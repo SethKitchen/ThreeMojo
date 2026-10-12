@@ -629,6 +629,10 @@ def _code_constant(value):
         return ('complex', struct.pack('>dd', value.real, value.imag))
     if value is Ellipsis:
         return ('ellipsis',)
+    if type(value) is slice:
+        # Python 3.14 folds constant slices such as `x[:2]` into co_consts.
+        return ('slice', _code_constant(value.start), _code_constant(value.stop),
+                _code_constant(value.step))
     require(type(value) in (str, bytes, int, bool, type(None)), 'unsupported executed-code constant')
     return (type(value).__name__, value)
 
@@ -885,6 +889,8 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None)
     cannot shadow a qualified import and is not itself a namespace competitor.
     For the new render helper only, a separately verified source entry census
     can restrict bare render basenames to actual compiled lookup directories.
+    A separate math scope is only for the exact supplemental native witness.
+    It does not replace any production owner's existing resolver obligations.
     The default retains the historical conservative rule for every namespace.
     Exact consumed module/prefix coordinates still reject case, alternate
     suffix/package and symlink changes. Only three exact regular wiki files are
@@ -1138,6 +1144,7 @@ class _CacheInputs:
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
 
     def _check_context(self, root):
@@ -1189,6 +1196,10 @@ class _CacheInputs:
                     'invalid captured input bytes or path')
         require(set(known) <= image.keys() and set(production) <= image.keys()
                 and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
+        require(not self._scaled_resolver_paths or
+                (self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+                 and self._scaled_resolver_paths <= image.keys()),
+                'pending scaled native context differs from captured image')
         self._raw = types.MappingProxyType(image)
         self._record_raw = authority_raw
         self._known = frozenset(known)
@@ -1283,6 +1294,11 @@ class _CacheInputs:
                     and all(resolver_unshadowed(location, self._resolver_paths)
                             for location in self._include_roots),
                     'resolver surface changed during owned verification')
+            if self._scaled_resolver_paths:
+                require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+                        and resolver_unshadowed(root, self._scaled_resolver_paths,
+                                                **_scaled_lookup_args()),
+                        'scaled native resolver changed during owned verification')
             raw = _regular(root, MIGRATION).read_bytes()
             require(type(raw) is bytes and raw == self._record_raw,
                     'record changed during owned verification')
@@ -1304,6 +1320,7 @@ class _CacheInputs:
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._owner_frame = None
 
@@ -1671,6 +1688,7 @@ class _InvariantInputs(_CacheInputs):
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._observations = []
         self._discoveries = []
@@ -1757,6 +1775,10 @@ class _InvariantInputs(_CacheInputs):
                     'invalid captured input bytes or path')
         require(set(known) <= image.keys() and set(production) <= image.keys()
                 and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
+        require(not self._scaled_resolver_paths or
+                (self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+                 and self._scaled_resolver_paths <= image.keys()),
+                'pending scaled native context differs from captured image')
         self._raw = types.MappingProxyType(image)
         self._record_raw = authority_raw
         self._known = frozenset(known)
@@ -1875,6 +1897,9 @@ class _InvariantInputs(_CacheInputs):
                     leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
                     for path, value, mode in self._observations:
                         if mode == 'bytes' and (path in self._resolver_paths or path == leaf
+                                or (self._scaled_resolver_paths and
+                                    (path in self._scaled_resolver_paths
+                                     or path == scaled_float32.LEAF or path in scaled_float32.TESTS))
                                 or (any(name.startswith('render/') for name in self._resolver_paths)
                                     and (path in self._known or path == MIGRATION))):
                             actual = _regular(root, path).read_bytes()
@@ -1889,6 +1914,17 @@ class _InvariantInputs(_CacheInputs):
                     require(resolver_unshadowed(root, self._resolver_paths,
                                 **_render_lookup_args(self._resolver_paths, self._entries)),
                             'supplemental resolver surface changed during historical operation')
+                    if self._scaled_resolver_paths:
+                        require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE,
+                                'historical scaled native context changed')
+                        current_known = _scaled_known_paths(root, _operation=self)
+                        for paths, kind in self._discoveries:
+                            if kind == 'known':
+                                require(paths == current_known,
+                                        'scaled source path census changed during historical operation')
+                        require(resolver_unshadowed(root, self._scaled_resolver_paths,
+                                                    **_scaled_lookup_args()),
+                                'scaled native resolver changed during historical operation')
             except BaseException:
                 self.close()
                 raise
@@ -1907,6 +1943,7 @@ class _InvariantInputs(_CacheInputs):
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._observations.clear()
         self._discoveries.clear()
@@ -1935,6 +1972,7 @@ class _BorrowedCacheInputs(_CacheInputs):
         self._entries = operation._entries
         self._native_contexts = operation._native_contexts
         self._resolver_paths = operation._resolver_paths
+        self._scaled_resolver_paths = operation._scaled_resolver_paths
         self._executing = operation._executing
         self._state = 'active'
 
@@ -1998,6 +2036,7 @@ class _BorrowedCacheInputs(_CacheInputs):
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._operation = None
         self._owner_frame = None
@@ -2182,6 +2221,165 @@ def shared_helper_edges(root, *, paths=None, include_roots=(), _inputs=None,
         _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)
     return shared_helpers.edges(tuple(path for path in shared_helpers.SOURCE_PATHS
         if bindings.get(path) == shared_helpers.AFTER_SHA256[path]))
+
+
+def _scaled_known_paths(root, *, _operation=None):
+    """Validate every discovered path before a set can hide a typed alias."""
+    known = set()
+    for path in _sibling('cache_key').input_paths(root):
+        if path.suffix != '.mojo':
+            continue
+        name = path.as_posix()
+        require(type(name) is str and _canonical_relative_text(name),
+                'invalid scaled source path census item')
+        known.add(name)
+    _operation_known_paths(root, known, _operation=_operation)
+    return known
+
+
+def _scaled_lookup_args():
+    """Only the pinned native witnesses establish this supplemental context."""
+    return {'math_entries': frozenset(('.', *(str(Path(path).parent).casefold()
+        for path in scaled_float32.NATIVE_TESTS)))}
+
+
+def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
+                             _input_owner=None, _operation=None, _context=None):
+    """Bind the exact math edge and its own native witness, not caller roots."""
+    _operation_check(_operation, root)
+    require((_inputs is None) == (_input_owner is None), 'incomplete scaled input ownership')
+    if _inputs is not None:
+        require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid scaled input view')
+        _inputs._check(_input_owner, root)
+        require(_operation is None or (type(_inputs) is _BorrowedCacheInputs
+                and _operation is _inputs._operation), 'unjoined scaled input and operation owners')
+    observed = {}
+
+    def observe(path):
+        raw = (_observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+               if _inputs is None else _inputs.raw(_input_owner, root, path))
+        require(type(raw) is bytes, 'scaled input is not physical bytes: ' + path)
+        require(observed.setdefault(path, raw) == raw, 'scaled input changed after consumption: ' + path)
+        if _snapshots is not None:
+            require(_snapshots.setdefault(path, raw) == raw, 'scaled captured input changed: ' + path)
+        return raw
+
+    selected = scaled_float32.SOURCE_PATHS if paths is None else paths
+    require(type(selected) is tuple and selected == scaled_float32.SOURCE_PATHS,
+            'invalid scaled input scope')
+    sources = {name: observe(name) for name in selected}
+    active = scaled_float32.verify_sources({name: raw.decode('utf-8') for name, raw in sources.items()})
+    if not active:
+        return {}
+    expected = {scaled_float32.LEAF: DEPENDENCY_TOOL_SHA256[scaled_float32.LEAF],
+                **scaled_float32.PACKAGE_INPUTS, **scaled_float32.PROVIDER_INPUTS,
+                **scaled_float32.TESTS}
+    for name, digest in expected.items():
+        require(sha(observe(name)) == digest, 'scaled correctness input changed: ' + name)
+    # Source identity and its actual main declaration jointly establish the
+    # fixed witness entry context. No production entry census is inferred.
+    affected = _sibling('affected')
+    entries = tuple(affected.entry_directories({name: _physical_text(observe(name))
+                                              for name in scaled_float32.NATIVE_TESTS}))
+    require(entries == tuple(sorted({str(Path(name).parent)
+                                     for name in scaled_float32.NATIVE_TESTS})),
+            'scaled native entry context changed')
+    known = _scaled_known_paths(root, _operation=_operation)
+    if _inputs is not None:
+        require(known == _inputs._known, 'scaled captured source path census changed')
+    found, pending = set(), list(scaled_float32.NATIVE_TESTS)
+    while pending:
+        name = pending.pop()
+        if name in found:
+            continue
+        require(name in known, 'scaled native dependency missing: ' + name)
+        found.add(name)
+        for imported in affected.imported_names(_physical_text(observe(name))):
+            pending.extend(affected.resolve(imported, name, known, entries=entries))
+    require(found == scaled_float32.NATIVE_CLOSURE, 'scaled native import closure changed')
+    for name, raw in tuple(observed.items()):
+        require(observe(name) == raw, 'scaled input changed during admission: ' + name)
+    final_known = _scaled_known_paths(root, _operation=_operation)
+    require(final_known == known, 'scaled source path census changed during admission')
+    if _context is not None:
+        require(type(_context) is dict and not _context, 'invalid scaled source context output')
+        _context['known'] = frozenset(known)
+    return {name: sha(raw) for name, raw in observed.items()}
+
+
+def scaled_float32_proof_bindings(root, *, paths=None, include_roots=(), _inputs=None,
+                                   _input_owner=None, _operation=None):
+    """Admit one source substitution and its fixed native context, never PASS."""
+    failure_operation = _operation
+    try:
+        _operation_check(_operation, root)
+        require((_inputs is None) == (_input_owner is None), 'incomplete scaled input ownership')
+        if _inputs is not None:
+            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid scaled input view')
+            _inputs._check(_input_owner, root)
+            if type(_inputs) is _BorrowedCacheInputs:
+                # Only a validated real lease may identify its failure owner.
+                failure_operation = _inputs._operation
+            require(_operation is None or (type(_inputs) is _BorrowedCacheInputs
+                    and _operation is _inputs._operation), 'unjoined scaled input and operation owners')
+        include_roots = tuple(include_roots)
+        require(include_roots == () or (_operation is None and _inputs is None),
+                'unowned scaled include roots')
+        standalone = _inputs is None and (_operation is None or _operation._state != 'active')
+        executing = (executing_checker_bindings() if standalone else
+                     (_inputs._executing if _inputs is not None else _operation._executing))
+        context = {}
+        result = _scaled_float32_bindings(root, paths=paths, _inputs=_inputs,
+            _input_owner=_input_owner, _operation=_operation, _context=context)
+        if result:
+            require(result[scaled_float32.LEAF] == executing[scaled_float32.LEAF],
+                    'scaled receipt lacks executing leaf')
+            resolver_paths = {name for name in result if name.endswith('.mojo')}
+            require(resolver_paths == scaled_float32.NATIVE_CLOSURE,
+                    'scaled resolver scope differs from native closure')
+            include_paths = resolver_paths | {name + '.cov-origin' for name in resolver_paths}
+            require(resolver_unshadowed(root, resolver_paths, **_scaled_lookup_args()) and all(
+                resolver_unshadowed(location, include_paths, **_scaled_lookup_args())
+                for location in include_roots), 'scaled resolver surface changed')
+            owners = (() if _inputs is None else (_inputs,))
+            if _operation is not None:
+                owners += (_operation,)
+            if type(_inputs) is _BorrowedCacheInputs:
+                owners += (_inputs._operation,)
+            for owner in owners:
+                observed = (owner._raw.keys() if owner._state == 'active' else
+                            {name for name, value, mode in owner._observations})
+                require(result.keys() <= observed, 'scaled inputs were not observed by their owner')
+                # This native-only context must never narrow or replace the
+                # owner's existing production/helper resolver obligations.
+                owner._scaled_resolver_paths = frozenset(resolver_paths)
+                if owner._state == 'pending':
+                    require(not owner._executing or dict(owner._executing) == executing,
+                            'pending scaled checker image changed')
+                    owner._executing = types.MappingProxyType(dict(executing))
+            for name, expected in result.items():
+                raw = (_observe_bytes(root, name, _regular(root, name).read_bytes(), _operation=_operation)
+                       if _inputs is None else _inputs.raw(_input_owner, root, name))
+                require(type(raw) is bytes and sha(raw) == expected,
+                        'scaled input changed before receipt: ' + name)
+            require(resolver_unshadowed(root, resolver_paths, **_scaled_lookup_args()) and all(
+                resolver_unshadowed(location, include_paths, **_scaled_lookup_args())
+                for location in include_roots), 'scaled final resolver surface changed')
+            final_known = _scaled_known_paths(root, _operation=_operation)
+            require(final_known == context['known'], 'scaled source path census changed before receipt')
+        if standalone:
+            require(executing_checker_bindings() == executing, 'scaled checker changed during admission')
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(failure_operation, error)
+
+
+def scaled_float32_edges(root, *, paths=None, _inputs=None, _input_owner=None, _operation=None):
+    """Return only the live math edge admitted through the same physical owner."""
+    bindings = scaled_float32_proof_bindings(root, paths=paths, _inputs=_inputs,
+        _input_owner=_input_owner, _operation=_operation)
+    return scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS
+        if bindings.get(name) == scaled_float32.AFTER_SHA256[name]))
 
 
 def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
@@ -2451,6 +2649,9 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             # Fixed exact inverse objects are not a normalization API. Only
             # sealed recorded endpoints may be inverted, after live checks.
             reverse_exact(path, item['after_source'], item)
+        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)
+        scaled_edges = scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS
+            if scaled_bindings.get(name) == scaled_float32.AFTER_SHA256[name]))
         helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots)
         helper_edges = shared_helpers.edges(tuple(
             path for path in shared_helpers.SOURCE_PATHS
@@ -2532,6 +2733,11 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                             and expected == helper_edges[path]['before_sha256'],
                             'helper edge does not extend immutable input: ' + path)
                     expected = helper_edges[path]['after_sha256']
+                if path in scaled_edges:
+                    require(group in ('unchanged_inputs', 'native_dependency_inputs')
+                            and expected == scaled_edges[path]['before_sha256'],
+                            'scaled edge does not extend immutable input: ' + path)
+                    expected = scaled_edges[path]['after_sha256']
                 if path in witness_bindings:
                     require(path in witness_format.SOURCE_PATHS
                             and group in ('native_witnesses', 'native_dependency_inputs')
