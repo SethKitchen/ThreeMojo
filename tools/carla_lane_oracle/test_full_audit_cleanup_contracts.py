@@ -8,7 +8,7 @@ files only; current source admission and independent center semantics have
 separate positive and adversarial controls. Run unchanged with Python and -O.
 """
 import copy
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from functools import wraps
 import json
 from pathlib import Path
@@ -115,6 +115,16 @@ def mutate_function(case, text, name, before, after):
 def physical_change(root, name, raw):
     path = root/name
     previous = path.read_bytes() if path.exists() else None
+    # A differently cased path can name the existing entry on macOS. Retain
+    # that entry's actual spelling, including when this control removes it.
+    original_path = path
+    if previous is not None:
+        entries = list(path.parent.iterdir())
+        original_path = next((entry for entry in entries if entry.name == path.name), None)
+        if original_path is None:
+            original_path = next(entry for entry in entries
+                                 if entry.name.casefold() == path.name.casefold()
+                                 and entry.samefile(path))
     created = []
     parent = path.parent
     while not parent.exists():
@@ -128,12 +138,127 @@ def physical_change(root, name, raw):
             path.write_bytes(raw)
         yield path
     finally:
-        if path.is_symlink() or path.exists():
+        if path.is_symlink() or (previous is None and path.exists()):
             path.unlink()
         if previous is not None:
-            path.write_bytes(previous)
+            original_path.write_bytes(previous)
         for folder in created:
             folder.rmdir()
+
+
+@contextmanager
+def physical_directory_spelling(path, spelling):
+    """Exercise a real case-only rename and restore the complete directory."""
+    target = path.with_name(spelling)
+    if path.name == spelling or path.name.casefold() != spelling.casefold():
+        raise AssertionError('fixture requires a different case spelling')
+    if target.exists() and not target.samefile(path):
+        raise AssertionError('case fixture would replace a distinct directory')
+    with tempfile.TemporaryDirectory(prefix='cleanup-case-spelling-', dir=path.parent) as folder:
+        staged = Path(folder)/'original'
+        path.rename(staged)
+        try:
+            staged.rename(target)
+            yield target
+        finally:
+            if target.exists():
+                target.rename(staged)
+            staged.rename(path)
+
+
+@contextmanager
+def physical_case_directory(root, name):
+    """Create a case competitor, or rename its existing filesystem alias."""
+    directory = root/name
+    if directory.exists():
+        original = next(entry for entry in directory.parent.iterdir()
+                        if entry.name.casefold() == directory.name.casefold()
+                        and entry.samefile(directory))
+        with physical_directory_spelling(original, directory.name) as changed:
+            yield changed
+        return
+    created = []
+    parent = directory
+    while not parent.exists():
+        created.append(parent)
+        parent = parent.parent
+    directory.mkdir(parents=True)
+    try:
+        yield directory
+    finally:
+        for folder in created:
+            folder.rmdir()
+
+
+class PhysicalFixtureRestoration(unittest.TestCase):
+    """Small real-file controls for case-preserving mutation and restoration."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory(
+            prefix='cleanup-fixture-restore-', dir=Path(tempfile.gettempdir()).resolve())
+        self.addCleanup(folder.cleanup)
+        self.root = Path(folder.name)
+
+    def test_file_case_alias_restores_original_spelling_and_bytes(self):
+        path = self.root/'canonical.mojo'
+        path.write_bytes(b'# original\n')
+        names = {entry.name for entry in self.root.iterdir()}
+        with physical_change(self.root, 'CANONICAL.mojo', b'# changed\n') as changed:
+            self.assertEqual(changed.read_bytes(), b'# changed\n')
+        self.assertEqual({entry.name for entry in self.root.iterdir()}, names)
+        self.assertEqual(path.read_bytes(), b'# original\n')
+        # A missing-file control must also restore the physical entry name.
+        with physical_change(self.root, path.name, None):
+            self.assertFalse(path.exists())
+        self.assertEqual({entry.name for entry in self.root.iterdir()}, names)
+        self.assertEqual(path.read_bytes(), b'# original\n')
+        alias = self.root/'CANONICAL.mojo'
+        if not alias.exists():
+            # Case-sensitive filesystems can hold two distinct hardlink names.
+            # Removing one must restore that exact entry, not its peer.
+            alias.hardlink_to(path)
+            names.add(alias.name)
+            with physical_change(self.root, alias.name, None):
+                self.assertFalse(alias.exists())
+            self.assertEqual({entry.name for entry in self.root.iterdir()}, names)
+            self.assertEqual(alias.read_bytes(), b'# original\n')
+            self.assertEqual(path.read_bytes(), b'# original\n')
+
+    def test_file_symlink_mutation_restores_without_writing_through_link(self):
+        path, target = self.root/'canonical.mojo', self.root/'target.mojo'
+        path.write_bytes(b'# original\n')
+        target.write_bytes(b'# target\n')
+        with physical_change(self.root, path.name, b'# changed\n') as changed:
+            changed.unlink()
+            changed.symlink_to(target)
+        self.assertFalse(path.is_symlink())
+        self.assertEqual(path.read_bytes(), b'# original\n')
+        self.assertEqual(target.read_bytes(), b'# target\n')
+
+    def test_directory_case_rename_refuses_and_restores_even_on_exception(self):
+        directory = self.root/'math'
+        directory.mkdir()
+        (directory/'utils.mojo').write_bytes(b'# unchanged provider\n')
+        paths = {'math/utils.mojo'}
+        original_names = {path.relative_to(self.root).as_posix()
+                          for path in self.root.rglob('*')}
+        self.assertTrue(cleanup.resolver_unshadowed(self.root, paths))
+        for fail in (False, True):
+            with self.subTest(exception=fail):
+                expected = (self.assertRaisesRegex(RuntimeError, '^fixture body failure$')
+                            if fail else nullcontext())
+                with expected:
+                    with physical_directory_spelling(directory, 'MATH') as changed:
+                        self.assertIn('MATH', {entry.name for entry in self.root.iterdir()})
+                        self.assertNotIn('math', {entry.name for entry in self.root.iterdir()})
+                        self.assertEqual((changed/'utils.mojo').read_bytes(), b'# unchanged provider\n')
+                        self.assertFalse(cleanup.resolver_unshadowed(self.root, paths))
+                        if fail:
+                            raise RuntimeError('fixture body failure')
+                self.assertEqual({path.relative_to(self.root).as_posix()
+                                  for path in self.root.rglob('*')}, original_names)
+                self.assertEqual((directory/'utils.mojo').read_bytes(), b'# unchanged provider\n')
+                self.assertTrue(cleanup.resolver_unshadowed(self.root, paths))
 
 
 class NativeDependencyInventoryBatching(unittest.TestCase):
@@ -317,7 +442,28 @@ class FullAuditCleanupContracts(unittest.TestCase):
         for group in cleanup.BOUND_GROUPS:
             expected.update(self.record[group])
         expected.update(cleanup.shared_helper_proof_bindings(self.root))
+        # Supplemental authorities extend the historical receipt with their
+        # own exact source and correctness-test obligations.
+        station, runtime = cleanup.station, cleanup.runtime_view
+        deviation = cleanup.deviation
+        runtime_raw = (self.root/runtime.MIGRATION).read_bytes()
+        self.assertEqual(cleanup.sha(runtime_raw), runtime.MIGRATION_SHA256)
+        runtime_record = json.loads(runtime_raw)
+        self.assertEqual(set(runtime_record['correctness_tests']), set(runtime.TESTS))
+        # The physical Map is the deviation endpoint (#685). Its edge extends
+        # the station edge, so both leaves and both test sets are bound.
+        self.assertEqual(cleanup.sha((self.root/station.MODULE).read_bytes()), deviation.AFTER_SHA256)
+        supplemental = {
+            station.MODULE: deviation.AFTER_SHA256, **station.TESTS, **deviation.TESTS,
+            runtime.MIGRATION: runtime.MIGRATION_SHA256,
+            **runtime_record['correctness_tests'],
+        }
+        for leaf in ('map_station_contracts.py', 'map_deviation_contracts.py', 'runtime_view_contracts.py'):
+            path = 'tools/carla_lane_oracle/' + leaf
+            supplemental[path] = cleanup.DEPENDENCY_TOOL_SHA256[path]
+        expected.update(supplemental)
         self.assertEqual(set(bindings), expected)
+        self.assertEqual({path: bindings[path] for path in supplemental}, supplemental)
         for path, digest in bindings.items():
             self.assertEqual(cleanup.sha((self.root/path).read_bytes()), digest)
         self.assertEqual(len(self.record['historical_records']), 38)
@@ -559,23 +705,43 @@ class FullAuditCleanupContracts(unittest.TestCase):
             self.assertGreaterEqual(len(observed), flip_at)
             self.assertEqual(path.read_bytes(), original)
             cleanup.verify(self.root, exact=True)
-        observed = []
-        def consumed_then_restored(p, *args, **kwargs):
-            raw = read(p, *args, **kwargs)
-            if p == path:
-                caller = sys._getframe(1)
-                in_bound = caller.f_code.co_name == 'verify' and 'group' in caller.f_locals
-                observed.append('A' if in_bound else 'B')
-                if not in_bound:
-                    return raw+b'\n# Consumed B before bound A.\n'
-            return raw
-        with patch.object(Path, 'read_bytes', consumed_then_restored):
-            with self.assertRaisesRegex(cleanup.ContractError, 'bound input changed after consumption'):
-                cleanup.verify(self.root)
-        self.assertIn('B', observed)
-        self.assertEqual(observed[-1], 'A')
-        self.assertEqual(path.read_bytes(), original)
-        cleanup.verify(self.root, exact=True)
+        # The original provider mutation now meets its mandatory helper gate
+        # first. A consumed, unchanged non-helper still reaches the bound-group
+        # checkpoint, so neither refusal layer is lost to the composition.
+        helper_inputs = (set(cleanup.shared_helpers.SOURCE_PATHS)
+                         | set(cleanup.shared_helpers.PROVIDERS)
+                         | set(cleanup.shared_helpers.TESTS))
+        self.assertIn(name, helper_inputs)
+        self.assertNotIn('extensions/carla/road.mojo', helper_inputs)
+        for name, refusal, last in (
+                (name, 'shared-helper fixture changed', 'B'),
+                ('extensions/carla/road.mojo', 'bound input changed after consumption', 'A')):
+            path = self.root/name
+            original = path.read_bytes()
+            self.assertIn(name, self.record['dependency_inventory'])
+            self.assertIn(name, self.record['unchanged_inputs'])
+            observed = []
+            def consumed_then_restored(p, *args, **kwargs):
+                raw = read(p, *args, **kwargs)
+                if p == path:
+                    caller = sys._getframe(1)
+                    in_bound = (caller.f_code is cleanup.verify.__code__
+                                and caller.f_locals.get('group') in cleanup.BOUND_GROUPS)
+                    observed.append('A' if in_bound else 'B')
+                    if not in_bound:
+                        return raw+b'\n# Consumed B before bound A.\n'
+                return raw
+            with self.subTest(consumed=name), patch.object(Path, 'read_bytes', consumed_then_restored):
+                with self.assertRaises(cleanup.ContractError) as caught:
+                    cleanup.verify(self.root)
+            self.assertEqual(str(caught.exception),
+                             'full-audit cleanup successor: ' + refusal + ': ' + name)
+            self.assertIn('B', observed)
+            self.assertEqual(observed[-1], last)
+            if last == 'B':
+                self.assertNotIn('A', observed, 'helper refusal must precede the bound group')
+            self.assertEqual(path.read_bytes(), original)
+            cleanup.verify(self.root, exact=True)
         broken = self.current.replace('if center_work >= 0:', 'if center_work > 0:', 1)
         with physical_change(self.root, LANE, broken.encode()):
             self.assertEqual(cleanup.reviewed_text(self.root, LANE, self.item['before_source']),
@@ -818,14 +984,9 @@ class FullAuditCleanupContracts(unittest.TestCase):
                             cleanup.verify(self.root, include_roots=(include,))
             for root in (self.root, include):
                 for name in ('MATH', 'extensions/CARLA'):
-                    directory = root/name
-                    directory.mkdir(parents=True)
-                    try:
-                        with self.subTest(root=str(root), empty_case_prefix=name):
-                            with self.assertRaises(cleanup.ContractError):
-                                cleanup.verify(self.root, include_roots=(include,))
-                    finally:
-                        directory.rmdir()
+                    with self.subTest(root=str(root), case_prefix=name), physical_case_directory(root, name):
+                        with self.assertRaises(cleanup.ContractError):
+                            cleanup.verify(self.root, include_roots=(include,))
             # This is an allowed qualified path, not bare math in an entry dir.
             # The maintained generation-origin protocol owns staged bytes.
             with physical_change(include, 'extensions/carla/math.mojo', b'# staged instrumentation view\n'):
@@ -2348,22 +2509,41 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     cache.verify(self.root)
             self.assertGreaterEqual(len(seen), flip_at)
             self.assertEqual(path.read_bytes(), original)
-        seen = []
-        def consumed_then_restored(candidate, *args, **kwargs):
-            raw = read(candidate, *args, **kwargs)
-            if candidate == path:
-                caller = sys._getframe(1)
-                bound = caller.f_code.co_name == 'verify' and 'group' in caller.f_locals
-                seen.append('A' if bound else 'B')
-                if not bound:
-                    return raw + b'\n# Consumed B before original bound A.\n'
-            return raw
-        with patch.object(Path, 'read_bytes', consumed_then_restored):
-            with self.assertRaisesRegex(ValueError, 'bound input changed after consumption'):
-                cache.verify(self.root)
-        self.assertIn('B', seen)
-        self.assertEqual(seen[-1], 'A')
-        self.assertEqual(path.read_bytes(), original)
+        helper_inputs = (set(cleanup.shared_helpers.SOURCE_PATHS)
+                         | set(cleanup.shared_helpers.PROVIDERS)
+                         | set(cleanup.shared_helpers.TESTS))
+        self.assertIn(name, helper_inputs)
+        self.assertNotIn('extensions/carla/road.mojo', helper_inputs)
+        for name, refusal, last in (
+                (name, 'shared-helper fixture changed', 'B'),
+                ('extensions/carla/road.mojo', 'bound input changed after consumption', 'A')):
+            path = self.root/name
+            original = path.read_bytes()
+            self.assertIn(name, self.record['dependency_inventory'])
+            self.assertIn(name, self.record['unchanged_inputs'])
+            seen = []
+            def consumed_then_restored(candidate, *args, **kwargs):
+                raw = read(candidate, *args, **kwargs)
+                if candidate == path:
+                    caller = sys._getframe(1)
+                    bound = (caller.f_code is cleanup.verify.__code__
+                             and caller.f_locals.get('group') in cleanup.BOUND_GROUPS)
+                    seen.append('A' if bound else 'B')
+                    if not bound:
+                        return raw + b'\n# Consumed B before original bound A.\n'
+                return raw
+            with self.subTest(consumed=name), patch.object(Path, 'read_bytes', consumed_then_restored):
+                with self.assertRaises(ValueError) as caught:
+                    cache.verify(self.root)
+            self.assertEqual(str(caught.exception),
+                             'cache-key successor: full-audit cleanup successor: '
+                             + refusal + ': ' + name)
+            self.assertIn('B', seen)
+            self.assertEqual(seen[-1], last)
+            if last == 'B':
+                self.assertNotIn('A', seen, 'helper refusal must precede the bound group')
+            self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(cache.verify(self.root), self.cache_record)
 
     def test_current_retained_map_each_observation_refuses_b_before_parsing(self):
         seed = self.seed
@@ -2616,7 +2796,17 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 seed.affected, 'imported_names', parsed), patch.object(seed.affected, 'resolve', resolution):
             self.assertEqual(cache.verify(self.root), self.cache_record)
         self.assertEqual(len(found), 1)
-        self.assertEqual(len(texts), 1 + len(self.seed_record['unchanged_inputs']))
+        # The reviewed XML helper imports one additional UTF-8 provider. Bind
+        # the exact parser inputs instead of merely increasing a call count.
+        xml, utf8 = 'loaders/xml.mojo', 'loaders/utf8.mojo'
+        self.assertEqual(cleanup.sha((self.root/xml).read_bytes()),
+                         cleanup.shared_helpers.AFTER_SHA256[xml])
+        expected_paths = {seed.MODULE, *self.seed_record['unchanged_inputs'], utf8}
+        self.assertNotIn(utf8, self.seed_record['unchanged_inputs'])
+        expected_texts = [(self.root/name).read_bytes().decode('utf-8')
+                          for name in sorted(expected_paths)]
+        self.assertCountEqual(texts, expected_texts)
+        self.assertIn((self.root/utf8).read_bytes().decode('utf-8'), texts)
         self.assertTrue(resolved)
         expected_known = frozenset(path.as_posix() for path in found[0][1] if path.suffix == '.mojo')
         self.assertTrue(all(known == expected_known for _, known in resolved))

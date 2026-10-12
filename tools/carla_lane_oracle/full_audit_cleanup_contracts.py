@@ -14,12 +14,19 @@ import io
 import json
 import types
 import os
+import pathlib
 from pathlib import Path, PosixPath
 import stat
 import struct
 import sys
 import threading
 import tokenize
+
+
+# Only the genuine original builtin can use the two-candidate expansion.
+# An injected callable retains the original generator and short-circuit protocol.
+_BUILTIN_ALL = (all if type(all) is types.BuiltinFunctionType
+                and all.__name__ == 'all' and all.__module__ == 'builtins' else None)
 
 
 class ContractError(ValueError, RuntimeError):
@@ -37,6 +44,7 @@ try:
         from . import sum2_guard_contracts as guard
         from . import consumer_successor_ledger as consumer_ledger
         from . import map_station_contracts as station
+        from . import map_deviation_contracts as deviation
         from . import runtime_view_contracts as runtime_view
         from . import shared_helper_contracts as shared_helpers
     else:
@@ -44,6 +52,7 @@ try:
         import sum2_guard_contracts as guard
         import consumer_successor_ledger as consumer_ledger
         import map_station_contracts as station
+        import map_deviation_contracts as deviation
         import runtime_view_contracts as runtime_view
         import shared_helper_contracts as shared_helpers
 except ImportError as error:
@@ -129,11 +138,12 @@ THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/runtime_view_contracts.py': '0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
+ 'tools/carla_lane_oracle/map_deviation_contracts.py': '741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',
  'tools/carla_lane_oracle/consumer_successor_ledger.py': '8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
- 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'd78221b196b78eabdf2554dd01efef035f089fcedaf14acaaee675a6e4bf84ce'}
+ 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'cf9bb32fd36fefb641e2c97210bfffe0fac00b5b773e87b5b19d46877afbf9a4'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -200,7 +210,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/consumer_successor_ledger.py',
                  'tools/carla_lane_oracle/map_station_contracts.py',
                  'tools/carla_lane_oracle/shared_helper_contracts.py',
-                 'tools/carla_lane_oracle/runtime_view_contracts.py')
+                 'tools/carla_lane_oracle/runtime_view_contracts.py',
+                 'tools/carla_lane_oracle/map_deviation_contracts.py')
 
 
 def _center_require(ok, message):
@@ -667,7 +678,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -697,10 +708,15 @@ def _live_function_code(value):
     return getattr(value, '__code__', None)
 
 
+_LIVE_FUNCTION_CODE = _live_function_code
+_LIVE_FUNCTION_CODE_CODE = _live_function_code.__code__
+
+
 def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
-               vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view))
+               vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
+               vars(deviation))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -743,9 +759,21 @@ def _root_unaliased(root):
     return all(not path.is_symlink() for path in (absolute, *absolute.parents))
 
 
+def _canonical_relative_text(text):
+    """Recognize only builtin canonical POSIX relative spellings."""
+    return (type(text) is str and bool(text) and text not in ('.', '..')
+            and not text.startswith(('/', './', '../'))
+            and not text.endswith(('/', '/.', '/..'))
+            and '//' not in text and '/./' not in text and '/../' not in text)
+
+
 def _regular(root, relative):
-    parts = Path(relative).parts
-    require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
+    if os.name == 'posix' and Path is pathlib.Path and _canonical_relative_text(relative):
+        parts = tuple(relative.split('/'))
+        require(parts and not relative.startswith('/') and '..' not in parts, 'unsafe input path')
+    else:
+        parts = Path(relative).parts
+        require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
     path = Path(root)
     require(_root_unaliased(path), 'symbolic root or ancestor')
     for part in parts:
@@ -1022,6 +1050,22 @@ def _cache_verify_frame(frame, *, include_aliases=False):
     namespace = frame.f_globals if frame is not None else {}
     if include_aliases is True and _different_alias_leaf(namespace.get('__file__'), ('cache_key_contracts.py',)):
         return False
+    # A real helper frame cannot be an unwrapped verify alias. Elide only
+    # lexical path construction; every stack walk and live owner check remains.
+    if (include_aliases is True and type(frame) is types.FrameType
+            and type(namespace) is dict and os.name == 'posix' and Path is pathlib.Path
+            and type(namespace.get('__file__')) is str
+            and namespace['__file__'].startswith('/')
+            and type(__file__) is str and __file__.startswith('/')
+            and __file__.rsplit('/', 1)[-1] not in ('', '.', '..')
+            and _live_function_code is _LIVE_FUNCTION_CODE
+            and _live_function_code.__code__ is _LIVE_FUNCTION_CODE_CODE):
+        candidate = namespace.get('verify')
+        if (candidate is None or (type(candidate) is types.FunctionType
+                and type(candidate.__dict__) is dict
+                and '__wrapped__' not in candidate.__dict__
+                and frame.f_code is not candidate.__code__)):
+            return False
     return (include_aliases and type(namespace.get('__file__')) is str
             and Path(namespace['__file__']).absolute() == Path(__file__).absolute().with_name('cache_key_contracts.py')
             and frame.f_code is _live_function_code(namespace.get('verify')))
@@ -1254,8 +1298,19 @@ def _operation_fail(operation, error):
 def _owner_module(kind):
     if kind in ('map_loops', 'rtree_loops'):
         return None
-    name = {'invariant': 'coverage_invariant_contracts',
-            'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
+    if type(kind) is str:
+        if kind == 'invariant':
+            name = 'coverage_invariant_contracts'
+        elif kind == 'winner':
+            name = 'winner_sign_contracts'
+        elif kind == 'border':
+            name = 'border_parser_contracts'
+        else:
+            name = None
+    else:
+        # Exotic keys retain dictionary hashing and equality behavior.
+        name = {'invariant': 'coverage_invariant_contracts',
+                'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
     return sys.modules.get((__package__ + '.' if __package__ else '') + name) if name else None
 
 
@@ -1269,9 +1324,20 @@ def _operation_frame_kind(frame, *, include_aliases=False):
     if (type(filename) is str and filename.startswith('/')
             and type(__file__) is str and __file__.startswith('/')):
         candidates = (namespace.get('verify'), namespace.get('reviewed_nonempty_loops'))
-        if all(value is None or (type(value) is types.FunctionType
-                and '__wrapped__' not in value.__dict__
-                and frame.f_code is not value.__code__) for value in candidates):
+        candidate_all = all
+        if _BUILTIN_ALL is not None and candidate_all is _BUILTIN_ALL:
+            first, second = candidates
+            negative = (first is None or (type(first) is types.FunctionType
+                        and '__wrapped__' not in first.__dict__
+                        and frame.f_code is not first.__code__)) and (
+                        second is None or (type(second) is types.FunctionType
+                        and '__wrapped__' not in second.__dict__
+                        and frame.f_code is not second.__code__))
+        else:
+            negative = candidate_all(value is None or (type(value) is types.FunctionType
+                       and '__wrapped__' not in value.__dict__
+                       and frame.f_code is not value.__code__) for value in candidates)
+        if negative:
             return None
         # Preserve the original plain branch and exotic-dictionary protocols.
         if type(namespace) is dict:
@@ -1674,8 +1740,10 @@ class _InvariantInputs(_CacheInputs):
     def _observe(self, root, path, value, mode):
         try:
             self._check_owner(root)
-            require(type(path) is str and path and Path(path).as_posix() == path
-                    and not Path(path).is_absolute() and '..' not in Path(path).parts,
+            plain_path = (os.name == 'posix' and Path is pathlib.Path and type(path) is str
+                          and (path == '.' or _canonical_relative_text(path)))
+            require(plain_path or (type(path) is str and path and Path(path).as_posix() == path
+                    and not Path(path).is_absolute() and '..' not in Path(path).parts),
                     'invalid operation observation path')
             require(mode in ('bytes', 'default', 'physical', 'utf8',
                              'supplied_default', 'supplied_physical'),
@@ -2052,7 +2120,11 @@ def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
 
 
 def _station_bindings(root, *, _snapshots=None, _operation=None):
-    """Admit one supplemental Map edge without replacing any live image bytes."""
+    """Admit the supplemental Map edges without replacing any live image bytes.
+
+    The station edge (#302) and its deviation successor (#685) each have exact
+    endpoints, a fixed inverse, an executing leaf and bound correctness tests.
+    """
     raw = _observe_bytes(root, station.MODULE,
         _regular(root, station.MODULE).read_bytes(), _operation=_operation)
     if _snapshots is not None:
@@ -2062,11 +2134,16 @@ def _station_bindings(root, *, _snapshots=None, _operation=None):
         require(source.token_sha256(_physical_text(raw)) == station.BEFORE_TOKEN_SHA256,
                 'historical fifth Map tokens changed')
         return {}
-    require(sha(raw) == station.AFTER_SHA256, 'unknown complete station Map bytes')
-    station.predecessor_source(raw.decode('utf-8'))
-    result = {station.MODULE: station.AFTER_SHA256}
+    require(sha(raw) in (station.AFTER_SHA256, deviation.AFTER_SHA256),
+            'unknown complete station Map bytes')
+    station.predecessor_source(deviation.station_source(raw.decode('utf-8')))
+    result = {station.MODULE: sha(raw)}
     leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
-    for path, expected in {leaf: DEPENDENCY_TOOL_SHA256[leaf], **station.TESTS}.items():
+    fixtures = {leaf: DEPENDENCY_TOOL_SHA256[leaf], **station.TESTS}
+    if sha(raw) == deviation.AFTER_SHA256:
+        deviation_leaf = 'tools/carla_lane_oracle/map_deviation_contracts.py'
+        fixtures.update({deviation_leaf: DEPENDENCY_TOOL_SHA256[deviation_leaf], **deviation.TESTS})
+    for path, expected in fixtures.items():
         value = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                _operation=_operation)
         require(sha(value) == expected, 'station correctness fixture changed: ' + path)
@@ -2184,7 +2261,9 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             require(expected_inventory.get(station.MODULE) ==
                     {'tokens_sha256': station.BEFORE_TOKEN_SHA256},
                     'station inventory does not start at fifth Map endpoint')
-            expected_inventory[station.MODULE] = {'tokens_sha256': station.AFTER_TOKEN_SHA256}
+            expected_inventory[station.MODULE] = {'tokens_sha256': (
+                deviation.AFTER_TOKEN_SHA256 if station_bindings[station.MODULE] == deviation.AFTER_SHA256
+                else station.AFTER_TOKEN_SHA256)}
         require(observed_inventory == expected_inventory, 'production caller/use inventory changed')
         for path, raw in {**bound, **snapshots}.items():
             require(_regular(root, path).read_bytes() == raw, 'input changed during verification: ' + path)
@@ -2361,6 +2440,10 @@ def station_proof_bindings(root, *, _operation=None):
         leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
         require(result.get(leaf) == executing[leaf],
                 'station receipt lacks its actual executing leaf')
+        deviation_leaf = 'tools/carla_lane_oracle/map_deviation_contracts.py'
+        require(result.get(station.MODULE) != deviation.AFTER_SHA256
+                or result.get(deviation_leaf) == executing[deviation_leaf],
+                'deviation receipt lacks its actual executing leaf')
         require(executing_checker_bindings() == executing,
                 'station receipt checker changed during verification')
         return result
@@ -2395,8 +2478,8 @@ def _absolute_root_text(root):
         raw = getattr(root, '_raw_paths', None)
         if type(raw) is list and len(raw) == 1 and type(raw[0]) is str:
             text = raw[0]
-            if text == '/' or (text.startswith('/') and all(
-                    part not in ('', '.', '..') for part in text[1:].split('/'))):
+            if text == '/' or (text.startswith('/') and not text.endswith(('/', '/.', '/..'))
+                    and '//' not in text and '/./' not in text and '/../' not in text):
                 return text
     return str(Path(root).absolute())
 

@@ -986,6 +986,75 @@ def test_a_renderer_grows_its_buffer_for_more_triangles() raises:
     assert_equal(count_mismatches(expected, grown), 0)
 
 
+def _strand_field() -> List[RasterVertex]:
+    """Return thin, tiny and blended triangles on and across the 16-pixel
+    tile seams, as strand hair draws them, over one far triangle too large
+    to snap exactly."""
+    var corners = List[RasterVertex]()
+    # Behind everything, and past the binning's snap limit: it goes in
+    # every tile.
+    corners.append(corner(-3.0e7, -3.0e7, 0.99, 1, Color(20, 30, 40)))
+    corners.append(corner(3.0e7, -3.0e7, 0.99, 1, Color(20, 30, 40)))
+    corners.append(corner(0, 3.0e7, 0.99, 1, Color(20, 30, 40)))
+    var seed = UInt64(298)
+    for strand in range(300):
+        var draws = SIMD[DType.float32, 4]()
+        for lane in range(4):
+            seed = seed * 6364136223846793005 + 1442695040888963407
+            draws[lane] = Float32(Int((seed >> 33) % 10000)) / 10000
+        var x = draws[0] * 60 - 3
+        var y = draws[1] * 44 - 3
+        var dx = draws[2] * 4 - 2
+        var dy = draws[3] * 4 - 2
+        var z = Float32(strand % 17) / 20
+        var color = Color(
+            UInt8(strand * 7 % 256),
+            UInt8(strand * 13 % 256),
+            UInt8(strand * 29 % 256),
+            UInt8(64 + strand % 128),
+        )
+        var blend = BLEND if strand % 3 == 0 else OPAQUE
+        corners.append(corner(x, y, z, 1, color, blend))
+        corners.append(corner(x + dx, y + 0.25, z, 1, color, blend))
+        corners.append(corner(x + dx * 0.5 + 0.3, y + dy, z, 1, color, blend))
+    # Slivers along the seams at x = 16 and 32 and y = 16 and 32.
+    for seam in range(1, 3):
+        var at = Float32(16 * seam)
+        corners.append(corner(at - 0.5, 0, 0.05, 1, Color(255, 255, 0)))
+        corners.append(corner(at + 0.5, 0, 0.05, 1, Color(255, 255, 0)))
+        corners.append(corner(at, 37, 0.05, 1, Color(255, 255, 0)))
+        corners.append(corner(0, at - 0.03, 0.04, 1, Color(0, 255, 255)))
+        corners.append(corner(53, at, 0.04, 1, Color(0, 255, 255)))
+        corners.append(corner(0, at + 0.06, 0.04, 1, Color(0, 255, 255)))
+    return corners^
+
+
+def test_both_backends_agree_on_a_binned_strand_field() raises:
+    # Each pixel walks only its tile's triangles. The field crosses every
+    # seam of a 53 x 37 image, which is not a whole number of tiles, and
+    # mixes depth-tested and blended triangles, so a triangle missing from
+    # a tile or a tile's triangles out of order changes some pixel.
+    if skipped_for_lack_of_a_gpu("both backends agree on a binned field"):
+        return
+    var corners = _strand_field()
+    var renderer = GpuRenderer(53, 37)
+    renderer.draw(corners, BACKGROUND)
+    var gpu = renderer.read_back()
+    var cpu = cpu_render_triangles(corners, 53, 37)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    # A second, smaller frame reuses the grown draw buffer.
+    var fewer = List[RasterVertex]()
+    for index in range(3, 3 + 60 * 3):
+        fewer.append(corners[index])
+    renderer.draw(fewer, BACKGROUND)
+    assert_equal(
+        count_mismatches(
+            cpu_render_triangles(fewer, 53, 37), renderer.read_back()
+        ),
+        0,
+    )
+
+
 def test_both_backends_keep_the_pixels_outside_a_scissor() raises:
     # The pair drawn under a scissor on the left half, then under one on
     # the right half with another background. Each draw clears and draws

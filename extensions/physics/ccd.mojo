@@ -793,7 +793,9 @@ def _sweep_convex_triangle(
     solid's interval moves linearly, so it overlaps during one interval of
     time. The first contact is the latest entry, when it comes before the
     earliest exit. Its normal is the axis that entered last; a solid that
-    already overlaps uses the axis of least overlap instead.
+    already overlaps uses the axis of least overlap instead. An axis that
+    the solid does not move along, and on which it only touches the
+    triangle, separates them for the whole interval.
 
     Args:
         vertices: The solid's corners at the start, in the world.
@@ -844,7 +846,11 @@ def _sweep_convex_triangle(
             shallow = unit if up < down else -unit
         var rate = _wide_dot(travel, unit)
         if rate == 0:
-            if solid[1] < flat[0] or solid[0] > flat[1]:
+            # An axis the solid does not move along separates it for the
+            # whole interval, even when the two only touch: a face or edge
+            # that slides along the triangle at zero clearance never
+            # enters it.
+            if solid[1] <= flat[0] or solid[0] >= flat[1]:
                 return miss
             continue
         # The solid's interval reaches the triangle's at `first` and

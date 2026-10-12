@@ -506,7 +506,7 @@ def _phases(
         measured,
     )
     meter.begin()
-    world._ccd_separation(0.01)
+    _ = world._ccd_separation(0.01)
     measured = meter.end()
     _report(name, world, probes, rays, "first_domain_separation", -1, measured)
     if not brute:
@@ -558,7 +558,7 @@ def _phases(
             Float64(len(transaction.bodies)),
         )
         meter.begin()
-        world._ccd_separation(0.01)
+        _ = world._ccd_separation(0.01)
         measured = meter.end()
         _report(
             name, world, probes, rays, "separation_domain", repetition, measured

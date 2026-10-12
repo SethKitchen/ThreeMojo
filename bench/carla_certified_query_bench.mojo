@@ -6,13 +6,14 @@
 """The certified lane query on the town, and what #685's items could save.
 
 Issue 685 lists performance items for the opt-in certified query. This
-bench measures the query on `assets/carla/town.xodr` and bounds the gain
-of two of them without changing a pinned source:
+bench measures the query on `assets/carla/town.xodr`:
 
-- Item 1, one global curve deviation: the same queries with the deviation
-  set to zero. A per-segment deviation can only lie between the two, so
-  the difference bounds its gain. The answers of the zero-deviation run
-  are not trusted; only its time and work are reported.
+- Item 1, per-segment curve deviation: the query as built, and the same
+  queries with the global deviation on every segment. The second run takes
+  the earlier code path, so the two give the gain of item 1. The bench
+  counts the queries whose answers differ; that count must be zero. A run
+  with the global deviation set to zero bounds any further gain. Its
+  answers are not trusted; only its time and work are reported.
 - Item 6, endpoint centers evaluated again at each node: the cost of one
   center evaluation, times two evaluations for each refined node.
 
@@ -23,8 +24,8 @@ times every query three times after one warm-up pass.
 Run it with `mojo run -I . bench/carla_certified_query_bench.mojo`.
 """
 
-from extensions.carla.lane_refinement import _checked_center
-from extensions.carla.map import Map
+from extensions.carla.lane_refinement import _LaneCertificate, _checked_center
+from extensions.carla.map import Map, Waypoint
 from extensions.carla.map_search import MapQueryBudget, _MapQueryWork
 from extensions.carla.opendrive import load_opendrive_file
 from extensions.carla.road_info import LANE_DRIVING
@@ -39,6 +40,43 @@ def _queries(map: Map) -> List[Vector3]:
         points.append(middle)
         points.append(middle + Vector3(0.7, 0, 0.3))
     return points^
+
+
+def _answers(
+    map: Map, queries: List[Vector3]
+) -> List[Optional[Tuple[Waypoint, Float64, Float64]]]:
+    # The waypoint and the certified bounds, or None for a refusal.
+    var result = List[Optional[Tuple[Waypoint, Float64, Float64]]]()
+    for query in queries:
+        var work = _MapQueryWork(MapQueryBudget())
+        try:
+            var found = map._closest_lane_certificate_with_work(
+                query, LANE_DRIVING, work
+            )
+            if found:
+                ref value = found.value()
+                result.append((value[0], value[1].lower, value[1].upper))
+            else:
+                result.append(None)
+        except:
+            result.append(None)
+    return result^
+
+
+def _differences(
+    a: List[Optional[Tuple[Waypoint, Float64, Float64]]],
+    b: List[Optional[Tuple[Waypoint, Float64, Float64]]],
+) -> Int:
+    var count = 0
+    for i in range(len(a)):
+        if Bool(a[i]) != Bool(b[i]):
+            count += 1
+        elif a[i]:
+            ref x = a[i].value()
+            ref y = b[i].value()
+            if x[0] != y[0] or x[0].s != y[0].s or x[1] != y[1] or x[2] != y[2]:
+                count += 1
+    return count
 
 
 @fieldwise_init
@@ -111,7 +149,19 @@ def main() raises:
     )
     var base = _run(map, queries)
     _report("certified", base, len(queries))
-    # Item 1: the gain of any tighter deviation is at most this.
+    var answers = _answers(map, queries)
+    # Item 1: the global deviation on every segment is the earlier path.
+    var stored = List[Float64]()
+    for i in range(len(map._segments)):
+        stored.append(map._segments[i].deviation)
+        map._segments[i].deviation = map._curve_deviation
+    var before = _run(map, queries)
+    _report("global-deviation", before, len(queries))
+    var before_answers = _answers(map, queries)
+    for i in range(len(map._segments)):
+        map._segments[i].deviation = stored[i]
+    print("answer_differences", _differences(answers, before_answers))
+    # The gain of any tighter deviation is at most this.
     var deviation = map._curve_deviation
     map._curve_deviation = 0
     var tight = _run(map, queries)

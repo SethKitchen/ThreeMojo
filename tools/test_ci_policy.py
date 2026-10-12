@@ -50,6 +50,7 @@ class CiPolicyTests(unittest.TestCase):
     def test_lint_tools_and_native_gates_have_explicit_conditions(self):
         for name in ('lint', 'lint-macos'):
             job = self.jobs[name]
+            self.assertRegex(job, r'(?m)^    timeout-minutes: 240$')
             for flag, target in [('tools', 'test-tools'), ('coverage_tools', 'test-coverage-tool'),
                                  ('portability', 'test-portability'), ('docs', 'docs-check')]:
                 self.assertRegex(job, "if: needs.scope.outputs.run_" + flag +
@@ -104,7 +105,6 @@ class CiPolicyTests(unittest.TestCase):
         self.assertEqual(self.jobs['cpu'].count('MOJOFLAGS='), 1)
         self.assertNotIn('MOJOFLAGS:', self.text)
         self.assertNotIn('continue-on-error:', self.jobs['lint'])
-        self.assertIn('timeout-minutes: 120', self.jobs['lint'])
 
     def test_compiler_telemetry_is_opted_in_only_for_the_linux_cpu_step(self):
         self.assertIn('THREEMOJO_COMPILER_TELEMETRY: "1"', self.jobs['cpu'])

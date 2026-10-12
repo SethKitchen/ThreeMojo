@@ -28,7 +28,7 @@ class CacheKeyContracts(unittest.TestCase):
         # Construct their historical Map only after qualifying the real root.
         cls.cleanup_sources = cleanup_fixtures.verified_predecessors(ROOT)
         cls.map_fixture = (ROOT/seed.MODULE).read_bytes()
-        if seed.sha(cls.map_fixture.decode()) in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}:
+        if seed.sha(cls.map_fixture.decode()) in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
             seed.verify_score(ROOT)
             cls.map_fixture = seed.score_family_predecessor_source(cls.map_fixture.decode()).encode()
 
@@ -206,7 +206,7 @@ class CacheKeyContracts(unittest.TestCase):
 class ScoreHelperCacheInventoryTests(unittest.TestCase):
     def test_physical_score_inventory_corresponds_only_after_verification(self):
         text = (ROOT/seed.MODULE).read_bytes().decode()
-        if seed.sha(text) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}:
+        if seed.sha(text) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
             self.skipTest('physical source is an earlier reviewed endpoint')
         previous = seed.score_family_predecessor_source(text)
         self.assertNotEqual(cache.inventory_entry(text), cache.inventory_entry(previous))
@@ -222,7 +222,7 @@ class ScoreHelperCacheInventoryTests(unittest.TestCase):
     def test_inventory_comments_preserve_views_but_semantic_tokens_reject(self):
         target = ROOT/seed.MODULE
         physical = target.read_bytes().decode('utf-8')
-        if seed.sha(physical) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}:
+        if seed.sha(physical) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
             self.skipTest('physical source is an earlier reviewed endpoint')
         previous = seed.score_family_predecessor_source(physical)
         read = Path.read_text
@@ -245,7 +245,7 @@ class ScoreHelperCacheInventoryTests(unittest.TestCase):
     def test_unknown_physical_and_between_read_changes_still_reject(self):
         target = ROOT/seed.MODULE
         physical = target.read_bytes()
-        if seed.sha(physical.decode('utf-8')) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}:
+        if seed.sha(physical.decode('utf-8')) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
             self.skipTest('physical source is an earlier reviewed endpoint')
         read_bytes, read_text = Path.read_bytes, Path.read_text
         prior = seed.score_family_predecessor_source(physical.decode('utf-8')).encode('utf-8')

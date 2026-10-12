@@ -62,7 +62,7 @@ The existing `HairLook.shadows` limit still bounds the darkness. The scalp-facin
 
 ## Motion fields
 
-`HairSimulation.step` reuses its particle arrays. It no longer allocates a work list for each strand on every step. Every follower still has its own simulated particles. No GPU dynamics or guide-only interpolation speed claim is made.
+`HairSimulation.step` reuses its particle arrays. It does not allocate a work list for each strand on every step. By default every follower has its own simulated particles. With `guides_only=True` the step lays each follower from its moved guide. No GPU dynamics are used.
 
 `write` checks the strand topology before changing the groom. It rotates each rest normal with the shortest rotation of the local tangent. A reversed tangent uses a deterministic half-turn axis. The scalp-depth value is a rest-surface proxy: outward displacement reduces it, and inward displacement increases it.
 
@@ -89,11 +89,13 @@ The new coverage, density grid and procedural scenes add no third-party asset or
 
 ## CPU stage costs
 
-`bench/hair_cost_bench.mojo` times growth, upload, shading and one simulation step at several groom sizes. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-cost-298.md) records one machine's results and the decisions they support. On that machine the default groom needs about 55 milliseconds a frame on one thread.
+`bench/hair_cost_bench.mojo` times growth, the first upload, the four stages of shading and the simulation step and write at several groom sizes. With the runtime allocation hook it also counts the allocations of each stage on the calling thread. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-cost-298.md) records the results of two machines and the decisions they support.
+
+The report decides two things. Guide-only interpolation stays: a laid follower costs about one seventh of a simulated follower. The hair simulation and shading stay on the CPU: strand rasterization costs about 50 to 110 times more than all the hair stages together. The GPU work is strand drawing and its device upload. On the calling thread, no per-frame allocation grows with the groom.
 
 Pass `guides_only=True` to `HairSimulation` to step the guides only. Each follower then keeps its groomed offsets in its moved guide's frame, and the step with its write costs about a third as much. Each follower must name a guide strand with as many points. The constructor refuses a groom when a follower does not, or when the strand starts or shading fields do not match the points.
 
-Shading, its self-shadow depths, the simulation step, the follower layout and the write all run on every logical core. Each task owns a disjoint run of strands, so the results equal the serial arithmetic bit for bit. A measured guides-only frame of the default groom takes about 7.3 milliseconds on that machine. That is the hair alone, not a whole 60 frames-per-second frame.
+Shading, its self-shadow depths, the simulation step, the follower layout and the write all run on every logical core. Each task owns a disjoint run of strands, so the results equal the serial arithmetic bit for bit. A measured guides-only frame of the default groom takes about 7.3 milliseconds on a 12-core desktop. It takes about 64 milliseconds on a shared four-core cloud machine. That is the hair alone, not a whole 60 frames-per-second frame.
 
 ## Mixed body and strand frames
 
@@ -107,7 +109,9 @@ On that machine a whole render at 4 workers fell from about 1.8 seconds to about
 
 ## Hardware qualification
 
-`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU. The GPU rasterizer is slower for this scene.
+`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU.
+
+The GPU rasterizer is slower for this scene. Its kernel bins the triangles by tile and takes about 38 milliseconds at 1920 by 1080. Packing 2.1 million corners on the host takes about 1.4 seconds. See [the GPU report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/gpu-strands-298.md).
 
 A 1920 by 1080 frame at 60 frames per second has a 16.667 millisecond budget. A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
 

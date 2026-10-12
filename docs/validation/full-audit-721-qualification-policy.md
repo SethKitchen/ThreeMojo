@@ -2,7 +2,7 @@
 
 This reviewed policy exception applies to the combined issue-completion
 qualification. It supersedes only the blanket requirement for unchanged test
-and watchdog limits in `full-audit-711-invariants.md` at these two Python test
+and watchdog limits in `full-audit-711-invariants.md` at these Python test
 harness sites:
 
 - `CoverageInvariantContracts.test_direct_and_qualified_package_verification`
@@ -11,7 +11,8 @@ harness sites:
 - `MapSuccessorLoopTests.clean_import_probe` uses a 30-second subprocess
   allowance instead of 10 seconds for its isolated import/consumer probes.
 
-The allowance is aligned with the existing 30-second proof-consumer probes.
+The import allowances originally aligned with the then-existing 30-second
+proof-consumer probes.
 The original test history does not document the numerical choice of ten
 seconds as a calibrated performance requirement. This is an explicit new
 policy decision, not a claim about an undocumented historical intent.
@@ -22,7 +23,7 @@ under thirty seconds does not turn those failures into passes. The new source
 seal and fresh receipts identify the changed harnesses and this addendum.
 
 Native five-second test limits and fifteen-second outer controls, numerical
-work budgets, proof predicates, coverage denominators and all maintained
+work budgets, proof predicates, coverage denominators and all other maintained
 individual child timeouts remain unchanged. This includes the 120-second
 authority children and the separate 1,800-second AIR-emission child in
 `tools/check_air_calls.py`. Full source-bound, adversarial, native, coverage and
@@ -56,9 +57,16 @@ permitted. Every final test body must run fresh in both modes; partial or
 subset diagnostics cannot be combined into a passing complete authority batch.
 Any new batch or aggregate timeout remains a failure under its actual limits.
 
-Approval of these external scheduling changes does not approve the separate
-two Python 10-to-30-second probe changes described above. Those two probe changes
-still require explicit owner approval before final qualification credit.
+The external scheduling changes did not themselves approve the two import
+allowances. On 12 October 2026, the owner explicitly authorized necessary
+validation-timeout changes. Both import guards remain at thirty seconds.
+
+`MapSuccessorLoopTests.consumer_script_probe` now allows forty-five seconds
+instead of thirty for each complete isolated Python proof-consumer process.
+This applies to its CLI, package, direct-import and refusal controls in both
+interpreter modes. All assertions, source checks and coverage requirements stay
+unchanged. Earlier thirty-second timeouts remain failures under their original
+limit; the new allowance does not turn them into passing evidence.
 
 The hash-bound theorem document and every historical proof record retain their
 original bytes. No source-authority pin is changed for this policy exception.
