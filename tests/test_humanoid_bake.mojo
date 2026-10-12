@@ -284,6 +284,11 @@ def test_digest_covers_each_buffer_and_its_order() raises:
         digests.append(digest)
     var again = _Bake()
     assert_equal(bake_geometry_digest(again.scene, again.assets), digests[0])
+    # A scene with no meshes still has a digest of its empty draw lists.
+    var empty = bake_geometry_digest(Scene(), Assets())
+    assert_true(is_geometry_digest(empty))
+    for digest in digests:
+        assert_true(empty != digest)
 
 
 def _load(
