@@ -814,6 +814,13 @@ def right[N: AnyType]() -> _Right[N]:
     return _Right[N]()
 
 
+# True for the fixed scalar types of `_pure`, by type identity. Their reflected
+# names are "Bool", "SIMD[DType.bool, 1]", "SIMD[DType.int, 1]" and "String".
+comptime _scalar[T: AnyType] = (
+    T == Bool or T == Scalar[DType.bool] or T == Int or T == String
+)
+
+
 def _pure(name: StaticString) -> Bool:
     """Return True for a type whose operands convert to Bool without probes.
 
@@ -826,15 +833,60 @@ def _pure(name: StaticString) -> Bool:
         or name == "SIMD[DType.bool, 1]"
         or name == "SIMD[DType.int, 1]"
         or name == "String"
-        or name.startswith("List[")
+        or _starts(name, "List[")
         or _optional(name)
     )
 
 
+def _starts(name: StaticString, prefix: StaticString) -> Bool:
+    """Return True if `name` starts with `prefix`, compared byte by byte.
+
+    It gives the result of `name.startswith(prefix)`. `node` evaluates the
+    reflected-name tests at compile time, and pinned Mojo 1.1.0 can deadlock
+    a single-threaded build that evaluates `startswith` there. The coverage
+    build of `materials/nodes.mojo` waits forever on one such test.
+
+    Args:
+        name: A reflected type name.
+        prefix: The prefix to look for.
+
+    Returns:
+        True if the first bytes of `name` are the bytes of `prefix`.
+    """
+    var size = prefix.byte_length()
+    if name.byte_length() < size:
+        return False
+    var text = name.as_bytes()
+    var head = prefix.as_bytes()
+    for index in range(size):
+        if text[index] != head[index]:
+            return False
+    return True
+
+
+def _bracket(name: StaticString) -> Int:
+    """Return the byte length of `name` through its first `[`.
+
+    It gives `name.find("[") + 1` without `find`, for the reason that
+    `_starts` gives.
+
+    Args:
+        name: A reflected type name.
+
+    Returns:
+        The index of the first `[` plus one, or 0 if `name` has none.
+    """
+    var text = name.as_bytes()
+    for index in range(len(text)):
+        if text[index] == UInt8(ord("[")):
+            return index + 1
+    return 0
+
+
 def _optional(name: StaticString) -> Bool:
     """Return True for an Optional type name, with or without its module."""
-    return name.startswith("Optional[") or name.startswith(
-        "std.collections.optional.Optional["
+    return _starts(name, "Optional[") or _starts(
+        name, "std.collections.optional.Optional["
     )
 
 
@@ -853,8 +905,8 @@ def _borrowed(name: StaticString) -> Bool:
     comptime proxy = reflect[
         _BorrowedLeaf[Bool, ImmutAnyOrigin, MutAnyOrigin]
     ].name()
-    comptime prefix = proxy[byte = : proxy.find("[") + 1]
-    return name.startswith(prefix)
+    comptime prefix = proxy[byte = : _bracket(proxy)]
+    return _starts(name, prefix)
 
 
 def _standard_string_optional[
@@ -923,6 +975,11 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     # Check actual type identity before reflected-name classification. This
     # keeps all four query arguments relevant without reflecting this tuple.
     comptime if L == Bool and R == Bool and N == Bool and I == Bool:
+        return True
+    # Fixed scalar operands and results take the pure-type branch below, and
+    # a scalar result is not Optional. Type identity answers them without
+    # the reflected-name tests, such as `flag or mask.reduce_or()`.
+    comptime if _scalar[L] and _scalar[R] and _scalar[N]:
         return True
     comptime left = reflect[L].name()
     comptime right = reflect[R].name()
