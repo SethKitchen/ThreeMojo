@@ -122,7 +122,9 @@ take `CubicPolynomial`. Their `_normalized` counterparts take
 `NormalizedCubic`. MapBuilder has the same explicit split. The source
 `*_from_coefficients` and MapBuilder `_si` adapters retain CARLA's tagged
 mode and shared raw coefficient representation. Shared storage after that
-choice does not erase the public type distinction. `RoadGeometry` keeps
+choice does not erase the public type distinction.
+
+`RoadGeometry` keeps
 its common polynomial storage private. `u_coefficients` and `v_coefficients`
 return explicit source tuples; they do not expose a misleading station-typed
 view of normalized coefficients.
@@ -187,10 +189,12 @@ Absolute source dates stay integer counters. They do not become an elapsed
 - `RecorderInfo.date`, each `generation_delta0` field, and the recorder's
   monotonic `start_ns` retain their source or internal integer storage.
 
-`tests/test_carla_epoch_adapters.mojo` covers signed i64 wire round trips,
-large odd values above `2^53`, both signed endpoints, recorder sentinels,
-default constructors, CAM epoch storage and encoding, and unchanged typed
-CAM interval and owner checks. Four `carla_epoch333_*` negative fixtures
+`tests/test_carla_epoch_adapters.mojo` covers signed i64 wire round trips
+and large odd values above `2^53`. It checks both signed endpoints, recorder
+sentinels, and default constructors. It also checks CAM epoch storage and
+encoding, unchanged typed CAM intervals, and owner checks.
+
+Four `carla_epoch333_*` negative fixtures
 require the named source route for an arbitrary integer epoch. The existing
 CAM interval negative fixtures still test interval types, not an argument-count
 error. These tests are added controls, not a claimed native pass.
