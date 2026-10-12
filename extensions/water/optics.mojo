@@ -16,8 +16,9 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
+from math.sine import sin_float32
 from math.vector3 import Vector3
-from std.math import cos, exp, floor, log, pow, round, sin, sqrt
+from std.math import cos, exp, floor, fma, log, pow, sin, sqrt
 from units.si import DEGREE, Angle
 
 
@@ -106,14 +107,16 @@ def hash12(x: Float32, y: Float32) -> Float32:
 
 
 def _times(a: Float32, b: Float32) -> Float32:
-    # A Float32 product is exact in Float64, so one cast rounds it once.
-    return Float32(Float64(a) * Float64(b))
+    # An `fma` with a zero addend is the product rounded once, and no
+    # compiler fuses its result into the next add. A plain product can fuse.
+    # Apple GPUs have no Float64, so the rounding cannot go through one.
+    return fma(a, b, Float32(0))
 
 
 def _plus(a: Float32, b: Float32) -> Float32:
-    # Float64 has more than 2 * 24 + 2 bits, so the second rounding of a
-    # Float32 sum is the correct one.
-    return Float32(Float64(a) + Float64(b))
+    # Each operand comes from `_times`, `_plus` or `_fract`, and none of
+    # them is a plain product, so the sum cannot fuse. It rounds once.
+    return a + b
 
 
 def _fract(value: Float32) -> Float32:
@@ -121,11 +124,10 @@ def _fract(value: Float32) -> Float32:
 
 
 def _sin(value: Float32) -> Float32:
-    # A GPU sine is accurate near zero only. Remove whole turns in Float64
-    # first, so a CPU and a GPU take the sine of the same small angle.
-    var turn = Float64(6.283185307179586)
-    var angle = Float64(value)
-    return sin(Float32(angle - turn * round(angle / turn)))
+    # A GPU sine is accurate near zero only, and Apple GPUs have no Float64
+    # to reduce an angle in. The shared sine reduces in Float32 and integer
+    # arithmetic, and gives the same bits on a CPU and a GPU.
+    return sin_float32(value)
 
 
 def value_noise(x: Float32, y: Float32) -> Float32:
