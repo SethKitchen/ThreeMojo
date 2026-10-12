@@ -4148,7 +4148,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '                result[path] = sha(raw)\n',
          ),
         ),
-        (2297, 2393,
+        (2297, 2403,
          (
           'def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None):\n',
          ),
@@ -4220,6 +4220,18 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    if edge is None:\n',
           '        return text\n',
           '    try:\n',
+          '        if _inputs is not None:\n',
+          '            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs),\n',
+          "                    'invalid typed source owner')\n",
+          '            if type(_inputs) is _BorrowedCacheInputs:\n',
+          '                # Authenticate the lease before using its operation. Its\n',
+          '                # canonical check poisons the consumed owner for bad tokens.\n',
+          '                _BorrowedCacheInputs._check(_inputs, _input_owner, root)\n',
+          '                explicit_operation = _operation\n',
+          '                _operation = _inputs._operation\n',
+          '                require(explicit_operation is None or explicit_operation is _operation,\n',
+          "                        'typed source operation differs from borrowed owner')\n",
+          "        require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')\n",
           '        if not (typed_boundary.is_current(path, text) or\n',
           "                source.token_sha256(text) == edge['after_token_sha256']):\n",
           '            return text\n',
@@ -4232,9 +4244,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                'supplied typed source differs from physical input: ' + path)\n",
           "        _observe_text(root, path, text, _operation=_operation, mode='physical',\n",
           '                      supplied=True, _checked_raw=raw)\n',
-          "        require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')\n",
           '        if _inputs is not None:\n',
-          "            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid typed source owner')\n",
           "            require(_inputs.raw(_input_owner, root, path) == raw, 'typed owner image changed: ' + path)\n",
           '        elif _operation is None:\n',
           '            verify(root, exact=True)\n',
@@ -4251,7 +4261,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           'def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None, _expected_sources=None):\n',
          ),
         ),
-        (2410, 2426,
+        (2420, 2436,
          (
           '        for path, raw in snapshots.items():\n',
           '            text = _physical_text(raw)\n',
@@ -4275,7 +4285,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            text = _historical_typed_text(path, _physical_text(raw))\n',
          ),
         ),
-        (2427, 2428,
+        (2437, 2438,
          (
           '            require(source.token_sha256(supplied_view) == source.token_sha256(text),\n',
          ),
@@ -4283,7 +4293,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            require(source.token_sha256(supplied_view) == source.token_sha256(_physical_text(raw)),\n',
          ),
         ),
-        (2430, 2432,
+        (2440, 2442,
          (
           '            require((not exact or sha(raw) == AFTER_SHA256[path])\n',
           "                    and source.token_sha256(_physical_text(raw)) == item['after_token_sha256']\n",
@@ -4293,13 +4303,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                    and source.token_sha256(text) == item['after_token_sha256']\n",
          ),
         ),
-        (2449, 2450,
+        (2459, 2460,
          (),
          (
           '                          | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else set())\n',
          ),
         ),
-        (2474, 2476,
+        (2484, 2486,
          (
           "                == set(record['dependency_inventory']) | helper_closure, 'production import inventory changed')\n",
          ),
@@ -4308,7 +4318,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                    set(record['dependency_inventory']) | helper_closure), 'production import inventory changed')\n",
          ),
         ),
-        (2478, 2480,
+        (2488, 2490,
          (
           "        require(native_found == set(record['native_dependency_inventory']) | helper_closure,\n",
          ),
@@ -4317,7 +4327,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                set(record['native_dependency_inventory']) | helper_closure),\n",
          ),
         ),
-        (2481, 2496,
+        (2491, 2506,
          (),
          (
           '        if typed_bindings:\n',
@@ -4337,7 +4347,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                    'typed production import inventory changed')\n",
          ),
         ),
-        (2525, 2529,
+        (2535, 2539,
          (
           "                require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' + path)\n",
          ),
@@ -4348,14 +4358,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)\n",
          ),
         ),
-        (2542, 2544,
+        (2552, 2554,
          (),
          (
           '        if typed_bindings:\n',
           '            expected_inventory = typed_boundary.INVENTORY\n',
          ),
         ),
-        (2584, 2587,
+        (2594, 2597,
          (
           "        text = _regular(root, path).read_text(encoding='utf-8')\n",
          ),
@@ -4365,14 +4375,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    text = reviewed_typed_text(root, path, text, _operation=_operation)\n',
          ),
         ),
-        (2590, 2590,
+        (2600, 2600,
          (
           '    if _operation is not None:\n',
           "        _observe_text(root, path, text, _operation=_operation, mode='physical', supplied=True)\n",
          ),
          (),
         ),
-        (2603, 2604,
+        (2613, 2614,
          (
           '        require(digest == AFTER_TOKEN_SHA256[path],\n',
          ),
@@ -4380,7 +4390,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, expected_raw),\n',
          ),
         ),
-        (2612, 2613,
+        (2622, 2623,
          (
           "        require(sha(road_raw) == record['unchanged_inputs'][road],\n",
          ),
@@ -4388,7 +4398,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "        require(sha(_historical_typed_text(road, road_raw.decode('utf-8'))) == record['unchanged_inputs'][road],\n",
          ),
         ),
-        (2628, 2635,
+        (2638, 2645,
          (
           '    record = verify(root)\n',
          ),
@@ -4402,7 +4412,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    record = verify(root, _expected_sources=physical_inputs)\n',
          ),
         ),
-        (2639, 2647,
+        (2649, 2657,
          (),
          (
           '        physical = _regular(root, path).read_bytes()\n',
@@ -4415,7 +4425,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        text = _historical_typed_text(path, _physical_text(physical))\n',
          ),
         ),
-        (2654, 2655,
+        (2664, 2665,
          (
           '            require(source.token_sha256(text) == source.token_sha256(_physical_text(raw)),\n',
          ),
@@ -4423,13 +4433,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            require(raw == physical and source.token_sha256(text) == source.token_sha256(_historical_typed_text(path, _physical_text(raw))),\n',
          ),
         ),
-        (2656, 2657,
+        (2666, 2667,
          (),
          (
           '            result[path] = text\n',
          ),
         ),
-        (2675, 2678,
+        (2685, 2688,
          (
           '            changed = any(declaration_sha256(text, name) not in expected\n',
          ),
@@ -4439,7 +4449,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            changed = typed_current or any(declaration_sha256(text, name) not in expected\n',
          ),
         ),
-        (2702, 2703,
+        (2712, 2713,
          (
           'def reviewed_lane_before_center_text(root, text=None):\n',
          ),
@@ -4447,13 +4457,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           'def reviewed_lane_before_center_text(root, text=None, *, _operation=None):\n',
          ),
         ),
-        (2704, 2705,
+        (2714, 2715,
          (),
          (
           '    supplied_raw = None\n',
          ),
         ),
-        (2706, 2718,
+        (2716, 2728,
          (
           "        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied center source')\n",
           "    item = verify(root)['sources'][path]\n",
@@ -4473,7 +4483,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                'supplied center physical input changed during admission')\n",
          ),
         ),
-        (2727, 2758,
+        (2737, 2768,
          (),
          (
           '\n',
@@ -4509,7 +4519,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        _operation_fail(_operation, error)\n',
          ),
         ),
-        (2776, 2784,
+        (2786, 2794,
          (),
          (
           "        if result.get(station.MODULE) == typed_boundary.EDGES[station.MODULE]['after_sha256']:\n",
@@ -4522,13 +4532,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            result.update(_typed_boundary_bindings(root, _operation=_operation))\n',
          ),
         ),
-        (2811, 2812,
+        (2821, 2822,
          (),
          (
           '        result.update(_typed_boundary_bindings(root, _operation=_operation))\n',
          ),
         ),
-        (2816, 2818,
+        (2826, 2828,
          (),
          (
           '        if _operation is not None:\n',
@@ -6788,6 +6798,342 @@ return result
         self.assertEqual(len(calls), 1)
         self.assertIs(calls[0], statements[0].body[0].value)
 
+
+
+class TypedBorrowedProvenancePureControls(unittest.TestCase):
+    """Isolated helper wiring, never physical current-root admission evidence."""
+
+    def probe(self):
+        import types
+        raw = Path(cleanup.__file__).read_bytes()
+        _checker_source_predecessor('full_audit_cleanup_contracts.py', raw)
+        node = function_ast(cleanup, 'reviewed_typed_text')
+        root, path, physical = Path('/isolated-typed-owner'), 'module.mojo', b'current typed'
+        events, reads, observations, projections, admissions = [], [], [], [], []
+        token = object()
+
+        class Refusal(ValueError):
+            pass
+
+        class Operation:
+            def __init__(self):
+                self.failed = False
+                self.active = True
+
+        operation, foreign = Operation(), Operation()
+
+        def require(value, message):
+            if not value:
+                raise Refusal(message)
+
+        def fail(owner, error):
+            events.append(('failure', owner))
+            if type(owner) is Operation:
+                owner.failed = True
+            raise error
+
+        class Base:
+            def raw(self, owner, actual_root, actual_path):
+                events.append(('lease-image', owner))
+                require(owner is token and actual_root == root and actual_path == path,
+                        'invalid isolated base input context')
+                return physical
+
+        class Borrowed(Base):
+            def _check(self, owner, actual_root):
+                events.append(('authenticate', self))
+                try:
+                    require(type(self._operation) is Operation, 'malformed canonical owner')
+                    require(owner is token and actual_root == root,
+                            'invalid isolated borrowed token or root')
+                    require(self._operation.active and not self._operation.failed,
+                            'inactive isolated borrowed owner')
+                except Refusal as error:
+                    fail(self._operation, error)
+
+        lease = Borrowed()
+        lease._operation = operation
+        # A permissive instance attribute cannot replace the canonical class
+        # authentication at the helper's entry boundary.
+        lease._check = lambda *args: events.append(('unchecked-instance-hook', lease))
+        returned = []
+
+        class PhysicalFile:
+            def read_bytes(self):
+                value = returned[len(reads)] if len(reads) < len(returned) else physical
+                reads.append(value)
+                events.append(('read', len(reads)))
+                return value
+
+        def regular(actual_root, actual_path):
+            require((actual_root, actual_path) == (root, path), 'wrong physical input')
+            return PhysicalFile()
+
+        def check(owner, actual_root):
+            events.append(('operation-check', owner))
+            if owner is not None:
+                if (type(owner) is not Operation or not owner.active or owner.failed
+                        or actual_root != root):
+                    fail(owner, Refusal('inactive isolated operation'))
+
+        def observe(actual_root, actual_path, value, *, _operation=None):
+            observations.append((_operation, value))
+            events.append(('observe', _operation))
+            if _operation is not None:
+                check(_operation, actual_root)
+                if actual_path != path or type(value) is not bytes or value != physical:
+                    fail(_operation, Refusal('returned physical image changed'))
+            return value
+
+        def tokens(value):
+            require(type(value) is str, 'nontext isolated tokens')
+            return value.split('#', 1)[0].strip()
+
+        def supplied(actual_root, actual_path, value, **kwargs):
+            events.append(('supplied', kwargs['_operation']))
+            require(kwargs == {'_operation': kwargs['_operation'], 'mode': 'physical',
+                               'supplied': True, '_checked_raw': physical},
+                    'changed supplied observation arguments')
+            check(kwargs['_operation'], actual_root)
+            require(actual_path == path and tokens(value) == tokens(physical.decode()),
+                    'changed supplied current tokens')
+            return value
+
+        def admitted(actual_root, **kwargs):
+            require(actual_root == root and kwargs == {'exact': True}, 'changed unowned gate')
+            admissions.append('unowned')
+
+        def record(owner, actual_root, **kwargs):
+            require(owner is operation and actual_root == root and kwargs == {'exact': True},
+                    'changed owned gate')
+            admissions.append('owned')
+
+        def historical(actual_path, text):
+            require((actual_path, text) == (path, physical.decode()), 'nonphysical provenance')
+            projections.append(text)
+            return 'historical provenance'
+
+        namespace = dict(vars(cleanup))
+        namespace.update(require=require, _operation_fail=fail, _operation_check=check,
+            _CacheInputs=Base, _BorrowedCacheInputs=Borrowed, _regular=regular,
+            _observe_bytes=observe, _observe_text=supplied, verify=admitted,
+            _operation_record=record, _historical_typed_text=historical,
+            source=types.SimpleNamespace(token_sha256=tokens),
+            typed_boundary=types.SimpleNamespace(EDGES={path: {'after_token_sha256': 'current typed'}},
+                is_current=lambda name, value: name == path and value in (physical, physical.decode())))
+        exec(compile(ast.Module(body=[node], type_ignores=[]),
+                     '<isolated-borrowed-typed-provenance>', 'exec'), namespace)
+        return types.SimpleNamespace(function=namespace['reviewed_typed_text'], root=root,
+            path=path, physical=physical, token=token, lease=lease, base=Base(),
+            operation=operation, foreign=foreign, events=events, reads=reads,
+            observations=observations, projections=projections, admissions=admissions,
+            returned=returned, Refusal=Refusal)
+
+    def test_authenticated_borrowed_owner_joins_both_reads_and_supplied_view(self):
+        for explicit in ('implicit', 'same'):
+            with self.subTest(explicit=explicit):
+                p = self.probe()
+                result = p.function(p.root, p.path, 'current typed # supplied comment',
+                    _inputs=p.lease, _input_owner=p.token,
+                    _operation=p.operation if explicit == 'same' else None)
+                self.assertEqual(result, 'historical provenance')
+                self.assertEqual(p.reads, [p.physical, p.physical])
+                self.assertEqual(p.observations, [(p.operation, p.physical)] * 2)
+                self.assertEqual(p.events[0], ('authenticate', p.lease))
+                self.assertIn(('supplied', p.operation), p.events)
+                self.assertNotIn(('unchecked-instance-hook', p.lease), p.events)
+                self.assertEqual(p.projections, [p.physical.decode()])
+                self.assertEqual(p.admissions, [])
+                self.assertFalse(p.operation.failed)
+
+    def test_first_and_final_returned_mutations_poison_the_joined_owner(self):
+        for ordinal in (1, 2):
+            with self.subTest(ordinal=ordinal):
+                p = self.probe()
+                changed = p.physical + b'\n# returned physical B\n'
+                p.returned.extend([p.physical] * (ordinal - 1) + [changed])
+                arguments = {'_inputs': p.lease, '_input_owner': p.token}
+                with self.assertRaisesRegex(p.Refusal, '^returned physical image changed$'):
+                    p.function(p.root, p.path, p.physical.decode(), **arguments)
+                self.assertTrue(p.operation.failed)
+                self.assertEqual(len(p.reads), ordinal)
+                self.assertEqual(p.observations[-1], (p.operation, changed))
+                self.assertEqual(p.projections, [])
+                # Catching the first failure cannot turn the same lease into
+                # another authority, even after subsequent reads return A.
+                with self.assertRaisesRegex(p.Refusal, 'inactive isolated borrowed owner'):
+                    p.function(p.root, p.path, p.physical.decode(), **arguments)
+                self.assertEqual(len(p.reads), ordinal)
+                self.assertTrue(p.operation.failed)
+
+    def test_bad_borrowed_authority_refuses_before_current_or_historical_reads(self):
+        faults = ('explicit mismatch', 'missing token', 'wrong token', 'foreign root',
+                  'inactive owner', 'malformed canonical owner', 'invalid lease type', 'lease subclass',
+                  'owner without inputs')
+        for text in ('current typed', 'historical text'):
+            for fault in faults:
+                with self.subTest(text=text, fault=fault):
+                    p = self.probe()
+                    root = p.root
+                    arguments = {'_inputs': p.lease, '_input_owner': p.token}
+                    if fault == 'explicit mismatch': arguments['_operation'] = p.foreign
+                    elif fault == 'missing token': arguments['_input_owner'] = None
+                    elif fault == 'wrong token': arguments['_input_owner'] = object()
+                    elif fault == 'foreign root': root = p.root/'foreign'
+                    elif fault == 'inactive owner': p.operation.active = False
+                    elif fault == 'malformed canonical owner': p.lease._operation = object()
+                    elif fault == 'invalid lease type': arguments['_inputs'] = object()
+                    elif fault == 'lease subclass':
+                        class Sublease(type(p.lease)):
+                            pass
+                        candidate = Sublease()
+                        candidate._operation = p.operation
+                        arguments['_inputs'] = candidate
+                    else: arguments['_inputs'] = None
+                    with self.assertRaises(p.Refusal):
+                        p.function(root, p.path, text, **arguments)
+                    self.assertEqual(p.reads, [])
+                    self.assertEqual(p.projections, [])
+                    self.assertEqual(p.admissions, [])
+                    trusted = fault not in ('malformed canonical owner', 'invalid lease type', 'lease subclass',
+                                            'owner without inputs')
+                    self.assertEqual(p.operation.failed, trusted)
+                    self.assertFalse(p.foreign.failed)
+
+    def test_historical_base_unowned_and_explicit_operation_domains_stay_distinct(self):
+        for mode in ('borrowed', 'base', 'unowned', 'operation'):
+            p = self.probe()
+            arguments = ({'_inputs': p.lease if mode == 'borrowed' else p.base,
+                          '_input_owner': p.token} if mode in ('borrowed', 'base') else
+                         {'_operation': p.operation} if mode == 'operation' else {})
+            for text in ('historical text', 'current typed + stale executable token'):
+                with self.subTest(mode=mode, text=text):
+                    self.assertIs(p.function(p.root, p.path, text, **arguments), text)
+                    self.assertEqual(p.reads, [])
+                    self.assertEqual(p.projections, [])
+                    self.assertEqual(p.admissions, [])
+            self.assertEqual(p.function(p.root, p.path, 'current typed', **arguments),
+                             'historical provenance')
+            expected_owner = p.operation if mode in ('borrowed', 'operation') else None
+            self.assertEqual(p.observations, [(expected_owner, p.physical)] * 2)
+            self.assertEqual(p.admissions, ['unowned'] if mode == 'unowned' else
+                             ['owned'] if mode == 'operation' else [])
+        p = self.probe()
+        text = 'outside the typed edge domain'
+        self.assertIs(p.function(p.root, 'unlisted.mojo', text, _inputs=object()), text)
+        self.assertEqual((p.events, p.reads, p.projections, p.admissions), ([], [], [], []))
+
+
+class TypedBorrowedProvenanceCurrentControls(unittest.TestCase):
+    """Actual current-root borrowed reads; all production admission stays real."""
+    setUp = BoundedOwnerCurrentControls.setUp
+    audit = BoundedOwnerCurrentControls.audit
+    assert_closed = BoundedOwnerCurrentControls.assert_closed
+    _frame = staticmethod(BoundedOwnerDistinctMechanismControls._frame)
+
+    def test_first_and_final_borrowed_reads_refuse_and_caught_errors_stay_sticky(self):
+        from functools import wraps
+        import cache_key_contracts as cache
+        import seed_count_contracts as seed
+        helper = cleanup.reviewed_typed_text
+        raw_source = Path(cleanup.__file__).read_bytes()
+        _checker_source_predecessor('full_audit_cleanup_contracts.py', raw_source)
+        path = seed.MODULE
+        physical = (self.root/path).read_bytes()
+        reason = 'full-audit cleanup successor: consumed operation bytes changed: ' + path
+        for ordinal in (1, 2):
+            with self.subTest(ordinal=ordinal):
+                selected, reads, marked, observed, caught, retried, projections = [], [], [], [], [], [], []
+                original_read = Path.read_bytes
+                original_observe = cleanup._operation_observe
+                original_projection = cleanup._historical_typed_text
+
+                @wraps(original_read)
+                def read(actual, *args, **kwargs):
+                    value = original_read(actual, *args, **kwargs)
+                    frame = sys._getframe(1)
+                    if frame.f_code is not helper.__code__ or actual != self.root/path:
+                        return value
+                    lease = frame.f_locals.get('_inputs')
+                    if (type(lease) is not cleanup._BorrowedCacheInputs
+                            or self._frame(seed.verify_score, frame) is None
+                            or self._frame(cache.verify, frame) is not lease._owner_frame):
+                        return value
+                    self.assertIsNone(frame.f_locals['explicit_operation'])
+                    operation = frame.f_locals['_operation']
+                    self.assertIs(operation, lease._operation)
+                    self.assertIs(frame.f_locals['_input_owner'], lease._owner)
+                    if not selected:
+                        self.assertEqual(operation._state, 'active')
+                        self.assertFalse(operation._failed)
+                        selected.append((frame, lease, operation))
+                    self.assertIs(frame, selected[0][0], 'a caught refusal reached another physical read')
+                    reads.append(value)
+                    if len(reads) == ordinal:
+                        self.assertEqual(marked, [])
+                        value += b'\n# borrowed physical B\n'
+                        marked.append(value)
+                    return value
+
+                @wraps(original_observe)
+                def observe(operation, root, name, value, mode):
+                    if marked and value is marked[0]:
+                        self.assertIs(operation, selected[0][2])
+                        self.assertEqual((root, name, mode), (self.root, path, 'bytes'))
+                        observed.append(value)
+                    return original_observe(operation, root, name, value, mode)
+
+                @wraps(original_projection)
+                def project(name, text):
+                    if selected and sys._getframe(1) is selected[0][0]:
+                        projections.append((name, text))
+                    return original_projection(name, text)
+
+                @wraps(helper)
+                def checked(root, name, text, **kwargs):
+                    try:
+                        return helper(root, name, text, **kwargs)
+                    except cleanup._OperationCoherenceError as error:
+                        if not selected or kwargs.get('_inputs') is not selected[0][1] or caught:
+                            raise
+                        frame, lease, operation = selected[0]
+                        self.assertIsNone(kwargs.get('_operation'))
+                        self.assertEqual(str(error), reason)
+                        self.assertTrue(operation._failed)
+                        caught.append(error)
+                        with self.assertRaises(cleanup._OperationCoherenceError) as lease_failure:
+                            lease.raw(kwargs['_input_owner'], root, name)
+                        with self.assertRaises(cleanup._OperationCoherenceError) as retry_failure:
+                            helper(root, name, text, **kwargs)
+                        self.assertEqual(str(lease_failure.exception), reason)
+                        self.assertEqual(str(retry_failure.exception), reason)
+                        retried.extend((lease_failure.exception, retry_failure.exception))
+                        raise
+
+                with self.audit() as events, patch.object(Path, 'read_bytes', read), \
+                        patch.object(cleanup, '_operation_observe', observe), \
+                        patch.object(cleanup, '_historical_typed_text', project), \
+                        patch.object(cleanup, 'reviewed_typed_text', checked):
+                    with self.assertRaises(ValueError) as public:
+                        invariant.verify(self.root)
+                self.assertEqual(len(selected), 1)
+                self.assertEqual(len(marked), 1)
+                self.assertEqual(reads, [physical] * ordinal)
+                self.assertEqual(observed, marked)
+                self.assertEqual(len(caught), 1)
+                self.assertEqual(len(retried), 2)
+                self.assertEqual(projections, [])
+                operation = selected[0][2]
+                self.assertEqual(events['admissions'], [operation])
+                self.assertTrue(operation._failed)
+                self.assertEqual(operation._failure_reason, reason)
+                chain, error = [], public.exception
+                while error is not None and all(error is not item for item in chain):
+                    chain.append(error)
+                    error = error.__cause__
+                self.assertTrue(any(error is caught[0] for error in chain))
+                self.assert_closed(operation)
+                self.assertEqual((self.root/path).read_bytes(), physical)
 
 
 if __name__ == '__main__':
