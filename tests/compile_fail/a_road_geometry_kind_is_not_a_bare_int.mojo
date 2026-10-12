@@ -10,7 +10,7 @@ from units.si import Angle, Length, METER, RADIAN
 
 
 def main() raises:
-    var g = RoadGeometry(
+    var g = RoadGeometry.from_float32(
         0,
         Length(0.0, METER),
         Length(0.0, METER),
