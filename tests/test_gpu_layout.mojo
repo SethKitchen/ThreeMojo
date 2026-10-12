@@ -90,6 +90,8 @@ from materials.material import (
     PHYSICAL,
     TOON,
 )
+from materials.material import DOUBLE_SIDE, Material
+from objects.mesh import Mesh
 from materials.nodes import (
     COLOR_NODE as NODES_COLOR,
     NodeGraph,
@@ -141,6 +143,7 @@ from render.gpu import (
     DIRECTIONAL_FLOATS,
     flatten,
     flatten_into,
+    join_corners,
     flatten_fog,
     flatten_lights,
     flatten_programs,
@@ -662,6 +665,52 @@ def test_flattening_on_many_threads_matches_one() raises:
         var bits = bitcast[DType.uint32](expected[at])
         assert_equal(bitcast[DType.uint32](split[at]), bits)
         assert_equal(bitcast[DType.uint32](serial[at]), bits)
+
+
+def test_joining_on_many_threads_matches_whole_corners() raises:
+    # Two materials on a finely split plane give more corners than one
+    # join worker takes, so eight workers really split the list.
+    var scene = Scene()
+    var assets = Assets()
+    var geometry = assets.geometries.add(
+        plane(Length(4, METER), Length(4, METER), 64, 64)
+    )
+    var shiny = Material(Color(200, 40, 10), kind=PHYSICAL, side=DOUBLE_SIDE)
+    shiny.roughness = 0.25
+    scene.add_mesh(
+        Mesh(geometry, assets.materials.add(shiny^), scene.add(Object3D()))
+    )
+    var dull = Material(Color(10, 40, 200), kind=PHYSICAL)
+    dull.roughness = 0.75
+    scene.add_mesh(
+        Mesh(geometry, assets.materials.add(dull^), scene.add(Object3D()))
+    )
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(90, DEGREE), 1, Length(1, METER), Length(100, METER)
+    )
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    var frame = Renderer(64, 64).prepare_frame(scene, assets, camera)
+    var expected = frame.whole_corners()
+    assert_true(len(expected) > 2 * 4096)
+    var rough = 0
+    for workers in [1, 8]:
+        var whole = join_corners(frame, workers)
+        assert_equal(len(whole), len(expected))
+        var flat = flatten(whole)
+        var reference = flatten(expected)
+        for at in range(len(flat)):
+            assert_equal(
+                bitcast[DType.uint32](flat[at]),
+                bitcast[DType.uint32](reference[at]),
+            )
+        for index in range(len(whole)):
+            assert_equal(whole[index].kind.value, expected[index].kind.value)
+            assert_equal(whole[index].blend.value, expected[index].blend.value)
+            if whole[index].roughness == 0.75:
+                rough += 1
+    # Both materials' surfaces reached the joined corners.
+    assert_true(rough > 0 and rough < 2 * len(expected))
 
 
 def test_the_point_state_table_has_an_entry_per_map_and_policy() raises:

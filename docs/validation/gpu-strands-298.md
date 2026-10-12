@@ -9,7 +9,7 @@ These are local results. Hosted CI builds the bench but does not run it.
 `bench/hair_frame_bench.mojo` draws the default groom as [the frame report](hair-frame-729.md) describes: 10,185 strands, a head sphere, one directional light and ambient light. The command is `mojo run -I . bench/hair_frame_bench.mojo 3 gpu W H`. Two warm-up frames come first, then three timed frames. The GPU stages are:
 
 - `gpu prepare`: `Renderer.prepare_frame` at the GPU's size, and the lighting.
-- `gpu draw`: `GpuRenderer.draw`, with `Frame.whole_corners()` as its argument. It includes the join of the corners, the host checks, the upload and the launch.
+- `gpu draw`: `join_corners` and `GpuRenderer.draw`. It includes the join of the corners to their surfaces, the host checks, the upload and the launch.
 - `gpu read back`: `GpuRenderer.read_back`, which waits for the kernel.
 
 A separate run timed the stages inside `draw` with temporary timers. Those timers are not in the repository.
@@ -20,7 +20,7 @@ Hardware: AMD Ryzen 9 5900X (12 cores, 24 threads) and NVIDIA TITAN RTX (24 GiB,
 
 - **Tile binning.** The host lists each 16 x 16 tile's triangles with `bin_triangles`, in the frame's order. The kernel tests a pixel only against its tile's list. A triangle goes in each tile where a pixel sample can lie inside its snapped bounds, by the kernel's own `snap` and `sample`. So each pixel sees the same covering triangles, in the same order. See [Tile binning](../wiki/GPU-backend.md#tile-binning).
 - **Upload.** `flatten_into` writes the vertex lanes straight into the device buffer's host mapping, on every core. The 1.07 GB list that `flatten` built first is gone.
-- **Join.** `Frame.whole_corners` joins corners to their surfaces on every core.
+- **Join.** `join_corners` joins a frame's corners to their surfaces on every core, as `Frame.whole_corners` does on one. It is in `render/gpu.mojo` because `renderers/renderer.mojo` is pinned by a reviewed coverage proof.
 
 ## Results
 
@@ -51,7 +51,7 @@ Inside `draw` at 1920 x 1080, with the join still in the caller and before the j
 
 - `tests/test_gpu_layout.mojo` checks each covered pixel of a 240-triangle field against the bins. The field holds small, thin and large triangles of both windings on and around tile seams. The image is not a whole number of tiles. A triangle with a corner that is not finite, or too large to snap, must be in every tile. A triangle off the image must be in none. It checks the fallback when the bins would be too large. It also checks that `flatten_into` on four threads and on one gives the bits of `flatten`.
 - `tests/test_gpu.mojo` draws a field of 300 thin, tiny and blended triangles across every seam on both backends. No pixel is different. It then draws a smaller frame into the grown buffer. All 281 device tests pass, and so do the parity tests that came before.
-- `tests/test_audit_slim.mojo` checks that `whole_corners` on one thread and on eight gives the same corners.
+- `tests/test_gpu_layout.mojo` also checks that `join_corners` on one thread and on eight gives the bits of `Frame.whole_corners`.
 
 ## Decisions
 

@@ -197,6 +197,9 @@ from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.rasterizer import (
+    joined,
+    Surface,
+    Corner,
     fragment_velocity,
     check_line_state,
     check_point_state,
@@ -500,7 +503,7 @@ from materials.compute_nodes import (
     unpack_storage,
 )
 from std.atomic import Atomic
-from renderers.renderer import Renderer
+from renderers.renderer import Frame, Renderer
 from objects.gaussian_splat import GaussianSplat
 from render.splat_raster import prepare_gaussian_splat
 from render.splatrule import (
@@ -1201,6 +1204,64 @@ def flatten_into(
     # The tasks read the corners through a pointer the compiler cannot
     # see; this read keeps the list alive until every band has finished.
     _ = len(corners)
+
+
+def join_corners(frame: Frame, workers: Int = 0) -> List[RasterVertex]:
+    """Return a frame's triangle corners whole, as `Frame.whole_corners` does,
+    joined on `workers` threads.
+
+    A frame of strand hair has millions of corners, and `draw` takes them
+    whole. Each worker writes its own run of the list.
+
+    Args:
+        frame: What `Renderer.prepare_frame` returned.
+        workers: How many threads to join on; zero or fewer means one for
+            each logical core.
+
+    Returns:
+        Each corner joined to its surface, in the frame's order.
+    """
+    var count = len(frame.corners)
+    var whole = List[RasterVertex]()
+    # Every slot is written below. A vertex holds no heap storage, so
+    # writing over an unset slot runs no destructor that matters.
+    whole.resize(unsafe_uninit_length=count)
+    var threads = workers if workers > 0 else num_logical_cores()
+    var bands = min(threads, max(1, count // _FLATTEN_GRAIN))
+    var group = TaskGroup()
+    for band in range(bands):
+        group.create_task(
+            _join_band(
+                frame.corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                frame.surfaces.unsafe_ptr().unsafe_origin_cast[
+                    ImmutAnyOrigin
+                ](),
+                whole.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                band * count // bands,
+                (band + 1) * count // bands,
+            )
+        )
+    group.wait()
+    # The tasks read the frame through pointers the compiler cannot see;
+    # this read keeps it alive until every band has finished.
+    _ = len(frame.corners)
+    return whole^
+
+
+async def _join_band(
+    corners: Pointer[Corner, ImmutAnyOrigin],
+    surfaces: Pointer[Surface, ImmutAnyOrigin],
+    whole: MutPointer[RasterVertex, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Join corners `first` to `past` of `join_corners`'s frame to their
+    surfaces, into `whole`."""
+    for index in range(first, past):
+        ref corner = corners[unsafe_offset=index]
+        whole[unsafe_offset=index] = joined(
+            corner, surfaces[unsafe_offset=corner.surface]
+        )
 
 
 # The fewest vertices a flatten worker takes: below this, starting a task
