@@ -124,9 +124,10 @@ attribute boundary. This is an intentional domain check.
 ## Validation
 
 `tests/test_carla_configuration_quantities.mojo` covers typed construction,
-unit conversions, raw storage, nonfinite values, negative domains,
-conversion overflow, transactional setters, weather sentinels and clamps,
-Float32 low bits, signed zero, and Float64 refractory time.
+unit conversions, and raw storage. Refusal controls cover nonfinite values,
+negative domains, conversion overflow, and transactional setters. Other
+controls cover weather sentinels and clamps, Float32 low bits, signed zero,
+and Float64 refractory time.
 
 Thirty `carla_config_*` compile-fail fixtures cover raw values, wrong
 dimensions, and wrong precision at ten configuration boundaries. The
