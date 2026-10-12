@@ -388,13 +388,13 @@ def test_pid() raises:
     # P = 1, I = 0.5 * 1 * 0.1 = 0.05, D = -0.1 * (1 - 0) / 0.1 = -1.
     var pid = PID(1, 0.5, 0.1)
     pid.set_point = 2
-    assert_almost_equal(pid.run(1, 0.1), 0.05, atol=1e-6)
+    assert_almost_equal(pid.run_seconds(1, 0.1), 0.05, atol=1e-6)
     # Measured 1 again: P = 1, I = 0.1, D = 0; the output clamps to 1.
-    assert_almost_equal(pid.run(1, 0.1), 1, atol=1e-6)
+    assert_almost_equal(pid.run_seconds(1, 0.1), 1, atol=1e-6)
     assert_almost_equal(pid.integral, 0.1, atol=1e-6)
     # Far below: the output clamps to minus one.
     pid.set_point = -50
-    assert_equal(pid.run(1, 0.1), -1)
+    assert_equal(pid.run_seconds(1, 0.1), -1)
     pid.reset()
     assert_equal(pid.integral, 0)
     assert_equal(pid.last_input, 0)
