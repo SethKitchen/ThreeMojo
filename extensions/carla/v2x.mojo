@@ -249,9 +249,6 @@ struct PropagationParams(ImplicitlyCopyable):
     def carrier_frequency(self) raises -> Frequency:
         """Return the checked radio frequency.
 
-        Args:
-            self: The raw CARLA settings.
-
         Returns:
             The frequency in Float32 hertz.
 
@@ -266,11 +263,10 @@ struct PropagationParams(ImplicitlyCopyable):
     def set_carrier_frequency(mut self, frequency: Frequency) raises:
         """Set the frequency after checking the hertz-to-GHz conversion.
 
+        The raw GHz field is updated after validation.
+
         Args:
             frequency: The positive Float32 carrier frequency.
-
-        Returns:
-            Nothing; the raw GHz field is updated after validation.
 
         Raises:
             Error: If an input or the computed loss is invalid.
@@ -656,9 +652,6 @@ struct PathLossModel(ImplicitlyCopyable):
     def wavelength_length(self) raises -> Length64:
         """Return the checked stored radio wavelength.
 
-        Args:
-            self: The raw CARLA channel.
-
         Returns:
             The positive wavelength with Float64 storage.
 
@@ -669,9 +662,6 @@ struct PathLossModel(ImplicitlyCopyable):
 
     def carrier_frequency(self) raises -> Frequency64:
         """Return the checked stored carrier frequency.
-
-        Args:
-            self: The raw CARLA channel.
 
         Returns:
             The positive hertz frequency with Float64 storage.
@@ -1446,9 +1436,6 @@ struct CamNoise(ImplicitlyCopyable):
     def latitude_stddev_angle(self) raises -> Angle:
         """Return the checked latitude stddev.
 
-        Args:
-            self: The raw CARLA noise record.
-
         Returns:
             The quantity with Float32 storage.
 
@@ -1460,9 +1447,6 @@ struct CamNoise(ImplicitlyCopyable):
 
     def latitude_bias_angle(self) raises -> Angle:
         """Return the checked latitude bias.
-
-        Args:
-            self: The raw CARLA noise record.
 
         Returns:
             The quantity with Float32 storage.
@@ -1476,12 +1460,11 @@ struct CamNoise(ImplicitlyCopyable):
     def set_latitude_noise(mut self, stddev: Angle, bias: Angle) raises:
         """Set both latitude noise fields after validation.
 
+        Both raw fields update together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw fields update together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -1496,9 +1479,6 @@ struct CamNoise(ImplicitlyCopyable):
     def longitude_stddev_angle(self) raises -> Angle:
         """Return the checked longitude stddev.
 
-        Args:
-            self: The raw CARLA noise record.
-
         Returns:
             The quantity with Float32 storage.
 
@@ -1510,9 +1490,6 @@ struct CamNoise(ImplicitlyCopyable):
 
     def longitude_bias_angle(self) raises -> Angle:
         """Return the checked longitude bias.
-
-        Args:
-            self: The raw CARLA noise record.
 
         Returns:
             The quantity with Float32 storage.
@@ -1526,12 +1503,11 @@ struct CamNoise(ImplicitlyCopyable):
     def set_longitude_noise(mut self, stddev: Angle, bias: Angle) raises:
         """Set both longitude noise fields after validation.
 
+        Both raw fields update together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw fields update together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -1546,9 +1522,6 @@ struct CamNoise(ImplicitlyCopyable):
     def altitude_stddev_length(self) raises -> Length:
         """Return the checked altitude stddev.
 
-        Args:
-            self: The raw CARLA noise record.
-
         Returns:
             The quantity with Float32 storage.
 
@@ -1560,9 +1533,6 @@ struct CamNoise(ImplicitlyCopyable):
 
     def altitude_bias_length(self) raises -> Length:
         """Return the checked altitude bias.
-
-        Args:
-            self: The raw CARLA noise record.
 
         Returns:
             The quantity with Float32 storage.
@@ -1576,12 +1546,11 @@ struct CamNoise(ImplicitlyCopyable):
     def set_altitude_noise(mut self, stddev: Length, bias: Length) raises:
         """Set both altitude noise fields after validation.
 
+        Both raw fields update together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw fields update together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -1596,9 +1565,6 @@ struct CamNoise(ImplicitlyCopyable):
     def heading_stddev_angle(self) raises -> Angle:
         """Return the checked heading stddev.
 
-        Args:
-            self: The raw CARLA noise record.
-
         Returns:
             The quantity with Float32 storage.
 
@@ -1610,9 +1576,6 @@ struct CamNoise(ImplicitlyCopyable):
 
     def heading_bias_angle(self) raises -> Angle:
         """Return the checked heading bias.
-
-        Args:
-            self: The raw CARLA noise record.
 
         Returns:
             The quantity with Float32 storage.
@@ -1626,12 +1589,11 @@ struct CamNoise(ImplicitlyCopyable):
     def set_heading_noise(mut self, stddev: Angle, bias: Angle) raises:
         """Set both heading noise fields after validation.
 
+        Both raw fields update together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw fields update together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -1646,9 +1608,6 @@ struct CamNoise(ImplicitlyCopyable):
     def yaw_rate_stddev_angular_velocity(self) raises -> AngularVelocity:
         """Return the checked yaw rate stddev.
 
-        Args:
-            self: The raw CARLA noise record.
-
         Returns:
             The quantity with Float32 storage.
 
@@ -1660,9 +1619,6 @@ struct CamNoise(ImplicitlyCopyable):
 
     def yaw_rate_bias_angular_velocity(self) raises -> AngularVelocity:
         """Return the checked yaw rate bias.
-
-        Args:
-            self: The raw CARLA noise record.
 
         Returns:
             The quantity with Float32 storage.
@@ -1678,12 +1634,11 @@ struct CamNoise(ImplicitlyCopyable):
     ) raises:
         """Set both yaw rate noise fields after validation.
 
+        Both raw fields update together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw fields update together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -1698,9 +1653,6 @@ struct CamNoise(ImplicitlyCopyable):
     def velocity_stddev_velocity(self) raises -> Velocity:
         """Return the checked velocity noise deviation.
 
-        Args:
-            self: The raw noise record.
-
         Returns:
             The deviation with Float32 meter-per-second storage.
 
@@ -1713,11 +1665,10 @@ struct CamNoise(ImplicitlyCopyable):
     def set_velocity_noise(mut self, stddev: Velocity) raises:
         """Set the velocity noise deviation.
 
+        The raw field updates after validation.
+
         Args:
             stddev: The nonnegative deviation.
-
-        Returns:
-            Nothing; the raw field updates after validation.
 
         Raises:
             Error: If an input or the computed loss is invalid.
@@ -1729,9 +1680,6 @@ struct CamNoise(ImplicitlyCopyable):
         self,
     ) raises -> Tuple[Acceleration, Acceleration, Acceleration]:
         """Return the three checked acceleration deviations.
-
-        Args:
-            self: The raw noise record.
 
         Returns:
             The x, y, and z deviations with Float32 storage.
@@ -1759,13 +1707,12 @@ struct CamNoise(ImplicitlyCopyable):
     ) raises:
         """Set the three acceleration deviations together.
 
+        The raw vector updates after all checks.
+
         Args:
             x: The nonnegative x deviation.
             y: The nonnegative y deviation.
             z: The nonnegative z deviation.
-
-        Returns:
-            Nothing; the raw vector updates after all checks.
 
         Raises:
             Error: If an input or the computed loss is invalid.
@@ -1892,6 +1839,9 @@ struct CaService(Copyable, Movable):
             max_interval: The longest gap between CAMs.
             fixed_rate: Whether to send each tick after `gen_cam_min`.
             noise: The noise of the data sent.
+
+        Returns:
+            The initialized CaService record.
 
         Raises:
             Error: If the owner, CAM intervals, or noise settings are invalid.
