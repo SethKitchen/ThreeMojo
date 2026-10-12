@@ -19,10 +19,47 @@ PACKAGE=Path(__file__).resolve().parent
 SOURCE=PACKAGE.parents[1]
 HERE=Path(os.environ.get('CARLA_LANE_ORACLE_OUTPUT', str(SOURCE/'out/carla-lane-oracle')))
 HERE.mkdir(parents=True, exist_ok=True)
+# A fresh complete current graph is required before consulting the immutable
+# historical pins below. Their method/source identities are provenance only;
+# the #333 local-polynomial theorem supplies the current numerical semantics.
+import full_audit_cleanup_contracts as full_audit
+import typed_boundary_contracts as typed_boundary
+_CURRENT_BINDINGS = full_audit.proof_bindings(SOURCE)
+_OBSERVED = {}
+
+
+def _current_bytes(name):
+    raw = (SOURCE/name).read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if name in _CURRENT_BINDINGS and digest != _CURRENT_BINDINGS[name]:
+        raise ValueError(('Current fixture input changed', name))
+    if _OBSERVED.setdefault(name, raw) != raw:
+        raise ValueError(('Fixture input changed after consumption', name))
+    return raw
+
+
+def _historical_text(name):
+    text = _current_bytes(name).decode('utf-8')
+    return (typed_boundary.historical_source(name, text)
+            if typed_boundary.is_current(name, text) else text)
+
+
+def _finish_current_graph():
+    for name, expected in _CURRENT_BINDINGS.items():
+        if hashlib.sha256(_current_bytes(name)).hexdigest() != expected:
+            raise ValueError(('Current fixture receipt changed', name))
+    for name, raw in tuple(_OBSERVED.items()):
+        if _current_bytes(name) != raw:
+            raise ValueError(('Fixture final observation changed', name))
+    # Recheck resolution, the complete caller census, and all owned proof
+    # providers after arithmetic. There is no reused verification result.
+    if full_audit.proof_bindings(SOURCE) != _CURRENT_BINDINGS:
+        raise ValueError('Current fixture graph changed during proof')
+
 # These proofs are for a reviewed operation graph, not arbitrary later source.
-SUPPORTED=json.loads((PACKAGE/'supported-source.json').read_text())
+SUPPORTED=json.loads(_current_bytes('tools/carla_lane_oracle/supported-source.json'))
 for name, expected in SUPPORTED['source_sha256'].items():
-    data=(SOURCE/name).read_bytes()
+    data=_historical_text(name).encode('utf-8')
     if name.endswith('/road.mojo'):
         start=re.search(rb'(?m)^from ',data)
         if start is None: raise ValueError('Road import scope missing')
@@ -37,13 +74,40 @@ import sum2_contracts
 verify_group(SOURCE, 'canonical_accumulation')
 sum2_contracts.verify(SOURCE)
 
+def _check_local_fixture_domain():
+    """Check the actual profiles used by the independent fixture formulas."""
+    import xml.etree.ElementTree as ET
+    town = ET.fromstring(_current_bytes('assets/carla/town.xodr'))
+    wanted = (
+        ("road[@id='5']/elevationProfile/elevation", 's', (0.,1.,.02,0.,0.)),
+        ("road[@id='5']/lanes/laneOffset", 's', (0.,.5,0.,0.,0.)),
+        ("road[@id='5']/lanes/laneSection/right/lane[@id='-1']/width", 'sOffset',
+         (0.,3.5,0.,0.,0.)),
+        ("road[@id='5']/lanes/laneSection/right/lane[@id='-2']/width", 'sOffset',
+         (0.,1.5,0.,0.,0.)),
+        ("road[@id='11']/lanes/laneSection/right/lane[@id='-1']/width", 'sOffset',
+         (0.,3.5,0.,0.,0.)),
+    )
+    for query,origin,expected in wanted:
+        node = town.find(query)
+        if node is None or tuple(float(node.get(key)) for key in
+                                 (origin,'a','b','c','d')) != expected:
+            raise ValueError(('Current local fixture domain changed', query))
+    # Both arc profiles are the parser's exact default zero constants.
+    arc = town.find("road[@id='11']")
+    if arc.find('elevationProfile') is not None or arc.find('lanes/laneOffset') is not None:
+        raise ValueError('Current arc default-profile premise changed')
+
+
+_check_local_fixture_domain()
+
 def b64(x): return F(float(x))
 def mf(x):
     if isinstance(x,F): return mp.mpf(x.numerator)/x.denominator
     return mp.mpf(x)
 def out(x): return mp.nstr(mf(x),45)
 def array(file,name):
-    text=file.read_text()
+    text=_current_bytes(file.relative_to(SOURCE).as_posix()).decode('utf-8')
     values=re.search(r'comptime '+name+r':[^=]*=\s*\[(.*?)\]',text,re.S).group(1)
     return [b64(x.strip()) for x in values.split(',') if x.strip()]
 trig=SOURCE/'extensions/carla/curve_trig.mojo'
@@ -51,7 +115,7 @@ geom=SOURCE/'extensions/carla/geometry.mojo'
 S=array(trig,'_SIN_COEFFICIENTS'); C=array(trig,'_COS_COEFFICIENTS')
 N=array(geom,'_GL_NODES'); W=array(geom,'_GL_WEIGHTS')
 BIT_FILE=PACKAGE/'constants.json'
-RECORDED=json.loads(BIT_FILE.read_text())
+RECORDED=json.loads(_current_bytes('tools/carla_lane_oracle/constants.json'))
 BITS={name:F(value['exact_rational']) for name,value in RECORDED.items()}
 assert all(float(BITS[name]).hex()==value['hex'] for name,value in RECORDED.items())
 assert N==[BITS[f'node_{i}'] for i in range(5)]
@@ -186,7 +250,7 @@ def main():
     pos_round=F(1,10**11) # 1e-11 coordinate bound; large safety margin.
     D_round=4*220*pos_round+2*pos_round**2+F(1,10**10)
     radius=mp.sqrt(4*mf(D_round)/mf(true_convex-second_error))
-    report={'source_sha256':{str(f.relative_to(SOURCE)):hashlib.sha256(f.read_bytes()).hexdigest() for f in [trig,geom,SOURCE/'assets/carla/town.xodr']},'recorded_constants_sha256':hashlib.sha256(BIT_FILE.read_bytes()).hexdigest(),'model':'Exact real operations over actual binary64 stored coefficients, with derived constant rate=Float64(stored(0.05)/20) and ARC radius=Float64(1/stored(-0.05)) frozen at their executed binary64 values. Every arithmetic operation in the executed Float64 model is covered separately. Polynomial moments use exact Fraction and frozen exported Float64(1+node), nodes, and weights. Count join candidates include both adjacent models.','shoulder':{'stationary_s':out(root),'retained_native_s':'4.5865310585259165','retained_native_minus_model':out(mp.mpf('4.5865310585259165')-root),'D2':out(evaluate(D,root)),'center_ODR':[out(evaluate(v,root)) for v in p],'D2second':out(evaluate(derivative(D,2),root)),'global_position_error_bounds_vs_clothoid':[[out(v) for v in row] for row in error],'true_clothoid_D2second_lower':out(true_convex),'D2second_perturbation_bound':out(second_error),'stored_piece_D2second_lower':out(true_convex-second_error),'nearest_count_boundary_D2_gap':out(min_boundary-evaluate(D,root)),'other_record_D2_lower':'42539.0625','other_record_gap':out(mf(F(680625,16))-evaluate(D,root)),'all_float64_coordinate_rounding_bound':out(pos_round),'all_float64_D2_rounding_bound':out(D_round),'conservative_global_rounded_argmin_radius':out(radius),'counts':rows}}
+    report={'source_sha256':{str(f.relative_to(SOURCE)):hashlib.sha256(_current_bytes(f.relative_to(SOURCE).as_posix())).hexdigest() for f in [trig,geom,SOURCE/'assets/carla/town.xodr']},'recorded_constants_sha256':hashlib.sha256(_current_bytes('tools/carla_lane_oracle/constants.json')).hexdigest(),'model':'Exact real operations over actual binary64 stored coefficients, with derived constant rate=Float64(stored(0.05)/20) and ARC radius=Float64(1/stored(-0.05)) frozen at their executed binary64 values. Every arithmetic operation in the executed Float64 model is covered separately. Polynomial moments use exact Fraction and frozen exported Float64(1+node), nodes, and weights. Count join candidates include both adjacent models.','shoulder':{'stationary_s':out(root),'retained_native_s':'4.5865310585259165','retained_native_minus_model':out(mp.mpf('4.5865310585259165')-root),'D2':out(evaluate(D,root)),'center_ODR':[out(evaluate(v,root)) for v in p],'D2second':out(evaluate(derivative(D,2),root)),'global_position_error_bounds_vs_clothoid':[[out(v) for v in row] for row in error],'true_clothoid_D2second_lower':out(true_convex),'D2second_perturbation_bound':out(second_error),'stored_piece_D2second_lower':out(true_convex-second_error),'nearest_count_boundary_D2_gap':out(min_boundary-evaluate(D,root)),'other_record_D2_lower':'42539.0625','other_record_gap':out(mf(F(680625,16))-evaluate(D,root)),'all_float64_coordinate_rounding_bound':out(pos_round),'all_float64_D2_rounding_bound':out(D_round),'conservative_global_rounded_argmin_radius':out(radius),'counts':rows}}
     # Arc ideal half-angle polynomial. No quadrant change occurs in the
     # stationary basin. Tiny endpoint branch alternatives use uniform trig
     # approximation bounds, not an assumed exact polynomial identity.
@@ -255,8 +319,14 @@ def main():
     gap=boundary_lower-min_cost_interval[1]
     assert gap>F(443,1000)
     report['exact_rational_endpoint_checks']={'all_46_signs_verified':True,'boundary_cost_gap_lower':out(gap),'details':proved}
+    report['current_semantic_scope'] = (
+        'Reviewed #333 local-coefficient shoulder/arc fixture domain only. '
+        'Historical method pins and retained_native values are provenance, '
+        'not old/new scalar bit-equivalence or new native observations.')
+    report['current_graph_sha256'] = dict(_CURRENT_BINDINGS)
+    _finish_current_graph()
     (HERE/'results.json').write_text(json.dumps(report,indent=2)+'\n')
-    print(json.dumps({k:v for k,v in report.items() if k!='source_sha256' and k!='model' and k!='shoulder'},indent=2))
+    print(json.dumps({k:v for k,v in report.items() if k not in ('source_sha256','model','shoulder','current_graph_sha256')},indent=2))
     print(json.dumps({k:v for k,v in report['shoulder'].items() if k!='counts'},indent=2))
 
 if __name__=='__main__':main()
