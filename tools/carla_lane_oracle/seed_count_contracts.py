@@ -712,6 +712,8 @@ def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _oper
     helper_edges = full_audit.shared_helper_edges(root,
         paths=('extensions/carla/curve_distance.mojo', 'loaders/xml.mojo'), _inputs=_inputs,
         _input_owner=_input_owner, _operation=_operation)
+    scaled_edges = full_audit.scaled_float32_edges(root,
+        _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)
     helper_closure = ({'loaders/utf8.mojo'} if 'loaders/xml.mojo' in helper_edges else set())
     require(dependencies == {MODULE, *record['unchanged_inputs']} | helper_closure,
             'live import or package-resolution closure changed')
@@ -727,6 +729,10 @@ def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _oper
         if path in record['unchanged_inputs']:
             require(path not in cleanup_edges, 'duplicate shared-helper count input: ' + path)
             cleanup_edges[path] = edge
+    for path, edge in scaled_edges.items():
+        require(path in record['unchanged_inputs'] and path not in cleanup_edges,
+                'unexpected or duplicate scaled count input: ' + path)
+        cleanup_edges[path] = edge
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests',
                   'after_correctness_tests'):
         for path, expected in record[group].items():
