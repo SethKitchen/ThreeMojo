@@ -67,12 +67,16 @@ for name, expected in SUPPORTED['source_sha256'].items():
     if hashlib.sha256(data).hexdigest()!=expected:
         raise ValueError(('Review oracle graph after source change', name))
 
-# Complete canonical accumulation closure includes the new helper and its
-# interval/error dependencies, in addition to the historical scalar pins.
-from source_contracts import verify_group
-import sum2_contracts
-verify_group(SOURCE, 'canonical_accumulation')
-sum2_contracts.verify(SOURCE)
+# Use the existing bounded runtime operation for these source obligations.
+# It runs the same canonical-accumulation group and complete Sum2 verifier,
+# with observed physical inputs and one final owned sweep. The independent
+# oracle entry/exit bindings above remain separate, fresh graph checks.
+def _verify_runtime_contracts(root):
+    from check_runtime_support import verify
+    return verify(root)
+
+
+_verify_runtime_contracts(SOURCE)
 
 def _check_local_fixture_domain():
     """Check the actual profiles used by the independent fixture formulas."""
