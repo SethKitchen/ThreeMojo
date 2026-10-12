@@ -161,7 +161,9 @@ def test_optional_lane_helpers_reject_structure_without_term_debit() raises:
         if kind == 0:
             road.info.geometries.clear()
         elif kind == 1:
-            road.info.geometries.append(RoadInfoGeometry(2.2, _geometry()))
+            road.info.geometries.append(
+                RoadInfoGeometry._from_si(2.2, _geometry())
+            )
         elif kind == 2:
             road.info.geometries[0].geometry.kind = LINE
         elif kind == 3:
@@ -212,7 +214,9 @@ def test_lane_record_errors_and_crossed_profiles_are_unknown() raises:
             road.sections[0].lanes[0].info.widths.clear()
         else:
             road.info.lane_offsets.append(
-                RoadInfoLaneOffset(2.2, CubicPolynomial.constant(0.0))
+                RoadInfoLaneOffset._from_si(
+                    2.2, CubicPolynomial._constant_si(0.0)
+                )
             )
         if kind < 3:
             with assert_raises():
@@ -260,10 +264,14 @@ def test_centered_and_monotone_enclosures_keep_original_on_failure() raises:
             road.info.elevations.clear()
         elif kind == 3:
             road.info.elevations.append(
-                RoadInfoElevation(2.2, CubicPolynomial.constant(0.0))
+                RoadInfoElevation._from_si(
+                    2.2, CubicPolynomial._constant_si(0.0)
+                )
             )
         else:
-            road.info.elevations[0].polynomial = CubicPolynomial.constant(100.0)
+            road.info.elevations[0].polynomial = CubicPolynomial._constant_si(
+                100.0
+            )
         var work = _MapBuildWork(MapBuildBudget())
         var result = _centered_elevation_enclosure(
             road, 2.125, 2.25, original, error, work
