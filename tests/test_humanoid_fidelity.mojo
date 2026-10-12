@@ -26,18 +26,25 @@ from extensions.humanoid.fidelity import (
     FIDELITY_SCHEMA,
     FINGERPRINT_ALGORITHM,
     GAME_RECIPE,
+    GEOMETRY_DIGEST_ALGORITHM,
+    UNSEALED_GEOMETRY,
     VISUAL_USE,
     HumanoidUse,
     canonical_inputs,
+    fingerprint_hex,
     humanoid_provenance,
+    is_geometry_digest,
     json_fingerprint,
     require_bake_provenance,
     require_current_spec,
     require_humanoid_use,
+    sealed_provenance,
     settings_fingerprint,
     spec_fingerprint,
     stored_provenance,
+    unsealed,
 )
+from extensions.humanoid.bake import require_sealed_bake, write_sealed_bake
 from extensions.humanoid.genome import (
     FACE_SHAPE_1,
     GENE_COUNT,
@@ -360,6 +367,7 @@ def test_stored_provenance_requires_every_record_field() raises:
         _ = stored_provenance(_stored(edited))
     for key in [
         "fingerprint_algorithm",
+        "geometry_digest_algorithm",
         "recipe_fingerprint",
         "identity_mapping",
         "expression_jaw_mapping",
@@ -470,6 +478,54 @@ def test_stored_provenance_checks_every_canonical_input() raises:
             )
 
 
+def test_geometry_digest_is_sealed_once_and_checked_for_form() raises:
+    var record = _provenance(_spec())
+    assert_equal(record.string("geometry_digest"), UNSEALED_GEOMETRY)
+    assert_equal(
+        record.string("geometry_digest_algorithm"),
+        String(GEOMETRY_DIGEST_ALGORITHM),
+    )
+    assert_equal(
+        fingerprint_hex(UInt64(0x0123456789ABCDEF)), "0123456789abcdef"
+    )
+    assert_true(is_geometry_digest("0123456789abcdef"))
+    for text in ["", "unsealed", "0123456789ABCDEF", "0123456789abcdeg"]:
+        assert_false(is_geometry_digest(text))
+    var sealed = sealed_provenance(record, "00ff00ff00ff00ff")
+    assert_equal(sealed.string("geometry_digest"), "00ff00ff00ff00ff")
+    assert_equal(unsealed(sealed).to_json(), record.to_json())
+    # A sealed record keeps its recipe checks.
+    assert_equal(stored_provenance(_stored(sealed)).to_json(), sealed.to_json())
+    require_bake_provenance(_stored(sealed), record)
+    require_bake_provenance(_stored(record), sealed)
+    require_current_spec(_stored(sealed), _spec())
+    with assert_raises(contains="spec fingerprint is stale"):
+        var spec = _spec()
+        spec.genome = spec.genome.with_gene(FACE_SHAPE_1, Expression(1))
+        require_bake_provenance(_stored(sealed), _provenance(spec))
+    with assert_raises(contains="geometry digest is malformed"):
+        _ = sealed_provenance(record, "0123456789ABCDEF")
+    with assert_raises(contains="has no schema"):
+        _ = sealed_provenance(UserData(), "0123456789abcdef")
+    for text in ["foreign claim", "0123456789ABCDEF", ""]:
+        var edited = record.copy()
+        edited.set_string("geometry_digest", text)
+        with assert_raises(contains="geometry digest is malformed"):
+            _ = stored_provenance(_stored(edited))
+    # A schema 2 record has no geometry digest and is refused as stale.
+    var old = record.copy()
+    old.set_number("schema_version", 2)
+    _ = old.remove("geometry_digest")
+    _ = old.remove("geometry_digest_algorithm")
+    with assert_raises(contains="schema is unsupported"):
+        _ = stored_provenance(_stored(old))
+    # A current-schema record without the digest is incomplete.
+    var missing = record.copy()
+    _ = missing.remove("geometry_digest")
+    with assert_raises(contains="provenance is incomplete"):
+        _ = stored_provenance(_stored(missing))
+
+
 def test_gltf_retains_node_and_scene_contracts() raises:
     var assets = Assets()
     var scene = Scene()
@@ -515,14 +571,14 @@ def test_real_game_humanoid_glb_retains_recipe_and_visual_positions() raises:
         "unverified-converted-ICTF-THRS",
     )
     require_bake_provenance(scene.get(person.root).user_data, expected)
-    var options = GltfExportOptions()
-    options.scene_user_data.set_json(String(FIDELITY_KEY), expected.to_json())
     var path = temporary_path("real-humanoid.glb")
-    write_gltf(path, scene, assets, GLB, options=options^)
+    write_sealed_bake(path, scene, assets, expected)
     var loaded_scene = Scene()
     var loaded_assets = Assets()
     var model = read_gltf(path, loaded_scene, loaded_assets)
-    require_bake_provenance(model.scene_extras, expected)
+    require_sealed_bake(
+        model.scene_extras, expected, loaded_scene, loaded_assets
+    )
     var contracts = 0
     for node in model.nodes:
         if node != NO_PARENT:
@@ -551,6 +607,17 @@ def test_real_game_humanoid_glb_retains_recipe_and_visual_positions() raises:
                 )
     # A real bake remains visual-only after its successful byte round trip.
     assert_false(expected.boolean("engineering_use"))
+    # One changed skin weight in the loaded body refuses the bake.
+    var body = loaded_scene.skinned_meshes[0].geometry
+    var edited = loaded_assets.geometries.get(body).clone()
+    var weights = edited.clone_attribute("skinWeight")
+    weights.set_component(0, 0, weights.component(0, 0) + 0.25)
+    edited.set_attribute("skinWeight", weights^)
+    loaded_assets.geometries.replace(body, edited^)
+    with assert_raises(contains="does not match its digest"):
+        require_sealed_bake(
+            model.scene_extras, expected, loaded_scene, loaded_assets
+        )
 
 
 def main() raises:

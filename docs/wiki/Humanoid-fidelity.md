@@ -87,9 +87,11 @@ The record identifies the canonical, visual and converted-model recipes.
 It records the right-handed, y-up, pelvis-origin rest frame. Parent and
 animation transforms remain separate glTF node and animation data.
 
-The game example also writes scene extras. It checks the complete expected
-record after loading, before animation or rendering. A missing or changed
-record is an error. Delete the stale bake to build a new one.
+The game example writes the bake with `write_sealed_bake`. The scene extras
+then hold the record with a sealed geometry digest. After loading, the
+example calls `require_sealed_bake` before animation or rendering. A
+missing, stale or changed record is an error. Edited geometry is an error.
+Delete the stale bake to build a new one.
 
 ## Bake fingerprints and stale-bake checks
 
@@ -108,8 +110,9 @@ sixteen lowercase hexadecimal digits. It is not a cryptographic hash.
 The recipe records `canonical_to_local_rest` as a column-major 4x4 matrix.
 The game path uses the identity matrix. Translations are in meters.
 
-Schema version 2 adds the fingerprints and the matrix. A version 1 bake
-is refused as stale.
+Schema version 2 adds the fingerprints and the matrix. Schema version 3
+adds the geometry digest. A version 1 or version 2 bake is refused as
+stale. Rebuild it.
 
 Use these checks after you load a bake:
 
@@ -121,7 +124,66 @@ Use these checks after you load a bake:
   It then compares the complete record.
 
 A stale bake raises an error. It never represents a changed spec silently.
-These checks do not hash the mesh bytes. Use a content digest for that.
+These recipe checks do not verify the geometry. The geometry digest does.
+
+## Bake geometry digest
+
+A sealed bake record holds a digest of its baked geometry. A geometry edit
+after the build changes the digest, and the load check refuses the bake.
+
+`extensions.humanoid.bake` writes and checks the digest:
+
+- `write_sealed_bake` exports the scene as GLB and reads it back. It
+  computes the digest over the loaded geometry and seals the record. It
+  then writes the file with the sealed record in the scene extras.
+- `require_sealed_bake` runs `require_bake_provenance` and then
+  `require_bake_geometry`.
+- `require_bake_geometry` recomputes the digest over the loaded scene. It
+  refuses a mismatch, an unsealed record and a missing record.
+
+The digest covers the geometry as the glTF loader reads it. The export
+side and the load side thus hash the same values. The loader scales skin
+weights to a sum of one. The loader drops attributes that glTF cannot
+carry, for example `thinness`. The seal reads its own export back for this
+reason. The digest is the same for GLB and embedded glTF.
+
+The digest is the 64-bit FNV-1a hash of this byte stream. Each count and
+index is eight little-endian bytes. Each value is the four little-endian
+bytes of its float32 bit pattern.
+
+1. The lengths of the scene's mesh, skinned mesh, instanced mesh, batched
+   mesh, LOD, line and point lists.
+2. Each skinned mesh, in list order: the bone count, the name of each
+   bone's node, then its geometry.
+3. Each mesh, in list order: its geometry.
+
+A geometry adds these items, in this order:
+
+| Item | Bytes |
+|---|---|
+| Groups | Count, then start, count and material index of each group |
+| Index | Count, then each entry |
+| Attributes | Count, then for each attribute in stored order: name length, UTF-8 name, item size, item count and each component |
+| Morph positions, normals and colors | Count of each list, then each target as an attribute without a name |
+
+The attributes include `position`, `normal`, `uv`, `color`, `skinIndex`
+and `skinWeight` when the bake has them. A changed value, a reordered
+vertex, a reordered mesh, a reordered attribute or an added mesh changes
+the digest. Materials, textures, node transforms, inverse bind matrices
+and animations are not covered.
+
+The record field `geometry_digest` holds sixteen lowercase hexadecimal
+digits. A record built before export holds `unsealed` in that field.
+`add_game_humanoid` writes such a record on its root node.
+
+`require_bake_provenance` accepts an unsealed record for its recipe check.
+It does not verify the geometry. `require_bake_geometry` refuses an
+unsealed record as unverified. `stored_provenance` refuses any other value.
+
+You must verify the scene the bake was loaded into. Do the check before you
+add other meshes. The digest is not cryptographic. It detects a careless
+edit. It does not authenticate a file that an editor rewrote together with
+its digest.
 
 These recipe revisions are semantic versions. They are not verified
 upstream commits or content hashes. A producer must change its recipe
@@ -134,7 +196,7 @@ The record marks identity, expression/jaw, dental, skin-weight and LOD
 physical mappings as unsupported. It does not embed canonical geometry or
 physical properties. The game mesh remains a visual derivative.
 A recipe check does not prove that an externally edited asset still matches
-its recipe. Use a separate content digest for that check.
+its recipe. The sealed geometry digest checks the loaded geometry.
 
 ## Independent canonical snapshots
 
@@ -205,7 +267,7 @@ It does not test physiological validity or convergence.
 | Separate visual and engineering capabilities | Typed native gate; game and bake records fail closed | A validated engineering coupling could add a capability only with independent evidence |
 | Retain canonical SI geometry, labels and properties | Immutable caller-supplied part snapshots retain the full #289 report | Generate and verify complete canonical part meshes and region correspondence from library fields; whole-body property coverage is absent |
 | Identity, jaw, weights and LOD mappings | Explicit unsupported maps, source/topology invalidation and two dental identities | Tested coupled maps, including eye fit and tissue clearance |
-| Bake provenance and stale-spec checks | Game roots and example scene extras retain exact spec/options/frame recipes, an explicit transform and spec, settings and recipe fingerprints; loaded bakes are refused when stale or edited; offline manifests bind artifact bytes | Pin and verify converted source/model inputs and license manifests under #303; generic exporters cannot detect arbitrary post-build scene edits |
+| Bake provenance and stale-spec checks | Game roots and example scene extras retain exact spec/options/frame recipes, an explicit transform and spec, settings and recipe fingerprints; sealed bakes retain a digest of the loaded geometry; loaded bakes are refused when stale, edited or unsealed; offline manifests bind artifact bytes | Pin and verify converted source/model inputs and license manifests under #303; materials, textures, node transforms and animations are outside the geometry digest |
 | Frames, full tensors and reference points | Tested offline proper-rotation and parallel-axis adapter | Native whole-body export integration when canonical part generation is available |
 | Round trips and extreme identities | Synthetic glTF recipe round trips, immutable SI data, full-tensor analytic controls, all extreme gene recipes, stale assets and unsupported paths | Anatomical correspondence, eye/dental fit and tissue-clearance fixtures with approved source assets |
 

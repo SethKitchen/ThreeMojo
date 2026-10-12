@@ -70,7 +70,7 @@ The angles follow the joint ranges of an ordinary gait (Winter 1991). The clips 
 
 ## Baking and speed
 
-Build the humanoid once and bake it with `write_gltf(path, scene, assets, GLB, animations=clips)`. A game loads the file with `read_gltf`, which returns the clips by name.
+Build the humanoid once and bake it with `write_sealed_bake(path, scene, assets, record, animations=clips)`. The record is the `humanoid_provenance` of the build. A game loads the file with `read_gltf`, which returns the clips by name. The game must then call `require_sealed_bake` on the loaded scene. It refuses a stale recipe or edited geometry. See [Humanoid fidelity](Humanoid-fidelity).
 
 | Step | Time |
 |---|---|

@@ -29,14 +29,12 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from exporters.gltf import GLB, GltfExportOptions, write_gltf
 from core.user_data import UserData
+from extensions.humanoid.bake import require_sealed_bake, write_sealed_bake
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,
-    FIDELITY_KEY,
     GAME_RECIPE,
     humanoid_provenance,
-    require_bake_provenance,
 )
 from extensions.humanoid.rig.clips import (
     idle_clip,
@@ -110,11 +108,9 @@ def _bake(path: String, triangles: Int) raises:
     clips.append(wave_clip(person.bones, person.rig))
     print("Built in", _seconds_since(start), "s")
     var written = perf_counter_ns()
-    var options = GltfExportOptions()
-    options.scene_user_data.set_json(
-        String(FIDELITY_KEY), _expected_provenance(triangles).to_json()
+    write_sealed_bake(
+        path, scene, assets, _expected_provenance(triangles), animations=clips^
     )
-    write_gltf(path, scene, assets, GLB, animations=clips^, options=options^)
     print("Baked", path, "in", _seconds_since(written), "s")
 
 
@@ -137,7 +133,9 @@ def main() raises:
     var assets = Assets()
     var scene = Scene()
     var model = read_gltf(baked, scene, assets)
-    require_bake_provenance(model.scene_extras, _expected_provenance(triangles))
+    require_sealed_bake(
+        model.scene_extras, _expected_provenance(triangles), scene, assets
+    )
     print("Loaded in", _seconds_since(start), "s")
     var mixer = AnimationMixer()
     var actions = List[Int]()

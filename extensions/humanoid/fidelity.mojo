@@ -23,13 +23,22 @@ from units.si import Length, METER
 
 comptime FIDELITY_KEY = "threemojo_humanoid_fidelity"
 # Version 2 adds the transform matrix and the content fingerprints.
-comptime FIDELITY_SCHEMA = 2
+# Version 3 adds the baked geometry digest.
+comptime FIDELITY_SCHEMA = 3
 comptime FINGERPRINT_ALGORITHM = (
     "fnv1a-64 over normalized UTF-8 JSON; not cryptographic"
 )
+comptime GEOMETRY_DIGEST_ALGORITHM = (
+    "fnv1a-64 over the loaded glTF draw geometry of the bake: draw-list"
+    " counts, then each skinned mesh and each mesh in order: joint names,"
+    " groups, index and every attribute and morph target as float32 bits;"
+    " not cryptographic"
+)
+# A record built before export has no geometry to digest yet.
+comptime UNSEALED_GEOMETRY = "unsealed"
 # The canonical frame is the local rest frame: a column-major 4x4 identity.
 comptime CANONICAL_TO_LOCAL_REST = "[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]"
-comptime _FNV_OFFSET = UInt64(0xCBF29CE484222325)
+comptime FNV1A_OFFSET = UInt64(0xCBF29CE484222325)
 comptime _FNV_PRIME = UInt64(0x100000001B3)
 comptime _HEX: List[String] = [
     "0",
@@ -164,9 +173,35 @@ def json_fingerprint(text: String) -> String:
     Returns:
         Sixteen lowercase hexadecimal digits.
     """
-    var hash = _FNV_OFFSET
+    var hash = FNV1A_OFFSET
     for byte in text.as_bytes():  # pragma: no branch
-        hash = (hash ^ UInt64(byte)) * _FNV_PRIME
+        hash = fnv1a_step(hash, byte)
+    return fingerprint_hex(hash)
+
+
+@always_inline
+def fnv1a_step(hash: UInt64, byte: UInt8) -> UInt64:
+    """Return a 64-bit FNV-1a state after one more byte.
+
+    Args:
+        hash: The state, `FNV1A_OFFSET` before the first byte.
+        byte: The next byte.
+
+    Returns:
+        The next state.
+    """
+    return (hash ^ UInt64(byte)) * _FNV_PRIME
+
+
+def fingerprint_hex(hash: UInt64) -> String:
+    """Write a 64-bit fingerprint as text, most significant digit first.
+
+    Args:
+        hash: The fingerprint.
+
+    Returns:
+        Sixteen lowercase hexadecimal digits.
+    """
     var hex = materialize[_HEX]()
     var digits = String()
     for at in range(16):  # pragma: no branch
@@ -238,7 +273,8 @@ def humanoid_provenance(
     The canonical-to-local-rest transform is an explicit identity matrix.
     Parent and animation transforms remain in glTF nodes and channels.
     The record holds fingerprints of the spec, the visual settings and
-    the complete recipe.
+    the complete recipe. Its geometry digest is `UNSEALED_GEOMETRY`:
+    `extensions.humanoid.bake` seals it with the exported geometry.
 
     Args:
         spec: Canonical SI inputs, copied independently of visual settings.
@@ -295,6 +331,11 @@ def humanoid_provenance(
         json_fingerprint(recipe.json("visual_settings")),
     )
     record.set_string("recipe_digest", json_fingerprint(record.json("recipe")))
+    record.set_string(
+        "geometry_digest_algorithm", String(GEOMETRY_DIGEST_ALGORITHM)
+    )
+    # `extensions.humanoid.bake` seals this field when it exports a bake.
+    record.set_string("geometry_digest", String(UNSEALED_GEOMETRY))
     record.set_boolean("visual_use", True)
     record.set_boolean("engineering_use", False)
     record.set_boolean("canonical_geometry_embedded", False)
@@ -327,7 +368,8 @@ def humanoid_provenance(
         "invalidation",
         (
             "spec, settings, source, topology, rig or transform change requires"
-            " a new recipe"
+            " a new recipe; a geometry edit after export breaks the geometry"
+            " digest"
         ),
     )
     return record^
@@ -378,6 +420,7 @@ def stored_provenance(stored: UserData) raises -> UserData:
     The check recomputes each fingerprint and the complete schema record.
     It refuses missing fields, edited capability claims and inconsistent
     recipes. It does not authenticate a recipe rewritten with its hashes.
+    It checks only the form of the geometry digest, not the geometry.
 
     Args:
         stored: Extras loaded from the humanoid root or scene.
@@ -387,7 +430,10 @@ def stored_provenance(stored: UserData) raises -> UserData:
 
     Raises:
         Error: If the record is absent, malformed, of another schema,
-            incomplete or inconsistent with its own fingerprints.
+            incomplete or inconsistent with its own fingerprints, or if
+            its geometry digest is neither unsealed nor sixteen lowercase
+            hexadecimal digits. A schema 2 bake has no geometry digest and
+            is refused as unsupported.
     """
     if not stored.has(String(FIDELITY_KEY)):
         raise Error("Humanoid bake has no fidelity provenance; rebuild it")
@@ -404,6 +450,7 @@ def stored_provenance(stored: UserData) raises -> UserData:
         "spec_fingerprint",
         "visual_settings_fingerprint",
         "recipe_digest",
+        "geometry_digest",
     ]:
         if not record.has(key):
             raise Error("Humanoid bake provenance is incomplete; rebuild it")
@@ -452,9 +499,76 @@ def stored_provenance(stored: UserData) raises -> UserData:
         recipe.string("visual_revision"),
         recipe.string("asset_revision"),
     )
-    if record.to_json() != expected.to_json():
+    if not is_geometry_digest(record.string("geometry_digest")):
+        if record.string("geometry_digest") != String(UNSEALED_GEOMETRY):
+            raise Error(
+                "Humanoid bake geometry digest is malformed; rebuild it"
+            )
+    if unsealed(record).to_json() != expected.to_json():
         raise Error("Humanoid bake provenance is stale or changed; rebuild it")
     return record^
+
+
+def is_geometry_digest(text: String) -> Bool:
+    """Return whether text has the form of a sealed geometry digest.
+
+    Args:
+        text: A stored `geometry_digest` value.
+
+    Returns:
+        True for sixteen lowercase hexadecimal digits.
+    """
+    if text.byte_length() != 16:
+        return False
+    for byte in text.as_bytes():  # pragma: no branch
+        var digit = byte >= UInt8(ord("0")) and byte <= UInt8(ord("9"))
+        var letter = byte >= UInt8(ord("a")) and byte <= UInt8(ord("f"))
+        if not (digit or letter):
+            return False
+    return True
+
+
+def unsealed(record: UserData) -> UserData:
+    """Return a copy of a record with its geometry digest unsealed.
+
+    Two records with the same recipe then compare equal, whatever geometry
+    each one sealed. A record without the field gains it at its end, so it
+    still differs from a complete record.
+
+    Args:
+        record: A provenance record, sealed or unsealed.
+
+    Returns:
+        The record with `geometry_digest` set to `UNSEALED_GEOMETRY`.
+    """
+    var copy = record.copy()
+    copy.set_string("geometry_digest", String(UNSEALED_GEOMETRY))
+    return copy^
+
+
+def sealed_provenance(record: UserData, digest: String) raises -> UserData:
+    """Return a provenance record that holds a baked geometry digest.
+
+    Use `extensions.humanoid.bake` to compute the digest at export.
+
+    Args:
+        record: A valid record, as `humanoid_provenance` returns it.
+        digest: The geometry digest of the exported bake.
+
+    Returns:
+        The record with `geometry_digest` set to the digest.
+
+    Raises:
+        Error: If `stored_provenance` refuses the record, or if the digest
+            is not sixteen lowercase hexadecimal digits.
+    """
+    var stored = UserData()
+    stored.set_json(String(FIDELITY_KEY), record.to_json())
+    var sealed = stored_provenance(stored)
+    if not is_geometry_digest(digest):
+        raise Error("Humanoid bake geometry digest is malformed")
+    sealed.set_string("geometry_digest", digest)
+    return sealed^
 
 
 def require_current_spec(stored: UserData, spec: HumanoidSpec) raises:
@@ -482,8 +596,9 @@ def require_current_spec(stored: UserData, spec: HumanoidSpec) raises:
 def require_bake_provenance(stored: UserData, expected: UserData) raises:
     """Refuse missing, stale or edited humanoid provenance before reuse.
 
-    This checks a creation recipe, not the current mesh bytes. Callers must
-    separately verify content digests when accepting externally edited files.
+    This checks a creation recipe, not the loaded geometry. It accepts a
+    sealed or an unsealed geometry digest and does not verify it. Use
+    `extensions.humanoid.bake.require_sealed_bake` to load a baked file.
     It never upgrades an artifact to an engineering model.
 
     Args:
@@ -501,5 +616,5 @@ def require_bake_provenance(stored: UserData, expected: UserData) raises:
         "visual_settings_fingerprint"
     ):
         raise Error("Humanoid bake visual settings are stale; rebuild it")
-    if stored.json(String(FIDELITY_KEY)) != expected.to_json():
+    if unsealed(record).to_json() != unsealed(expected).to_json():
         raise Error("Humanoid bake provenance is stale or changed; rebuild it")
