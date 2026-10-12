@@ -742,12 +742,13 @@ struct World(Movable):
         """
         return self.weather
 
-    def set_weather(mut self, weather: WeatherParameters):
+    def set_weather(mut self, weather: WeatherParameters) raises:
         """Change the weather, `SetWeather`.
 
         Args:
             weather: The new weather.
         """
+        weather.validate()
         self.weather = weather
 
     def get_snapshot(self) -> WorldSnapshot:
@@ -2054,7 +2055,7 @@ struct World(Movable):
                 "A light search distance must be finite and nonnegative"
             )
         var out = List[ActorId]()
-        for landmark in self.map.landmarks_in_distance(
+        for landmark in self.map.landmarks_in_distance_meters(
             waypoint, distance.value
         ):
             ref signal = self.map.signal(landmark.reference.signal_id)
@@ -2291,7 +2292,7 @@ struct World(Movable):
         self.delta_seconds = Float64(dt.value)
         self.elapsed_seconds = next_elapsed
         for s in range(len(self.signs)):
-            self._apply(self.signs[s].tick_timers(dt.value))
+            self._apply(self.signs[s].tick_timers(dt))
         self.traffic_lights.tick(dt)
         self._notify()
         self._park_destroyed()
