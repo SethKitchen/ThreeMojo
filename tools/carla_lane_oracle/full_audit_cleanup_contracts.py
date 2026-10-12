@@ -151,7 +151,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': '8e6b6209f9e3d84fa97d4f8ae0eb726d69f43f6caf4496fb6e32accbf9a94cef',
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': '4039578ac9fe2f4e5485c961dec3ad2377a9b68b43f480bbaf8e51af2c9aea49',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
@@ -759,8 +759,8 @@ def executing_checker_bindings(root=None):
                 require(actual is not None and _code_identity(actual) == _code_identity(expected),
                         'executing function changed: ' + relative + ':' + name)
         if root is not None:
-            supplied = Path(root) / relative
-            require(not supplied.is_symlink() and sha(supplied.read_bytes()) == captured,
+            supplied = _regular(root, relative)
+            require(sha(supplied.read_bytes()) == captured,
                     'receipt checker differs from executing checker: ' + relative)
         result[relative] = captured
     typed_boundary.verify_authority()
@@ -1657,6 +1657,7 @@ class _InvariantInputs(_CacheInputs):
         self._observations = []
         self._discoveries = []
         self._capturing = False
+        self._checker_receipt = False
 
     def _invalidate(self, error):
         self._failed = True
@@ -1672,6 +1673,25 @@ class _InvariantInputs(_CacheInputs):
         self._executing = types.MappingProxyType({})
         self._observations = []
         self._discoveries = []
+        self._checker_receipt = False
+
+    def _bind_checker_receipt(self, root, executing):
+        """Retain only a supplied checker image consumed by this operation."""
+        try:
+            self._check_owner(root)
+            caller = sys._getframe(1)
+            require(caller.f_globals is globals()
+                    and caller.f_code is _live_function_code(proof_bindings)
+                    and caller.f_locals.get('_operation') is self
+                    and type(executing) is dict
+                    and type(self._checker_receipt) is bool
+                    and self._state == 'active' and not self._capturing,
+                    'checker receipt requires its active proof-binding owner')
+            require(executing == dict(self._executing),
+                    'checker receipt differs from captured executing image')
+            self._checker_receipt = True
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
 
     def _check_owner(self, root):
         try:
@@ -1843,6 +1863,11 @@ class _InvariantInputs(_CacheInputs):
             try:
                 if self._state == 'active':
                     _CacheInputs.checkpoint(self, self._owner, root)
+                    require(type(self._checker_receipt) is bool,
+                            'invalid consumed checker receipt state')
+                    if self._checker_receipt:
+                        require(executing_checker_bindings(root) == dict(self._executing),
+                                'consumed receipt checker changed during owned verification')
                 elif self._resolver_paths:
                     # Historical owners need no current-root admission. Retain
                     # only their supplemental helper observations until exit.
@@ -1886,6 +1911,7 @@ class _InvariantInputs(_CacheInputs):
         self._discoveries.clear()
         self._owner_frame = None
         self._capturing = False
+        self._checker_receipt = False
 
 
 class _BorrowedCacheInputs(_CacheInputs):
@@ -2788,6 +2814,8 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         result.update(_runtime_view_bindings(root, _operation=_operation))
         result.update(shared_helper_proof_bindings(root, include_roots=include_roots,
                                                   _operation=_operation))
+        if _operation is not None:
+            _operation._bind_checker_receipt(root, executing)
         return result
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
         _operation_fail(_operation, error)
