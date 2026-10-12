@@ -59,7 +59,7 @@ def _flat_map(
     roads[0].sections[0].lanes[lane].distance = record_s
     roads[0].sections[0].lanes[lane].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(0.0002)
+    ].polynomial = CubicPolynomial._constant_si(0.0002)
     return Map(roads^, List[Junction](), List[Signal](), List[Controller]())
 
 
