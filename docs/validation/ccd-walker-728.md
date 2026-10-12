@@ -1,6 +1,6 @@
 # CCD cost for walkers and spinning spheres (#728)
 
-This report measures the two CCD contracts that came after the sphere probes: rotation-locked capsules and spheres with an anisotropic inertia tensor. [Issue 728](https://github.com/SethKitchen/ThreeMojo/issues/728) asks for these walker and spinning-body workloads, split from [issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635). On these scenes a CCD step costs about two discrete steps. Every body touched the terrain and stayed clear of it within 1 mm.
+This report measures the two CCD contracts that came after the sphere probes: rotation-locked capsules and spheres with an anisotropic inertia tensor. [Issue 728](https://github.com/SethKitchen/ThreeMojo/issues/728) asks for these walker and spinning-body workloads, split from [issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635). On these scenes a CCD step costs about two to three discrete steps. Every body touched the terrain and stayed clear of it within 1 mm.
 
 These are local results. Hosted CI compiles the bench but does not run it.
 
@@ -26,22 +26,28 @@ Controls run first:
 
 Run it with `mojo run -I . bench/physics_ccd_walker_bench.mojo`.
 
-Hardware: AMD Ryzen 9 5900X, WSL 2 on Windows 11, Mojo 1.1.0 (`8189361e`). The world steps on one thread.
+Hardware: Intel Xeon processor at 2.80 GHz, a 4-vCPU cloud Linux virtual machine (kernel 6.18), Mojo 1.1.0 (`8189361e`). The world steps on one thread.
 
 ## Results
 
-The table gives the median of three runs of the mean step. The last two columns give the least gap over all steps and bodies of a run. Those values were the same in each run.
+Each scene runs with 1 and with 64 bodies on 2,048 and on 8,192 triangles, so the body count and the triangle count change one at a time. The step columns give the median of three runs. "Mean" is the mean of a run's twenty timed steps, and "max" is its longest timed step. The last two columns give the least gap over all steps and bodies of a run. Those values were the same in each run.
 
-| Scene | Triangles | Bodies | Discrete step | CCD step | Discrete least gap | CCD least gap |
-|---|---:|---:|---:|---:|---:|---:|
-| walker | 2,048 | 1 | 0.0016 ms | 0.0048 ms | -0.049 m | -2.5e-8 m |
-| walker-crowd | 8,192 | 64 | 0.239 ms | 0.528 ms | -0.200 m | -1.2e-7 m |
-| spinning-probe | 2,048 | 1 | 0.0018 ms | 0.0044 ms | -0.049 m | +0.0084 m |
-| spinning-fleet | 8,192 | 64 | 0.204 ms | 0.390 ms | -0.200 m | +0.0084 m |
+| Scene | Triangles | Bodies | Discrete mean | Discrete max | CCD mean | CCD max | Discrete least gap | CCD least gap |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| walker | 2,048 | 1 | 0.0018 ms | 0.0033 ms | 0.0066 ms | 0.0110 ms | -0.049 m | -2.5e-8 m |
+| walker | 8,192 | 1 | 0.0039 ms | 0.0061 ms | 0.0087 ms | 0.0131 ms | -0.049 m | -2.5e-8 m |
+| walker-crowd | 2,048 | 64 | 0.225 ms | 0.291 ms | 0.481 ms | 0.796 ms | -0.200 m | -1.2e-7 m |
+| walker-crowd | 8,192 | 64 | 0.285 ms | 0.345 ms | 0.629 ms | 0.827 ms | -0.200 m | -1.2e-7 m |
+| spinning-probe | 2,048 | 1 | 0.0019 ms | 0.0035 ms | 0.0062 ms | 0.0102 ms | -0.049 m | +0.0084 m |
+| spinning-probe | 8,192 | 1 | 0.0049 ms | 0.0198 ms | 0.0084 ms | 0.0125 ms | -0.049 m | +0.0084 m |
+| spinning-fleet | 2,048 | 64 | 0.106 ms | 0.141 ms | 0.315 ms | 0.374 ms | -0.200 m | +0.0084 m |
+| spinning-fleet | 8,192 | 64 | 0.254 ms | 0.419 ms | 0.506 ms | 0.766 ms | -0.200 m | +0.0084 m |
 
-The longest CCD step took 0.62 ms for 64 walkers and 0.48 ms for 64 spinning spheres.
+On this virtual machine one maximum can be several times its mean, because other work shares the host. Use the means to compare rows.
 
-Discrete steps leave bodies up to 20 cm inside raised terrain. CCD stops each walker at contact, and each sphere rebounds a little above the terrain.
+Discrete steps leave bodies up to 20 cm inside raised terrain. CCD stops each walker at contact, and each sphere rebounds a little above the terrain. The least gaps do not change with the terrain size, because the terrain repeats.
+
+An earlier version of this report ran only the 1-body scenes on 2,048 triangles and the 64-body scenes on 8,192 triangles, on an AMD Ryzen 9 5900X under WSL 2. Its means were in the same range.
 
 ## Limits
 
