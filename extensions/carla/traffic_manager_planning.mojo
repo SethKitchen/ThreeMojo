@@ -45,6 +45,8 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrafficLightStage.c
 `MotionPlanStage.cpp` and `VehicleLightStage.cpp`.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
+
 from extensions.carla.actor import ActorId, GREEN, OFF, TrafficLightState
 from extensions.carla.map import Map
 from extensions.carla.speed_limits import simulation_speed
@@ -97,7 +99,7 @@ from extensions.carla.traffic_manager_map import (
     ROAD_OPTION_LEFT,
     ROAD_OPTION_RIGHT,
     SimpleWaypointIndex,
-    distance_squared,
+    _distance_squared_si as distance_squared,
 )
 from extensions.carla.traffic_manager_pid import (
     LATERAL_HIGHWAY_PARAM,
@@ -118,6 +120,7 @@ from extensions.carla.traffic_manager_shared import (
     set_vehicle_light_state,
 )
 from extensions.carla.traffic_manager_state import (
+    _check_actor_id,
     FLOAT_MAX,
     KinematicState,
     Neighbor,
@@ -188,7 +191,8 @@ struct TrafficLightStage(Movable):
             timestamp: The world's time now.
 
         Raises:
-            Error: If the index is out of range, or the vehicle is not
+            Error: If an actor id is not valid, or the index is out of range,
+                or the vehicle is not
                 tracked or has no path.
         """
         if index < 0 or index >= len(shared.vehicle_id_list):
@@ -240,8 +244,9 @@ struct TrafficLightStage(Movable):
             junction: The junction's id.
 
         Raises:
-            Error: Never; the lookups are checked.
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(ego)
         if junction not in self.entering_vehicles_map:
             self.entering_vehicles_map[junction] = List[Int]()
         if ego.value not in self.entering_vehicles_map[junction]:
@@ -270,9 +275,11 @@ struct TrafficLightStage(Movable):
             True while it must stay stopped.
 
         Raises:
-            Error: If the junction has no queue or the vehicle is not
+            Error: If an actor id is not valid, or the junction has no queue or
+                the vehicle is not
                 tracked.
         """
+        _ = _check_actor_id(ego)
         var a = ego.value
         if junction not in self.entering_vehicles_map:
             raise Error("The junction has no queue")
@@ -303,8 +310,9 @@ struct TrafficLightStage(Movable):
             is queued there, or -1.
 
         Raises:
-            Error: If the vehicle has no path.
+            Error: If an actor id is not valid, or the vehicle has no path.
         """
+        _ = _check_actor_id(ego)
         if ego.value not in shared.buffer_map:
             raise Error("A tracked vehicle has no path")
         ref buffer = shared.buffer_map[ego.value]
@@ -327,8 +335,9 @@ struct TrafficLightStage(Movable):
             ego: The vehicle.
 
         Raises:
-            Error: Never; the lookups are checked.
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(ego)
         var a = ego.value
         var junction = self.vehicle_last_junction.get(a)
         if not Bool(junction):
@@ -398,7 +407,8 @@ struct MotionPlanStage(Movable):
             timestamp: The world's time now.
 
         Raises:
-            Error: If the index is out of range, or the vehicle is not
+            Error: If an actor id is not valid, or the index is out of range,
+                or the vehicle is not
                 tracked or has no path.
         """
         if index < 0 or index >= len(shared.vehicle_id_list):
@@ -417,6 +427,7 @@ struct MotionPlanStage(Movable):
         var buffer = shared.buffer_map[a].copy()
         var localization = shared.localization_frame[index]
         var collision = shared.collision_frame[index]
+        _ = _check_actor_id(collision.hazard_actor_id)
         var tl_hazard = shared.tl_frame[index]
         var now = timestamp.elapsed_seconds
         var teleport = CarlaTransform(
@@ -472,14 +483,14 @@ struct MotionPlanStage(Movable):
         var max_target = shared.parameters.get_vehicle_target_velocity(
             actor, state.speed_limit
         ).value
-        var landmark_target = self.get_landmark_target_velocity(
+        var landmark_target = self._get_landmark_target_velocity_si(
             buffer[0], location, actor, max_target, shared, map
         )
-        var turn_target = self.get_turn_target_velocity(
+        var turn_target = self._get_turn_target_velocity_si(
             buffer, max_target, shared
         )
         max_target = min(min(max_target, landmark_target), turn_target)
-        var response = self.collision_handling(
+        var response = self._collision_handling_si(
             collision, tl_hazard, velocity, heading, max_target, shared
         )
         var collision_emergency_stop = response[0]
@@ -503,7 +514,7 @@ struct MotionPlanStage(Movable):
             )
             var target_location = target[0]
             ref target_waypoint = shared.local_map.at(buffer[target[1]])
-            var base_offset = self.calculate_base_offset(
+            var base_offset = self._calculate_base_offset_si(
                 actor,
                 buffer,
                 target_waypoint.check_junction(),
@@ -627,7 +638,7 @@ struct MotionPlanStage(Movable):
             return True
         ref map = shared.local_map
         if not (
-            map.at(end).distance_squared(map.at(safe).location())
+            map.at(end)._distance_squared_si(map.at(safe).location())
             > MIN_SAFE_INTERVAL_LENGTH.value * MIN_SAFE_INTERVAL_LENGTH.value
         ):
             return True
@@ -661,6 +672,64 @@ struct MotionPlanStage(Movable):
         is_target_junction: Bool,
         target_index: Int,
         shared: TrafficManagerShared,
+    ) raises -> Length:
+        """Read the checked physical stage result.
+
+        Args:
+            actor: The source actor.
+            buffer: The source buffer.
+            is_target_junction: The source is target junction.
+            target_index: The source target index.
+            shared: The source shared.
+
+        Returns:
+            The physical result; an absent collision margin means no yield.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        return Length(
+            self.calculate_base_offset_meters(
+                actor, buffer, is_target_junction, target_index, shared
+            )
+        )
+
+    def calculate_base_offset_meters(
+        self,
+        actor: ActorId,
+        buffer: List[SimpleWaypointIndex],
+        is_target_junction: Bool,
+        target_index: Int,
+        shared: TrafficManagerShared,
+    ) raises -> Float32:
+        """Explicit checked meters stage compatibility adapter.
+
+        Args:
+            actor: The source actor.
+            buffer: The source buffer.
+            is_target_junction: The source is target junction.
+            target_index: The source target index.
+            shared: The source shared.
+
+        Returns:
+            The scalar CARLA result in meters; collision no-yield retains positive infinity.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        var result = self._calculate_base_offset_si(
+            actor, buffer, is_target_junction, target_index, shared
+        )
+        _ = _finite_si(Float64(result))
+        return result
+
+    def _calculate_base_offset_si(
+        self,
+        actor: ActorId,
+        buffer: List[SimpleWaypointIndex],
+        is_target_junction: Bool,
+        target_index: Int,
+        shared: TrafficManagerShared,
     ) raises -> Float32:
         """Return a large vehicle's side offset in a junction,
         `CalculateBaseOffset`.
@@ -678,8 +747,10 @@ struct MotionPlanStage(Movable):
             with wide turns off.
 
         Raises:
-            Error: If a node or the vehicle is not known.
+            Error: If an actor id is not valid, or a node or the vehicle is not
+                known.
         """
+        _ = _check_actor_id(actor)
         var found = shared.large_vehicles.get(actor.value)
         if not Bool(found) or not is_target_junction:
             return 0.0
@@ -692,7 +763,7 @@ struct MotionPlanStage(Movable):
         for i in range(target_index, len(buffer)):  # pragma: no branch
             ref current = shared.local_map.at(buffer[i])
             if i > target_index:
-                missing += current.distance(
+                missing += current._distance_si(
                     shared.local_map.at(buffer[i - 1]).location()
                 )
             if not current.check_junction():
@@ -736,7 +807,7 @@ struct MotionPlanStage(Movable):
             Whether another vehicle on its grids is there.
 
         Raises:
-            Error: If a vehicle is not tracked.
+            Error: If an actor id is not valid, or a vehicle is not tracked.
         """
         var others = shared.track_traffic.get_overlapping_vehicles(actor)
         if len(others) == 0:
@@ -772,6 +843,78 @@ struct MotionPlanStage(Movable):
         tl_hazard: Bool,
         vehicle_velocity: Vector3,
         vehicle_heading: Vector3,
+        max_target_velocity: Velocity,
+        shared: TrafficManagerShared,
+    ) raises -> Tuple[Bool, Velocity]:
+        """Read the checked physical stage result.
+
+        Args:
+            collision_hazard: The source collision hazard.
+            tl_hazard: The source tl hazard.
+            vehicle_velocity: The source vehicle velocity.
+            vehicle_heading: The source vehicle heading.
+            max_target_velocity: The source max target velocity.
+            shared: The source shared.
+
+        Returns:
+            The physical result; an absent collision margin means no yield.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        var result = self.collision_handling_meters_per_second(
+            collision_hazard,
+            tl_hazard,
+            vehicle_velocity,
+            vehicle_heading,
+            max_target_velocity.value,
+            shared,
+        )
+        return (result[0], Velocity(result[1]))
+
+    def collision_handling_meters_per_second(
+        self,
+        collision_hazard: CollisionHazardData,
+        tl_hazard: Bool,
+        vehicle_velocity: Vector3,
+        vehicle_heading: Vector3,
+        max_target_velocity: Float32,
+        shared: TrafficManagerShared,
+    ) raises -> Tuple[Bool, Float32]:
+        """Explicit checked meters-per-second stage compatibility adapter.
+
+        Args:
+            collision_hazard: The source collision hazard.
+            tl_hazard: The source tl hazard.
+            vehicle_velocity: The source vehicle velocity.
+            vehicle_heading: The source vehicle heading.
+            max_target_velocity: The source max target velocity.
+            shared: The source shared.
+
+        Returns:
+            The scalar CARLA result in meters per second; collision no-yield retains positive infinity.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        _ = _nonnegative_si(Float64(max_target_velocity))
+        var result = self._collision_handling_si(
+            collision_hazard,
+            tl_hazard,
+            vehicle_velocity,
+            vehicle_heading,
+            max_target_velocity,
+            shared,
+        )
+        _ = _nonnegative_si(Float64(result[1]))
+        return result
+
+    def _collision_handling_si(
+        self,
+        collision_hazard: CollisionHazardData,
+        tl_hazard: Bool,
+        vehicle_velocity: Vector3,
+        vehicle_heading: Vector3,
         max_target_velocity: Float32,
         shared: TrafficManagerShared,
     ) raises -> Tuple[Bool, Float32]:
@@ -789,8 +932,10 @@ struct MotionPlanStage(Movable):
             Whether it must brake fully, and its target speed in m/s.
 
         Raises:
-            Error: If the hazard's actor is not tracked.
+            Error: If an actor id is not valid, or the hazard's actor is not
+                tracked.
         """
+        _ = _check_actor_id(collision_hazard.hazard_actor_id)
         var emergency = False
         var target = max_target_velocity
         var speed = vehicle_velocity.length()
@@ -825,6 +970,74 @@ struct MotionPlanStage(Movable):
         waypoint: SimpleWaypointIndex,
         vehicle_location: Vector3,
         actor: ActorId,
+        max_target_velocity: Velocity,
+        shared: TrafficManagerShared,
+        map: Map,
+    ) raises -> Velocity:
+        """Read the checked physical stage result.
+
+        Args:
+            waypoint: The source waypoint.
+            vehicle_location: The source vehicle location.
+            actor: The source actor.
+            max_target_velocity: The source max target velocity.
+            shared: The source shared.
+            map: The source map.
+
+        Returns:
+            The physical result; an absent collision margin means no yield.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        return Velocity(
+            self.get_landmark_target_velocity_meters_per_second(
+                waypoint,
+                vehicle_location,
+                actor,
+                max_target_velocity.value,
+                shared,
+                map,
+            )
+        )
+
+    def get_landmark_target_velocity_meters_per_second(
+        self,
+        waypoint: SimpleWaypointIndex,
+        vehicle_location: Vector3,
+        actor: ActorId,
+        max_target_velocity: Float32,
+        shared: TrafficManagerShared,
+        map: Map,
+    ) raises -> Float32:
+        """Explicit checked meters-per-second stage compatibility adapter.
+
+        Args:
+            waypoint: The source waypoint.
+            vehicle_location: The source vehicle location.
+            actor: The source actor.
+            max_target_velocity: The source max target velocity.
+            shared: The source shared.
+            map: The source map.
+
+        Returns:
+            The scalar CARLA result in meters per second; collision no-yield retains positive infinity.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        _ = _nonnegative_si(Float64(max_target_velocity))
+        var result = self._get_landmark_target_velocity_si(
+            waypoint, vehicle_location, actor, max_target_velocity, shared, map
+        )
+        _ = _finite_si(Float64(result))
+        return result
+
+    def _get_landmark_target_velocity_si(
+        self,
+        waypoint: SimpleWaypointIndex,
+        vehicle_location: Vector3,
+        actor: ActorId,
         max_target_velocity: Float32,
         shared: TrafficManagerShared,
         map: Map,
@@ -853,11 +1066,12 @@ struct MotionPlanStage(Movable):
             The lowest allowed speed in m/s, or `FLT_MAX` with none.
 
         Raises:
-            Error: If a map query fails.
+            Error: If an actor id is not valid, or a map query fails.
         """
+        _ = _check_actor_id(actor)
         var max_distance = LANDMARK_DETECTION_TIME.value * max_target_velocity
         var target = FLOAT_MAX
-        for landmark in map.landmarks_in_distance(
+        for landmark in map.landmarks_in_distance_meters(
             shared.local_map.at(waypoint).waypoint,
             Float64(max_distance),
             False,
@@ -894,6 +1108,57 @@ struct MotionPlanStage(Movable):
         return target
 
     def get_turn_target_velocity(
+        self,
+        buffer: List[SimpleWaypointIndex],
+        max_target_velocity: Velocity,
+        shared: TrafficManagerShared,
+    ) raises -> Velocity:
+        """Read the checked physical stage result.
+
+        Args:
+            buffer: The source buffer.
+            max_target_velocity: The source max target velocity.
+            shared: The source shared.
+
+        Returns:
+            The physical result; an absent collision margin means no yield.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        return Velocity(
+            self.get_turn_target_velocity_meters_per_second(
+                buffer, max_target_velocity.value, shared
+            )
+        )
+
+    def get_turn_target_velocity_meters_per_second(
+        self,
+        buffer: List[SimpleWaypointIndex],
+        max_target_velocity: Float32,
+        shared: TrafficManagerShared,
+    ) raises -> Float32:
+        """Explicit checked meters-per-second stage compatibility adapter.
+
+        Args:
+            buffer: The source buffer.
+            max_target_velocity: The source max target velocity.
+            shared: The source shared.
+
+        Returns:
+            The scalar CARLA result in meters per second; collision no-yield retains positive infinity.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        _ = _nonnegative_si(Float64(max_target_velocity))
+        var result = self._get_turn_target_velocity_si(
+            buffer, max_target_velocity, shared
+        )
+        _ = _finite_si(Float64(result))
+        return result
+
+    def _get_turn_target_velocity_si(
         self,
         buffer: List[SimpleWaypointIndex],
         max_target_velocity: Float32,
@@ -940,8 +1205,9 @@ struct MotionPlanStage(Movable):
             actor: The vehicle.
 
         Raises:
-            Error: Never; the lookups are checked.
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor)
         if actor.value in self.pid_state_map:
             _ = self.pid_state_map.pop(actor.value)
         if actor.value in self.teleportation_instance:
@@ -980,14 +1246,21 @@ struct VehicleLightStage(Movable):
         var light_states: List[Tuple[ActorId, VehicleLightState]],
         weather: WeatherParameters,
         is_weather_enabled: Bool = True,
-    ):
+    ) raises:
         """Read the lights and the weather once a step, `UpdateWorldInfo`.
 
         Args:
             light_states: Every vehicle's lights.
             weather: The weather.
             is_weather_enabled: Whether the world has weather.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
+        for entry in light_states:
+            _ = _check_actor_id(entry[0])
+        if is_weather_enabled:
+            weather.validate()
         self.all_light_states = light_states^
         self.is_weather_enabled = is_weather_enabled
         if is_weather_enabled:
@@ -1001,7 +1274,8 @@ struct VehicleLightStage(Movable):
             shared: The traffic manager's state.
 
         Raises:
-            Error: If the index is out of range or the vehicle has no path.
+            Error: If an actor id is not valid, or the index is out of range or
+                the vehicle has no path.
         """
         if index < 0 or index >= len(shared.vehicle_id_list):
             raise Error("The vehicle index is out of range")
