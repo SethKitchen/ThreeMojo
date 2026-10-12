@@ -324,12 +324,17 @@ def _is_group(condition: String) raises -> Bool:
 
 
 def _wrap_leaf(
-    condition: String, id: String, mut count: Int, frame: String, stem: String
+    condition: String,
+    id: String,
+    mut count: Int,
+    frame: String,
+    stem: String,
+    immediate: Bool = False,
 ) -> String:
-    """Wrap one opaque expression without changing its evaluation."""
+    """Wrap one opaque expression, using immediate truth only under not."""
     var result = (
         stem
-        + "leaf("
+        + ("immediate(" if immediate else "leaf(")
         + condition
         + ", "
         + frame
@@ -452,6 +457,7 @@ def _wrap_leaves(
     frame: String,
     stem: String,
     mut checks: List[String],
+    immediate: Bool = False,
 ) raises -> String:
     """Wrap Boolean leaves, retaining every logical operator and group.
 
@@ -460,6 +466,7 @@ def _wrap_leaves(
     Boolean expression used as an argument or value. No leaf is duplicated
     in evaluated code. Each `and`/`or` operator also gets an unevaluated type
     check, because Mojo selects its truth semantics from the operand types.
+    Immediate truth follows grouping parentheses, but stops at and/or nodes.
     """
     var parts = split_conditions(condition)
     # Conditional expressions bind less tightly than Boolean operators.
@@ -467,7 +474,9 @@ def _wrap_leaves(
     # arm runs or move a logical operator across the conditional expression.
     for index in range(1, len(parts), 2):
         if parts[index] == " if ":
-            return _wrap_leaf(String(condition.strip()), id, count, frame, stem)
+            return _wrap_leaf(
+                String(condition.strip()), id, count, frame, stem, immediate
+            )
     if len(parts) > 1:
         # `and` binds more tightly than `or`; each level groups left to right.
         var terms = List[String]()
@@ -480,7 +489,7 @@ def _wrap_leaves(
             operands.append(parts[index].copy())
             var before = count
             var probe = _wrap_leaves(
-                parts[index], id, count, frame, stem, checks
+                parts[index], id, count, frame, stem, checks, False
             )
             direct.append(_direct(probe, count - before, stem))
             wrapped.append(probe^)
@@ -501,13 +510,19 @@ def _wrap_leaves(
     var text = parts[0].copy()
     if _is_group(text):
         var inner = _substring(text, 1, _codepoint_count(text) - 1)
-        return "(" + _wrap_leaves(inner, id, count, frame, stem, checks) + ")"
+        return (
+            "("
+            + _wrap_leaves(inner, id, count, frame, stem, checks, immediate)
+            + ")"
+        )
     var chars = _characters(text)
     if len(chars) > 3 and _word_at(chars, 0, String("not")):
         if _token_boundary(chars[3]):
             var inner = _substring(text, 3, len(chars))
-            return "not " + _wrap_leaves(inner, id, count, frame, stem, checks)
-    return _wrap_leaf(text, id, count, frame, stem)
+            return "not " + _wrap_leaves(
+                inner, id, count, frame, stem, checks, True
+            )
+    return _wrap_leaf(text, id, count, frame, stem, immediate)
 
 
 struct Wrapped(Movable):
@@ -822,7 +837,9 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     + stem
                     + "begin, leaf as "
                     + stem
-                    + "leaf, finish as "
+                    + "leaf, immediate as "
+                    + stem
+                    + "immediate, finish as "
                     + stem
                     + "finish, buffer as "
                     + stem
