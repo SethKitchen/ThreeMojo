@@ -192,7 +192,10 @@ class OperationAdapterFakeFrameControls(unittest.TestCase):
 
     @contextmanager
     def selector_fixture(self):
-        with tempfile.TemporaryDirectory(prefix='invariant-selector-fake-') as directory:
+        # macOS temporary roots can have a symbolic /var ancestor. Normalize
+        # only the fixture's parent; production must still reject aliased input.
+        with tempfile.TemporaryDirectory(
+                prefix='invariant-selector-fake-', dir=Path(tempfile.gettempdir()).resolve()) as directory:
             root = Path(directory)
             raw = {'selector.mojo': b'fake', 'reference.mojo': b'fake',
                    selector.prior.MIGRATION: b'fake', LANE: b'current scope', ROAD: b'road source'}
@@ -218,6 +221,38 @@ class OperationAdapterFakeFrameControls(unittest.TestCase):
                     patch.object(cleanup, '_reviewed_lane_observation', return_value=('old scope', raw[ROAD])), \
                     patch.object(guard, 'declaration', declaration):
                 yield root, raw, record, interpreted
+
+    def test_selector_fixture_under_symbolic_temp_root_keeps_controls(self):
+        with tempfile.TemporaryDirectory(
+                prefix='invariant-selector-temp-alias-', dir=Path(tempfile.gettempdir()).resolve()) as directory:
+            parent = Path(directory)
+            physical = parent/'physical'
+            physical.mkdir()
+            symbolic = parent/'symbolic'
+            symbolic.symlink_to(physical, target_is_directory=True)
+            with patch.object(tempfile, 'tempdir', str(symbolic)):
+                self.assertEqual(Path(tempfile.gettempdir()), symbolic)
+                for control in (
+                        self.test_private_selector_positive_result_and_physical_read_order_match_public,
+                        self.test_private_selector_consumed_b_stops_before_declaration,
+                        self.test_private_selector_supplied_comments_keep_token_equivalence):
+                    with self.subTest(control=control.__name__):
+                        control()
+                        self.assertEqual(list(physical.iterdir()), [])
+                with self.selector_fixture() as (root, raw, record, interpreted):
+                    self.assertEqual(root.parent, physical)
+                    self.assertEqual(root, root.resolve())
+                    self.assertEqual(cleanup._regular(root, LANE).read_bytes(), raw[LANE])
+                    with self.assertRaisesRegex(cleanup.ContractError, 'symbolic root or ancestor'):
+                        cleanup._regular(symbolic/root.name, LANE)
+                    for kind in ('root', 'ancestor', 'leaf'):
+                        message = 'symbolic root or ancestor' if kind == 'root' else 'symlink input'
+                        with self.subTest(alias=kind), paired_helpers.alias(root, LANE, kind):
+                            with self.assertRaisesRegex(cleanup.ContractError, message):
+                                cleanup._regular(root, LANE)
+                        self.assertEqual(cleanup._regular(root, LANE).read_bytes(), raw[LANE])
+                self.assertFalse(root.exists())
+                self.assertEqual(list(physical.iterdir()), [])
 
     def test_private_selector_positive_result_and_physical_read_order_match_public(self):
         with self.selector_fixture() as (root, raw, record, interpreted), self.fake_image(root, raw) as operation:
