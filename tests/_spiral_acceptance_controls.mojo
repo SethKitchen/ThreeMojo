@@ -38,7 +38,7 @@ from extensions.carla.road_info import (
     RoadInfoLaneWidth,
     RoadInfoLaneOffset,
     RoadInfoElevation,
-    info_index,
+    info_index_meters as info_index,
 )
 from extensions.carla.spiral_domain_proof import (
     _SpiralRootCapture,
@@ -59,7 +59,7 @@ def _acceptance_road(
     y: Float64 = 0.0,
     varying_width: Bool = False,
 ) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(id),
         "admitted SPIRAL acceptance",
         1.0,
@@ -68,27 +68,29 @@ def _acceptance_road(
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
-    var width = CubicPolynomial.constant(2.0)
-    var offset = CubicPolynomial.constant(1.0)
+    var width = CubicPolynomial._constant_si(2.0)
+    var offset = CubicPolynomial._constant_si(1.0)
     if varying_width:
         # Identical stored polynomial records are intentional index cuts.
         # Width/2 equals offset by exact binary scaling. A nonzero b keeps
         # the existing projected-seed heuristic off; no policy is changed.
-        width = CubicPolynomial(2.0, 0.125, 0.0, 0.0, 0.0)
-        offset = CubicPolynomial(1.0, 0.0625, 0.0, 0.0, 0.0)
+        width = CubicPolynomial._from_coefficients(2.0, 0.125, 0.0, 0.0, 0.0)
+        offset = CubicPolynomial._from_coefficients(1.0, 0.0625, 0.0, 0.0, 0.0)
     for station in [0.0, 0.375, 0.75]:
         road.sections[0].lanes[0].info.widths.append(
-            RoadInfoLaneWidth(station, width)
+            RoadInfoLaneWidth._from_si(station, width)
         )
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(SPIRAL, 0.0, 0.0, y, 0.0, 4.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, y, 0.0, 4.0)
+        )
     )
-    road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, offset))
+    road.info.lane_offsets.append(RoadInfoLaneOffset._from_si(0.0, offset))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     return road^
 
