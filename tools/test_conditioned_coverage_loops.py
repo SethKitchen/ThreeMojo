@@ -159,6 +159,40 @@ class ConditionedCurrentLoopAdmission(unittest.TestCase):
         return {loops._typed_loop_row(module,line,expression,text)
                 for (name,line),expression in descriptors().items() if name == module}
 
+    def test_consumed_checker_copy_mutation_at_finalization_is_sticky(self):
+        from functools import wraps
+        from carla_lane_oracle import full_audit_cleanup_contracts as audit
+        name = 'tools/carla_lane_oracle/full_audit_cleanup_contracts.py'
+        target = self.root/name
+        physical = target.read_bytes()
+        original = audit._InvariantInputs.finish
+        fired = []
+        @wraps(original)
+        def finish(operation, root):
+            self.assertEqual(operation._kind, 'map_loops')
+            self.assertTrue(operation._checker_receipt)
+            self.assertIn(name, operation._executing)
+            self.assertNotIn(name, operation._raw)
+            self.assertEqual(fired, [])
+            fired.append(operation)
+            target.write_bytes(physical + b'\n# changed consumed checker copy\n')
+            return original(operation, root)
+        try:
+            with patch.object(audit._InvariantInputs, 'finish', finish):
+                self.assertEqual(loops.reviewed_nonempty_loops(
+                    self.root, 'extensions/carla/map'), {})
+        finally:
+            target.write_bytes(physical)
+        self.assertEqual(len(fired), 1)
+        operation = fired[0]
+        self.assertTrue(operation._failed)
+        self.assertIn('receipt checker differs from executing checker',
+                      operation._failure_reason)
+        self.assertEqual(operation._state, 'closed')
+        self.assertFalse(operation._checker_receipt)
+        self.assertEqual(set(loops.reviewed_nonempty_loops(
+            self.root, 'extensions/carla/map')), self.expected('extensions/carla/map'))
+
     def test_current_rows_bind_new_graph_and_preserve_required_true(self):
         from carla_lane_oracle import conditioned_cubic_contracts as conditioned
         modules = ('extensions/carla/map', 'extensions/carla/curve_rounded_arc',
