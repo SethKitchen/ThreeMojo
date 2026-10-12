@@ -590,6 +590,10 @@ struct RecorderFrames(Movable):
 
         Args:
             delta_seconds: The tick's duration in seconds.
+
+        Raises:
+            Error: If the frame duration is nonfinite or negative, or the new
+                elapsed time is nonfinite or negative.
         """
         _ = _nonnegative_si(delta_seconds)
         var elapsed = Float64(0)
