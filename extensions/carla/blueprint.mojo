@@ -44,6 +44,9 @@ port chooses them, and says so where it does.
   port does not either. `ActorAttribute.is_recommended` tells.
 """
 
+from extensions.carla.quantity_boundary import _RawSI, _RAW_SI, _nonnegative_si
+from units.si import Velocity
+
 from render.framebuffer import Color
 from std.math import inf, nan
 
@@ -1585,7 +1588,6 @@ comptime AGE_ADULT = PedestrianAge(2)
 comptime AGE_ELDERLY = PedestrianAge(3)
 
 
-@fieldwise_init
 struct PedestrianParameters(Copyable, Movable):
     """A pedestrian model's catalog entry, CARLA's pedestrian parameters."""
 
@@ -1596,6 +1598,94 @@ struct PedestrianParameters(Copyable, Movable):
     var generation: Int
     # The recommended speeds, in m/s: still, walking, running.
     var speeds: List[Float32]
+
+    def __init__(
+        out self,
+        id: String,
+        gender: PedestrianGender,
+        age: PedestrianAge,
+        generation: Int,
+        speeds: List[Velocity],
+    ) raises:
+        """Create a catalog entry with checked physical speed choices.
+
+        Args:
+            id: The source model id.
+            gender: The source gender enumeration.
+            age: The source age enumeration.
+            generation: The source generation.
+            speeds: Nonnegative still, walking and running speeds.
+
+        Raises:
+            Error: If an enumeration or speed is invalid.
+        """
+        var values = List[Float32]()
+        for speed in speeds:
+            values.append(speed.value)
+        self = PedestrianParameters.from_meters_per_second(
+            id, gender, age, generation, values
+        )
+
+    @staticmethod
+    def from_meters_per_second(
+        id: String,
+        gender: PedestrianGender,
+        age: PedestrianAge,
+        generation: Int,
+        speeds: List[Float32],
+    ) raises -> PedestrianParameters:
+        """Read explicit CARLA source speed values without changing bits.
+
+        Args:
+            id: The source model id.
+            gender: The source gender enumeration.
+            age: The source age enumeration.
+            generation: The source generation.
+            speeds: The nonnegative speeds in meters per second.
+
+        Returns:
+            The checked catalog record.
+
+        Raises:
+            Error: If an enumeration or speed is invalid.
+        """
+        if not (gender.is_valid() and age.is_valid()):
+            raise Error("Pedestrian gender or age is not valid")
+        for speed in speeds:
+            _ = _nonnegative_si(Float64(speed))
+        return PedestrianParameters(
+            _RAW_SI, id, gender, age, generation, speeds
+        )
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        id: String,
+        gender: PedestrianGender,
+        age: PedestrianAge,
+        generation: Int,
+        speeds: List[Float32],
+    ):
+        self.id = id
+        self.gender = gender
+        self.age = age
+        self.generation = generation
+        self.speeds = speeds.copy()
+
+    def speeds_quantity(self) raises -> List[Velocity]:
+        """Read checked physical views of the mutable source speeds.
+
+        Returns:
+            The speed choices in their original order and precision.
+
+        Raises:
+            Error: If a source speed is nonfinite or negative.
+        """
+        var out = List[Velocity]()
+        for speed in self.speeds:
+            _ = _nonnegative_si(Float64(speed))
+            out.append(Velocity(speed))
+        return out^
 
 
 def make_pedestrian_definition(
@@ -1615,6 +1705,7 @@ def make_pedestrian_definition(
     """
     if not (p.gender.is_valid() and p.age.is_valid()):
         raise Error("Pedestrian gender or age is not valid")
+    _ = p.speeds_quantity()
     var out = _definition(["walker", "pedestrian", p.id])
     _set_role_names(out, ["pedestrian"])
     var gender: List[String] = ["other", "female", "male"]
@@ -1762,6 +1853,7 @@ def pedestrian_catalog() -> List[PedestrianParameters]:
             id = "0" + id
         out.append(
             PedestrianParameters(
+                _RAW_SI,
                 id,
                 GENDER_OTHER,
                 AGE_CHILD if n >= 48 else AGE_ADULT,
