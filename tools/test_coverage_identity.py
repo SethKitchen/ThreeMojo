@@ -44,6 +44,17 @@ class IdentityAdmissionTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertTrue(grouping.truth_supported(('or', ('not', (kind, 0)), ('B', 1))))
 
+    def test_last_use_sources_remove_only_the_two_post_use_reads(self):
+        for number in (0, 3):
+            expression = grouping.IDENTITY_POSITIVE_CASES[number][0]
+            retained = grouping.identity_source(expression)
+            last_use = grouping.identity_last_use_source(expression)
+            suffix = ('    print("RETAINED", kept.payload)\n'
+                      '    print("ADDRESS", Int(Pointer(to=kept.payload)) == kept.expected)\n')
+            self.assertEqual(retained, last_use + suffix)
+            self.assertIn('print("DIRECT", kept.__bool__())', last_use)
+            self.assertNotIn('print("RETAINED"', last_use)
+
     def test_identity_controls_keep_both_condition_slots(self):
         self.assertEqual(len(grouping.IDENTITY_POSITIVE_CASES), 6)
         self.assertEqual(len(grouping.IDENTITY_REFUSED_CASES), 4)
