@@ -509,10 +509,18 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     Returns:
         True if the instrumented operator keeps the native truth semantics.
     """
-    comptime left = reflect[L].name()
-    comptime right = reflect[R].name()
     comptime native = reflect[N].name()
     comptime rewritten = reflect[I].name()
+    # A Bool result kept Bool is exact whatever the operands are: the pure
+    # branch below keeps a non-Optional result, and the Bool branch asks
+    # only for a Bool rewrite. Answer it before the operand reflections.
+    # Pinned Mojo 1.1.0 deadlocks a build whose module holds many
+    # operand reflections, such as the instrumented COLLADA loader, and
+    # most operators join two Bool comparisons.
+    comptime if native == "Bool" and rewritten == "Bool":
+        return True
+    comptime left = reflect[L].name()
+    comptime right = reflect[R].name()
     comptime if _pure(left) and _pure(right) and _pure(native):
         # An Optional can itself be an Optional's element. Both operands
         # being Optional does not rule out a wrap that changes emptiness to
