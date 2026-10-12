@@ -1,4 +1,14 @@
 """Exact graph for the reviewed private Y-finiteness lemma. No arbitrary projection."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
 from pathlib import Path
 if __package__:
     from . import source_contracts
@@ -30,7 +40,10 @@ def verify(root, *, _operation=None):
             import full_audit_cleanup_contracts as full_audit
     modules = {p: (root/p).read_text() for p in EXPECTED}
     if _operation is not None:
-        modules = {p: full_audit._observe_text(root, p, text, _operation=_operation)
+        modules = {p: _typed_source.historical_text(root, p, full_audit._observe_text(root, p, text, _operation=_operation), _operation=_operation)
+                   for p, text in modules.items()}
+    else:
+        modules = {p: _typed_source.historical_text(root, p, text)
                    for p, text in modules.items()}
     return verify_text(modules)
 
@@ -43,6 +56,7 @@ PREDECESSOR_TOKEN_SHA256 = 'a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a78
 def predecessor_text(root, path, *, _operation=None):
     """Verify all actual Y premises before restoring its exact prior module."""
     import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     root = Path(root)
     if str(path) != MODULE:
@@ -50,7 +64,7 @@ def predecessor_text(root, path, *, _operation=None):
     # Never call selection or another historical projection from here. The
     # actual five-file graph must pass before any record can provide text.
     verify(root, _operation=_operation)
-    payload = (root / RECORD).read_bytes()
+    payload = _typed_source.historical_bytes(root, root / RECORD, (root / RECORD).read_bytes(), _operation=_operation)
     if hashlib.sha256(payload).hexdigest() != RECORD_SHA256:
         raise ValueError('Unreviewed grouped Y successor record')
     record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)
