@@ -18,14 +18,16 @@ They do not route raw degree values through radians and back.
 The typed angle views use Float64 radian arithmetic. They do not use the
 Float32 scale in `DEGREE`. A conversion between degrees and radians can
 round by Float64 arithmetic. It is not a bit-exact degree round trip.
+
 The existing `latitude_angle` and `longitude_angle` methods remain
 Float32 views and now reject invalid values. The Float64 views have a
 `64` suffix. CARLA frame vectors remain Float32 meter coordinates.
 
 Latitude must be between -90 and 90 degrees. Longitude can be any finite
 value because projection code wraps a longitude difference. Altitudes and
-offsets can have either sign. An axis must be positive. An inverse
-flattening must exceed one; positive infinity denotes a sphere. A
+offsets can have either sign. An axis must be positive.
+
+An inverse flattening must exceed one; positive infinity denotes a sphere. A
 semi-minor axis must not exceed its semi-major axis. A transverse
 Mercator scale must be positive. These checks do not certify a projection
 formula at a singular input or replace its existing numerical contract.
@@ -129,11 +131,13 @@ hertz state as `Frequency64`. CAM constructor intervals use Float32
 ## Verification
 
 `tests/test_carla_geo_quantity.mojo` checks large and tiny Float64 meter
-values, low-bit geographic coordinates, signed zero, exact serialized
-GNSS bytes, parsed low bits, explicit unit conversion, typed views,
-invalid raw mutations, domain rejection, conversion overflow,
-transactional noise setters, and Float32 component bits. Existing CARLA
-geometry and sensor tests keep their numerical expectations. Two
+values, low-bit geographic coordinates, signed zero, and exact serialized
+GNSS bytes. It also checks parsed low bits, explicit unit conversion,
+typed views, and Float32 component bits. Refusal controls cover invalid raw
+mutations, domain rejection, conversion overflow, and transactional noise
+setters.
+
+Existing CARLA geometry and sensor tests keep their numerical expectations. Two
 comparison-only invalid ellipsoid and scale inputs become distinct valid
 values because the new constructors reject the original invalid inputs.
 
