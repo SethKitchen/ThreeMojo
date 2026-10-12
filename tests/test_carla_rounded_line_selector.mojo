@@ -17,7 +17,7 @@ from extensions.carla.curve_rounded_line import (
 from extensions.carla.curve_trig import _curve_cos, _curve_sin
 from extensions.carla.geometry import LINE
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import info_index_meters as info_index
 from std.testing import TestSuite, assert_equal, assert_true, assert_false
 from tests.test_carla_rounded_line_axis import _rotated
 
