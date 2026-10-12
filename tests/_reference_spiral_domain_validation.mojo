@@ -10,7 +10,7 @@ from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.curve_interval import _Jet
 from extensions.carla.geometry import RoadGeometry
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import info_index_meters as info_index
 from extensions.carla.spiral_moment_proof import _all_spiral_nodes_quadrant_zero
 from std.math import isfinite
 
