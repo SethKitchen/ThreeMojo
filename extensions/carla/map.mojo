@@ -246,6 +246,18 @@ struct Waypoint(Hashable, ImplicitlyCopyable, KeyElement, Writable):
         road_id: RoadId, section_id: SectionId, lane_id: LaneId, s: Float64
     ) raises -> Waypoint:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            road_id: The road identifier.
+            section_id: The lane-section identifier.
+            lane_id: The signed lane identifier.
+            s: The nonnegative station in meters.
+
+        Returns:
+            The new Waypoint record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
         return Waypoint(_RAW_SI, road_id, section_id, lane_id, s)
@@ -323,9 +335,6 @@ struct Waypoint(Hashable, ImplicitlyCopyable, KeyElement, Writable):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -657,6 +666,9 @@ struct Signal(Copyable, Movable):
             roll: Its roll, in radians.
             value_present: Whether the file supplied a numeric value.
 
+        Returns:
+            The new Signal record with the supplied source fields.
+
         Raises:
             Error: If an id is not valid.
         """
@@ -793,6 +805,7 @@ struct Signal(Copyable, Movable):
         """Create a signal from a file's `signal`.
 
         Args:
+            raw: The private raw-storage construction capability.
             road_id: The road it stands on.
             signal_id: Its id.
             s: Meters along the road.
@@ -882,9 +895,6 @@ struct Signal(Copyable, Movable):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -895,9 +905,6 @@ struct Signal(Copyable, Movable):
 
     def t_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw t compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -910,9 +917,6 @@ struct Signal(Copyable, Movable):
     def z_offset_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw z_offset compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -923,9 +927,6 @@ struct Signal(Copyable, Movable):
 
     def height_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw height compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -938,9 +939,6 @@ struct Signal(Copyable, Movable):
     def width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw width compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -951,9 +949,6 @@ struct Signal(Copyable, Movable):
 
     def h_offset_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw h_offset compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -966,9 +961,6 @@ struct Signal(Copyable, Movable):
     def pitch_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw pitch compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -979,9 +971,6 @@ struct Signal(Copyable, Movable):
 
     def roll_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw roll compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1065,9 +1054,6 @@ struct RoadObject(Copyable, Movable):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1078,9 +1064,6 @@ struct RoadObject(Copyable, Movable):
 
     def t_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw t compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1093,9 +1076,6 @@ struct RoadObject(Copyable, Movable):
     def z_offset_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw z_offset compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1106,9 +1086,6 @@ struct RoadObject(Copyable, Movable):
 
     def valid_length_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw valid_length compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1121,9 +1098,6 @@ struct RoadObject(Copyable, Movable):
     def length_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw length compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1134,9 +1108,6 @@ struct RoadObject(Copyable, Movable):
 
     def width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw width compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1149,9 +1120,6 @@ struct RoadObject(Copyable, Movable):
     def heading_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw heading compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1163,9 +1131,6 @@ struct RoadObject(Copyable, Movable):
     def pitch_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw pitch compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1176,9 +1141,6 @@ struct RoadObject(Copyable, Movable):
 
     def roll_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw roll compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1372,6 +1334,12 @@ struct SignalSearchData(Copyable, Movable):
             signal: The signal reference found.
             waypoint: Where it applies.
             accumulated_s: How far from the start, in meters.
+
+        Returns:
+            The new SignalSearchData record with the supplied source fields.
+
+        Raises:
+            Error: If the accumulated distance is nonfinite or negative.
         """
         _ = _nonnegative_si(accumulated_s)
         return SignalSearchData(_RAW_SI, signal, waypoint, accumulated_s)
@@ -1401,19 +1369,16 @@ struct SignalSearchData(Copyable, Movable):
         """Create a result.
 
         Args:
+            raw: The private raw-storage construction capability.
             signal: The signal reference found.
             waypoint: Where it applies.
-            accumulated_s: How far from the start, in meters.
-        """
+            accumulated_s: How far from the start, in meters."""
         self.signal = signal.copy()
         self.waypoint = waypoint
         self.accumulated_s = accumulated_s
 
     def accumulated_s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw accumulated_s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1469,6 +1434,12 @@ struct Landmark(Copyable, Movable):
             waypoint: Where it applies, or None.
             reference: The signal reference.
             distance: Meters from the search's start.
+
+        Returns:
+            The new Landmark record with the supplied source fields.
+
+        Raises:
+            Error: If the distance is nonfinite or negative.
         """
         _ = _nonnegative_si(distance)
         return Landmark(_RAW_SI, waypoint, reference, distance)
@@ -1498,19 +1469,16 @@ struct Landmark(Copyable, Movable):
         """Create a landmark.
 
         Args:
+            raw: The private raw-storage construction capability.
             waypoint: Where it applies, or None.
             reference: The signal reference.
-            distance: Meters from the search's start.
-        """
+            distance: Meters from the search's start."""
         self.waypoint = waypoint
         self.reference = reference.copy()
         self.distance = distance
 
     def distance_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw distance compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -3782,8 +3750,8 @@ struct Map(Movable):
         """Return the next result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
 
         Returns:
             The requested records with unchanged Float64 endpoint arithmetic.
@@ -3822,8 +3790,8 @@ struct Map(Movable):
         """Return the previous result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
 
         Returns:
             The requested records with unchanged Float64 endpoint arithmetic.
@@ -4285,8 +4253,8 @@ struct Map(Movable):
         """Return the signals in distance result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
             stop_at_junction: Whether to stop at a junction.
 
         Returns:
@@ -4508,8 +4476,8 @@ struct Map(Movable):
         """Return the next until lane end result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
 
         Returns:
             The requested records with unchanged Float64 endpoint arithmetic.
@@ -4549,8 +4517,8 @@ struct Map(Movable):
         """Return the previous until lane start result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
 
         Returns:
             The requested records with unchanged Float64 endpoint arithmetic.
@@ -4741,8 +4709,8 @@ struct Map(Movable):
         """Return the landmarks in distance result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
             stop_at_junction: Whether to stop at a junction.
 
         Returns:
@@ -4803,8 +4771,8 @@ struct Map(Movable):
         """Return the landmarks of type in distance result with a Float64 length.
 
         Args:
-            distance: The distance or spacing, with its meter unit.
             waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
             type: The signal type to keep.
             stop_at_junction: Whether to stop at a junction.
 
