@@ -353,14 +353,14 @@ struct GlobalRoutePlanner(Movable):
             segment.exit_xyz = _xyz(l2)
             segment.entry_key = _key(segment.entry_xyz)
             segment.exit_key = _key(segment.exit_xyz)
-            var first = map.next(pair[0], res)
+            var first = map.next_meters(pair[0], res)
             if _distance(l1, l2) > res:
                 # The exit is more than one resolution away along the lane,
                 # so the first step stays on it.
                 var w = first[0]
                 while _distance(map.compute_transform(w).location, l2) > res:
                     segment.path.append(w)
-                    var step = map.next(w, res)
+                    var step = map.next_meters(w, res)
                     if len(step) == 0:
                         break
                     w = step[0]
@@ -447,7 +447,7 @@ struct GlobalRoutePlanner(Movable):
             var n2 = -count
             self._road_id_to_edge[key] = (n1, n2)
             var path = List[Waypoint]()
-            var nexts = map.next(end, res)
+            var nexts = map.next_meters(end, res)
             while (
                 len(nexts) > 0
                 and nexts[0].road_id == end.road_id
@@ -456,7 +456,7 @@ struct GlobalRoutePlanner(Movable):
             ):
                 var reached = nexts[0]
                 path.append(reached)
-                nexts = map.next(reached, res)
+                nexts = map.next_meters(reached, res)
             if len(path) == 0:
                 continue
             var tail = path[len(path) - 1]
