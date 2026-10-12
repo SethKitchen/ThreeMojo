@@ -554,6 +554,7 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
         self.assertIsNone(operation._owner_frame)
         self.assertEqual(operation._observations, [])
         self.assertEqual(operation._discoveries, [])
+        self.assertIs(operation._checker_receipt, False)
 
     def assert_one_owner(self, events, kind, core=cleanup):
         self.assertEqual(len(events['admissions']), 1)
@@ -1118,6 +1119,127 @@ class BoundedOwnerSyntheticBoundaryControls(unittest.TestCase):
                 with self.subTest(frame=frame, aliases=aliases):
                     self.assertEqual(outcome(cleanup._operation_frame_kind, frame, aliases),
                                      outcome(reference, frame, aliases))
+
+    @staticmethod
+    def _receipt_control_namespace():
+        """Compile isolated routing mechanics, never a replacement authority."""
+        raw = Path(cleanup.__file__).read_bytes()
+        _checker_source_predecessor('full_audit_cleanup_contracts.py', raw)
+        tree = ast.parse(raw)
+        owner = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                     and node.name == '_InvariantInputs')
+        methods = [copy.deepcopy(node) for node in owner.body
+                   if isinstance(node, ast.FunctionDef)
+                   and node.name in ('_bind_checker_receipt', 'finish')]
+        if len(methods) != 2:
+            raise AssertionError('missing exact checker receipt methods')
+        namespace = dict(vars(cleanup))
+        exec(compile(ast.Module(body=methods, type_ignores=[]),
+                     '<isolated-checker-receipt-mechanics>', 'exec'), namespace)
+        exec(compile("""
+def proof_bindings(root, executing, *, _operation, target):
+    return target._bind_checker_receipt(root, executing)
+def wrong_frame(root, executing, *, _operation, target):
+    return target._bind_checker_receipt(root, executing)
+""", '<isolated-checker-receipt-callers>', 'exec'), namespace)
+        return namespace
+
+    def test_checker_receipt_registration_requires_exact_frame_owner_and_image(self):
+        import types
+        root = Path('/synthetic-checker-receipt-root')
+        captured = {'synthetic-checker.py': 'captured'}
+        for fault in (None, 'wrong frame', 'wrong globals', 'wrong owner', 'wrong root',
+                      'pending', 'capturing', 'nonbool receipt', 'nondict image', 'different image'):
+            with self.subTest(fault=fault):
+                namespace = self._receipt_control_namespace()
+                events = []
+                owner = types.SimpleNamespace(_state='active', _capturing=False,
+                    _checker_receipt=False, _executing=types.MappingProxyType(captured))
+                def check(actual_root):
+                    events.append('owner')
+                    cleanup.require(actual_root == root, 'synthetic wrong root')
+                def fail(actual_owner, error):
+                    self.assertIs(actual_owner, owner)
+                    events.append('failure')
+                    owner._checker_receipt = False
+                    raise error
+                owner._check_owner = check
+                owner._bind_checker_receipt = types.MethodType(namespace['_bind_checker_receipt'], owner)
+                namespace['_operation_fail'] = fail
+                caller = namespace['proof_bindings']
+                operation, actual_root, executing = owner, root, dict(captured)
+                if fault == 'wrong frame': caller = namespace['wrong_frame']
+                elif fault == 'wrong globals':
+                    caller = types.FunctionType(caller.__code__, dict(namespace))
+                elif fault == 'wrong owner': operation = object()
+                elif fault == 'wrong root': actual_root = root/'foreign'
+                elif fault == 'pending': owner._state = 'pending'
+                elif fault == 'capturing': owner._capturing = True
+                elif fault == 'nonbool receipt': owner._checker_receipt = 0
+                elif fault == 'nondict image': executing = types.MappingProxyType(captured)
+                elif fault == 'different image': executing = {'synthetic-checker.py': 'different'}
+                if fault is None:
+                    self.assertIsNone(caller(actual_root, executing, _operation=operation, target=owner))
+                    self.assertIs(owner._checker_receipt, True)
+                    self.assertEqual(events, ['owner'])
+                else:
+                    with self.assertRaises(ValueError):
+                        caller(actual_root, executing, _operation=operation, target=owner)
+                    self.assertIs(owner._checker_receipt, False)
+                    self.assertEqual(events, ['owner', 'failure'])
+
+    def test_checker_receipt_finalizer_keeps_unregistered_owner_scope(self):
+        import types
+        root = Path('/synthetic-checker-receipt-root')
+        captured = {'synthetic-checker.py': 'captured'}
+        cases = (('active', False, False), ('pending', False, False),
+                 ('active', True, False), ('active', True, True), ('active', 1, False))
+        for state, registered, changed in cases:
+            with self.subTest(state=state, registered=registered, changed=changed):
+                namespace = self._receipt_control_namespace()
+                events = []
+                owner = types.SimpleNamespace(_state=state, _checker_receipt=registered,
+                    _owner=object(), _executing=types.MappingProxyType(captured),
+                    _resolver_paths=frozenset())
+                def check(actual_root):
+                    self.assertEqual(actual_root, root)
+                    events.append('owner')
+                def checkpoint(actual_owner, token, actual_root):
+                    self.assertIs(actual_owner, owner)
+                    self.assertIs(token, owner._owner)
+                    self.assertEqual(actual_root, root)
+                    events.append('checkpoint')
+                def executing(actual_root):
+                    self.assertEqual(actual_root, root)
+                    events.append('executing')
+                    return {'synthetic-checker.py': 'different'} if changed else dict(captured)
+                def close():
+                    events.append('close')
+                    owner._checker_receipt = False
+                    owner._state = 'closed'
+                def fail(actual_owner, error):
+                    self.assertIs(actual_owner, owner)
+                    events.append('failure')
+                    raise error
+                owner._check_owner, owner.close = check, close
+                namespace.update(_CacheInputs=types.SimpleNamespace(checkpoint=checkpoint),
+                    executing_checker_bindings=executing, _operation_fail=fail)
+                finish = types.MethodType(namespace['finish'], owner)
+                refused = changed or type(registered) is not bool
+                if refused:
+                    with self.assertRaisesRegex(ValueError, 'consumed receipt checker changed|invalid consumed checker receipt state'):
+                        finish(root)
+                    self.assertEqual(owner._state, 'closed')
+                    self.assertIs(owner._checker_receipt, False)
+                else:
+                    self.assertIsNone(finish(root))
+                    self.assertEqual(owner._state, 'finished')
+                expected = ['owner']
+                if state == 'active': expected.append('checkpoint')
+                if registered is True: expected.append('executing')
+                if refused: expected.extend(('close', 'failure'))
+                self.assertEqual(events, expected)
+
 
 # Append before the maintained module's final unittest.main() guard.
 # Copyright (c) 2026 Seth Kitchen, PE
@@ -3471,7 +3593,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            return None\n',
          ),
         ),
-        (1416, 1461,
+        (1416, 1472,
          (),
          (
           'def _typed_construction_boundary_loops(root, current, *, include_roots=(), _operation=None):\n',
@@ -3503,8 +3625,19 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    if (_operation is None and not _final_unowned_typed_loop_bindings(\n',
           '            root, bindings, include_roots=include_roots)):\n',
           '        return {}\n',
-          '    # Observe every bound current input again after the independent census.\n',
+          '    # The receipt has disjoint executing-checker and source-input domains.\n',
+          '    # Recheck both physical images. A checker copy is not a source observation;\n',
+          '    # the owner separately retains this consumed premise through finalization.\n',
+          '    try:\n',
+          '        executing = cleanup.executing_checker_bindings(root)\n',
+          '        cleanup.require(all(bindings.get(path) == digest\n',
+          '                            for path, digest in executing.items()),\n',
+          "                        'construction receipt checker image changed')\n",
+          '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:\n',
+          '        cleanup._operation_fail(_operation, error)\n',
           '    for path, expected in bindings.items():\n',
+          '        if path in executing:\n',
+          '            continue\n',
           '        raw = _coverage_observe_bytes(root, path,\n',
           '            relative_source(root, path, **operation_args).read_bytes(),\n',
           '            _operation=_operation)\n',
@@ -3521,7 +3654,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '\n',
          ),
         ),
-        (1471, 1479,
+        (1482, 1490,
          (),
          (
           '        from carla_lane_oracle import typed_boundary_contracts as typed\n',
@@ -3578,7 +3711,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          (
           " 'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',\n",
           " 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
-          " 'tools/carla_lane_oracle/typed_boundary_contracts.py': '8e6b6209f9e3d84fa97d4f8ae0eb726d69f43f6caf4496fb6e32accbf9a94cef',\n",
+          " 'tools/carla_lane_oracle/typed_boundary_contracts.py': '4039578ac9fe2f4e5485c961dec3ad2377a9b68b43f480bbaf8e51af2c9aea49',\n",
           " 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}\n",
          ),
         ),
@@ -3606,6 +3739,16 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
          (
           '               vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic))\n',
+         ),
+        ),
+        (761, 763,
+         (
+          '            supplied = Path(root) / relative\n',
+          '            require(not supplied.is_symlink() and sha(supplied.read_bytes()) == captured,\n',
+         ),
+         (
+          '            supplied = _regular(root, relative)\n',
+          '            require(sha(supplied.read_bytes()) == captured,\n',
          ),
         ),
         (765, 767,
@@ -3765,7 +3908,37 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "        require(kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'map_loops', 'rtree_loops'),\n",
          ),
         ),
-        (1826, 1829,
+        (1659, 1660,
+         (),
+         (
+          '        self._checker_receipt = False\n',
+         ),
+        ),
+        (1675, 1694,
+         (),
+         (
+          '        self._checker_receipt = False\n',
+          '\n',
+          '    def _bind_checker_receipt(self, root, executing):\n',
+          '        """Retain only a supplied checker image consumed by this operation."""\n',
+          '        try:\n',
+          '            self._check_owner(root)\n',
+          '            caller = sys._getframe(1)\n',
+          '            require(caller.f_globals is globals()\n',
+          '                    and caller.f_code is _live_function_code(proof_bindings)\n',
+          "                    and caller.f_locals.get('_operation') is self\n",
+          '                    and type(executing) is dict\n',
+          '                    and type(self._checker_receipt) is bool\n',
+          "                    and self._state == 'active' and not self._capturing,\n",
+          "                    'checker receipt requires its active proof-binding owner')\n",
+          '            require(executing == dict(self._executing),\n',
+          "                    'checker receipt differs from captured executing image')\n",
+          '            self._checker_receipt = True\n',
+          '        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:\n',
+          '            _operation_fail(self, error)\n',
+         ),
+        ),
+        (1846, 1849,
          (
           '                    require(sha(self.raw(self._owner, root, path)) == AFTER_SHA256[path],\n',
          ),
@@ -3775,27 +3948,43 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                            and typed_boundary.edge(path)['before_sha256'] == AFTER_SHA256[path]),\n",
          ),
         ),
-        (1991, 1991,
+        (1865, 1870,
+         (),
+         (
+          '                    require(type(self._checker_receipt) is bool,\n',
+          "                            'invalid consumed checker receipt state')\n",
+          '                    if self._checker_receipt:\n',
+          '                        require(executing_checker_bindings(root) == dict(self._executing),\n',
+          "                                'consumed receipt checker changed during owned verification')\n",
+         ),
+        ),
+        (1913, 1914,
+         (),
+         (
+          '        self._checker_receipt = False\n',
+         ),
+        ),
+        (2017, 2017,
          (
           '        require(digest == AFTER_TOKEN_SHA256[path],\n',
           "                'unreviewed supplied successor source: ' + path)\n",
          ),
          (),
         ),
-        (1995, 1997,
+        (2021, 2023,
          (),
          (
           '        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, raw),\n',
           "                'unreviewed supplied successor source: ' + path)\n",
          ),
         ),
-        (2058, 2059,
+        (2084, 2085,
          (),
          (
           '    typed_fixtures = {}\n',
          ),
         ),
-        (2060, 2070,
+        (2086, 2096,
          (
           "        require(sha(raw) == expected[path], 'shared-helper fixture changed: ' + path)\n",
          ),
@@ -3812,7 +4001,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "        require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + path)\n",
          ),
         ),
-        (2074, 2078,
+        (2100, 2104,
          (),
          (
           '    if typed_fixtures and _inputs is None and _operation is None:\n',
@@ -3821,7 +4010,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        verify(root, exact=True, _expected_sources=typed_fixtures)\n',
          ),
         ),
-        (2080, 2081,
+        (2106, 2107,
          (
           '    return {**expected, **{path: sha(raw) for path, raw in sources.items()}}\n',
          ),
@@ -3829,19 +4018,19 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    return {path: sha(raw) for path, raw in {**sources, **bound}.items()}\n',
          ),
         ),
-        (2161, 2161,
+        (2187, 2187,
          (
           '    runtime_view.steps(root, _operation=_operation)\n',
          ),
          (),
         ),
-        (2166, 2167,
+        (2192, 2193,
          (),
          (
           '    runtime_view.checked_steps(record)\n',
          ),
         ),
-        (2175, 2177,
+        (2201, 2203,
          (
           "        require(sha(value) == expected, 'runtime view bound input changed: ' + path)\n",
          ),
@@ -3850,7 +4039,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                'runtime view bound input changed: ' + path)\n",
          ),
         ),
-        (2180, 2181,
+        (2206, 2207,
          (
           '        result[path] = expected\n',
          ),
@@ -3858,7 +4047,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        result[path] = sha(value)\n',
          ),
         ),
-        (2196, 2199,
+        (2222, 2225,
          (
           '    if sha(raw) == station.BEFORE_SHA256:\n',
           '        require(source.token_sha256(_physical_text(raw)) == station.BEFORE_TOKEN_SHA256,\n',
@@ -3869,7 +4058,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        require(source.token_sha256(historical) == station.BEFORE_TOKEN_SHA256,\n',
          ),
         ),
-        (2201, 2202,
+        (2227, 2228,
          (
           '    require(sha(raw) in (station.AFTER_SHA256, deviation.AFTER_SHA256),\n',
          ),
@@ -3877,7 +4066,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    require(sha(historical) in (station.AFTER_SHA256, deviation.AFTER_SHA256),\n',
          ),
         ),
-        (2203, 2204,
+        (2229, 2230,
          (
           "    station.predecessor_source(deviation.station_source(raw.decode('utf-8')))\n",
          ),
@@ -3885,7 +4074,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    station.predecessor_source(deviation.station_source(historical))\n',
          ),
         ),
-        (2207, 2208,
+        (2233, 2234,
          (
           '    if sha(raw) == deviation.AFTER_SHA256:\n',
          ),
@@ -3893,7 +4082,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    if sha(historical) == deviation.AFTER_SHA256:\n',
          ),
         ),
-        (2213, 2215,
+        (2239, 2241,
          (
           "        require(sha(value) == expected, 'station correctness fixture changed: ' + path)\n",
          ),
@@ -3902,7 +4091,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                'station correctness fixture changed: ' + path)\n",
          ),
         ),
-        (2218, 2219,
+        (2244, 2245,
          (
           '        result[path] = expected\n',
          ),
@@ -3910,7 +4099,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        result[path] = sha(value)\n',
          ),
         ),
-        (2238, 2240,
+        (2264, 2266,
          (
           '            digest = sha(raw)\n',
          ),
@@ -3919,7 +4108,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            digest = sha(historical)\n',
          ),
         ),
-        (2241, 2242,
+        (2267, 2268,
          (
           "                require(source.token_sha256(raw.decode('utf-8')) ==\n",
          ),
@@ -3927,7 +4116,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '                require(source.token_sha256(historical) ==\n',
          ),
         ),
-        (2245, 2246,
+        (2271, 2272,
          (
           "                witness_format.predecessor_source(path, raw.decode('utf-8'))\n",
          ),
@@ -3935,7 +4124,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '                witness_format.predecessor_source(path, historical)\n',
          ),
         ),
-        (2247, 2248,
+        (2273, 2274,
          (
           '            result[path] = digest\n',
          ),
@@ -3943,7 +4132,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            result[path] = sha(raw)\n',
          ),
         ),
-        (2254, 2255,
+        (2280, 2281,
          (
           '                require(type(raw) is bytes and sha(raw) == expected,\n',
          ),
@@ -3951,7 +4140,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                require(type(raw) is bytes and sha(_historical_typed_text(path, raw.decode('utf-8'))) == expected,\n",
          ),
         ),
-        (2260, 2261,
+        (2286, 2287,
          (
           '                result[path] = expected\n',
          ),
@@ -3959,7 +4148,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '                result[path] = sha(raw)\n',
          ),
         ),
-        (2271, 2367,
+        (2297, 2393,
          (
           'def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None):\n',
          ),
@@ -4062,7 +4251,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           'def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None, _expected_sources=None):\n',
          ),
         ),
-        (2384, 2400,
+        (2410, 2426,
          (
           '        for path, raw in snapshots.items():\n',
           '            text = _physical_text(raw)\n',
@@ -4086,7 +4275,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            text = _historical_typed_text(path, _physical_text(raw))\n',
          ),
         ),
-        (2401, 2402,
+        (2427, 2428,
          (
           '            require(source.token_sha256(supplied_view) == source.token_sha256(text),\n',
          ),
@@ -4094,7 +4283,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            require(source.token_sha256(supplied_view) == source.token_sha256(_physical_text(raw)),\n',
          ),
         ),
-        (2404, 2406,
+        (2430, 2432,
          (
           '            require((not exact or sha(raw) == AFTER_SHA256[path])\n',
           "                    and source.token_sha256(_physical_text(raw)) == item['after_token_sha256']\n",
@@ -4104,13 +4293,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                    and source.token_sha256(text) == item['after_token_sha256']\n",
          ),
         ),
-        (2423, 2424,
+        (2449, 2450,
          (),
          (
           '                          | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else set())\n',
          ),
         ),
-        (2448, 2450,
+        (2474, 2476,
          (
           "                == set(record['dependency_inventory']) | helper_closure, 'production import inventory changed')\n",
          ),
@@ -4119,7 +4308,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                    set(record['dependency_inventory']) | helper_closure), 'production import inventory changed')\n",
          ),
         ),
-        (2452, 2454,
+        (2478, 2480,
          (
           "        require(native_found == set(record['native_dependency_inventory']) | helper_closure,\n",
          ),
@@ -4128,7 +4317,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                set(record['native_dependency_inventory']) | helper_closure),\n",
          ),
         ),
-        (2455, 2470,
+        (2481, 2496,
          (),
          (
           '        if typed_bindings:\n',
@@ -4148,7 +4337,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                    'typed production import inventory changed')\n",
          ),
         ),
-        (2499, 2503,
+        (2525, 2529,
          (
           "                require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' + path)\n",
          ),
@@ -4159,14 +4348,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)\n",
          ),
         ),
-        (2516, 2518,
+        (2542, 2544,
          (),
          (
           '        if typed_bindings:\n',
           '            expected_inventory = typed_boundary.INVENTORY\n',
          ),
         ),
-        (2558, 2561,
+        (2584, 2587,
          (
           "        text = _regular(root, path).read_text(encoding='utf-8')\n",
          ),
@@ -4176,14 +4365,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    text = reviewed_typed_text(root, path, text, _operation=_operation)\n',
          ),
         ),
-        (2564, 2564,
+        (2590, 2590,
          (
           '    if _operation is not None:\n',
           "        _observe_text(root, path, text, _operation=_operation, mode='physical', supplied=True)\n",
          ),
          (),
         ),
-        (2577, 2578,
+        (2603, 2604,
          (
           '        require(digest == AFTER_TOKEN_SHA256[path],\n',
          ),
@@ -4191,7 +4380,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, expected_raw),\n',
          ),
         ),
-        (2586, 2587,
+        (2612, 2613,
          (
           "        require(sha(road_raw) == record['unchanged_inputs'][road],\n",
          ),
@@ -4199,7 +4388,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "        require(sha(_historical_typed_text(road, road_raw.decode('utf-8'))) == record['unchanged_inputs'][road],\n",
          ),
         ),
-        (2602, 2609,
+        (2628, 2635,
          (
           '    record = verify(root)\n',
          ),
@@ -4213,7 +4402,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '    record = verify(root, _expected_sources=physical_inputs)\n',
          ),
         ),
-        (2613, 2621,
+        (2639, 2647,
          (),
          (
           '        physical = _regular(root, path).read_bytes()\n',
@@ -4226,7 +4415,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        text = _historical_typed_text(path, _physical_text(physical))\n',
          ),
         ),
-        (2628, 2629,
+        (2654, 2655,
          (
           '            require(source.token_sha256(text) == source.token_sha256(_physical_text(raw)),\n',
          ),
@@ -4234,13 +4423,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            require(raw == physical and source.token_sha256(text) == source.token_sha256(_historical_typed_text(path, _physical_text(raw))),\n',
          ),
         ),
-        (2630, 2631,
+        (2656, 2657,
          (),
          (
           '            result[path] = text\n',
          ),
         ),
-        (2649, 2652,
+        (2675, 2678,
          (
           '            changed = any(declaration_sha256(text, name) not in expected\n',
          ),
@@ -4250,7 +4439,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            changed = typed_current or any(declaration_sha256(text, name) not in expected\n',
          ),
         ),
-        (2676, 2677,
+        (2702, 2703,
          (
           'def reviewed_lane_before_center_text(root, text=None):\n',
          ),
@@ -4258,13 +4447,13 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           'def reviewed_lane_before_center_text(root, text=None, *, _operation=None):\n',
          ),
         ),
-        (2678, 2679,
+        (2704, 2705,
          (),
          (
           '    supplied_raw = None\n',
          ),
         ),
-        (2680, 2692,
+        (2706, 2718,
          (
           "        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied center source')\n",
           "    item = verify(root)['sources'][path]\n",
@@ -4284,7 +4473,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           "                'supplied center physical input changed during admission')\n",
          ),
         ),
-        (2701, 2732,
+        (2727, 2758,
          (),
          (
           '\n',
@@ -4320,7 +4509,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '        _operation_fail(_operation, error)\n',
          ),
         ),
-        (2750, 2758,
+        (2776, 2784,
          (),
          (
           "        if result.get(station.MODULE) == typed_boundary.EDGES[station.MODULE]['after_sha256']:\n",
@@ -4333,10 +4522,17 @@ _TYPED_CHECKER_SOURCE_EDITS = {
           '            result.update(_typed_boundary_bindings(root, _operation=_operation))\n',
          ),
         ),
-        (2785, 2786,
+        (2811, 2812,
          (),
          (
           '        result.update(_typed_boundary_bindings(root, _operation=_operation))\n',
+         ),
+        ),
+        (2816, 2818,
+         (),
+         (
+          '        if _operation is not None:\n',
+          '            _operation._bind_checker_receipt(root, executing)\n',
          ),
         ),
     ),
@@ -5143,20 +5339,31 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
 
     @contextmanager
     def _no_marked_semantics(self, marked):
+        """Keep admission's parser identities until the exact marked read."""
         from contextlib import ExitStack
         from functools import wraps
         with ExitStack() as stack:
-            for module, name in ((source, 'token_sha256'), (source, 'tokens'), (json, 'loads')):
-                original = getattr(module, name)
-                def install(original):
-                    @wraps(original)
-                    def checked(value, *args, **kwargs):
-                        self.assertFalse(any(value is item for item in marked),
-                                         'marked observation reached semantic sink')
-                        return original(value, *args, **kwargs)
-                    return checked
-                stack.enter_context(patch.object(module, name, install(original)))
-            yield
+            armed = False
+            def arm():
+                nonlocal armed
+                self.assertFalse(armed, 'semantic sinks armed more than once')
+                self.assertEqual(marked, [], 'semantic sinks armed after marked publication')
+                for module, name in ((source, 'token_sha256'), (source, 'tokens'), (json, 'loads')):
+                    original = getattr(module, name)
+                    def install(original):
+                        @wraps(original)
+                        def checked(value, *args, **kwargs):
+                            self.assertFalse(any(value is item for item in marked),
+                                             'marked observation reached semantic sink')
+                            return original(value, *args, **kwargs)
+                        return checked
+                    stack.enter_context(patch.object(module, name, install(original)))
+                armed = True
+            try:
+                yield arm
+            finally:
+                self.assertEqual(armed, bool(marked),
+                                 'semantic sink arming and marked publication differ')
 
     def test_shared_helper_local_final_reread_rejects_and_recovers(self):
         """Exercise the new local theorem seam without fabricating an owner."""
@@ -5307,6 +5514,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                         self.assertEqual(injected, [])
                         injected.append(operation)
                         value += '\n# grouped batch B\n'
+                        arm_semantic_sinks()
                         marked.append(value)
             return value
         @wraps(original_verify)
@@ -5314,7 +5522,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
             self.assertFalse(any(value is item for value in modules.values() for item in marked))
             return original_verify(modules)
         with self.audit() as events, patch.object(Path, 'read_text', read), \
-                patch.object(grouped, 'verify_text', verify), self._no_marked_semantics(marked):
+                patch.object(grouped, 'verify_text', verify), self._no_marked_semantics(marked) as arm_semantic_sinks:
             with self.assertRaises(ValueError) as raised:
                 invariant.verify(self.root)
         self.assertEqual(len(injected), 1)
@@ -5351,10 +5559,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                 checked.append(frame.f_locals['predecessor_payload'])
                 injected.append(operation)
                 value = ' \n' + value
+                arm_semantic_sinks()
                 marked.append(value)
             return value
         with self.audit() as events, patch.object(Path, 'read_text', read), \
-                self._no_marked_semantics(marked):
+                self._no_marked_semantics(marked) as arm_semantic_sinks:
             with self.assertRaises(cleanup._OperationCoherenceError) as raised:
                 invariant.verify(self.root)
         self.assertEqual(len(injected), 1)
@@ -5391,6 +5600,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                         injected.append(operation)
                         value = (' \n' + value if function is source.read_pins
                                  else value + '\n# UTF8 group B\n')
+                        arm_semantic_sinks()
                         marked.append(value)
                     return value
                 @wraps(observe)
@@ -5401,7 +5611,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                         modes.append(mode)
                     return observe(operation, root, name, value, mode)
                 with self.audit() as events, patch.object(Path, 'read_text', read), \
-                        patch.object(cleanup, '_operation_observe', observed), self._no_marked_semantics(marked):
+                        patch.object(cleanup, '_operation_observe', observed), self._no_marked_semantics(marked) as arm_semantic_sinks:
                     with self.assertRaises(cleanup._OperationCoherenceError) as raised:
                         winner.verify(self.root)
                 self.assertEqual(len(injected), 1)
@@ -6517,6 +6727,67 @@ class TypedCheckerSuccessorStaticControls(unittest.TestCase):
                 else: check.test = ast.Constant(False)
                 with self.subTest(function=name, fault=fault), self.assertRaises(AssertionError):
                     _coverage_current_discriminator_contract(node)
+
+    def test_semantic_sink_guards_arm_only_at_marked_publication(self):
+        controls = BoundedOwnerDistinctMechanismControls()
+        sinks = ((source, 'token_sha256'), (source, 'tokens'), (json, 'loads'))
+        originals = [getattr(module, name) for module, name in sinks]
+        expected = [function('{}') for function in originals]
+        marked = []
+        with controls._no_marked_semantics(marked) as arm:
+            self.assertTrue(all(getattr(module, name) is original
+                                for (module, name), original in zip(sinks, originals)))
+            arm()
+            marker = 'marked semantic input'
+            marked.append(marker)
+            for (module, name), value in zip(sinks, expected):
+                with self.subTest(sink=name):
+                    function = getattr(module, name)
+                    with self.assertRaisesRegex(AssertionError, 'marked observation reached semantic sink'):
+                        function(marker)
+                    self.assertEqual(function('{}'), value)
+            with self.assertRaisesRegex(AssertionError, 'armed more than once'):
+                arm()
+        self.assertTrue(all(getattr(module, name) is original
+                            for (module, name), original in zip(sinks, originals)))
+        for fault in ('unarmed publication', 'arming without publication', 'arming after publication'):
+            marked = []
+            with self.subTest(fault=fault), self.assertRaisesRegex(
+                    AssertionError, 'semantic sink arming and marked publication differ'):
+                with controls._no_marked_semantics(marked) as arm:
+                    if fault == 'arming without publication':
+                        arm()
+                    else:
+                        marked.append('unobserved marked input')
+                        if fault == 'arming after publication':
+                            with self.assertRaisesRegex(AssertionError, 'armed after marked publication'):
+                                arm()
+            self.assertTrue(all(getattr(module, name) is original
+                                for (module, name), original in zip(sinks, originals)))
+
+
+    def test_checker_receipt_lifecycle_and_return_registration_are_explicit(self):
+        raw = Path(cleanup.__file__).read_bytes()
+        _checker_source_predecessor('full_audit_cleanup_contracts.py', raw)
+        tree = ast.parse(raw)
+        owner = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                     and node.name == '_InvariantInputs')
+        for name in ('__init__', '_invalidate', 'close'):
+            node = next(item for item in owner.body if isinstance(item, ast.FunctionDef)
+                        and item.name == name)
+            _one_ast_run(node, 'self._checker_receipt = False')
+        binding = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                       and node.name == 'proof_bindings')
+        statements = _one_ast_run(binding, """
+if _operation is not None:
+    _operation._bind_checker_receipt(root, executing)
+return result
+""")
+        calls = [item for item in ast.walk(binding) if isinstance(item, ast.Call)
+                 and isinstance(item.func, ast.Attribute) and item.func.attr == '_bind_checker_receipt']
+        self.assertEqual(len(calls), 1)
+        self.assertIs(calls[0], statements[0].body[0].value)
+
 
 
 if __name__ == '__main__':
