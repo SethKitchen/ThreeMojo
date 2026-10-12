@@ -1524,7 +1524,10 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         if any(actual[name] != expected[name] and not (
                 name in cleanup.shared_helpers.SOURCE_PATHS
                 and expected[name] == cleanup.shared_helpers.BEFORE_SHA256[name]
-                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name])
+                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name]) and not (
+                name == cleanup.scaled_float32.MATH
+                and expected[name] == cleanup.scaled_float32.BEFORE_SHA256[name]
+                and actual[name] == cleanup.scaled_float32.AFTER_SHA256[name])
                for name in expected):
             cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
             edges = cleanup.verified_edges(root, include_roots=include_roots, **operation_args)
@@ -1541,6 +1544,13 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
                 if expected[name] != cleanup.shared_helpers.BEFORE_SHA256[name]:
                     return {}
                 expected[name] = cleanup.shared_helpers.AFTER_SHA256[name]
+        scaled_bindings = cleanup.scaled_float32_proof_bindings(
+            root, include_roots=include_roots, **operation_args)
+        name = cleanup.scaled_float32.MATH
+        if scaled_bindings.get(name) == cleanup.scaled_float32.AFTER_SHA256[name]:
+            if expected.get(name) != cleanup.scaled_float32.BEFORE_SHA256[name]:
+                return {}
+            expected[name] = cleanup.scaled_float32.AFTER_SHA256[name]
         if actual != expected:
             return {}
         helper_closure = ({'loaders/utf8.mojo'} if helper_bindings.get('loaders/xml.mojo')
@@ -1559,6 +1569,7 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         record = seed_count_contracts.read_record(root, **operation_args)
         actual.update(cleanup_bindings)
         actual.update(helper_bindings)
+        actual.update(scaled_bindings)
         actual[seed_count_contracts.MIGRATION] = seed_count_contracts.MIGRATION_SHA256
         for group in ('historical_records', 'unchanged_correctness_tests',
                       'after_correctness_tests'):
