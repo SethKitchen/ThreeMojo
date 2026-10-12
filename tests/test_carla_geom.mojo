@@ -72,7 +72,7 @@ from extensions.carla.math import (
     distance_2d,
     distance_arc_to_point,
     distance_segment_to_point,
-    distance_squared_2d,
+    distance_squared_2d_si as distance_squared_2d,
     dot_2d,
     from_right_handed,
     generate_range,
@@ -540,8 +540,8 @@ def test_bounding_box_obb_equality_and_checks() raises:
 # --- geo ------------------------------------------------------------------------
 
 
-def _wgs84() -> Ellipsoid:
-    return Ellipsoid(6378137.0, 298.257223563)
+def _wgs84() raises -> Ellipsoid:
+    return Ellipsoid.from_meters(6378137.0, 298.257223563)
 
 
 def _close_geo(
@@ -566,8 +566,8 @@ def test_ellipsoids() raises:
     assert_almost_equal(wgs.b_meters(), 6356752.314245179, atol=1e-6)
     assert_almost_equal(wgs.e2(), 0.0066943799901413165, atol=1e-15)
     assert_almost_equal(wgs.ep2(), 0.006739496742276435, atol=1e-15)
-    var e = Ellipsoid(6378137.0, 300.0)
-    e.from_b(6356752.314245179)
+    var e = Ellipsoid.from_meters(6378137.0, 300.0)
+    e.from_b_meters(6356752.314245179)
     assert_almost_equal(e.f_inv, 298.257223563, atol=1e-6)
     e.from_f(0.5)
     assert_equal(e.f_inv, 2.0)
@@ -594,20 +594,20 @@ def test_ellipsoids() raises:
     assert_true(isinf(named_ellipsoid("sphere").value().f_inv))
     assert_false(Bool(named_ellipsoid("mars")))
     assert_true(wgs == _wgs84())
-    assert_false(wgs == Ellipsoid(1.0, 298.257223563))
-    assert_false(wgs == Ellipsoid(6378137.0, 1.0))
+    assert_false(wgs == Ellipsoid.from_meters(1.0, 298.257223563))
+    assert_false(wgs == Ellipsoid.from_meters(6378137.0, 2.0))
 
 
 def test_geo_location_basics() raises:
     var g = GeoLocation()
     assert_equal(g.latitude_degrees, 0.0)
-    var h = GeoLocation(49.5, 8.25, 100.0)
+    var h = GeoLocation.from_degrees_meters(49.5, 8.25, 100.0)
     assert_almost_equal(h.latitude_angle().to(DEGREE), 49.5, atol=1e-4)
     assert_almost_equal(h.longitude_angle().to(DEGREE), 8.25, atol=1e-4)
-    assert_true(h == GeoLocation(49.5, 8.25, 100.0))
-    assert_false(h == GeoLocation(0, 8.25, 100.0))
-    assert_false(h == GeoLocation(49.5, 0, 100.0))
-    assert_false(h == GeoLocation(49.5, 8.25, 0))
+    assert_true(h == GeoLocation.from_degrees_meters(49.5, 8.25, 100.0))
+    assert_false(h == GeoLocation.from_degrees_meters(0, 8.25, 100.0))
+    assert_false(h == GeoLocation.from_degrees_meters(49.5, 0, 100.0))
+    assert_false(h == GeoLocation.from_degrees_meters(49.5, 8.25, 0))
     assert_true(h != g)
     assert_equal(
         String(h), "GeoLocation(latitude=49.5, longitude=8.25, altitude=100.0)"
@@ -615,7 +615,9 @@ def test_geo_location_basics() raises:
 
 
 def test_offset_transform() raises:
-    var off = OffsetTransform(-691000.0, 5334000.0, -500.0, 0.3)
+    var off = OffsetTransform.from_meters_radians(
+        -691000.0, 5334000.0, -500.0, 0.3
+    )
     var p = Vector3(100, -200, 3)
     # Python port of `ApplyTransformation`.
     var q = off.apply(p)
@@ -627,26 +629,34 @@ def test_offset_transform() raises:
     assert_almost_equal(Float64(q.y), tx * s + ty * c, atol=0.5)
     assert_equal(q.z, -497.0)
     _near(off.apply_inverse(off.apply(p)), p, 0.5)
-    var zero = OffsetTransform(1.0, 2.0, 3.0, 0.0)
+    var zero = OffsetTransform.from_meters_radians(1.0, 2.0, 3.0, 0.0)
     _near(zero.apply(Vector3(1, 1, 1)), Vector3(2, 1, 4))
     _near(zero.apply_inverse(Vector3(2, 1, 4)), Vector3(1, 1, 1))
-    assert_true(zero == OffsetTransform(1.0, 2.0, 3.0, 0.0))
-    assert_false(zero == OffsetTransform(0.0, 2.0, 3.0, 0.0))
-    assert_false(zero == OffsetTransform(1.0, 0.0, 3.0, 0.0))
-    assert_false(zero == OffsetTransform(1.0, 2.0, 0.0, 0.0))
-    var turned = OffsetTransform(1.0, 2.0, 3.0, 0.0)
+    assert_true(zero == OffsetTransform.from_meters_radians(1.0, 2.0, 3.0, 0.0))
+    assert_false(
+        zero == OffsetTransform.from_meters_radians(0.0, 2.0, 3.0, 0.0)
+    )
+    assert_false(
+        zero == OffsetTransform.from_meters_radians(1.0, 0.0, 3.0, 0.0)
+    )
+    assert_false(
+        zero == OffsetTransform.from_meters_radians(1.0, 2.0, 0.0, 0.0)
+    )
+    var turned = OffsetTransform.from_meters_radians(1.0, 2.0, 3.0, 0.0)
     turned.offset_cos_h = 0.5
     assert_false(zero == turned)
-    turned = OffsetTransform(1.0, 2.0, 3.0, 0.0)
+    turned = OffsetTransform.from_meters_radians(1.0, 2.0, 3.0, 0.0)
     turned.offset_sin_h = 0.5
     assert_false(zero == turned)
 
 
 def test_transverse_mercator() raises:
     # Python port of `GeoProjection.cpp`.
-    var p = TransverseMercatorParams(49.0, 8.0, 1.0, 0.0, 0.0, _wgs84())
+    var p = TransverseMercatorParams.from_degrees_meters(
+        49.0, 8.0, 1.0, 0.0, 0.0, _wgs84()
+    )
     var loc = geo_location_to_transform_transverse_mercator(
-        GeoLocation(49.0005, 8.0012, 110.0), p
+        GeoLocation.from_degrees_meters(49.0005, 8.0012, 110.0), p
     )
     assert_equal(loc.x, Float32(87.8052749633789))
     assert_equal(loc.y, Float32(55.60556411743164))
@@ -659,11 +669,11 @@ def test_transverse_mercator() raises:
         8.001195827876666,
         3.0,
     )
-    var k = TransverseMercatorParams(
+    var k = TransverseMercatorParams.from_degrees_meters(
         40.0, -3.0, 0.9996, 500000.0, 100.0, Ellipsoid()
     )
     var loc2 = geo_location_to_transform_transverse_mercator(
-        GeoLocation(40.4, -3.7, 0.0), k
+        GeoLocation.from_degrees_meters(40.4, -3.7, 0.0), k
     )
     assert_equal(loc2.x, Float32(440681.65625))
     assert_equal(loc2.y, Float32(44844.83984375))
@@ -677,7 +687,7 @@ def test_transverse_mercator() raises:
     )
     var d = TransverseMercatorParams()
     var loc3 = geo_location_to_transform_transverse_mercator(
-        GeoLocation(0.001, 0.002, 0.0), d
+        GeoLocation.from_degrees_meters(0.001, 0.002, 0.0), d
     )
     assert_equal(loc3.x, Float32(222.63897705078125))
     assert_equal(loc3.y, Float32(111.31948852539062))
@@ -686,7 +696,7 @@ def test_transverse_mercator() raises:
 def test_universal_transverse_mercator() raises:
     var p = UniversalTransverseMercatorParams(UtmZone(32), True, _wgs84(), None)
     var loc = geo_location_to_transform_universal_transverse_mercator(
-        GeoLocation(48.137, 11.575, 519.0), p
+        GeoLocation.from_degrees_meters(48.137, 11.575, 519.0), p
     )
     assert_equal(loc.x, Float32(691567.3125))
     assert_equal(loc.y, Float32(5334734.5))
@@ -702,7 +712,7 @@ def test_universal_transverse_mercator() raises:
         UtmZone(56), False, _wgs84(), None
     )
     var loc2 = geo_location_to_transform_universal_transverse_mercator(
-        GeoLocation(-33.8688, 151.2093, 5.0), south
+        GeoLocation.from_degrees_meters(-33.8688, 151.2093, 5.0), south
     )
     assert_equal(loc2.x, Float32(334368.625))
     assert_equal(loc2.y, Float32(6250948.5))
@@ -718,10 +728,10 @@ def test_universal_transverse_mercator() raises:
         UtmZone(32),
         True,
         _wgs84(),
-        OffsetTransform(-691000.0, 5334000.0, -500.0, 0.3),
+        OffsetTransform.from_meters_radians(-691000.0, 5334000.0, -500.0, 0.3),
     )
     var loc3 = geo_location_to_transform_universal_transverse_mercator(
-        GeoLocation(48.137, 11.575, 519.0), off
+        GeoLocation.from_degrees_meters(48.137, 11.575, 519.0), off
     )
     assert_equal(loc3.x, Float32(-224842.359375))
     assert_equal(loc3.y, Float32(33161.35546875))
@@ -750,7 +760,7 @@ def test_universal_transverse_mercator() raises:
 def test_web_mercator() raises:
     var p = WebMercatorParams(_wgs84())
     var loc = geo_location_to_transform_web_mercator(
-        GeoLocation(41.3874, 2.1686, 12.0), p
+        GeoLocation.from_degrees_meters(41.3874, 2.1686, 12.0), p
     )
     assert_equal(loc.x, Float32(241407.453125))
     assert_equal(loc.y, Float32(5069652.0))
@@ -765,17 +775,17 @@ def test_web_mercator() raises:
 
 
 def test_lambert_conformal_conic() raises:
-    var p = LambertConformalConicParams(
+    var p = LambertConformalConicParams.from_degrees_meters(
         46.5,
         44.0,
         49.0,
         3.0,
         700000.0,
         6600000.0,
-        Ellipsoid(6378137.0, 298.257222101),
+        Ellipsoid.from_meters(6378137.0, 298.257222101),
     )
     var loc = geo_location_to_transform_lambert_conformal_conic(
-        GeoLocation(47.3, 3.2, 0.0), p
+        GeoLocation.from_degrees_meters(47.3, 3.2, 0.0), p
     )
     assert_equal(loc.x, Float32(715112.875))
     assert_equal(loc.y, Float32(6688872.5))
@@ -788,11 +798,11 @@ def test_lambert_conformal_conic() raises:
         7.0,
     )
     # On a sphere the first step already converges.
-    var sphere = LambertConformalConicParams(
+    var sphere = LambertConformalConicParams.from_degrees_meters(
         30.0, 20.0, 60.0, 0.0, 0.0, 0.0, Ellipsoid()
     )
     var s = geo_location_to_transform_lambert_conformal_conic(
-        GeoLocation(31.0, 1.0, 0.0), sphere
+        GeoLocation.from_degrees_meters(31.0, 1.0, 0.0), sphere
     )
     assert_equal(s.x, Float32(90935.6953125))
     assert_equal(s.y, Float32(106770.34375))
@@ -805,11 +815,11 @@ def test_lambert_conformal_conic() raises:
         0.0,
     )
     # A cone that opens south has a negative constant.
-    var south = LambertConformalConicParams(
+    var south = LambertConformalConicParams.from_degrees_meters(
         -40.0, -30.0, -50.0, 145.0, 0.0, 0.0, _wgs84()
     )
     var t = geo_location_to_transform_lambert_conformal_conic(
-        GeoLocation(-40.0, 150.0, 0.0), south
+        GeoLocation.from_degrees_meters(-40.0, 150.0, 0.0), south
     )
     assert_equal(t.x, Float32(420273.53125))
     assert_equal(t.y, Float32(-11852.34765625))
@@ -822,8 +832,8 @@ def test_lambert_conformal_conic() raises:
         0.0,
     )
     # A very flat ellipsoid does not converge in ten steps; CARLA stops.
-    var flat = LambertConformalConicParams(
-        30.0, 20.0, 60.0, 10.0, 0.0, 0.0, Ellipsoid(6378137.0, 2.0)
+    var flat = LambertConformalConicParams.from_degrees_meters(
+        30.0, 20.0, 60.0, 10.0, 0.0, 0.0, Ellipsoid.from_meters(6378137.0, 2.0)
     )
     _close_geo(
         transform_to_geo_location_lambert_conformal_conic(
@@ -837,7 +847,7 @@ def test_lambert_conformal_conic() raises:
 
 
 def test_geo_projection_dispatches() raises:
-    var geo = GeoLocation(48.137, 11.575, 519.0)
+    var geo = GeoLocation.from_degrees_meters(48.137, 11.575, 519.0)
     var tm = GeoProjection()
     assert_true(tm.projection_type == TRANSVERSE_MERCATOR)
     _near(
@@ -862,7 +872,9 @@ def test_geo_projection_dispatches() raises:
     var web = GeoProjection.make(WebMercatorParams(_wgs84()))
     assert_true(web.projection_type == WEB_MERCATOR)
     assert_equal(
-        web.geo_location_to_transform(GeoLocation(41.3874, 2.1686, 12.0)).x,
+        web.geo_location_to_transform(
+            GeoLocation.from_degrees_meters(41.3874, 2.1686, 12.0)
+        ).x,
         Float32(241407.453125),
     )
     _close_geo(
@@ -872,19 +884,21 @@ def test_geo_projection_dispatches() raises:
         12.0,
     )
     var lcc = GeoProjection.make(
-        LambertConformalConicParams(
+        LambertConformalConicParams.from_degrees_meters(
             46.5,
             44.0,
             49.0,
             3.0,
             700000.0,
             6600000.0,
-            Ellipsoid(6378137.0, 298.257222101),
+            Ellipsoid.from_meters(6378137.0, 298.257222101),
         )
     )
     assert_true(lcc.projection_type == LAMBERT_CONFORMAL_CONIC)
     assert_equal(
-        lcc.geo_location_to_transform(GeoLocation(47.3, 3.2, 0.0)).y,
+        lcc.geo_location_to_transform(
+            GeoLocation.from_degrees_meters(47.3, 3.2, 0.0)
+        ).y,
         Float32(6688872.5),
     )
     _close_geo(
@@ -894,7 +908,9 @@ def test_geo_projection_dispatches() raises:
         7.0,
     )
     var tmp = GeoProjection.make(
-        TransverseMercatorParams(49.0, 8.0, 1.0, 0.0, 0.0, _wgs84())
+        TransverseMercatorParams.from_degrees_meters(
+            49.0, 8.0, 1.0, 0.0, 0.0, _wgs84()
+        )
     )
     _close_geo(
         tmp.transform_to_geo_location(Vector3(87.5, 55.25, 3)),
@@ -911,16 +927,41 @@ def test_geo_projection_dispatches() raises:
 
 
 def test_projection_params_compare() raises:
-    var tm = TransverseMercatorParams(1, 2, 3, 4, 5, _wgs84())
-    assert_true(tm == TransverseMercatorParams(1, 2, 3, 4, 5, _wgs84()))
-    assert_false(tm == TransverseMercatorParams(0, 2, 3, 4, 5, _wgs84()))
-    assert_false(tm == TransverseMercatorParams(1, 0, 3, 4, 5, _wgs84()))
-    assert_false(tm == TransverseMercatorParams(1, 2, 0, 4, 5, _wgs84()))
-    assert_false(tm == TransverseMercatorParams(1, 2, 3, 0, 5, _wgs84()))
-    assert_false(tm == TransverseMercatorParams(1, 2, 3, 4, 0, _wgs84()))
-    assert_false(tm == TransverseMercatorParams(1, 2, 3, 4, 5, Ellipsoid()))
+    var tm = TransverseMercatorParams.from_degrees_meters(
+        1, 2, 3, 4, 5, _wgs84()
+    )
+    assert_true(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(1, 2, 3, 4, 5, _wgs84())
+    )
+    assert_false(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(0, 2, 3, 4, 5, _wgs84())
+    )
+    assert_false(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(1, 0, 3, 4, 5, _wgs84())
+    )
+    assert_false(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(1, 2, 2, 4, 5, _wgs84())
+    )
+    assert_false(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(1, 2, 3, 0, 5, _wgs84())
+    )
+    assert_false(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(1, 2, 3, 4, 0, _wgs84())
+    )
+    assert_false(
+        tm
+        == TransverseMercatorParams.from_degrees_meters(
+            1, 2, 3, 4, 5, Ellipsoid()
+        )
+    )
     assert_true(tm != TransverseMercatorParams())
-    var off = OffsetTransform(1, 2, 3, 0.5)
+    var off = OffsetTransform.from_meters_radians(1, 2, 3, 0.5)
     var u = UniversalTransverseMercatorParams(UtmZone(3), True, _wgs84(), off)
     assert_true(
         u == UniversalTransverseMercatorParams(UtmZone(3), True, _wgs84(), off)
@@ -941,7 +982,10 @@ def test_projection_params_compare() raises:
     assert_false(
         u
         == UniversalTransverseMercatorParams(
-            UtmZone(3), True, _wgs84(), OffsetTransform(9, 2, 3, 0.5)
+            UtmZone(3),
+            True,
+            _wgs84(),
+            OffsetTransform.from_meters_radians(9, 2, 3, 0.5),
         )
     )
     assert_true(
@@ -950,16 +994,56 @@ def test_projection_params_compare() raises:
     )
     assert_true(WebMercatorParams() == WebMercatorParams(Ellipsoid()))
     assert_false(WebMercatorParams() == WebMercatorParams(_wgs84()))
-    var l = LambertConformalConicParams(1, 2, 3, 4, 5, 6, _wgs84())
-    assert_true(l == LambertConformalConicParams(1, 2, 3, 4, 5, 6, _wgs84()))
-    assert_false(l == LambertConformalConicParams(0, 2, 3, 4, 5, 6, _wgs84()))
-    assert_false(l == LambertConformalConicParams(1, 0, 3, 4, 5, 6, _wgs84()))
-    assert_false(l == LambertConformalConicParams(1, 2, 0, 4, 5, 6, _wgs84()))
-    assert_false(l == LambertConformalConicParams(1, 2, 3, 0, 5, 6, _wgs84()))
-    assert_false(l == LambertConformalConicParams(1, 2, 3, 4, 0, 6, _wgs84()))
-    assert_false(l == LambertConformalConicParams(1, 2, 3, 4, 5, 0, _wgs84()))
+    var l = LambertConformalConicParams.from_degrees_meters(
+        1, 2, 3, 4, 5, 6, _wgs84()
+    )
+    assert_true(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 2, 3, 4, 5, 6, _wgs84()
+        )
+    )
     assert_false(
-        l == LambertConformalConicParams(1, 2, 3, 4, 5, 6, Ellipsoid())
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            0, 2, 3, 4, 5, 6, _wgs84()
+        )
+    )
+    assert_false(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 0, 3, 4, 5, 6, _wgs84()
+        )
+    )
+    assert_false(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 2, 0, 4, 5, 6, _wgs84()
+        )
+    )
+    assert_false(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 2, 3, 0, 5, 6, _wgs84()
+        )
+    )
+    assert_false(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 2, 3, 4, 0, 6, _wgs84()
+        )
+    )
+    assert_false(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 2, 3, 4, 5, 0, _wgs84()
+        )
+    )
+    assert_false(
+        l
+        == LambertConformalConicParams.from_degrees_meters(
+            1, 2, 3, 4, 5, 6, Ellipsoid()
+        )
     )
     var d = LambertConformalConicParams()
     assert_equal(d.lat_1_degrees, -5.0)
@@ -1051,11 +1135,12 @@ def _params(text: String) -> Dict[String, String]:
 def test_create_ellipsoid() raises:
     assert_true(create_ellipsoid(_params("")) == _wgs84())
     assert_true(
-        create_ellipsoid(_params("+ellps=intl")) == Ellipsoid(6378388.0, 297.0)
+        create_ellipsoid(_params("+ellps=intl"))
+        == Ellipsoid.from_meters(6378388.0, 297.0)
     )
     assert_true(
         create_ellipsoid(_params("+datum=WGS84 +ellps=bessel"))
-        == Ellipsoid(6377397.155, 299.1528128)
+        == Ellipsoid.from_meters(6377397.155, 299.1528128)
     )
     # An unknown `ellps` hides the `datum`, and nothing else is set.
     assert_true(
@@ -1063,7 +1148,7 @@ def test_create_ellipsoid() raises:
     )
     assert_true(
         create_ellipsoid(_params("+datum=airy"))
-        == Ellipsoid(6377563.396, 299.3249646)
+        == Ellipsoid.from_meters(6377563.396, 299.3249646)
     )
     var a = create_ellipsoid(_params("+a=6000000"))
     assert_equal(a.a_meters, 6000000.0)
@@ -1085,7 +1170,9 @@ def test_create_offset_transform() raises:
     d["hdg"] = 0.0
     d["other"] = 9.0
     var off = create_offset_transform(d)
-    assert_true(off.value() == OffsetTransform(1.0, 0.0, 0.0, 0.0))
+    assert_true(
+        off.value() == OffsetTransform.from_meters_radians(1.0, 0.0, 0.0, 0.0)
+    )
 
 
 def test_parse_geo_projection_and_reference() raises:
@@ -1100,9 +1187,11 @@ def test_parse_geo_projection_and_reference() raises:
     assert_true(tm[0].projection_type == TRANSVERSE_MERCATOR)
     assert_true(
         tm[0].transverse_mercator
-        == TransverseMercatorParams(49.0, 8.0, 0.9996, 500000.0, 10.0, _wgs84())
+        == TransverseMercatorParams.from_degrees_meters(
+            49.0, 8.0, 0.9996, 500000.0, 10.0, _wgs84()
+        )
     )
-    assert_true(tm[1] == GeoLocation(49.0, 8.0, 0.0))
+    assert_true(tm[1] == GeoLocation.from_degrees_meters(49.0, 8.0, 0.0))
     assert_true(tm[0].proj_string.startswith("+proj=tmerc"))
     var offsets = Dict[String, Float64]()
     offsets["x"] = 10.0
@@ -1114,9 +1203,12 @@ def test_parse_geo_projection_and_reference() raises:
     ref u = utm[0].universal_transverse_mercator
     assert_true(u.zone == UtmZone(56))
     assert_false(u.north)
-    assert_true(u.ellps == Ellipsoid(6378137.0, 298.257222101))
-    assert_true(u.offset.value() == OffsetTransform(10.0, 0.0, 0.0, 0.5))
-    assert_true(utm[1] == GeoLocation(0.0, 153.0, 0.0))
+    assert_true(u.ellps == Ellipsoid.from_meters(6378137.0, 298.257222101))
+    assert_true(
+        u.offset.value()
+        == OffsetTransform.from_meters_radians(10.0, 0.0, 0.0, 0.5)
+    )
+    assert_true(utm[1] == GeoLocation.from_degrees_meters(0.0, 153.0, 0.0))
     var fractional = parse_geo_projection_and_reference(
         "+proj=utm +zone=31.5", none
     )
@@ -1148,24 +1240,25 @@ def test_parse_geo_projection_and_reference() raises:
     assert_true(lcc[0].projection_type == LAMBERT_CONFORMAL_CONIC)
     assert_true(
         lcc[0].lambert_conformal_conic
-        == LambertConformalConicParams(
+        == LambertConformalConicParams.from_degrees_meters(
             46.5,
             44.0,
             49.0,
             3.0,
             700000.0,
             6600000.0,
-            Ellipsoid(6378137.0, 298.257222101),
+            Ellipsoid.from_meters(6378137.0, 298.257222101),
         )
     )
-    assert_true(lcc[1] == GeoLocation(46.5, 3.0, 0.0))
+    assert_true(lcc[1] == GeoLocation.from_degrees_meters(46.5, 3.0, 0.0))
     var lcc_default = parse_geo_projection_and_reference("+proj=lcc", none)
     assert_equal(lcc_default[0].lambert_conformal_conic.lat_1_degrees, -5.0)
     assert_equal(lcc_default[0].lambert_conformal_conic.lat_2_degrees, 5.0)
     var missing = parse_geo_projection_and_reference("+ellps=intl", none)
     assert_true(missing[0].projection_type == TRANSVERSE_MERCATOR)
     assert_true(
-        missing[0].transverse_mercator.ellps == Ellipsoid(6378388.0, 297.0)
+        missing[0].transverse_mercator.ellps
+        == Ellipsoid.from_meters(6378388.0, 297.0)
     )
     assert_equal(missing[0].proj_string, "")
     assert_true(missing[1] == GeoLocation())
@@ -1186,7 +1279,10 @@ def test_parse_geo_reference_from_opendrive() raises:
     ref u = read[0].universal_transverse_mercator
     assert_true(u.zone == UtmZone(32))
     assert_true(
-        u.offset.value() == OffsetTransform(-691000.0, 5334000.0, -500.0, 0.3)
+        u.offset.value()
+        == OffsetTransform.from_meters_radians(
+            -691000.0, 5334000.0, -500.0, 0.3
+        )
     )
     assert_equal(read[1].longitude_degrees, 9.0)
     # The GNSS reading of a CARLA location, as the sensor computes it.
