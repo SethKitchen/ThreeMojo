@@ -6,8 +6,9 @@
 """Separate a humanoid's visual recipe from engineering capabilities.
 
 The versioned recipe retains canonical SI inputs, not canonical geometry
-or physical properties. It cannot certify anatomy, correspondence or an
-asset's source. Visual realism never grants an engineering capability.
+or physical properties. `extensions.humanoid.canonical` regenerates the
+canonical parts from those inputs. The recipe cannot certify anatomy,
+correspondence or an asset's source. Visual realism never grants an engineering capability.
 A producer must change its revision when its geometry or mapping changes.
 """
 
@@ -62,6 +63,10 @@ comptime _HEX: List[String] = [
 comptime CANONICAL_RECIPE = "threemojo-canonical-inputs-v1"
 comptime GAME_RECIPE = "threemojo-game-skin-19-joints-v1"
 comptime SCAN_RECIPE = "threemojo-ict-identity-expression-v1"
+# The generator of canonical parts and the canonical-to-visual map rules.
+# See `extensions.humanoid.canonical` and `.correspondence`.
+comptime CANONICAL_PARTS_REVISION = "threemojo-canonical-parts-v1"
+comptime MAPPING_REVISION = "threemojo-canonical-visual-maps-v1"
 
 
 @fieldwise_init
@@ -342,26 +347,33 @@ def humanoid_provenance(
     record.set_boolean("physical_properties_embedded", False)
     record.set_boolean("source_manifest_verified", False)
     record.set_string(
+        "canonical_parts_revision", String(CANONICAL_PARTS_REVISION)
+    )
+    record.set_string("mapping_revision", String(MAPPING_REVISION))
+    record.set_string(
         "identity_mapping",
-        "visual-only; canonical skull and tissue coupling unsupported",
+        (
+            "not embedded; regenerate canonical parts from canonical_inputs"
+            " and check identity fit per region"
+        ),
     )
     record.set_string(
         "expression_jaw_mapping",
-        "visual-only; canonical jaw mechanics unsupported",
+        "not embedded; only jawOpen has a fitted canonical jaw hinge",
     )
     record.set_string(
         "dental_mapping",
-        "unsupported; authored and scanned dentitions remain separate",
+        "unsupported; BONES and MOUTH dentitions remain separate",
     )
     record.set_string(
         "skin_weight_mapping",
-        "animation-only; physical tissue mapping unsupported",
+        "animation-only; a joint-to-region table measures agreement",
     )
     record.set_string(
         "lod_mapping",
         (
-            "visual-only; canonical mass and contact geometry must remain"
-            " independent"
+            "visual-only; canonical mass and contact geometry come from"
+            " canonical parts, never from this mesh"
         ),
     )
     record.set_string(
@@ -507,6 +519,31 @@ def stored_provenance(stored: UserData) raises -> UserData:
     if unsealed(record).to_json() != expected.to_json():
         raise Error("Humanoid bake provenance is stale or changed; rebuild it")
     return record^
+
+
+def stored_spec(stored: UserData) raises -> HumanoidSpec:
+    """Return the exact spec that a bake's provenance record holds.
+
+    The spec is read from the exact Float32 bits of the canonical inputs.
+    Canonical parts generated from it match parts generated from the
+    original spec at the same canonical revision.
+
+    Args:
+        stored: Extras loaded from the humanoid root or scene.
+
+    Returns:
+        The canonical input recipe.
+
+    Raises:
+        Error: If `stored_provenance` refuses the record.
+    """
+    var record = stored_provenance(stored)
+    var recipe_document = parse_json(record.json("recipe"))
+    var recipe = user_data_of(recipe_document, recipe_document.root())
+    var input_document = parse_json(recipe.json("canonical_inputs"))
+    return _spec_from_canonical(
+        user_data_of(input_document, input_document.root())
+    )
 
 
 def is_geometry_digest(text: String) -> Bool:
