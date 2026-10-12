@@ -63,7 +63,7 @@ from extensions.carla.curve_frozen_arc import (
 from extensions.carla.curve_rounded_line import _rounded_line_axis_context
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from math.vector3 import Vector3
 from std.math import inf, isfinite, sqrt
 from std.memory import bitcast
@@ -434,7 +434,7 @@ def _scaled_accuracy(
 ) raises -> Float64:
     # The spatial target is unchanged. Division precedes the square.
     var spatial_scale = high - low
-    var width = abs(road.lane_width(section, lane, best))
+    var width = abs(road._lane_width_si(section, lane, best))
     if width > 0.0:
         spatial_scale = min(spatial_scale, width)
     var spatial = (
@@ -801,7 +801,7 @@ def _lane_certificate_contains(
         return _wide_plan_contains(
             certificate.point,
             query,
-            road.lane_width(section, lane, certificate.s),
+            road._lane_width_si(section, lane, certificate.s),
         )
     if len(certificate.cells) == 0:
         raise Error("Lane classification needs possible minimizing cells")
@@ -815,7 +815,9 @@ def _lane_certificate_contains(
     # The approximate returned waypoint must agree with every possible
     # minimizing cell. Cell consensus alone does not classify this sample.
     var result = _wide_plan_contains(
-        certificate.point, query, road.lane_width(section, lane, certificate.s)
+        certificate.point,
+        query,
+        road._lane_width_si(section, lane, certificate.s),
     )
     if len(certificate.cells) > max_nodes - certificate.nodes:
         raise Error("Lane classification exhausted its interval work limit")
@@ -843,7 +845,7 @@ def _lane_certificate_contains(
                 road, section, lane, cell.low, certificate.terms, max_terms
             )
             resolved = _wide_plan_contains(
-                point, query, road.lane_width(section, lane, cell.low)
+                point, query, road._lane_width_si(section, lane, cell.low)
             )
         else:
             var work = _reference_work(road, cell.low, cell.high)
