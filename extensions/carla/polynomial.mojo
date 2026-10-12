@@ -43,12 +43,12 @@ struct CubicPolynomial(ImplicitlyCopyable):
         This is a numerical correction, not bit-identical legacy behavior.
 
         Args:
+            raw: The private raw-storage construction capability.
             a: The constant term, in meters.
             b: The linear term.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
-            s: Where the record starts along the road, in meters.
-        """
+            s: Where the record starts along the road, in meters."""
         self.a = a
         self.b = b
         self.c = c
@@ -170,6 +170,9 @@ struct CubicPolynomial(ImplicitlyCopyable):
 
         Returns:
             A cubic with a = value and every other term zero.
+
+        Raises:
+            Error: If the constant value is nonfinite.
         """
         return CubicPolynomial.from_coefficients(value, 0, 0, 0, 0)
 
@@ -181,6 +184,10 @@ struct CubicPolynomial(ImplicitlyCopyable):
 
         Returns:
             The value of the cubic.
+
+        Raises:
+            Error: If the station, origin, any coefficient, or the evaluated
+                result is nonfinite.
         """
         _ = _finite_si(self.a)
         _ = _finite_si(self.b)
@@ -198,6 +205,10 @@ struct CubicPolynomial(ImplicitlyCopyable):
 
         Returns:
             The slope of the cubic.
+
+        Raises:
+            Error: If the station, origin, any coefficient, or the computed
+                slope is nonfinite.
         """
         _ = _finite_si(self.a)
         _ = _finite_si(self.b)
@@ -218,9 +229,6 @@ struct CubicPolynomial(ImplicitlyCopyable):
     def a_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw a compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -231,9 +239,6 @@ struct CubicPolynomial(ImplicitlyCopyable):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -246,9 +251,6 @@ struct CubicPolynomial(ImplicitlyCopyable):
     def c_quantity(self) raises -> InverseLength64:
         """Read the checked typed view of the raw c compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -259,9 +261,6 @@ struct CubicPolynomial(ImplicitlyCopyable):
 
     def d_quantity(self) raises -> InverseArea64:
         """Read the checked typed view of the raw d compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
