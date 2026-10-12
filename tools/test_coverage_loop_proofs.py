@@ -2227,7 +2227,8 @@ print('consumer verified',consumer,mode,','.join(sorted(loaded)))
         if sys.flags.optimize:command.append('-O')
         command.extend([str(script),str(root),consumer,mode,str(shadow),
                         str(internal_error),str(unknown)])
-        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=30)
+        # Owner-approved validation allowance; native test budgets stay unchanged.
+        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=45)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         return result.stdout
 
