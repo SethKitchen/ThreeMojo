@@ -19,15 +19,19 @@ def _diagonal_road(thin_width: Bool = False) raises -> Road:
     var road = _acceptance_road(varying_width=thin_width)
     # X=s and Z=s make the nearest distance require correlated coordinates.
     # Independent coordinate boxes cannot settle an interior off-line query.
-    road.info.elevations[0].polynomial = CubicPolynomial(0, 1, 0, 0, 0)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
+        0, 1, 0, 0, 0
+    )
     if thin_width:
         for i in range(len(road.sections[0].lanes[0].info.widths)):
             road.sections[0].lanes[0].info.widths[
                 i
-            ].polynomial = CubicPolynomial(0.05, 0.01, 0, 0, 0)
-        road.info.lane_offsets[0].polynomial = CubicPolynomial(
-            0.025, 0.005, 0, 0, 0
-        )
+            ].polynomial = CubicPolynomial._from_coefficients(
+                0.05, 0.01, 0, 0, 0
+            )
+        road.info.lane_offsets[
+            0
+        ].polynomial = CubicPolynomial._from_coefficients(0.025, 0.005, 0, 0, 0)
     return road^
 
 
