@@ -23,6 +23,9 @@ Python's floats do.
 This port has no debug drawing.
 """
 
+from extensions.carla.quantity_boundary import _finite_si
+from units.si import Velocity64
+
 from extensions.carla.actor import ActorId
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
@@ -174,7 +177,43 @@ def kmh(speed: Velocity) -> Float64:
     return Float64(speed.to(KILOMETER_PER_HOUR))
 
 
-def from_kmh(value: Float64) -> Velocity:
+def from_kmh(value: Float64) raises -> Velocity64:
+    """Read an explicit km/h value without narrowing its Float64 precision.
+
+    Args:
+        value: The finite signed speed in kilometers per hour.
+
+    Returns:
+        The finite Float64 speed quantity.
+
+    Raises:
+        Error: If the input or converted result is not finite.
+    """
+    _ = _finite_si(value)
+    var speed = Velocity64(value / Float64(3.6))
+    _ = _finite_si(speed.value)
+    return speed
+
+
+def from_kmh_float32(value: Float64) raises -> Velocity:
+    """Read a km/h value through the explicit legacy Float32 adapter.
+
+    Args:
+        value: The finite signed speed in kilometers per hour.
+
+    Returns:
+        CARLA's Float32 speed with its original rounding order.
+
+    Raises:
+        Error: If the input or Float32 result is not finite.
+    """
+    _ = _finite_si(value)
+    var speed = _from_kmh_si(value)
+    _ = _finite_si(Float64(speed.value))
+    return speed
+
+
+def _from_kmh_si(value: Float64) -> Velocity:
     """Return a speed given in km/h.
 
     Args:
