@@ -158,6 +158,9 @@ struct RadarDetection(Equatable, ImplicitlyCopyable, Writable):
             altitude: The vertical angle.
             depth: The nonnegative range.
 
+        Returns:
+            The initialized RadarDetection record.
+
         Raises:
             Error: If a field is nonfinite or the range is negative.
         """
