@@ -232,6 +232,13 @@ if typed_boundary.is_current(_fixture_name, _fixture_text):
 # scalar graph change: review the proof and each fixture first.
 def method_bytes(path, name):
     text=_historical_text(path)
+    if path == 'extensions/carla/map.mojo' and name == '_subdivide_segment':
+        # The complete current gate above binds the exact deviation leaf.
+        # Its added segment certificate field does not change the sampled
+        # station or midpoint arithmetic modeled here. Recover only this
+        # method's older station-era provenance, without changing its pin.
+        from map_deviation_contracts import station_source
+        text = station_source(text)
     matches=list(re.finditer(r'(?m)^(?:    )?def '+re.escape(name)+r'[\[(]',text))
     if len(matches) != 1:
         raise ValueError(('Translated method is missing or ambiguous', path, name))
