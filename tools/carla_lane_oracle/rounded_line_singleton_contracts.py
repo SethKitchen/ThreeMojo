@@ -5,7 +5,13 @@
 This standalone verifier grants no coverage exclusion. Central migration and
 independent approval must compose this proposal into aggregate tooling.
 """
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import io
 import json
 if __package__:
@@ -27,7 +33,7 @@ def require(value, message):
 
 
 def read_record(root):
-    payload = (root / MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root / MIGRATION, (root / MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -37,7 +43,7 @@ def read_record(root):
 
 
 def _reviewed_text(root, path, record):
-    text = (root/path).read_text()
+    text = _typed_source.historical_text(root, root/path, (root/path).read_text())
     if path != 'extensions/carla/curve_rounded_line.mojo' or guard.significant(text) == guard.significant(record['modules'][path]['source']):
         return text
     if __package__:
@@ -63,10 +69,11 @@ def _lane_text(root):
     """Compare actual text/byte views without imposing a historical file pin."""
     path = root/'extensions/carla/lane_refinement.mojo'
     text = path.read_text()
-    with io.TextIOWrapper(io.BytesIO(path.read_bytes()), encoding='utf-8', newline=None) as reader:
+    physical = path.read_bytes()
+    with io.TextIOWrapper(io.BytesIO(physical), encoding='utf-8', newline=None) as reader:
         require(source.token_sha256(text) == source.token_sha256(reader.read()),
                 'consumer lane source text/bytes disagree')
-    return text
+    return _typed_source.historical_text(root, path, physical.decode('utf-8'))
 
 
 def verify_premises(root):
@@ -77,7 +84,7 @@ def verify_premises(root):
         if guard.significant(actual) != guard.significant(item['source']):
             _verify_dependency(path, actual, item['token_sha256'])
     for path, expected in record['import_scopes'].items():
-        text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else (root/path).read_text()
+        text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else _typed_source.historical_text(root, root/path, (root/path).read_text())
         actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
         if (path == 'extensions/carla/lane_refinement.mojo'
                 and guard.significant(actual) != guard.significant(expected)):
@@ -88,7 +95,7 @@ def verify_premises(root):
     for item in record['declarations']:
         selected = (item['path'], item['name'], tuple(item['owner'])) == (
             'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ())
-        text = _lane_text(root) if selected else (root/item['path']).read_text()
+        text = _lane_text(root) if selected else _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         actual = guard.declaration(text, item['name'], tuple(item['owner']))
         if selected and guard.significant(actual) != guard.significant(item['source']):
             text = full_audit.reviewed_text(root, item['path'], text)
