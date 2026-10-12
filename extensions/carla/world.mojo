@@ -747,6 +747,9 @@ struct World(Movable):
 
         Args:
             weather: The new weather.
+
+        Raises:
+            Error: If any weather field is nonfinite.
         """
         weather.validate()
         self.weather = weather
