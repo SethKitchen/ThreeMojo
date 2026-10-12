@@ -436,6 +436,11 @@ struct NavPolygon(Copyable, Movable):
         Returns:
             The height of the fan triangle that holds the point best: the
             one whose smallest barycentric weight is largest.
+
+        Raises:
+            Error: If the point or a stored vertex is nonfinite, the polygon
+                has fewer than three vertices or plan-area magnitude below 1e-6, or the result
+                is nonfinite.
         """
         return Length(self.height_at_si(point))
 
@@ -448,6 +453,11 @@ struct NavPolygon(Copyable, Movable):
         Returns:
             The height of the fan triangle that holds the point best: the
             one whose smallest barycentric weight is largest.
+
+        Raises:
+            Error: If the point or a stored vertex is nonfinite, the polygon
+                has fewer than three vertices or plan-area magnitude below 1e-6, or the result
+                is nonfinite.
         """
         _ = _finite_si(Float64(point.x))
         _ = _finite_si(Float64(point.y))
