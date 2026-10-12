@@ -356,9 +356,14 @@ TRUTH_CASES = [
     ('and', ('T', 0), ('not', ('C', 1))),
 ]
 
-TRUTH_ACCEPTED = (0, 1, 2, 3, 4, 5, 9, 15, 31, 34, 37, 39, 41)
+TRUTH_ACCEPTED = ()
+TRUTH_TEMPORARY_REJECTED = (0, 1, 2, 3, 4, 5, 9, 15, 37, 39, 41)
 TRUTH_MIXED_REJECTED = (6, 7, 8, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23,
                         24, 25, 26, 27, 28, 29, 30, 32, 33, 35, 36, 38, 40, 42)
+TRUTH_RETAINED_REJECTED = (31, 34)
+TRUTH_REFUSED = tuple(sorted(TRUTH_MIXED_REJECTED + TRUTH_RETAINED_REJECTED + TRUTH_TEMPORARY_REJECTED))
+TEMPORARY_SELECTION_REFUSAL = 'a one-type operator over custom temporaries'
+RETAINED_SELECTION_REFUSAL = 'a one-type operator that selects a retained custom operand'
 COMPOUND_REFUSAL = 'Coverage cannot yet preserve this compound condition'
 BOOL_MERGE_REFUSAL = 'custom mixed-type operator whose Bool result'
 
@@ -376,21 +381,27 @@ TRUTH_CASES = [fresh(tree) for tree in TRUTH_CASES]
 
 
 def truth_supported(tree):
-    """Return True if the operator check admits every operator of a tree.
+    """Admit only operators over Bool-valued custom-operand expressions.
 
-    Two operand types use Boolean fallback here, but a custom merge can have
-    the same `Bool` result, so each two-type operator is refused. A one-type
-    operator is refused over a Moving, whose move the probe cannot make, and
-    with a retained Shared on the left, whose copy a borrow cannot make.
+    Borrowed retained probes cannot select an owned result. Temporary probes
+    convert in place instead of adding an identity-changing move. Custom
+    same-type operators therefore remain refused, as do mixed custom joins.
     """
-    kind = tree[0]
-    if kind in ('and', 'or'):
-        left, right = truth_type(tree[1]), truth_type(tree[2])
-        # A conditional of two retained values selects a reference.
-        retained = tree[1][0] == 'C' or (tree[1][0] == 'choose' and tree[1][2][0] == 'C')
-        if left != right or left == 'M' or (left == 'C' and retained):
+    if tree[0] in ('and', 'or'):
+        if truth_type(tree[1]) != 'B' or truth_type(tree[2]) != 'B':
             return False
     return all(truth_supported(child) for child in tree[1:] if isinstance(child, tuple))
+
+
+def negate_custom_leaves(tree):
+    """Make a separate positive program; never replace an original tree."""
+    if tree[0] in ('S', 'D', 'X', 'C', 'M', 'P', 'Q', 'T', 'choose'):
+        return ('not', ('not', tree))
+    return tuple(negate_custom_leaves(child) if isinstance(child, tuple) else child
+                 for child in tree)
+
+
+NEGATED_TRUTH_CASES = [fresh(negate_custom_leaves(tree)) for tree in TRUTH_CASES]
 
 
 def truth_type(tree):
@@ -760,16 +771,16 @@ def flag(index: Int, state: Cell) raises -> Bool:
 '''
 
 
-def truth_source(numbers=None, names=TRUTH_NAMES):
+def truth_source(numbers=None, names=TRUTH_NAMES, cases=TRUTH_CASES):
     """Generate one function per reference tree; return the decision lines."""
-    numbers = tuple(range(len(TRUTH_CASES))) if numbers is None else tuple(numbers)
+    numbers = tuple(range(len(cases))) if numbers is None else tuple(numbers)
     text = TRUTH_PRELUDE
     for name in ('probe', 'other', 'flag', 'moving', 'bits', 'shared'):
         text = text.replace(f'\ndef {name}(', f'\ndef {names[name]}(')
     state, cell, retained_names = names['state'], names['cell'], names['retained']
     lines = {}
     for number in numbers:
-        tree = TRUTH_CASES[number]
+        tree = cases[number]
         kept = list({leaf[1]: leaf for leaf in truth_leaves(tree)
                      if leaf[0] in ('X', 'C', 'P')}.values())
         retained = ''.join(
@@ -1068,6 +1079,40 @@ for header, width in MIXED_CONTROL_WIDTHS.items():
     CONTROL_WIDTHS[header] = width
 
 
+# Preserve the previously admitted programs verbatim as native-success/refusal
+# controls. The positive programs below make a different, explicit choice:
+# each custom operand converts under not before a Bool-only operator.
+TRUTH_OWNED_CONTROLS = TRUTH_CONTROLS
+OWNED_CONTROL_WIDTHS = dict(CONTROL_WIDTHS)
+IDENTITY_CONTROL_REPLACEMENTS = {
+    'not not (probe(0, state) and (probe(1, state) or probe(2, state))) and count > 0':
+        '(not not probe(0, state)) and ((not not probe(1, state)) or (not not probe(2, state))) and count > 0',
+    'not not (probe(0, state) or probe(1, state)) and loops < 3':
+        '((not not probe(0, state)) or (not not probe(1, state))) and loops < 3',
+    'if probe(0, state) and probe(1, state):':
+        'if not not probe(0, state) and not not probe(1, state):',
+    'elif probe(1, state) or probe(2, state):':
+        'elif not not probe(1, state) or not not probe(2, state):',
+    'A.make(0, state) or A.make(1, state) and A.make(2, state)':
+        '(not not A.make(0, state)) or (not not A.make(1, state)) and (not not A.make(2, state))',
+    'Probe(0, state) or Probe(1, state) and Probe(2, state)':
+        '(not not Probe(0, state)) or (not not Probe(1, state)) and (not not Probe(2, state))',
+    'if shared(0, state) and live:':
+        'if not not shared(0, state) and not not live:',
+    'if shared(0, state) or last:':
+        'if not not shared(0, state) or not not last:',
+}
+for original, accepted in IDENTITY_CONTROL_REPLACEMENTS.items():
+    assert TRUTH_CONTROLS.count(original) == 1, original
+    TRUTH_CONTROLS = TRUTH_CONTROLS.replace(original, accepted, 1)
+CONTROL_WIDTHS = dict(OWNED_CONTROL_WIDTHS)
+for original, accepted in IDENTITY_CONTROL_REPLACEMENTS.items():
+    CONTROL_WIDTHS = {header.replace(original, accepted): width
+                      for header, width in CONTROL_WIDTHS.items()}
+
+
+
+
 class GenericTruthModel(TruthModel):
     """Model Made.make leaves, which do not call State.enter."""
 
@@ -1075,7 +1120,7 @@ class GenericTruthModel(TruthModel):
         pass
 
 
-def single_generic_source():
+def single_generic_source(negated=False):
     """Keep one declared type parameter and exercise both concrete types."""
     source = TRUTH_PRELUDE + '''
 
@@ -1102,60 +1147,73 @@ def main():
             run_generic[Other]("Other", mask, changing)
 '''
     header = 'if A.make(0, state) or A.make(1, state) and A.make(2, state):'
+    if negated:
+        replacement = 'if (not not A.make(0, state)) or (not not A.make(1, state)) and (not not A.make(2, state)):'
+        assert source.count(header) == 1
+        source = source.replace(header, replacement)
+        header = replacement
     line = next(i for i, row in enumerate(source.splitlines(), 1) if row.strip() == header)
     return source, {header: 3}, line
 
 
 def check_single_generic_truth(work, native, rewritten, build, mojo):
-    """Check all 64 generic bodies and ordered line/hit/vector records."""
-    name = 'generic_single'
-    source, widths, line = single_generic_source()
-    (native / f'{name}.mojo').write_text(source)
-    (work / 'generic-single-native.mojo').write_text(source)
-    optional_capture(work, 'generic-single-rewrite',
-                     [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
-    shutil.copy(rewritten / f'{name}.mojo', work / 'generic-single-instrumented.mojo')
-    shutil.copy(rewritten / 'manifest.txt', work / 'generic-single-manifest-raw.txt')
-    manifest = assert_obligations(rewritten, name, single_line_obligations(source, widths))
-    (work / 'generic-single-manifest.txt').write_text('\n'.join(manifest) + '\n')
-    expected_rows, expected_trace = [], []
-    tree = ('or', ('S', 0), ('and', ('S', 1), ('S', 2)))
-    for changing in (False, True):
-        for mask in range(16):
-            for concrete in ('Probe', 'Other'):
-                model = GenericTruthModel(tree, mask, -1, changing, line)
-                log, hits, vector = model.run()
-                assert log[-2:] in ('|T', '|F') and vector is not None
-                outcome = log.endswith('|T')
-                expected_rows.append(
-                    f'GENERIC {concrete} {mask} {changing} {outcome} {log[:-2]} '
-                    + ' '.join(str(model.counts[i]) for i in range(3)))
-                expected_trace.append(f'COVLINE:{name}:{line}')
-                expected_trace.extend(row.replace(':truth:', f':{name}:') for row in hits)
-                expected_trace.append(vector.replace(':truth:', f':{name}:'))
-    assert len(expected_rows) == 64 and len(expected_trace) == 328
-    assert sum('?' in row for row in expected_trace if row.startswith('COVEVAL2:')) == 24
-    (work / 'generic-single-expected.txt').write_text('\n'.join(expected_rows) + '\n')
-    (work / 'generic-single-trace-expected.txt').write_text('\n'.join(expected_trace) + '\n')
-    outputs = []
-    raw = ''
-    for label, folder in (('native', native), ('instrumented', rewritten)):
-        binary = work / f'generic-single-{label}'
-        optional_capture(work, f'generic-single-{label}-build',
-                         [mojo, 'build', '-Werror', '-I', str(folder), '-I', str(ROOT),
-                          str(folder / f'{name}.mojo'), '-o', str(binary)])
-        result = optional_capture(work, f'generic-single-{label}-run', [str(binary)], timeout=5)
-        outputs.append(result.stdout)
-        assert result.stdout.splitlines() == expected_rows, (label, 'generic native/model output differs')
-        if label == 'instrumented':
-            raw = result.stderr
-    assert outputs[0] == outputs[1]
-    actual = [row for row in raw.splitlines()
-              if row.startswith((f'COVLINE:{name}:', f'COVEVAL2:{name}:'))
-              and row.split(':')[2].split('.', 1)[0] == str(line)]
-    (work / 'generic-single-trace-actual.txt').write_text('\n'.join(actual) + '\n')
-    assert actual == expected_trace, 'generic line/condition/decision/vector order differs'
-
+    """Retain the original generic oracle/refusal and a separate safe variant."""
+    for negated in (False, True):
+        name = 'generic-single-negated' if negated else 'generic-single-original'
+        source, widths, line = single_generic_source(negated)
+        (native / f'{name}.mojo').write_text(source)
+        (work / f'{name}-native.mojo').write_text(source)
+        expected_rows, expected_trace = [], []
+        tree = ('or', ('S', 0), ('and', ('S', 1), ('S', 2)))
+        if negated:
+            tree = negate_custom_leaves(tree)
+        for changing in (False, True):
+            for mask in range(16):
+                for concrete in ('Probe', 'Other'):
+                    model = GenericTruthModel(tree, mask, -1, changing, line, name)
+                    log, hits, vector = model.run()
+                    assert log[-2:] in ('|T', '|F') and vector is not None
+                    outcome = log.endswith('|T')
+                    expected_rows.append(
+                        f'GENERIC {concrete} {mask} {changing} {outcome} {log[:-2]} '
+                        + ' '.join(str(model.counts[i]) for i in range(3)))
+                    expected_trace.append(f'COVLINE:{name}:{line}')
+                    expected_trace.extend(hits)
+                    expected_trace.append(vector)
+        assert len(expected_rows) == 64
+        if not negated:
+            assert len(expected_trace) == 328
+            assert sum('?' in row for row in expected_trace if row.startswith('COVEVAL2:')) == 24
+        else:
+            assert not any('?' in row for row in expected_trace if row.startswith('COVEVAL2:'))
+        (work / f'{name}-expected.txt').write_text('\n'.join(expected_rows) + '\n')
+        (work / f'{name}-trace-expected.txt').write_text('\n'.join(expected_trace) + '\n')
+        binary = work / f'{name}-native'
+        optional_capture(work, f'{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native), '-I', str(ROOT),
+                          str(native / f'{name}.mojo'), '-o', str(binary)])
+        native_result = optional_capture(work, f'{name}-native-run', [str(binary)], timeout=5)
+        assert native_result.stdout.splitlines() == expected_rows, (name, 'native/model output differs')
+        if not negated:
+            check_refusal(work, native, rewritten, build, mojo, name, source, widths,
+                          (COMPOUND_REFUSAL, TEMPORARY_SELECTION_REFUSAL))
+            continue
+        optional_capture(work, f'{name}-rewrite',
+                         [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+        shutil.copy(rewritten / f'{name}.mojo', work / f'{name}-instrumented.mojo')
+        manifest = assert_obligations(rewritten, name, single_line_obligations(source, widths))
+        (work / f'{name}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+        binary = work / f'{name}-instrumented'
+        optional_capture(work, f'{name}-instrumented-build',
+                         [mojo, 'build', '-Werror', '-I', str(rewritten), '-I', str(ROOT),
+                          str(rewritten / f'{name}.mojo'), '-o', str(binary)])
+        instrumented = optional_capture(work, f'{name}-instrumented-run', [str(binary)], timeout=5)
+        assert instrumented.stdout == native_result.stdout, (name, 'native/instrumented output differs')
+        actual = [row for row in instrumented.stderr.splitlines()
+                  if row.startswith((f'COVLINE:{name}:', f'COVEVAL2:{name}:'))
+                  and row.split(':')[2].split('.', 1)[0] == str(line)]
+        (work / f'{name}-trace-actual.txt').write_text('\n'.join(actual) + '\n')
+        assert actual == expected_trace, (name, 'generic line/condition/decision/vector order differs')
 
 def single_line_obligations(source, widths=None):
     """Declare every decision in these fixtures, with explicit compound widths."""
@@ -1446,7 +1504,7 @@ def main():
         print("T")
     else:
         print("F")
-''', 'a one-type operator that selects a retained operand whose copy runs source'),
+''', 'a one-type operator that selects a retained custom operand'),
     'copyable-retained-self': ('''struct Copied(ImplicitlyCopyable, Boolable):
     var value: Bool
 
@@ -1469,7 +1527,7 @@ def main():
     else:
         print("F")
     print(copied.value)
-''', 'a one-type operator that selects a retained operand whose copy runs source'),
+''', 'a one-type operator that selects a retained custom operand'),
     'copyable-retained-temporary': ('''struct Copied(ImplicitlyCopyable, Boolable):
     var value: Bool
 
@@ -1492,7 +1550,7 @@ def main():
     else:
         print("F")
     print(copied.value)
-''', 'a one-type operator that selects a retained operand whose copy runs source'),
+''', 'a one-type operator that selects a retained custom operand'),
     # Mixed-type sources: native Mojo converts each operand once, but the
     # operator check cannot tell this Boolean fallback from a custom merge.
     'copyable-retained-mixed': ('''@fieldwise_init
@@ -1550,7 +1608,7 @@ def main():
     else:
         print("F")
     print(full.value().name)
-''', 'a one-type operator that selects a retained operand whose copy runs source'),
+''', 'a one-type operator that selects a retained custom operand'),
     'custom-move-same': ('''struct Moving(Boolable, Movable):
     var value: Bool
 
@@ -1646,7 +1704,7 @@ LEAF_GUARD_REJECTIONS = {
         .replace('    var other = Copied(False)\n', '')
         .replace('if copied or other:', 'if copied or copied:')
         + '    print("RETAINED", copied.value)\n',
-        'a one-type operator that selects a retained operand whose copy runs source'),
+        'a one-type operator that selects a retained custom operand'),
     'custom-move-same-type': (
         TRUTH_REJECTED['custom-move'][0]
         .replace('    var flag = True\n', '')
@@ -1678,77 +1736,77 @@ def check_refusal(work, native, rewritten, build, mojo, name, source, widths, me
         assert message in rejected.stderr, (name, message, rejected.stderr[-4000:])
 
 
-def truth_widths(numbers, names=TRUTH_NAMES):
-    return {f'if {truth_text(TRUTH_CASES[number], names=names)}:':
-            len(truth_slots(TRUTH_CASES[number])) for number in numbers}
+def truth_widths(numbers, names=TRUTH_NAMES, cases=TRUTH_CASES):
+    return {f'if {truth_text(cases[number], names=names)}:':
+            len(truth_slots(cases[number])) for number in numbers}
 
 
-def check_truth_module(work, native, rewritten, build, mojo, module, names):
-    """Compare all native trees and the supported instrumented trees with the model.
+def check_truth_module(work, native, rewritten, build, mojo, module, names,
+                       cases=TRUTH_CASES, accepted_numbers=TRUTH_ACCEPTED):
+    """Check every native tree; compare only explicitly supported variants.
 
-    Returns:
-        The inconsistent vectors that the reducer and report refused, the
-        complete native source, and the native rows of each tree.
+    The original 43 trees stay native-success/refusal controls. Negated-leaf
+    variants are separate programs with their own native/model comparisons.
     """
-    source, native_lines = truth_source(names=names)
+    source, native_lines = truth_source(names=names, cases=cases)
     (native / f'{module}.mojo').write_text(source)
     (work / f'{module}-native.mojo').write_text(source)
     native_binary = work / f'{module}-native'
     run([mojo, 'build', '-Werror', '-I', str(native),
          str(native / f'{module}.mojo'), '-o', str(native_binary)])
+    binaries = [('native', native_binary)]
+    lines = {}
+    if accepted_numbers:
+        accepted, lines = truth_source(accepted_numbers, names, cases)
+        accepted_source = work / f'{module}-accepted-source'
+        accepted_source.mkdir()
+        (accepted_source / f'{module}.mojo').write_text(accepted)
+        (work / f'{module}-accepted-native.mojo').write_text(accepted)
+        run([str(build), str(rewritten), f'{module}.mojo'], cwd=accepted_source)
+        manifest = assert_obligations(
+            rewritten, module,
+            single_line_obligations(accepted, truth_widths(accepted_numbers, names, cases)))
+        assert len([entry for entry in manifest if entry.startswith('M ')]) == sum(
+            len(truth_slots(cases[number])) for number in accepted_numbers)
+        (work / f'{module}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+        instrumented = (rewritten / f'{module}.mojo').read_text()
+        (work / f'{module}-instrumented.mojo').write_text(instrumented)
+        if names is COLLISION_NAMES:
+            header = next(line for line in instrumented.splitlines()
+                          if line.startswith('from coverage.runtime import '))
+            aliases = [part.split(' as ')[1] for part in
+                       header.removeprefix('from coverage.runtime import ').split(', ')]
+            frames = sorted(set(word for word in instrumented.replace('(', ' ').replace(',', ' ').split()
+                                if word.startswith(aliases[2].removesuffix('begin') + 'state')))
+            assert frames, header
+            for name in aliases + frames:
+                assert name not in accepted, (name, header)
+            for name in ('_cov_eval_leaf', '_cov_eval_buffer', '_cov_eval_truth', '_cov_eval_right',
+                         '_cov_eval_state0', 'List', 'Int', 'Bool'):
+                assert f'var {name} = ' in accepted or f'def {name}(' in accepted, name
+        instrumented_binary = work / f'{module}-instrumented'
+        run([mojo, 'build', '-Werror', '-I', str(rewritten),
+             str(rewritten / f'{module}.mojo'), '-o', str(instrumented_binary)])
+        binaries.append(('instrumented', instrumented_binary))
 
-    accepted, lines = truth_source(TRUTH_ACCEPTED, names)
-    accepted_source = work / f'{module}-accepted-source'
-    accepted_source.mkdir()
-    (accepted_source / f'{module}.mojo').write_text(accepted)
-    (work / f'{module}-accepted-native.mojo').write_text(accepted)
-    run([str(build), str(rewritten), f'{module}.mojo'], cwd=accepted_source)
-    manifest = assert_obligations(
-        rewritten, module,
-        single_line_obligations(accepted, truth_widths(TRUTH_ACCEPTED, names)))
-    assert len([entry for entry in manifest if entry.startswith('M ')]) == sum(
-        len(truth_slots(TRUTH_CASES[number])) for number in TRUTH_ACCEPTED)
-    (work / f'{module}-manifest.txt').write_text('\n'.join(manifest) + '\n')
-    instrumented = (rewritten / f'{module}.mojo').read_text()
-    (work / f'{module}-instrumented.mojo').write_text(instrumented)
-    if names is COLLISION_NAMES:
-        # Each generated alias and frame must avoid every source identifier,
-        # also the default prefixes, which the fixture takes as its own names.
-        header = next(line for line in instrumented.splitlines()
-                      if line.startswith('from coverage.runtime import '))
-        aliases = [part.split(' as ')[1] for part in
-                   header.removeprefix('from coverage.runtime import ').split(', ')]
-        frames = sorted(set(word for word in instrumented.replace('(', ' ').replace(',', ' ').split()
-                            if word.startswith(aliases[2].removesuffix('begin') + 'state')))
-        assert frames, header
-        for name in aliases + frames:
-            assert name not in accepted, (name, header)
-        for name in ('_cov_eval_leaf', '_cov_eval_buffer', '_cov_eval_truth', '_cov_eval_right',
-                     '_cov_eval_state0',
-                     'List', 'Int', 'Bool'):
-            assert f'var {name} = ' in accepted or f'def {name}(' in accepted, name
-    instrumented_binary = work / f'{module}-instrumented'
-    run([mojo, 'build', '-Werror', '-I', str(rewritten),
-         str(rewritten / f'{module}.mojo'), '-o', str(instrumented_binary)])
-    binaries = [('native', native_binary), ('instrumented', instrumented_binary)]
-    inconsistent, native_rows = 0, defaultdict(list)
+    native_rows = defaultdict(list)
     for changing in (False, True):
         expected_rows = {'native': [], 'instrumented': []}
         expected_records, expected_vectors = defaultdict(list), defaultdict(list)
         for fail in range(-1, 4):
             for mask in range(16):
-                for number, tree in enumerate(TRUTH_CASES):
+                for number, tree in enumerate(cases):
                     log, hits, vector = TruthModel(
                         tree, mask, fail, changing, lines.get(number, native_lines[number]),
                         module).run()
                     row = f'TRUTH {number} {mask} {fail} {changing} {log}'
                     expected_rows['native'].append(row)
-                    if number in TRUTH_ACCEPTED:
+                    if number in accepted_numbers:
                         expected_rows['instrumented'].append(row)
                         expected_records[number] += hits
                         if vector:
                             expected_vectors[number].append(vector)
-        outputs = []
+        outputs = {}
         label = 'changing' if changing else 'stable'
         for kind, binary in binaries:
             with isolated_environment() as environment:
@@ -1763,8 +1821,10 @@ def check_truth_module(work, native, rewritten, build, mojo, module, names):
                 for row in rows:
                     native_rows[int(row.split()[1])].append(row)
             (work / f'{module}-{kind}-{label}.txt').write_text(result.stdout)
-            outputs.append(result)
-        raw = outputs[1].stderr
+            outputs[kind] = result
+        if not accepted_numbers:
+            continue
+        raw = outputs['instrumented'].stderr
         (work / f'{module}-raw-{label}.txt').write_text(raw)
         for number, line in lines.items():
             hits = [record for record in raw.splitlines()
@@ -1773,53 +1833,42 @@ def check_truth_module(work, native, rewritten, build, mojo, module, names):
             actual = [record for record in raw.splitlines()
                       if record.startswith(f'COVEVAL2:{module}:{line}:')]
             assert actual == expected_vectors[number], (module, number, changing, actual[:3])
-        marked = sum('?' in record.rpartition(':')[2]
-                     for record in raw.splitlines() if record.startswith('COVEVAL2:'))
+        # Each supported custom leaf converts once before a Bool operator.
+        # Repeated-conversion rejection is exercised separately through the
+        # real borrowed probe, reducer and reporter; it is never disabled.
+        assert not any('?' in record.rpartition(':')[2]
+                       for record in raw.splitlines() if record.startswith('COVEVAL2:'))
         reduced = []
         reducer = Reducer(reduced.append)
-        if not changing:
-            assert marked == 0
-            for record in raw.encode().splitlines(keepends=True):
-                reducer.feed(record)
-            (work / f'{module}-reduced-stable.txt').write_bytes(b''.join(reduced))
-            reports = [run([str(work / 'analyze'), str(work / name)]).stdout
-                       for name in (f'{module}-raw-stable.txt', f'{module}-reduced-stable.txt')]
-            assert reports[0] == reports[1], f'raw/reduced custom {module} traces differ'
-            continue
-        # A repeated conversion that disagrees must refuse MC-DC evidence.
-        assert marked > 0
-        inconsistent = marked
-        try:
-            for record in raw.encode().splitlines(keepends=True):
-                reducer.feed(record)
-            raise AssertionError('the reducer accepted an inconsistent vector')
-        except ValueError as error:
-            assert 'Inconsistent repeated truth conversion' in str(error), error
-        refused = subprocess.run([str(work / 'report'), str(work / f'{module}-manifest.txt'),
-                                  str(work / f'{module}-raw-changing.txt')],
-                                 text=True, capture_output=True)
-        assert refused.returncode != 0, refused.stdout
-        assert 'Inconsistent repeated truth conversion' in refused.stdout + refused.stderr, refused
-        (work / f'{module}-refused-report.txt').write_text(refused.stdout + refused.stderr)
-    return inconsistent, source, native_rows
-
+        for record in raw.encode().splitlines(keepends=True):
+            reducer.feed(record)
+        (work / f'{module}-reduced-{label}.txt').write_bytes(b''.join(reduced))
+        reports = [run([str(work / 'analyze'), str(work / name)]).stdout
+                   for name in (f'{module}-raw-{label}.txt', f'{module}-reduced-{label}.txt')]
+        assert reports[0] == reports[1], f'raw/reduced custom {module} traces differ'
+    return source, native_rows
 
 def check_custom_truth(work, native, rewritten, build, mojo):
     """Compare all native trees and only the explicitly supported instruments."""
-    assert set(TRUTH_ACCEPTED).isdisjoint(TRUTH_MIXED_REJECTED)
-    assert sorted(TRUTH_ACCEPTED + TRUTH_MIXED_REJECTED) == list(range(len(TRUTH_CASES)))
+    assert len(TRUTH_REFUSED) == len(set(TRUTH_REFUSED)) == 43
+    assert set(TRUTH_ACCEPTED).isdisjoint(TRUTH_REFUSED)
+    assert sorted(TRUTH_ACCEPTED + TRUTH_REFUSED) == list(range(len(TRUTH_CASES)))
     # The hand-kept lists must agree with the independent operator model.
     assert TRUTH_ACCEPTED == tuple(number for number, tree in enumerate(TRUTH_CASES)
                                    if truth_supported(tree))
-    inconsistent = 0
     for module, names in (('truth', TRUTH_NAMES), ('collision', COLLISION_NAMES)):
-        marked, module_source, module_rows = check_truth_module(
+        module_source, module_rows = check_truth_module(
             work, native, rewritten, build, mojo, module, names)
-        inconsistent += marked
         if module == 'truth':
             source, native_rows = module_source, module_rows
 
-    for number in TRUTH_MIXED_REJECTED:
+    # These supported variants have explicit negation around each custom
+    # leaf. Their own native/model evidence is separate from the originals.
+    for module, names in (('negated-truth', TRUTH_NAMES), ('negated-collision', COLLISION_NAMES)):
+        check_truth_module(work, native, rewritten, build, mojo, module, names,
+                           NEGATED_TRUTH_CASES, tuple(range(len(NEGATED_TRUTH_CASES))))
+
+    for number in TRUTH_REFUSED:
         rejected_source, _ = truth_source((number,))
         # The native-success evidence above covers this exact function, not an
         # easier substitute. The reduced fixture merely selects its entry point.
@@ -1827,10 +1876,13 @@ def check_custom_truth(work, native, rewritten, build, mojo):
         assert (source.split(signature, 1)[1].split('\n\ndef ', 1)[0].strip()
                 == rejected_source.split(signature, 1)[1].split('\n\ndef ', 1)[0].strip())
         assert len(native_rows[number]) == 16 * 5 * 2, number
-        name = f'truth-mixed-{number}'
+        reason = (RETAINED_SELECTION_REFUSAL if number in TRUTH_RETAINED_REJECTED else
+                  TEMPORARY_SELECTION_REFUSAL if number in TRUTH_TEMPORARY_REJECTED else
+                  BOOL_MERGE_REFUSAL)
+        name = f'truth-refused-{number}'
         (work / f'truth-{name}-native.txt').write_text('\n'.join(native_rows[number]) + '\n')
         check_refusal(work, native, rewritten, build, mojo, name, rejected_source,
-                      truth_widths((number,)), (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL))
+                      truth_widths((number,)), (COMPOUND_REFUSAL, reason))
 
     # Run the untouched original controls before requiring their refusal.
     name = 'controls-mixed'
@@ -1864,6 +1916,26 @@ def check_custom_truth(work, native, rewritten, build, mojo):
                   TWO_PARAMETER_CONTROL_WIDTHS, (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL,
                                                 'def generic_pair[A: Made, B: Made]'))
 
+    # This is the exact previously admitted one-parameter/owned control.
+    # Keep all native lifetime, recursion and concurrent behavior, then
+    # require refusal before testing the explicitly negated variant.
+    name = 'controls-owned'
+    (native / f'{name}.mojo').write_text(TRUTH_OWNED_CONTROLS)
+    (work / 'controls-owned-native.mojo').write_text(TRUTH_OWNED_CONTROLS)
+    binary = work / name
+    optional_capture(work, 'controls-owned-native-build',
+                     [mojo, 'build', '-Werror', '-I', str(native), '-I', str(ROOT),
+                      str(native / f'{name}.mojo'), '-o', str(binary)])
+    owned_result = optional_capture(work, 'controls-owned-native-run', [str(binary)], timeout=5)
+    assert not result_errors(owned_result.stdout), owned_result.stdout
+    assert not slow_tests(owned_result.stdout, 5), owned_result.stdout
+    owned_rows = [row for row in owned_result.stdout.splitlines() if row.startswith('CONTROL ')]
+    assert len(owned_rows) == 32 and 'CONCURRENT' in owned_result.stdout
+    assert [row.split()[1:3] for row in two_parameter_rows] == [row.split()[1:3] for row in owned_rows]
+    assert two_parameter_rows != owned_rows, 'Independent parameters lost their distinct native traces'
+    check_refusal(work, native, rewritten, build, mojo, name, TRUTH_OWNED_CONTROLS,
+                  OWNED_CONTROL_WIDTHS, (COMPOUND_REFUSAL, TEMPORARY_SELECTION_REFUSAL))
+
     (native / 'controls.mojo').write_text(TRUTH_CONTROLS)
     run([str(build), str(rewritten), 'controls.mojo'], cwd=native)
     control_manifest = assert_obligations(
@@ -1885,20 +1957,386 @@ def check_custom_truth(work, native, rewritten, build, mojo):
     assert 'CONCURRENT' in outputs[0] and outputs[0].count('CONTROL ') == 32, outputs[0]
     single_parameter_rows = [row for row in outputs[0].splitlines() if row.startswith('CONTROL ')]
     assert [row.split()[1:3] for row in two_parameter_rows] == [row.split()[1:3] for row in single_parameter_rows]
-    assert two_parameter_rows != single_parameter_rows, 'Independent parameters lost their distinct native traces'
     check_single_generic_truth(work, native, rewritten, build, mojo)
 
     check_custom_refusals(work, native, rewritten, build, mojo)
+    identity_summary = check_identity_truth(work, native, rewritten, build, mojo)
+    temporary_identity_summary = check_temporary_identity_truth(work, native, rewritten, build, mojo)
+    check_repeated_truth_guard(work, mojo)
     return (f'{len(TRUTH_CASES)} native/model custom truth trees x 16 masks x 5 failure positions, '
-            f'stable and changing; {len(TRUTH_ACCEPTED)} exact instrumented/model trees, '
+            f'stable and changing; all original trees explicitly refused; {len(NEGATED_TRUTH_CASES)} separate negated-leaf instrumented/model trees, '
             'with own and caller-scope collision names; '
-            f'{len(TRUTH_MIXED_REJECTED)} mixed trees, original mixed controls and exact two-parameter controls refused; '
-            '64 single-parameter generic native/model/trace cases; '
-            f'{inconsistent} inconsistent vectors refused; '
+            f'{len(TRUTH_MIXED_REJECTED)} mixed, {len(TRUTH_RETAINED_REJECTED)} retained-selection and {len(TRUTH_TEMPORARY_REJECTED)} temporary-selection trees, '
+            'original mixed controls and exact two-parameter controls refused; '
+            '64 original generic native/model cases refused and 64 separate negated native/model/trace cases; '
+            'a real repeated borrowed-truth vector refused by reducer and reporter; '
             f'{len(TRUTH_REJECTED)} existing rejections; '
             f'{len(LEAF_GUARD_REJECTIONS)} same-type rejections of old mixed sources; '
             f'{len(BOOL_MERGE_REJECTIONS)} Bool-merge rejections x 4 native masks; '
-            f'{len(GATED_MERGE_REJECTIONS)} type-gated merge rejections x 4 native masks')
+            f'{len(GATED_MERGE_REJECTIONS)} type-gated merge rejections x 4 native masks; '
+            f'{identity_summary}; {temporary_identity_summary}')
+
+
+TEMPORARY_IDENTITY_PRELUDE = '''struct Anchored(ImplicitlyCopyable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __init__(out self, payload: Int):
+        self.payload = payload
+        self.expected = Int(Pointer(to=self.payload))
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT Anchored", original)
+        return original
+
+
+struct MoveOnly(Movable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __init__(out self, payload: Int):
+        self.payload = payload
+        self.expected = Int(Pointer(to=self.payload))
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT MoveOnly", original)
+        return original
+
+
+struct Moving(Movable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __init__(out self, payload: Int):
+        self.payload = payload
+        self.expected = Int(Pointer(to=self.payload))
+
+    @inline(.never)
+    def __init__(out self, *, deinit move: Self):
+        self.payload = move.payload
+        self.expected = move.expected
+        print("MOVE Moving")
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT Moving", original)
+        return original
+
+
+'''
+
+
+TEMPORARY_IDENTITY_TYPES = ('Anchored', 'MoveOnly', 'Moving')
+TEMPORARY_IDENTITY_POSITIVE_CASES = (
+    ('not {kind}(7) or False', False, 'TF'),
+    ('flag or not {kind}(7)', False, 'FT'),
+    ('not not {kind}(7) and True', True, 'TT'),
+)
+TEMPORARY_IDENTITY_REFUSED_TEMPLATE = 'not ({kind}(7) or {kind}(9)) or False'
+
+
+def temporary_identity_source(kind, expression):
+    move = 'not ' if kind == 'Moving' else ''
+    flag = '    var flag = False\n' if 'flag' in expression else ''
+    return TEMPORARY_IDENTITY_PRELUDE + f'''
+def main():
+    comptime assert {move}{kind}.__move_ctor_is_trivial
+    comptime assert {kind}.__del__is_trivial
+    print("DIRECT", {kind}(7).__bool__())
+{flag}    if {expression}:
+        print("BRANCH T")
+    else:
+        print("BRANCH F")
+'''
+
+
+def check_temporary_identity_truth(work, native, rewritten, build, mojo):
+    """Preserve constructor-to-truth identity for every admitted temporary."""
+    for kind in TEMPORARY_IDENTITY_TYPES:
+        for number, (template, outcome, vector) in enumerate(TEMPORARY_IDENTITY_POSITIVE_CASES):
+            expression = template.format(kind=kind)
+            name = f'identity-temporary-{kind.lower()}-{number}'
+            source = temporary_identity_source(kind, expression)
+            expected = (f'CONVERT {kind} True\nDIRECT True\nCONVERT {kind} True\n'
+                        + ('BRANCH T\n' if outcome else 'BRANCH F\n'))
+            (native / f'{name}.mojo').write_text(source)
+            (work / f'{name}-native.mojo').write_text(source)
+            binary = work / f'{name}-native'
+            optional_capture(work, f'{name}-native-build',
+                             [mojo, 'build', '-Werror', '-I', str(native),
+                              str(native / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+            original = optional_capture(work, f'{name}-native-run', [str(binary)], timeout=5)
+            assert original.stdout == expected, (name, 'native constructor/identity control',
+                                                  original.stdout, expected)
+            optional_capture(work, f'{name}-rewrite',
+                             [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+            shutil.copy(rewritten / f'{name}.mojo', work / f'{name}-instrumented.mojo')
+            manifest = assert_obligations(
+                rewritten, name, single_line_obligations(source, {f'if {expression}:': 2}))
+            (work / f'{name}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+            assert_identity_origin(rewritten, name, source)
+            binary = work / f'{name}-instrumented'
+            optional_capture(work, f'{name}-instrumented-build',
+                             [mojo, 'build', '-Werror', '-I', str(rewritten),
+                              str(rewritten / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+            instrumented = optional_capture(work, f'{name}-instrumented-run', [str(binary)], timeout=5)
+            assert instrumented.stdout == original.stdout, (name, 'native/instrumented stdout differs')
+            decision = next(i for i, line in enumerate(source.splitlines(), 1)
+                            if line.strip() == f'if {expression}:')
+            truth = 'T' if outcome else 'F'
+            expected_records = [f'COVLINE:{name}:{decision}.{slot}:{state}'
+                                for slot, state in enumerate(vector)]
+            expected_records += [f'COVLINE:{name}:{decision}:{truth}',
+                                 f'COVEVAL2:{name}:{decision}:{truth}:{vector};']
+            actual_records = [line for line in instrumented.stderr.splitlines()
+                              if line.startswith((f'COVLINE:{name}:{decision}:',
+                                                  f'COVLINE:{name}:{decision}.',
+                                                  f'COVEVAL2:{name}:{decision}:'))]
+            assert actual_records == expected_records, (name, actual_records, expected_records)
+
+        name = f'identity-temporary-refused-{kind.lower()}'
+        expression = TEMPORARY_IDENTITY_REFUSED_TEMPLATE.format(kind=kind)
+        source = temporary_identity_source(kind, expression)
+        (native / f'{name}.mojo').write_text(source)
+        binary = work / f'{name}-native'
+        optional_capture(work, f'{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native),
+                          str(native / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+        original = optional_capture(work, f'{name}-native-run', [str(binary)], timeout=5)
+        selected_move = 'MOVE Moving\n' if kind == 'Moving' else ''
+        expected = (f'CONVERT {kind} True\nDIRECT True\nCONVERT {kind} True\n'
+                    + selected_move + f'CONVERT {kind} False\nBRANCH T\n')
+        assert original.stdout == expected, (name, 'native selected-object identity',
+                                             original.stdout, expected)
+        check_refusal(work, native, rewritten, build, mojo, name, source,
+                      {f'if {expression}:': 3},
+                      (COMPOUND_REFUSAL, TEMPORARY_SELECTION_REFUSAL))
+        assert_identity_origin(rewritten, name, source)
+    return '9 constructor-identity controls and 3 exact temporary-selection refusals'
+
+
+
+
+def repeated_truth_source(probe):
+    """Keep the counter storage and truth object alive after both conversions."""
+    source = ('from coverage.runtime import buffer, begin, leaf, finish, _borrowed\n'
+              'from std.reflection import reflect\n\n') if probe else ''
+    source += """@fieldwise_init
+struct Changing(Boolable):
+    var count: Pointer[Int, MutUntrackedOrigin]
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        self.count[] += 1
+        return self.count[] == 1
+
+def main():
+    var count = 0
+    var kept = Changing(Pointer(to=count).unsafe_origin_cast[MutUntrackedOrigin]())
+"""
+    if probe:
+        source += """    var values = buffer()
+    _ = begin(values, 2)
+    var observed = leaf(kept, values, "repeat:1.0", 0)
+    comptime assert _borrowed(reflect[type_of(observed)].name())
+"""
+    target = 'observed' if probe else 'kept'
+    source += f'    print("FIRST", {target}.__bool__())\n'
+    source += f'    print("SECOND", {target}.__bool__())\n'
+    if probe:
+        source += '    _ = observed^\n'
+    # The local storage must outlive its unsafe pointer, and kept must remain
+    # retained at leaf() so this really selects the borrowed probe overload.
+    source += '    print("COUNT", count, kept.count[])\n'
+    if probe:
+        source += """    _ = leaf(True, values, "repeat:1.1", 1)
+    _ = finish(False, values, "repeat:1")
+"""
+    return source
+
+
+def check_repeated_truth_guard(work, mojo):
+    """Compare native repeated truth, then exercise both fail-closed readers."""
+    expected_stdout = 'FIRST True\nSECOND False\nCOUNT 2 2\n'
+    native_result = None
+    for probe in (False, True):
+        name = 'repeat-probe' if probe else 'repeat-native'
+        path, binary = work / f'{name}.mojo', work / name
+        path.write_text(repeated_truth_source(probe))
+        optional_capture(work, f'{name}-build',
+                         [mojo, 'build', '-Werror', '-I', str(ROOT), str(path), '-o', str(binary)],
+                         timeout=180)
+        result = optional_capture(work, f'{name}-run', [str(binary)], timeout=5)
+        assert result.stdout == expected_stdout, (name, result.stdout)
+        if not probe:
+            assert result.stderr == '', result.stderr
+            native_result = result
+    assert native_result is not None and result.stdout == native_result.stdout
+    expected = ('COVLINE:repeat:1.0:T\nCOVLINE:repeat:1.0:F\n'
+                'COVLINE:repeat:1.1:T\nCOVLINE:repeat:1:F\n'
+                'COVEVAL2:repeat:1:F:?T;\n')
+    assert result.stderr == expected, result.stderr
+    reducer = Reducer(lambda record: None)
+    try:
+        for record in result.stderr.encode().splitlines(keepends=True):
+            reducer.feed(record)
+        raise AssertionError('the reducer accepted an inconsistent vector')
+    except ValueError as error:
+        assert 'Inconsistent repeated truth conversion' in str(error), error
+    manifest = work / 'repeat-manifest.txt'
+    manifest.write_text('B repeat 1\nC repeat 1 0\nM repeat 1 0\nC repeat 1 1\nM repeat 1 1\n')
+    raw = work / 'repeat-raw.txt'
+    raw.write_text(result.stderr)
+    rejected = subprocess.run([str(work / 'report'), str(manifest), str(raw)],
+                              text=True, capture_output=True, timeout=5)
+    (work / 'repeat-rejected-stdout.txt').write_text(rejected.stdout)
+    (work / 'repeat-rejected-stderr.txt').write_text(rejected.stderr)
+    assert rejected.returncode != 0, rejected
+    assert 'Inconsistent repeated truth conversion' in rejected.stdout + rejected.stderr, rejected
+
+
+# A bitwise lifecycle does not make truth insensitive to the object's identity.
+# Only compare addresses within a process, never absolute addresses across runs.
+IDENTITY_PRELUDE = '''@fieldwise_init
+struct Identity(ImplicitlyCopyable, Boolable):
+    var payload: Int
+    var expected: Int
+
+    @inline(.never)
+    def __bool__(self) -> Bool:
+        var original = Int(Pointer(to=self.payload)) == self.expected
+        print("CONVERT", original)
+        return original
+'''
+IDENTITY_POSITIVE_CASES = (
+    ('not kept or False', 1, False, 'TF'),
+    ('not not kept and True', 1, True, 'TT'),
+    ('flag or not kept', 1, False, 'FT'),
+    ('not (kept if choose_kept else kept) or False', 1, False, 'TF'),
+    ('(not kept) or (not not kept)', 2, True, 'TT'),
+    ('flag and not kept', 0, False, 'F-'),
+)
+IDENTITY_REFUSED_CASES = (
+    'kept or kept',
+    'kept and kept',
+    'kept or Identity(9, 0)',
+    '(kept if choose_kept else kept) or kept',
+)
+
+
+def identity_source(expression):
+    flag = '    var flag = False\n' if 'flag' in expression else ''
+    selector = '    var choose_kept = True\n' if 'choose_kept' in expression else ''
+    return IDENTITY_PRELUDE + f'''
+
+def main():
+    comptime assert Identity.__copy_ctor_is_trivial
+    comptime assert Identity.__move_ctor_is_trivial
+    comptime assert Identity.__del__is_trivial
+    var kept = Identity(7, 0)
+    kept.expected = Int(Pointer(to=kept.payload))
+    print("DIRECT", kept.__bool__())
+{flag}{selector}    if {expression}:
+        print("BRANCH T")
+    else:
+        print("BRANCH F")
+    print("RETAINED", kept.payload)
+    print("ADDRESS", Int(Pointer(to=kept.payload)) == kept.expected)
+'''
+
+
+def identity_output(conversions, outcome):
+    return ('CONVERT True\nDIRECT True\n' + conversions +
+            ('BRANCH T\n' if outcome else 'BRANCH F\n') +
+            'RETAINED 7\nADDRESS True\n')
+
+
+def assert_identity_origin(rewritten, name, source):
+    """Bind a fixture's complete source, rewrite and denominator to the builder."""
+    encoded = source.encode()
+    generated = (rewritten / f'{name}.mojo').read_bytes()
+    manifest = (rewritten / 'manifest.txt').read_bytes()
+    header, body = (rewritten / f'{name}.mojo.cov-origin').read_bytes().split(b'\n', 1)
+    parts = [f'{name}.mojo'.encode(), encoded, generated, manifest]
+    assert header == b'COVORIGIN1 ' + b' '.join(str(len(part)).encode() for part in parts)
+    assert body == b''.join(parts), (name, 'builder origin differs')
+    header, body = (rewritten / 'origins.ready').read_bytes().split(b'\n', 1)
+    assert header == b'COVORIGIN_INDEX2 1 ' + str(len(manifest)).encode() + b' 0'
+    assert body == manifest + str(len(parts[0])).encode() + b'\n' + parts[0]
+
+
+def check_identity_truth(work, native, rewritten, build, mojo):
+    """Keep original-object truth under not and refuse premature selection.
+
+    The expected traces describe the original retained object's truth. Trivial
+    lifecycle flags do not prove this address-sensitive method copy-invariant.
+    """
+    for number, (expression, conversions, outcome, vector) in enumerate(IDENTITY_POSITIVE_CASES):
+        name = f'identity-positive-{number}'
+        source = identity_source(expression)
+        expected = identity_output('CONVERT True\n' * conversions, outcome)
+        (native / f'{name}.mojo').write_text(source)
+        (work / f'{name}-native.mojo').write_text(source)
+        native_binary = work / f'{name}-native'
+        optional_capture(work, f'{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native),
+                          str(native / f'{name}.mojo'), '-o', str(native_binary)],
+                         timeout=180)
+        actual = optional_capture(work, f'{name}-native-run', [str(native_binary)], timeout=5)
+        assert actual.stdout == expected, (name, 'native identity control', actual.stdout, expected)
+        optional_capture(work, f'{name}-rewrite',
+                         [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+        shutil.copy(rewritten / f'{name}.mojo', work / f'{name}-instrumented.mojo')
+        manifest = assert_obligations(
+            rewritten, name, single_line_obligations(source, {f'if {expression}:': 2}))
+        (work / f'{name}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+        assert_identity_origin(rewritten, name, source)
+        binary = work / f'{name}-instrumented'
+        optional_capture(work, f'{name}-instrumented-build',
+                         [mojo, 'build', '-Werror', '-I', str(rewritten),
+                          str(rewritten / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+        instrumented = optional_capture(work, f'{name}-instrumented-run', [str(binary)], timeout=5)
+        assert instrumented.stdout == actual.stdout, (name, 'native/instrumented stdout differs')
+        decision = next(number for number, line in enumerate(source.splitlines(), 1)
+                        if line.strip() == f'if {expression}:')
+        expected_records = [f'COVLINE:{name}:{decision}.{slot}:{state}'
+                            for slot, state in enumerate(vector) if state != '-']
+        truth = 'T' if outcome else 'F'
+        expected_records += [f'COVLINE:{name}:{decision}:{truth}',
+                             f'COVEVAL2:{name}:{decision}:{truth}:{vector};']
+        actual_records = [line for line in instrumented.stderr.splitlines()
+                          if line.startswith((f'COVLINE:{name}:{decision}:',
+                                              f'COVLINE:{name}:{decision}.',
+                                              f'COVEVAL2:{name}:{decision}:'))]
+        assert actual_records == expected_records, (name, actual_records, expected_records)
+        (work / f'{name}-expected-records.txt').write_text('\n'.join(expected_records) + '\n')
+
+    for number, expression in enumerate(IDENTITY_REFUSED_CASES):
+        name = f'identity-refused-{number}'
+        source = identity_source(expression)
+        (native / f'{name}.mojo').write_text(source)
+        binary = work / f'{name}-native'
+        optional_capture(work, f'{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native),
+                          str(native / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+        native_result = optional_capture(work, f'{name}-native-run', [str(binary)], timeout=5)
+        expected = identity_output('CONVERT True\nCONVERT False\n', False)
+        assert native_result.stdout == expected, (name, 'native selection timing',
+                                                  native_result.stdout, expected)
+        check_refusal(work, native, rewritten, build, mojo, name, source,
+                      {f'if {expression}:': 2},
+                      (COMPOUND_REFUSAL, RETAINED_SELECTION_REFUSAL))
+        assert_identity_origin(rewritten, name, source)
+    return (f'{len(IDENTITY_POSITIVE_CASES)} original-object identity controls with exact traces; '
+            f'{len(IDENTITY_REFUSED_CASES)} native-success identity-selection refusals')
 
 
 # Optional selection can run payload lifecycle operations that a Bool collapse
@@ -2706,7 +3144,7 @@ def main() raises:
                 args.output.mkdir(parents=True, exist_ok=True)
                 for path in work.iterdir():
                     if path.suffix in ('.txt', '.mojo') and path.name.startswith(
-                            ('truth-', 'controls-', 'generic-')):
+                            ('truth-', 'controls-', 'generic-', 'identity-', 'negated-', 'repeat-')):
                         shutil.copy(path, args.output / path.name)
 
         lifetime, lifetime_cases = lifetime_source()
