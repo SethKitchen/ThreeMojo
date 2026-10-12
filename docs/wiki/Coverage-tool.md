@@ -224,6 +224,16 @@ Compiler-free controls run under normal Python and `python -O`. Native qualifica
 
 Its separate branch-only reporter projections are explicit unit diagnostics; they do not replace the original manifest or claim a production gate. `make test-coverage-tool` includes these checks. Historical percentages refer to their original denominators; impossible classifications are denominator changes, not newly executed tests.
 
+### Platform-specific witnesses
+
+Coverage captures run only on Linux x86-64. Some obligations need a floating-point state that only x86 has. The macOS arm64 runner runs those suites as correctness tests, and its results do not enter a coverage report.
+
+The junction endpoint refusal in `extensions/carla/junction_bounds.mojo` is one such obligation (issue #721). Its last-endpoint witness needs x86 denormals-are-zero. The test fixture `tools/fixtures/carla_sum2_fp_state.c` exposes seven modes on x86 and five on Arm.
+
+On x86, `tests/test_carla_junction_endpoint_refusals.mojo` runs both last-endpoint vectors. On Arm, it runs the first-endpoint control and prints `LAST_DAZ_CAPABILITY_UNAVAILABLE`. The suite fails on any other mode count. The Arm run claims no last-endpoint witness.
+
+The obligations that issue #721 lists, and the tests that witness them, are in [the #721 coverage record](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/full-audit-721-coverage.md).
+
 ### The capture grows with every statement run
 
 Each statement that runs writes one record, so the capture grows with the work a suite does. A PMREM blur reads its source about half a million times, and each read ran about 150 statements. That made `test_pmrem` write 14 GB and run for six and a half minutes.

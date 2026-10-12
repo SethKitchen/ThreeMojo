@@ -445,16 +445,20 @@ class FullAuditCleanupContracts(unittest.TestCase):
         # Supplemental authorities extend the historical receipt with their
         # own exact source and correctness-test obligations.
         station, runtime = cleanup.station, cleanup.runtime_view
+        deviation = cleanup.deviation
         runtime_raw = (self.root/runtime.MIGRATION).read_bytes()
         self.assertEqual(cleanup.sha(runtime_raw), runtime.MIGRATION_SHA256)
         runtime_record = json.loads(runtime_raw)
         self.assertEqual(set(runtime_record['correctness_tests']), set(runtime.TESTS))
+        # The physical Map is the deviation endpoint (#685). Its edge extends
+        # the station edge, so both leaves and both test sets are bound.
+        self.assertEqual(cleanup.sha((self.root/station.MODULE).read_bytes()), deviation.AFTER_SHA256)
         supplemental = {
-            station.MODULE: station.AFTER_SHA256, **station.TESTS,
+            station.MODULE: deviation.AFTER_SHA256, **station.TESTS, **deviation.TESTS,
             runtime.MIGRATION: runtime.MIGRATION_SHA256,
             **runtime_record['correctness_tests'],
         }
-        for leaf in ('map_station_contracts.py', 'runtime_view_contracts.py'):
+        for leaf in ('map_station_contracts.py', 'map_deviation_contracts.py', 'runtime_view_contracts.py'):
             path = 'tools/carla_lane_oracle/' + leaf
             supplemental[path] = cleanup.DEPENDENCY_TOOL_SHA256[path]
         expected.update(supplemental)

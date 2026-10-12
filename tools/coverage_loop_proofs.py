@@ -538,6 +538,17 @@ _MAP_STATION_SUCCESSOR_LINES = {
 }
 
 
+# The per-segment deviation edge (#685) adds one stored field, one skip in
+# the query's candidate admission and one constructor argument. Its exact
+# inverse leaves every byte outside those three spans unchanged, including
+# each loop header and body below. Each site was mapped individually: +3
+# after the _Segment field, +7 after the query skip. No blanket offset.
+_MAP_DEVIATION_SUCCESSOR_LINES = {
+    1491: 1511, 2272: 2294, 2279: 2301, 2301: 2323,
+    2373: 2395, 2378: 2400, 2387: 2409, 2396: 2418,
+}
+
+
 # A separate exact source pair for the HairDensity boundary correction.
 # Historical hashes/rules stay unchanged. The four retained hair theorems were
 # reviewed again: rebuild still validates its positive cube and owned partition;
@@ -974,13 +985,14 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             if digest not in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
                                       seed_count.SUPPORT_AFTER_SHA256,
                                       seed_count.FRONTIER_AFTER_SHA256,
-                                      seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
+                                      seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256,
+                                      seed_count.deviation.AFTER_SHA256}:
                 return None
             predecessor = seed_count.historical_source(root, **operation_args).encode('utf-8')
             if sha256(predecessor) != expected or _coverage_observe_bytes(
                     root, name, path.read_bytes(), _operation=_operation) != raw:
                 return None
-            if digest == seed_count.station.AFTER_SHA256:
+            if digest in {seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}:
                 actual.update(cleanup.station_proof_bindings(root, **operation_args))
             actual.update(_cleanup_current_bindings(root, include_roots=include_roots, **operation_args))
         actual[name] = digest
@@ -1065,6 +1077,7 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
                 seed_count.FRONTIER_AFTER_SHA256: _MAP_FRONTIER_SUCCESSOR_LINES,
                 seed_count.SCORE_AFTER_SHA256: _MAP_SCORE_SUCCESSOR_LINES,
                 seed_count.station.AFTER_SHA256: _MAP_STATION_SUCCESSOR_LINES,
+                seed_count.deviation.AFTER_SHA256: _MAP_DEVIATION_SUCCESSOR_LINES,
             }[actual_bindings[module + '.mojo']]
             line = mapping.get(line)
             if line is None:
@@ -1263,13 +1276,17 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         # Preserve the immutable frontier table and verify the complete new
         # source/data edge before admitting its identical constructor theorem.
         expected = dict(CONSTRUCTION_BOUNDARY_SOURCE_SHA256)
-        station = actual[seed_count_contracts.MODULE] == seed_count_contracts.station.AFTER_SHA256
-        score = station or actual[seed_count_contracts.MODULE] == seed_count_contracts.SCORE_AFTER_SHA256
+        # Each reviewed score-family endpoint has its own exact boundary line.
+        lines = {seed_count_contracts.SCORE_AFTER_SHA256: 4069,
+                 seed_count_contracts.station.AFTER_SHA256: 4099,
+                 seed_count_contracts.deviation.AFTER_SHA256: 4106}
+        station = actual[seed_count_contracts.MODULE] in {
+            seed_count_contracts.station.AFTER_SHA256, seed_count_contracts.deviation.AFTER_SHA256}
+        score = actual[seed_count_contracts.MODULE] in lines
         line = CONSTRUCTION_BOUNDARY_LINE
         if score:
-            expected[seed_count_contracts.MODULE] = (seed_count_contracts.station.AFTER_SHA256
-                if station else seed_count_contracts.SCORE_AFTER_SHA256)
-            line = 4099 if station else 4069
+            expected[seed_count_contracts.MODULE] = actual[seed_count_contracts.MODULE]
+            line = lines[actual[seed_count_contracts.MODULE]]
         # An inapplicable constructor theorem must not attempt current admission.
         # Historical guarded theorems are still verified independently below.
         if actual[seed_count_contracts.MODULE] != expected[seed_count_contracts.MODULE]:
