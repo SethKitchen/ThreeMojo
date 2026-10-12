@@ -300,7 +300,10 @@ def case_{number}():
 # expression. Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one
 # type, it tests the left operand, then returns it or the right operand
 # unconverted, and the enclosing operator or truth context tests the selected
-# object again. With two types, it converts each evaluated operand once.
+# object again. These two-type fixtures use the ordinary Bool fallback, which
+# converts each evaluated operand once. They still have native/model checks,
+# but instrumentation must refuse them: a user-defined Bool-valued merge has
+# the same result type and requires different observable behavior.
 TRUTH_CASES = [
     ('or', ('S', 0), ('S', 1)),
     ('and', ('S', 0), ('S', 1)),
@@ -320,6 +323,11 @@ TRUTH_CASES = [
     ('or', ('choose', ('B', 1), ('S', 2), ('S', 3)), ('S', 0)),
     ('and', ('or', ('D', 0), ('D', 1)), ('S', 2)),
 ]
+
+TRUTH_ACCEPTED = (0, 1, 2, 3, 4, 5, 9, 15)
+TRUTH_MIXED_REJECTED = (6, 7, 8, 10, 11, 12, 13, 14, 16)
+COMPOUND_REFUSAL = 'Coverage cannot yet preserve this compound condition'
+BOOL_MERGE_REFUSAL = 'custom mixed-type operator whose Bool result'
 
 
 def truth_type(tree):
@@ -573,11 +581,13 @@ def flag(index: Int, state: Cell) raises -> Bool:
 '''
 
 
-def truth_source():
+def truth_source(numbers=None):
     """Generate one function per reference tree; return the decision lines."""
+    numbers = tuple(range(len(TRUTH_CASES))) if numbers is None else tuple(numbers)
     text = TRUTH_PRELUDE
-    lines = []
-    for number, tree in enumerate(TRUTH_CASES):
+    lines = {}
+    for number in numbers:
+        tree = TRUTH_CASES[number]
         retained = ''.join(f'    var retained{leaf[1]} = Probe({leaf[1]}, state)\n'
                            for leaf in truth_leaves(tree) if leaf[0] == 'X')
         released = ''.join(f'    _ = retained{leaf[1]}^\n'
@@ -589,7 +599,7 @@ def truth_{number}(mask: Int, fail: Int, changing: Bool):
     var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
 {retained}    try:
 '''
-        lines.append(len(text.splitlines()) + 1)
+        lines[number] = len(text.splitlines()) + 1
         text += f'''        if {truth_text(tree)}:
             state[].log += "|T"
         else:
@@ -607,13 +617,13 @@ def test_truth() raises:
         for mask in range(16):
 '''
     text += ''.join(f'            truth_{number}(mask, fail, changing)\n'
-                    for number in range(len(TRUTH_CASES)))
+                    for number in numbers)
     text += '\n\ndef main() raises:\n    TestSuite.discover_tests[__functions_in_module()]().run()\n'
     return text, lines
 
 
-# Native-only controls without an independent model: the instrumented output
-# must equal the native output byte for byte.
+# Controls without an independent model. Preserve the original mixed source
+# as a native-success/refusal test, then compare an accepted variant exactly.
 TRUTH_CONTROLS = TRUTH_PRELUDE.replace(
     'from std.testing import TestSuite\n',
     'from std.testing import TestSuite\nfrom render.tasks import TaskGroup\n') + '''
@@ -748,6 +758,201 @@ def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 '''
 
+
+# Capture before replacing any expression: none of the original recursion,
+# lifetime, generic, concurrent, or control-flow source may silently disappear.
+TRUTH_MIXED_CONTROLS = TRUTH_CONTROLS
+CONTROL_REPLACEMENTS = {
+    'probe(0, state) and (probe(1, state) or flag(2, state)) and count > 0':
+        'not not (probe(0, state) and (probe(1, state) or probe(2, state))) and count > 0',
+    '(probe(0, state) or probe(1, state)) and loops < 3':
+        'not not (probe(0, state) or probe(1, state)) and loops < 3',
+    'not probe(2, state) or other(3, state)':
+        'not probe(2, state) or not other(3, state)',
+    'flag(0, state) and not unpinned or probe(1, state)':
+        'flag(0, state) and not unpinned or not probe(1, state)',
+    'Pinned(1, state) or flag(2, state) and Pinned(3, state)':
+        'not Pinned(1, state) or flag(2, state) and not Pinned(3, state)',
+    'optional_probe(0, state) and flag(1, state) or probe(2, state)':
+        'optional_probe(0, state) and flag(1, state) or not probe(2, state)',
+    'generic_pair[Probe, Other](state)': 'generic_pair[Other, Other](state)',
+    'Probe(0, state) or Probe(1, state) and Other(2, state)':
+        'Probe(0, state) or Probe(1, state) and Probe(2, state)',
+    '# The operator checks run per instantiation: one type, then two types.':
+        '# The operator checks run per instantiation: Probe, then Other.',
+}
+for original, accepted in CONTROL_REPLACEMENTS.items():
+    assert TRUTH_CONTROLS.count(original) == 1, original
+    TRUTH_CONTROLS = TRUTH_CONTROLS.replace(original, accepted, 1)
+
+
+# Keep the exact failed V8 control as a separate native-success/refusal case.
+# Independent A/B parameters select Bool fallback even when A == B after
+# instantiation. The positive fixture must use one declared type parameter.
+TRUTH_TWO_PARAMETER_CONTROLS = TRUTH_CONTROLS
+SINGLE_GENERIC_REPLACEMENTS = {
+    'def generic_pair[A: Made, B: Made](state: Cell) -> Bool:':
+        'def generic_pair[A: Made](state: Cell) -> Bool:',
+    'A.make(0, state) or B.make(1, state) and A.make(2, state)':
+        'A.make(0, state) or A.make(1, state) and A.make(2, state)',
+    'generic_pair[Probe, Probe](state)': 'generic_pair[Probe](state)',
+    'generic_pair[Other, Other](state)': 'generic_pair[Other](state)',
+    '# The operator checks run per instantiation: Probe, then Other.':
+        '# One declared type keeps same-type joining for both instantiations.',
+}
+for original, accepted in SINGLE_GENERIC_REPLACEMENTS.items():
+    assert TRUTH_CONTROLS.count(original) == 1, original
+    TRUTH_CONTROLS = TRUTH_CONTROLS.replace(original, accepted, 1)
+
+MIXED_CONTROL_WIDTHS = {
+    'if probe(0, state) and (probe(1, state) or flag(2, state)) and count > 0:': 4,
+    'if A.make(0, state) or B.make(1, state) and A.make(2, state):': 3,
+    'while (probe(0, state) or probe(1, state)) and loops < 3:': 3,
+    'if probe(0, state) and probe(1, state):': 2,
+    'elif not probe(2, state) or other(3, state):': 2,
+    'elif probe(1, state) or probe(2, state):': 2,
+    'if flag(0, state) and not unpinned or probe(1, state):': 3,
+    'if Pinned(1, state) or flag(2, state) and Pinned(3, state):': 3,
+    'if optional_probe(0, state) and flag(1, state) or probe(2, state):': 3,
+    'if (maybe or other) and (number or flag(1, state)) or String("x") and List[Int](length=mask, fill=0):': 6,
+    'if nested_optional(mask % 2 == 0) or nested_optional(mask % 3 == 0):': 2,
+    'if nested_optional(mask % 2 == 0) and nested_optional(mask % 3 == 0):': 2,
+    'if Probe(0, state) or Probe(1, state) and Other(2, state):': 3,
+}
+TWO_PARAMETER_CONTROL_WIDTHS = {}
+CONTROL_WIDTHS = {}
+for header, width in MIXED_CONTROL_WIDTHS.items():
+    for original, accepted in CONTROL_REPLACEMENTS.items():
+        header = header.replace(original, accepted)
+    TWO_PARAMETER_CONTROL_WIDTHS[header] = width
+    for original, accepted in SINGLE_GENERIC_REPLACEMENTS.items():
+        header = header.replace(original, accepted)
+    CONTROL_WIDTHS[header] = width
+
+
+class GenericTruthModel(TruthModel):
+    """Model Made.make leaves, which do not call State.enter."""
+
+    def enter(self, name):
+        pass
+
+
+def single_generic_source():
+    """Keep one declared type parameter and exercise both concrete types."""
+    source = TRUTH_PRELUDE + '''
+
+
+def generic_single[A: Made](state: Cell) -> Bool:
+    if A.make(0, state) or A.make(1, state) and A.make(2, state):
+        return True
+    return False
+
+
+def run_generic[A: Made](name: StaticString, mask: Int, changing: Bool):
+    var cell = State(mask, -1, changing)
+    var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
+    var result = generic_single[A](state)
+    print("GENERIC", name, mask, changing, result, state[].log,
+          state[].counts[0], state[].counts[1], state[].counts[2])
+    _ = cell^
+
+
+def main():
+    for changing in [False, True]:
+        for mask in range(16):
+            run_generic[Probe]("Probe", mask, changing)
+            run_generic[Other]("Other", mask, changing)
+'''
+    header = 'if A.make(0, state) or A.make(1, state) and A.make(2, state):'
+    line = next(i for i, row in enumerate(source.splitlines(), 1) if row.strip() == header)
+    return source, {header: 3}, line
+
+
+def check_single_generic_truth(work, native, rewritten, build, mojo):
+    """Check all 64 generic bodies and ordered line/hit/vector records."""
+    name = 'generic_single'
+    source, widths, line = single_generic_source()
+    (native / f'{name}.mojo').write_text(source)
+    (work / 'generic-single-native.mojo').write_text(source)
+    optional_capture(work, 'generic-single-rewrite',
+                     [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+    shutil.copy(rewritten / f'{name}.mojo', work / 'generic-single-instrumented.mojo')
+    shutil.copy(rewritten / 'manifest.txt', work / 'generic-single-manifest-raw.txt')
+    manifest = assert_obligations(rewritten, name, single_line_obligations(source, widths))
+    (work / 'generic-single-manifest.txt').write_text('\n'.join(manifest) + '\n')
+    expected_rows, expected_trace = [], []
+    tree = ('or', ('S', 0), ('and', ('S', 1), ('S', 2)))
+    for changing in (False, True):
+        for mask in range(16):
+            for concrete in ('Probe', 'Other'):
+                model = GenericTruthModel(tree, mask, -1, changing, line)
+                log, hits, vector = model.run()
+                assert log[-2:] in ('|T', '|F') and vector is not None
+                outcome = log.endswith('|T')
+                expected_rows.append(
+                    f'GENERIC {concrete} {mask} {changing} {outcome} {log[:-2]} '
+                    + ' '.join(str(model.counts[i]) for i in range(3)))
+                expected_trace.append(f'COVLINE:{name}:{line}')
+                expected_trace.extend(row.replace(':truth:', f':{name}:') for row in hits)
+                expected_trace.append(vector.replace(':truth:', f':{name}:'))
+    assert len(expected_rows) == 64 and len(expected_trace) == 328
+    assert sum('?' in row for row in expected_trace if row.startswith('COVEVAL2:')) == 24
+    (work / 'generic-single-expected.txt').write_text('\n'.join(expected_rows) + '\n')
+    (work / 'generic-single-trace-expected.txt').write_text('\n'.join(expected_trace) + '\n')
+    outputs = []
+    raw = ''
+    for label, folder in (('native', native), ('instrumented', rewritten)):
+        binary = work / f'generic-single-{label}'
+        optional_capture(work, f'generic-single-{label}-build',
+                         [mojo, 'build', '-Werror', '-I', str(folder), '-I', str(ROOT),
+                          str(folder / f'{name}.mojo'), '-o', str(binary)])
+        result = optional_capture(work, f'generic-single-{label}-run', [str(binary)], timeout=5)
+        outputs.append(result.stdout)
+        assert result.stdout.splitlines() == expected_rows, (label, 'generic native/model output differs')
+        if label == 'instrumented':
+            raw = result.stderr
+    assert outputs[0] == outputs[1]
+    actual = [row for row in raw.splitlines()
+              if row.startswith((f'COVLINE:{name}:', f'COVEVAL2:{name}:'))
+              and row.split(':')[2].split('.', 1)[0] == str(line)]
+    (work / 'generic-single-trace-actual.txt').write_text('\n'.join(actual) + '\n')
+    assert actual == expected_trace, 'generic line/condition/decision/vector order differs'
+
+
+def single_line_obligations(source, widths=None):
+    """Declare every decision in these fixtures, with explicit compound widths."""
+    widths = {} if widths is None else widths
+    obligations, used = {}, set()
+    for line, text in enumerate(source.splitlines(), 1):
+        header = text.strip()
+        if not header.startswith(('if ', 'elif ', 'while ', 'for ')):
+            continue
+        assert header.endswith(':'), header
+        if header in widths:
+            width = widths[header]
+            used.add(header)
+        else:
+            assert ' and ' not in header and ' or ' not in header, header
+            width = 1
+        obligations[line] = width
+    assert used == set(widths), (used, widths)
+    return obligations
+
+
+def assert_obligations(rewritten, module, obligations):
+    """Reject lost branches, conditions, or MC/DC slots, including refusals."""
+    actual = [entry for entry in (rewritten / 'manifest.txt').read_text().splitlines()
+              if entry.split()[0] in ('B', 'C', 'M') and entry.split()[1] == module]
+    expected = []
+    for line, width in obligations.items():
+        expected.append(f'B {module} {line}')
+        if width > 1:
+            expected.extend(f'{kind} {module} {line} {slot}'
+                            for slot in range(width) for kind in ('C', 'M'))
+    assert sorted(actual) == sorted(expected), (module, actual, expected)
+    return actual
+
+
 def nested_optional_rejections():
     """Model selection before an inner Optional wraps into the result type.
 
@@ -797,6 +1002,106 @@ def main():
 
 
 NESTED_OPTIONAL_REJECTIONS = nested_optional_rejections()
+
+
+# Keep the issue #560 counterexample independent of TruthModel. Native Mojo
+# tests Left once and merges only the selected operand; it never tests Right.
+# Every merge flips its stored truth. A Bool fallback therefore changes all
+# eight outcomes even though the native result type is also Bool.
+BOOL_MERGE_PRELUDE = '''struct Left(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+        print("MAKE L", value)
+
+    def __bool__(self) -> Bool:
+        print("BOOL L", self.value)
+        return self.value
+
+    def __merge_with__[other_type: AnyType](self) -> Bool:
+        print("MERGE L", self.value)
+        return not self.value
+
+
+struct Right(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+        print("MAKE R", value)
+
+    def __bool__(self) -> Bool:
+        print("BOOL R", self.value)
+        return self.value
+
+    def __merge_with__[other_type: AnyType](self) -> Bool:
+        print("MERGE R", self.value)
+        return not self.value
+'''
+
+BOOL_MERGE_EXPECTED = {
+    'or': '''CASE OR False False
+MAKE L False
+BOOL L False
+MAKE R False
+MERGE R False
+BODY T
+CASE OR False True
+MAKE L False
+BOOL L False
+MAKE R True
+MERGE R True
+BODY F
+CASE OR True False
+MAKE L True
+BOOL L True
+MERGE L True
+BODY F
+CASE OR True True
+MAKE L True
+BOOL L True
+MERGE L True
+BODY F
+''',
+    'and': '''CASE AND False False
+MAKE L False
+BOOL L False
+MERGE L False
+BODY T
+CASE AND False True
+MAKE L False
+BOOL L False
+MERGE L False
+BODY T
+CASE AND True False
+MAKE L True
+BOOL L True
+MAKE R False
+MERGE R False
+BODY T
+CASE AND True True
+MAKE L True
+BOOL L True
+MAKE R True
+MERGE R True
+BODY F
+''',
+}
+BOOL_MERGE_REJECTIONS = {
+    f'bool-merge-{operator}': (BOOL_MERGE_PRELUDE + f'''
+
+def main():
+    for first in [False, True]:
+        for second in [False, True]:
+            print("CASE {operator.upper()}", first, second)
+            if Left(first) {operator} Right(second):
+                print("BODY T")
+            else:
+                print("BODY F")
+''', expected)
+    for operator, expected in BOOL_MERGE_EXPECTED.items()
+}
 
 
 # Unsupported operands must fail compilation with the coverage diagnostic.
@@ -906,44 +1211,114 @@ def main():
 }
 
 
+# The node guard can run before a leaf body is instantiated. Keep every old
+# mixed-source refusal, and separately require each exact leaf diagnostic.
+# Reusing one retained origin lets the copy control pass the node type check.
+LEAF_GUARD_REJECTIONS = {
+    'copyable-retained-same-origin': (
+        TRUTH_REJECTED['copyable-retained'][0]
+        .replace('    var other = Copied(False)\n', '')
+        .replace('if copied or other:', 'if copied or copied:')
+        + '    print("RETAINED", copied.value)\n',
+        'Coverage cannot yet preserve a retained implicitly copyable custom'),
+    'custom-move-same-type': (
+        TRUTH_REJECTED['custom-move'][0]
+        .replace('    var flag = True\n', '')
+        .replace('Moving(False) or flag', 'Moving(False) or Moving(True)'),
+        'Coverage cannot yet preserve a temporary custom Boolable compound operand with a user-defined move constructor'),
+}
+
+
+def check_refusal(work, native, rewritten, build, mojo, name, source, widths, messages):
+    """Instrument the complete source, retain all obligations, and refuse it."""
+    (native / f'{name}.mojo').write_text(source)
+    (work / f'truth-{name}-native.mojo').write_text(source)
+    optional_capture(work, f'truth-{name}-rewrite',
+                     [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+    shutil.copy(rewritten / f'{name}.mojo', work / f'truth-{name}-instrumented.mojo')
+    shutil.copy(rewritten / 'manifest.txt', work / f'truth-{name}-manifest-raw.txt')
+    manifest = assert_obligations(
+        rewritten, name, single_line_obligations(source, widths))
+    rejected = subprocess.run([mojo, 'build', '-Werror', '-I', str(rewritten),
+                               '-I', str(ROOT), str(rewritten / f'{name}.mojo'),
+                               '-o', str(work / 'rejected')],
+                              text=True, capture_output=True)
+    (work / f'truth-{name}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+    (work / f'truth-{name}-rejected.txt').write_text(rejected.stderr)
+    (work / f'truth-{name}-rejected-stdout.txt').write_text(rejected.stdout)
+    (work / f'truth-{name}-rejected-returncode.txt').write_text(str(rejected.returncode) + '\n')
+    assert rejected.returncode != 0, (name, 'instrumentation unexpectedly accepted the source')
+    for message in messages:
+        assert message in rejected.stderr, (name, message, rejected.stderr[-4000:])
+
+
+def truth_widths(numbers):
+    return {f'if {truth_text(TRUTH_CASES[number])}:': len(truth_slots(TRUTH_CASES[number]))
+            for number in numbers}
+
+
 def check_custom_truth(work, native, rewritten, build, mojo):
-    """Compare custom compound operands with the native-semantics model."""
-    source, lines = truth_source()
+    """Compare all native trees and only the explicitly supported instruments."""
+    assert set(TRUTH_ACCEPTED).isdisjoint(TRUTH_MIXED_REJECTED)
+    assert sorted(TRUTH_ACCEPTED + TRUTH_MIXED_REJECTED) == list(range(len(TRUTH_CASES)))
+    source, native_lines = truth_source()
     (native / 'truth.mojo').write_text(source)
-    run([str(build), str(rewritten), 'truth.mojo'], cwd=native)
-    binaries = []
-    for label, folder in (('native', native), ('instrumented', rewritten)):
-        binary = work / f'truth-{label}'
-        run([mojo, 'build', '-Werror', '-I', str(folder),
-             str(folder / 'truth.mojo'), '-o', str(binary)])
-        binaries.append(binary)
-    inconsistent = 0
+    (work / 'truth-native.mojo').write_text(source)
+    native_binary = work / 'truth-native'
+    run([mojo, 'build', '-Werror', '-I', str(native),
+         str(native / 'truth.mojo'), '-o', str(native_binary)])
+
+    accepted, lines = truth_source(TRUTH_ACCEPTED)
+    accepted_source = work / 'truth-accepted-source'
+    accepted_source.mkdir()
+    (accepted_source / 'truth.mojo').write_text(accepted)
+    (work / 'truth-accepted-native.mojo').write_text(accepted)
+    run([str(build), str(rewritten), 'truth.mojo'], cwd=accepted_source)
+    manifest = assert_obligations(
+        rewritten, 'truth', single_line_obligations(accepted, truth_widths(TRUTH_ACCEPTED)))
+    assert len([entry for entry in manifest if entry.startswith('M ')]) == sum(
+        len(truth_slots(TRUTH_CASES[number])) for number in TRUTH_ACCEPTED)
+    (work / 'truth-manifest.txt').write_text('\n'.join(manifest) + '\n')
+    shutil.copy(rewritten / 'truth.mojo', work / 'truth-instrumented.mojo')
+    instrumented_binary = work / 'truth-instrumented'
+    run([mojo, 'build', '-Werror', '-I', str(rewritten),
+         str(rewritten / 'truth.mojo'), '-o', str(instrumented_binary)])
+    binaries = [('native', native_binary), ('instrumented', instrumented_binary)]
+    inconsistent, native_rows = 0, defaultdict(list)
     for changing in (False, True):
-        expected_rows, expected_records, expected_vectors = [], defaultdict(list), defaultdict(list)
+        expected_rows = {'native': [], 'instrumented': []}
+        expected_records, expected_vectors = defaultdict(list), defaultdict(list)
         for fail in range(-1, 4):
             for mask in range(16):
                 for number, tree in enumerate(TRUTH_CASES):
                     log, hits, vector = TruthModel(
-                        tree, mask, fail, changing, lines[number]).run()
-                    expected_rows.append(f'TRUTH {number} {mask} {fail} {changing} {log}')
-                    expected_records[number] += hits
-                    if vector:
-                        expected_vectors[number].append(vector)
+                        tree, mask, fail, changing, lines.get(number, native_lines[number])).run()
+                    row = f'TRUTH {number} {mask} {fail} {changing} {log}'
+                    expected_rows['native'].append(row)
+                    if number in TRUTH_ACCEPTED:
+                        expected_rows['instrumented'].append(row)
+                        expected_records[number] += hits
+                        if vector:
+                            expected_vectors[number].append(vector)
         outputs = []
-        for binary in binaries:
+        label = 'changing' if changing else 'stable'
+        for kind, binary in binaries:
             with isolated_environment() as environment:
                 environment['THREEMOJO_TRUTH_CHANGING'] = '1' if changing else '0'
-                result = run([str(binary)], env=environment, timeout=10)
+                result = run([str(binary)], env=environment, timeout=5)
             assert not result_errors(result.stdout), result.stdout
             assert not slow_tests(result.stdout, 5), result.stdout
             rows = [line for line in result.stdout.splitlines() if line.startswith('TRUTH ')]
-            mismatch = next((pair for pair in zip(rows, expected_rows) if pair[0] != pair[1]), None)
-            assert rows == expected_rows, (binary.name, changing, mismatch, len(rows))
+            mismatch = next((pair for pair in zip(rows, expected_rows[kind]) if pair[0] != pair[1]), None)
+            assert rows == expected_rows[kind], (binary.name, changing, mismatch, len(rows))
+            if kind == 'native':
+                for row in rows:
+                    native_rows[int(row.split()[1])].append(row)
+            (work / f'truth-{kind}-{label}.txt').write_text(result.stdout)
             outputs.append(result)
         raw = outputs[1].stderr
-        label = 'changing' if changing else 'stable'
         (work / f'truth-raw-{label}.txt').write_text(raw)
-        for number, line in enumerate(lines):
+        for number, line in lines.items():
             hits = [record for record in raw.splitlines()
                     if record.startswith((f'COVLINE:truth:{line}:', f'COVLINE:truth:{line}.'))]
             assert hits == expected_records[number], (number, changing, hits[:4])
@@ -972,11 +1347,6 @@ def check_custom_truth(work, native, rewritten, build, mojo):
             raise AssertionError('the reducer accepted an inconsistent vector')
         except ValueError as error:
             assert 'Inconsistent repeated truth conversion' in str(error), error
-        manifest = [entry for entry in (rewritten / 'manifest.txt').read_text().splitlines()
-                    if entry.split()[0] in ('B', 'C', 'M') and entry.split()[1] == 'truth']
-        assert len([entry for entry in manifest if entry.startswith('M ')]) == sum(
-            len(truth_slots(tree)) for tree in TRUTH_CASES)
-        (work / 'truth-manifest.txt').write_text('\n'.join(manifest) + '\n')
         refused = subprocess.run([str(work / 'report'), str(work / 'truth-manifest.txt'),
                                   str(work / 'truth-raw-changing.txt')],
                                  text=True, capture_output=True)
@@ -984,39 +1354,730 @@ def check_custom_truth(work, native, rewritten, build, mojo):
         assert 'Inconsistent repeated truth conversion' in refused.stdout + refused.stderr, refused
         (work / 'truth-refused-report.txt').write_text(refused.stdout + refused.stderr)
 
+    for number in TRUTH_MIXED_REJECTED:
+        rejected_source, _ = truth_source((number,))
+        # The native-success evidence above covers this exact function, not an
+        # easier substitute. The reduced fixture merely selects its entry point.
+        signature = f'def truth_{number}('
+        assert (source.split(signature, 1)[1].split('\n\ndef ', 1)[0].strip()
+                == rejected_source.split(signature, 1)[1].split('\n\ndef ', 1)[0].strip())
+        assert len(native_rows[number]) == 16 * 5 * 2, number
+        name = f'truth-mixed-{number}'
+        (work / f'truth-{name}-native.txt').write_text('\n'.join(native_rows[number]) + '\n')
+        check_refusal(work, native, rewritten, build, mojo, name, rejected_source,
+                      truth_widths((number,)), (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL))
+
+    # Run the untouched original controls before requiring their refusal.
+    name = 'controls-mixed'
+    (native / f'{name}.mojo').write_text(TRUTH_MIXED_CONTROLS)
+    binary = work / name
+    run([mojo, 'build', '-Werror', '-I', str(native), '-I', str(ROOT),
+         str(native / f'{name}.mojo'), '-o', str(binary)])
+    result = run([str(binary)], timeout=5)
+    assert not result_errors(result.stdout), result.stdout
+    assert not slow_tests(result.stdout, 5), result.stdout
+    assert 'CONCURRENT' in result.stdout and result.stdout.count('CONTROL ') == 32, result.stdout
+    (work / 'controls-mixed-native.txt').write_text(result.stdout)
+    check_refusal(work, native, rewritten, build, mojo, name, TRUTH_MIXED_CONTROLS,
+                  MIXED_CONTROL_WIDTHS, (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL))
+
+    # Preserve the complete V8 source and all 32 control rows, including both
+    # equal-concrete A/B calls, rather than relabeling them as supported.
+    name = 'controls-two-parameters'
+    (native / f'{name}.mojo').write_text(TRUTH_TWO_PARAMETER_CONTROLS)
+    (work / f'truth-{name}-native.mojo').write_text(TRUTH_TWO_PARAMETER_CONTROLS)
+    binary = work / name
+    optional_capture(work, f'truth-{name}-native-build',
+                     [mojo, 'build', '-Werror', '-I', str(native), '-I', str(ROOT),
+                      str(native / f'{name}.mojo'), '-o', str(binary)])
+    two_parameter = optional_capture(work, f'truth-{name}-native-run', [str(binary)], timeout=5)
+    assert not result_errors(two_parameter.stdout), two_parameter.stdout
+    assert not slow_tests(two_parameter.stdout, 5), two_parameter.stdout
+    two_parameter_rows = [row for row in two_parameter.stdout.splitlines() if row.startswith('CONTROL ')]
+    assert len(two_parameter_rows) == 32 and 'CONCURRENT' in two_parameter.stdout
+    check_refusal(work, native, rewritten, build, mojo, name, TRUTH_TWO_PARAMETER_CONTROLS,
+                  TWO_PARAMETER_CONTROL_WIDTHS, (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL,
+                                                'def generic_pair[A: Made, B: Made]'))
+
     (native / 'controls.mojo').write_text(TRUTH_CONTROLS)
     run([str(build), str(rewritten), 'controls.mojo'], cwd=native)
+    control_manifest = assert_obligations(
+        rewritten, 'controls', single_line_obligations(TRUTH_CONTROLS, CONTROL_WIDTHS))
+    (work / 'controls-manifest.txt').write_text('\n'.join(control_manifest) + '\n')
+    (work / 'controls-native.mojo').write_text(TRUTH_CONTROLS)
+    shutil.copy(rewritten / 'controls.mojo', work / 'controls-instrumented.mojo')
     outputs = []
     for label, folder in (('native', native), ('instrumented', rewritten)):
         binary = work / f'controls-{label}'
         run([mojo, 'build', '-Werror', '-I', str(folder), '-I', str(ROOT),
              str(folder / 'controls.mojo'), '-o', str(binary)])
-        result = run([str(binary)], timeout=10)
+        result = run([str(binary)], timeout=5)
         assert not result_errors(result.stdout), result.stdout
         assert not slow_tests(result.stdout, 5), result.stdout
         outputs.append(result.stdout.partition('\nRunning ')[0].strip() or result.stdout)
         (work / f'controls-{label}.txt').write_text(result.stdout)
     assert outputs[0] == outputs[1], 'custom truth controls differ'
     assert 'CONCURRENT' in outputs[0] and outputs[0].count('CONTROL ') == 32, outputs[0]
+    single_parameter_rows = [row for row in outputs[0].splitlines() if row.startswith('CONTROL ')]
+    assert [row.split()[1:3] for row in two_parameter_rows] == [row.split()[1:3] for row in single_parameter_rows]
+    assert two_parameter_rows != single_parameter_rows, 'Independent parameters lost their distinct native traces'
+    check_single_generic_truth(work, native, rewritten, build, mojo)
 
-    for name, (text, message) in TRUTH_REJECTED.items():
+    check_custom_refusals(work, native, rewritten, build, mojo)
+    return (f'{len(TRUTH_CASES)} native/model custom truth trees x 16 masks x 5 failure positions, '
+            f'stable and changing; {len(TRUTH_ACCEPTED)} exact instrumented/model trees; '
+            f'{len(TRUTH_MIXED_REJECTED)} mixed trees, original mixed controls and exact two-parameter controls refused; '
+            '64 single-parameter generic native/model/trace cases; '
+            f'{inconsistent} inconsistent vectors refused; '
+            f'{len(TRUTH_REJECTED)} existing rejections; '
+            f'{len(LEAF_GUARD_REJECTIONS)} exact leaf-guard rejections; '
+            f'{len(BOOL_MERGE_REJECTIONS)} Bool-merge rejections x 4 native masks')
+
+
+
+# Optional selection can run payload lifecycle operations that a Bool collapse
+# omits. Item/or repeats the pinned regression source and exact event sequence.
+# The other native event expectations are source models, not prior pin results.
+OPTIONAL_LIFECYCLE_REFUSAL = 'an Optional result with observable copy, move, or destructor effects'
+OPTIONAL_PAYLOADS = {
+    'Item': '''struct Item(ImplicitlyCopyable):
+    var index: Int
+
+    def __init__(out self, index: Int):
+        self.index = index
+        print("CREATE", index)
+
+    def __init__(out self, *, copy: Self):
+        self.index = copy.index
+        print("COPY", self.index)
+
+    def __init__(out self, *, deinit move: Self):
+        self.index = move.index
+        print("MOVE", self.index)
+
+    def __deinit__(deinit self):
+        print("DROP", self.index)
+''',
+    'CopyOnly': '''struct CopyOnly(ImplicitlyCopyable):
+    var index: Int
+
+    def __init__(out self, index: Int):
+        self.index = index
+        print("CREATE", index)
+
+    def __init__(out self, *, copy: Self):
+        self.index = copy.index
+        print("COPY", self.index)
+''',
+    'CopyDrop': '''@fieldwise_init
+struct CopyDrop(ImplicitlyCopyable):
+    var index: Int
+
+    def __deinit__(deinit self):
+        print("DROP", self.index)
+''',
+    'MoveOnly': '''struct MoveOnly(Movable):
+    var index: Int
+
+    def __init__(out self, index: Int):
+        self.index = index
+        print("CREATE", index)
+
+    def __init__(out self, *, deinit move: Self):
+        self.index = move.index
+        print("MOVE", self.index)
+
+    def __deinit__(deinit self):
+        print("DROP", self.index)
+''',
+    'Trivial': '''@fieldwise_init
+struct Trivial(ImplicitlyCopyable):
+    var index: Int
+''',
+}
+
+
+def check_custom_refusals(work, native, rewritten, build, mojo):
+    """Run every original and direct-leaf negative control without omissions."""
+    refused_sources = dict(TRUTH_REJECTED)
+    refused_sources.update(LEAF_GUARD_REJECTIONS)
+    refused_sources.update({name: (text, BOOL_MERGE_REFUSAL)
+                            for name, (text, _) in BOOL_MERGE_REJECTIONS.items()})
+    for name, (text, message) in refused_sources.items():
         (native / f'{name}.mojo').write_text(text)
-        result = run([mojo, 'build', '-Werror', '-I', str(native), str(native / f'{name}.mojo'),
-                      '-o', str(work / name)])
-        native_output = run([str(work / name)], timeout=5).stdout
+        (work / f'truth-{name}-native.mojo').write_text(text)
+        optional_capture(work, f'truth-{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native), str(native / f'{name}.mojo'),
+                          '-o', str(work / name)])
+        native_output = optional_capture(
+            work, f'truth-{name}-native-run', [str(work / name)], timeout=5).stdout
+        (work / f'truth-{name}-native.txt').write_text(native_output)
         if name in NESTED_OPTIONAL_REJECTIONS:
             assert native_output == NESTED_OPTIONAL_REJECTIONS[name][1], (
                 name, native_output, NESTED_OPTIONAL_REJECTIONS[name][1])
-        run([str(build), str(rewritten), f'{name}.mojo'], cwd=native)
-        rejected = subprocess.run([mojo, 'build', '-Werror', '-I', str(rewritten),
-                                   str(rewritten / f'{name}.mojo'), '-o', str(work / 'rejected')],
-                                  text=True, capture_output=True)
-        assert rejected.returncode != 0 and message in rejected.stderr, (name, rejected.stderr[-2000:])
-        (work / f'truth-{name}-native.txt').write_text(native_output)
-        (work / f'truth-{name}-rejected.txt').write_text(rejected.stderr)
-    return (f'{len(TRUTH_CASES)} custom truth trees x 16 masks x 5 failure positions, '
-            f'stable and changing; {inconsistent} inconsistent vectors refused; '
-            f'{len(TRUTH_REJECTED)} explicit rejections')
+        if name in BOOL_MERGE_REJECTIONS:
+            assert native_output == BOOL_MERGE_REJECTIONS[name][1], (
+                name, native_output, BOOL_MERGE_REJECTIONS[name][1])
+            assert 'BOOL R' not in native_output, (name, native_output)
+        # These negative fixtures each have one two-operand decision. Scalar
+        # decisions in their constructors/helpers remain obligations as well.
+        compound = [line.strip() for line in text.splitlines()
+                    if line.strip().startswith('if ') and (' and ' in line or ' or ' in line)]
+        assert len(compound) == 1, (name, compound)
+        # These exact old sources now reach the earlier node guard. Require
+        # its intended semantic diagnostic, never an arbitrary compiler error.
+        if name in ('copyable-retained-mixed', 'custom-move'):
+            messages = (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL)
+        elif name == 'copyable-retained' or name in BOOL_MERGE_REJECTIONS:
+            messages = (COMPOUND_REFUSAL, message)
+        else:
+            messages = (message,)
+        check_refusal(work, native, rewritten, build, mojo, name, text,
+                      {compound[0]: 2}, messages)
+
+
+def optional_factory(payload, name='optional'):
+    return f'''
+
+def {name}(index: Int, full: Bool) -> Optional[{payload}]:
+    print("MAKE", index, full)
+    if full:
+        return {payload}(index)
+    return None
+'''
+
+
+def optional_lifecycle_expected(payload, operator):
+    """Model selected native copy/move/drop independently of instrumenting.
+
+    Item/or follows the saved 8189361e native receipt. All other cases are
+    explicit source-model expectations awaiting their first pinned run. Do
+    not update these by copying instrumented output if qualification fails.
+    """
+    lines = []
+    custom_copy = payload in ('Item', 'CopyOnly')
+    custom_move = payload in ('Item', 'MoveOnly')
+    drops = payload in ('Item', 'CopyDrop', 'MoveOnly')
+
+    def make(index, full):
+        lines.append(f'MAKE {index} {full}')
+        if full:
+            if payload != 'CopyDrop':
+                lines.append(f'CREATE {index}')
+            if custom_move:
+                lines.append(f'MOVE {index}')
+
+    def drop(index, full):
+        if full and drops:
+            lines.append(f'DROP {index}')
+
+    for first in (False, True):
+        for second in (False, True):
+            short = first if operator == 'or' else not first
+            selected, present = (0, first) if short else (1, second)
+            if payload != 'MoveOnly':
+                lines.append(f'RETAINED {first} {second}')
+                make(0, first)
+                make(1, second)
+                if present and custom_copy:
+                    lines.append(f'COPY {selected}')
+                drop(selected, present)
+                lines.append('BODY T' if present else 'BODY F')
+                # This is the established source form: post-use in the print
+                # arguments keeps the operands retained at the operator. Its
+                # last-use destruction precedes the final print in the pin.
+                drop(0, first)
+                drop(1, second)
+                lines.append(f'RETAINED AFTER {first} {second}')
+            lines.append(f'TEMPORARY {first} {second}')
+            make(0, first)
+            if not short:
+                drop(0, first)
+                make(1, second)
+            if present and custom_move:
+                lines.append(f'MOVE {selected}')
+            drop(selected, present)
+            lines.append('BODY T' if present else 'BODY F')
+    return '\n'.join(lines) + '\n'
+
+
+def optional_lifecycle_rejections():
+    """Keep native-valid custom lifecycle pairs as exact-source refusals."""
+    cases = {}
+    for payload in ('Item', 'CopyOnly', 'CopyDrop', 'MoveOnly'):
+        for operator in ('and', 'or'):
+            source = OPTIONAL_PAYLOADS[payload] + optional_factory(payload)
+            widths = {}
+            if payload != 'MoveOnly':
+                expression = f'left {operator} right'
+                widths[f'if {expression}:'] = 2
+                source += f'''
+
+def retained(first: Bool, second: Bool):
+    print("RETAINED", first, second)
+    var left = optional(0, first)
+    var right = optional(1, second)
+    if {expression}:
+        print("BODY T")
+    else:
+        print("BODY F")
+    print("RETAINED AFTER", Bool(left), Bool(right))
+'''
+            expression = f'optional(0, first) {operator} optional(1, second)'
+            widths[f'if {expression}:'] = 2
+            source += f'''
+
+def temporary(first: Bool, second: Bool):
+    print("TEMPORARY", first, second)
+    if {expression}:
+        print("BODY T")
+    else:
+        print("BODY F")
+
+
+def main():
+    for first in [False, True]:
+        for second in [False, True]:
+'''
+            if payload != 'MoveOnly':
+                source += '            retained(first, second)\n'
+            source += '            temporary(first, second)\n'
+            cases[f'optional-{payload.lower()}-{operator}'] = (
+                source, widths, optional_lifecycle_expected(payload, operator))
+    return cases
+
+
+OPTIONAL_LIFECYCLE_REJECTIONS = optional_lifecycle_rejections()
+
+
+def optional_positive_source():
+    """Exercise guard placement and storage-owner moves, with exact parity."""
+    source = '\n'.join(OPTIONAL_PAYLOADS.values())
+    for payload in OPTIONAL_PAYLOADS:
+        source += optional_factory(payload, f'optional_{payload}')
+    source += '''
+
+def flag(index: Int, value: Bool) -> Bool:
+    print("FLAG", index, value)
+    return value
+
+
+def items(index: Int, full: Bool) -> List[Item]:
+    print("LIST", index, full)
+    var result = List[Item]()
+    if full:
+        result.append(Item(index))
+    return result^
+
+
+def optional_items(index: Int, full: Bool) -> Optional[List[Item]]:
+    print("OPTIONAL LIST", index, full)
+    if full:
+        return items(index, True)
+    return None
+'''
+    cases = []
+    for payload in ('Item', 'CopyOnly', 'CopyDrop', 'MoveOnly'):
+        setup = f'    var retained = optional_{payload}(2, first)\n'
+        after = '    print("RETAINED AFTER", Bool(retained))\n'
+        leaf = f'optional_{payload}(0, first)'
+        for expression, width in (
+            (f'not {leaf}', 1), ('not retained', 1),
+            (f'{leaf} and flag(1, second)', 2),
+            (f'{leaf} or flag(1, second)', 2),
+            ('retained and flag(1, second)', 2),
+            ('retained or flag(1, second)', 2),
+        ):
+            retained = 'retained' in expression
+            cases.append((setup if retained else '', expression,
+                          after if retained else '', width))
+    for operator in ('and', 'or'):
+        cases.append(('', f'optional_Trivial(0, first) {operator} optional_Trivial(1, second)', '', 2))
+        cases.append(('    var left = optional_Trivial(0, first)\n'
+                      '    var right = optional_Trivial(1, second)\n',
+                      f'left {operator} right',
+                      '    print("AFTER", Bool(left), Bool(right))\n', 2))
+        cases.append(('', f'optional_items(0, first) {operator} optional_items(1, second)', '', 2))
+        cases.append(('', f'items(0, first) {operator} items(1, second)', '', 2))
+        cases.append(('    var retained = items(0, first)\n',
+                      f'retained {operator} flag(1, second)',
+                      '    print("AFTER", len(retained))\n', 2))
+        cases.append(('    var left = items(0, first)\n'
+                      '    var right = items(1, second)\n',
+                      f'left.copy() {operator} right.copy()',
+                      '    print("AFTER", len(left), len(right))\n', 2))
+    widths = {}
+    for number, (setup, expression, after, width) in enumerate(cases):
+        if width > 1:
+            widths[f'if {expression}:'] = width
+        source += f'''
+
+def positive_{number}(first: Bool, second: Bool):
+    print("POSITIVE", {number}, first, second)
+{setup}    if {expression}:
+        print("BODY T")
+    else:
+        print("BODY F")
+{after}'''
+    source += '\n\ndef main():\n    for first in [False, True]:\n        for second in [False, True]:\n'
+    source += ''.join(f'            positive_{number}(first, second)\n' for number in range(len(cases)))
+    return source, widths, len(cases)
+
+
+# Only public String operations appear here. In Mojo 1.1 the nondeprecated
+# APIs are capacity_bytes/reserve_bytes and String(capacity_bytes=...). A
+# literal remains static until mutation; build the inline case from String().
+OPTIONAL_STRING_PRELUDE = '''def heap_string() -> String:
+    var text = String(capacity_bytes=256)
+    text += "heap-buffer-abcdefghijklmnopqrstuvwxyz-0123456789"
+    return text^
+
+
+def optional_string(index: Int, full: Bool, flavor: Int, shared: String) -> Optional[String]:
+    print("MAKE STRING", index, full, flavor)
+    if not full:
+        return None
+    if flavor == 0:
+        return String()
+    if flavor == 1:
+        var text = String()
+        text += "tiny"
+        return text^
+    if flavor == 2:
+        return String("static-buffer-abcdefghijklmnopqrstuvwxyz-0123456789")
+    if flavor == 3:
+        return heap_string()
+    return shared.copy()
+
+
+def inspect_string(index: Int, value: Optional[String]):
+    if value:
+        print("STRING", index, True, value.value(), value.value().byte_length(), value.value().capacity_bytes())
+    else:
+        print("STRING", index, False)
+
+
+def mutate_strings(mut left: Optional[String], mut right: Optional[String]) -> Bool:
+    print("MUTATE")
+    inspect_string(0, left)
+    inspect_string(1, right)
+    if left:
+        left.value().write("!")
+    if right:
+        right.value().write("?")
+    inspect_string(0, left)
+    inspect_string(1, right)
+    return True
+'''
+
+
+def optional_string_source():
+    """Qualify the fixed standard type, including public COW observations.
+
+    Every retained owner is used afterward to exercise that source category.
+    There is no post-use added to a temporary and no lifetime-pinning pointer.
+    The shared backing is used afterward so explicit copies really do share
+    an owner across mutation. Identical source feeds both compilers.
+    """
+    source, widths, cases = OPTIONAL_STRING_PRELUDE, {}, []
+    left = 'optional_string(0, first, flavor, shared)'
+    right = 'optional_string(1, second, flavor, shared)'
+    for operator in ('and', 'or'):
+        for category, expression, retained_left, retained_right in (
+            ('retained', f'left {operator} right', True, True),
+            ('temporary', f'{left} {operator} {right}', False, False),
+            ('retained-temporary', f'left {operator} {right}', True, False),
+            ('temporary-retained', f'{left} {operator} right', False, True),
+        ):
+            cases.append((category, operator, None, expression, retained_left, retained_right))
+        for outer in ('and', 'or'):
+            cases.append((f'mutate-{outer}', operator, outer,
+                          f'(left {operator} right) {outer} mutate_strings(left, right)', True, True))
+    for number, (category, operator, outer, expression, retained_left, retained_right) in enumerate(cases):
+        setup, after = '', ''
+        if retained_left:
+            setup += f'    var left = {left}\n'
+            after += '    inspect_string(0, left)\n'
+        if retained_right:
+            setup += f'    var right = {right}\n'
+            after += '    inspect_string(1, right)\n'
+        widths[f'if {expression}:'] = 3 if outer else 2
+        source += f'''
+
+def strings_{number}(first: Bool, second: Bool, flavor: Int):
+    print("STRING CASE", {number}, flavor, first, second)
+    var shared = heap_string()
+{setup}    if {expression}:
+        print("STRING BODY", {number}, flavor, first, second, True)
+    else:
+        print("STRING BODY", {number}, flavor, first, second, False)
+{after}    print("SHARED AFTER", shared, shared.byte_length(), shared.capacity_bytes())
+'''
+    source += '\n\ndef run_string_controls():\n    for flavor in range(5):\n        for first in [False, True]:\n            for second in [False, True]:\n'
+    source += ''.join(f'                strings_{number}(first, second, flavor)\n' for number in range(len(cases)))
+    nested_source, nested_widths, nested_expected = nested_optional_string_source()
+    source += nested_source
+    widths.update(nested_widths)
+    source += '\n\ndef main():\n    run_string_controls()\n    run_nested_string_controls()\n'
+    expected = []
+    for flavor in range(5):
+        for first in (False, True):
+            for second in (False, True):
+                for number, (_, operator, outer, _, _, _) in enumerate(cases):
+                    pair = (first and second) if operator == 'and' else (first or second)
+                    outcome = True if outer == 'or' else pair
+                    expected.append(f'STRING BODY {number} {flavor} {first} {second} {outcome}')
+    return source, widths, expected + nested_expected
+
+
+
+def nested_optional_string_source():
+    """Distinguish an absent outer Optional from a present, empty inner one."""
+    source = '''
+
+def nested_string(index: Int, full: Bool, flavor: Int) -> Optional[Optional[String]]:
+    print("MAKE NESTED STRING", index, full, flavor)
+    if not full:
+        return None
+    if flavor == 0:
+        return Optional[String](None)
+    if flavor == 1:
+        return Optional[String](String())
+    return Optional[String](heap_string())
+
+
+def inspect_nested_string(index: Int, value: Optional[Optional[String]]):
+    print("OUTER STRING", index, Bool(value))
+    if value:
+        inspect_string(index, value.value())
+'''
+    widths, expected = {}, []
+    cases = []
+    for operator in ('and', 'or'):
+        for retained in (True, False):
+            left, right = 'nested_string(0, first, flavor)', 'nested_string(1, second, flavor)'
+            setup, after = '', ''
+            if retained:
+                setup = f'    var left = {left}\n    var right = {right}\n'
+                left, right = 'left', 'right'
+                after = '    inspect_nested_string(0, left)\n    inspect_nested_string(1, right)\n'
+            expression = f'{left} {operator} {right}'
+            number = len(cases)
+            cases.append(operator)
+            widths[f'if {expression}:'] = 2
+            source += f'''
+
+def nested_strings_{number}(first: Bool, second: Bool, flavor: Int):
+    print("NESTED STRING CASE", {number}, flavor, first, second)
+{setup}    if {expression}:
+        print("NESTED STRING BODY", {number}, flavor, first, second, True)
+    else:
+        print("NESTED STRING BODY", {number}, flavor, first, second, False)
+{after}'''
+    source += '\n\ndef run_nested_string_controls():\n    for flavor in range(3):\n        for first in [False, True]:\n            for second in [False, True]:\n'
+    source += ''.join(f'                nested_strings_{number}(first, second, flavor)\n'
+                      for number in range(len(cases)))
+    for flavor in range(3):
+        for first in (False, True):
+            for second in (False, True):
+                for number, operator in enumerate(cases):
+                    outcome = (first and second) if operator == 'and' else (first or second)
+                    expected.append(f'NESTED STRING BODY {number} {flavor} {first} {second} {outcome}')
+    return source, widths, expected
+
+
+def optional_decision_models():
+    """Declare reference trees separately from source spelling and rewriting.
+
+    Integers name input values: first, second, and the mutation helper's True
+    result. Negation applies to the outcome, not to its leaf observation.
+    """
+    simple = [('not', 0), ('not', 0), ('and', 0, 1), ('or', 0, 1),
+              ('and', 0, 1), ('or', 0, 1)]
+    positive = simple * 4 + [('and', 0, 1)] * 6 + [('or', 0, 1)] * 6
+    strings = []
+    for operator in ('and', 'or'):
+        pair = (operator, 0, 1)
+        strings += [pair] * 4 + [('and', pair, 2), ('or', pair, 2)]
+    nested = [('and', 0, 1)] * 2 + [('or', 0, 1)] * 2
+    return {
+        'positive': {f'positive_{number}': tree for number, tree in enumerate(positive)},
+        'strings': {f'strings_{number}': tree for number, tree in enumerate(strings)},
+        'nested_strings': {f'nested_strings_{number}': tree for number, tree in enumerate(nested)},
+    }
+
+
+def optional_decision_lines(source, models):
+    """Locate each tested decision inside its generated function declaration."""
+    lines, function = {}, None
+    declared = set()
+    prefixes = {function.rsplit('_', 1)[0] for function in models}
+    for line, text in enumerate(source.splitlines(), 1):
+        if text.startswith('def '):
+            function = text[4:].split('(', 1)[0]
+            if function.rsplit('_', 1)[0] in prefixes:
+                assert function in models, (function, 'missing independent model')
+            if function in models:
+                assert function not in declared, function
+                declared.add(function)
+        elif function in models and text.startswith('    if '):
+            assert function not in lines, (function, 'more than one main decision')
+            lines[function] = line
+    assert set(lines) == set(models) == declared, (lines, models, declared)
+    return lines
+
+
+def optional_presence_records(tree, values, module, line):
+    """Model exact stable hits and masked slots without using the runtime."""
+    def width(node):
+        return 1 if isinstance(node, int) else sum(width(child) for child in node[1:])
+
+    observations, next_slot = [], [0]
+
+    def evaluate(node):
+        if isinstance(node, int):
+            slot = next_slot[0]
+            next_slot[0] += 1
+            value = bool(values[node])
+            observations.append((slot, value))
+            return value
+        operator = node[0]
+        if operator == 'not':
+            return not evaluate(node[1])
+        left = evaluate(node[1])
+        if (operator == 'and' and not left) or (operator == 'or' and left):
+            next_slot[0] += width(node[2])
+            return left
+        return evaluate(node[2])
+
+    outcome = evaluate(tree)
+    count = width(tree)
+    assert next_slot[0] == count
+    tag = f'{module}:{line}'
+    # Every tested source decision first emits its ordinary line hit.
+    records = [f'COVLINE:{tag}']
+    if count > 1:
+        records += [f'COVLINE:{tag}.{slot}:{"T" if value else "F"}'
+                    for slot, value in observations]
+    records.append(f'COVLINE:{tag}:{"T" if outcome else "F"}')
+    if count > 1:
+        states = dict(observations)
+        vector = ''.join('-' if slot not in states else ('T' if states[slot] else 'F')
+                         for slot in range(count))
+        records.append(f'COVEVAL2:{tag}:{"T" if outcome else "F"}:{vector};')
+    return records
+
+
+def optional_trace_expected(source, module, groups):
+    """Construct a chronological oracle for only the generated main decisions."""
+    models = optional_decision_models()
+    expected, decision_lines = [], set()
+    for group, repeats in groups:
+        trees = models[group]
+        lines = optional_decision_lines(source, trees)
+        decision_lines.update(lines.values())
+        for _ in range(repeats):
+            for first in (False, True):
+                for second in (False, True):
+                    for function, tree in trees.items():
+                        expected += optional_presence_records(
+                            tree, (first, second, True), module, lines[function])
+    return expected, decision_lines
+
+
+def assert_optional_traces(work, module, source, raw, groups):
+    """Assert interleaved decision/condition hits and complete vectors exactly."""
+    expected, decisions = optional_trace_expected(source, module, groups)
+    actual = []
+    for row in raw.splitlines():
+        fields = row.split(':')
+        if len(fields) < 3 or fields[0] not in ('COVLINE', 'COVEVAL2') or fields[1] != module:
+            continue
+        main_line = fields[2].split('.', 1)[0]
+        if main_line.isdigit() and int(main_line) in decisions:
+            actual.append(row)
+    (work / f'{module}-main-trace-expected.txt').write_text('\n'.join(expected) + '\n')
+    (work / f'{module}-main-trace-actual.txt').write_text('\n'.join(actual) + '\n')
+    assert actual == expected, (module, 'main decision/condition/vector order differs', actual, expected)
+
+
+def optional_capture(work, stem, command, **kwargs):
+    """Save diagnostics and actual output before checking a new probe's exit."""
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        for label, data in (('stdout', error.stdout), ('stderr', error.stderr)):
+            if isinstance(data, bytes):
+                data = data.decode(errors='replace')
+            (work / f'{stem}-{label}.txt').write_text(data or '')
+        (work / f'{stem}-returncode.txt').write_text('timeout\n')
+        raise
+    (work / f'{stem}-stdout.txt').write_text(result.stdout)
+    (work / f'{stem}-stderr.txt').write_text(result.stderr)
+    (work / f'{stem}-returncode.txt').write_text(str(result.returncode) + '\n')
+    if result.returncode:
+        raise RuntimeError(f'{command}:\n{result.stdout}\n{result.stderr}')
+    return result
+
+
+def check_optional_parity(work, native, rewritten, build, mojo, name, source, widths):
+    """Retain exact sources, stdout, stderr and every B/C/M obligation."""
+    (native / f'{name}.mojo').write_text(source)
+    (work / f'{name}-native.mojo').write_text(source)
+    optional_capture(work, f'{name}-rewrite',
+                     [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+    shutil.copy(rewritten / f'{name}.mojo', work / f'{name}-instrumented.mojo')
+    shutil.copy(rewritten / 'manifest.txt', work / f'{name}-manifest-raw.txt')
+    manifest = assert_obligations(rewritten, name, single_line_obligations(source, widths))
+    (work / f'{name}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+    outputs = []
+    for label, folder in (('native', native), ('instrumented', rewritten)):
+        binary = work / f'{name}-{label}'
+        optional_capture(work, f'{name}-{label}-build',
+                         [mojo, 'build', '-Werror', '-I', str(folder),
+                          str(folder / f'{name}.mojo'), '-o', str(binary)])
+        result = optional_capture(work, f'{name}-{label}-run', [str(binary)], timeout=5)
+        outputs.append(result.stdout)
+        (work / f'{name}-{label}.txt').write_text(result.stdout)
+        (work / f'{name}-{label}-stderr.txt').write_text(result.stderr)
+    assert outputs[0] == outputs[1], (name, 'native/instrumented stdout differs')
+    return outputs[0], result.stderr
+
+
+def check_optional_lifecycles(work, native, rewritten, build, mojo):
+    """Require native success, the specific refusal and retained obligations."""
+    for name, (source, widths, expected) in OPTIONAL_LIFECYCLE_REJECTIONS.items():
+        (native / f'{name}.mojo').write_text(source)
+        (work / f'{name}-expected.txt').write_text(expected)
+        binary = work / name
+        (work / f'truth-{name}-native.mojo').write_text(source)
+        optional_capture(work, f'{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native),
+                          str(native / f'{name}.mojo'), '-o', str(binary)])
+        result = optional_capture(work, f'{name}-native-run', [str(binary)], timeout=5)
+        # Keep actual output before checking the independent oracle. A model
+        # mismatch must leave useful evidence, never become a refusal pass.
+        (work / f'truth-{name}-native.txt').write_text(result.stdout)
+        (work / f'truth-{name}-native-stderr.txt').write_text(result.stderr)
+        assert result.stdout == expected, (name, result.stdout, expected)
+        check_refusal(work, native, rewritten, build, mojo, name, source, widths,
+                      (COMPOUND_REFUSAL, OPTIONAL_LIFECYCLE_REFUSAL))
+    source, widths, count = optional_positive_source()
+    output, raw = check_optional_parity(work, native, rewritten, build, mojo,
+                                       'optional-positive', source, widths)
+    assert output.count('POSITIVE ') == count * 4, output
+    assert_optional_traces(work, 'optional-positive', source, raw, [('positive', 1)])
+    source, widths, expected = optional_string_source()
+    output, raw = check_optional_parity(work, native, rewritten, build, mojo,
+                                       'optional-string', source, widths)
+    assert [line for line in output.splitlines()
+            if line.startswith(('STRING BODY ', 'NESTED STRING BODY '))] == expected
+    assert_optional_traces(work, 'optional-string', source, raw,
+                           [('strings', 5), ('nested_strings', 3)])
+    return (f'{len(OPTIONAL_LIFECYCLE_REJECTIONS)} Optional lifecycle refusals, 56 native cases; '
+            f'{count * 4} accepted Optional/List lifecycle controls; '
+            '240 standard Optional[String] value/capacity controls; '
+            '48 same-depth Optional[Optional[String]] controls; exact main decision traces/vectors')
 
 
 def run(command, **kwargs):
@@ -1094,7 +2155,7 @@ def main():
             for binary in binaries:
                 with isolated_environment() as environment:
                     environment['THREEMOJO_GROUPING_FAIL'] = str(fail)
-                    result = run([str(binary)], env=environment, timeout=10)
+                    result = run([str(binary)], env=environment, timeout=5)
                 assert not result_errors(result.stdout), result.stdout
                 assert not slow_tests(result.stdout, 5), result.stdout
                 program_output = result.stdout.partition('\nRunning ')[0].strip()
@@ -1170,11 +2231,24 @@ def main() raises:
         (work / 'branch-report.txt').write_text(branch_report.stdout)
         assert 'condition 1:' in result.stdout and 'condition 2:' in result.stdout, result.stdout
         (work / 'negative-report.txt').write_text(result.stdout + result.stderr)
-        truth_summary = check_custom_truth(work, native, rewritten, build, mojo)
+        try:
+            truth_summary = check_custom_truth(work, native, rewritten, build, mojo)
+        finally:
+            if args.output:
+                args.output.mkdir(parents=True, exist_ok=True)
+                for path in work.iterdir():
+                    if path.suffix in ('.txt', '.mojo') and path.name.startswith(
+                            ('truth-', 'controls-', 'generic-')):
+                        shutil.copy(path, args.output / path.name)
 
         lifetime, lifetime_cases = lifetime_source()
         (native / 'lifetime.mojo').write_text(lifetime)
         run([str(build), str(rewritten), 'lifetime.mojo'], cwd=native)
+        lifetime_manifest = assert_obligations(
+            rewritten, 'lifetime', single_line_obligations(lifetime, {
+                f'if {expression}:': 1 + expression.count(' and ') + expression.count(' or ')
+                for expression in lifetime_cases}))
+        (work / 'lifetime-manifest.txt').write_text('\n'.join(lifetime_manifest) + '\n')
         lifetime_results = []
         for label, folder in (('native', native), ('instrumented', rewritten)):
             binary = work / f'lifetime-{label}'
@@ -1186,9 +2260,23 @@ def main() raises:
         assert lifetime_results[0] == lifetime_results[1], 'Container destruction order differs'
         (work / 'lifetime-cases.txt').write_text('\n'.join(lifetime_cases) + '\n')
 
+        try:
+            optional_summary = check_optional_lifecycles(work, native, rewritten, build, mojo)
+        finally:
+            # A first-run native/model or standard-String mismatch is evidence,
+            # not a disposable temporary directory or a successful refusal.
+            if args.output:
+                args.output.mkdir(parents=True, exist_ok=True)
+                for path in work.iterdir():
+                    if path.suffix in ('.txt', '.mojo') and path.name.startswith(
+                            ('optional-', 'truth-optional-')):
+                        shutil.copy(path, args.output / path.name)
+
         if args.output:
             args.output.mkdir(parents=True, exist_ok=True)
             for path in work.glob('*.txt'):
+                shutil.copy(path, args.output / path.name)
+            for path in work.glob('*.mojo'):
                 shutil.copy(path, args.output / path.name)
             shutil.copy(native / 'lifetime.mojo', args.output / 'lifetime-native.mojo')
             shutil.copy(rewritten / 'lifetime.mojo', args.output / 'lifetime-instrumented.mojo')
@@ -1197,7 +2285,7 @@ def main() raises:
             (args.output / 'manifest.txt').write_text('\n'.join(manifest) + '\n')
         print(f'PASS: {len(CASES)} native/instrumented cases, 64 truth assignments, normal and 6 throwing positions; '
               'exact order/count/outcomes, manifest C/M, raw/reduced Mojo vectors, and negative report; '
-              f'{len(lifetime_cases)} container destructor-order cases; {truth_summary}')
+              f'{len(lifetime_cases)} container destructor-order cases; {truth_summary}; {optional_summary}')
 
 
 if __name__ == '__main__':

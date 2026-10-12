@@ -49,7 +49,9 @@ def test_points_and_segment_ends_and_sides() raises:
     var none = _v(0, 0, 0)
     # Two points: 0.3 of the way, closing 1 m on a 0.5 m gap at 0.2.
     _near(
-        _sweep_segments(_v(0, 0, 0), none, _v(0.5, 0, 0), none, _v(1, 0, 0), 0.2),
+        _sweep_segments(
+            _v(0, 0, 0), none, _v(0.5, 0, 0), none, _v(1, 0, 0), 0.2
+        ),
         0.3,
         _v(-1, 0, 0),
     )
@@ -85,7 +87,12 @@ def test_interiors_parallel_and_misses() raises:
     # Crossed segments meet at their interiors.
     _near(
         _sweep_segments(
-            _v(0, -1, 1), _v(0, 2, 0), _v(-1, 0, 0), _v(2, 0, 0), _v(0, 0, -1), 0.25
+            _v(0, -1, 1),
+            _v(0, 2, 0),
+            _v(-1, 0, 0),
+            _v(2, 0, 0),
+            _v(0, 0, -1),
+            0.25,
         ),
         0.75,
         _v(0, 0, 1),
@@ -93,7 +100,12 @@ def test_interiors_parallel_and_misses() raises:
     # Parallel segments meet side to side, through an end.
     _near(
         _sweep_segments(
-            _v(-1, 0, 1), _v(2, 0, 0), _v(-1, 0, 0), _v(2, 0, 0), _v(0, 0, -1), 0.25
+            _v(-1, 0, 1),
+            _v(2, 0, 0),
+            _v(-1, 0, 0),
+            _v(2, 0, 0),
+            _v(0, 0, -1),
+            0.25,
         ),
         0.75,
         _v(0, 0, 1),
@@ -101,7 +113,12 @@ def test_interiors_parallel_and_misses() raises:
     # Crossed segments that already overlap and close meet at once.
     _near(
         _sweep_segments(
-            _v(0, -1, 0.1), _v(0, 2, 0), _v(-1, 0, 0), _v(2, 0, 0), _v(0, 0, -1), 0.25
+            _v(0, -1, 0.1),
+            _v(0, 2, 0),
+            _v(-1, 0, 0),
+            _v(2, 0, 0),
+            _v(0, 0, -1),
+            0.25,
         ),
         0,
         _v(0, 0, 1),
@@ -111,20 +128,35 @@ def test_interiors_parallel_and_misses() raises:
     for travel in [_v(0, 0, 1), _v(0, 0, -0.5)]:
         assert_equal(
             _sweep_segments(
-                _v(0, -1, 1), _v(0, 2, 0), _v(-1, 0, 0), _v(2, 0, 0), travel, 0.25
+                _v(0, -1, 1),
+                _v(0, 2, 0),
+                _v(-1, 0, 0),
+                _v(2, 0, 0),
+                travel,
+                0.25,
             ).fraction,
             2,
         )
     assert_equal(
         _sweep_segments(
-            _v(5, -1, 1), _v(0, 2, 0), _v(-1, 0, 0), _v(2, 0, 0), _v(0, 0, -1), 0.25
+            _v(5, -1, 1),
+            _v(0, 2, 0),
+            _v(-1, 0, 0),
+            _v(2, 0, 0),
+            _v(0, 0, -1),
+            0.25,
         ).fraction,
         2,
     )
     # The interiors would meet, but A's closest point is past its end.
     assert_equal(
         _sweep_segments(
-            _v(0, 1, 1), _v(0, 2, 0), _v(-1, 0, 0), _v(2, 0, 0), _v(0, 0, -1), 0.25
+            _v(0, 1, 1),
+            _v(0, 2, 0),
+            _v(-1, 0, 0),
+            _v(2, 0, 0),
+            _v(0, 0, -1),
+            0.25,
         ).fraction,
         2,
     )
@@ -143,7 +175,9 @@ def test_a_point_hit_keeps_only_earlier_approaches() raises:
         _point_hit(earlier, point, travel, other, 0.3, False).fraction, 0.1
     )
     assert_equal(
-        _point_hit(miss, point, _v(0, 1, 0), _v(0, -0.5, 0), 0.3, False).fraction,
+        _point_hit(
+            miss, point, _v(0, 1, 0), _v(0, -0.5, 0), 0.3, False
+        ).fraction,
         2,
     )
     var hit = _point_hit(miss, point, travel, other, 0.3, True)

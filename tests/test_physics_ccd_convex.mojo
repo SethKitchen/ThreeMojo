@@ -62,7 +62,9 @@ def _cube(
 
 
 def _flat() -> Triangle:
-    return Triangle(Vector3(-10, -10, 0), Vector3(10, -10, 0), Vector3(0, 10, 0))
+    return Triangle(
+        Vector3(-10, -10, 0), Vector3(10, -10, 0), Vector3(0, 10, 0)
+    )
 
 
 def test_the_separating_axis_sweep() raises:
@@ -130,7 +132,9 @@ def test_an_edge_meets_a_vertical_fin() raises:
     # from 1 m: its edge, 0.5 sqrt(2) from its center, meets the fin.
     var fin = Triangle(Vector3(0, -1, -1), Vector3(0, 1, -1), Vector3(0, 0, 1))
     var box = Polyhedron.box(Vector3(0.5, 0.5, 0.5))
-    var turn = Quaternion(0, 0, Float32(sin(0.3926990817)), Float32(cos(0.3926990817)))
+    var turn = Quaternion(
+        0, 0, Float32(sin(0.3926990817)), Float32(cos(0.3926990817))
+    )
     var corners = List[SIMD[DType.float64, 4]]()
     for corner in box.vertices:
         var at = turn.rotate(corner)
@@ -157,7 +161,9 @@ def _floor() raises -> RigidBody:
     )
 
 
-def _box(z: Float32, velocity: Vector3, bounce: Float32 = 0) raises -> RigidBody:
+def _box(
+    z: Float32, velocity: Vector3, bounce: Float32 = 0
+) raises -> RigidBody:
     var body = RigidBody(
         DYNAMIC,
         Shape.box(Length(0.5), Length(0.5), Length(0.5)),
