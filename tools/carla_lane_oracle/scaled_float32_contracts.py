@@ -99,7 +99,7 @@ NATIVE_CLOSURE = frozenset({'math/__init__.mojo',
            'math/scaled_products.mojo',
            'tests/test_scaled_products_subnormal.mojo'})
 TESTS = {'tests/test_scaled_products_subnormal.mojo': '9025041d39d6f2586d5baaa85ef043c17eaea0215f77ecf3ddc5be901bd423e8',
- 'tools/carla_lane_oracle/test_scaled_float32_contracts.py': '06b1068a37fcf6871b5234e8d3080b89b8ea07e8c699eef6ee9013d9f6b433f8',
+ 'tools/carla_lane_oracle/test_scaled_float32_contracts.py': 'be7b72191ada5dcb0123e93491db6777dff24003d14cd858d5f5dffd4e61a2bd',
  'docs/validation/scaled-float32-746.md': '43d615855d3cae77db601d5be333475bc31819677137a7a40822d249d4ea669f'}
 
 def require(ok, message):
