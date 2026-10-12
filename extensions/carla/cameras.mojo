@@ -162,6 +162,48 @@ def camera_model_of(name: String) -> CameraModel:
 
 
 def kannala_brandt_polynomial(
+    theta: Angle, coefficients: List[Float32]
+) raises -> Float32:
+    """Evaluate the Kannala-Brandt radial polynomial at a typed angle.
+
+    Args:
+        theta: The finite angle from the forward direction.
+        coefficients: The finite coefficients of the radian-based model.
+
+    Returns:
+        The dimensionless radius divided by focal length.
+
+    Raises:
+        Error: If the angle or a coefficient is nonfinite.
+    """
+    validate_sensor_float(theta.value, "A lens angle")
+    for coefficient in coefficients:
+        validate_sensor_float(coefficient, "A lens coefficient")
+    return _kannala_brandt_polynomial(theta.to(RADIAN), coefficients)
+
+
+def kannala_brandt_derivative(
+    theta: Angle, coefficients: List[Float32]
+) raises -> Float32:
+    """Evaluate the Kannala-Brandt radial derivative at a typed angle.
+
+    Args:
+        theta: The finite angle from the forward direction.
+        coefficients: The finite coefficients of the radian-based model.
+
+    Returns:
+        The derivative with respect to the angle measured in radians.
+
+    Raises:
+        Error: If the angle or a coefficient is nonfinite.
+    """
+    validate_sensor_float(theta.value, "A lens angle")
+    for coefficient in coefficients:
+        validate_sensor_float(coefficient, "A lens coefficient")
+    return _kannala_brandt_derivative(theta.to(RADIAN), coefficients)
+
+
+def _kannala_brandt_polynomial(
     theta: Float32, coefficients: List[Float32]
 ) -> Float32:
     """Return theta (1 + k0 theta^2 + k1 theta^4 + ...),
@@ -183,7 +225,7 @@ def kannala_brandt_polynomial(
     return result * theta
 
 
-def kannala_brandt_derivative(
+def _kannala_brandt_derivative(
     theta: Float32, coefficients: List[Float32]
 ) -> Float32:
     """Return the polynomial's derivative, `ComputeCameraPolynomialDerivative`.
@@ -245,8 +287,8 @@ def compute_angle(
     var theta = d
     # The step count is a positive constant.
     for _ in range(KANNALA_BRANDT_SOLVER_ITERATIONS):  # pragma: no branch
-        var n = d - kannala_brandt_polynomial(theta, coefficients)
-        var slope = -kannala_brandt_derivative(theta, coefficients)
+        var n = d - _kannala_brandt_polynomial(theta, coefficients)
+        var slope = -_kannala_brandt_derivative(theta, coefficients)
         theta -= n / slope
     return Angle(theta, RADIAN)
 
@@ -286,7 +328,7 @@ def compute_distance(
         return r / (sin(half * 0.5) * 2)
     if model == ORTHOGRAPHIC:
         return r / sin(half)
-    return r / kannala_brandt_polynomial(half, coefficients)
+    return r / _kannala_brandt_polynomial(half, coefficients)
 
 
 @fieldwise_init
@@ -313,7 +355,7 @@ struct WideAngleLens(Copyable, Movable):
     var perspective: Bool
     var equirectangular: Bool
     var fov_mask: Bool
-    # In degrees.
+    # Raw CARLA degrees. Use fade_angle and set_fov_fade_size.
     var fov_fade_size: Float32
     var longitude_offset: Angle
 
@@ -413,6 +455,37 @@ struct WideAngleLens(Copyable, Movable):
             out.fov_fade_size = attribute_float(attributes, "fov_fade_size", 0)
             validate_sensor_nonnegative(out.fov_fade_size, "fov_fade_size")
         return out^
+
+    def fade_angle(self) raises -> Angle:
+        """Return the checked angular width of the field-of-view fade.
+
+        Args:
+            self: The lens with CARLA's raw degree field.
+
+        Returns:
+            A finite, nonnegative angle.
+
+        Raises:
+            Error: If the raw fade is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.fov_fade_size, "fov_fade_size")
+        return Angle(self.fov_fade_size, DEGREE)
+
+    def set_fov_fade_size(mut self, value: Angle) raises:
+        """Set the angular width of the field-of-view fade.
+
+        Args:
+            value: A finite, nonnegative angle.
+
+        Returns:
+            Nothing; the raw degree field is updated after validation.
+
+        Raises:
+            Error: If the angle is nonfinite or negative in Float32 degrees.
+        """
+        var degrees = value.to(DEGREE)
+        validate_sensor_nonnegative(degrees, "fov_fade_size")
+        self.fov_fade_size = degrees
 
     def pixel_ray(self, x: Float32, y: Float32) raises -> PixelRay:
         """Return the ray through a point of the image.
@@ -736,6 +809,46 @@ struct DVSConfig(ImplicitlyCopyable):
         self.refractory_period_ns = 0
         self.use_log = True
         self.log_eps = 0.001
+
+    def refractory_duration(self) raises -> Duration64:
+        """Return the refractory period as Float64 seconds.
+
+        The raw integer remains the exact CARLA nanosecond count. The
+        view rounds to Float64 when that count cannot fit exactly.
+
+        Args:
+            self: The event camera's settings.
+
+        Returns:
+            The nonnegative period with no Float32 intermediate.
+
+        Raises:
+            Error: If the raw nanosecond count is negative.
+        """
+        if self.refractory_period_ns < 0:
+            raise Error("An event camera refractory period cannot be negative")
+        return Duration64(Float64(self.refractory_period_ns) / 1e9, SECOND)
+
+    def set_refractory_period(mut self, value: Duration64) raises:
+        """Set a period by truncating Float64 nanoseconds toward zero.
+
+        Args:
+            value: Finite seconds from zero through 9.2e9, the event clock limit.
+
+        Returns:
+            Nothing; the exact integer count is set after validation.
+
+        Raises:
+            Error: If the period is nonfinite, negative, or above the clock limit.
+        """
+        var seconds = value.to(SECOND)
+        if not isfinite(seconds):
+            raise Error("An event camera refractory period must be finite")
+        if seconds < 0 or seconds > _MAX_EVENT_SECONDS:
+            raise Error(
+                "An event camera refractory period is outside the clock range"
+            )
+        self.refractory_period_ns = Int(seconds * 1e9)
 
     def validate(self) raises:
         """Reject nonfinite physical settings and invalid domains.
