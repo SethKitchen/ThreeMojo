@@ -459,9 +459,6 @@ struct WideAngleLens(Copyable, Movable):
     def fade_angle(self) raises -> Angle:
         """Return the checked angular width of the field-of-view fade.
 
-        Args:
-            self: The lens with CARLA's raw degree field.
-
         Returns:
             A finite, nonnegative angle.
 
@@ -474,11 +471,10 @@ struct WideAngleLens(Copyable, Movable):
     def set_fov_fade_size(mut self, value: Angle) raises:
         """Set the angular width of the field-of-view fade.
 
+        The raw degree field is updated after validation.
+
         Args:
             value: A finite, nonnegative angle.
-
-        Returns:
-            Nothing; the raw degree field is updated after validation.
 
         Raises:
             Error: If the angle is nonfinite or negative in Float32 degrees.
@@ -816,9 +812,6 @@ struct DVSConfig(ImplicitlyCopyable):
         The raw integer remains the exact CARLA nanosecond count. The
         view rounds to Float64 when that count cannot fit exactly.
 
-        Args:
-            self: The event camera's settings.
-
         Returns:
             The nonnegative period with no Float32 intermediate.
 
@@ -832,11 +825,10 @@ struct DVSConfig(ImplicitlyCopyable):
     def set_refractory_period(mut self, value: Duration64) raises:
         """Set a period by truncating Float64 nanoseconds toward zero.
 
+        The exact integer count is set after validation.
+
         Args:
             value: Finite seconds from zero through 9.2e9, the event clock limit.
-
-        Returns:
-            Nothing; the exact integer count is set after validation.
 
         Raises:
             Error: If the period is nonfinite, negative, or above the clock limit.
