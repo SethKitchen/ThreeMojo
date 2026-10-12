@@ -866,4 +866,4 @@ def edge(path):
 # Filled from the exact reviewed new test and policy-note bytes. Historical
 # JSON and theorem documents remain unchanged.
 BOUND_INPUTS = {'tools/carla_lane_oracle/test_witness_format_contracts.py': '2e57bf5524f03303042c30c04588b776802b5d672e0ad69e15a04611e4bc9e7b',
- 'docs/validation/carla-witness-format-successor.md': 'f633265882f902c2274aa83bd8d0df72a444d83629fb5db43c9b5ec273a90e9e'}
+ 'docs/validation/carla-witness-format-successor.md': 'e2df2607c2aba63bf440dcc1efb2acad4da7a1e6f9eaef82cd1f8e2827fbb8db'}
