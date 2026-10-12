@@ -7,10 +7,21 @@ No Mojo execution. Uses only the Python standard library; no Mojo parser or comp
 Numeric grouping, branches, imports and retained value/error operations are
 checked against the full-Jet source. Primitive changes require renewed review.
 """
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import argparse
 import ast
 import copy
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import io
 import json
 from pathlib import Path
@@ -232,7 +243,7 @@ def primitive_graph(text):
 
 
 
-def reviewed_reference_tree(text, root=ROOT):
+def reviewed_reference_tree(text, root=ROOT, *, _operation=None):
     """Retain the historical reference graph after one exact additive refusal.
 
     Default False preserves every existing call. True may return unknown
@@ -244,7 +255,7 @@ def reviewed_reference_tree(text, root=ROOT):
             import full_audit_cleanup_contracts as full_audit
         except ModuleNotFoundError:
             from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
-        text = full_audit.reviewed_text(root, 'extensions/carla/curve_bounds.mojo', text)
+        text = full_audit.reviewed_text(root, 'extensions/carla/curve_bounds.mojo', text, _operation=_operation)
     except (ValueError, OSError) as error:
         raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
     tree = syntax_tree(text)
@@ -287,237 +298,254 @@ def reviewed_reference_tree(text, root=ROOT):
     return tree
 
 
+@source.lexical_memo_scope()
 def verify(root):
-    paths = {name: root/'extensions/carla'/name for name in
-             ('curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo', 'lane_value_bounds.mojo')}
-    texts = {name: path.read_text() for name, path in paths.items()}
-    bounds, trig, target = (texts[name] for name in
-                            ('curve_bounds.mojo', 'curve_trig.mojo', 'lane_value_bounds.mojo'))
-    # Deliberately conservative closure: imports, aliases, all helper setup,
-    # branch dispatch and every shared operation in all three reference
-    # modules are bound. Any dependency change needs renewed source review.
-    require(set(REFERENCE_MODULE_GRAPHS) == {'curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo'},
-            'wrong reference-module closure')
-    for filename, expected_hash in REFERENCE_MODULE_GRAPHS.items():
-        reference_graph = (dump(reviewed_reference_tree(texts[filename], root))
-                           if filename == 'curve_bounds.mojo' else graph(texts[filename]))
-        actual = hashlib.sha256(reference_graph.encode()).hexdigest()
-        require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
-    require(primitive_graph(texts['curve_interval.mojo']) == PRIMITIVE_GRAPH_SHA256,
-            'Jet primitive graph changed; renewed derivative-independence review required')
-    # Complete stored helper/interval closure and lexical qualifiers are
-    # independent of the unchanged primitive-class AST hash.
+    if __package__:
+        from . import full_audit_cleanup_contracts as audit
+    else:
+        import full_audit_cleanup_contracts as audit
+    _operation, owns = audit._operation_enter(root, 'sampled')
     try:
-        verify_group(root, 'stored_arithmetic')
-        verify_group(root, 'canonical_accumulation')
+        paths = {name: root/'extensions/carla'/name for name in
+                 ('curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo', 'lane_value_bounds.mojo')}
+        texts = {name: _typed_source.historical_text(root, path, _typed_source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation) for name, path in paths.items()}
+        bounds, trig, target = (texts[name] for name in
+                                ('curve_bounds.mojo', 'curve_trig.mojo', 'lane_value_bounds.mojo'))
+        # Deliberately conservative closure: imports, aliases, all helper setup,
+        # branch dispatch and every shared operation in all three reference
+        # modules are bound. Any dependency change needs renewed source review.
+        require(set(REFERENCE_MODULE_GRAPHS) == {'curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo'},
+                'wrong reference-module closure')
+        for filename, expected_hash in REFERENCE_MODULE_GRAPHS.items():
+            reference_graph = (dump(reviewed_reference_tree(texts[filename], root, _operation=_operation))
+                               if filename == 'curve_bounds.mojo' else graph(texts[filename]))
+            actual = hashlib.sha256(reference_graph.encode()).hexdigest()
+            require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
+        require(primitive_graph(texts['curve_interval.mojo']) == PRIMITIVE_GRAPH_SHA256,
+                'Jet primitive graph changed; renewed derivative-independence review required')
+        # Complete stored helper/interval closure and lexical qualifiers are
+        # independent of the unchanged primitive-class AST hash.
         try:
-            import sum2_contracts
-        except ModuleNotFoundError:
-            from tools.carla_lane_oracle import sum2_contracts
-        sum2_contracts.verify(root)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
-    interval_tree = syntax_tree(texts['curve_interval.mojo'])
-    for helper in ('_stored_difference', '_stored_half', '_stored_blend_error',
-                   '_without_derivatives'):
-        for node in ast.walk(unique_function(interval_tree, helper)):
-            require(not (isinstance(node, ast.Attribute) and
-                        node.attr in ('first', 'second', 'derivatives')),
-                    'derivative-field/flag read in stored helper: ' + helper)
-    target_tree = syntax_tree(target)
-    reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds, root), 'curve_trig.mojo': syntax_tree(trig)}
-    for key, expected_hash in SHARED_GRAPHS.items():
-        filename, name = key.split(':', 1)
-        node = unique_function(reference_trees[filename], name)
-        actual = hashlib.sha256(dump(node).encode()).hexdigest()
-        require(actual == expected_hash, 'shared generic or full-Jet bridge changed: ' + key)
-    for node in ast.walk(target_tree):
-        require(not (isinstance(node, ast.Attribute) and node.attr in ('first', 'second', 'derivatives', 'sqrt')),
-                'derivative-field/flag read or sqrt in value-only graph')
-    try:
-        for filename, text in texts.items():
-            verify_qualifiers(root, filename, text)
-    except ValueError as error:
-        raise CheckError(str(error)) from error
-    actual_imports = [dump(n) for n in target_tree.body if isinstance(n, ast.ImportFrom)]
-    expected_imports = [dump(n) for n in ast.parse(IMPORTS).body]
-    require(actual_imports == expected_imports, 'sampled graph imports changed')
-    expected = {}
-    for name in COPIES:
-        old = function(trig if name.startswith('_atan') else bounds, name)
-        new = translated(old)
-        if name == '_sample_blend_jet':
-            # Remove only these two complete assignments, never value/error.
-            for field in ('first', 'second'):
-                pattern = r'(?m)^\s*result\s*\.\s*' + field + r'\s*=\s*_intersect_ideal_bounds\s*\(result\s*\.\s*' + field + r'\s*,\s*ideal\s*\.\s*' + field + r'\s*\)\s*\n'
-                new, count = re.subn(pattern, '\n', new, count=1)
-                require(count == 1, 'derivative intersection shape changed')
-        expected[NAMES[name]] = new
-    expected['_uncertain_value'] = '''def _uncertain_value(value: _Interval) -> _ValueJet:
-    return _uncertain_expression[False](value)
-'''
-    # Project complete parsed declarations, never raw prefix/tail slices.
-    def reference(filename, name):
-        node = unique_function(syntax_tree(translated(function(texts[filename], name))), NAMES.get(name, name))
-        node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
-        return copy.deepcopy(node)
+            verify_group(root, 'stored_arithmetic', _operation=_operation)
+            verify_group(root, 'canonical_accumulation', _operation=_operation)
+            try:
+                import sum2_contracts
+            except ModuleNotFoundError:
+                from tools.carla_lane_oracle import sum2_contracts
+            sum2_contracts.verify(root, _operation=_operation)
+        except ValueError as error:
+            raise CheckError(str(error)) from error
+        interval_tree = syntax_tree(texts['curve_interval.mojo'])
+        for helper in ('_stored_difference', '_stored_half', '_stored_blend_error',
+                       '_without_derivatives'):
+            for node in ast.walk(unique_function(interval_tree, helper)):
+                require(not (isinstance(node, ast.Attribute) and
+                            node.attr in ('first', 'second', 'derivatives')),
+                        'derivative-field/flag read in stored helper: ' + helper)
+        target_tree = syntax_tree(target)
+        reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds, root, _operation=_operation), 'curve_trig.mojo': syntax_tree(trig)}
+        for key, expected_hash in SHARED_GRAPHS.items():
+            filename, name = key.split(':', 1)
+            node = unique_function(reference_trees[filename], name)
+            actual = hashlib.sha256(dump(node).encode()).hexdigest()
+            require(actual == expected_hash, 'shared generic or full-Jet bridge changed: ' + key)
+        for node in ast.walk(target_tree):
+            require(not (isinstance(node, ast.Attribute) and node.attr in ('first', 'second', 'derivatives', 'sqrt')),
+                    'derivative-field/flag read or sqrt in value-only graph')
+        try:
+            for filename, text in texts.items():
+                verify_qualifiers(root, filename, text, _operation=_operation)
+        except ValueError as error:
+            raise CheckError(str(error)) from error
+        actual_imports = [dump(n) for n in target_tree.body if isinstance(n, ast.ImportFrom)]
+        expected_imports = [dump(n) for n in ast.parse(IMPORTS).body]
+        require(actual_imports == expected_imports, 'sampled graph imports changed')
+        expected = {}
+        for name in COPIES:
+            old = function(trig if name.startswith('_atan') else bounds, name)
+            new = translated(old)
+            if name == '_sample_blend_jet':
+                # Remove only these two complete assignments, never value/error.
+                for field in ('first', 'second'):
+                    pattern = r'(?m)^\s*result\s*\.\s*' + field + r'\s*=\s*_intersect_ideal_bounds\s*\(result\s*\.\s*' + field + r'\s*,\s*ideal\s*\.\s*' + field + r'\s*\)\s*\n'
+                    new, count = re.subn(pattern, '\n', new, count=1)
+                    require(count == 1, 'derivative intersection shape changed')
+            expected[NAMES[name]] = new
+        expected['_uncertain_value'] = '''def _uncertain_value(value: _Interval) -> _ValueJet:
+        return _uncertain_expression[False](value)
+    '''
+        # Project complete parsed declarations, never raw prefix/tail slices.
+        def reference(filename, name):
+            node = unique_function(syntax_tree(translated(function(texts[filename], name))), NAMES.get(name, name))
+            node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
+            return copy.deepcopy(node)
 
-    def declaration(source):
-        return syntax_tree(source).body[0]
+        def declaration(source):
+            return syntax_tree(source).body[0]
 
-    def shape(nodes):
-        """Each complete top-level statement has an explicit reviewed role."""
-        result = []
-        for node in nodes:
-            if isinstance(node, ast.Assign):
-                result.append('assign:' + ast.unparse(node.targets[0]))
-            elif isinstance(node, ast.AnnAssign):
-                result.append('annotate:' + ast.unparse(node.target))
-            elif isinstance(node, ast.If):
-                result.append('if:' + ast.unparse(node.test))
-            elif isinstance(node, ast.Return):
-                result.append('return')
-            else:
-                result.append(type(node).__name__)
-        return result
+        def shape(nodes):
+            """Each complete top-level statement has an explicit reviewed role."""
+            result = []
+            for node in nodes:
+                if isinstance(node, ast.Assign):
+                    result.append('assign:' + ast.unparse(node.targets[0]))
+                elif isinstance(node, ast.AnnAssign):
+                    result.append('annotate:' + ast.unparse(node.target))
+                elif isinstance(node, ast.If):
+                    result.append('if:' + ast.unparse(node.test))
+                elif isinstance(node, ast.Return):
+                    result.append('return')
+                else:
+                    result.append(type(node).__name__)
+            return result
 
-    union = declaration('''def _union_value_points(
-        one: Tuple[_ValueJet, _ValueJet, _ValueJet],
-        two: Tuple[_ValueJet, _ValueJet, _ValueJet],
-    ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-        pass
-''')
-    old = reference('curve_bounds.mojo', '_union_points')
-    require(shape(old.body) == ['return'], 'union complete body shape changed')
-    union.body = old.body
-    expected['_union_value_points'] = union
+        union = declaration('''def _union_value_points(
+            one: Tuple[_ValueJet, _ValueJet, _ValueJet],
+            two: Tuple[_ValueJet, _ValueJet, _ValueJet],
+        ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+            pass
+    ''')
+        old = reference('curve_bounds.mojo', '_union_points')
+        require(shape(old.body) == ['return'], 'union complete body shape changed')
+        union.body = old.body
+        expected['_union_value_points'] = union
 
-    sampled = declaration('''def _reference_sampled_value(
-        geometry: RoadGeometry, distance: _ValueJet, translation: Vector3
-    ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-        if geometry.kind != POLY3 and geometry.kind != PARAM_POLY3:
-            return _unknown_value_point()
-''')
-    old = reference('curve_bounds.mojo', '_reference_jet_capture')
-    require(shape(old.body) == [
-        'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
-        'if:geometry.kind == SPIRAL', 'if:len(geometry.samples) < 2',
-        'assign:domain', 'assign:low', 'assign:high', 'if:high - low > 1',
-        'assign:first', 'if:low == high', 'return',
-    ], 'complete reference dispatcher layout changed')
-    # Remove precisely the three complete non-sampled branches. The new
-    # leading guard rejects those kinds; the independent broad wrapper
-    # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
-    sampled.body += [old.body[0]] + old.body[4:]
-    expected['_reference_sampled_value'] = sampled
+        sampled = declaration('''def _reference_sampled_value(
+            geometry: RoadGeometry, distance: _ValueJet, translation: Vector3
+        ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+            if geometry.kind != POLY3 and geometry.kind != PARAM_POLY3:
+                return _unknown_value_point()
+    ''')
+        old = reference('curve_bounds.mojo', '_reference_jet_capture')
+        require(shape(old.body) == [
+            'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
+            'if:geometry.kind == SPIRAL', 'if:len(geometry.samples) < 2',
+            'assign:domain', 'assign:low', 'assign:high', 'if:high - low > 1',
+            'assign:first', 'if:low == high', 'return',
+        ], 'complete reference dispatcher layout changed')
+        # Remove precisely the three complete non-sampled branches. The new
+        # leading guard rejects those kinds; the independent broad wrapper
+        # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
+        sampled.body += [old.body[0]] + old.body[4:]
+        expected['_reference_sampled_value'] = sampled
 
-    for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
-                           ('_arc_offset_jet', 'curve_bounds.mojo')):
-        expected[NAMES[name]] = reference(filename, name)
+        for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
+                               ('_arc_offset_jet', 'curve_bounds.mojo')):
+            expected[NAMES[name]] = reference(filename, name)
 
-    constant = reference('curve_trig.mojo', '_constant_sincos_jet')
-    require(shape(constant.body) == ['assign:result',
-        'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
-        'assign:zero', 'return'], 'constant heading layout changed')
-    require(dump(constant.body[2]) == dump(ast.parse('zero = _Interval.point(0.0)').body[0]),
-            'constant heading derivative constructor changed')
-    constant.body[2] = ast.parse('unknown = _Interval.whole()').body[0]
-    returned = constant.body[3].value
-    require(isinstance(returned, ast.Tuple) and len(returned.elts) == 2,
-            'constant heading result shape changed')
-    for index, item in enumerate(returned.elts):
-        required = ast.parse('_ValueJet(result[' + str(index) +
-            '].rounded_value(), zero, zero, 0.0)', mode='eval').body
-        require(dump(item) == dump(required), 'constant heading field projection changed')
-        # Only derivative constructor fields change. Coefficient enclosure,
-        # exact-zero scalar error, result ordering and guards are retained.
-        item.args[1:3] = [ast.Name(id='unknown', ctx=ast.Load()),
-                          ast.Name(id='unknown', ctx=ast.Load())]
-    expected['_constant_sincos_value'] = constant
+        constant = reference('curve_trig.mojo', '_constant_sincos_jet')
+        require(shape(constant.body) == ['assign:result',
+            'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
+            'assign:zero', 'return'], 'constant heading layout changed')
+        require(dump(constant.body[2]) == dump(ast.parse('zero = _Interval.point(0.0)').body[0]),
+                'constant heading derivative constructor changed')
+        constant.body[2] = ast.parse('unknown = _Interval.whole()').body[0]
+        returned = constant.body[3].value
+        require(isinstance(returned, ast.Tuple) and len(returned.elts) == 2,
+                'constant heading result shape changed')
+        for index, item in enumerate(returned.elts):
+            required = ast.parse('_ValueJet(result[' + str(index) +
+                '].rounded_value(), zero, zero, 0.0)', mode='eval').body
+            require(dump(item) == dump(required), 'constant heading field projection changed')
+            # Only derivative constructor fields change. Coefficient enclosure,
+            # exact-zero scalar error, result ordering and guards are retained.
+            item.args[1:3] = [ast.Name(id='unknown', ctx=ast.Load()),
+                              ast.Name(id='unknown', ctx=ast.Load())]
+        expected['_constant_sincos_value'] = constant
 
-    expected['_sampled_lane_value_bound'] = '''def _sampled_lane_value_bound(
-        road: Road, section: Int, lane: Int, low: Float64, high: Float64
-    ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-        return _lane_value_bound_impl[False](road, section, lane, low, high)
-'''
-    expected['_lane_value_bound'] = '''def _lane_value_bound(
-        road: Road, section: Int, lane: Int, low: Float64, high: Float64
-    ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-        var at = info_index(road.info.geometries, low)
-        if at >= 0 and road.info.geometries[at].geometry.kind == SPIRAL:
-            var full = _lane_jet(road, section, lane, low, high)
-            return (_without_derivatives(full[0]), _without_derivatives(full[1]),
-                    _without_derivatives(full[2]))
-        return _lane_value_bound_impl[True](road, section, lane, low, high)
-'''
-    lane = declaration('''def _lane_value_bound_impl[all_geometry: Bool](
-        road: Road, section: Int, lane: Int, low: Float64, high: Float64,
-    ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-        var translation = Vector3(0, 0, 0)
-''')
-    old = reference('curve_bounds.mojo', '_lane_jet_model_proof')
-    # This private value-only specialization has no cached proof argument.
-    # Remove only the exact new refusal branch whose proof condition is false
-    # for that route. The full cached-proof caller remains separately bound.
-    require(dump(old.body[0]) == dump(ast.parse("""if proof and not _sum2_supported_environment():
-    return _unknown_value_point()
-""").body[0]), 'cached-proof environment refusal changed or moved')
-    old.body.pop(0)
-    require(shape(old.body) == [
-        'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
-        'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
-        'if:info_index(road.info.geometries, high) != geometry_at or info_index(road.info.elevations, high) != elevation_at or info_index(road.info.lane_offsets, high) != offset_at',
-        'assign:s', 'assign:offset', 'assign:lanes', 'assign:lane_id',
-        'assign:negative', 'assign:sign', 'if:lane_id.value != 0',
-        'assign:offset', 'assign:record', 'if:capture',
-        'if:record.geometry.kind == ARC', 'if:record.geometry.kind == LINE',
-        'annotate:reused', 'if:not capture', 'annotate:point', 'if:reused',
-        'assign:trig', 'return',
-    ], 'complete lane dispatcher layout changed')
-    require(dump(old.body[14]) == dump(ast.parse('''if capture:
-        captured.record_at = geometry_at
-        captured.low = low
-        captured.high = high
-''').body[0]), 'capture bookkeeping projection changed')
-    # 0..13: all record checks/width traversal/elevation setup are retained.
-    # 14: the exact capture-only assignments above are deleted.
-    # 15..16: complete ARC/LINE branches move under all_geometry, in order.
-    # 17..20: complete proof/capture dispatch is replaced by a sampled call.
-    # This replacement is justified only by _reference_sampled_value's kind
-    # guard and the separately bound SPIRAL full-Jet wrapper, never by a
-    # claim that the proof branch is value-independent. Whole reference
-    # modules bind every removed proof statement and its dependencies.
-    # 21..22: original trig and final output are retained, without slicing.
-    lane.body += old.body[:14]
-    lane.body += [ast.If(test=ast.Name(id='all_geometry', ctx=ast.Load()),
-                        body=old.body[15:17], orelse=[])]
-    lane.body += ast.parse('''point = _reference_sampled_value(
-        record.geometry, _stored_difference(s, _ValueJet.constant(record.s)), translation)
-''').body + old.body[21:]
-    expected['_lane_value_bound_impl'] = lane
-    functions = {n.name for n in target_tree.body if isinstance(n, ast.FunctionDef)}
-    require(functions == set(expected), 'missing or extra sampled helper')
-    for node in target_tree.body:
-        require(isinstance(node, (ast.ImportFrom, ast.FunctionDef)) or
-                (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)),
-                'unexpected top-level execution in sampled graph')
-    for name, source in expected.items():
-        wanted = (unique_function(syntax_tree(source), name)
-                  if isinstance(source, str) else source)
-        if name in {NAMES[n] for n in COPIES}:
-            original = next(n for n in COPIES if NAMES[n] == name)
-            filename = 'curve_trig.mojo' if original.startswith('_atan') else 'curve_bounds.mojo'
-            # Decorators are part of the actual declarations, not dropped by
-            # a text slice starting at def. Current copies have none.
-            wanted.decorator_list = unique_function(reference_trees[filename], original).decorator_list
-        actual = unique_function(target_tree, name)
-        require(dump(wanted) == dump(actual),
-                'sampled helper diverged: ' + name)
-    return {'status': 'PASS', 'repo_root': str(root.resolve()), 'copied_functions': 8, 'dispatch_functions': 6, 'additional_source_pairs': 3, 'shared_generic_and_bridge_functions': len(SHARED_GRAPHS),
-            'complete_reference_modules': len(REFERENCE_MODULE_GRAPHS),
-            'primitive_graph_sha256': PRIMITIVE_GRAPH_SHA256,
-            'source_sha256': {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()},
-            'scope': 'Complete explicit sampled/ARC/LINE correspondence and SPIRAL bridge with stored-arithmetic closure; source binding is not mathematical/runtime qualification. Separate eligibility/translation/support source gate, native/codegen/budget/coverage/performance remain required'}
+        expected['_sampled_lane_value_bound'] = '''def _sampled_lane_value_bound(
+            road: Road, section: Int, lane: Int, low: Float64, high: Float64
+        ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+            return _lane_value_bound_impl[False](road, section, lane, low, high)
+    '''
+        expected['_lane_value_bound'] = '''def _lane_value_bound(
+            road: Road, section: Int, lane: Int, low: Float64, high: Float64
+        ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+            var at = info_index(road.info.geometries, low)
+            if at >= 0 and road.info.geometries[at].geometry.kind == SPIRAL:
+                var full = _lane_jet(road, section, lane, low, high)
+                return (_without_derivatives(full[0]), _without_derivatives(full[1]),
+                        _without_derivatives(full[2]))
+            return _lane_value_bound_impl[True](road, section, lane, low, high)
+    '''
+        lane = declaration('''def _lane_value_bound_impl[all_geometry: Bool](
+            road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+        ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+            var translation = Vector3(0, 0, 0)
+    ''')
+        old = reference('curve_bounds.mojo', '_lane_jet_model_proof')
+        # This private value-only specialization has no cached proof argument.
+        # Remove only the exact new refusal branch whose proof condition is false
+        # for that route. The full cached-proof caller remains separately bound.
+        require(dump(old.body[0]) == dump(ast.parse("""if proof and not _sum2_supported_environment():
+        return _unknown_value_point()
+    """).body[0]), 'cached-proof environment refusal changed or moved')
+        old.body.pop(0)
+        require(shape(old.body) == [
+            'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
+            'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
+            'if:info_index(road.info.geometries, high) != geometry_at or info_index(road.info.elevations, high) != elevation_at or info_index(road.info.lane_offsets, high) != offset_at',
+            'assign:s', 'assign:offset', 'assign:lanes', 'assign:lane_id',
+            'assign:negative', 'assign:sign', 'if:lane_id.value != 0',
+            'assign:offset', 'assign:record', 'if:capture',
+            'if:record.geometry.kind == ARC', 'if:record.geometry.kind == LINE',
+            'annotate:reused', 'if:not capture', 'annotate:point', 'if:reused',
+            'assign:trig', 'return',
+        ], 'complete lane dispatcher layout changed')
+        require(dump(old.body[14]) == dump(ast.parse('''if capture:
+            captured.record_at = geometry_at
+            captured.low = low
+            captured.high = high
+    ''').body[0]), 'capture bookkeeping projection changed')
+        # 0..13: all record checks/width traversal/elevation setup are retained.
+        # 14: the exact capture-only assignments above are deleted.
+        # 15..16: complete ARC/LINE branches move under all_geometry, in order.
+        # 17..20: complete proof/capture dispatch is replaced by a sampled call.
+        # This replacement is justified only by _reference_sampled_value's kind
+        # guard and the separately bound SPIRAL full-Jet wrapper, never by a
+        # claim that the proof branch is value-independent. Whole reference
+        # modules bind every removed proof statement and its dependencies.
+        # 21..22: original trig and final output are retained, without slicing.
+        lane.body += old.body[:14]
+        lane.body += [ast.If(test=ast.Name(id='all_geometry', ctx=ast.Load()),
+                            body=old.body[15:17], orelse=[])]
+        lane.body += ast.parse('''point = _reference_sampled_value(
+            record.geometry, _stored_difference(s, _ValueJet.constant(record.s)), translation)
+    ''').body + old.body[21:]
+        expected['_lane_value_bound_impl'] = lane
+        functions = {n.name for n in target_tree.body if isinstance(n, ast.FunctionDef)}
+        require(functions == set(expected), 'missing or extra sampled helper')
+        for node in target_tree.body:
+            require(isinstance(node, (ast.ImportFrom, ast.FunctionDef)) or
+                    (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)),
+                    'unexpected top-level execution in sampled graph')
+        for name, source in expected.items():
+            wanted = (unique_function(syntax_tree(source), name)
+                      if isinstance(source, str) else source)
+            if name in {NAMES[n] for n in COPIES}:
+                original = next(n for n in COPIES if NAMES[n] == name)
+                filename = 'curve_trig.mojo' if original.startswith('_atan') else 'curve_bounds.mojo'
+                # Decorators are part of the actual declarations, not dropped by
+                # a text slice starting at def. Current copies have none.
+                wanted.decorator_list = unique_function(reference_trees[filename], original).decorator_list
+            actual = unique_function(target_tree, name)
+            require(dump(wanted) == dump(actual),
+                    'sampled helper diverged: ' + name)
+        current_edges = audit.typed_successor_edges(root, _operation=_operation)
+        physical_sources = {name: hashlib.sha256(audit._observe_bytes(root,
+            path.relative_to(root).as_posix(), path.read_bytes(), _operation=_operation)).hexdigest()
+            for name, path in paths.items()}
+        if owns:
+            _operation.finish(root)
+        return {'status': 'PASS', 'repo_root': str(root.resolve()), 'copied_functions': 8, 'dispatch_functions': 6, 'additional_source_pairs': 3, 'shared_generic_and_bridge_functions': len(SHARED_GRAPHS),
+                'complete_reference_modules': len(REFERENCE_MODULE_GRAPHS),
+                'primitive_graph_sha256': PRIMITIVE_GRAPH_SHA256,
+                'source_sha256': physical_sources,
+                'typed_boundary_successors': current_edges,
+                'scope': 'Current typed/conditioned source admission; historical sampled/ARC/LINE correspondence and SPIRAL bridge with stored-arithmetic closure; source binding is not mathematical/runtime qualification. Separate eligibility/translation/support source gate, native/codegen/budget/coverage/performance remain required'}
+    finally:
+        if owns:
+            _operation.close()
 
 
 def main():
@@ -534,4 +562,7 @@ def main():
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    # The CLI uses the canonical registered module, so its public verifier
+    # can own one physical capture just like an imported invocation.
+    from check_sampled_values import main as _owned_main
+    raise SystemExit(_owned_main())
