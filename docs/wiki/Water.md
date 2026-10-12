@@ -117,7 +117,7 @@ Underwater absorption and ripple lookup follow the refracted sun direction. The 
 
 ## Shade it on a GPU
 
-`GpuWater` in `extensions/water/gpu.mojo` runs `lit_radiance` with one thread for each pixel. It needs MAX and an NVIDIA CUDA GPU, and it refuses a machine without one. It was run on a TITAN RTX, and CI builds it for sm_80. Apple Metal is not a supported target: no Metal check covers this kernel.
+`GpuWater` in `extensions/water/gpu.mojo` runs `lit_radiance` with one thread for each pixel. It needs MAX and a GPU, and it refuses a machine without one. It runs on NVIDIA CUDA and on Apple Metal. It was run on a TITAN RTX and on an Apple M4 Max. CI builds it for sm_80, and `make check-gpu-air` checks its Metal calls.
 
 Make one with the pebble photograph, which it copies to the device once. Then use the same calls as `WaterScene`:
 
@@ -131,6 +131,8 @@ The GPU result is not bit-identical to the CPU result. The device fuses multipli
 
 See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 41 to 76 milliseconds. A whole water frame takes about 255 milliseconds, because bloom, glare and grading take about 154 on the CPU. A composed scene takes about 247. The depth pass, the highlight and blur passes, and the grade and write run on every logical core.
 
+On an Apple M4 Max with Metal, a 1920 x 1080 shade takes about 71 milliseconds. A whole water frame takes about 168, and a composed scene about 174.
+
 ## Shader storage
 
 `lit_radiance` shades one view ray. It reads every texture through four traits: `SurfaceTexels`, `RippleTexels`, `CausticTexels` and `PebbleTexels`. The water fields implement them, so `draw` and `compose` call it directly.
@@ -139,7 +141,9 @@ A `WaterPack` copies one frame's textures into flat float arrays, with a table o
 
 The CPU and a device shade with the same arithmetic. The sky azimuth uses `atan2_float32` from `math/arc_tangent.mojo`, because a GPU has no libm. The field of view uses the stored bits of the host's `tan(32°)`.
 
-`hash12` rounds each step to Float32 once, so a fused multiply-add cannot change the hash. The CPU hash is unchanged. The sine of a large angle removes whole turns in Float64 first, because a GPU sine is accurate near zero only. A compiler can fuse a multiply and an add differently for each storage type, so the last bits of a pixel can differ.
+The shader uses no Float64, because Apple GPUs have none.
+
+`hash12` rounds each step to Float32 once, so a fused multiply-add cannot change the hash. Each product is an `fma` with a zero addend: it rounds once, and no compiler fuses it into the next add. So the CPU and a GPU give the same hash bits. `tests/test_gpu_water.mojo` compares them bit for bit. The water sine is `sin_float32` from `math/sine.mojo`, which gives the same bits on a CPU and a GPU at every angle. A compiler can fuse other multiplies and adds differently for each storage type, so the last bits of a pixel can differ.
 
 This extension draws a CPU still. It is not a shared scene-water object or a validated fluid solver. The picture does not establish a real-time frame rate, buoyancy, or engineering fluid accuracy.
 
