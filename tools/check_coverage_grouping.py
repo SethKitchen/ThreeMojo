@@ -1120,6 +1120,65 @@ class GenericTruthModel(TruthModel):
         pass
 
 
+def two_parameter_generic_source():
+    """Isolate the exact original function so another refusal cannot mask it."""
+    signature = 'def generic_pair[A: Made, B: Made](state: Cell) -> Bool:'
+    assert TRUTH_TWO_PARAMETER_CONTROLS.count(signature) == 1
+    body = signature + TRUTH_TWO_PARAMETER_CONTROLS.split(signature, 1)[1].split('\n\ndef ', 1)[0]
+    source = TRUTH_PRELUDE + '\n\n' + body + '''
+
+
+def run_pair[A: Made, B: Made](name: StaticString, mask: Int, changing: Bool):
+    var cell = State(mask, -1, changing)
+    var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
+    var result = generic_pair[A, B](state)
+    print("PAIR", name, mask, changing, result, state[].log,
+          state[].counts[0], state[].counts[1], state[].counts[2])
+    _ = cell^
+
+
+def main():
+    for changing in [False, True]:
+        for mask in range(16):
+            run_pair[Probe, Probe]("Probe", mask, changing)
+            run_pair[Other, Other]("Other", mask, changing)
+'''
+    header = 'if A.make(0, state) or B.make(1, state) and A.make(2, state):'
+    line = next(i for i, text in enumerate(source.splitlines(), 1) if text.strip() == header)
+    return source, {header: 3}, line, signature
+
+
+def check_two_parameter_generic_truth(work, native, rewritten, build, mojo):
+    """Require the generic-specific refusal after an independent native model."""
+    name = 'generic-pair-isolated'
+    source, widths, line, signature = two_parameter_generic_source()
+    expected = []
+    # Independently declared A/B select Bool fallback even for equal concrete
+    # bindings. Each custom temporary converts once before Boolean selection.
+    tree = negate_custom_leaves(('or', ('S', 0), ('and', ('S', 1), ('S', 2))))
+    for changing in (False, True):
+        for mask in range(16):
+            for concrete in ('Probe', 'Other'):
+                model = GenericTruthModel(tree, mask, -1, changing, line, name)
+                log, _, vector = model.run()
+                assert log[-2:] in ('|T', '|F') and vector is not None
+                expected.append(f'PAIR {concrete} {mask} {changing} {log.endswith("|T")} {log[:-2]} '
+                                + ' '.join(str(model.counts[i]) for i in range(3)))
+    assert len(expected) == 64
+    (work / f'{name}-expected.txt').write_text('\n'.join(expected) + '\n')
+    (native / f'{name}.mojo').write_text(source)
+    (work / f'{name}-native.mojo').write_text(source)
+    binary = work / f'{name}-native'
+    optional_capture(work, f'{name}-native-build',
+                     [mojo, 'build', '-Werror', '-I', str(native), '-I', str(ROOT),
+                      str(native / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+    original = optional_capture(work, f'{name}-native-run', [str(binary)], timeout=5)
+    assert original.stdout.splitlines() == expected, (name, 'native/model output differs')
+    check_refusal(work, native, rewritten, build, mojo, name, source, widths,
+                  (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL, signature))
+    assert_identity_origin(rewritten, name, source)
+
+
 def single_generic_source(negated=False):
     """Keep one declared type parameter and exercise both concrete types."""
     source = TRUTH_PRELUDE + '''
@@ -1196,7 +1255,8 @@ def check_single_generic_truth(work, native, rewritten, build, mojo):
         assert native_result.stdout.splitlines() == expected_rows, (name, 'native/model output differs')
         if not negated:
             check_refusal(work, native, rewritten, build, mojo, name, source, widths,
-                          (COMPOUND_REFUSAL, TEMPORARY_SELECTION_REFUSAL))
+                          (COMPOUND_REFUSAL, TEMPORARY_SELECTION_REFUSAL,
+                           'def generic_single[A: Made](state: Cell) -> Bool:'))
             continue
         optional_capture(work, f'{name}-rewrite',
                          [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
@@ -1913,8 +1973,8 @@ def check_custom_truth(work, native, rewritten, build, mojo):
     two_parameter_rows = [row for row in two_parameter.stdout.splitlines() if row.startswith('CONTROL ')]
     assert len(two_parameter_rows) == 32 and 'CONCURRENT' in two_parameter.stdout
     check_refusal(work, native, rewritten, build, mojo, name, TRUTH_TWO_PARAMETER_CONTROLS,
-                  TWO_PARAMETER_CONTROL_WIDTHS, (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL,
-                                                'def generic_pair[A: Made, B: Made]'))
+                  TWO_PARAMETER_CONTROL_WIDTHS, (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL))
+    check_two_parameter_generic_truth(work, native, rewritten, build, mojo)
 
     # This is the exact previously admitted one-parameter/owned control.
     # Keep all native lifetime, recursion and concurrent behavior, then
@@ -1961,6 +2021,7 @@ def check_custom_truth(work, native, rewritten, build, mojo):
 
     check_custom_refusals(work, native, rewritten, build, mojo)
     identity_summary = check_identity_truth(work, native, rewritten, build, mojo)
+    last_use_summary = check_last_use_identity_truth(work, native, rewritten, build, mojo)
     temporary_identity_summary = check_temporary_identity_truth(work, native, rewritten, build, mojo)
     check_repeated_truth_guard(work, mojo)
     return (f'{len(TRUTH_CASES)} native/model custom truth trees x 16 masks x 5 failure positions, '
@@ -1974,7 +2035,7 @@ def check_custom_truth(work, native, rewritten, build, mojo):
             f'{len(LEAF_GUARD_REJECTIONS)} same-type rejections of old mixed sources; '
             f'{len(BOOL_MERGE_REJECTIONS)} Bool-merge rejections x 4 native masks; '
             f'{len(GATED_MERGE_REJECTIONS)} type-gated merge rejections x 4 native masks; '
-            f'{identity_summary}; {temporary_identity_summary}')
+            f'{identity_summary}; {last_use_summary}; {temporary_identity_summary}')
 
 
 TEMPORARY_IDENTITY_PRELUDE = '''struct Anchored(ImplicitlyCopyable, Boolable):
@@ -2271,6 +2332,64 @@ def assert_identity_origin(rewritten, name, source):
     header, body = (rewritten / 'origins.ready').read_bytes().split(b'\n', 1)
     assert header == b'COVORIGIN_INDEX2 1 ' + str(len(manifest)).encode() + b' 0'
     assert body == manifest + str(len(parts[0])).encode() + b'\n' + parts[0]
+
+
+def identity_last_use_source(expression):
+    """Remove only the retained fixture's two trailing post-use reads."""
+    source = identity_source(expression)
+    suffix = ('    print("RETAINED", kept.payload)\n'
+              '    print("ADDRESS", Int(Pointer(to=kept.payload)) == kept.expected)\n')
+    assert source.endswith(suffix)
+    return source[:-len(suffix)]
+
+
+def check_last_use_identity_truth(work, native, rewritten, build, mojo):
+    """Compare direct and conditional last-use truth against native execution."""
+    for number in (0, 3):
+        expression, conversions, outcome, vector = IDENTITY_POSITIVE_CASES[number]
+        name = f'identity-last-use-{number}'
+        source = identity_last_use_source(expression)
+        expected = identity_output('CONVERT True\n' * conversions, outcome)
+        suffix = 'RETAINED 7\nADDRESS True\n'
+        assert expected.endswith(suffix)
+        expected = expected[:-len(suffix)]
+        (native / f'{name}.mojo').write_text(source)
+        (work / f'{name}-native.mojo').write_text(source)
+        native_binary = work / f'{name}-native'
+        optional_capture(work, f'{name}-native-build',
+                         [mojo, 'build', '-Werror', '-I', str(native),
+                          str(native / f'{name}.mojo'), '-o', str(native_binary)],
+                         timeout=180)
+        actual = optional_capture(work, f'{name}-native-run', [str(native_binary)], timeout=5)
+        assert actual.stdout == expected, (name, 'native identity control', actual.stdout, expected)
+        optional_capture(work, f'{name}-rewrite',
+                         [str(build), str(rewritten), f'{name}.mojo'], cwd=native, timeout=5)
+        shutil.copy(rewritten / f'{name}.mojo', work / f'{name}-instrumented.mojo')
+        manifest = assert_obligations(
+            rewritten, name, single_line_obligations(source, {f'if {expression}:': 2}))
+        (work / f'{name}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+        assert_identity_origin(rewritten, name, source)
+        binary = work / f'{name}-instrumented'
+        optional_capture(work, f'{name}-instrumented-build',
+                         [mojo, 'build', '-Werror', '-I', str(rewritten),
+                          str(rewritten / f'{name}.mojo'), '-o', str(binary)], timeout=180)
+        instrumented = optional_capture(work, f'{name}-instrumented-run', [str(binary)], timeout=5)
+        assert instrumented.stdout == actual.stdout, (name, 'native/instrumented stdout differs')
+        decision = next(number for number, line in enumerate(source.splitlines(), 1)
+                        if line.strip() == f'if {expression}:')
+        expected_records = [f'COVLINE:{name}:{decision}.{slot}:{state}'
+                            for slot, state in enumerate(vector) if state != '-']
+        truth = 'T' if outcome else 'F'
+        expected_records += [f'COVLINE:{name}:{decision}:{truth}',
+                             f'COVEVAL2:{name}:{decision}:{truth}:{vector};']
+        actual_records = [line for line in instrumented.stderr.splitlines()
+                          if line.startswith((f'COVLINE:{name}:{decision}:',
+                                              f'COVLINE:{name}:{decision}.',
+                                              f'COVEVAL2:{name}:{decision}:'))]
+        assert actual_records == expected_records, (name, actual_records, expected_records)
+        (work / f'{name}-expected-records.txt').write_text('\n'.join(expected_records) + '\n')
+
+    return '2 last-use identity controls with exact native truth and traces'
 
 
 def check_identity_truth(work, native, rewritten, build, mojo):
