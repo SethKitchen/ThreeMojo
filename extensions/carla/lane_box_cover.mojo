@@ -26,7 +26,7 @@ from extensions.carla.lane_refinement import (
     _whole_lane_box,
 )
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from math.vector3 import Vector3
 from std.math import isfinite
 
