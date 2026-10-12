@@ -226,8 +226,8 @@ def test_polygon_basics() raises:
     assert_true(p.contains(Vector3(2, 1, 0)))
     assert_false(p.contains(Vector3(2.01, 1, 0)))
     # The quad slopes up along y: z = y.
-    assert_almost_equal(p.height_at(Vector3(0.5, 1.5, 0)), 1.5, atol=1e-6)
-    assert_almost_equal(p.height_at(Vector3(1.5, 0.5, 0)), 0.5, atol=1e-6)
+    assert_almost_equal(p.height_at_si(Vector3(0.5, 1.5, 0)), 1.5, atol=1e-6)
+    assert_almost_equal(p.height_at_si(Vector3(1.5, 0.5, 0)), 0.5, atol=1e-6)
     var inside = p.closest_point(Vector3(1, 0.25, 9))
     assert_almost_equal(inside.z, 0.25, atol=1e-6)
     var outside = p.closest_point(Vector3(3, 1, 0))
