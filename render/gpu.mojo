@@ -309,6 +309,8 @@ from materials.nodes import (
     ProgramShape,
     NodeContext,
     NodeInputs,
+    NodeOutput,
+    Lanes,
     NodeProgramStore,
     NodeSource,
     here_inputs,
@@ -1979,61 +1981,119 @@ def _point_shaped[
     return shape.shaped(_cube_through(lights, Int(block), position, normal))
 
 
-def _direction_through[
+# The kinds `_light_slot` names, in the order the lighting functions sum
+# them: every directional light, every point light, every hemisphere light,
+# then every spot light.
+comptime _DIRECTIONAL = 0
+comptime _POINT = 1
+comptime _SKY = 2
+comptime _SPOT = 3
+
+
+def _light_slot(
+    slot: Int, count: Int, points: Int, hemispheres: Int
+) -> Tuple[Int, Int]:
+    """Return the kind of the light at `slot` in summing order, and where
+    its record starts in the light buffer.
+
+    The lighting functions walk every light in one loop. The loop body
+    shapes a shadow at one call site, and a node program shapes it there.
+    Metal inlines every call, so a loop per kind copied the whole node
+    interpreter into the rasterize kernel once for each kind, and Apple's
+    compiler ran out of memory on the kernel.
+    """
+    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
+    var first_sky = first_point + points * POINT_FLOATS
+    var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
+    if slot < count:
+        return (_DIRECTIONAL, LIGHTS_FIRST + slot * DIRECTIONAL_FLOATS)
+    if slot < count + points:
+        return (_POINT, first_point + (slot - count) * POINT_FLOATS)
+    if slot < count + points + hemispheres:
+        return (
+            _SKY,
+            first_sky + (slot - count - points) * HEMISPHERE_FLOATS,
+        )
+    return (
+        _SPOT,
+        first_spot + (slot - count - points - hemispheres) * SPOT_FLOATS,
+    )
+
+
+def _light_through[
     R: ShadowShape
 ](
     lights: DevicePointer[Float32],
+    kind: Int,
     at: Int,
     receives: Bool,
     position: Vector3,
     normal: Vector3,
     shape: R,
 ) -> Vector3:
-    """Return how much of one directional light reaches a surface, per
-    channel: the device counterpart of `Lighting.direction_through`,
-    reading the light's shadow and cascade from its record at `at`."""
-    var span = lights[unsafe_offset=at + CASCADE_AT + 2]
-    if span == 0:
-        return _shaped_through(
-            lights, at + 6, receives, position, normal, shape
+    """Return how much of one light reaches a surface once the surface has
+    shaped its shadow: the device counterpart of `Lighting.direction_through`
+    for a directional light, with its cascade, and of
+    `Lighting.shadow_through` for a point or spot light. One `shape.shaped`
+    call serves all three kinds; see `_light_slot`.
+    """
+    var block_at = at + 13
+    if kind == _DIRECTIONAL:
+        block_at = at + 6
+    elif kind == _POINT:
+        block_at = at + 8
+    var span = Float32(0)
+    if kind == _DIRECTIONAL:
+        span = lights[unsafe_offset=at + CASCADE_AT + 2]
+    var reach = SIMD[DType.float32, 2](1, 1)
+    if span != 0:
+        var depth = (
+            view_depth(
+                position,
+                Vector3(
+                    lights[unsafe_offset=LIGHTS_EYE],
+                    lights[unsafe_offset=LIGHTS_EYE + 1],
+                    lights[unsafe_offset=LIGHTS_EYE + 2],
+                ),
+                Vector3(
+                    lights[unsafe_offset=LIGHTS_BACK],
+                    lights[unsafe_offset=LIGHTS_BACK + 1],
+                    lights[unsafe_offset=LIGHTS_BACK + 2],
+                ),
+            )
+            / span
         )
-    var depth = (
-        view_depth(
-            position,
-            Vector3(
-                lights[unsafe_offset=LIGHTS_EYE],
-                lights[unsafe_offset=LIGHTS_EYE + 1],
-                lights[unsafe_offset=LIGHTS_EYE + 2],
-            ),
-            Vector3(
-                lights[unsafe_offset=LIGHTS_BACK],
-                lights[unsafe_offset=LIGHTS_BACK + 1],
-                lights[unsafe_offset=LIGHTS_BACK + 2],
-            ),
-        )
-        / span
-    )
-    var reach = cascade_reach(
-        depth,
-        lights[unsafe_offset=at + CASCADE_AT],
-        lights[unsafe_offset=at + CASCADE_AT + 1],
-        lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
-        lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
-    )
-    if lights[unsafe_offset=at + CASCADE_AT + 5] == Float32(SUN_BLEND.value):
-        reach = sun_reach(
+        reach = cascade_reach(
             depth,
             lights[unsafe_offset=at + CASCADE_AT],
-            lights[unsafe_offset=at + CASCADE_AT + 7],
-            lights[unsafe_offset=at + CASCADE_AT + 6],
             lights[unsafe_offset=at + CASCADE_AT + 1],
             lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+            lights[unsafe_offset=at + CASCADE_AT + 4] != 0,
         )
-    if reach[0] == 0:
-        return Vector3(0, 0, 0)
-    var through = _shaped_through(
-        lights, at + 6, receives, position, normal, shape
-    )
+        if lights[unsafe_offset=at + CASCADE_AT + 5] == Float32(
+            SUN_BLEND.value
+        ):
+            reach = sun_reach(
+                depth,
+                lights[unsafe_offset=at + CASCADE_AT],
+                lights[unsafe_offset=at + CASCADE_AT + 7],
+                lights[unsafe_offset=at + CASCADE_AT + 6],
+                lights[unsafe_offset=at + CASCADE_AT + 1],
+                lights[unsafe_offset=at + CASCADE_AT + 3] != 0,
+            )
+        if reach[0] == 0:
+            return Vector3(0, 0, 0)
+    var through = Vector3(1, 1, 1)
+    var block = lights[unsafe_offset=block_at]
+    if block >= 0 and receives:
+        var raw: Vector3
+        if kind == _POINT:
+            raw = _cube_through(lights, Int(block), position, normal)
+        else:
+            raw = _square_through(lights, Int(block), position, normal)
+        through = shape.shaped(raw)
+    if span == 0:
+        return through
     return Vector3(
         reach[0] * shadow_strength(through.x, reach[1]),
         reach[0] * shadow_strength(through.y, reach[1]),
@@ -2545,158 +2605,137 @@ def _arriving[
     var red = base.x
     var green = base.y
     var blue = base.z
-    for index in range(count):
-        var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
-        var lambert = (
-            nx * lights[unsafe_offset=at]
-            + ny * lights[unsafe_offset=at + 1]
-            + nz * lights[unsafe_offset=at + 2]
-        )
-        if lambert <= 0:
+    # Every light in one loop, in the host's order; see `_light_slot`.
+    for slot in range(count + points + hemispheres + spots):
+        var found = _light_slot(slot, count, points, hemispheres)
+        var kind = found[0]
+        var at = found[1]
+        if kind == _SKY:
+            # How far the surface is turned toward the sky, then ground to
+            # sky by that weight, exactly as `Lighting.intensity_at` mixes
+            # them.
+            var weight = (
+                0.5
+                * (
+                    nx * lights[unsafe_offset=at]
+                    + ny * lights[unsafe_offset=at + 1]
+                    + nz * lights[unsafe_offset=at + 2]
+                )
+                + 0.5
+            )
+            var lift_r = (
+                lights[unsafe_offset=at + 6]
+                + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
+                * weight
+            )
+            var lift_g = (
+                lights[unsafe_offset=at + 7]
+                + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
+                * weight
+            )
+            var lift_b = (
+                lights[unsafe_offset=at + 8]
+                + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
+                * weight
+            )
+            red += lift_r
+            green += lift_g
+            blue += lift_b
             continue
-        var through = _direction_through(
+        var weight = Float32(0)
+        if kind == _DIRECTIONAL:
+            var lambert = (
+                nx * lights[unsafe_offset=at]
+                + ny * lights[unsafe_offset=at + 1]
+                + nz * lights[unsafe_offset=at + 2]
+            )
+            if lambert <= 0:
+                continue
+            weight = lambert
+        else:
+            var ray = light_vector(
+                Vector3(
+                    lights[unsafe_offset=at],
+                    lights[unsafe_offset=at + 1],
+                    lights[unsafe_offset=at + 2],
+                ),
+                Vector3(px, py, pz),
+            )
+            var dx = ray[0].x
+            var dy = ray[0].y
+            var dz = ray[0].z
+            var distance = ray[1]
+            var direction_length = ray[2]
+            if distance == 0:
+                continue
+            var rim = Float32(1)
+            if kind == _SPOT:
+                # The cosine of the angle off the cone's axis, and from it
+                # how far inside the cone this is -- the host's arithmetic,
+                # in its order.
+                var angle_cos = (
+                    dx * lights[unsafe_offset=at + 3]
+                    + dy * lights[unsafe_offset=at + 4]
+                    + dz * lights[unsafe_offset=at + 5]
+                ) / direction_length
+                rim = _spot_attenuation(
+                    lights,
+                    texels,
+                    ramp,
+                    table,
+                    at,
+                    angle_cos,
+                    Vector3(px, py, pz),
+                )
+                if rim <= 0:
+                    continue
+            var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
+            if lambert <= 0:
+                continue
+            if kind == _POINT:
+                weight = lambert * falloff(
+                    distance,
+                    lights[unsafe_offset=at + 6],
+                    lights[unsafe_offset=at + 7],
+                )
+            else:
+                weight = (
+                    lambert
+                    * rim
+                    * falloff(
+                        distance,
+                        lights[unsafe_offset=at + 9],
+                        lights[unsafe_offset=at + 10],
+                    )
+                )
+        var through = _light_through(
             lights,
+            kind,
             at,
             receives,
             Vector3(px, py, pz),
             Vector3(nx, ny, nz),
             shape,
         )
-        red += lights[unsafe_offset=at + 3] * (lambert * through.x)
-        green += lights[unsafe_offset=at + 4] * (lambert * through.y)
-        blue += lights[unsafe_offset=at + 5] * (lambert * through.z)
-    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
-    for index in range(points):
-        var at = first_point + index * POINT_FLOATS
-        # From the surface to the bulb: how far, and which way.
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var dx = ray[0].x
-        var dy = ray[0].y
-        var dz = ray[0].z
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
-        if lambert <= 0:
-            continue
-        var bare = lambert * falloff(
-            distance,
-            lights[unsafe_offset=at + 6],
-            lights[unsafe_offset=at + 7],
-        )
-        var through = _point_shaped(
-            lights,
-            at + 8,
-            receives,
-            Vector3(px, py, pz),
-            Vector3(nx, ny, nz),
-            shape,
-        )
-        red += lights[unsafe_offset=at + 3] * (bare * through.x)
-        green += lights[unsafe_offset=at + 4] * (bare * through.y)
-        blue += lights[unsafe_offset=at + 5] * (bare * through.z)
-    var first_sky = first_point + points * POINT_FLOATS
-    for index in range(hemispheres):
-        var at = first_sky + index * HEMISPHERE_FLOATS
-        # How far the surface is turned toward the sky, then ground to sky
-        # by that weight, exactly as `Lighting.intensity_at` mixes them.
-        var weight = (
-            0.5
-            * (
-                nx * lights[unsafe_offset=at]
-                + ny * lights[unsafe_offset=at + 1]
-                + nz * lights[unsafe_offset=at + 2]
+        if kind == _SPOT:
+            var tint = _spot_tint(
+                lights,
+                texels,
+                ramp,
+                table,
+                at + 14,
+                Vector3(px, py, pz),
+                Vector3(nx, ny, nz),
             )
-            + 0.5
-        )
-        var lift_r = (
-            lights[unsafe_offset=at + 6]
-            + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
-            * weight
-        )
-        var lift_g = (
-            lights[unsafe_offset=at + 7]
-            + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
-            * weight
-        )
-        var lift_b = (
-            lights[unsafe_offset=at + 8]
-            + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
-            * weight
-        )
-        red += lift_r
-        green += lift_g
-        blue += lift_b
-    var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
-    for index in range(spots):
-        var at = first_spot + index * SPOT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var dx = ray[0].x
-        var dy = ray[0].y
-        var dz = ray[0].z
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        # The cosine of the angle off the cone's axis, and from it how far
-        # inside the cone this is -- the host's arithmetic, in its order.
-        var angle_cos = (
-            dx * lights[unsafe_offset=at + 3]
-            + dy * lights[unsafe_offset=at + 4]
-            + dz * lights[unsafe_offset=at + 5]
-        ) / direction_length
-        var rim = _spot_attenuation(
-            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
-        )
-        if rim <= 0:
-            continue
-        var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
-        if lambert <= 0:
-            continue
-        var bare = (
-            lambert
-            * rim
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 9],
-                lights[unsafe_offset=at + 10],
+            red += lights[unsafe_offset=at + 6] * tint.x * (weight * through.x)
+            green += (
+                lights[unsafe_offset=at + 7] * tint.y * (weight * through.y)
             )
-        )
-        var through = _shaped_through(
-            lights,
-            at + 13,
-            receives,
-            Vector3(px, py, pz),
-            Vector3(nx, ny, nz),
-            shape,
-        )
-        var tint = _spot_tint(
-            lights,
-            texels,
-            ramp,
-            table,
-            at + 14,
-            Vector3(px, py, pz),
-            Vector3(nx, ny, nz),
-        )
-        red += lights[unsafe_offset=at + 6] * tint.x * (bare * through.x)
-        green += lights[unsafe_offset=at + 7] * tint.y * (bare * through.y)
-        blue += lights[unsafe_offset=at + 8] * tint.z * (bare * through.z)
+            blue += lights[unsafe_offset=at + 8] * tint.z * (weight * through.z)
+        else:
+            red += lights[unsafe_offset=at + 3] * (weight * through.x)
+            green += lights[unsafe_offset=at + 4] * (weight * through.y)
+            blue += lights[unsafe_offset=at + 5] * (weight * through.z)
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
@@ -2768,161 +2807,141 @@ def _toon_arriving[
     var red = base.x
     var green = base.y
     var blue = base.z
-    for index in range(count):
-        var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
-        var tone = _toon_tone(
-            texels,
-            start,
-            tones,
-            nx * lights[unsafe_offset=at]
-            + ny * lights[unsafe_offset=at + 1]
-            + nz * lights[unsafe_offset=at + 2],
-        )
-        var through = _direction_through(
+    # Every light in one loop, in the host's order; see `_light_slot`.
+    for slot in range(count + points + hemispheres + spots):
+        var found = _light_slot(slot, count, points, hemispheres)
+        var kind = found[0]
+        var at = found[1]
+        if kind == _SKY:
+            # How far the surface is turned toward the sky, then ground to
+            # sky by that weight, exactly as `Lighting.intensity_at` mixes
+            # them.
+            var weight = (
+                0.5
+                * (
+                    nx * lights[unsafe_offset=at]
+                    + ny * lights[unsafe_offset=at + 1]
+                    + nz * lights[unsafe_offset=at + 2]
+                )
+                + 0.5
+            )
+            var lift_r = (
+                lights[unsafe_offset=at + 6]
+                + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
+                * weight
+            )
+            var lift_g = (
+                lights[unsafe_offset=at + 7]
+                + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
+                * weight
+            )
+            var lift_b = (
+                lights[unsafe_offset=at + 8]
+                + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
+                * weight
+            )
+            red += lift_r
+            green += lift_g
+            blue += lift_b
+            continue
+        var weight = Float32(0)
+        if kind == _DIRECTIONAL:
+            var lambert = _toon_tone(
+                texels,
+                start,
+                tones,
+                nx * lights[unsafe_offset=at]
+                + ny * lights[unsafe_offset=at + 1]
+                + nz * lights[unsafe_offset=at + 2],
+            )
+            weight = lambert
+        else:
+            var ray = light_vector(
+                Vector3(
+                    lights[unsafe_offset=at],
+                    lights[unsafe_offset=at + 1],
+                    lights[unsafe_offset=at + 2],
+                ),
+                Vector3(px, py, pz),
+            )
+            var dx = ray[0].x
+            var dy = ray[0].y
+            var dz = ray[0].z
+            var distance = ray[1]
+            var direction_length = ray[2]
+            if distance == 0:
+                continue
+            var rim = Float32(1)
+            if kind == _SPOT:
+                # The cosine of the angle off the cone's axis, and from it
+                # how far inside the cone this is -- the host's arithmetic,
+                # in its order.
+                var angle_cos = (
+                    dx * lights[unsafe_offset=at + 3]
+                    + dy * lights[unsafe_offset=at + 4]
+                    + dz * lights[unsafe_offset=at + 5]
+                ) / direction_length
+                rim = _spot_attenuation(
+                    lights,
+                    texels,
+                    ramp,
+                    table,
+                    at,
+                    angle_cos,
+                    Vector3(px, py, pz),
+                )
+                if rim <= 0:
+                    continue
+            var lambert = _toon_tone(
+                texels,
+                start,
+                tones,
+                (nx * dx + ny * dy + nz * dz) / direction_length,
+            )
+            if kind == _POINT:
+                weight = lambert * falloff(
+                    distance,
+                    lights[unsafe_offset=at + 6],
+                    lights[unsafe_offset=at + 7],
+                )
+            else:
+                weight = (
+                    lambert
+                    * rim
+                    * falloff(
+                        distance,
+                        lights[unsafe_offset=at + 9],
+                        lights[unsafe_offset=at + 10],
+                    )
+                )
+        var through = _light_through(
             lights,
+            kind,
             at,
             receives,
             Vector3(px, py, pz),
             Vector3(nx, ny, nz),
             shape,
         )
-        red += lights[unsafe_offset=at + 3] * (tone * through.x)
-        green += lights[unsafe_offset=at + 4] * (tone * through.y)
-        blue += lights[unsafe_offset=at + 5] * (tone * through.z)
-    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
-    for index in range(points):
-        var at = first_point + index * POINT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var dx = ray[0].x
-        var dy = ray[0].y
-        var dz = ray[0].z
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var tone = _toon_tone(
-            texels,
-            start,
-            tones,
-            (nx * dx + ny * dy + nz * dz) / direction_length,
-        )
-        var bare = tone * falloff(
-            distance,
-            lights[unsafe_offset=at + 6],
-            lights[unsafe_offset=at + 7],
-        )
-        var through = _point_shaped(
-            lights,
-            at + 8,
-            receives,
-            Vector3(px, py, pz),
-            Vector3(nx, ny, nz),
-            shape,
-        )
-        red += lights[unsafe_offset=at + 3] * (bare * through.x)
-        green += lights[unsafe_offset=at + 4] * (bare * through.y)
-        blue += lights[unsafe_offset=at + 5] * (bare * through.z)
-    var first_sky = first_point + points * POINT_FLOATS
-    for index in range(hemispheres):
-        var at = first_sky + index * HEMISPHERE_FLOATS
-        # Indirect, so it is not stepped: the host's own sum, in its order.
-        var weight = (
-            0.5
-            * (
-                nx * lights[unsafe_offset=at]
-                + ny * lights[unsafe_offset=at + 1]
-                + nz * lights[unsafe_offset=at + 2]
+        if kind == _SPOT:
+            var tint = _spot_tint(
+                lights,
+                texels,
+                ramp,
+                table,
+                at + 14,
+                Vector3(px, py, pz),
+                Vector3(nx, ny, nz),
             )
-            + 0.5
-        )
-        var lift_r = (
-            lights[unsafe_offset=at + 6]
-            + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
-            * weight
-        )
-        var lift_g = (
-            lights[unsafe_offset=at + 7]
-            + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
-            * weight
-        )
-        var lift_b = (
-            lights[unsafe_offset=at + 8]
-            + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
-            * weight
-        )
-        red += lift_r
-        green += lift_g
-        blue += lift_b
-    var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
-    for index in range(spots):
-        var at = first_spot + index * SPOT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var dx = ray[0].x
-        var dy = ray[0].y
-        var dz = ray[0].z
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var angle_cos = (
-            dx * lights[unsafe_offset=at + 3]
-            + dy * lights[unsafe_offset=at + 4]
-            + dz * lights[unsafe_offset=at + 5]
-        ) / direction_length
-        var rim = _spot_attenuation(
-            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
-        )
-        if rim <= 0:
-            continue
-        var tone = _toon_tone(
-            texels,
-            start,
-            tones,
-            (nx * dx + ny * dy + nz * dz) / direction_length,
-        )
-        var bare = (
-            tone
-            * rim
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 9],
-                lights[unsafe_offset=at + 10],
+            red += lights[unsafe_offset=at + 6] * tint.x * (weight * through.x)
+            green += (
+                lights[unsafe_offset=at + 7] * tint.y * (weight * through.y)
             )
-        )
-        var through = _shaped_through(
-            lights,
-            at + 13,
-            receives,
-            Vector3(px, py, pz),
-            Vector3(nx, ny, nz),
-            shape,
-        )
-        var tint = _spot_tint(
-            lights,
-            texels,
-            ramp,
-            table,
-            at + 14,
-            Vector3(px, py, pz),
-            Vector3(nx, ny, nz),
-        )
-        red += lights[unsafe_offset=at + 6] * tint.x * (bare * through.x)
-        green += lights[unsafe_offset=at + 7] * tint.y * (bare * through.y)
-        blue += lights[unsafe_offset=at + 8] * tint.z * (bare * through.z)
+            blue += lights[unsafe_offset=at + 8] * tint.z * (weight * through.z)
+        else:
+            red += lights[unsafe_offset=at + 3] * (weight * through.x)
+            green += lights[unsafe_offset=at + 4] * (weight * through.y)
+            blue += lights[unsafe_offset=at + 5] * (weight * through.z)
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
@@ -2977,112 +2996,121 @@ def _highlight[
     var red = Float32(0)
     var green = Float32(0)
     var blue = Float32(0)
-    for index in range(count):
-        var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at],
-            lights[unsafe_offset=at + 1],
-            lights[unsafe_offset=at + 2],
-        )
-        var lambert = normal.dot(toward)
-        if lambert <= 0:
+    # Every light in one loop, in the host's order; see `_light_slot`. The
+    # hemisphere lights make no highlight.
+    for slot in range(count + points + hemispheres + spots):
+        var found = _light_slot(slot, count, points, hemispheres)
+        var kind = found[0]
+        var at = found[1]
+        if kind == _SKY:
             continue
-        var through = _direction_through(
-            lights, at, receives, Vector3(px, py, pz), normal, shape
-        )
-        var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
-        red += lights[unsafe_offset=at + 3] * (lambert * through.x) * sent.x
-        green += lights[unsafe_offset=at + 4] * (lambert * through.y) * sent.y
-        blue += lights[unsafe_offset=at + 5] * (lambert * through.z) * sent.z
-    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
-    for index in range(points):
-        var at = first_point + index * POINT_FLOATS
-        var ray = light_vector(
-            Vector3(
+        var toward: Vector3
+        var distance = Float32(0)
+        var direction_length = Float32(1)
+        var rim = Float32(1)
+        if kind == _DIRECTIONAL:
+            toward = Vector3(
                 lights[unsafe_offset=at],
                 lights[unsafe_offset=at + 1],
                 lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var toward = ray[0]
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var lambert = normal.dot(toward) / direction_length
-        if lambert <= 0:
-            continue
-        var bare = lambert * falloff(
-            distance,
-            lights[unsafe_offset=at + 6],
-            lights[unsafe_offset=at + 7],
-        )
-        var through = _point_shaped(
-            lights, at + 8, receives, Vector3(px, py, pz), normal, shape
-        )
-        toward.normalize()
-        var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
-        red += lights[unsafe_offset=at + 3] * (bare * through.x) * sent.x
-        green += lights[unsafe_offset=at + 4] * (bare * through.y) * sent.y
-        blue += lights[unsafe_offset=at + 5] * (bare * through.z) * sent.z
-    var first_spot = (
-        first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
-    )
-    for index in range(spots):
-        var at = first_spot + index * SPOT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var toward = ray[0]
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var angle_cos = (
-            toward.x * lights[unsafe_offset=at + 3]
-            + toward.y * lights[unsafe_offset=at + 4]
-            + toward.z * lights[unsafe_offset=at + 5]
-        ) / direction_length
-        var rim = _spot_attenuation(
-            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
-        )
-        if rim <= 0:
-            continue
-        var lambert = normal.dot(toward) / direction_length
-        if lambert <= 0:
-            continue
-        var bare = (
-            lambert
-            * rim
-            * falloff(
-                distance,
-                lights[unsafe_offset=at + 9],
-                lights[unsafe_offset=at + 10],
             )
+        else:
+            var ray = light_vector(
+                Vector3(
+                    lights[unsafe_offset=at],
+                    lights[unsafe_offset=at + 1],
+                    lights[unsafe_offset=at + 2],
+                ),
+                Vector3(px, py, pz),
+            )
+            toward = ray[0]
+            distance = ray[1]
+            direction_length = ray[2]
+            if distance == 0:
+                continue
+            if kind == _SPOT:
+                var angle_cos = (
+                    toward.x * lights[unsafe_offset=at + 3]
+                    + toward.y * lights[unsafe_offset=at + 4]
+                    + toward.z * lights[unsafe_offset=at + 5]
+                ) / direction_length
+                rim = _spot_attenuation(
+                    lights,
+                    texels,
+                    ramp,
+                    table,
+                    at,
+                    angle_cos,
+                    Vector3(px, py, pz),
+                )
+                if rim <= 0:
+                    continue
+        var weight: Float32
+        if kind == _DIRECTIONAL:
+            var lambert = normal.dot(toward)
+            if lambert <= 0:
+                continue
+            weight = lambert
+        else:
+            var lambert = normal.dot(toward) / direction_length
+            if lambert <= 0:
+                continue
+            if kind == _POINT:
+                weight = lambert * falloff(
+                    distance,
+                    lights[unsafe_offset=at + 6],
+                    lights[unsafe_offset=at + 7],
+                )
+            else:
+                weight = (
+                    lambert
+                    * rim
+                    * falloff(
+                        distance,
+                        lights[unsafe_offset=at + 9],
+                        lights[unsafe_offset=at + 10],
+                    )
+                )
+        var through = _light_through(
+            lights, kind, at, receives, Vector3(px, py, pz), normal, shape
         )
-        var through = _shaped_through(
-            lights, at + 13, receives, Vector3(px, py, pz), normal, shape
-        )
-        toward.normalize()
+        if kind != _DIRECTIONAL:
+            toward.normalize()
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
-        var tint = _spot_tint(
-            lights, texels, ramp, table, at + 14, Vector3(px, py, pz), normal
-        )
-        red += (
-            lights[unsafe_offset=at + 6] * tint.x * (bare * through.x) * sent.x
-        )
-        green += (
-            lights[unsafe_offset=at + 7] * tint.y * (bare * through.y) * sent.y
-        )
-        blue += (
-            lights[unsafe_offset=at + 8] * tint.z * (bare * through.z) * sent.z
-        )
+        if kind == _SPOT:
+            var tint = _spot_tint(
+                lights,
+                texels,
+                ramp,
+                table,
+                at + 14,
+                Vector3(px, py, pz),
+                normal,
+            )
+            red += (
+                lights[unsafe_offset=at + 6]
+                * tint.x
+                * (weight * through.x)
+                * sent.x
+            )
+            green += (
+                lights[unsafe_offset=at + 7]
+                * tint.y
+                * (weight * through.y)
+                * sent.y
+            )
+            blue += (
+                lights[unsafe_offset=at + 8]
+                * tint.z
+                * (weight * through.z)
+                * sent.z
+            )
+        else:
+            red += lights[unsafe_offset=at + 3] * (weight * through.x) * sent.x
+            green += (
+                lights[unsafe_offset=at + 4] * (weight * through.y) * sent.y
+            )
+            blue += lights[unsafe_offset=at + 5] * (weight * through.z) * sent.z
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
@@ -3134,104 +3162,97 @@ def _scattered[
     var red = Float32(0)
     var green = Float32(0)
     var blue = Float32(0)
-    for index in range(count):
-        var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at],
-            lights[unsafe_offset=at + 1],
-            lights[unsafe_offset=at + 2],
-        )
-        var sent = scattering_through(
-            toward, normal, toward_eye, distortion, power, scale, ambient
-        )
-        var shadowed = _direction_through(
-            lights, at, receives, place, normal, shape
-        )
-        red += lights[unsafe_offset=at + 3] * (sent * shadowed.x)
-        green += lights[unsafe_offset=at + 4] * (sent * shadowed.y)
-        blue += lights[unsafe_offset=at + 5] * (sent * shadowed.z)
-    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
-    for index in range(points):
-        var at = first_point + index * POINT_FLOATS
-        var ray = light_vector(
-            Vector3(
+    # Every light in one loop, in the host's order; see `_light_slot`. The
+    # hemisphere lights have no direction to scatter.
+    for slot in range(count + points + hemispheres + spots):
+        var found = _light_slot(slot, count, points, hemispheres)
+        var kind = found[0]
+        var at = found[1]
+        if kind == _SKY:
+            continue
+        var toward: Vector3
+        var distance = Float32(0)
+        var direction_length = Float32(1)
+        var rim = Float32(1)
+        if kind == _DIRECTIONAL:
+            toward = Vector3(
                 lights[unsafe_offset=at],
                 lights[unsafe_offset=at + 1],
                 lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
+            )
+        else:
+            var ray = light_vector(
+                Vector3(
+                    lights[unsafe_offset=at],
+                    lights[unsafe_offset=at + 1],
+                    lights[unsafe_offset=at + 2],
+                ),
+                place,
+            )
+            toward = ray[0]
+            distance = ray[1]
+            direction_length = ray[2]
+            if distance == 0:
+                continue
+            if kind == _SPOT:
+                var angle_cos = (
+                    toward.x * lights[unsafe_offset=at + 3]
+                    + toward.y * lights[unsafe_offset=at + 4]
+                    + toward.z * lights[unsafe_offset=at + 5]
+                ) / direction_length
+                rim = _spot_attenuation(
+                    lights, texels, ramp, table, at, angle_cos, place
+                )
+                if rim <= 0:
+                    continue
+        var bare = Float32(1)
+        if kind == _POINT:
+            bare = falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            )
+        elif kind == _SPOT:
+            bare = rim * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            )
+        var shadowed = _light_through(
+            lights, kind, at, receives, place, normal, shape
         )
-        var toward = ray[0]
-        var distance = ray[1]
-        if distance == 0:
-            continue
-        var bare = falloff(
-            distance,
-            lights[unsafe_offset=at + 6],
-            lights[unsafe_offset=at + 7],
-        )
-        var shadowed = _point_shaped(
-            lights, at + 8, receives, place, normal, shape
-        )
-        toward.normalize()
+        if kind != _DIRECTIONAL:
+            toward.normalize()
         var sent = scattering_through(
             toward, normal, toward_eye, distortion, power, scale, ambient
         )
-        red += lights[unsafe_offset=at + 3] * (sent * (bare * shadowed.x))
-        green += lights[unsafe_offset=at + 4] * (sent * (bare * shadowed.y))
-        blue += lights[unsafe_offset=at + 5] * (sent * (bare * shadowed.z))
-    var first_spot = (
-        first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
-    )
-    for index in range(spots):
-        var at = first_spot + index * SPOT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            Vector3(px, py, pz),
-        )
-        var toward = ray[0]
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var angle_cos = (
-            toward.x * lights[unsafe_offset=at + 3]
-            + toward.y * lights[unsafe_offset=at + 4]
-            + toward.z * lights[unsafe_offset=at + 5]
-        ) / direction_length
-        var rim = _spot_attenuation(
-            lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
-        )
-        if rim <= 0:
-            continue
-        var bare = rim * falloff(
-            distance,
-            lights[unsafe_offset=at + 9],
-            lights[unsafe_offset=at + 10],
-        )
-        var shadowed = _shaped_through(
-            lights, at + 13, receives, place, normal, shape
-        )
-        toward.normalize()
-        var sent = scattering_through(
-            toward, normal, toward_eye, distortion, power, scale, ambient
-        )
-        var tint = _spot_tint(
-            lights, texels, ramp, table, at + 14, place, normal
-        )
-        red += (
-            lights[unsafe_offset=at + 6] * tint.x * (sent * (bare * shadowed.x))
-        )
-        green += (
-            lights[unsafe_offset=at + 7] * tint.y * (sent * (bare * shadowed.y))
-        )
-        blue += (
-            lights[unsafe_offset=at + 8] * tint.z * (sent * (bare * shadowed.z))
-        )
+        if kind == _DIRECTIONAL:
+            red += lights[unsafe_offset=at + 3] * (sent * shadowed.x)
+            green += lights[unsafe_offset=at + 4] * (sent * shadowed.y)
+            blue += lights[unsafe_offset=at + 5] * (sent * shadowed.z)
+        elif kind == _POINT:
+            red += lights[unsafe_offset=at + 3] * (sent * (bare * shadowed.x))
+            green += lights[unsafe_offset=at + 4] * (sent * (bare * shadowed.y))
+            blue += lights[unsafe_offset=at + 5] * (sent * (bare * shadowed.z))
+        else:
+            var tint = _spot_tint(
+                lights, texels, ramp, table, at + 14, place, normal
+            )
+            red += (
+                lights[unsafe_offset=at + 6]
+                * tint.x
+                * (sent * (bare * shadowed.x))
+            )
+            green += (
+                lights[unsafe_offset=at + 7]
+                * tint.y
+                * (sent * (bare * shadowed.y))
+            )
+            blue += (
+                lights[unsafe_offset=at + 8]
+                * tint.z
+                * (sent * (bare * shadowed.z))
+            )
     return Vector3(red, green, blue)
 
 
@@ -3708,144 +3729,110 @@ def _physical[
     if toward_eye.length() == 0:
         return none
     var sum = none
-    for index in range(count):
-        var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at],
-            lights[unsafe_offset=at + 1],
-            lights[unsafe_offset=at + 2],
-        )
-        var lambert = max(Float32(0), normal.dot(toward))
+    var first_spot = (
+        LIGHTS_FIRST
+        + count * DIRECTIONAL_FLOATS
+        + points * POINT_FLOATS
+        + hemispheres * HEMISPHERE_FLOATS
+    )
+    # Every light in one loop, in the host's order; see `_light_slot`. The
+    # hemisphere lights have no direction.
+    for slot in range(count + points + hemispheres + spots):
+        var found = _light_slot(slot, count, points, hemispheres)
+        var kind = found[0]
+        var at = found[1]
+        if kind == _SKY:
+            continue
+        var toward: Vector3
+        var distance = Float32(0)
+        var direction_length = Float32(1)
+        var rim = Float32(1)
+        var lambert: Float32
         var coat_lambert = Float32(0)
-        if clearcoat > 0:
-            coat_lambert = max(Float32(0), coat_normal.dot(toward))
+        if kind == _DIRECTIONAL:
+            toward = Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            )
+            lambert = max(Float32(0), normal.dot(toward))
+            if clearcoat > 0:
+                coat_lambert = max(Float32(0), coat_normal.dot(toward))
+        else:
+            var ray = light_vector(
+                Vector3(
+                    lights[unsafe_offset=at],
+                    lights[unsafe_offset=at + 1],
+                    lights[unsafe_offset=at + 2],
+                ),
+                position,
+            )
+            toward = ray[0]
+            distance = ray[1]
+            direction_length = ray[2]
+            if distance == 0:
+                continue
+            if kind == _SPOT:
+                var angle_cos = (
+                    toward.x * lights[unsafe_offset=at + 3]
+                    + toward.y * lights[unsafe_offset=at + 4]
+                    + toward.z * lights[unsafe_offset=at + 5]
+                ) / direction_length
+                rim = _spot_attenuation(
+                    lights, texels, ramp, table, at, angle_cos, position
+                )
+                if rim <= 0:
+                    continue
+            lambert = max(Float32(0), normal.dot(toward) / direction_length)
+            if clearcoat > 0:
+                coat_lambert = max(
+                    Float32(0), coat_normal.dot(toward) / direction_length
+                )
         if lambert == 0 and coat_lambert == 0:
             continue
-        var through = _direction_through(
-            lights, at, receives, position, normal, shape
+        var bare = Float32(1)
+        if kind == _POINT:
+            bare = falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            )
+        elif kind == _SPOT:
+            bare = rim * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            )
+        var through = _light_through(
+            lights, kind, at, receives, position, normal, shape
         )
-        sum = physical_light(
-            sum,
-            Vector3(
+        var color: Vector3
+        if kind == _DIRECTIONAL:
+            color = Vector3(
                 lights[unsafe_offset=at + 3] * through.x,
                 lights[unsafe_offset=at + 4] * through.y,
                 lights[unsafe_offset=at + 5] * through.z,
-            ),
-            lambert,
-            coat_lambert,
-            toward,
-            toward_eye,
-            normal,
-            coat_normal,
-            surface,
-            roughness,
-            clearcoat_roughness,
-            layers,
-        )
-    var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
-    for index in range(points):
-        var at = first_point + index * POINT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            position,
-        )
-        var toward = ray[0]
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var lambert = max(Float32(0), normal.dot(toward) / direction_length)
-        var coat_lambert = Float32(0)
-        if clearcoat > 0:
-            coat_lambert = max(
-                Float32(0), coat_normal.dot(toward) / direction_length
             )
-        if lambert == 0 and coat_lambert == 0:
-            continue
-        var bare = falloff(
-            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
-        )
-        var through = _point_shaped(
-            lights, at + 8, receives, position, normal, shape
-        )
-        toward.normalize()
-        sum = physical_light(
-            sum,
-            Vector3(
+        elif kind == _POINT:
+            toward.normalize()
+            color = Vector3(
                 lights[unsafe_offset=at + 3] * (bare * through.x),
                 lights[unsafe_offset=at + 4] * (bare * through.y),
                 lights[unsafe_offset=at + 5] * (bare * through.z),
-            ),
-            lambert,
-            coat_lambert,
-            toward,
-            toward_eye,
-            normal,
-            coat_normal,
-            surface,
-            roughness,
-            clearcoat_roughness,
-            layers,
-        )
-    var first_spot = (
-        first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
-    )
-    for index in range(spots):
-        var at = first_spot + index * SPOT_FLOATS
-        var ray = light_vector(
-            Vector3(
-                lights[unsafe_offset=at],
-                lights[unsafe_offset=at + 1],
-                lights[unsafe_offset=at + 2],
-            ),
-            position,
-        )
-        var toward = ray[0]
-        var distance = ray[1]
-        var direction_length = ray[2]
-        if distance == 0:
-            continue
-        var angle_cos = (
-            toward.x * lights[unsafe_offset=at + 3]
-            + toward.y * lights[unsafe_offset=at + 4]
-            + toward.z * lights[unsafe_offset=at + 5]
-        ) / direction_length
-        var rim = _spot_attenuation(
-            lights, texels, ramp, table, at, angle_cos, position
-        )
-        if rim <= 0:
-            continue
-        var lambert = max(Float32(0), normal.dot(toward) / direction_length)
-        var coat_lambert = Float32(0)
-        if clearcoat > 0:
-            coat_lambert = max(
-                Float32(0), coat_normal.dot(toward) / direction_length
             )
-        if lambert == 0 and coat_lambert == 0:
-            continue
-        var bare = rim * falloff(
-            distance,
-            lights[unsafe_offset=at + 9],
-            lights[unsafe_offset=at + 10],
-        )
-        var through = _shaped_through(
-            lights, at + 13, receives, position, normal, shape
-        )
-        toward.normalize()
-        var tint = _spot_tint(
-            lights, texels, ramp, table, at + 14, position, normal
-        )
-        sum = physical_light(
-            sum,
-            Vector3(
+        else:
+            toward.normalize()
+            var tint = _spot_tint(
+                lights, texels, ramp, table, at + 14, position, normal
+            )
+            color = Vector3(
                 lights[unsafe_offset=at + 6] * tint.x * (bare * through.x),
                 lights[unsafe_offset=at + 7] * tint.y * (bare * through.y),
                 lights[unsafe_offset=at + 8] * tint.z * (bare * through.z),
-            ),
+            )
+        sum = physical_light(
+            sum,
+            color,
             lambert,
             coat_lambert,
             toward,
@@ -4431,29 +4418,43 @@ def _sample_filtered(
     filter: Filter,
 ) -> FloatColor:
     """Sample one mip level through one filter, the device counterpart of
-    `Texture._sample_at`."""
+    `Texture._sample_at`.
+
+    One `_fetch` in a loop reads the one nearest texel or the four linear
+    ones. Metal inlines every call, and every map and every node program
+    reaches this function, so each extra call site here is copied
+    thousands of times into the rasterize kernel. Apple's compiler ran out
+    of memory on the kernel with five."""
     var wide = _extent(image.width, level)
     var tall = _extent(image.height, level)
     var from_top = row_coordinate(v, image.flip_y)
-    if filter == NEAREST:
-        return _fetch(
+    var nearest = filter == NEAREST
+    var across = u * Float32(wide)
+    var down = from_top * Float32(tall)
+    if not nearest:
+        # Texel centers sit at half-integers; see Texture.sample.
+        across = across - 0.5
+        down = down - 0.5
+    var column = Int(floor(across))
+    var row = Int(floor(down))
+    var corners = 1 if nearest else 4
+    var taps = Array[FloatColor, 4](fill=FloatColor(0.0, 0.0, 0.0, 0.0))
+    for corner in range(corners):
+        taps[corner] = _fetch(
             texels,
             ramp,
             image,
-            Int(floor(u * Float32(wide))),
-            Int(floor(from_top * Float32(tall))),
+            column + (corner & 1),
+            row + (corner >> 1),
             level,
         )
-    # Texel centers sit at half-integers; see Texture.sample.
-    var across = u * Float32(wide) - 0.5
-    var down = from_top * Float32(tall) - 0.5
-    var column = Int(floor(across))
-    var row = Int(floor(down))
+    if nearest:
+        return taps[0]
     return blend_texels(
-        _fetch(texels, ramp, image, column, row, level),
-        _fetch(texels, ramp, image, column + 1, row, level),
-        _fetch(texels, ramp, image, column, row + 1, level),
-        _fetch(texels, ramp, image, column + 1, row + 1, level),
+        taps[0],
+        taps[1],
+        taps[2],
+        taps[3],
         across - Float32(column),
         down - Float32(row),
     )
@@ -4468,19 +4469,27 @@ def _sample_level(
     level: Float32,
 ) -> FloatColor:
     """Read at a fractional level through the texture's two filters,
-    matching `Texture.sample_level`: `plan_levels`, the host's own plan."""
+    matching `Texture.sample_level`: `plan_levels`, the host's own plan.
+    One `_sample_filtered` in a loop reads both levels, for the reason
+    `_sample_filtered` gives."""
     var plan = plan_levels(
         level, image.levels, image.mag_filter, image.min_filter
     )
-    var near = _sample_filtered(
-        texels, ramp, image, u, v, plan.lower, plan.filter
-    )
-    if plan.upper == plan.lower:
-        return near
-    var far = _sample_filtered(
-        texels, ramp, image, u, v, plan.upper, plan.filter
-    )
-    return mix_color(near, far, plan.blend)
+    var count = 1 if plan.upper == plan.lower else 2
+    var read = Array[FloatColor, 2](fill=FloatColor(0.0, 0.0, 0.0, 0.0))
+    for which in range(count):
+        read[which] = _sample_filtered(
+            texels,
+            ramp,
+            image,
+            u,
+            v,
+            plan.lower if which == 0 else plan.upper,
+            plan.filter,
+        )
+    if count == 1:
+        return read[0]
+    return mix_color(read[0], read[1], plan.blend)
 
 
 def _sample_cube(
@@ -4511,11 +4520,7 @@ def _sample_cube(
     )
 
 
-def _sample_slot(
-    texels: DevicePointer[UInt8],
-    ramp: DevicePointer[Float32],
-    table: DevicePointer[Int32],
-    slot: Int,
+def _slot_steps(
     corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
@@ -4528,28 +4533,11 @@ def _sample_slot(
     swapped: Bool,
     px: Int,
     py: Int,
-    u: Float32,
-    v: Float32,
-    placement: UvPlacement = UvPlacement(),
-) -> FloatColor:
-    """Sample texture `slot` at (u, v) for the pixel at (px, py).
-
-    Every texture lives in one buffer end to end, so the table says where
-    this one starts and how to read it. With one level there is no chain to
-    choose from and so no footprint to measure; the CPU takes the same
-    shortcut. Otherwise the level comes from where the coordinates land one
-    pixel over and one down, evaluated from the triangle's own uv function
-    rather than read from a neighboring thread -- see
-    `render.rasterizer.mip_level`. Shared by every map, as `_sample_map` is
-    on the host, so all are filtered alike on both sides. (u, v) is
-    already placed: `placement` says which pair the footprint is measured
-    on, `LANE_U` or `LANE_U1` by its channel, and how that pair is moved.
-    The identity on the first pair, the default, is what a node graph
-    samples at.
-    """
-    var image = _describe(table, slot)
-    if image.levels == 1 and image.anisotropy == 1:
-        return _sample_at(texels, ramp, image, u, v, 0)
+    placement: UvPlacement,
+) -> Tuple[Vector2, Vector2]:
+    """Return how a map's placed coordinates change one pixel over and one
+    pixel down, from the triangle's own uv function: what `_sample_slot`
+    measures its footprint on."""
     var lane = LANE_U
     if placement.channel == UV_CHANNEL_1:
         lane = LANE_U1
@@ -4606,16 +4594,134 @@ def _sample_slot(
             lane,
         )
     )
+    return (
+        Vector2(along_x.x - here.x, along_x.y - here.y),
+        Vector2(along_y.x - here.x, along_y.y - here.y),
+    )
+
+
+def _sample_slot(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
+    slot: Int,
+    corners: DevicePointer[Float32],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    u: Float32,
+    v: Float32,
+    placement: UvPlacement = UvPlacement(),
+) -> FloatColor:
+    """Sample texture `slot` at (u, v) for the pixel at (px, py).
+
+    Every texture lives in one buffer end to end, so the table says where
+    this one starts and how to read it. With one level there is no chain to
+    choose from and so no footprint to measure; the CPU takes the same
+    shortcut. Otherwise the level comes from where the coordinates land one
+    pixel over and one down, evaluated from the triangle's own uv function
+    rather than read from a neighboring thread -- see
+    `render.rasterizer.mip_level`. Shared by every map, as `_sample_map` is
+    on the host, so all are filtered alike on both sides. (u, v) is
+    already placed: `placement` says which pair the footprint is measured
+    on, `LANE_U` or `LANE_U1` by its channel, and how that pair is moved.
+    The identity on the first pair, the default, is what a node graph
+    samples at.
+    """
+    var image = _describe(table, slot)
+    if image.levels == 1 and image.anisotropy == 1:
+        return _sample_at(texels, ramp, image, u, v, 0)
+    var steps = _slot_steps(
+        corners,
+        base,
+        ax,
+        ay,
+        bx,
+        by,
+        cx,
+        cy,
+        span_inv,
+        swapped,
+        px,
+        py,
+        placement,
+    )
     # The level and the taps, from the host's own function, and v flipped
     # and wrapped by the same routine the host uses -- see render.texture.
     var footprint = anisotropic_footprint(
-        Vector2(along_x.x - here.x, along_x.y - here.y),
-        Vector2(along_y.x - here.x, along_y.y - here.y),
-        image.width,
-        image.height,
-        image.anisotropy,
+        steps[0], steps[1], image.width, image.height, image.anisotropy
     )
     return _sample_footprint(texels, ramp, image, u, v, footprint)
+
+
+def _sample_slot_or_grad(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
+    slot: Int,
+    corners: DevicePointer[Float32],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    u: Float32,
+    v: Float32,
+    explicit: Bool,
+    dx: Vector2,
+    dy: Vector2,
+) -> FloatColor:
+    """Read as `_sample_grad` when `explicit` is set, else as `_sample_slot`
+    with the identity placement, through one footprint and one
+    `_sample_footprint`. A node program reads both kinds of texture node
+    here, so the kernel keeps one copy of the footprint arithmetic for
+    each place it runs a program."""
+    var image = _describe(table, slot)
+    var along_x = dx
+    var along_y = dy
+    if explicit:
+        if not texture_grad_finite(u, v, dx, dy):
+            return FloatColor(0, 0, 0, 0)
+    else:
+        if image.levels == 1 and image.anisotropy == 1:
+            return _sample_at(texels, ramp, image, u, v, 0)
+        var steps = _slot_steps(
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px,
+            py,
+            UvPlacement(),
+        )
+        along_x = steps[0]
+        along_y = steps[1]
+    var footprint = anisotropic_footprint(
+        along_x, along_y, image.width, image.height, image.anisotropy
+    )
+    return _sample_footprint(
+        texels, ramp, image, u, v, footprint, explicit=explicit
+    )
 
 
 def _sample_grad(
@@ -4985,6 +5091,41 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
             _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
             u,
             v,
+            dx,
+            dy,
+        )
+
+    def sample_either(
+        self,
+        slot: Int,
+        u: Float32,
+        v: Float32,
+        explicit: Bool,
+        dx: Vector2,
+        dy: Vector2,
+    ) -> FloatColor:
+        """Read as `sample_grad` or as `sample`, through one footprint; see
+        `_sample_slot_or_grad`."""
+        return _sample_slot_or_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            slot,
+            self.corners.unsafe_origin_cast[MutAnyOrigin](),
+            self.base,
+            self.ax,
+            self.ay,
+            self.bx,
+            self.by,
+            self.cx,
+            self.cy,
+            self.span_inv,
+            self.swapped,
+            self.px,
+            self.py,
+            u,
+            v,
+            explicit,
             dx,
             dy,
         )
@@ -8042,40 +8183,58 @@ def rasterize_kernel(
                         Vector3(0, 0, 0),
                         textured,
                     )
-                    if has_output(nodes, COLOR_NODE):
-                        var diffuse = run_nodes(nodes, COLOR_NODE, given)
-                        red = diffuse[0] * arriving.x
-                        green = diffuse[1] * arriving.y
-                        blue = diffuse[2] * arriving.z
-                    if has_output(nodes, OPACITY_NODE):
-                        alpha = run_nodes(nodes, OPACITY_NODE, given)[0]
-                    if has_output(nodes, EMISSIVE_NODE):
-                        var given_off = run_nodes(nodes, EMISSIVE_NODE, given)
-                        glow_r = given_off[0]
-                        glow_g = given_off[1]
-                        glow_b = given_off[2]
-                    if has_output(nodes, ROUGHNESS_NODE):
-                        roughness = run_nodes(nodes, ROUGHNESS_NODE, given)[0]
+                    # Every output through one `run_nodes` call in a loop.
+                    # Metal inlines every call, so each call site copied the
+                    # whole interpreter into this kernel once more.
+                    var wanted: Array[NodeOutput, 8] = [
+                        COLOR_NODE,
+                        OPACITY_NODE,
+                        EMISSIVE_NODE,
+                        ROUGHNESS_NODE,
+                        METALNESS_NODE,
+                        BACKDROP_NODE,
+                        BACKDROP_ALPHA_NODE,
+                        MASK_NODE,
+                    ]
+                    var ran = Array[Lanes, 8](fill=Lanes(0))
+                    var set = Array[Bool, 8](fill=False)
+                    for index in range(8):
+                        var asked = has_output(nodes, wanted[index])
+                        if index == 6:
+                            asked = asked and has_output(nodes, BACKDROP_NODE)
+                        if index == 7:
+                            # The mask, before the alpha test, as the host
+                            # asks it.
+                            asked = masked
+                        if asked:
+                            ran[index] = run_nodes(nodes, wanted[index], given)
+                            set[index] = True
+                    if set[0]:
+                        red = ran[0][0] * arriving.x
+                        green = ran[0][1] * arriving.y
+                        blue = ran[0][2] * arriving.z
+                    if set[1]:
+                        alpha = ran[1][0]
+                    if set[2]:
+                        glow_r = ran[2][0]
+                        glow_g = ran[2][1]
+                        glow_b = ran[2][2]
+                    if set[3]:
+                        roughness = ran[3][0]
                         roughened = True
-                    if has_output(nodes, METALNESS_NODE):
-                        metalness = run_nodes(nodes, METALNESS_NODE, given)[0]
+                    if set[4]:
+                        metalness = ran[4][0]
                         metallized = True
                     # The backdrop in place of the diffuse light, as the
                     # host mixes it.
-                    if has_output(nodes, BACKDROP_NODE):
-                        var backdrop_light = run_nodes(
-                            nodes, BACKDROP_NODE, given
-                        )
+                    if set[5]:
                         var share = Float32(1)
-                        if has_output(nodes, BACKDROP_ALPHA_NODE):
-                            share = run_nodes(
-                                nodes, BACKDROP_ALPHA_NODE, given
-                            )[0]
-                        red = red + (backdrop_light[0] - red) * share
-                        green = green + (backdrop_light[1] - green) * share
-                        blue = blue + (backdrop_light[2] - blue) * share
-                    # The mask, before the alpha test, as the host asks it.
-                    if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                        if set[6]:
+                            share = ran[6][0]
+                        red = red + (ran[5][0] - red) * share
+                        green = green + (ran[5][1] - green) * share
+                        blue = blue + (ran[5][2] - blue) * share
+                    if set[7] and ran[7][0] == 0:
                         continue
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
