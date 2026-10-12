@@ -8,7 +8,9 @@ Error-free product splits and TwoSum expansions retain small terms when
 large terms cancel. The Float32 specialization is device-compatible.
 """
 
+from std.bit import count_leading_zeros
 from std.math import fma, frexp, inf, isfinite, ldexp
+from std.memory import bitcast
 
 
 @fieldwise_init
@@ -28,6 +30,20 @@ def _split[
         1.1754943508222875e-38
     ) if dtype == DType.float32 else SIMD[dtype, 1](2.2250738585072014e-308)
     comptime shift = 64 if dtype == DType.float32 else 512
+    comptime if dtype == DType.float32:
+        # A subnormal Float32 is split from its bits. Apple GPUs flush
+        # subnormal operands to zero, so scaling one up first reads zero
+        # there. The bits give the same fraction and exponent.
+        var bits = bitcast[DType.uint32](value)
+        var significand = bits & UInt32(0x7FFFFF)
+        if (bits & UInt32(0x7F800000)) == 0 and significand != 0:
+            var top = 31 - Int(count_leading_zeros(significand))
+            var fraction = (
+                (bits & UInt32(0x80000000))
+                | UInt32(126 << 23)
+                | ((significand << UInt32(23 - top)) & UInt32(0x7FFFFF))
+            )
+            return _Scaled(bitcast[dtype](fraction), exponent + top - 148)
     if value != 0 and abs(value) < tiny:
         var parts = frexp(value * ldexp(SIMD[dtype, 1](1), Int32(shift)))
         return _Scaled(parts[0], exponent + Int(parts[1]) - shift)
