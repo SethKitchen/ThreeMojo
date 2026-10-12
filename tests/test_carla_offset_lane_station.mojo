@@ -73,7 +73,9 @@ def _check_center(
     map: Map, section: Int, lane: Int, s: Float64, s_tolerance: Float64
 ) raises:
     # Query at the exact lane center and require the same lane back.
-    var target = Waypoint(RoadId(1), SectionId(section), LaneId(lane), s)
+    var target = Waypoint._from_si(
+        RoadId(1), SectionId(section), LaneId(lane), s
+    )
     var query = map.compute_transform(target).location
     var found = map.closest_waypoint_on_road(query)
     assert_true(Bool(found))
@@ -105,7 +107,7 @@ def test_curved_offset_returns_the_exact_center_station() raises:
     # The issue's reproduction: laneOffset c=0.01 gave s=53.03.
     var map = _one_section("0", "0.01")
     assert_false(map.roads[0].lane_is_straight(0))
-    var target = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 50.0)
+    var target = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 50.0)
     var query = map.compute_transform(target).location
     var nearest = map.closest_waypoint_on_road(query).value()
     assert_equal(nearest.lane_id, LaneId(-1))
@@ -153,7 +155,7 @@ def test_section_boundaries_keep_section_identity() raises:
 def test_sign_check_query_uses_the_same_station() raises:
     # The load-time sign check uses the default query's arithmetic.
     var map = _one_section("1", "0")
-    var target = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 50.0)
+    var target = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 50.0)
     var query = map.compute_transform(target).location
     var work = _MapBuildWork(MapBuildBudget())
     var found = map._closest_lane_with_build_work(query, LANE_DRIVING, work)
