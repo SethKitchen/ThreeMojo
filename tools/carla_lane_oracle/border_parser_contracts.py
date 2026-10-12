@@ -187,7 +187,7 @@ def verify(root, *, _operation=None):
                     require(expected == seed_count.BEFORE_SHA256
                             and actual in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
                                           seed_count.SUPPORT_AFTER_SHA256,
-                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256},
+                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                             'unreviewed Map consumer variant')
                     map_edge = seed_count.verify(root, **operation_args)
                     require(map_edge is not None and map_edge['before_sha256'] == expected

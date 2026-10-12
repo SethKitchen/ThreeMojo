@@ -938,6 +938,9 @@ struct _Segment(ImplicitlyCopyable):
     var bounds: Tuple[_Interval, _Interval, _Interval]
     # -1 means the optional construction proof is absent.
     var cover_index: Int
+    # This segment's certified full-curve distance to its stored chord. The
+    # map's `_curve_deviation` is the maximum over every segment (#685).
+    var deviation: Float64
 
 
 @fieldwise_init
@@ -2242,12 +2245,16 @@ struct Map(Movable):
             var index = candidate.value().start_value
             ref segment = self._segments[index]
             if best >= 0:
-                var lower = _indexed_curve_lower(
-                    _segment_distance2(segment.start, segment.end, location),
-                    self._curve_deviation,
+                var key = _segment_distance2(
+                    segment.start, segment.end, location
                 )
+                var lower = _indexed_curve_lower(key, self._curve_deviation)
                 if lower > best_radius:
                     break
+                # The index orders keys only, so the walk keeps the global
+                # stop. This candidate's own deviation can still exclude it.
+                if _indexed_curve_lower(key, segment.deviation) > best_radius:
+                    continue
                 if not _lane_box_can_improve(
                     segment.bounds, location, certificates[best].point
                 ):
@@ -4260,6 +4267,7 @@ struct Map(Movable):
                 second,
                 certificate[1],
                 cover_index,
+                certificate[0],
             )
         )
         self._curve_deviation = max(self._curve_deviation, certificate[0])

@@ -101,8 +101,9 @@ jobs:
       CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
     name: lint (standard library only)
     runs-on: ubuntu-latest
-    # A hang detector, not a speed target: lint alone once ran an hour.
-    timeout-minutes: 120
+    # Full Python proof tooling precedes native and coverage checks.
+    # This aggregate hang guard does not change any per-test timeout.
+    timeout-minutes: 240
 
     steps:
       # The whole history, so that the merge base with the base branch exists.
@@ -235,8 +236,9 @@ jobs:
       CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
     name: check-cpu (macOS, Apple Silicon) lint
     runs-on: macos-latest
-    # A hang detector, not a speed target: lint alone once ran an hour.
-    timeout-minutes: 150
+    # Full Python proof tooling precedes native and coverage checks.
+    # This aggregate hang guard does not change any per-test timeout.
+    timeout-minutes: 240
 
     steps:
       # The whole history, so that the merge base with the base branch exists.

@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 import map_station_contracts as station
+import map_deviation_contracts as deviation
 import seed_count_contracts as seed
 import full_audit_cleanup_contracts as cleanup
 import _full_audit_test_fixtures as fixtures
@@ -22,7 +23,9 @@ LEAF = 'tools/carla_lane_oracle/map_station_contracts.py'
 class StationLeafControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.current = (ROOT/station.MODULE).read_text()
+        # The physical Map can be the later deviation endpoint (#685). Its
+        # exact inverse gives the station endpoint that these controls bind.
+        cls.current = deviation.station_source((ROOT/station.MODULE).read_text())
         cls.before = station.predecessor_source(cls.current)
 
     def test_exact_sixth_edge_reconstructs_all_five_unchanged_predecessors(self):
@@ -132,7 +135,9 @@ class StationLeafControls(unittest.TestCase):
             keywords = [kw for kw in call.keywords if kw.arg == 'station_edge']
             self.assertEqual(len(keywords), 1)
             self.assertEqual(ast.dump(keywords[0].value), ast.dump(ast.Name(id='station_edge', ctx=ast.Load())))
-        expected = ast.dump(ast.parse('station_edge = sha(text) == station.AFTER_SHA256').body[0], include_attributes=False)
+        expected = ast.dump(ast.parse("station_edge = deviation_edge or sha(text) == station.AFTER_SHA256").body[0], include_attributes=False)
+        self.assertEqual(sum(ast.dump(node, include_attributes=False) == expected for node in verify.body), 1)
+        expected = ast.dump(ast.parse('deviation_edge = sha(text) == deviation.AFTER_SHA256').body[0], include_attributes=False)
         self.assertEqual(sum(ast.dump(node, include_attributes=False) == expected for node in verify.body), 1)
         names = [ast.unparse(node.func) for node in ast.walk(verify) if isinstance(node, ast.Call)]
         self.assertIn('station.predecessor_source', names)
@@ -156,7 +161,11 @@ class StationLeafControls(unittest.TestCase):
 class StationIntegrationControls(unittest.TestCase):
     def setUp(self):
         self.root = fixtures.copy_current_root(self, ROOT)
-        self.current = (self.root/station.MODULE).read_bytes()
+        # Hold the fixture at the station endpoint. The deviation successor
+        # has its own controls in test_map_deviation_contracts.
+        self.current = deviation.station_source(
+            (self.root/station.MODULE).read_bytes().decode()).encode()
+        (self.root/station.MODULE).write_bytes(self.current)
         self.before = station.predecessor_source(self.current.decode()).encode()
 
     @contextmanager

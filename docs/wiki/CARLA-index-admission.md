@@ -33,6 +33,23 @@ Thus the same lower bound applies to every later candidate in the sorted prefix.
 The query can stop only when that lower radius exceeds the incumbent point's wide upper radius.
 Equality retains the candidate and the insertion-order tie policy.
 
+## Per-segment skip
+
+Each indexed segment also stores its own bound E (issue #685, item 1).
+The map's maximum is the largest of these values.
+The index orders its keys only, so the query keeps the stop above with the maximum E.
+
+After that stop, the query computes the same lower radius with the candidate's own E.
+When this radius is strictly greater than the incumbent's wide upper radius, the query skips the candidate.
+The skip comes before candidate admission and refinement, like the box and sampled-cover skips.
+The incumbent's radius bounds the distance of an actual stored witness point.
+Thus a skipped candidate cannot win or tie, and every answer and certificate stays the same.
+An unknown or nonfinite E gives a zero radius, so that candidate is not skipped.
+
+On `assets/carla/town.xodr` the skip removes about 44 percent of the candidate certifications.
+See [the #685 measurement](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/certified-query-685.md).
+The source edge has its own reviewed lane-oracle record, `map_deviation_contracts.py`.
+
 ## Separate limits
 
 This bound does not prove a minimum inside an admitted segment.

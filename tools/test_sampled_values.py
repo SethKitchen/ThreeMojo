@@ -43,13 +43,6 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         paths = set(GROUP_PATHS['canonical_accumulation']) | set(PROTECTED_INPUTS)
         paths.update(json.loads(guard_pin.read_text())['protected_inventory'])
         paths.update(GROUP_PATHS['optional_runtime'])
-        # The shared-helper binding reads its contract and its package inputs,
-        # providers and tests.
-        from tools.carla_lane_oracle import shared_helper_contracts as helpers
-        paths.update((
-            'tools/carla_lane_oracle/shared_helper_contracts.py',
-            'loaders/utf8.mojo', *helpers.PACKAGE_INPUTS, *helpers.PROVIDERS,
-            *helpers.TESTS))
         paths.update('extensions/carla/' + name for name in
                      ('curve_trig.mojo', 'geometry.mojo', 'lane_value_bounds.mojo'))
         for name in paths:
@@ -93,15 +86,17 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
             paths.update(record[group])
         physical = (ROOT/seed_count.MODULE).read_bytes().decode('utf-8')
         score_tests = ()
-        if seed_count.sha(physical) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
+        if seed_count.sha(physical) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}:
             # Only the fully verified physical score endpoint can add its
             # separate numerical fixture. Historical mutation setup stays fixed.
             seed_count.verify_score(ROOT)
             self.assertEqual((ROOT/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
             score_tests = tuple(seed_count.SCORE_TESTS)
             paths.update(score_tests)
-            if seed_count.sha(physical) == seed_count.station.AFTER_SHA256:
+            if seed_count.sha(physical) in {seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}:
                 paths.update(seed_count.station.TESTS)
+            if seed_count.sha(physical) == seed_count.deviation.AFTER_SHA256:
+                paths.update(seed_count.deviation.TESTS)
         for name in paths:
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +104,7 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         # This Map-successor control keeps its exact historical dependencies.
         # Complete current-cleanup admission has a separate test below.
         cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
+        cleanup_fixtures.copy_shared_helper_inputs(self.root, ROOT)
         for name, raw in self.cleanup_sources.items():
             self.assertEqual((self.root/name).read_bytes(), raw)
         self.assertEqual((self.root/seed_count.MODULE).read_bytes().decode('utf-8'), physical)

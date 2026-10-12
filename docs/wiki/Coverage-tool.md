@@ -136,6 +136,16 @@ To keep this order, a probe must run the native implicit conversion at that poin
 
 The operator check therefore refuses each join, instead of a false vector. This includes an `Optional` wrap of a pure operand, which replaces the value with its presence.
 
+#### Retry the refused forms on a new Mojo
+
+The refused forms are limits of pinned Mojo 1.1.0. They are not limits of the coverage design. When the toolchain pin moves, test each form again. Admit a form only if the native and instrumented controls agree. These language features can remove a refusal:
+
+- A way to copy or move an operand after its truth test, and only on selection. This removes the one-type refusals for a retained left operand and for a type with a user-defined move constructor.
+- A generic implicit conversion, or reflection that can call a conversion between two generic types. This removes the refusal of implicit-conversion joins.
+- Reflection that names the overloads of `__merge_with__` or the origin parameters of a type. This can make the operator check simpler.
+
+Keep each refusal until its native control passes. Do not admit a form because it compiles.
+
 The pinned reflection API names types without their origin parameters. A same-type check therefore also needs a proxy as the instrumented result. An operator whose operands differ only by origin keeps its native two-type semantics through distinct proxy types.
 
 [Issue #556](https://github.com/SethKitchen/ThreeMojo/issues/556) fixes standard-library truth conversion. Native and instrumented checks cover optional, string, list and integer operands, including throwing operand expressions and short-circuit order.
@@ -261,6 +271,16 @@ Proof-related source changes participate in the existing repository cache key, a
 Compiler-free controls run under normal Python and `python -O`. Native qualification checks actual source-to-origin-to-stage byte correspondence for LF, CRLF, CR and UTF-8. It checks failed generation, alias drift, original/instrumented output and exact loop records. It also checks a missing dynamic-empty outcome and an actual contradictory entry-probe mutant. It also captures one real staged suite through the maintained wrapper and reports its complete original manifest through the proof-aware boundary.
 
 Its separate branch-only reporter projections are explicit unit diagnostics; they do not replace the original manifest or claim a production gate. `make test-coverage-tool` includes these checks. Historical percentages refer to their original denominators; impossible classifications are denominator changes, not newly executed tests.
+
+### Platform-specific witnesses
+
+Coverage captures run only on Linux x86-64. Some obligations need a floating-point state that only x86 has. The macOS arm64 runner runs those suites as correctness tests, and its results do not enter a coverage report.
+
+The junction endpoint refusal in `extensions/carla/junction_bounds.mojo` is one such obligation (issue #721). Its last-endpoint witness needs x86 denormals-are-zero. The test fixture `tools/fixtures/carla_sum2_fp_state.c` exposes seven modes on x86 and five on Arm.
+
+On x86, `tests/test_carla_junction_endpoint_refusals.mojo` runs both last-endpoint vectors. On Arm, it runs the first-endpoint control and prints `LAST_DAZ_CAPABILITY_UNAVAILABLE`. The suite fails on any other mode count. The Arm run claims no last-endpoint witness.
+
+The obligations that issue #721 lists, and the tests that witness them, are in [the #721 coverage record](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/full-audit-721-coverage.md).
 
 ### The capture grows with every statement run
 

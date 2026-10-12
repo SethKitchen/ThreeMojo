@@ -22,8 +22,8 @@ stage:
   preparation, lighting, rasterization and resolve.
 - `gpu prepare`: `Renderer.prepare_frame`, the host step that turns the
   scene into screen-space triangles and segments for the device.
-- `gpu draw`: `GpuRenderer.draw`: the upload, the launch and the
-  rasterization.
+- `gpu draw`: `render.gpu.join_corners` and `GpuRenderer.draw`: the
+  join of the corners to their surfaces, the upload and the launch.
 - `gpu read back`: `GpuRenderer.read_back`, which waits for the draw.
 
 The GPU stages run only where a GPU is present, and only when the command
@@ -58,7 +58,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from lights.lighting import Lighting
 from render.framebuffer import Color
-from render.gpu import GpuRenderer
+from render.gpu import GpuRenderer, join_corners
 from render.rasterizer import SHADE_TEXTURE
 from renderers.renderer import Renderer, camera_position, toward_camera
 from std.sys import argv, has_accelerator, num_logical_cores
@@ -271,7 +271,7 @@ def main() raises:
             )
             gpu_drawing = perf_counter_ns()
             device.value().draw(
-                prepared.whole_corners(),
+                join_corners(prepared),
                 small.background,
                 SHADE_TEXTURE,
                 lighting,

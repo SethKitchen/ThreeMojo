@@ -66,8 +66,8 @@ class SeedCountSuccessorTests(unittest.TestCase):
         self.assertEqual(edge['before_sha256'], seed.BEFORE_SHA256)
         self.assertEqual(edge['after_sha256'], seed.AFTER_SHA256)
         actual = seed.sha((ROOT/MAP).read_bytes().decode())
-        self.assertIn(actual, {seed.BEFORE_SHA256, seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256})
-        expected = (seed.verify_score(ROOT) if actual in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}
+        self.assertIn(actual, {seed.BEFORE_SHA256, seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256})
+        expected = (seed.verify_score(ROOT) if actual in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}
                     else seed.verify_frontier(ROOT) if actual == seed.FRONTIER_AFTER_SHA256
                     else seed.verify_support(ROOT) if actual == seed.SUPPORT_AFTER_SHA256
                     else seed.verify_optional(ROOT) if actual == seed.OPTIONAL_AFTER_SHA256 else edge)

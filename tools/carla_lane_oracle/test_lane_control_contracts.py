@@ -33,7 +33,7 @@ class LaneControlContracts(unittest.TestCase):
             if rel == 'extensions/carla/map.mojo':
                 import seed_count_contracts as seed
                 text = (self.source/rel).read_bytes().decode('utf-8')
-                if seed.sha(text) in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}:
+                if seed.sha(text) in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
                     # Keep this partial lane-mutation fixture at the verified
                     # predecessor, as the lane-order/cache fixtures already do.
                     seed.verify_score(self.source)
