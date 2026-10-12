@@ -358,9 +358,6 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     def shutter_frequency(self) raises -> Frequency:
         """Return the reciprocal shutter time.
 
-        Args:
-            self: The raw CARLA camera settings.
-
         Returns:
             The checked quantity with its Float32 precision.
 
@@ -374,11 +371,10 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     def set_shutter_speed(mut self, value: Frequency) raises:
         """Set the reciprocal shutter time.
 
+        The raw CARLA field is updated after validation.
+
         Args:
             value: The physical quantity in any compatible unit.
-
-        Returns:
-            Nothing; the raw CARLA field is updated after validation.
 
         Raises:
             Error: If the converted value is nonfinite or outside its domain.
@@ -389,9 +385,6 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
 
     def exposure_up_rate(self) raises -> Frequency:
         """Return the dark-to-bright adaptation rate in stops per second.
-
-        Args:
-            self: The raw CARLA camera settings.
 
         Returns:
             The checked quantity with its Float32 precision.
@@ -406,11 +399,10 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     def set_exposure_speed_up(mut self, value: Frequency) raises:
         """Set the dark-to-bright adaptation rate in stops per second.
 
+        The raw CARLA field is updated after validation.
+
         Args:
             value: The physical quantity in any compatible unit.
-
-        Returns:
-            Nothing; the raw CARLA field is updated after validation.
 
         Raises:
             Error: If the converted value is nonfinite or outside its domain.
@@ -421,9 +413,6 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
 
     def exposure_down_rate(self) raises -> Frequency:
         """Return the bright-to-dark adaptation rate in stops per second.
-
-        Args:
-            self: The raw CARLA camera settings.
 
         Returns:
             The checked quantity with its Float32 precision.
@@ -440,11 +429,10 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     def set_exposure_speed_down(mut self, value: Frequency) raises:
         """Set the bright-to-dark adaptation rate in stops per second.
 
+        The raw CARLA field is updated after validation.
+
         Args:
             value: The physical quantity in any compatible unit.
-
-        Returns:
-            Nothing; the raw CARLA field is updated after validation.
 
         Raises:
             Error: If the converted value is nonfinite or outside its domain.
@@ -455,9 +443,6 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
 
     def depth_blur_distance(self) raises -> Length:
         """Return the distance at which depth blur reaches half its radius.
-
-        Args:
-            self: The raw CARLA camera settings.
 
         Returns:
             The checked quantity with its Float32 precision.
@@ -473,11 +458,10 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     def set_depth_blur_distance(mut self, value: Length) raises:
         """Set the distance at which depth blur reaches half its radius.
 
+        The raw CARLA field is updated after validation.
+
         Args:
             value: The physical quantity in any compatible unit.
-
-        Returns:
-            Nothing; the raw CARLA field is updated after validation.
 
         Raises:
             Error: If the converted value is nonfinite or outside its domain.
