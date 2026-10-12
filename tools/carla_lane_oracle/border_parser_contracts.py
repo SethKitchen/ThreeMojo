@@ -7,7 +7,13 @@ The historical parser remains accepted without activating an edge. Only the
 reviewed border parser activates the new edge. Consumer checks read the live
 root; reconstructed source is never substituted for their actual inputs.
 """
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 from pathlib import Path
 
@@ -59,7 +65,7 @@ def sha(text):
 
 
 def read_record(root):
-    payload = (Path(root)/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, Path(root)/MIGRATION, (Path(root)/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'immutable successor record changed')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -106,7 +112,7 @@ def predecessor_source(text, record):
 def successor_source(root):
     """Reconstruct the reviewed after fixture; this does not qualify a root."""
     record = read_record(root)
-    text = (Path(root)/MODULE).read_bytes().decode('utf-8')
+    text = _typed_source.historical_bytes(root, Path(root)/MODULE, (Path(root)/MODULE).read_bytes()).decode('utf-8')
     if sha(text) == BEFORE_SHA256:
         require(source.token_sha256(text) == BEFORE_TOKEN_SHA256, 'before tokens changed')
         for edit in checked_edits(record):
@@ -158,14 +164,14 @@ def verify(root, *, _operation=None):
     try:
         root = Path(root)
         record = read_record(root)
-        edge = verify_source(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8'), record)
+        edge = verify_source(_typed_source.historical_bytes(root, MODULE, full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation), _operation=_operation).decode('utf-8'), record)
         consumers = boundary.verify(root, **operation_args)
         for path, reviewed in reuse.verify(root, **operation_args).items():
             require(path not in consumers, 'duplicate reviewed consumer edge: ' + path)
             consumers[path] = reviewed
         if any(path in full_audit.SOURCE_PATHS
                and expected != full_audit.AFTER_SHA256[path]
-               and hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest() == full_audit.AFTER_SHA256[path]
+               and hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest() == full_audit.AFTER_SHA256[path]
                for path, expected in record['unchanged_inputs'].items()):
             for path, reviewed in full_audit.verified_edges(root, **operation_args).items():
                 require(path not in consumers, 'duplicate reviewed cleanup consumer edge: ' + path)
@@ -178,7 +184,7 @@ def verify(root, *, _operation=None):
                 consumers[path] = reviewed
         for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
             for path, expected in record[group].items():
-                actual = hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest()
+                actual = hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest()
                 if group == 'unchanged_inputs' and path == 'extensions/carla/map.mojo' and actual != expected:
                     if __package__:
                         from . import seed_count_contracts as seed_count
@@ -208,7 +214,7 @@ def verify(root, *, _operation=None):
         if edge is not None:
             for path, expected in record['after_correctness_tests'].items():
                 require((root/path).is_file()
-                        and hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest() == expected,
+                        and hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest() == expected,
                         'reviewed border regression suite missing or changed: ' + path)
         if _owns_operation:
             _operation.finish(root)
