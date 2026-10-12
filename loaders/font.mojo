@@ -499,11 +499,18 @@ def _glyph_path(
     `getPoints` drops the repeated point, so the shape is the same. A
     `Glyph` starts with a move, so the pen is down before it is compared.
 
+    A move waits until its contour first draws. A contour that draws
+    nothing once scaled, such as one whose points all round to one spot,
+    leaves no outline of no points for `ShapePath.to_shapes` to refuse.
+    DejaVu Sans's "u" has such a contour.
+
     Raises:
         Error: Never; a `Glyph` has already checked its outline.
     """
     var path = ShapePath()
     var pen = Vector2(0, 0)
+    var pending = Vector2(0, 0)
+    var waiting = False
     for index in range(len(glyph.steps)):
         ref step = glyph.steps[index]
         var points = List[Vector2]()
@@ -518,10 +525,16 @@ def _glyph_path(
                 still = False
             points.append(placed)
         if step.verb == MOVE_TO:
-            path.move_to(points[0])
-        elif still:
+            pending = points[0]
+            waiting = True
+            pen = points[0]
             continue
-        elif step.verb == LINE_TO:
+        if still:
+            continue
+        if waiting:
+            path.move_to(pending)
+            waiting = False
+        if step.verb == LINE_TO:
             path.line_to(points[0])
         elif step.verb == QUADRATIC_TO:
             path.quadratic_curve_to(points[0], points[1])
