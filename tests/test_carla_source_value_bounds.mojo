@@ -74,7 +74,7 @@ def test_sinc_and_constant_trig_retain_branch_and_signed_zero_bounds() raises:
 
 def test_arc_value_matches_full_graph_at_scale_and_radius_limits() raises:
     for scale in [1e-200, 1.0, 1e200]:
-        var geometry = RoadGeometry(ARC, 0, scale, -scale, 0.3, 1)
+        var geometry = RoadGeometry.from_meters(ARC, 0, scale, -scale, 0.3, 1)
         for curvature in [-1e200, -2.0, -1e-320, 1e-320, 2.0, 1e200]:
             geometry.curvature_start = curvature
             var full = _arc_offset_jet(
@@ -115,7 +115,7 @@ def test_all_geometry_kinds_keep_clamps_record_joins_and_missing_records() raise
                     _equal_value(full[1], value[1])
                     _equal_value(full[2], value[2])
         road.info.elevations.append(
-            RoadInfoElevation(10.0, CubicPolynomial.constant(2.0))
+            RoadInfoElevation._from_si(10.0, CubicPolynomial._constant_si(2.0))
         )
         var full = _lane_jet(road, 0, 0, 9.0, 11.0)
         var value = _lane_value_bound(road, 0, 0, 9.0, 11.0)
