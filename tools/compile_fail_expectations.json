@@ -121,6 +121,18 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_body_region_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'region_label': value passed to 'region' cannot be converted from 'IntLiteral[0]' to 'BodyRegion'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_body_segment_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -245,6 +257,18 @@
         "column": 25,
         "line": 12,
         "message": "invalid call to 'compute_angle': value passed to 'model' cannot be converted from 'IntLiteral[1]' to 'CameraModel'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'tissue_label': value passed to 'tissue' cannot be converted from 'IntLiteral[1]' to 'CanonicalTissue'"
       }
     ],
     "notes": [
@@ -644,6 +668,18 @@
         "column": 42,
         "line": 13,
         "message": "invalid call to 'get': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'DataArrayTextureId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_dentition_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "invalid call to 'dentition_label': value passed to 'dentition' cannot be converted from 'IntLiteral[0]' to 'Dentition'"
       }
     ],
     "notes": [
@@ -1932,6 +1968,18 @@
         "column": 35,
         "line": 16,
         "message": "invalid call to 'lymph_mesh': value passed to 'part' cannot be converted from 'IntLiteral[0]' to 'LymphPart'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "invalid call to 'mapping_label': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MappingKind'"
       }
     ],
     "notes": [
