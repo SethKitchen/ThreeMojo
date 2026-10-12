@@ -1,162 +1,268 @@
+<!--
+Copyright (c) 2026 Seth Kitchen, PE
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-->
+
 # CARLA quantity boundary inventory (#333)
 
-This is a preliminary candidate scan of the public CARLA APIs that still
-expose a dimensional value as a raw `Float32` or `Float64`. It is not yet a
-reviewed classification of each symbol, so the issue's inventory item stays
-open. It sorts them into groups, and each
-group has its own migration rule. Issue
-[#333](https://github.com/SethKitchen/ThreeMojo/issues/333) tracks the work.
+The public scalar inventory is reviewed per declaration. It replaces the
+422-row name-filter scan. The review starts from `main` `2d81e959` and
+includes the issue #333 working source on October 12, 2026. It records
+what each value means, its exact typed entry or view, its raw adapter,
+and why raw storage remains where it does.
 
-## Method
+The [TSV inventory](carla-quantity-inventory-333.tsv) is the per-symbol
+record. An inventory pass is not a compiler, runtime, coverage, or
+numerical-certificate pass. Those checks must qualify the final source.
 
-A script scanned every public struct field, function parameter and return in
-`extensions/carla/` at `main` `01c7c8e8`. It kept the names that suggest a
-dimension, such as distance, width, time, speed, angle, `s`, `x` or a unit
-suffix. A private name, one with a leading underscore, is not public. The
-scan found 422 candidates. It is a name filter, so it also lists some
-dimensionless values, such as PID gains and the DVS log-intensity
-thresholds. [`carla-quantity-inventory-333.tsv`](carla-quantity-inventory-333.tsv)
-holds every candidate: its file, symbol, raw type, kind and group. The group
-comes from the file alone; a per-symbol review can move a candidate.
+## Review coverage
 
-The precision-preserving contract exists already. `units.si` defines
-`Length64`, `Duration64` and the other `Float64` quantities. A `Float64`
-quantity keeps every digit, and a `Float32` quantity is a separate type
-that cannot mix with it.
+The review reads declarations in all 125 Mojo modules under
+`extensions/carla/`. The current inventory has 2,219 rows from 80 modules:
+1,146 parameters, 671 fields, and 402 returns. It includes:
 
-| Group | Entries | Rule |
+- Every public `Float32` and `Float64` field, parameter, and return.
+- Floating scalars inside public lists, dictionaries, tuples, and SIMD types.
+- Already-typed quantity fields, parameters, and returns, including physics,
+  temperature, and photometry types.
+- Integer event clocks, sensor point rates, recorder dates, and CAM wire
+  records. Their neighboring count and confidence fields are classified too.
+
+No name filter selects these floating-point rows. In particular, `a`, `c`,
+`d`, `b`, `max`, `value`, `input`, `size`, `rise`, `blur_amount`, and tuple
+results are reviewed. Public fieldwise constructors are represented by their
+fields. Authored overloads have separate rows and source-line references.
+
+Private types, private functions, function-local variables, and constructors
+that require the private `_RawSI` capability are implementation details.
+The inventory does not count them as application entry points. Integer IDs,
+ordinary counts, Boolean flags, strings, constants, and opaque composite
+objects are outside the scalar-quantity list. A re-export retains the
+contract at its defining module; this scan does not duplicate declarations
+outside `extensions/carla/`.
+
+| Classification | Rows | Disposition |
 |---|---:|---|
-| Pinned OpenDRIVE and map geometry | 206 | Migrate only with successor pins |
-| Internal and hot-loop SI scalars | 94 | Keep raw; a typed public wrapper first |
-| Geodesy and V2X | 53 | Keep CARLA's raw fields; add typed accessors |
-| Serialized compatibility fields | 41 | Keep raw; the byte format is fixed |
-| Runtime time and distance boundaries | 28 | Migrate to `Duration64` and `Length64` |
+| Typed boundary | 1,047 | The signature fixes dimension and precision. |
+| Explicit raw adapter | 366 | A named unit or source-format boundary. |
+| Source compatibility field | 143 | Raw layout with an identified typed entry or view. |
+| Wire field | 85 | Retain the encoded width, unit, scale, and sentinel. |
+| Internal state | 64 | A named simulation, controller, or rendering cache. |
+| Packed geometry stream | 2 | The `cuboid` position and texture-coordinate buffers. |
+| Dimensionless control | 370 | A ratio, normalized coordinate, gain, or reference-scale value. |
+| Generic numeric utility | 77 | Its dimension depends on its caller or model convention. |
+| Source code or logarithmic value | 63 | A tagged source value, ETSI code, or radio log representation. |
+| Unimplemented source setting | 2 | CARLA sleep controls are stored but not simulated. |
 
-## Runtime time and distance boundaries
+Each TSV row supplies a source file and declaration line. Its classification
+is a reviewed decision, not a classification inferred from the filename.
+The rationale includes the source contract where the declaration provides
+one. A raw wire field or mutable quantity field is not itself a certificate
+that its value is finite or in range.
 
-These are the boundaries that a user calls with a time or a distance
-during a run. They migrate first, because they are outside the pinned map
-geometry. They still need a proof successor: the lane oracle's
-`border-parser-successor.json` and `winner-sign-query-migration.json` pin
-almost every file in `extensions/carla/` as an unchanged live consumer.
+## Existing merged boundaries
 
-| Boundary | State |
-|---|---|
-| `Timestamp(frame, elapsed, delta, platform)` | `Duration64`, already on `main` |
-| `Timestamp.from_seconds` | The named raw adapter, already on `main` |
-| `EpisodeSettings.fixed_delta_seconds` | `Duration`; `check` refuses infinity |
-| `DVSCamera.simulate(image, elapsed)` | `Duration64`, this change |
-| `LaneInvasionSensor.tick(map, frame, timestamp, transform)` | `Duration64`, this change |
-| `World.get_traffic_lights_from_waypoint(waypoint, distance)` | `Length64`, this change |
-| `LaneInvasionEvent(frame, timestamp, transform, markings)` | `Duration64`; refuses a nonfinite or negative time |
-| `LaneInvasionEvent.timestamp` | Raw field that mirrors CARLA; `elapsed()` is the checked typed view |
-| `SensorMeasurement.timestamp` | Raw field that the header writes; `elapsed()` is the checked typed view |
-| `World.elapsed_seconds`, `World.delta_seconds` | Raw fields that mirror CARLA; `Timestamp` is the typed view |
-| `Navigation.delta_seconds`, `Navigation.time_to_unblock` | Internal crowd state |
-| `ALSM.current_time`, `ALSM.elapsed_last_actor_destruction` | Internal traffic manager state |
+These are retained work on `main`, not new issue #333 changes:
 
-Each migrated boundary refuses a nonfinite or negative value with an error.
-The event camera also refuses a time above 9.2e9 seconds, about 291 years.
-Its Float32 interpolation can overshoot a tick by about 8 * 2^-24 of the
-tick, and a stored event time goes to seconds and back. Below the cap each
-result keeps wide headroom inside an `Int`. The tests feed a microsecond tick one
-million seconds into a run, and the input digits survive in the event
-times and the lane invasion timestamp. This keeps the input precision. It
-does not make the event interpolation exact: CARLA's camera narrows the
-tick's nanoseconds to `Float32`, and the port does the same.
+- `units.si` provides the Float64 quantity family. `Length64`, `Duration64`,
+  and the other 64-bit quantities cannot implicitly mix with Float32 quantities.
+- `Timestamp` takes `Duration64`. `Timestamp.from_seconds` is the explicit
+  raw adapter. `elapsed`, `delta`, and `platform` are checked Float64 views.
+- The three #696 entries already use quantities:
+  `DVSCamera.simulate` and `LaneInvasionSensor.tick` take `Duration64`;
+  `World.get_traffic_lights_from_waypoint` takes `Length64`.
+- `LaneInvasionEvent` and `SensorMeasurement` retain raw timestamp fields
+  with checked `elapsed` views. Their storage precision does not change.
+- `EpisodeSettings.fixed_delta_seconds` already uses `Duration`.
+  `EpisodeSettings.check` already refuses infinity in this baseline.
 
-Nine compile-fail fixtures check that each boundary refuses a raw
-`Float64`, the wrong dimension and the `Float32` quantity.
+World timing remains Float64 seconds in stored state. A snapshot exposes
+that state through `Timestamp`. The DVS camera retains an integer nanosecond
+clock and Float64 per-pixel timestamps in seconds. The public tick is typed.
+The integer and floating event clocks must not be confused.
 
-The lane invasion event and the sensor measurement were the last runtime
-time records with only a raw field. The event constructor now takes a
-`Duration64`. Each record keeps its raw Float64 field and has an `elapsed`
-view that checks the field before it returns a `Duration64`. A measurement
-also refuses a nonfinite or negative world time before it writes its
-header. `tests/test_carla_event_time_quantity.mojo` checks the exact bits
-of large, tiny and signed-zero times, a one-microsecond step at about
-1.2e8 seconds, and the header round trip. Four more compile-fail fixtures
-check the event constructor and the typed view. The lane oracle accepts
-these two source changes only as the exact steps in
-`tools/carla_lane_oracle/runtime-view-successor.json`. Each step starts at
-the after digest of the runtime boundary edge for the same file.
+## Map and polynomial boundaries
 
-## Pinned OpenDRIVE and map geometry
+The default map, Road, MapBuilder, geometry, and road-record scalar entry
+points use quantities. Meter station and distance values retain Float64
+precision. The TSV names each exact entry and adapter. The main patterns are:
 
-`map_builder.mojo`, `road_info.mojo`, `map.mojo`, `road.mojo`,
-`geometry.mojo` and `polynomial.mojo` are pinned by the CARLA lane oracle in
-`tools/carla_lane_oracle/`. They expose road `s`, lane widths, offsets and
-waypoint distances in raw `Float64`, as CARLA does. A change to any of
-these files needs successor contracts for each pinned digest. The owner of
-the lane-oracle machinery must agree to the successor first.
+- Map and Road queries use `Length64`; explicit `_meters` adapters retain
+  source callers. A squared-distance result uses `Area` or `Area64` at the
+  precision of its source computation.
+- MapBuilder's typed methods use `_si` source adapters. Road and lane speed
+  records use explicitly named `_opendrive` adapters when the input carries
+  a source speed unit or keyword.
+- Record constructors take quantities. `from_si`, `from_meters`, and
+  `from_coefficients` name their raw source alternatives. The old raw
+  constructor bodies require the private `_RawSI` capability.
+- Raw record fields keep their storage. The corresponding `*_quantity`
+  method checks the field before returning its quantity. A view rejects
+  invalid raw mutation; it does not rewrite the stored value.
+- `RoadInfoSpeed` takes `Velocity64` at default construction and retains
+  explicit source-unit creation. Its `limit` view preserves the distinction
+  between zero, absent, undefined, and unlimited speed.
+- A `Signal.value` is sign-type-dependent. `Signal.speed_limit` is the
+  checked speed interpretation. A non-speed sign value is not labeled m/s.
 
-One numerical defect is in this group. `CubicPolynomial(3.5, 0, 0, 1, s=1e6)`
-re-expands its coefficients about zero, as CARLA does. At `x = 1e6` the
-expanded terms cancel, and `evaluate` returns 0 instead of 3.5. A typed
-`Length64` alone does not fix it. The fix keeps the local coefficients and
-evaluates at `x - s`. That changes the computed bits of every record that
-starts at a nonzero `s`, so it needs new oracle pins. Its migration and the
-typed map queries belong in one coordinated successor change. That change
-is still open.
+`CubicPolynomial` now stores local coefficients and evaluates at `x - s`.
+The station-polynomial views assign `a` length, `b` slope, `c` inverse length,
+`d` inverse area, and `s` length. `DirectedPoint.pitch` is elevation slope,
+whereas its tangent is an angle. These meanings are distinct.
 
-The fix is not a local edit, for two reasons:
+A normalized `paramPoly3` has a separate `NormalizedCubic` type. All four
+coefficients are `Length64`, because its parameter `p` is dimensionless.
+Its `evaluate` and `tangent` return `Length64`; they check finite `p` in
+`[0, 1]`. `NormalizedCubic.from_meters` is the explicit raw coefficient
+adapter. This avoids assigning station-polynomial dimensions to normalized
+coefficients.
 
-- The certificates read the expanded coefficients. `curve_bounds.mojo`
-  (`_polynomial_jet`), `lane_value_bounds.mojo` (`_polynomial_value`),
-  `junction_bounds.mojo` (`_polynomial_bounds` and its interval form) and
-  `Road`'s line-center cubic in `road.mojo` enclose the value of the
-  expanded cubic. A conditioned `evaluate` returns 3.5 where that
-  enclosure holds only 0, so these bounds must move to the local form in
-  the same change. Otherwise they are unsound.
-- Thirteen lane oracle records pin `polynomial.mojo`, by whole-file digest,
-  token digest, embedded source or selected method. They are
-  `border-parser-successor.json`, `canonical-source-correspondence.json`,
-  `frozen-arc-producer-migration.json`, `full-audit-cleanup-successor.json`,
-  `optional-runtime-migration.json`, `rounded-line-singleton-migration.json`,
-  `runtime-source-pins.json`, `seed-count-successor.json`,
-  `spiral-graph-correspondence.json`, `sum2-correspondence-migration.json`,
-  `supported-source.json`, `translated-parameter-source.json` and
-  `winner-sign-query-migration.json`. `tools/coverage_loop_proofs.py` pins
-  it too. Three records state that `__init__`, `evaluate` and `tangent`
-  are byte-identical to the reviewed proof sources. A conditioned
-  evaluation makes that statement false, so each record needs a reviewed
-  successor, not a new digest. Each of the thirteen records also pins
-  `road.mojo` or a certificate module.
+The default `param_poly3` and `with_param_poly3` select arc-length mode and
+take `CubicPolynomial`. Their `_normalized` counterparts take
+`NormalizedCubic`. MapBuilder has the same explicit split. The source
+`*_from_coefficients` and MapBuilder `_si` adapters retain CARLA's tagged
+mode and shared raw coefficient representation. Shared storage after that
+choice does not erase the public type distinction. `RoadGeometry` keeps
+its common polynomial storage private. `u_coefficients` and `v_coefficients`
+return explicit source tuples; they do not expose a misleading station-typed
+view of normalized coefficients.
 
-## Geodesy and V2X
+The numerical correction is separate from adding quantity wrappers.
+The [conditioned cubic review](conditioned-cubic-333.md) records the local
+polynomial, its enclosure theorem, its consumers, and its limits.
+The [typed successor record](typed-boundary-successor-333.md) records current
+source admission. Historical source reconstruction establishes provenance;
+it does not prove old and new cubic values are equal.
 
-`GeoLocation`, `Ellipsoid`, `OffsetTransform` and the projection parameter
-records keep CARLA's raw degree and meter fields. The georeference string
-round trip depends on those fields. `GeoLocation` already has typed
-`latitude_angle` and `longitude_angle` accessors. GNSS and CAM noise records
-hold standard deviations and biases in CARLA's raw units. The rule for this
-group is a typed accessor or adapter beside each raw field, not a field
-change.
+## Other typed application entries
 
-## Serialized compatibility fields
+These omissions from the old scan now have explicit boundaries:
 
-`recorder_packets.mojo`, `recorder_physics.mojo`, the recorder's
-`write_frame` and the replayer's clock fields mirror CARLA's recorder file
-format. The sensor data headers mirror CARLA's serialized sensor bytes. A
-field type there is part of a byte layout, so it stays raw. A typed view can
-wrap a record where a runtime caller needs one.
+| Family | Typed entry | Explicit raw route |
+|---|---|---|
+| Recorder frame time | `Recorder.write_frame`, `RecorderFrames.set_frame` with `Duration64` | `write_frame_seconds`, `set_frame_seconds` |
+| Recorder time packet | `time_packet` with `Duration64` | `time_packet_seconds` |
+| Sensor header | `sensor_header` with `Duration64` | `sensor_header_seconds` |
+| Camera packet field of view | `image_data`, `optical_flow_data`, `dvs_data` with `Angle` | `image_data_carla`, `optical_flow_data_degrees`, `dvs_data_degrees` |
+| Replay angle and walker speed | `lerp_angle` with `Angle64`; `set_walker_speed` with `Velocity` | `lerp_angle_degrees`, `set_walker_speed_centimeters_per_second` |
+| Radar result | `RadarDetection` and `velocity_quantity` | `RadarDetection.from_si` |
+| Pedestrian catalog speed | `PedestrianParameters` and `speeds_quantity` with `List[Velocity]` | `from_meters_per_second` |
+| Render shape dimensions | Body/cabin helpers, wheel inset, stride, and `loft` | Unit-named `_si` helpers and `loft_meters` |
+| Fog extinction | `fog_density_at` returns `InverseLength` | `fog_density_at_per_meter` |
+| Mesh generation | Typed start/end station, lane-mark widths | Explicit `_si` methods |
+| Controller/sign tick | `PID.run` and `TrafficSign.tick_timers` with `Duration` | `run_seconds`, `tick_timers_seconds` |
+| TM geometry | Typed polygon, waypoint, extension, and side-offset results | `_meters` or `_square_meters` methods |
+| TM target speed | Typed planning inputs and outputs | `_meters_per_second` methods |
 
-## Internal and hot-loop SI scalars
+`image_data` selects the source camera encoding explicitly: CARLA uses
+raw degrees for a pinhole packet and raw radians for a wide-angle packet.
+The raw `image_data_carla` adapter preserves that format choice.
 
-The vehicle and walker physics, the traffic manager's planning, collision,
-PID and map stages, the render helpers, the camera exposure and lens
-models, and the 2D math helpers use `Float32` scalars in SI units. They port
-CARLA's `float` arithmetic one to one. Most are internal state of a public
-struct rather than an input that a user supplies. Where a user does supply
-one, the migration adds a typed constructor or setter and keeps the raw
-field for the arithmetic. `WeatherParameters`, `RgbCameraSettings`,
-`WideAngleLens` and `GnssDescription` are the next candidates.
+`polygon_distance` returns an optional `Length64`: an empty polygon has no
+finite separation. Its explicit meter adapter retains positive infinity.
+`CollisionStage.negotiate_collision` returns an optional typed length for
+its margin. An absent margin means no yield. Its explicit meter adapter
+retains CARLA's positive-infinity no-yield sentinel. Infinity is not silently
+certified as an ordinary finite distance.
 
-## Remaining acceptance work
+`agents_misc.from_kmh` returns `Velocity64` from a Float64 input. The separate
+`from_kmh_float32` names the old Float32 rounding path. Both check the input
+and converted result. `kmh` remains an explicit unit-named output adapter
+for the existing Float32 agent velocity.
 
-- The pinned map group, together with the conditioned cubic evaluation
-  and the certificate modules that read its coefficients.
-- Typed constructors for the user-supplied configuration records.
-- A reviewed classification of each candidate in the scan.
-- The traffic manager's `ActorId` input audit, which the issue lists as
-  separate work.
+## Exact integer epoch adapters
+
+Absolute source dates stay integer counters. They do not become an elapsed
+`Duration64` through a conversion that can lose integers above `2^53`.
+
+- `Recorder.begin` and `Recorder.start` use the current date. Their
+  `begin_unix_seconds` and `start_unix_seconds` adapters accept exact integer
+  seconds since 1970-01-01 UTC. Nonnegative values retain signed i64 bits.
+  The conventional `-1` sentinel selects now. Other negative values retain
+  the pre-existing negative-means-now behavior.
+- `SensorManager()` and the default `CaService` constructor use CAM epoch
+  offset zero. Their `from_cam_epoch_milliseconds` factories accept exact
+  signed integer milliseconds since 2004-01-01 UTC. Pre-epoch negative
+  values remain supported. CAM encoding retains its existing modulo rule.
+- `RecorderInfo.date`, each `generation_delta0` field, and the recorder's
+  monotonic `start_ns` retain their source or internal integer storage.
+
+`tests/test_carla_epoch_adapters.mojo` covers signed i64 wire round trips,
+large odd values above `2^53`, both signed endpoints, recorder sentinels,
+default constructors, CAM epoch storage and encoding, and unchanged typed
+CAM interval and owner checks. Four `carla_epoch333_*` negative fixtures
+require the named source route for an arbitrary integer epoch. The existing
+CAM interval negative fixtures still test interval types, not an argument-count
+error. These tests are added controls, not a claimed native pass.
+
+## Retained raw values and their reasons
+
+The TSV does not use a blanket exemption for publicly named traffic-manager
+stage helpers. Their dimensional scalar entries and results have typed
+wrappers and explicit raw adapters. The private stage kernels retain the
+upstream arithmetic order.
+
+Raw simulation state still includes wheel compression, force, angular speed,
+torque, and mass; Ackermann state; navigation and traffic-manager clocks;
+replay clocks; and render caches. These rows identify the typed control,
+tick, or telemetry entry that owns them. `WheelState.lat_slip` is radians,
+`spin` is radians per second, and `Navigation.yaw_walkers` is degrees.
+They are not dimensionless controls.
+
+Raw wire and source records retain their existing representation:
+
+- Recorder physics uses centimeters, centimeters per second, degrees, rpm,
+  and the source mechanical units. `from_control` converts from typed setup.
+- `LogVector` stores locations, rotations, and generic vector records.
+  Its scalar norm has the record's units; it is not always a length.
+- CAM integers include scales, saturation, availability flags, and reserved
+  values. They must remain codes rather than ordinary SI integers.
+- Sensor point rates remain exact CARLA integer samples per second. The
+  description checks the rate; a typed `Duration` converts it to a ray count.
+- `SceneHit.distance` is a ray parameter measured in direction-vector lengths.
+  Infinity means a miss. It is not unconditionally a distance in meters.
+- `cuboid` appends packed vertex and texture-coordinate buffers in meters.
+  Its normal buffer is dimensionless. These are mesh attribute streams.
+
+The following controls are also distinct:
+
+- Image pixel coordinates and blur radius are not world distances.
+  Lens radius divided by focal length, NDC depth, pose blend, percentages,
+  and normalized controller commands remain scalar controls.
+- Mesh `vertex_width_resolution` is a transverse vertex count.
+- RGB depth-blur `blur_amount` is kilometers and has a checked `Length` view.
+  Exposure adaptation rates are stops per second and use `Frequency`.
+- `camera_exposure` takes renderer-scale luminance and returns an exposure
+  multiplier. EV100 results are logarithmic exposure values.
+- Generic vector norms, rounding, random draws, curve evaluators, PID gains,
+  and fixed-convention lens coefficients have no one physical dimension.
+  PID gains are not asserted to be dimensionless across different loops.
+- Radio power, gain, fading, and loss retain dBm, dBi, and dB conventions.
+  They are not linear SI watts.
+- The unused CARLA sleep controls retain opaque source semantics. This port
+  does not put bodies to sleep; the inventory does not invent their units.
+
+The [configuration review](carla-configuration-quantities-333.md) and
+[geodesy/V2X review](carla-geodesy-quantities-333.md) give the detailed domain,
+conversion, precision, and source-unit contracts. They also record remaining
+behavior limits, including the pre-existing focal-distance scale discrepancy.
+
+## Static coverage check and validation limits
+
+Run the inventory check after source edits:
+
+```sh
+python3 tools/check_carla_quantity_inventory_333.py
+```
+
+The checker independently scans declarations and compares their multiset
+with the TSV. It refuses missing or stale declarations and missing review
+columns. It does not choose a dimension or a disposition. New declarations
+need a source review. `--refresh-lines` refreshes source-line references only
+when the declaration set still matches, for example after formatting.
+
+The current static inventory check passes. It covers declarations only.
+No Mojo compiler, runtime, or coverage process was run to prepare this
+inventory. The integrated work must separately qualify the type-negative
+controls, invalid-value tests, source successors, runtime limits, and coverage.
+Existing type annotations alone do not prove all mutable legacy state valid.
