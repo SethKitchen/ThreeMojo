@@ -20,12 +20,28 @@ from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
 from extensions.carla.map_validation import _preflight_road_records
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import LANE_DRIVING, NO_JUNCTION, LaneId, RoadId, RoadInfoElevation, RoadInfoGeometry, RoadInfoLaneOffset, RoadInfoLaneWidth, SectionId
+from extensions.carla.road_info import (
+    LANE_DRIVING,
+    NO_JUNCTION,
+    LaneId,
+    RoadId,
+    RoadInfoElevation,
+    RoadInfoGeometry,
+    RoadInfoLaneOffset,
+    RoadInfoLaneWidth,
+    SectionId,
+)
 from math.bounds import Box3
 from math.vector3 import Vector3
 from std.ffi import external_call
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_false, assert_true, assert_raises
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_true,
+    assert_raises,
+)
 
 
 def _first_road() raises -> Road:
@@ -35,14 +51,28 @@ def _first_road() raises -> Road:
     var geometry = RoadGeometry(SPIRAL, 0, 0, 0, 0, 2)
     geometry.curvature_start = curvature
     geometry.curvature_end = curvature
-    var road = Road(RoadId(1), "direct junction helper refusal", 2.0, NO_JUNCTION, RoadId(0), RoadId(0), True)
+    var road = Road(
+        RoadId(1),
+        "direct junction helper refusal",
+        2.0,
+        NO_JUNCTION,
+        RoadId(0),
+        RoadId(0),
+        True,
+    )
     _ = road.add_section(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
-    road.sections[0].lanes[0].info.widths.append(RoadInfoLaneWidth(-1.0, CubicPolynomial.constant(2.0)))
+    road.sections[0].lanes[0].info.widths.append(
+        RoadInfoLaneWidth(-1.0, CubicPolynomial.constant(2.0))
+    )
     road.info.geometries.append(RoadInfoGeometry(-1.0, geometry^))
-    road.info.elevations.append(RoadInfoElevation(-1.0, CubicPolynomial(2.0, 1.0, 0.0, 0.0, 0.0)))
-    road.info.lane_offsets.append(RoadInfoLaneOffset(-1.0, CubicPolynomial.constant(1.0)))
+    road.info.elevations.append(
+        RoadInfoElevation(-1.0, CubicPolynomial(2.0, 1.0, 0.0, 0.0, 0.0))
+    )
+    road.info.lane_offsets.append(
+        RoadInfoLaneOffset(-1.0, CubicPolynomial.constant(1.0))
+    )
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)
     assert_false(validation.exhausted)
@@ -51,7 +81,9 @@ def _first_road() raises -> Road:
 
 def _same(one: _Interval, two: _Interval) raises:
     assert_equal(bitcast[DType.uint64](one.low), bitcast[DType.uint64](two.low))
-    assert_equal(bitcast[DType.uint64](one.high), bitcast[DType.uint64](two.high))
+    assert_equal(
+        bitcast[DType.uint64](one.high), bitcast[DType.uint64](two.high)
+    )
 
 
 def _first_endpoint_control() raises:
@@ -82,7 +114,9 @@ def _first_endpoint_control() raises:
         assert_true(z.is_finite())
         assert_true(z.low < 2.0 or z.high > 2.0)
         var work = _MapBuildWork(MapBuildBudget(0, 5, terms, 0))
-        var result = _monotone_junction_enclosure(road, 0, 0, low, high, terms, proposal, x, y, z, work)
+        var result = _monotone_junction_enclosure(
+            road, 0, 0, low, high, terms, proposal, x, y, z, work
+        )
         _same(result[0], x)
         _same(result[1], y)
         _same(result[2], z)
@@ -91,11 +125,15 @@ def _first_endpoint_control() raises:
         assert_false(work.exhausted)
         var short = _MapBuildWork(MapBuildBudget(0, 5, terms - 1, 0))
         with assert_raises(contains="global term budget"):
-            _ = _monotone_junction_enclosure(road, 0, 0, low, high, terms, proposal, x, y, z, short)
+            _ = _monotone_junction_enclosure(
+                road, 0, 0, low, high, terms, proposal, x, y, z, short
+            )
         assert_equal(short.steps, 1)
         assert_equal(short.terms, 0)
         assert_true(short.exhausted)
-        print("REFUSAL_LEDGER", work.steps, work.terms, short.steps, short.terms)
+        print(
+            "REFUSAL_LEDGER", work.steps, work.terms, short.steps, short.terms
+        )
     except error:
         external_call["sum2_test_restore_mode", NoneType](original)
         raise error
@@ -110,14 +148,28 @@ def _last_road() raises -> Road:
     var geometry = RoadGeometry(SPIRAL, 0, 0, 0, 0, length)
     geometry.curvature_start = curvature
     geometry.curvature_end = _next_up(curvature)
-    var road = Road(RoadId(1), "direct last-end junction helper refusal", 2.0, NO_JUNCTION, RoadId(0), RoadId(0), True)
+    var road = Road(
+        RoadId(1),
+        "direct last-end junction helper refusal",
+        2.0,
+        NO_JUNCTION,
+        RoadId(0),
+        RoadId(0),
+        True,
+    )
     _ = road.add_section(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
-    road.sections[0].lanes[0].info.widths.append(RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0)))
+    road.sections[0].lanes[0].info.widths.append(
+        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+    )
     road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
-    road.info.elevations.append(RoadInfoElevation(0.0, CubicPolynomial(2.0, 1.0, 0.0, 0.0, 0.0)))
-    road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, CubicPolynomial.constant(1.0)))
+    road.info.elevations.append(
+        RoadInfoElevation(0.0, CubicPolynomial(2.0, 1.0, 0.0, 0.0, 0.0))
+    )
+    road.info.lane_offsets.append(
+        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(1.0))
+    )
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)
     assert_false(validation.exhausted)
@@ -152,7 +204,9 @@ def _last_endpoint_control(mode: Int32) raises:
         assert_true(z.is_finite())
         assert_true(z.low < 3.0 or z.high > 3.0)
         var work = _MapBuildWork(MapBuildBudget(0, 5, terms, 0))
-        var result = _monotone_junction_enclosure(road, 0, 0, low, high, terms, proposal, x, y, z, work)
+        var result = _monotone_junction_enclosure(
+            road, 0, 0, low, high, terms, proposal, x, y, z, work
+        )
         _same(result[0], x)
         _same(result[1], y)
         _same(result[2], z)
@@ -161,11 +215,20 @@ def _last_endpoint_control(mode: Int32) raises:
         assert_false(work.exhausted)
         var short = _MapBuildWork(MapBuildBudget(0, 5, terms - 1, 0))
         with assert_raises(contains="global term budget"):
-            _ = _monotone_junction_enclosure(road, 0, 0, low, high, terms, proposal, x, y, z, short)
+            _ = _monotone_junction_enclosure(
+                road, 0, 0, low, high, terms, proposal, x, y, z, short
+            )
         assert_equal(short.steps, 1)
         assert_equal(short.terms, 0)
         assert_true(short.exhausted)
-        print("LAST_REFUSAL_LEDGER", mode, work.steps, work.terms, short.steps, short.terms)
+        print(
+            "LAST_REFUSAL_LEDGER",
+            mode,
+            work.steps,
+            work.terms,
+            short.steps,
+            short.terms,
+        )
     except error:
         external_call["sum2_test_restore_mode", NoneType](original)
         raise error
@@ -182,7 +245,10 @@ def test_genuine_endpoint_refusals_keep_bounds_ledgers_and_state() raises:
         _last_endpoint_control(Int32(5))
         _last_endpoint_control(Int32(6))
     else:
-        print("LAST_DAZ_CAPABILITY_UNAVAILABLE: fixture exposes Arm modes0..4; first-end FTZ control executed")
+        print(
+            "LAST_DAZ_CAPABILITY_UNAVAILABLE: fixture exposes Arm modes0..4;"
+            " first-end FTZ control executed"
+        )
 
 
 def test_real_junction_admitted_endpoints_charge_both_traversals() raises:
@@ -198,8 +264,22 @@ def test_real_junction_admitted_endpoints_charge_both_traversals() raises:
     assert_true(first_terms >= 0)
     assert_true(last_terms >= 0)
     var point = _lane_value_bound(road, 0, 0, low, high)
-    var work = _MapBuildWork(MapBuildBudget(0, 9, terms + first_terms + last_terms, 0))
-    var result = _monotone_junction_enclosure(road, 0, 0, low, high, terms, Box3(Vector3(-2, -2, 2), Vector3(2, 2, 2)), point[0].rounded_value(), -point[1].rounded_value(), point[2].rounded_value(), work)
+    var work = _MapBuildWork(
+        MapBuildBudget(0, 9, terms + first_terms + last_terms, 0)
+    )
+    var result = _monotone_junction_enclosure(
+        road,
+        0,
+        0,
+        low,
+        high,
+        terms,
+        Box3(Vector3(-2, -2, 2), Vector3(2, 2, 2)),
+        point[0].rounded_value(),
+        -point[1].rounded_value(),
+        point[2].rounded_value(),
+        work,
+    )
     assert_equal(work.steps, 9)
     assert_equal(work.terms, terms + first_terms + last_terms)
     assert_false(work.exhausted)
