@@ -2419,6 +2419,7 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((self.repo/name).read_bytes())
 
+        audit_fixtures.copy_shared_helper_inputs(self.root, self.repo)
         audit_fixtures.write_predecessors(
             self.root, audit_fixtures.verified_predecessors(self.repo))
         (self.root/self.map).write_text((self.repo/self.map).read_text() if getattr(self, "station", False) else
@@ -2440,7 +2441,8 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
         for name, expected in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256.items():
             self.assertEqual(row['dependency_sha256'][name],
                              loops.file_sha256(self.root/name) if (self.score and name == self.map)
-                             or name in helpers.SOURCE_PATHS else expected)
+                             or name in helpers.SOURCE_PATHS
+                             or name == audit_fixtures.cleanup.scaled_float32.MATH else expected)
         for name, expected in row['dependency_sha256'].items():
             self.assertEqual(loops.file_sha256(self.root/name), expected)
         self.assertEqual((self.root/self.map).read_text().splitlines()[self.line-1].strip(),
