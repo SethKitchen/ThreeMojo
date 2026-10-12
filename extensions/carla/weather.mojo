@@ -49,7 +49,11 @@ struct WeatherParameters(Equatable, ImplicitlyCopyable, Writable):
     var dust_storm: Float32
 
     def __init__(out self):
-        """Create CARLA's field defaults: all zero but the Rayleigh scale."""
+        """Create CARLA's field defaults: all zero but the Rayleigh scale.
+
+        Returns:
+            The initialized WeatherParameters record.
+        """
         self.cloudiness = 0
         self.precipitation = 0
         self.precipitation_deposits = 0
@@ -186,11 +190,7 @@ struct WeatherParameters(Equatable, ImplicitlyCopyable, Writable):
     def validate(self) raises:
         """Check weather before use without applying the town's clamps.
 
-        Args:
-            self: The weather to inspect.
-
-        Returns:
-            Nothing; the weather is unchanged.
+        The weather is unchanged.
 
         Raises:
             Error: If any field is nonfinite.
