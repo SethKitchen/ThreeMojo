@@ -501,11 +501,10 @@ struct CanonicalEnvelope(Copyable, Movable):
         if _in_box(hand.low, hand.high, point):
             var d = hand.distance(point)
             # The hand skin is the nearest skin.
-            if d < arm:
-                if d < trunk:
-                    if past_wrist:
-                        return _side_region(RIGHT_HAND_REGION.value, side)
-                    return _side_region(RIGHT_FOREARM_REGION.value, side)
+            if d < min(arm, trunk):
+                if past_wrist:
+                    return _side_region(RIGHT_HAND_REGION.value, side)
+                return _side_region(RIGHT_FOREARM_REGION.value, side)
         if arm < trunk:
             if past_wrist:
                 return _side_region(RIGHT_HAND_REGION.value, side)
