@@ -330,6 +330,85 @@ def constant_loops(source):
 
 
 
+# #333 transports only these reviewed theorem sites from exact main2d81.
+# The complete current scalar/bound/API graph is admitted first. Pure row
+# correspondence cannot itself grant a coverage mask or source receipt.
+_TYPED_LOOP_MAIN_SHA256 = {'extensions/carla/curve_rounded_arc.mojo': '7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745',
+ 'extensions/carla/curve_rounded_line.mojo': '6741ad9d7434c08070de3c959cb49ac42939ac633d1dcd48c9f5cdfdaa719aed',
+ 'extensions/carla/curve_sample_dispatch.mojo': '91ede65bbc39ac57ca54239513b462d3c71e90cacd085b8bafb2bff514767a86',
+ 'extensions/carla/junction_bounds.mojo': 'd8b7a6de8e495ab16f0cbe9688459eb544ac9ef6c8ec0c44c952ed5b4743a615',
+ 'extensions/carla/lane_refinement.mojo': '13ae6d4658458a7d243597428eee762f9bbc40f8fe3507a47beac9ebd4ac1737',
+ 'extensions/carla/map.mojo': '0e2d282fcd6c70217e7413b7febe40619af070f7adbeaefa3fd56d95562c404b',
+ 'extensions/carla/opendrive.mojo': '9ff9b750af2c1c1a92fe3f3dfe1e49566e9d6f8c39a3576e0d4cf542bc8cdc28',
+ 'extensions/carla/rtree.mojo': 'be63ea929c25e0a55600d19568e5f8a117e2f712850ea3da0d977c39b002d460'}
+_TYPED_LOOP_ROWS = {('extensions/carla/curve_rounded_arc', 228): (228, (), '_rounded_arc_context'),
+ ('extensions/carla/curve_rounded_line', 93): (93, (), '_rounded_line_axis_context'),
+ ('extensions/carla/curve_sample_dispatch', 126): (126, (), '_try_sample_dispatch_cuts'),
+ ('extensions/carla/junction_bounds', 706): (706, (), '_lane_section_box_with_work'),
+ ('extensions/carla/lane_refinement', 145): (146, (), '_axis_lane_minimum'),
+ ('extensions/carla/lane_refinement', 726): (736, (), '_lane_certificate_dominates_cells'),
+ ('extensions/carla/lane_refinement', 1289): (1299, (), '_continue_lane_certificate'),
+ ('extensions/carla/lane_refinement', 1314): (1324, (), '_continue_lane_certificate'),
+ ('extensions/carla/map', 1491): (1511, (), '_try_winner_seed'),
+ ('extensions/carla/map', 2272): (2294, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 2279): (2301, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 2301): (2323, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 2373): (2395, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 2378): (2400, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 2387): (2409, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 2396): (2418, ('Map',), '_closest_lane_certificate_with_work'),
+ ('extensions/carla/map', 4055): (4106, ('Map',), '_add_segment'),
+ ('extensions/carla/opendrive', 450): (450, (), '_active'),
+ ('extensions/carla/opendrive', 593): (593, (), '_border_widths'),
+ ('extensions/carla/opendrive', 601): (601, (), '_border_widths'),
+ ('extensions/carla/opendrive', 615): (615, (), '_border_widths'),
+ ('extensions/carla/opendrive', 617): (617, (), '_border_widths'),
+ ('extensions/carla/opendrive', 621): (621, (), '_border_widths'),
+ ('extensions/carla/opendrive', 787): (787, (), '_lanes'),
+ ('extensions/carla/rtree', 666): (666, ('_Rtree',), '_nearest_next')}
+
+
+def _typed_loop_row(module, historical_line, expression, current):
+    """Locate one unchanged loop in its exact reviewed declaration owner.
+
+    The whole endpoint and inverse must be sealed. Match the complete ordered
+    loop-statement inventory of the owner, not just a line or expression.
+    Owners call this only after physical current graph admission.
+    """
+    from carla_lane_oracle import typed_boundary_contracts as typed
+    from carla_lane_oracle import seed_count_contracts as seed
+    item = _TYPED_LOOP_ROWS.get((module, historical_line))
+    name = module + '.mojo'
+    if item is None or not typed.is_current(name, current):
+        return None
+    previous = typed.historical_source(name, current)
+    if sha256(previous.encode('utf-8')) != _TYPED_LOOP_MAIN_SHA256[name]:
+        return None
+    main_line, owner, function = item
+    before, before_first, before_last = seed._function_span(previous, function, owner)
+    after, after_first, after_last = seed._function_span(current, function, owner)
+    old_statements, new_statements = _statements(before), _statements(after)
+    expected = _statements('for value in ' + expression + ':\n    pass\n')
+    if old_statements is None or new_statements is None or expected is None:
+        return None
+    def for_rows(statements, first):
+        return [(first + row[0].start[0], tuple(token.string for token in row))
+                for row in statements if row[0].string == 'for']
+    old_rows = for_rows(old_statements, before_first)
+    new_rows = for_rows(new_statements, after_first)
+    if [words for _, words in old_rows] != [words for _, words in new_rows]:
+        return None
+    selected = [(index, words) for index, (line, words) in enumerate(old_rows)
+                if line == main_line]
+    if len(selected) != 1:
+        return None
+    index, words = selected[0]
+    if len(words) < 5 or words[2] != 'in' or words[-1] != ':' or words[3:-1] != tuple(
+            token.string for token in expected[0])[3:-1]:
+        return None
+    return new_rows[index][0]
+
+
 # The independently reviewed count theorem is not dynamic inference. The exact
 # complete consumer binds count declaration, dominating guard, all intervening
 # statements and builtin range resolution. The producer module binds Int typing.
@@ -903,13 +982,28 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
         if _operation is not None:
             cleanup._observe_bytes(root, name, raw, _operation=_operation)
         digest = sha256(raw)
+        physical_digest = digest
+        from carla_lane_oracle import typed_boundary_contracts as typed
+        if typed.is_current(name, raw):
+            from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+            current_bindings = cleanup.proof_bindings(
+                root, include_roots=include_roots, **operation_args)
+            if (current_bindings.get(name) != physical_digest
+                    or _coverage_observe_bytes(root, name, path.read_bytes(),
+                        _operation=_operation) != raw):
+                return None
+            actual.update(current_bindings)
+            # The current numerical/API graph was physically admitted above.
+            # This exact inverse now supplies historical provenance only.
+            checked = typed.historical_source(name, raw.decode('utf-8'))
+            digest = sha256(checked.encode('utf-8'))
         if (name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256
                 and digest == DENSITY_AFTER_SHA256):
             # Explicit paired admission for the four re-reviewed hair rows.
             if not all(_density_stdlib_unshadowed(path)
                        for path in (root, *include_roots)):
                 return None
-            actual[name] = digest
+            actual[name] = physical_digest
             continue
         if digest != expected:
             from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
@@ -968,15 +1062,17 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
                     return None
                 actual.update(providers)
                 actual[leaf] = executing[leaf]
-                actual[name] = digest
+                actual[name] = physical_digest
                 continue
             if (name in cleanup.SOURCE_PATHS
                     and expected == cleanup.BEFORE_SHA256[name]
                     and digest == cleanup.AFTER_SHA256[name]):
-                actual.update(cleanup.proof_bindings(root, include_roots=include_roots))
-                if path.read_bytes() != raw:
+                actual.update(cleanup.proof_bindings(
+                    root, include_roots=include_roots, **operation_args))
+                if _coverage_observe_bytes(root, name, path.read_bytes(),
+                                           _operation=_operation) != raw:
                     return None
-                actual[name] = digest
+                actual[name] = physical_digest
                 continue
             if (name != 'extensions/carla/map.mojo'
                     or expected != GUARDED_LOOP_SOURCE_SHA256[name]):
@@ -995,8 +1091,22 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             if digest in {seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}:
                 actual.update(cleanup.station_proof_bindings(root, **operation_args))
             actual.update(_cleanup_current_bindings(root, include_roots=include_roots, **operation_args))
-        actual[name] = digest
+        actual[name] = physical_digest
     return actual
+
+
+def _final_unowned_typed_loop_bindings(root, bindings, *, include_roots=()):
+    """Fresh final topology/caller admission after current lexical transport.
+
+    This helper is only for unowned standalone rows. Map/R-tree retain their
+    existing owning operation and sticky finalization; no kind is broadened.
+    """
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    fresh = cleanup.proof_bindings(root, include_roots=include_roots)
+    if any(bindings.get(name) != digest for name,digest in fresh.items()):
+        return False
+    return all(sha256(relative_source(root,name).read_bytes()) == digest
+               for name,digest in bindings.items())
 
 
 def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _operation=None):
@@ -1042,12 +1152,34 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _oper
         if _operation is not None and isinstance(error, (OSError, UnicodeError)):
             cleanup._operation_fail(_operation, error)
         return {}
-    return {line: {
-        'line': line, 'kind': kind, 'cardinality': minimum,
-        'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',
-        'expression': expression, 'proof_id': proof_id,
-        'dependency_sha256': actual,
-    } for line, kind, minimum, maximum, expression, proof_id in sites}
+    try:
+        result = {}
+        from carla_lane_oracle import typed_boundary_contracts as typed
+        name = module + '.mojo'
+        current = _coverage_observe_text(root, name,
+            relative_source(root, name, **operation_args).read_text(), _operation=_operation)
+        if sha256(current.encode('utf-8')) != actual[name]:
+            return {}
+        for line, kind, minimum, maximum, expression, proof_id in sites:
+            if typed.is_current(name, current):
+                line = _typed_loop_row(module, line, expression, current)
+                if line is None:
+                    return {}
+            result[line] = {
+                'line': line, 'kind': kind, 'cardinality': minimum,
+                'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',
+                'expression': expression, 'proof_id': proof_id,
+                'dependency_sha256': actual,
+            }
+        if (typed.is_current(name, current) and _operation is None
+                and not _final_unowned_typed_loop_bindings(
+                    root, actual, include_roots=include_roots)):
+            return {}
+        return result
+    except (OSError, ValueError, ImportError, UnicodeError) as error:
+        if _operation is not None and isinstance(error, (OSError, UnicodeError)):
+            cleanup._operation_fail(_operation, error)
+        return {}
 
 
 def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
@@ -1067,7 +1199,19 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
         actual_bindings = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots, **operation_args)
         if actual_bindings is None:
             return None
-        if (module == 'extensions/carla/map'
+        from carla_lane_oracle import typed_boundary_contracts as typed
+        module_path = module + '.mojo'
+        current = _coverage_observe_text(root, module_path,
+            relative_source(root, module_path, **operation_args).read_text(),
+            _operation=_operation)
+        if sha256(current.encode('utf-8')) != actual_bindings[module_path]:
+            return None
+        typed_current = typed.is_current(module_path, current)
+        if typed_current:
+            line = _typed_loop_row(module, line, expression, current)
+            if line is None:
+                return None
+        if (not typed_current and module == 'extensions/carla/map'
                 and actual_bindings[module + '.mojo'] != bindings[module + '.mojo']):
             from carla_lane_oracle import seed_count_contracts as seed_count
             mapping = {
@@ -1087,7 +1231,7 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
             line = _DENSITY_SUCCESSOR_LINES.get(line)
             if line is None:
                 return None
-        if ((module, line) in _CLEANUP_LOOP_ROWS
+        if (not typed_current and (module, line) in _CLEANUP_LOOP_ROWS
                 and actual_bindings[module + '.mojo'] != bindings[module + '.mojo']):
             line = _cleanup_loop_row(root, module, line, expression)
             if line is None:
@@ -1096,11 +1240,17 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
             # A private helper's local precondition is backed by the complete
             # maintained caller census. New calls or aliases fail closed.
             pattern = r'\b(?:' + '|'.join(re.escape(name) for name in callers) + r')\b'
+            paths = tuple(cache_key.input_paths(Path(root)))
+            if _operation is not None:
+                cleanup._operation_known_paths(root, frozenset(
+                    path.as_posix() for path in paths if path.suffix == '.mojo'),
+                    _operation=_operation)
             actual = {
-                path.as_posix() for path in cache_key.input_paths(Path(root))
+                path.as_posix() for path in paths
                 if path.suffix == '.mojo'
-                and re.search(pattern,
-                              relative_source(root, path.as_posix()).read_text())
+                and re.search(pattern, _coverage_observe_text(root, path.as_posix(),
+                    relative_source(root, path.as_posix(), **operation_args).read_text(),
+                    _operation=_operation))
             }
             if actual != set(bindings):
                 return None
@@ -1120,6 +1270,10 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
                 }
                 if actual != set(expected):
                     return None
+        if (typed_current and _operation is None
+                and not _final_unowned_typed_loop_bindings(
+                    root, actual_bindings, include_roots=include_roots)):
+            return None
     except (OSError, ValueError, ImportError) as error:
         if _operation is not None and isinstance(error, (OSError, UnicodeError)):
             cleanup._operation_fail(_operation, error)
@@ -1260,6 +1414,51 @@ def _construction_boundary_callers(root, *, _operation=None):
     return True
 
 
+def _typed_construction_boundary_loops(root, current, *, include_roots=(), _operation=None):
+    """Re-admit the nonempty-list theorem for the exact typed current graph.
+
+    Successful same-owner _build_transform still calls the concrete private
+    Road implementation and rejects a missing geometry before success. The
+    boundary producer still appends that geometry into a fresh owned list.
+    Numerical value changes and new early refusals do not weaken this fact.
+    """
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    from carla_lane_oracle import typed_boundary_contracts as typed
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
+    name = 'extensions/carla/map.mojo'
+    if (bindings.get(name) != sha256(current.encode('utf-8'))
+            or not typed.is_current(name, current)):
+        return {}
+    line = _typed_loop_row('extensions/carla/map', CONSTRUCTION_BOUNDARY_LINE,
+                           'boundaries', current)
+    if line is None:
+        return {}
+    # Preserve the actual whole-maintained-source caller census. A pure
+    # historical view cannot hide a new caller, alias, package, or std shadow.
+    for location in (root, *include_roots):
+        if (not _density_stdlib_unshadowed(location, **operation_args)
+                or not _construction_boundary_callers(location, **operation_args)):
+            return {}
+    if (_operation is None and not _final_unowned_typed_loop_bindings(
+            root, bindings, include_roots=include_roots)):
+        return {}
+    # Observe every bound current input again after the independent census.
+    for path, expected in bindings.items():
+        raw = _coverage_observe_bytes(root, path,
+            relative_source(root, path, **operation_args).read_bytes(),
+            _operation=_operation)
+        if sha256(raw) != expected:
+            return {}
+    return {line: {
+        'line': line, 'kind': 'reviewed-nonempty-iterator', 'cardinality': 1,
+        'minimum_cardinality': 1, 'maximum_cardinality': None,
+        'required': 'T', 'impossible': 'F', 'expression': 'boundaries',
+        'proof_id': 'construction-geometry-boundary-list',
+        'dependency_sha256': bindings,
+    }}
+
+
 def construction_boundary_loops(root, *, include_roots=(), _operation=None):
     """Admit only the exact final endpoint and the reviewed typed call graph."""
     operation_args = {} if _operation is None else {'_operation': _operation}
@@ -1270,6 +1469,14 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         if _operation is not None and include_roots != ():
             cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
     try:
+        from carla_lane_oracle import typed_boundary_contracts as typed
+        name = 'extensions/carla/map.mojo'
+        current = _coverage_observe_text(root, name,
+            relative_source(root, name, **operation_args).read_text(),
+            _operation=_operation)
+        if typed.is_current(name, current):
+            return _typed_construction_boundary_loops(
+                root, current, include_roots=include_roots, **operation_args)
         actual = {name: file_sha256(relative_source(root, name, **operation_args), **stream_args)
                   for name in CONSTRUCTION_BOUNDARY_SOURCE_SHA256}
         from carla_lane_oracle import seed_count_contracts
