@@ -1344,42 +1344,46 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
 
 def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
-    _operation, owns_operation = None, False
-    coherence_errors = ()
-    bounded = include_roots == () and module in ('extensions/carla/map', 'extensions/carla/rtree')
-    if bounded:
-        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
-        coherence_errors = (cleanup._OperationCoherenceError,)
-    try:
+    # One request reuses only exact immutable lexical strings, as the complete
+    # consumer verifiers do. Every read, admission and proof check still runs.
+    from carla_lane_oracle import source_contracts as lexical
+    with lexical.lexical_memo_scope():
+        _operation, owns_operation = None, False
+        coherence_errors = ()
+        bounded = include_roots == () and module in ('extensions/carla/map', 'extensions/carla/rtree')
         if bounded:
-            kind = 'map_loops' if module == 'extensions/carla/map' else 'rtree_loops'
-            _operation, owns_operation = cleanup._operation_enter(
-                root, kind, module=module, include_roots=include_roots)
-        operation_args = {} if _operation is None else {'_operation': _operation}
-        result = _historical_reviewed_nonempty_loops(root, module, include_roots=include_roots, **operation_args)
-        if module == 'renderers/renderer':
-            result.update(strand_cap_loops(root, include_roots=include_roots))
-        if module == 'extensions/carla/map':
-            result.update(construction_boundary_loops(root, include_roots=include_roots, **operation_args))
-        if module + '.mojo' == DENSITY_SOURCE:
-            result.update(repaired_density_loops(root, include_roots=include_roots))
-        for rule in GUARDED_LOOP_RULES:
-            if rule[0] != module:
-                continue
-            proof = guarded_loop_proof(root, rule, include_roots=include_roots, **operation_args)
-            if proof is None:
-                continue
-            if proof['line'] in result:
-                raise ValueError('Conflicting reviewed loop proof: ' + module)
-            result[proof['line']] = proof
-        if owns_operation:
-            _operation.finish(root)
-        return result
-    except coherence_errors:
-        return {}
-    finally:
-        if owns_operation:
-            _operation.close()
+            from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+            coherence_errors = (cleanup._OperationCoherenceError,)
+        try:
+            if bounded:
+                kind = 'map_loops' if module == 'extensions/carla/map' else 'rtree_loops'
+                _operation, owns_operation = cleanup._operation_enter(
+                    root, kind, module=module, include_roots=include_roots)
+            operation_args = {} if _operation is None else {'_operation': _operation}
+            result = _historical_reviewed_nonempty_loops(root, module, include_roots=include_roots, **operation_args)
+            if module == 'renderers/renderer':
+                result.update(strand_cap_loops(root, include_roots=include_roots))
+            if module == 'extensions/carla/map':
+                result.update(construction_boundary_loops(root, include_roots=include_roots, **operation_args))
+            if module + '.mojo' == DENSITY_SOURCE:
+                result.update(repaired_density_loops(root, include_roots=include_roots))
+            for rule in GUARDED_LOOP_RULES:
+                if rule[0] != module:
+                    continue
+                proof = guarded_loop_proof(root, rule, include_roots=include_roots, **operation_args)
+                if proof is None:
+                    continue
+                if proof['line'] in result:
+                    raise ValueError('Conflicting reviewed loop proof: ' + module)
+                result[proof['line']] = proof
+            if owns_operation:
+                _operation.finish(root)
+            return result
+        except coherence_errors:
+            return {}
+        finally:
+            if owns_operation:
+                _operation.close()
 
 
 def _counts(records):

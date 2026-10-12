@@ -8,11 +8,13 @@ checks receive a predecessor only after the complete live successor and its
 production routing have passed. Unknown edits, callers and records fail closed.
 """
 from functools import lru_cache
+import copy
 import hashlib
 import json
 from pathlib import Path
 import sys
 import tokenize
+import weakref
 
 if __package__:
     from . import source_contracts as source
@@ -59,6 +61,31 @@ def inventory_entry(text):
     return {'routing': guard.declaration_routing(text), 'uses': uses} if uses else None
 
 
+# Production inventories already computed inside one active bounded operation.
+# That operation fixes every consumed byte and both path censuses in its
+# captured image, rejects any differing observation, and sweeps the whole image
+# again in finish() before a result escapes. A repeat scan of the same image
+# with the same supplied lane view adds no evidence. Entries die with the
+# operation object; pending, failed or closed owners never use them.
+_INVENTORIES = weakref.WeakKeyDictionary()
+
+
+def _inventory_memo_owner(inputs, operation):
+    """Return the active captured operation that fixes this scan's inputs."""
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    if inputs is not None:
+        if type(inputs) is not full_audit._BorrowedCacheInputs:
+            return None
+        operation = inputs._operation
+    if (type(operation) is not full_audit._InvariantInputs or operation._failed
+            or operation._state != 'active'):
+        return None
+    return operation
+
+
 def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     # Reuse the established production boundary, including nested namespaces
@@ -82,6 +109,11 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                 and _input_owner is not None,
                 'invalid owned inventory inputs')
         _inputs._check(_input_owner, root)
+    memo_owner = _inventory_memo_owner(_inputs, _operation)
+    memo_key = (str(Path(root).absolute()), 'inputs' if _inputs is not None else 'operation',
+                None if verified_lane_source is None else sha(verified_lane_source))
+    if memo_owner is not None and memo_key in _INVENTORIES.get(memo_owner, {}):
+        return copy.deepcopy(_INVENTORIES[memo_owner][memo_key])
     paths = (guard.production_mojo_paths(root) if _inputs is None else
              (Path(root) / path for path in _inputs.production_paths(_input_owner, root)))
     if _inputs is None and _operation is not None:
@@ -157,6 +189,8 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
         entry = inventory_entry(text)
         if entry is not None:
             result[rel.as_posix()] = entry
+    if memo_owner is not None and _inventory_memo_owner(_inputs, _operation) is memo_owner:
+        _INVENTORIES.setdefault(memo_owner, {})[memo_key] = copy.deepcopy(result)
     return result
 
 

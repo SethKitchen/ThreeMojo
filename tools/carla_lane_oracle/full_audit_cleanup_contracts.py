@@ -8,6 +8,7 @@ from native qualification. No historical record, budget, outcome or mask is
 modified. Every projection is named and follows fresh physical admission.
 """
 import ast
+import errno
 import hashlib
 import importlib.util
 import io
@@ -132,7 +133,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/runtime_view_contracts.py': '
  'tools/carla_lane_oracle/consumer_successor_ledger.py': '8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
- 'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
+ 'tools/carla_lane_oracle/source_contracts.py': '8450a4fea133402fc2eb90d314984942b0512fef85e0b67507e896051048c550',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'd78221b196b78eabdf2554dd01efef035f089fcedaf14acaaee675a6e4bf84ce'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
@@ -610,14 +611,27 @@ def _code_constant(value):
     return (type(value).__name__, value)
 
 
+# Code objects are immutable, so the identity of one object never changes.
+# Each entry keeps its code object alive, and a lookup requires that exact
+# object. A replaced function, method or module witness is a different object
+# and is compared from its own fields. Live functions are still looked up and
+# compared on every call; only the field walk of a seen object is reused.
+_CODE_IDENTITIES = {}
+
+
 def _code_identity(code):
     require(type(code) is types.CodeType, 'missing executed module-code witness')
+    cached = _CODE_IDENTITIES.get(id(code))
+    if cached is not None and cached[0] is code:
+        return cached[1]
     # Compare every public code-data field, recursively. The sole normalized
     # field is co_filename, which may differ for the same relocated checkout.
     # This does not serialize object identities, refcounts or string interning.
-    return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
-                 if name.startswith('co_') and name != 'co_filename'
-                 and not callable(getattr(code, name)))
+    identity = tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+                     if name.startswith('co_') and name != 'co_filename'
+                     and not callable(getattr(code, name)))
+    _CODE_IDENTITIES[id(code)] = (code, identity)
+    return identity
 
 
 def _compiled_functions(raw, filename):
@@ -738,20 +752,56 @@ def executing_checker_bindings(root=None):
     return result
 
 
+# Path.is_symlink() ignores exactly these lstat errors and raises the rest.
+_IGNORED_LSTAT_ERRNOS = (errno.ENOENT, errno.ENOTDIR, errno.EBADF, errno.ELOOP)
+
+
+def _is_symlink(text):
+    """Path.is_symlink() on an exact path string, without pathlib parsing."""
+    try:
+        return stat.S_ISLNK(os.lstat(text).st_mode)
+    except OSError as error:
+        if getattr(error, 'errno', None) not in _IGNORED_LSTAT_ERRNOS:
+            raise
+        return False
+    except ValueError:
+        return False
+
+
 def _root_unaliased(root):
-    absolute = Path(root).absolute()
-    return all(not path.is_symlink() for path in (absolute, *absolute.parents))
+    # The same lexical absolute path and parents as Path.absolute().parents,
+    # each checked with lstat on every call. Only the pathlib objects go.
+    current = str(Path(root).absolute())
+    while True:
+        if _is_symlink(current):
+            return False
+        parent = os.path.dirname(current)
+        if parent == current:
+            return True
+        current = parent
+
+
+def _relative_parts(relative):
+    """Path(relative).parts and is_absolute(), parsing only unusual spellings."""
+    if (type(relative) is str and relative and relative[0] != '/'
+            and '//' not in relative and relative[-1] != '/'):
+        parts = tuple(relative.split('/'))
+        if '.' not in parts:
+            return parts, False
+    return Path(relative).parts, Path(relative).is_absolute()
 
 
 def _regular(root, relative):
-    parts = Path(relative).parts
-    require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
+    parts, absolute = _relative_parts(relative)
+    require(parts and not absolute and '..' not in parts, 'unsafe input path')
     path = Path(root)
     require(_root_unaliased(path), 'symbolic root or ancestor')
+    current = str(path)
     for part in parts:
-        path = path / part
-        require(not path.is_symlink(), 'symlink input: ' + relative)
-    require(stat.S_ISREG(path.stat().st_mode), 'input is not a regular file: ' + relative)
+        current = os.path.join(current, part)
+        require(not _is_symlink(current), 'symlink input: ' + relative)
+    path = path.joinpath(*parts)
+    require(stat.S_ISREG(os.stat(current).st_mode), 'input is not a regular file: ' + relative)
     return path
 
 

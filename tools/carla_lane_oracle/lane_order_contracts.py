@@ -1,9 +1,11 @@
 """Bind the finite ordered queue successor without rewriting historical pins."""
 from functools import lru_cache
+import copy
 import hashlib
 import json
 from pathlib import Path
 import tokenize
+import weakref
 
 if __package__:
     from . import source_contracts as source
@@ -55,9 +57,34 @@ def inventory_entry(text):
     return {'routing': guard.declaration_routing(text), 'uses': uses} if uses else None
 
 
+# Routing inventories already computed inside one active bounded operation.
+# The operation fixes every consumed byte and the production path census, and
+# finish() sweeps the whole image again before a result escapes. A repeat scan
+# with the same supplied predecessor adds no evidence. Entries die with the
+# operation object; pending, failed or closed owners never use them.
+_INVENTORIES = weakref.WeakKeyDictionary()
+
+
+def _inventory_memo_owner(operation):
+    """Return the active captured operation that fixes this scan's inputs."""
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    if (type(operation) is not full_audit._InvariantInputs or operation._failed
+            or operation._state != 'active'):
+        return None
+    return operation
+
+
 def inventory(root, *, verified_lane_predecessor=None, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
+    memo_owner = _inventory_memo_owner(_operation)
+    memo_key = (str(Path(root).absolute()), None if verified_lane_predecessor is None
+                else hashlib.sha256(verified_lane_predecessor.encode()).hexdigest())
+    if memo_owner is not None and memo_key in _INVENTORIES.get(memo_owner, {}):
+        return copy.deepcopy(_INVENTORIES[memo_owner][memo_key])
     result = {}
     operation_args = {} if _operation is None else {'_operation': _operation}
     if _operation is not None:
@@ -107,6 +134,8 @@ def inventory(root, *, verified_lane_predecessor=None, _operation=None):
         entry = inventory_entry(text)
         if entry is not None:
             result[rel.as_posix()] = entry
+    if memo_owner is not None and _inventory_memo_owner(_operation) is memo_owner:
+        _INVENTORIES.setdefault(memo_owner, {})[memo_key] = copy.deepcopy(result)
     return result
 
 

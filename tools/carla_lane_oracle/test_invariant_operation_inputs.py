@@ -2397,14 +2397,14 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
 
     _SOURCE_SHA256 = {
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
-        'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
+        'cache_key_contracts.py': 'c170ae3a20d369334350fd67c9bab0bcb60f98c7cd8662bf46bd6851b5fba3d7',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '2b6dbe7483d3c9ceb2ee9914158d99fcd8c1d87f9298f797edac150a78457f67',
-        'full_audit_cleanup_contracts.py': 'a182c861c55962fb749b2c0aa6b7a5c0466674b474e1c6b67dd6ed621dc44f25',
+        'coverage_loop_proofs.py': '0e771d4c18059e048079ee69eba366c18cce268a7397ab902aa1c353b10cf36f',
+        'full_audit_cleanup_contracts.py': '2b2c504cc73e24f6337065fbf382bd1f7f413fade2644ac068a2c55a819287ba',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': 'd5b16ad9ef253250c5cceffe2fe82ca6f013526f574974e5b952c81ee012a4c4',
-        'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
+        'seed_count_contracts.py': 'c00a561c014eea9e27df9337d8d8bdab2d7d245bd7d97d149468829abdd522d7',
+        'source_contracts.py': '8450a4fea133402fc2eb90d314984942b0512fef85e0b67507e896051048c550',
     }
 
     def _site(self, function, line, expression):
@@ -2717,10 +2717,10 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
 
     def _lease_sites(self, cache, seed):
         return (
-            self._site(cache.inventory, 106, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
-            self._site(seed.verify_score, 583, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
-            self._site(seed.verify_score, 612, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
-            self._site(cache.inventory, 153, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
+            self._site(cache.inventory, 138, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
+            self._site(seed.verify_score, 606, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(seed.verify_score, 642, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(cache.inventory, 185, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
         )
 
     @staticmethod
@@ -2740,7 +2740,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1157,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1207,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -2844,8 +2844,8 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         import seed_count_contracts as seed
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
-        site = self._site(cache.inventory, 103, 'path.read_text()')
-        local_require = self._site(cache.inventory, 113,
+        site = self._site(cache.inventory, 135, 'path.read_text()')
+        local_require = self._site(cache.inventory, 145,
             "require(source.token_sha256(text) == source.token_sha256(_inputs.text_default(_input_owner, root, rel.as_posix())) == (seed_count.station.AFTER_TOKEN_SHA256 if hashlib.sha256(physical).hexdigest() == seed_count.station.AFTER_SHA256 else seed_count.SCORE_AFTER_TOKEN_SHA256), 'unreviewed supplied score-helper source')")
         sites = self._lease_sites(cache, seed)
         for fault in ('comment', 'tokens', 'io'):
@@ -2928,11 +2928,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         from functools import wraps
         loops, core = self.coverage()
         from carla_lane_oracle import seed_count_contracts as seed
-        production_site = self._site(seed.verify_score_caller_inventory, 486,
+        production_site = self._site(seed.verify_score_caller_inventory, 487,
                                      'guard.production_mojo_paths(root)')
         known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1471,
+        production_catch = self._site(core._operation_production_paths, 1521,
                                       '_operation_fail(_operation, error)')
         known_catch = self._site(loops.construction_boundary_loops, 1326,
                                  'cleanup._operation_fail(_operation, error)')

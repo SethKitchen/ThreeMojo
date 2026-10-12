@@ -13,6 +13,7 @@ import importlib.util
 import json
 import textwrap
 import tokenize
+import weakref
 from pathlib import Path
 
 if __package__:
@@ -573,6 +574,28 @@ def score_successor_source(root):
     return text
 
 
+# Whole-tree score premises already verified inside one active bounded
+# operation. The operation fixes every consumed byte in its captured image,
+# rejects any differing observation, and re-reads the whole image and both
+# path censuses in finish() before a result escapes. Inside that one image the
+# three premise checks are deterministic, so a repeat adds no evidence. Keys
+# hold the exact Map digest, station endpoint and access mode. Entries die
+# with the operation object; pending, failed or closed owners never use them.
+_SCORE_PREMISES = weakref.WeakKeyDictionary()
+
+
+def _score_memo_owner(inputs, operation):
+    """Return the active captured operation that fixes this call's inputs."""
+    if inputs is not None:
+        if type(inputs) is not full_audit._BorrowedCacheInputs:
+            return None
+        operation = inputs._operation
+    if (type(operation) is not full_audit._InvariantInputs or operation._failed
+            or operation._state != 'active'):
+        return None
+    return operation
+
+
 def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
     """Verify five original edges and, when present, the exact station edge."""
     root = Path(root)
@@ -598,7 +621,12 @@ def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
     middle = optional_predecessor_source(optional)
     prior_edge = verify_source(middle, record)
     require(prior_edge is not None, 'score edge must follow all preceding edges')
-    if _inputs is None:
+    memo_owner = _score_memo_owner(_inputs, _operation)
+    memo_key = (str(Path(root).absolute()), 'inputs' if _inputs is not None else 'operation',
+                sha(text), station_edge)
+    if memo_owner is not None and memo_key in _SCORE_PREMISES.get(memo_owner, ()):
+        pass
+    elif _inputs is None:
         _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': _operation}))
         verify_score_caller_inventory(root, station_edge=station_edge, **({} if _operation is None else {'_operation': _operation}))
         verify_premises(root, record, after=True, optional=True, support=True,
@@ -608,6 +636,8 @@ def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
         verify_score_caller_inventory(root, station_edge=station_edge, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
         verify_premises(root, record, after=True, optional=True, support=True,
                         frontier=True, score=True, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
+    if memo_owner is not None and _score_memo_owner(_inputs, _operation) is memo_owner:
+        _SCORE_PREMISES.setdefault(memo_owner, set()).add(memo_key)
     final_text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
                   _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))
     require(final_text == text,

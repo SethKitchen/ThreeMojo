@@ -148,7 +148,7 @@ def require(condition, message):
         raise ValueError(message)
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=512)
 def _token_snapshot(text):
     """Cache only lexical output for exact immutable text, never validation.
 
