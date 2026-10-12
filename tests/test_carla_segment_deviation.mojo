@@ -234,7 +234,7 @@ def _probe_queries(map: Map) raises -> List[Vector3]:
     var points = List[Vector3]()
     for lane in [1, -1, -2]:
         for k in range(1, 20):
-            var target = Waypoint(
+            var target = Waypoint._from_si(
                 RoadId(1), SectionId(0), LaneId(lane), Float64(k) * 5.0
             )
             var at = map.compute_transform(target).location
