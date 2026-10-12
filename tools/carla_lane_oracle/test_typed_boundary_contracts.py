@@ -25,6 +25,75 @@ class TypedBoundaryContracts(unittest.TestCase):
     def setUpClass(cls):
         cls.current = {path: (ROOT/path).read_text() for path in typed.SOURCE_PATHS}
 
+    def test_translated_method_provenance_retains_all_original_pins(self):
+        import ast
+        import re
+        path = ROOT/'tools/carla_lane_oracle/translated_parameter_resolution.py'
+        tree = ast.parse(path.read_text())
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                        and node.name == 'method_bytes')
+        # Pure projection only. The physical positive and mutation test below
+        # lives in TypedCurrentOwnedOperation and executes complete admission.
+        seen = []
+        def historical(name):
+            seen.append(name)
+            text = (ROOT/name).read_text()
+            return typed.historical_source(name, text)
+        namespace = {'re': re, '_historical_text': historical}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), 'exec'), namespace)
+        pins = json.loads((ROOT/'tools/carla_lane_oracle/translated-parameter-source.json').read_text())
+        self.assertEqual(len(pins['methods']), 21)
+        for item in pins['methods']:
+            with self.subTest(path=item['path'], method=item['name']):
+                actual = namespace['method_bytes'](item['path'], item['name'])
+                self.assertEqual(hashlib.sha256(actual).hexdigest(), item['sha256'])
+        self.assertEqual(seen, [item['path'] for item in pins['methods']])
+
+    def test_oracle_runtime_composition_propagates_both_required_child_refusals(self):
+        import ast
+        import check_runtime_support as runtime
+        import full_audit_cleanup_contracts as audit
+        path = ROOT/'tools/carla_lane_oracle/oracle.py'
+        tree = ast.parse(path.read_text())
+        function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                        and node.name == '_verify_runtime_contracts')
+        calls = [node for node in tree.body if isinstance(node, ast.Expr)
+                 and isinstance(node.value, ast.Call)
+                 and isinstance(node.value.func, ast.Name)
+                 and node.value.func.id == function.name]
+        self.assertEqual([ast.unparse(node) for node in calls],
+                         ['_verify_runtime_contracts(SOURCE)'])
+        namespace = {}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), 'exec'), namespace)
+        root = Path('/synthetic-oracle-control')
+        for child in ('canonical_accumulation', 'sum2'):
+            reached = []
+            failure = ValueError('required oracle child refused: ' + child)
+            def group(actual, name, *, _operation=None):
+                self.assertEqual(actual, root)
+                reached.append(name)
+                if name == child:
+                    raise failure
+                return {'synthetic': name}
+            def sum2(actual, *, _operation=None):
+                self.assertEqual(actual, root)
+                reached.append('sum2')
+                raise failure
+            # Exercise the actual public runtime dispatcher, isolating only
+            # its admission and child work. Real owner/refusal controls remain
+            # in TypedCurrentOwnedOperation and the maintained owner matrix.
+            with self.subTest(child=child), \
+                    patch.object(audit, '_operation_enter', return_value=(None, False)), \
+                    patch.object(runtime, 'verify_group', group), \
+                    patch.object(runtime.heading_correspondence, 'verify', return_value={}), \
+                    patch.object(runtime.optional_runtime_contracts, 'verify', return_value={}), \
+                    patch.object(runtime.sum2_contracts, 'verify', sum2):
+                with self.assertRaises(ValueError) as raised:
+                    namespace[function.name](root)
+                self.assertIs(raised.exception, failure)
+            self.assertIn('canonical_accumulation', reached)
+            self.assertEqual(reached[-1], child)
+
     def test_exact_provenance_reconstruction_has_no_lexical_result_cache(self):
         path = 'extensions/carla/map.mojo'
         first = typed.predecessor_source(path, self.current[path])
