@@ -126,7 +126,15 @@ A right operand does not have this problem. The native operator selects it when 
 
 The native operator converts the left operand in its own type. Then it converts the selected operand to the joined type and moves it into the result. The enclosing operator converts the joined value.
 
-To keep this order, the probes of both operands must give one proxy type. That proxy must do the implicit conversion when the operator selects it. The pinned overload rules can select such a probe only by the joined type. This design is not implemented yet. Until it is, the operator check refuses the join instead of a false vector.
+To keep this order, a probe must run the native implicit conversion at that point. No probe can do this in pinned Mojo 1.1.0:
+
+- Only code with concrete types can call an implicit conversion. A generic function that returns a generic `L` value as a generic `J` does not compile: "cannot implicitly convert 'L' value to 'J'". The runtime helpers are generic, so they cannot convert.
+- The instrumenter reads source text without types. It writes the same probe text for a join and for every other operator. That text must select its behavior through overloads.
+- An overload whose argument type is the joined type needs an implicit conversion. The overload rules select an exact generic overload before it, and every probe needs exact generic overloads for its other operands. Inference also does not convert: an overload that infers the joined type from a second argument does not accept the operand.
+- A text that always converts, such as a conditional expression whose other arm has the result type, changes other operators. It copies a retained operand of a two-type operator, and it does not compile when there is no conversion between the two types.
+- A lifted left operand also needs the conversion only after its own conversion and only on selection. The only deferred expressions are `and`, `or` and a conditional expression, and these cannot convert, for the reasons above.
+
+The operator check therefore refuses each join, instead of a false vector. This includes an `Optional` wrap of a pure operand, which replaces the value with its presence.
 
 The pinned reflection API names types without their origin parameters. A same-type check therefore also needs a proxy as the instrumented result. An operator whose operands differ only by origin keeps its native two-type semantics through distinct proxy types.
 
