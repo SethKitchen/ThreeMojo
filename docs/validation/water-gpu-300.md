@@ -96,6 +96,8 @@ So a 1920 x 1080 frame holds at most about 28.3 MB of device storage beyond the 
 
 The resource tests read free device memory after each frame, never inside one. These readings are post-frame watermarks, not in-frame peaks; the in-frame peak is the bound above. Over two rounds of 60 frames at 64 x 48, 97 x 61 and 128 x 72, with a `reset` and a refused frame, free memory ends within 1 MiB of where warm-up left it, the post-frame readings stay within 16 MiB of it, and resident host memory grows by under 32 MiB. After an object is dropped, free device memory returns within 1 MiB of where it was before the object. This also holds for an object dropped with no frame, and for one dropped after a failed frame. Repeated whole `draw` calls are not part of these tests.
 
+An Apple GPU shares the system's memory. The free memory a context reports there moves with every other process, so the tests do not ask for the free-memory bounds on Apple GPUs. macOS has no `/proc`, so the host check reads the peak resident size from `getrusage`. A peak that does not grow means the resident size did not grow.
+
 ## Decisions
 
 - **The GPU makes the shading about 15 to 30 times faster.** A 1920 x 1080 shade takes about 41 to 76 milliseconds on the GPU and 1,360 on every CPU core.
