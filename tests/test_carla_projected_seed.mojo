@@ -7,7 +7,12 @@ from extensions.carla.map import (
     _use_projected_spiral_seed,
 )
 from extensions.carla.curve_interval import _Interval
-from extensions.carla.geometry import ARC, SPIRAL, RoadGeometry, with_spiral
+from extensions.carla.geometry import (
+    ARC,
+    SPIRAL,
+    RoadGeometry,
+    with_spiral_si as with_spiral,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import RoadInfoLaneWidth
 from tests.test_carla_curve_bounds import _road
@@ -247,7 +252,7 @@ def test_unknown_full_boxes_and_widths_keep_midpoint_eligibility() raises:
 
 def test_seed_eligibility_preserves_arc_and_variable_width_paths() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.02
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.02
     )
     var road = _road(geometry^, width=4.0)
     var bounds = (
@@ -283,7 +288,7 @@ def test_seed_eligibility_preserves_arc_and_variable_width_paths() raises:
         )
     )
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.5, CubicPolynomial.constant(4.0))
+        RoadInfoLaneWidth._from_si(0.5, CubicPolynomial._constant_si(4.0))
     )
     assert_false(
         _use_projected_spiral_seed(road, 0, 0, 0.1, 0.9, bounds, query)
