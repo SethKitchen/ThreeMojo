@@ -47,7 +47,7 @@ from std.testing import (
 
 
 def _road(var geometry: RoadGeometry) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1),
         "centered",
         geometry.length,
@@ -56,18 +56,18 @@ def _road(var geometry: RoadGeometry) raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(1.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(1.0))
     )
     return road^
 
@@ -154,7 +154,9 @@ def test_exact_point_metric_does_not_invent_scalar_distance_rounding() raises:
 
 
 def test_expansion_translation_is_value_only_and_retains_actual_error_separation() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 1000000001.0, 0.0, 0.0, 1.0))
+    var road = _road(
+        RoadGeometry.from_meters(LINE, 0.0, 1000000001.0, 0.0, 0.0, 1.0)
+    )
     var expansion = _expansion_distance_jet(
         road, 0, 0, 0.5, Vector3(1000000000.0, 0, 0), 1.0
     )
@@ -165,7 +167,7 @@ def test_expansion_translation_is_value_only_and_retains_actual_error_separation
 
 
 def test_spiral_accumulates_displacement_before_the_wide_origin() raises:
-    var geometry = RoadGeometry(
+    var geometry = RoadGeometry.from_meters(
         SPIRAL, 0.0, 10000000000000000.0, 123.0, 0.0, 10.0
     )
     # Zero curvature is independently a straight segment. Each original
@@ -174,7 +176,7 @@ def test_spiral_accumulates_displacement_before_the_wide_origin() raises:
     # Its 25 positive terms are each below half the origin's 2m ULP, so every
     # addition rounds back to the origin. The canonical lane graph instead
     # accumulates displacement first; keep both contracts explicit.
-    var reference = geometry.pos_at(4.0)
+    var reference = geometry.pos_at_meters(4.0)
     assert_equal(reference.x, geometry.x)
     assert_equal(reference.y, geometry.y)
     var point = _lane_geometry_pos_at(geometry, 4.0)
