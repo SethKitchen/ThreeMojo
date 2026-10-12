@@ -629,7 +629,7 @@ def edges(paths):
 BINDING_INPUTS = {'tests/test_carla_conditioned_polynomial.mojo': '03dd1897b7c43e4cfd4f14e595c136753dae139a16cf505ede804f3a417a4273',
  'tools/carla_lane_oracle/conditioned-cubic-successor.json': 'a0cf7af298262796ba1db8292830f683ae2a1c3844e8d8d967fe5f5d4cfa309c',
  'tools/carla_lane_oracle/test_conditioned_cubic_contracts.py': 'e6de36edf8083671416d28f90c129bed042a6e1f9fa2dcbb5b6fc2826f3d2e48',
- 'docs/validation/conditioned-cubic-333.md': 'a24bd19a9c6778bb19370c1e7116f4546b84b85a52696d710b66c2e7c1db21ec',
+ 'docs/validation/conditioned-cubic-333.md': '20b3e2ddf5d979999cae5f262560e3f3a41bab773346351791a3b355dc0b0a2a',
  'assets/carla/town.xodr': '4130289eab48e8cc3c6cf928a054d6af15566e3cd1e5d6c95ecbe5d84377f797',
  'extensions/carla/curve_interval.mojo': 'ff6bf0d35b357047c609ea7cb6dbcbe535446cf4e315d9eac5f6c341ddbf1040'}
 
@@ -644,5 +644,5 @@ def verify_authority():
     payload = {name: globals()[name] for name in ('LEAF', 'MIGRATION', 'MIGRATION_SHA256', 'SOURCE_PATHS', 'BEFORE_SHA256', 'AFTER_SHA256', 'BEFORE_TOKEN_SHA256', 'AFTER_TOKEN_SHA256', 'EDITS', 'EDITS_SHA256', 'PROVIDER_INPUTS', 'AUDIT_PROVIDER_SHA256', 'NATIVE_TESTS', 'GRAPH_SPANS', 'BINDING_INPUTS')}
     actual = hashlib.sha256(json.dumps(payload, sort_keys=True,
         separators=(',', ':')).encode('utf-8')).hexdigest()
-    if actual != 'c647109c0b83d04c47f9ac2d31c24460ff26dbc3a5a3ade12e0f48208e22a5e1':
+    if actual != 'bd9663e17970394c5b91dac1f1e0fe43cb421e336793a3044025a611713c6c94':
         raise ValueError('conditioned cubic authority namespace changed')
