@@ -61,7 +61,8 @@ class AirCallTests(unittest.TestCase):
     def test_kernels_are_found_from_launches(self):
         found = air.kernels(air.ROOT)
         self.assertIn(('render/gpu.mojo', 'rasterize_kernel'), found)
-        self.assertEqual(len(found), 37)
+        self.assertIn(('extensions/water/gpu.mojo', 'water_kernel'), found)
+        self.assertEqual(len(found), 38)
 
 
 class DiscoveryTests(unittest.TestCase):
