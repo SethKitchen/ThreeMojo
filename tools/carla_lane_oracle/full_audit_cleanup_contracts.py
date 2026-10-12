@@ -606,6 +606,10 @@ def _code_constant(value):
         return ('complex', struct.pack('>dd', value.real, value.imag))
     if value is Ellipsis:
         return ('ellipsis',)
+    if type(value) is slice:
+        # Python 3.14 folds constant slices such as `x[:2]` into co_consts.
+        return ('slice', _code_constant(value.start), _code_constant(value.stop),
+                _code_constant(value.step))
     require(type(value) in (str, bytes, int, bool, type(None)), 'unsupported executed-code constant')
     return (type(value).__name__, value)
 
