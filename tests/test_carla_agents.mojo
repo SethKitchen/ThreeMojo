@@ -53,7 +53,7 @@ from extensions.carla.agents_misc import (
     compute_distance,
     compute_magnitude_angle,
     distance_vehicle,
-    from_kmh,
+    from_kmh_float32 as from_kmh,
     get_speed,
     get_trafficlight_trigger_location,
     is_within_distance,
@@ -630,7 +630,7 @@ def test_compute_connection() raises:
 
 def test_plan_item_checks_its_option() raises:
     var map = _town()
-    var w = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 10.0)
+    var w = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 10.0)
     var item = plan_item(map, w, OPTION_STRAIGHT)
     assert_almost_equal(item.transform.location.x, 10, atol=1e-5)
     with assert_raises(contains="Road option is not valid"):
@@ -641,15 +641,15 @@ def test_retrieve_options_at_the_fork() raises:
     # Three metres into road 11 the arc has turned 3.9 / 20 rad = 11
     # degrees: CARLA calls every branch straight.
     var map = _town()
-    var last = Waypoint(RoadId(1), SectionId(1), LaneId(-1), 58.9)
-    var nexts = map.next(last, 2.0)
+    var last = Waypoint._from_si(RoadId(1), SectionId(1), LaneId(-1), 58.9)
+    var nexts = map.next_meters(last, 2.0)
     assert_equal(len(nexts), 3)
     var options = retrieve_options(map, nexts, last)
     for o in options:
         assert_equal(o.value, OPTION_STRAIGHT.value)
     # A lane that ends gives no waypoint 3 m on.
     var dead = List[Waypoint]()
-    dead.append(Waypoint(RoadId(2), SectionId(0), LaneId(-1), 38.5))
+    dead.append(Waypoint._from_si(RoadId(2), SectionId(0), LaneId(-1), 38.5))
     with assert_raises(contains="No waypoint lies 3 m past"):
         _ = retrieve_options(map, dead, last)
 
@@ -749,7 +749,7 @@ def test_local_planner_global_plan() raises:
         plan.append(
             plan_item(
                 world.map,
-                Waypoint(RoadId(1), SectionId(0), LaneId(-1), s),
+                Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), s),
                 OPTION_LANE_FOLLOW,
             )
         )
@@ -1091,7 +1091,7 @@ def _node(mut grp: GlobalRoutePlanner, x: Float64, y: Float64) -> Int:
 
 
 def _link(mut grp: GlobalRoutePlanner, a: Int, b: Int, length: Int) raises:
-    var w = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 0.0)
+    var w = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 0.0)
     var e = grp._add_edge(a, b, w, w)
     grp._edges[e].length = length
 
