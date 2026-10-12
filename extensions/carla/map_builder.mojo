@@ -53,10 +53,11 @@ from extensions.carla.geometry import (
     LINE,
     NORMALIZED,
     RoadGeometry,
-    with_arc,
-    with_param_poly3,
-    with_poly3,
-    with_spiral,
+    with_arc_si as with_arc,
+    with_param_poly3_from_coefficients as with_param_poly3,
+    NormalizedCubic,
+    with_poly3_si as with_poly3,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.map import (
     Connection,
@@ -112,7 +113,22 @@ from extensions.carla.road_info import (
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.bounds import Box3
 from math.vector3 import Vector3
-from units.si import DEGREE, Angle, Length, METER
+from units.si import (
+    DEGREE,
+    Angle,
+    Length,
+    METER,
+    Length64,
+    Angle64,
+    InverseLength64,
+    InverseArea64,
+    Velocity64,
+)
+from extensions.carla.quantity_boundary import (
+    _finite_si,
+    _nonnegative_si,
+    _positive_si,
+)
 
 comptime _FLOAT_MAX = Float32(3.4028234663852886e38)
 comptime _TO_DEGREES = Float32(180.0) / Float32(3.14159265358979323846)
@@ -194,13 +210,13 @@ struct MapBuilder(Movable):
         mut self,
         id: RoadId,
         name: String,
-        length: Float64,
+        length: Length64,
         junction_id: JuncId,
         predecessor: RoadId,
         successor: RoadId,
         is_rht: Bool,
     ) raises -> Int:
-        """Add a road, `AddRoad`. A second road with the same id resets the
+        """Checked typed boundary. Add a road, `AddRoad`. A second road with the same id resets the
         first's fields, as CARLA's `emplace` and assignments do.
 
         Args:
@@ -218,7 +234,41 @@ struct MapBuilder(Movable):
         Raises:
             Error: If an id is not valid.
         """
-        var road = Road(
+        return self.add_road_si(
+            id, name, length.value, junction_id, predecessor, successor, is_rht
+        )
+
+    def add_road_si(
+        mut self,
+        id: RoadId,
+        name: String,
+        length: Float64,
+        junction_id: JuncId,
+        predecessor: RoadId,
+        successor: RoadId,
+        is_rht: Bool,
+    ) raises -> Int:
+        """Explicit source-unit compatibility adapter. Add a road, `AddRoad`. A second road with the same id resets the
+        first's fields, as CARLA's `emplace` and assignments do.
+
+        Args:
+            id: The road's id.
+            name: Its name.
+            length: Its length, in meters.
+            junction_id: Its junction, or `NO_JUNCTION`.
+            predecessor: The road or junction before it, 0 for none.
+            successor: The road or junction after it, 0 for none.
+            is_rht: True if traffic keeps to the right.
+
+        Returns:
+            The road's index in `roads`.
+
+        Raises:
+            Error: If an id is not valid.
+        """
+        _ = _positive_si(length)
+
+        var road = Road._from_si(
             id, name, length, junction_id, predecessor, successor, is_rht
         )
         for i in range(len(self.roads)):
@@ -253,9 +303,9 @@ struct MapBuilder(Movable):
         raise Error("The builder has no road with that id")
 
     def add_road_section(
-        mut self, road: Int, id: SectionId, s: Float64
+        mut self, road: Int, id: SectionId, s: Length64
     ) raises -> Int:
-        """Add a lane section, `AddRoadSection`.
+        """Checked typed boundary. Add a lane section, `AddRoadSection`.
 
         Args:
             road: The road's index.
@@ -268,7 +318,27 @@ struct MapBuilder(Movable):
         Raises:
             Error: If the id is not valid.
         """
-        return self.roads[road].add_section(id, s)
+        return self.add_road_section_si(road, id, s.value)
+
+    def add_road_section_si(
+        mut self, road: Int, id: SectionId, s: Float64
+    ) raises -> Int:
+        """Explicit source-unit compatibility adapter. Add a lane section, `AddRoadSection`.
+
+        Args:
+            road: The road's index.
+            id: The section's id.
+            s: Where it starts, in meters.
+
+        Returns:
+            The section's index in the road.
+
+        Raises:
+            Error: If the id is not valid.
+        """
+        _ = _nonnegative_si(s)
+
+        return self.roads[road]._add_section_si(id, s)
 
     def add_road_section_lane(
         mut self,
@@ -314,9 +384,9 @@ struct MapBuilder(Movable):
         return LaneKey(self.roads[road].id, s.id, lane_id)
 
     def lane(
-        self, road_id: RoadId, lane_id: LaneId, s: Float64
+        self, road_id: RoadId, lane_id: LaneId, s: Length64
     ) raises -> Tuple[Int, Int, Int]:
-        """Return the lane with an id at s, `MapBuilder::GetLane`.
+        """Checked typed boundary. Return the lane with an id at s, `MapBuilder::GetLane`.
 
         Args:
             road_id: The road.
@@ -329,8 +399,28 @@ struct MapBuilder(Movable):
         Raises:
             Error: If there is no such road or lane.
         """
+        return self.lane_si(road_id, lane_id, s.value)
+
+    def lane_si(
+        self, road_id: RoadId, lane_id: LaneId, s: Float64
+    ) raises -> Tuple[Int, Int, Int]:
+        """Explicit source-unit compatibility adapter. Return the lane with an id at s, `MapBuilder::GetLane`.
+
+        Args:
+            road_id: The road.
+            lane_id: The lane.
+            s: A distance along the road, in meters.
+
+        Returns:
+            The road's index, the section's index and the lane's index.
+
+        Raises:
+            Error: If there is no such road or lane.
+        """
+        _ = _nonnegative_si(s)
+
         var r = self.road_index(road_id)
-        var found = self.roads[r].lane_by_distance(s, lane_id)
+        var found = self.roads[r]._lane_by_distance_si(s, lane_id)
         return (r, found[0], found[1])
 
     # --- lane records ---------------------------------------------------------
@@ -338,13 +428,13 @@ struct MapBuilder(Movable):
     def create_lane_width(
         mut self,
         lane: Tuple[Int, Int, Int],
-        s: Float64,
-        a: Float64,
+        s: Length64,
+        a: Length64,
         b: Float64,
-        c: Float64,
-        d: Float64,
-    ):
-        """Add a width record, `CreateLaneWidth`.
+        c: InverseLength64,
+        d: InverseArea64,
+    ) raises:
+        """Checked typed boundary. Add a width record, `CreateLaneWidth`.
 
         Args:
             lane: The lane, from `lane`.
@@ -354,11 +444,9 @@ struct MapBuilder(Movable):
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
         """
-        self._lane(lane).info.widths.append(
-            RoadInfoLaneWidth(s, CubicPolynomial(a, b, c, d, s))
-        )
+        self.create_lane_width_si(lane, s.value, a.value, b, c.value, d.value)
 
-    def create_lane_border(
+    def create_lane_width_si(
         mut self,
         lane: Tuple[Int, Int, Int],
         s: Float64,
@@ -366,8 +454,38 @@ struct MapBuilder(Movable):
         b: Float64,
         c: Float64,
         d: Float64,
-    ):
-        """Add a border record, `CreateLaneBorder`.
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a width record, `CreateLaneWidth`.
+
+        Args:
+            lane: The lane, from `lane`.
+            s: Where the record starts, in meters along the road.
+            a: The width at s, in meters.
+            b: Its rate of change.
+            c: The quadratic term, per meter.
+            d: The cubic term, per square meter.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(a)
+        _ = _finite_si(c)
+        _ = _finite_si(d)
+
+        self._lane(lane).info.widths.append(
+            RoadInfoLaneWidth._from_si(
+                s, CubicPolynomial.from_coefficients(a, b, c, d, s)
+            )
+        )
+
+    def create_lane_border(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Length64,
+        a: Length64,
+        b: Float64,
+        c: InverseLength64,
+        d: InverseArea64,
+    ) raises:
+        """Checked typed boundary. Add a border record, `CreateLaneBorder`.
 
         Args:
             lane: The lane.
@@ -377,18 +495,46 @@ struct MapBuilder(Movable):
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
         """
+        self.create_lane_border_si(lane, s.value, a.value, b, c.value, d.value)
+
+    def create_lane_border_si(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        a: Float64,
+        b: Float64,
+        c: Float64,
+        d: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a border record, `CreateLaneBorder`.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            a: The border's offset at s, in meters.
+            b: Its rate of change.
+            c: The quadratic term, per meter.
+            d: The cubic term, per square meter.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(a)
+        _ = _finite_si(c)
+        _ = _finite_si(d)
+
         self._lane(lane).info.borders.append(
-            RoadInfoLaneBorder(s, CubicPolynomial(a, b, c, d, s))
+            RoadInfoLaneBorder._from_si(
+                s, CubicPolynomial.from_coefficients(a, b, c, d, s)
+            )
         )
 
     def create_lane_height(
         mut self,
         lane: Tuple[Int, Int, Int],
-        s: Float64,
-        inner: Float64,
-        outer: Float64,
-    ):
-        """Add a height record, `CreateLaneHeight`.
+        s: Length64,
+        inner: Length64,
+        outer: Length64,
+    ) raises:
+        """Checked typed boundary. Add a height record, `CreateLaneHeight`.
 
         Args:
             lane: The lane.
@@ -396,19 +542,40 @@ struct MapBuilder(Movable):
             inner: The lift at the inner edge, in meters.
             outer: The lift at the outer edge, in meters.
         """
+        self.create_lane_height_si(lane, s.value, inner.value, outer.value)
+
+    def create_lane_height_si(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        inner: Float64,
+        outer: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a height record, `CreateLaneHeight`.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            inner: The lift at the inner edge, in meters.
+            outer: The lift at the outer edge, in meters.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(inner)
+        _ = _finite_si(outer)
+
         self._lane(lane).info.heights.append(
-            RoadInfoLaneHeight(s, inner, outer)
+            RoadInfoLaneHeight._from_si(s, inner, outer)
         )
 
     def create_lane_material(
         mut self,
         lane: Tuple[Int, Int, Int],
-        s: Float64,
+        s: Length64,
         surface: String,
         friction: Float64,
         roughness: Float64,
-    ):
-        """Add a material record, `CreateLaneMaterial`.
+    ) raises:
+        """Checked typed boundary. Add a material record, `CreateLaneMaterial`.
 
         Args:
             lane: The lane.
@@ -417,32 +584,69 @@ struct MapBuilder(Movable):
             friction: Its friction coefficient.
             roughness: Its roughness.
         """
+        self.create_lane_material_si(
+            lane, s.value, surface, friction, roughness
+        )
+
+    def create_lane_material_si(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        surface: String,
+        friction: Float64,
+        roughness: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a material record, `CreateLaneMaterial`.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            surface: The surface's name.
+            friction: Its friction coefficient.
+            roughness: Its roughness.
+        """
+        _ = _nonnegative_si(s)
+
         self._lane(lane).info.materials.append(
-            RoadInfoLaneMaterial(s, surface, friction, roughness)
+            RoadInfoLaneMaterial._from_si(s, surface, friction, roughness)
         )
 
     def create_lane_rule(
-        mut self, lane: Tuple[Int, Int, Int], s: Float64, value: String
-    ):
-        """Add a rule record, `CreateLaneRule`.
+        mut self, lane: Tuple[Int, Int, Int], s: Length64, value: String
+    ) raises:
+        """Checked typed boundary. Add a rule record, `CreateLaneRule`.
 
         Args:
             lane: The lane.
             s: Where the record starts, in meters along the road.
             value: The rule's text.
         """
-        self._lane(lane).info.rules.append(RoadInfoLaneRule(s, value))
+        self.create_lane_rule_si(lane, s.value, value)
+
+    def create_lane_rule_si(
+        mut self, lane: Tuple[Int, Int, Int], s: Float64, value: String
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a rule record, `CreateLaneRule`.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            value: The rule's text.
+        """
+        _ = _nonnegative_si(s)
+
+        self._lane(lane).info.rules.append(RoadInfoLaneRule._from_si(s, value))
 
     def create_lane_visibility(
         mut self,
         lane: Tuple[Int, Int, Int],
-        s: Float64,
-        forward: Float64,
-        back: Float64,
-        left: Float64,
-        right: Float64,
-    ):
-        """Add a visibility record, `CreateLaneVisibility`.
+        s: Length64,
+        forward: Length64,
+        back: Length64,
+        left: Length64,
+        right: Length64,
+    ) raises:
+        """Checked typed boundary. Add a visibility record, `CreateLaneVisibility`.
 
         Args:
             lane: The lane.
@@ -452,32 +656,74 @@ struct MapBuilder(Movable):
             left: Meters of sight left.
             right: Meters of sight right.
         """
+        self.create_lane_visibility_si(
+            lane, s.value, forward.value, back.value, left.value, right.value
+        )
+
+    def create_lane_visibility_si(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        forward: Float64,
+        back: Float64,
+        left: Float64,
+        right: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a visibility record, `CreateLaneVisibility`.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            forward: Meters of sight forward.
+            back: Meters of sight back.
+            left: Meters of sight left.
+            right: Meters of sight right.
+        """
+        _ = _nonnegative_si(s)
+        _ = _nonnegative_si(forward)
+        _ = _nonnegative_si(back)
+        _ = _nonnegative_si(left)
+        _ = _nonnegative_si(right)
+
         self._lane(lane).info.visibilities.append(
-            RoadInfoLaneVisibility(s, forward, back, left, right)
+            RoadInfoLaneVisibility._from_si(s, forward, back, left, right)
         )
 
     def create_lane_access(
-        mut self, lane: Tuple[Int, Int, Int], s: Float64, restriction: String
-    ):
-        """Add an access record, `CreateLaneAccess`.
+        mut self, lane: Tuple[Int, Int, Int], s: Length64, restriction: String
+    ) raises:
+        """Checked typed boundary. Add an access record, `CreateLaneAccess`.
 
         Args:
             lane: The lane.
             s: Where the record starts, in meters along the road.
             restriction: Who may use the lane.
         """
+        self.create_lane_access_si(lane, s.value, restriction)
+
+    def create_lane_access_si(
+        mut self, lane: Tuple[Int, Int, Int], s: Float64, restriction: String
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add an access record, `CreateLaneAccess`.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            restriction: Who may use the lane.
+        """
+        _ = _nonnegative_si(s)
+
         self._lane(lane).info.accesses.append(
-            RoadInfoLaneAccess(s, restriction)
+            RoadInfoLaneAccess._from_si(s, restriction)
         )
 
     def create_lane_speed(
         mut self,
         lane: Tuple[Int, Int, Int],
-        s: Float64,
-        max: Float64,
-        unit: String = "",
+        s: Length64,
+        max: Velocity64,
     ) raises:
-        """Add a numeric lane speed without dropping its source unit.
+        """Checked typed boundary. Add a numeric lane speed without dropping its source unit.
 
         Args:
             lane: The lane.
@@ -488,17 +734,39 @@ struct MapBuilder(Movable):
         Raises:
             Error: If the source number or unit is invalid.
         """
-        var record = RoadInfoSpeed(s, max, "Town", unit)
+        self.create_lane_speed_opendrive(lane, s.value, max.value, "m/s")
+
+    def create_lane_speed_opendrive(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        max: Float64,
+        unit: String = "",
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a numeric lane speed without dropping its source unit.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            max: The finite nonnegative limit in the source unit.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If the source number or unit is invalid.
+        """
+        _ = _nonnegative_si(s)
+
+        var record = RoadInfoSpeed._from_si(s, max, "Town", unit)
         self._lane(lane).info.speeds.append(record^)
 
-    def create_lane_speed(
+    def create_lane_speed_opendrive(
         mut self,
         lane: Tuple[Int, Int, Int],
         s: Float64,
         max: String,
         unit: String,
     ) raises:
-        """Add a numeric lane speed directly from OpenDRIVE text.
+        """Explicit source-unit compatibility adapter. Add a numeric lane speed directly from OpenDRIVE text.
 
         Args:
             lane: The lane.
@@ -509,6 +777,8 @@ struct MapBuilder(Movable):
         Raises:
             Error: If the source number or unit is invalid.
         """
+        _ = _nonnegative_si(s)
+
         var record = RoadInfoSpeed.from_opendrive(s, max, "Town", unit, False)
         self._lane(lane).info.speeds.append(record^)
 
@@ -516,19 +786,19 @@ struct MapBuilder(Movable):
         mut self,
         lane: Tuple[Int, Int, Int],
         road_mark_id: Int,
-        s: Float64,
+        s: Length64,
         type: String,
         weight: String,
         color: String,
         material: String,
-        width: Float64,
+        width: Length64,
         lane_change: String,
-        height: Float64,
+        height: Length64,
         type_name: String,
-        type_width: Float64,
+        type_width: Length64,
         is_rht: Bool,
-    ):
-        """Add a road mark, `CreateRoadMark`.
+    ) raises:
+        """Checked typed boundary. Add a road mark, `CreateRoadMark`.
 
         Args:
             lane: The lane.
@@ -546,8 +816,63 @@ struct MapBuilder(Movable):
             type_width: The width of the mark's `type` child.
             is_rht: The traffic rule of the lane's road.
         """
+        self.create_road_mark_si(
+            lane,
+            road_mark_id,
+            s.value,
+            type,
+            weight,
+            color,
+            material,
+            width.value,
+            lane_change,
+            height.value,
+            type_name,
+            type_width.value,
+            is_rht,
+        )
+
+    def create_road_mark_si(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        road_mark_id: Int,
+        s: Float64,
+        type: String,
+        weight: String,
+        color: String,
+        material: String,
+        width: Float64,
+        lane_change: String,
+        height: Float64,
+        type_name: String,
+        type_width: Float64,
+        is_rht: Bool,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a road mark, `CreateRoadMark`.
+
+        Args:
+            lane: The lane.
+            road_mark_id: The mark's index within the lane.
+            s: Where the mark starts, in meters along the road.
+            type: The mark's type, such as "broken".
+            weight: Its weight.
+            color: Its color.
+            material: Its material.
+            width: The paint's width, in meters.
+            lane_change: "increase", "decrease", "none", or anything else
+                for both.
+            height: The paint's height, in meters.
+            type_name: The name of the mark's `type` child.
+            type_width: The width of the mark's `type` child.
+            is_rht: The traffic rule of the lane's road.
+        """
+        _ = _nonnegative_si(s)
+        _ = _nonnegative_si(width)
+        _ = _nonnegative_si(height)
+        _ = _nonnegative_si(type_width)
+
         self._lane(lane).info.marks.append(
-            RoadInfoMarkRecord(
+            RoadInfoMarkRecord._from_si(
                 s,
                 road_mark_id,
                 type,
@@ -567,14 +892,14 @@ struct MapBuilder(Movable):
         mut self,
         lane: Tuple[Int, Int, Int],
         road_mark_id: Int,
-        length: Float64,
-        space: Float64,
-        t_offset: Float64,
-        s: Float64,
+        length: Length64,
+        space: Length64,
+        t_offset: Length64,
+        s: Length64,
         rule: String,
-        width: Float64,
-    ):
-        """Add a line to a road mark's type, `CreateRoadMarkTypeLine`.
+        width: Length64,
+    ) raises:
+        """Checked typed boundary. Add a line to a road mark's type, `CreateRoadMarkTypeLine`.
 
         The line joins the first mark of the lane with the same id. With
         no such mark it is dropped, as in CARLA.
@@ -589,11 +914,54 @@ struct MapBuilder(Movable):
             rule: The line's rule.
             width: The line's width, in meters.
         """
+        self.create_road_mark_type_line_si(
+            lane,
+            road_mark_id,
+            length.value,
+            space.value,
+            t_offset.value,
+            s.value,
+            rule,
+            width.value,
+        )
+
+    def create_road_mark_type_line_si(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        road_mark_id: Int,
+        length: Float64,
+        space: Float64,
+        t_offset: Float64,
+        s: Float64,
+        rule: String,
+        width: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a line to a road mark's type, `CreateRoadMarkTypeLine`.
+
+        The line joins the first mark of the lane with the same id. With
+        no such mark it is dropped, as in CARLA.
+
+        Args:
+            lane: The lane.
+            road_mark_id: The mark's index within the lane.
+            length: Meters of paint.
+            space: Meters of gap.
+            t_offset: The sideways offset, in meters.
+            s: Where the line starts, in meters along the road.
+            rule: The line's rule.
+            width: The line's width, in meters.
+        """
+        _ = _nonnegative_si(length)
+        _ = _nonnegative_si(space)
+        _ = _finite_si(t_offset)
+        _ = _nonnegative_si(s)
+        _ = _nonnegative_si(width)
+
         ref marks = self._lane(lane).info.marks
         for i in range(len(marks)):
             if marks[i].road_mark_id == road_mark_id:
                 marks[i].lines.append(
-                    RoadInfoMarkTypeLine(
+                    RoadInfoMarkTypeLine._from_si(
                         s, road_mark_id, length, space, t_offset, rule, width
                     )
                 )
@@ -609,13 +977,13 @@ struct MapBuilder(Movable):
     def add_road_elevation_profile(
         mut self,
         road: Int,
-        s: Float64,
-        a: Float64,
+        s: Length64,
+        a: Length64,
         b: Float64,
-        c: Float64,
-        d: Float64,
-    ):
-        """Add an elevation record, `AddRoadElevationProfile`.
+        c: InverseLength64,
+        d: InverseArea64,
+    ) raises:
+        """Checked typed boundary. Add an elevation record, `AddRoadElevationProfile`.
 
         Args:
             road: The road's index.
@@ -625,11 +993,11 @@ struct MapBuilder(Movable):
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
         """
-        self.roads[road].info.elevations.append(
-            RoadInfoElevation(s, CubicPolynomial(a, b, c, d, s))
+        self.add_road_elevation_profile_si(
+            road, s.value, a.value, b, c.value, d.value
         )
 
-    def create_section_offset(
+    def add_road_elevation_profile_si(
         mut self,
         road: Int,
         s: Float64,
@@ -637,8 +1005,38 @@ struct MapBuilder(Movable):
         b: Float64,
         c: Float64,
         d: Float64,
-    ):
-        """Add a lane offset record, `CreateSectionOffset`.
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add an elevation record, `AddRoadElevationProfile`.
+
+        Args:
+            road: The road's index.
+            s: Where the record starts, in meters.
+            a: The height at s, in meters.
+            b: The slope.
+            c: The quadratic term, per meter.
+            d: The cubic term, per square meter.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(a)
+        _ = _finite_si(c)
+        _ = _finite_si(d)
+
+        self.roads[road].info.elevations.append(
+            RoadInfoElevation._from_si(
+                s, CubicPolynomial.from_coefficients(a, b, c, d, s)
+            )
+        )
+
+    def create_section_offset(
+        mut self,
+        road: Int,
+        s: Length64,
+        a: Length64,
+        b: Float64,
+        c: InverseLength64,
+        d: InverseArea64,
+    ) raises:
+        """Checked typed boundary. Add a lane offset record, `CreateSectionOffset`.
 
         Args:
             road: The road's index.
@@ -648,19 +1046,48 @@ struct MapBuilder(Movable):
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
         """
+        self.create_section_offset_si(
+            road, s.value, a.value, b, c.value, d.value
+        )
+
+    def create_section_offset_si(
+        mut self,
+        road: Int,
+        s: Float64,
+        a: Float64,
+        b: Float64,
+        c: Float64,
+        d: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a lane offset record, `CreateSectionOffset`.
+
+        Args:
+            road: The road's index.
+            s: Where the record starts, in meters.
+            a: The offset at s, in meters. Plus is to the left.
+            b: Its rate of change.
+            c: The quadratic term, per meter.
+            d: The cubic term, per square meter.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(a)
+        _ = _finite_si(c)
+        _ = _finite_si(d)
+
         self.roads[road].info.lane_offsets.append(
-            RoadInfoLaneOffset(s, CubicPolynomial(a, b, c, d, s))
+            RoadInfoLaneOffset._from_si(
+                s, CubicPolynomial.from_coefficients(a, b, c, d, s)
+            )
         )
 
     def create_road_speed(
         mut self,
         road: Int,
-        s: Float64,
+        s: Length64,
         type: String,
-        max: Float64,
-        unit: String,
+        max: Velocity64,
     ) raises:
-        """Add a numeric road speed without dropping its unit.
+        """Checked typed boundary. Add a numeric road speed without dropping its unit.
 
         Args:
             road: The road's index.
@@ -672,11 +1099,35 @@ struct MapBuilder(Movable):
         Raises:
             Error: If the number or unit is invalid.
         """
+        self.create_road_speed_opendrive(road, s.value, type, max.value, "m/s")
+
+    def create_road_speed_opendrive(
+        mut self,
+        road: Int,
+        s: Float64,
+        type: String,
+        max: Float64,
+        unit: String,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a numeric road speed without dropping its unit.
+
+        Args:
+            road: The road's index.
+            s: Where the record starts, in meters.
+            type: The road type; the compatibility record type stays Town.
+            max: The finite nonnegative source limit.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If the number or unit is invalid.
+        """
+        _ = _nonnegative_si(s)
+
         _ = type
-        var record = RoadInfoSpeed(s, max, "Town", unit)
+        var record = RoadInfoSpeed._from_si(s, max, "Town", unit)
         self.roads[road].info.speeds.append(record^)
 
-    def create_road_speed(
+    def create_road_speed_opendrive(
         mut self,
         road: Int,
         s: Float64,
@@ -684,7 +1135,7 @@ struct MapBuilder(Movable):
         max: String,
         unit: String,
     ) raises:
-        """Add a numeric, unrestricted, undefined or absent road speed.
+        """Explicit source-unit compatibility adapter. Add a numeric, unrestricted, undefined or absent road speed.
 
         Args:
             road: The road's index.
@@ -696,6 +1147,8 @@ struct MapBuilder(Movable):
         Raises:
             Error: If a numeric limit or source unit is invalid.
         """
+        _ = _nonnegative_si(s)
+
         _ = type
         var record = RoadInfoSpeed.from_opendrive(s, max, "Town", unit, True)
         self.roads[road].info.speeds.append(record^)
@@ -704,18 +1157,18 @@ struct MapBuilder(Movable):
         mut self,
         road: Int,
         name: String,
-        s: Float64,
-        t: Float64,
-        z_offset: Float64,
-        heading: Float64,
-        pitch: Float64,
-        roll: Float64,
+        s: Length64,
+        t: Length64,
+        z_offset: Length64,
+        heading: Angle64,
+        pitch: Angle64,
+        roll: Angle64,
         orientation: String,
-        width: Float64,
-        length: Float64,
+        width: Length64,
+        length: Length64,
         points: List[CrosswalkPoint],
-    ):
-        """Add a crosswalk, `AddRoadObjectCrosswalk`.
+    ) raises:
+        """Checked typed boundary. Add a crosswalk, `AddRoadObjectCrosswalk`.
 
         Args:
             road: The road's index.
@@ -731,8 +1184,67 @@ struct MapBuilder(Movable):
             length: Its length, in meters.
             points: Its outline's corners.
         """
+        self.add_road_object_crosswalk_si(
+            road,
+            name,
+            s.value,
+            t.value,
+            z_offset.value,
+            heading.value,
+            pitch.value,
+            roll.value,
+            orientation,
+            width.value,
+            length.value,
+            points,
+        )
+
+    def add_road_object_crosswalk_si(
+        mut self,
+        road: Int,
+        name: String,
+        s: Float64,
+        t: Float64,
+        z_offset: Float64,
+        heading: Float64,
+        pitch: Float64,
+        roll: Float64,
+        orientation: String,
+        width: Float64,
+        length: Float64,
+        points: List[CrosswalkPoint],
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a crosswalk, `AddRoadObjectCrosswalk`.
+
+        Args:
+            road: The road's index.
+            name: The object's name.
+            s: Where it sits, in meters along the road.
+            t: Meters to the left of the reference line.
+            z_offset: Meters up.
+            heading: Its heading, in radians.
+            pitch: Its pitch, in radians.
+            roll: Its roll, in radians.
+            orientation: Its orientation text.
+            width: Its width, in meters.
+            length: Its length, in meters.
+            points: Its outline's corners.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(t)
+        _ = _finite_si(z_offset)
+        _ = _finite_si(heading)
+        _ = _finite_si(pitch)
+        _ = _finite_si(roll)
+        _ = _nonnegative_si(width)
+        _ = _nonnegative_si(length)
+
+        for point in points:
+            _ = _finite_si(point.u)
+            _ = _finite_si(point.v)
+            _ = _finite_si(point.z)
         self.roads[road].info.crosswalks.append(
-            RoadInfoCrosswalk(
+            RoadInfoCrosswalk._from_si(
                 s,
                 name,
                 t,
@@ -749,7 +1261,9 @@ struct MapBuilder(Movable):
 
     def _geometry(mut self, road: Int, var geometry: RoadGeometry):
         var s = geometry.s
-        self.roads[road].info.geometries.append(RoadInfoGeometry(s, geometry^))
+        self.roads[road].info.geometries.append(
+            RoadInfoGeometry._from_si(s, geometry^)
+        )
 
     def _base(
         self,
@@ -760,7 +1274,7 @@ struct MapBuilder(Movable):
         length: Float64,
     ) raises -> RoadGeometry:
         # CARLA keeps the start point as a `float` `Location`.
-        return RoadGeometry(
+        return RoadGeometry.from_meters(
             LINE,
             s,
             Float64(Float32(x)),
@@ -772,13 +1286,13 @@ struct MapBuilder(Movable):
     def add_road_geometry_line(
         mut self,
         road: Int,
-        s: Float64,
-        x: Float64,
-        y: Float64,
-        heading: Float64,
-        length: Float64,
+        s: Length64,
+        x: Length64,
+        y: Length64,
+        heading: Angle64,
+        length: Length64,
     ) raises:
-        """Add a straight geometry, `AddRoadGeometryLine`.
+        """Checked typed boundary. Add a straight geometry, `AddRoadGeometryLine`.
 
         Args:
             road: The road's index.
@@ -791,9 +1305,11 @@ struct MapBuilder(Movable):
         Raises:
             Error: If s is negative or the length is not positive.
         """
-        self._geometry(road, self._base(s, x, y, heading, length))
+        self.add_road_geometry_line_si(
+            road, s.value, x.value, y.value, heading.value, length.value
+        )
 
-    def add_road_geometry_arc(
+    def add_road_geometry_line_si(
         mut self,
         road: Int,
         s: Float64,
@@ -801,9 +1317,39 @@ struct MapBuilder(Movable):
         y: Float64,
         heading: Float64,
         length: Float64,
-        curvature: Float64,
     ) raises:
-        """Add an arc, `AddRoadGeometryArc`.
+        """Explicit source-unit compatibility adapter. Add a straight geometry, `AddRoadGeometryLine`.
+
+        Args:
+            road: The road's index.
+            s: Where it starts, in meters.
+            x: Start east, in meters.
+            y: Start north, in meters.
+            heading: Its heading, in radians.
+            length: Its length, in meters.
+
+        Raises:
+            Error: If s is negative or the length is not positive.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(x)
+        _ = _finite_si(y)
+        _ = _finite_si(heading)
+        _ = _positive_si(length)
+
+        self._geometry(road, self._base(s, x, y, heading, length))
+
+    def add_road_geometry_arc(
+        mut self,
+        road: Int,
+        s: Length64,
+        x: Length64,
+        y: Length64,
+        heading: Angle64,
+        length: Length64,
+        curvature: InverseLength64,
+    ) raises:
+        """Checked typed boundary. Add an arc, `AddRoadGeometryArc`.
 
         Args:
             road: The road's index.
@@ -818,11 +1364,17 @@ struct MapBuilder(Movable):
             Error: If s is negative, the length is not positive, or the
                 curvature is zero.
         """
-        self._geometry(
-            road, with_arc(self._base(s, x, y, heading, length), curvature)
+        self.add_road_geometry_arc_si(
+            road,
+            s.value,
+            x.value,
+            y.value,
+            heading.value,
+            length.value,
+            curvature.value,
         )
 
-    def add_road_geometry_spiral(
+    def add_road_geometry_arc_si(
         mut self,
         road: Int,
         s: Float64,
@@ -830,10 +1382,46 @@ struct MapBuilder(Movable):
         y: Float64,
         heading: Float64,
         length: Float64,
-        curvature_start: Float64,
-        curvature_end: Float64,
+        curvature: Float64,
     ) raises:
-        """Add a clothoid, `AddRoadGeometrySpiral`.
+        """Explicit source-unit compatibility adapter. Add an arc, `AddRoadGeometryArc`.
+
+        Args:
+            road: The road's index.
+            s: Where it starts, in meters.
+            x: Start east, in meters.
+            y: Start north, in meters.
+            heading: Its start heading, in radians.
+            length: Its length, in meters.
+            curvature: One over the radius, per meter.
+
+        Raises:
+            Error: If s is negative, the length is not positive, or the
+                curvature is zero.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(x)
+        _ = _finite_si(y)
+        _ = _finite_si(heading)
+        _ = _positive_si(length)
+        _ = _finite_si(curvature)
+
+        self._geometry(
+            road, with_arc(self._base(s, x, y, heading, length), curvature)
+        )
+
+    def add_road_geometry_spiral(
+        mut self,
+        road: Int,
+        s: Length64,
+        x: Length64,
+        y: Length64,
+        heading: Angle64,
+        length: Length64,
+        curvature_start: InverseLength64,
+        curvature_end: InverseLength64,
+    ) raises:
+        """Checked typed boundary. Add a clothoid, `AddRoadGeometrySpiral`.
 
         Args:
             road: The road's index.
@@ -848,6 +1436,51 @@ struct MapBuilder(Movable):
         Raises:
             Error: If s is negative or the length is not positive.
         """
+        self.add_road_geometry_spiral_si(
+            road,
+            s.value,
+            x.value,
+            y.value,
+            heading.value,
+            length.value,
+            curvature_start.value,
+            curvature_end.value,
+        )
+
+    def add_road_geometry_spiral_si(
+        mut self,
+        road: Int,
+        s: Float64,
+        x: Float64,
+        y: Float64,
+        heading: Float64,
+        length: Float64,
+        curvature_start: Float64,
+        curvature_end: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a clothoid, `AddRoadGeometrySpiral`.
+
+        Args:
+            road: The road's index.
+            s: Where it starts, in meters.
+            x: Start east, in meters.
+            y: Start north, in meters.
+            heading: Its start heading, in radians.
+            length: Its length, in meters.
+            curvature_start: The curvature at the start, per meter.
+            curvature_end: The curvature at the end, per meter.
+
+        Raises:
+            Error: If s is negative or the length is not positive.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(x)
+        _ = _finite_si(y)
+        _ = _finite_si(heading)
+        _ = _positive_si(length)
+        _ = _finite_si(curvature_start)
+        _ = _finite_si(curvature_end)
+
         self._geometry(
             road,
             with_spiral(
@@ -860,17 +1493,17 @@ struct MapBuilder(Movable):
     def add_road_geometry_poly3(
         mut self,
         road: Int,
-        s: Float64,
-        x: Float64,
-        y: Float64,
-        heading: Float64,
-        length: Float64,
-        a: Float64,
+        s: Length64,
+        x: Length64,
+        y: Length64,
+        heading: Angle64,
+        length: Length64,
+        a: Length64,
         b: Float64,
-        c: Float64,
-        d: Float64,
+        c: InverseLength64,
+        d: InverseArea64,
     ) raises:
-        """Add a cubic v(u), `AddRoadGeometryPoly3`.
+        """Checked typed boundary. Add a cubic v(u), `AddRoadGeometryPoly3`.
 
         Args:
             road: The road's index.
@@ -887,11 +1520,140 @@ struct MapBuilder(Movable):
         Raises:
             Error: If s is negative or the length is not positive.
         """
+        self.add_road_geometry_poly3_si(
+            road,
+            s.value,
+            x.value,
+            y.value,
+            heading.value,
+            length.value,
+            a.value,
+            b,
+            c.value,
+            d.value,
+        )
+
+    def add_road_geometry_poly3_si(
+        mut self,
+        road: Int,
+        s: Float64,
+        x: Float64,
+        y: Float64,
+        heading: Float64,
+        length: Float64,
+        a: Float64,
+        b: Float64,
+        c: Float64,
+        d: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Add a cubic v(u), `AddRoadGeometryPoly3`.
+
+        Args:
+            road: The road's index.
+            s: Where it starts, in meters.
+            x: Start east, in meters.
+            y: Start north, in meters.
+            heading: The direction of plus u, in radians.
+            length: Its length, in meters.
+            a: The constant term of v, in meters.
+            b: The linear term.
+            c: The quadratic term, per meter.
+            d: The cubic term, per square meter.
+
+        Raises:
+            Error: If s is negative or the length is not positive.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(x)
+        _ = _finite_si(y)
+        _ = _finite_si(heading)
+        _ = _positive_si(length)
+        _ = _finite_si(a)
+        _ = _finite_si(c)
+        _ = _finite_si(d)
+
         self._geometry(
             road, with_poly3(self._base(s, x, y, heading, length), a, b, c, d)
         )
 
     def add_road_geometry_param_poly3(
+        mut self,
+        road: Int,
+        s: Length64,
+        x: Length64,
+        y: Length64,
+        heading: Angle64,
+        length: Length64,
+        u: CubicPolynomial,
+        v: CubicPolynomial,
+    ) raises:
+        """Checked typed boundary. Add a parametric cubic, `AddRoadGeometryParamPoly3`.
+
+        Args:
+            road: The road's index.
+            s: Where it starts, in meters.
+            x: Start east, in meters.
+            y: Start north, in meters.
+            heading: The direction of plus u, in radians.
+            length: Its length, in meters.
+            u: The cubic u(p).
+            v: The cubic v(p).
+
+        Raises:
+            Error: If s is negative, the length is not positive, or the
+                curve does not move.
+        """
+        self.add_road_geometry_param_poly3_si(
+            road,
+            s.value,
+            x.value,
+            y.value,
+            heading.value,
+            length.value,
+            u,
+            v,
+            "arcLength",
+        )
+
+    def add_road_geometry_param_poly3_normalized(
+        mut self,
+        road: Int,
+        s: Length64,
+        x: Length64,
+        y: Length64,
+        heading: Angle64,
+        length: Length64,
+        u: NormalizedCubic,
+        v: NormalizedCubic,
+    ) raises:
+        """Add a normalized cubic with all-length coefficients.
+
+        Args:
+            road: The road index.
+            s: The start station.
+            x: The start east coordinate.
+            y: The start north coordinate.
+            heading: The heading.
+            length: The positive curve length.
+            u: The u polynomial of dimensionless p.
+            v: The v polynomial of dimensionless p.
+
+        Raises:
+            Error: If a value is invalid or the curve does not move.
+        """
+        self.add_road_geometry_param_poly3_si(
+            road,
+            s.value,
+            x.value,
+            y.value,
+            heading.value,
+            length.value,
+            u._coefficients(),
+            v._coefficients(),
+            "normalized",
+        )
+
+    def add_road_geometry_param_poly3_si(
         mut self,
         road: Int,
         s: Float64,
@@ -903,7 +1665,7 @@ struct MapBuilder(Movable):
         v: CubicPolynomial,
         p_range: String,
     ) raises:
-        """Add a parametric cubic, `AddRoadGeometryParamPoly3`.
+        """Explicit source-unit compatibility adapter. Add a parametric cubic, `AddRoadGeometryParamPoly3`.
 
         Args:
             road: The road's index.
@@ -914,12 +1676,20 @@ struct MapBuilder(Movable):
             length: Its length, in meters.
             u: The cubic u(p).
             v: The cubic v(p).
-            p_range: "arcLength", or anything else for a normalized p.
+            p_range: "arcLength", "normalized", or the omitted-source default "".
 
         Raises:
             Error: If s is negative, the length is not positive, or the
                 curve does not move.
         """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(x)
+        _ = _finite_si(y)
+        _ = _finite_si(heading)
+        _ = _positive_si(length)
+
+        if p_range != "arcLength" and p_range != "normalized" and p_range != "":
+            raise Error("paramPoly3 range must be arcLength or normalized")
         var p = ARC_LENGTH if p_range == "arcLength" else NORMALIZED
         self._geometry(
             road,
@@ -932,26 +1702,26 @@ struct MapBuilder(Movable):
         mut self,
         road: Int,
         signal_id: SignalId,
-        s: Float64,
-        t: Float64,
+        s: Length64,
+        t: Length64,
         name: String,
         dynamic: String,
         orientation: String,
-        z_offset: Float64,
+        z_offset: Length64,
         country: String,
         type: String,
         subtype: String,
         value: Float64,
         unit: String,
-        height: Float64,
-        width: Float64,
+        height: Length64,
+        width: Length64,
         text: String,
-        h_offset: Float64,
-        pitch: Float64,
-        roll: Float64,
+        h_offset: Angle64,
+        pitch: Angle64,
+        roll: Angle64,
         value_present: Bool = True,
     ) raises -> SignalReferenceHandle:
-        """Add a signal and a reference to it on its road, `AddSignal`.
+        """Checked typed boundary. Add a signal and a reference to it on its road, `AddSignal`.
 
         Args:
             road: The road's index.
@@ -982,7 +1752,93 @@ struct MapBuilder(Movable):
         Raises:
             Error: If the id is not valid or s is negative.
         """
-        var signal = Signal(
+        return self.add_signal_si(
+            road,
+            signal_id,
+            s.value,
+            t.value,
+            name,
+            dynamic,
+            orientation,
+            z_offset.value,
+            country,
+            type,
+            subtype,
+            value,
+            unit,
+            height.value,
+            width.value,
+            text,
+            h_offset.value,
+            pitch.value,
+            roll.value,
+            value_present,
+        )
+
+    def add_signal_si(
+        mut self,
+        road: Int,
+        signal_id: SignalId,
+        s: Float64,
+        t: Float64,
+        name: String,
+        dynamic: String,
+        orientation: String,
+        z_offset: Float64,
+        country: String,
+        type: String,
+        subtype: String,
+        value: Float64,
+        unit: String,
+        height: Float64,
+        width: Float64,
+        text: String,
+        h_offset: Float64,
+        pitch: Float64,
+        roll: Float64,
+        value_present: Bool = True,
+    ) raises -> SignalReferenceHandle:
+        """Explicit source-unit compatibility adapter. Add a signal and a reference to it on its road, `AddSignal`.
+
+        Args:
+            road: The road's index.
+            signal_id: Its id. A later signal with the same id replaces
+                this one.
+            s: Meters along the road.
+            t: Meters to the left of the reference line.
+            name: Its name.
+            dynamic: "yes" for a signal that changes.
+            orientation: "+", "-" or anything else for both.
+            z_offset: Meters up from the road.
+            country: Its catalog's country.
+            type: Its type.
+            subtype: Its subtype.
+            value: Its value.
+            unit: The value's unit.
+            height: Its height, in meters.
+            width: Its width, in meters.
+            text: Its text.
+            h_offset: The turn from the road's heading, in radians.
+            pitch: Its pitch, in radians.
+            roll: Its roll, in radians.
+            value_present: Whether the source supplied a numeric value.
+
+        Returns:
+            The reference's handle.
+
+        Raises:
+            Error: If the id is not valid or s is negative.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(t)
+        _ = _finite_si(z_offset)
+        _ = _nonnegative_si(height)
+        _ = _nonnegative_si(width)
+        _ = _finite_si(h_offset)
+        _ = _finite_si(pitch)
+        _ = _finite_si(roll)
+
+        var signal = Signal._from_si(
             self.roads[road].id,
             signal_id,
             s,
@@ -1011,7 +1867,7 @@ struct MapBuilder(Movable):
                 replaced = True
         if not replaced:
             self.signals.append(signal^)
-        return self.add_signal_reference(road, signal_id, s, t, orientation)
+        return self.add_signal_reference_si(road, signal_id, s, t, orientation)
 
     def _signal_index(self, signal_id: SignalId) raises -> Int:
         for i in range(len(self.signals)):
@@ -1022,14 +1878,14 @@ struct MapBuilder(Movable):
     def add_signal_position_inertial(
         mut self,
         signal_id: SignalId,
-        x: Float64,
-        y: Float64,
-        z: Float64,
-        heading: Float64,
-        pitch: Float64,
-        roll: Float64,
+        x: Length64,
+        y: Length64,
+        z: Length64,
+        heading: Angle64,
+        pitch: Angle64,
+        roll: Angle64,
     ) raises:
-        """Place a signal at a point, `AddSignalPositionInertial`.
+        """Checked typed boundary. Place a signal at a point, `AddSignalPositionInertial`.
 
         Args:
             signal_id: The signal.
@@ -1043,9 +1899,49 @@ struct MapBuilder(Movable):
         Raises:
             Error: If no signal has the id.
         """
+        self.add_signal_position_inertial_si(
+            signal_id,
+            x.value,
+            y.value,
+            z.value,
+            heading.value,
+            pitch.value,
+            roll.value,
+        )
+
+    def add_signal_position_inertial_si(
+        mut self,
+        signal_id: SignalId,
+        x: Float64,
+        y: Float64,
+        z: Float64,
+        heading: Float64,
+        pitch: Float64,
+        roll: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Place a signal at a point, `AddSignalPositionInertial`.
+
+        Args:
+            signal_id: The signal.
+            x: East, in meters.
+            y: North, in meters.
+            z: Up, in meters.
+            heading: Its heading, in radians.
+            pitch: Its pitch, in radians.
+            roll: Its roll, in radians.
+
+        Raises:
+            Error: If no signal has the id.
+        """
+        _ = _finite_si(x)
+        _ = _finite_si(y)
+        _ = _finite_si(z)
+        _ = _finite_si(heading)
+        _ = _finite_si(pitch)
+        _ = _finite_si(roll)
+
         ref signal = self.signals[self._signal_index(signal_id)]
-        signal.using_inertial_position = True
-        signal.transform = CarlaTransform(
+        var transform = CarlaTransform(
             Length(Float32(x), METER),
             Length(Float32(-y), METER),
             Length(Float32(z), METER),
@@ -1055,19 +1951,27 @@ struct MapBuilder(Movable):
                 Angle(Float32(roll) * _TO_DEGREES, DEGREE),
             ),
         )
+        _ = _finite_si(Float64(transform.location.x))
+        _ = _finite_si(Float64(transform.location.y))
+        _ = _finite_si(Float64(transform.location.z))
+        _ = _finite_si(Float64(transform.rotation.pitch))
+        _ = _finite_si(Float64(transform.rotation.yaw))
+        _ = _finite_si(Float64(transform.rotation.roll))
+        signal.transform = transform
+        signal.using_inertial_position = True
 
     def add_signal_position_road(
         mut self,
         signal_id: SignalId,
         road_id: RoadId,
-        s: Float64,
-        t: Float64,
-        z_offset: Float64,
-        h_offset: Float64,
-        pitch: Float64,
-        roll: Float64,
+        s: Length64,
+        t: Length64,
+        z_offset: Length64,
+        h_offset: Angle64,
+        pitch: Angle64,
+        roll: Angle64,
     ) raises:
-        """Move a signal to another place on a road, `AddSignalPositionRoad`.
+        """Checked typed boundary. Move a signal to another place on a road, `AddSignalPositionRoad`.
 
         Args:
             signal_id: The signal.
@@ -1082,6 +1986,50 @@ struct MapBuilder(Movable):
         Raises:
             Error: If no signal has the id, or the road id is not valid.
         """
+        self.add_signal_position_road_si(
+            signal_id,
+            road_id,
+            s.value,
+            t.value,
+            z_offset.value,
+            h_offset.value,
+            pitch.value,
+            roll.value,
+        )
+
+    def add_signal_position_road_si(
+        mut self,
+        signal_id: SignalId,
+        road_id: RoadId,
+        s: Float64,
+        t: Float64,
+        z_offset: Float64,
+        h_offset: Float64,
+        pitch: Float64,
+        roll: Float64,
+    ) raises:
+        """Explicit source-unit compatibility adapter. Move a signal to another place on a road, `AddSignalPositionRoad`.
+
+        Args:
+            signal_id: The signal.
+            road_id: The road.
+            s: Meters along it.
+            t: Meters to the left of its reference line.
+            z_offset: Meters up.
+            h_offset: The turn from the road's heading, in radians.
+            pitch: Its pitch, in radians.
+            roll: Its roll, in radians.
+
+        Raises:
+            Error: If no signal has the id, or the road id is not valid.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(t)
+        _ = _finite_si(z_offset)
+        _ = _finite_si(h_offset)
+        _ = _finite_si(pitch)
+        _ = _finite_si(roll)
+
         if not road_id.is_valid():
             raise Error("Road id is not valid")
         ref signal = self.signals[self._signal_index(signal_id)]
@@ -1097,11 +2045,11 @@ struct MapBuilder(Movable):
         mut self,
         road: Int,
         signal_id: SignalId,
-        s: Float64,
-        t: Float64,
+        s: Length64,
+        t: Length64,
         orientation: String,
     ) raises -> SignalReferenceHandle:
-        """Add a reference to a signal, `AddSignalReference`.
+        """Checked typed boundary. Add a reference to a signal, `AddSignalReference`.
 
         CARLA clamps s to 10 micrometers short of the road's end.
 
@@ -1118,6 +2066,38 @@ struct MapBuilder(Movable):
         Raises:
             Error: If s is negative or the id is not valid.
         """
+        return self.add_signal_reference_si(
+            road, signal_id, s.value, t.value, orientation
+        )
+
+    def add_signal_reference_si(
+        mut self,
+        road: Int,
+        signal_id: SignalId,
+        s: Float64,
+        t: Float64,
+        orientation: String,
+    ) raises -> SignalReferenceHandle:
+        """Explicit source-unit compatibility adapter. Add a reference to a signal, `AddSignalReference`.
+
+        CARLA clamps s to 10 micrometers short of the road's end.
+
+        Args:
+            road: The road's index.
+            signal_id: The signal.
+            s: Meters along the road. It must not be negative.
+            t: Meters to the left of the reference line.
+            orientation: "+", "-" or anything else for both.
+
+        Returns:
+            The reference's handle.
+
+        Raises:
+            Error: If s is negative or the id is not valid.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(t)
+
         if s < 0.0:
             raise Error("A signal reference cannot sit before s = 0")
         if not signal_id.is_valid():
@@ -1125,7 +2105,7 @@ struct MapBuilder(Movable):
         ref r = self.roads[road]
         var fixed = min(max(s, 0.0), r.length - 0.00001)
         r.info.signals.append(
-            RoadInfoSignal(
+            RoadInfoSignal._from_si(
                 signal_id, r.id, fixed, t, orientation, List[LaneValidity]()
             )
         )
@@ -1353,14 +2333,14 @@ struct MapBuilder(Movable):
             ref road = self.roads[found.value()]
             if road_id == road.predecessor:
                 _reserve_lanes_at(road, self._build_work)
-                for pair in road.lanes_at(0.0):
+                for pair in road._lanes_at_si(0.0):
                     self._build_work.step()
                     ref lane = road.sections[pair[0]].lanes[pair[1]]
                     if lane_id == lane.predecessor:
                         out.append((road.id, lane.id))
             if road_id == road.successor:
                 _reserve_lanes_at(road, self._build_work)
-                for pair in road.lanes_at(road.length):
+                for pair in road._lanes_at_si(road.length):
                     self._build_work.step()
                     ref lane = road.sections[pair[0]].lanes[pair[1]]
                     if lane_id == lane.successor:
@@ -1395,9 +2375,9 @@ struct MapBuilder(Movable):
                     inside = True
         if inside:
             if linked:
-                var found = r.next_lane(s, next) if positive else r.prev_lane(
+                var found = r._next_lane_si(
                     s, next
-                )
+                ) if positive else r._prev_lane_si(s, next)
                 if Bool(found):
                     var f = found.value()
                     out.append(LaneKey(r.id, r.sections[f[0]].id, next))
@@ -1501,7 +2481,7 @@ struct MapBuilder(Movable):
                 "Signal construction cannot resolve reference quadrature work"
             )
         self._build_work.term(terms)
-        var point = self.roads[found.value()].directed_point_no_lane_offset(
+        var point = self.roads[found.value()]._directed_point_no_lane_offset_si(
             signal.s
         )
         point.apply_lateral_offset(Length(Float32(-signal.t), METER))
@@ -1553,7 +2533,7 @@ struct MapBuilder(Movable):
                 _reserve_road_scan(
                     self.roads[r], self._build_work, section_passes=2
                 )
-                for pair in self.roads[r].lanes_by_distance(s):
+                for pair in self.roads[r]._lanes_by_distance_si(s):
                     self._build_work.step()
                     lanes.append(
                         self.roads[r].sections[pair[0]].lanes[pair[1]].id
@@ -1820,7 +2800,7 @@ def _signal_lane_pose(
     work.step()
     work.term(terms)
     work.term(terms)
-    return map.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+    return map.roads[at[0]]._lane_transform_si(at[1], at[2], waypoint.s)
 
 
 def _signal_lane_width(
@@ -1828,7 +2808,7 @@ def _signal_lane_width(
 ) raises -> Float64:
     var at = map._locate_with_work(waypoint, work)
     work.step(len(map.roads[at[0]].sections[at[1]].lanes[at[2]].info.widths))
-    return map.roads[at[0]].lane_width(at[1], at[2], waypoint.s)
+    return map.roads[at[0]]._lane_width_si(at[1], at[2], waypoint.s)
 
 
 def _signal_lane_type(
