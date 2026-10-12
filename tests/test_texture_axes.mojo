@@ -11,7 +11,12 @@ The existing rotated-footprint regression keeps its original tolerance.
 
 from math.vector2 import Vector2
 from render.texture import _principal_axes, anisotropic_footprint
-from std.testing import TestSuite, assert_almost_equal, assert_equal
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_true,
+)
 
 
 def check_axes(u: Vector2, v: Vector2, major: Float32, minor: Float32) raises:
@@ -388,6 +393,24 @@ def test_round_footprints_keep_one_tap_without_ratio_rounding() raises:
         assert_equal(footprint.taps, 1)
         var swapped = anisotropic_footprint(v, u, 1, 1, 16)
         assert_equal(swapped.taps, 1)
+
+
+def test_extreme_columns_keep_their_short_axis() raises:
+    # Squares underflow, so the columns are divided by a power of two
+    # before the determinant, and the short axis survives.
+    check_axes(
+        Vector2(Float32(8e-20), Float32(0)),
+        Vector2(Float32(0), Float32(1e-20)),
+        Float32(8e-20),
+        Float32(1e-20),
+    )
+    # Nearly parallel columns far above one keep their small determinant.
+    var axes = _principal_axes(
+        Vector2(Float32(3e30), Float32(1e30)),
+        Vector2(Float32(3e30), Float32(1.0000001e30)),
+    )
+    assert_true(axes.y > 0)
+    assert_true(axes.y < axes.x)
 
 
 def main() raises:
