@@ -246,7 +246,7 @@ def _roads(doc: _Doc, mut builder: MapBuilder) raises:
         var after = doc.child(link, "successor")
         if after != NO_ELEMENT:
             successor = RoadId(doc.uint(after, "elementId"))
-        var road = builder.add_road(
+        var road = builder.add_road_si(
             id,
             doc.text(node, "name"),
             doc.double(node, "length"),
@@ -268,13 +268,13 @@ def _roads(doc: _Doc, mut builder: MapBuilder) raises:
                     raise Error(
                         "OpenDRIVE speed unit cannot be empty when present"
                     )
-            builder.create_road_speed(
+            builder.create_road_speed_opendrive(
                 road, doc.double(kind, "s"), doc.text(kind, "type"), max, unit
             )
         var lanes = doc.child(node, "lanes")
         var offsets = doc.children(lanes, "laneOffset")
         for offset in offsets:
-            builder.create_section_offset(
+            builder.create_section_offset_si(
                 road,
                 doc.double(offset, "s"),
                 doc.double(offset, "a"),
@@ -283,10 +283,10 @@ def _roads(doc: _Doc, mut builder: MapBuilder) raises:
                 doc.double(offset, "d"),
             )
         if len(offsets) == 0:
-            builder.create_section_offset(road, 0.0, 0.0, 0.0, 0.0, 0.0)
+            builder.create_section_offset_si(road, 0.0, 0.0, 0.0, 0.0, 0.0)
         var number = 0
         for section_node in doc.children(lanes, "laneSection"):
-            var section = builder.add_road_section(
+            var section = builder.add_road_section_si(
                 road, SectionId(number), doc.double(section_node, "s")
             )
             number += 1
@@ -358,13 +358,13 @@ def _geometries(doc: _Doc, mut builder: MapBuilder) raises:
             var hdg = doc.double(geo, "hdg")
             var length = doc.double(geo, "length")
             if kind == "line":
-                builder.add_road_geometry_line(road, s, x, y, hdg, length)
+                builder.add_road_geometry_line_si(road, s, x, y, hdg, length)
             elif kind == "arc":
-                builder.add_road_geometry_arc(
+                builder.add_road_geometry_arc_si(
                     road, s, x, y, hdg, length, doc.double(shape, "curvature")
                 )
             elif kind == "spiral":
-                builder.add_road_geometry_spiral(
+                builder.add_road_geometry_spiral_si(
                     road,
                     s,
                     x,
@@ -375,7 +375,7 @@ def _geometries(doc: _Doc, mut builder: MapBuilder) raises:
                     doc.double(shape, "curvEnd"),
                 )
             elif kind == "poly3":
-                builder.add_road_geometry_poly3(
+                builder.add_road_geometry_poly3_si(
                     road,
                     s,
                     x,
@@ -388,21 +388,21 @@ def _geometries(doc: _Doc, mut builder: MapBuilder) raises:
                     doc.double(shape, "d"),
                 )
             elif kind == "paramPoly3":
-                builder.add_road_geometry_param_poly3(
+                builder.add_road_geometry_param_poly3_si(
                     road,
                     s,
                     x,
                     y,
                     hdg,
                     length,
-                    CubicPolynomial(
+                    CubicPolynomial.from_coefficients(
                         doc.double(shape, "aU"),
                         doc.double(shape, "bU"),
                         doc.double(shape, "cU"),
                         doc.double(shape, "dU"),
                         0.0,
                     ),
-                    CubicPolynomial(
+                    CubicPolynomial.from_coefficients(
                         doc.double(shape, "aV"),
                         doc.double(shape, "bV"),
                         doc.double(shape, "cV"),
@@ -662,10 +662,10 @@ def _lane_records(
     var derived = _border_widths(doc, group, s, end, offset_free)
     for node in doc.children(group, "lane"):
         var lane_id = LaneId(doc.int(node, "id"))
-        var lane = builder.lane(road_id, lane_id, s)
+        var lane = builder.lane_si(road_id, lane_id, s)
         var widths = doc.children(node, "width")
         for width in widths:
-            builder.create_lane_width(
+            builder.create_lane_width_si(
                 lane,
                 doc.double(width, "sOffset") + s,
                 doc.double(width, "a"),
@@ -676,12 +676,12 @@ def _lane_records(
         var from_borders = 0
         for piece in derived:
             if piece.lane == lane_id.value:
-                builder.create_lane_width(
+                builder.create_lane_width_si(
                     lane, piece.start, piece.a, piece.b, piece.c, piece.d
                 )
                 from_borders += 1
         if len(widths) == 0 and from_borders == 0:
-            builder.create_lane_width(lane, s, 0.0, 0.0, 0.0, 0.0)
+            builder.create_lane_width_si(lane, s, 0.0, 0.0, 0.0, 0.0)
             if lane_id.value != 0:
                 print(
                     "WARNING: In road "
@@ -692,7 +692,7 @@ def _lane_records(
                     + " Using default values."
                 )
         for border in doc.children(node, "border"):
-            builder.create_lane_border(
+            builder.create_lane_border_si(
                 lane,
                 doc.double(border, "sOffset") + s,
                 doc.double(border, "a"),
@@ -704,7 +704,7 @@ def _lane_records(
         var is_rht = builder.roads[lane[0]].is_rht
         for mark in doc.children(node, "roadMark"):
             var mark_type = doc.child(mark, "type")
-            builder.create_road_mark(
+            builder.create_road_mark_si(
                 lane,
                 mark_id,
                 doc.double(mark, "sOffset") + s,
@@ -720,7 +720,7 @@ def _lane_records(
                 is_rht,
             )
             for line in doc.children(mark_type, "line"):
-                builder.create_road_mark_type_line(
+                builder.create_road_mark_type_line_si(
                     lane,
                     mark_id,
                     doc.double(line, "length"),
@@ -732,7 +732,7 @@ def _lane_records(
                 )
             mark_id += 1
         for material in doc.children(node, "material"):
-            builder.create_lane_material(
+            builder.create_lane_material_si(
                 lane,
                 doc.double(material, "sOffset") + s,
                 doc.text(material, "surface"),
@@ -740,7 +740,7 @@ def _lane_records(
                 doc.double(material, "roughness"),
             )
         for sight in doc.children(node, "visibility"):
-            builder.create_lane_visibility(
+            builder.create_lane_visibility_si(
                 lane,
                 doc.double(sight, "sOffset") + s,
                 doc.double(sight, "forward"),
@@ -752,27 +752,27 @@ def _lane_records(
             var unit = doc.text(speed, "unit")
             if doc.has(speed, "unit") and unit.byte_length() == 0:
                 raise Error("OpenDRIVE speed unit cannot be empty when present")
-            builder.create_lane_speed(
+            builder.create_lane_speed_opendrive(
                 lane,
                 doc.double(speed, "sOffset") + s,
                 doc.text(speed, "max"),
                 unit,
             )
         for access in doc.children(node, "access"):
-            builder.create_lane_access(
+            builder.create_lane_access_si(
                 lane,
                 doc.double(access, "sOffset") + s,
                 doc.text(access, "restriction"),
             )
         for height in doc.children(node, "height"):
-            builder.create_lane_height(
+            builder.create_lane_height_si(
                 lane,
                 doc.double(height, "sOffset") + s,
                 doc.double(height, "inner"),
                 doc.double(height, "outer"),
             )
         for rule in doc.children(node, "rule"):
-            builder.create_lane_rule(
+            builder.create_lane_rule_si(
                 lane, doc.double(rule, "sOffset") + s, doc.text(rule, "value")
             )
 
@@ -811,7 +811,7 @@ def _profiles(doc: _Doc, mut builder: MapBuilder) raises:
             doc.child(node, "elevationProfile"), "elevation"
         )
         for elevation in elevations:
-            builder.add_road_elevation_profile(
+            builder.add_road_elevation_profile_si(
                 road,
                 doc.double(elevation, "s"),
                 doc.double(elevation, "a"),
@@ -820,7 +820,7 @@ def _profiles(doc: _Doc, mut builder: MapBuilder) raises:
                 doc.double(elevation, "d"),
             )
         if len(elevations) == 0:
-            builder.add_road_elevation_profile(road, 0.0, 0.0, 0.0, 0.0, 0.0)
+            builder.add_road_elevation_profile_si(road, 0.0, 0.0, 0.0, 0.0, 0.0)
 
 
 def _validities(
@@ -848,7 +848,7 @@ def _signals(doc: _Doc, mut builder: MapBuilder) raises:
             var value = doc.double(node, "value")
             if doc.text(node, "type") == "274" and value_present:
                 value = read_speed_number(doc.text(node, "value"))
-            var reference = builder.add_signal(
+            var reference = builder.add_signal_si(
                 builder.road_index(road_id),
                 id,
                 doc.double(node, "s"),
@@ -876,7 +876,7 @@ def _signals(doc: _Doc, mut builder: MapBuilder) raises:
                     id, doc.text(dependency, "id"), doc.text(dependency, "type")
                 )
             for position in doc.children(node, "positionInertial"):
-                builder.add_signal_position_inertial(
+                builder.add_signal_position_inertial_si(
                     id,
                     doc.double(position, "x"),
                     doc.double(position, "y"),
@@ -886,7 +886,7 @@ def _signals(doc: _Doc, mut builder: MapBuilder) raises:
                     doc.double(position, "roll"),
                 )
         for node in doc.children(signals, "signalReference"):
-            var reference = builder.add_signal_reference(
+            var reference = builder.add_signal_reference_si(
                 builder.road_index(road_id),
                 SignalId(doc.text(node, "id")),
                 doc.double(node, "s"),
@@ -911,13 +911,13 @@ def _objects(doc: _Doc, mut builder: MapBuilder) raises:
                     points.clear()
                     for corner in doc.children(outline, "cornerLocal"):
                         points.append(
-                            CrosswalkPoint(
+                            CrosswalkPoint.from_si(
                                 doc.double(corner, "u"),
                                 doc.double(corner, "v"),
                                 doc.double(corner, "z"),
                             )
                         )
-                builder.add_road_object_crosswalk(
+                builder.add_road_object_crosswalk_si(
                     builder.road_index(road_id),
                     name,
                     doc.double(node, "s"),
@@ -936,7 +936,7 @@ def _objects(doc: _Doc, mut builder: MapBuilder) raises:
                 if skip > name.byte_length():
                     raise Error("basic_string::substr: the name is too short")
                 var speed_text = String(name[byte=skip:])
-                _ = builder.add_signal(
+                _ = builder.add_signal_si(
                     builder.road_index(road_id),
                     SignalId(doc.text(node, "id")),
                     doc.double(node, "s"),
@@ -958,7 +958,7 @@ def _objects(doc: _Doc, mut builder: MapBuilder) raises:
                     doc.double(node, "roll"),
                 )
             elif "Stencil_STOP" in name:
-                _ = builder.add_signal(
+                _ = builder.add_signal_si(
                     builder.road_index(road_id),
                     SignalId(doc.text(node, "id")),
                     doc.double(node, "s"),
