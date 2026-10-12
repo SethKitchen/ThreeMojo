@@ -6,7 +6,13 @@ Singleton coefficients follow from this exact producer and Box operation
 graph. The removed consumer loop is not a general promise about models made
 elsewhere. This source binding does not certify native or aggregate behavior.
 """
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
 if __package__:
@@ -40,20 +46,21 @@ def _observe_text(root, path, text, *, _operation=None, mode='default'):
         root, path, text, _operation=_operation, mode=mode)
 
 
+
 def require(condition, message):
     if not condition:
         raise ValueError('frozen ARC producer contract: ' + message)
 
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
     require(type(record['schema']) is int and record['schema'] == 1,
             'unsupported migration schema')
     previous = root/'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
-    require(hashlib.sha256(previous.read_bytes()).hexdigest() ==
+    require(hashlib.sha256(_typed_source.historical_bytes(root, previous, previous.read_bytes())).hexdigest() ==
             record['previous_cleanup_migration_sha256'],
             'historical three-file cleanup changed')
     require(record['source_successor']['path'] == SOURCE_PATH,
@@ -99,14 +106,14 @@ def verify_premises(root, *, _operation=None):
         import sum2_guard_contracts as guard
     record = read_record(root)
     for item in record['function_sources']:
-        actual = guard.declaration(_observe_text(
-            root, item['path'], (root/item['path']).read_text(), _operation=_operation),
+        actual = guard.declaration(_typed_source.historical_text(root, item['path'], _observe_text(
+            root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation),
                                    item['name'], tuple(item['owner']))
         require(guard.significant(actual) == guard.significant(item['source']),
                 'complete producer/Box function changed: ' + item['name'])
-    arc = _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
+    arc = _typed_source.historical_text(root, 'extensions/carla/curve_rounded_arc.mojo', _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
                         (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
-                        _operation=_operation)
+                        _operation=_operation), _operation=_operation)
     require(guard.declaration_routing(arc) == record['rounded_arc_routing'],
             'RoundedArc/Box field layout, imports, or declaration owners changed')
     return len(record['function_sources'])
@@ -137,8 +144,8 @@ def verify(root, *, _operation=None):
         raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
     require(hashlib.sha256(guard_payload).hexdigest() ==
             record['guard_pins_unchanged_sha256'], 'guard pin lineage changed')
-    require(source.token_sha256(_observe_text(
-        root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation)) ==
+    require(source.token_sha256(_typed_source.historical_text(root, SOURCE_PATH, _observe_text(
+        root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation), _operation=_operation)) ==
             record['source_successor']['after_token_sha256'],
             'complete frozen ARC successor changed')
     if __package__:
@@ -146,8 +153,8 @@ def verify(root, *, _operation=None):
     else:
         import reviewed_cleanup_contracts as cleanup
     for path, expected in record['premise_dependencies'].items():
-        cleanup.verify_dependency(path, _observe_text(
-            root, path, (root/path).read_text(), _operation=_operation),
+        cleanup.verify_dependency(path, _typed_source.historical_text(root, path, _observe_text(
+            root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             expected['token_sha256'])
     verify_premises(root, **operation_args)
     return record
