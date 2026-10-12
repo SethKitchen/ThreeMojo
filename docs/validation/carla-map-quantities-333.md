@@ -23,7 +23,9 @@ pass through a Float32 quantity on their way to endpoint comparisons.
 the existing narrow client result. Geometry and lane-edge algorithms that
 already produce Float32 coordinates retain that layout and expose `Length`
 results. This change makes their units explicit; it does not improve the
-precision of their underlying coordinates. The OpenDRIVE builder also retains
+precision of their underlying coordinates.
+
+The OpenDRIVE builder also retains
 CARLA's Float32 start-Location rounding for geometry x/y, even though the
 compatibility record exposes those rounded values as Float64. Round-trip
 controls distinguish that conversion from unchanged wide road stations,
@@ -43,6 +45,7 @@ numbers. Zero is not treated as a missing speed limit.
 A station cubic stores local coefficients and evaluates with `x - s` before
 Horner arithmetic. The coefficient dimensions are length, one, inverse length
 and inverse area. Its tangent is dimensionless. The origin is a `Length64`.
+
 This corrects cancellation caused by expanding local coefficients around a
 large global origin. It intentionally differs numerically from that old graph.
 The independent enclosure review is in
