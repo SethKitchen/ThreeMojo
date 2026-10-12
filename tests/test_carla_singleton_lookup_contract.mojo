@@ -4,7 +4,10 @@
 """Singleton lookup implication and retained malformed-input refusals."""
 
 from extensions.carla.polynomial import CubicPolynomial
-from extensions.carla.road_info import RoadInfoLaneOffset, info_index
+from extensions.carla.road_info import (
+    RoadInfoLaneOffset,
+    info_index_meters as info_index,
+)
 from std.math import inf, nan
 from std.testing import TestSuite, assert_equal
 from tests.test_carla_proof_guard_controls import _assert_refused, _proof_road
@@ -23,7 +26,9 @@ def test_singleton_low_lookup_implies_ordered_high_for_all_start_classes() raise
         nan[DType.float64](),
     ]:
         var records = List[RoadInfoLaneOffset]()
-        records.append(RoadInfoLaneOffset(start, CubicPolynomial.constant(0)))
+        records.append(
+            RoadInfoLaneOffset._from_si(start, CubicPolynomial._constant_si(0))
+        )
         for low in [Float64(-2), -0.0, 0.0, 1.0, 2.0]:
             for high in [Float64(-2), -0.0, 0.0, 1.0, 2.0, 3.0]:
                 if low <= high and info_index(records, low) == 0:
