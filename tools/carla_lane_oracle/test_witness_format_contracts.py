@@ -201,7 +201,7 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
         original = cleanup._witness_format_bindings
         read = Path.read_bytes
         target = self.root/witness.SOURCE_PATHS[0]
-        injected, caught, owners = [], [], []
+        injected, caught, retried, owners = [], [], [], []
         def transient(path, *args, **kwargs):
             raw = read(path, *args, **kwargs)
             caller = sys._getframe(1)
@@ -217,11 +217,21 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
                 self.assertEqual(owner._state, 'pending')
             try: return original(root, **kwargs)
             except ValueError as error:
-                caught.append(str(error))
-                return original(root, **kwargs)
+                self.assertIs(type(error), cleanup._OperationCoherenceError)
+                caught.append(error)
+                with self.assertRaises(cleanup._OperationCoherenceError) as retry:
+                    original(root, **kwargs)
+                self.assertEqual(str(retry.exception), str(error))
+                retried.append(retry.exception)
+                raise retry.exception
         with patch.object(Path, 'read_bytes', transient), patch.object(cleanup, '_witness_format_bindings', catch):
-            with self.assertRaises(cleanup._OperationCoherenceError): invariant.verify(self.root)
-        self.assertEqual(injected, [True]); self.assertTrue(caught); self.assertEqual(len(owners), 1)
+            with self.assertRaisesRegex(ValueError, 'unreviewed complete successor:') as public:
+                invariant.verify(self.root)
+        self.assertIs(type(public.exception), ValueError)
+        self.assertEqual(injected, [True]); self.assertEqual(len(caught), 1); self.assertEqual(len(owners), 1)
+        self.assertEqual(len(retried), 1)
+        self.assertIs(public.exception.__cause__, retried[0])
+        self.assertIs(type(public.exception.__cause__), cleanup._OperationCoherenceError)
         self.assertEqual(read(target), read(ROOT/witness.SOURCE_PATHS[0]))
 
     def test_active_owner_final_reread_catches_late_witness_and_proof_changes(self):
