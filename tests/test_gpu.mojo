@@ -15495,37 +15495,44 @@ def matrix_inverse_sample(value: Float32) -> Array[Float32, 3]:
 def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
     if skipped_for_lack_of_a_gpu("shared matrix inverses across scales"):
         return
-    # Apple GPUs have no Float64; their kernels invert in Float32 alone.
-    from std.math import isfinite
+    # The wide inverse path is exact Float64 arithmetic, which Metal lacks.
+    comptime if has_apple_gpu_accelerator():
+        print("SKIP (Apple GPU has no Float64): shared wide matrix inverses")
+    else:
+        from std.math import isfinite
 
-    var inputs: List[Float32] = [0, 1e-30, 1, 1e30]
-    var context = DeviceContext()
-    var device_inputs = context.enqueue_create_buffer[DType.float32](
-        len(inputs)
-    )
-    var output = context.enqueue_create_buffer[DType.float32](3 * len(inputs))
-    with device_inputs.map_to_host() as host:
-        for at in range(len(inputs)):
-            host[at] = inputs[at]
-    context.enqueue_function[_ScalarMathKernels.matrix_inverse_kernel](
-        output.unsafe_ptr(),
-        device_inputs.unsafe_ptr(),
-        Int32(len(inputs)),
-        grid_dim=(1,),
-        block_dim=(32,),
-    )
-    context.synchronize()
-    with output.map_to_host() as host:
-        for at in range(len(inputs)):
-            var expected = matrix_inverse_sample(inputs[at])
-            for component in range(3):
-                var actual = host[3 * at + component]
-                var unit = Float32(0) if inputs[at] == 0 else (
-                    Float32(-1) if component == 2 else Float32(1)
-                )
-                assert_true(isfinite(actual) and isfinite(expected[component]))
-                assert_almost_equal(actual, unit, atol=1e-6)
-                assert_almost_equal(actual, expected[component], atol=1e-6)
+        var inputs: List[Float32] = [0, 1e-30, 1, 1e30]
+        var context = DeviceContext()
+        var device_inputs = context.enqueue_create_buffer[DType.float32](
+            len(inputs)
+        )
+        var output = context.enqueue_create_buffer[DType.float32](
+            3 * len(inputs)
+        )
+        with device_inputs.map_to_host() as host:
+            for at in range(len(inputs)):
+                host[at] = inputs[at]
+        context.enqueue_function[_ScalarMathKernels.matrix_inverse_kernel](
+            output.unsafe_ptr(),
+            device_inputs.unsafe_ptr(),
+            Int32(len(inputs)),
+            grid_dim=(1,),
+            block_dim=(32,),
+        )
+        context.synchronize()
+        with output.map_to_host() as host:
+            for at in range(len(inputs)):
+                var expected = matrix_inverse_sample(inputs[at])
+                for component in range(3):
+                    var actual = host[3 * at + component]
+                    var unit = Float32(0) if inputs[at] == 0 else (
+                        Float32(-1) if component == 2 else Float32(1)
+                    )
+                    assert_true(
+                        isfinite(actual) and isfinite(expected[component])
+                    )
+                    assert_almost_equal(actual, unit, atol=1e-6)
+                    assert_almost_equal(actual, expected[component], atol=1e-6)
 
 
 def norm_consumer_sample(high: Float32, low: Float32) -> Array[Float32, 5]:
