@@ -48,6 +48,8 @@ try:
         from . import runtime_view_contracts as runtime_view
         from . import shared_helper_contracts as shared_helpers
         from . import witness_format_contracts as witness_format
+        from . import typed_boundary_contracts as typed_boundary
+        from . import conditioned_cubic_contracts as conditioned_cubic
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
@@ -57,6 +59,8 @@ try:
         import runtime_view_contracts as runtime_view
         import shared_helper_contracts as shared_helpers
         import witness_format_contracts as witness_format
+        import typed_boundary_contracts as typed_boundary
+        import conditioned_cubic_contracts as conditioned_cubic
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -137,16 +141,18 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',
- 'tools/carla_lane_oracle/runtime_view_contracts.py': '0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',
- 'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
- 'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
- 'tools/carla_lane_oracle/map_deviation_contracts.py': '741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',
- 'tools/carla_lane_oracle/consumer_successor_ledger.py': '8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',
- 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
+DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
- 'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
- 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'cf9bb32fd36fefb641e2c97210bfffe0fac00b5b773e87b5b19d46877afbf9a4'}
+ 'tools/carla_lane_oracle/conditioned_cubic_contracts.py': '595d9a5be957ced3aa563cf016de3eaa7edb1e301a7df475992e1da5796af766',
+ 'tools/carla_lane_oracle/consumer_successor_ledger.py': 'ce9a639084dfcc1442c6ac7535060cf5a123c2eb96683d2f35816ec26b0599ed',
+ 'tools/carla_lane_oracle/map_deviation_contracts.py': '741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',
+ 'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
+ 'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
+ 'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
+ 'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
+ 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'e09d896437bd2216c2b3282d391530cb52f45191512e4c406cf5ee4bf97482a9',
+ 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -215,7 +221,9 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/shared_helper_contracts.py',
                  'tools/carla_lane_oracle/runtime_view_contracts.py',
                  'tools/carla_lane_oracle/map_deviation_contracts.py',
-                 'tools/carla_lane_oracle/witness_format_contracts.py')
+                 'tools/carla_lane_oracle/witness_format_contracts.py',
+                 'tools/carla_lane_oracle/typed_boundary_contracts.py',
+                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
 
 
 def _center_require(ok, message):
@@ -682,7 +690,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -720,7 +728,7 @@ def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
-               vars(deviation), vars(witness_format))
+               vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -755,6 +763,8 @@ def executing_checker_bindings(root=None):
             require(not supplied.is_symlink() and sha(supplied.read_bytes()) == captured,
                     'receipt checker differs from executing checker: ' + relative)
         result[relative] = captured
+    typed_boundary.verify_authority()
+    conditioned_cubic.verify_authority()
     return result
 
 
@@ -865,7 +875,7 @@ def _native_dependency_inventory(root, *, witnesses, _known=None, _snapshots=Non
     return found
 
 
-def resolver_unshadowed(root, paths, *, render_entries=None):
+def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None):
     """Refuse alternate qualified-module and namespace lookup surfaces.
 
     Every reviewed import begins at a protected top-level namespace. Guard
@@ -888,6 +898,14 @@ def resolver_unshadowed(root, paths, *, render_entries=None):
             or '.' not in render_entries or any(type(path) is not str or not path
             or Path(path).is_absolute() or '..' in Path(path).parts for path in render_entries)):
         return False
+    if typed_entries is not None and (type(typed_entries) is not frozenset
+            or '.' not in typed_entries or any(type(path) is not str or not path
+            or Path(path).is_absolute() or '..' in Path(path).parts for path in typed_entries)):
+        return False
+    # Only these newly introduced families use the established compiled-entry
+    # lookup rule. Every pre-333 family keeps its historical refusal policy.
+    typed_families = ('animation', 'cameras', 'core', 'exporters', 'geometries',
+                      'lights', 'materials', 'objects', 'postprocessing', 'renderers')
     allowed = set(paths)
     stems = {str(Path(p).with_suffix('')).casefold() for p in allowed}
     canonical_prefixes = {str(parent) for p in allowed for parent in Path(p).parents if str(parent) != '.'}
@@ -932,7 +950,9 @@ def resolver_unshadowed(root, paths, *, render_entries=None):
                 relevant = (folded in stems or folded in prefixes or stem in stems
                             or stem in prefixes or (scoped_name in top
                                 and (scoped_name != 'render' or render_entries is None
-                                     or relative_dir.casefold() in render_entries))
+                                     or relative_dir.casefold() in render_entries)
+                                and (scoped_name not in typed_families or typed_entries is None
+                                     or relative_dir.casefold() in typed_entries))
                             or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
                 if not relevant:
                     continue
@@ -954,12 +974,26 @@ def resolver_unshadowed(root, paths, *, render_entries=None):
 
 
 def _render_lookup_args(paths, entries):
-    """Restrict only render's namespace clause with an established entry census."""
-    if not any(path.startswith('render/') for path in paths):
+    """Scope only reviewed new families with an established entry census.
+
+    Exact module and package prefixes never use this namespace-only exception.
+    The caller checks the complete physical source/entry inventory before and
+    after the operation; adding a new entry or import cannot reuse this scope.
+    Include-root calls intentionally omit these arguments and stay conservative.
+    """
+    render = any(path.startswith('render/') for path in paths)
+    typed = any(path.split('/')[0] in ('animation', 'cameras', 'core', 'exporters',
+        'geometries', 'lights', 'materials', 'objects', 'postprocessing', 'renderers')
+        for path in paths)
+    if not render and not typed:
         return {}
-    require(type(entries) in (tuple, list), 'missing render entry census')
-    return {'render_entries': frozenset(('.', *(path.casefold() for path in entries),
-        *(str(Path(path).parent).casefold() for path in shared_helpers.TESTS)))}
+    require(type(entries) in (tuple, list), 'missing compiled entry census')
+    roots = frozenset(('.', *(path.casefold() for path in entries),
+        *(str(Path(path).parent).casefold() for path in shared_helpers.TESTS)))
+    typed_roots = roots | frozenset(str(Path(path).parent).casefold()
+                                    for path in typed_boundary.TESTS)
+    return {**({'render_entries': roots} if render else {}),
+            **({'typed_entries': typed_roots} if typed else {})}
 
 
 def _helper_entry_census(root, *, _operation=None):
@@ -1221,7 +1255,7 @@ class _CacheInputs:
     def exact_edges(self, owner, root):
         self._check(owner, root)
         for path in SOURCE_PATHS:
-            require(sha(self.raw(owner, root, path)) == AFTER_SHA256[path],
+            require(sha(_historical_typed_text(path, self.raw(owner, root, path).decode('utf-8'))) == AFTER_SHA256[path],
                     'unreviewed complete live endpoint: ' + path)
         self.checkpoint(owner, root)
         try:
@@ -1309,12 +1343,17 @@ def _owner_module(kind):
             name = 'winner_sign_contracts'
         elif kind == 'border':
             name = 'border_parser_contracts'
+        elif kind == 'runtime':
+            name = 'check_runtime_support'
+        elif kind == 'sampled':
+            name = 'check_sampled_values'
         else:
             name = None
     else:
         # Exotic keys retain dictionary hashing and equality behavior.
         name = {'invariant': 'coverage_invariant_contracts',
-                'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
+                'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts',
+                'runtime': 'check_runtime_support', 'sampled': 'check_sampled_values'}.get(kind)
     return sys.modules.get((__package__ + '.' if __package__ else '') + name) if name else None
 
 
@@ -1368,6 +1407,8 @@ def _operation_frame_kind(frame, *, include_aliases=False):
                             (prefix + 'coverage_invariant_contracts', 'verify'),
                             (prefix + 'winner_sign_contracts', 'verify'),
                             (prefix + 'border_parser_contracts', 'verify'),
+                            (prefix + 'check_runtime_support', 'verify'),
+                            (prefix + 'check_sampled_values', 'verify'),
                             ('coverage_loop_proofs', 'reviewed_nonempty_loops'),
                             ('tools.coverage_loop_proofs', 'reviewed_nonempty_loops')):
                         module = sys.modules.get(name)
@@ -1377,7 +1418,7 @@ def _operation_frame_kind(frame, *, include_aliases=False):
                             break
                     else:
                         return None
-    for kind in ('invariant', 'winner', 'border'):
+    for kind in ('invariant', 'winner', 'border', 'runtime', 'sampled'):
         module = _owner_module(kind)
         if (module is not None and namespace is vars(module)
                 and frame.f_code is _live_function_code(getattr(module, 'verify', None))):
@@ -1391,11 +1432,13 @@ def _operation_frame_kind(frame, *, include_aliases=False):
     if not include_aliases or type(filename) is not str:
         return None
     if _different_alias_leaf(filename, ('coverage_invariant_contracts.py', 'winner_sign_contracts.py',
-                                         'border_parser_contracts.py', 'coverage_loop_proofs.py')):
+                                         'border_parser_contracts.py', 'check_runtime_support.py',
+                                         'check_sampled_values.py', 'coverage_loop_proofs.py')):
         return None
     for kind, name in (('invariant', 'coverage_invariant_contracts.py'),
                        ('winner', 'winner_sign_contracts.py'),
-                       ('border', 'border_parser_contracts.py')):
+                       ('border', 'border_parser_contracts.py'),
+                       ('runtime', 'check_runtime_support.py'), ('sampled', 'check_sampled_values.py')):
         if (Path(filename).absolute() == Path(__file__).absolute().with_name(name)
                 and frame.f_code is _live_function_code(namespace.get('verify'))):
             return 'alias_' + kind
@@ -1412,7 +1455,7 @@ def _invariant_verify_frame(frame, *, include_aliases=False):
 
 def _private_operation_wrapper(frame, kind, operation):
     """Return only the exact explicit child wrapper; never skip arbitrary frames."""
-    if kind not in ('invariant', 'border') or operation._kind != 'winner':
+    if kind not in ('invariant', 'border') or operation._kind not in ('winner', 'runtime', 'sampled'):
         return None
     module = _owner_module(kind)
     if module is None or frame.f_globals is not vars(module):
@@ -1460,7 +1503,7 @@ def _operation_borrow(operation, root, kind):
                 and frame.f_code is getattr(module, '_verify_owned').__code__
                 and frame.f_locals.get('_operation') is operation
                 and str(Path(frame.f_locals.get('root')).absolute()) == operation._root
-                and operation._kind == 'winner', 'invalid private operation wrapper')
+                and operation._kind in ('winner', 'runtime', 'sampled'), 'invalid private operation wrapper')
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         _operation_fail(operation, error)
 
@@ -1472,7 +1515,7 @@ def _operation_enter(root, kind, _operation=None, *, module=None, include_roots=
         if kind is None or include_roots != ():
             require(_operation is None, 'unsupported context cannot borrow operation inputs')
             return None, False
-        require(kind in ('invariant', 'winner', 'border', 'map_loops', 'rtree_loops'),
+        require(kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'map_loops', 'rtree_loops'),
                 'unknown bounded operation kind')
         actual = _operation_frame_kind(frame)
         if _operation is not None:
@@ -1781,7 +1824,9 @@ class _InvariantInputs(_CacheInputs):
             self._check(self._owner, root)
             if exact:
                 for path in SOURCE_PATHS:
-                    require(sha(self.raw(self._owner, root, path)) == AFTER_SHA256[path],
+                    raw = self.raw(self._owner, root, path)
+                    require(sha(raw) == AFTER_SHA256[path] or (typed_boundary.is_current(path, raw)
+                            and typed_boundary.edge(path)['before_sha256'] == AFTER_SHA256[path]),
                             'unreviewed exact operation endpoint: ' + path)
             return json.loads(self._record_raw, object_pairs_hook=source.unique_keys)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
@@ -1944,12 +1989,12 @@ def _cache_lane_inputs(root, supplied_text, owner, *, _operation=None):
         digest = source.token_sha256(supplied_text)
         if digest == BEFORE_TOKEN_SHA256[path]:
             return supplied_text, None
-        require(digest == AFTER_TOKEN_SHA256[path],
-                'unreviewed supplied successor source: ' + path)
         raw = _regular(root, path).read_bytes()
         require(type(raw) is bytes, 'expected lane observation is not bytes')
         require(digest == source.token_sha256(_physical_text(raw)),
                 'supplied and physical lane observation views differ')
+        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, raw),
+                'unreviewed supplied successor source: ' + path)
         if _operation is None:
             _pending = _CacheInputs(owner, root, owner_frame)
             record = verify(root, _expected_lane_raw=raw, _capture=_pending)
@@ -2011,15 +2056,29 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
                 **{path: shared_helpers.PROVIDERS[path] for path in providers},
                 **{path: shared_helpers.TESTS[path] for path in tests}}
     bound = {path: observe(path) for path in expected}
+    typed_fixtures = {}
     for path, raw in bound.items():
-        require(sha(raw) == expected[path], 'shared-helper fixture changed: ' + path)
+        historical = raw
+        if path in tests and typed_boundary.is_current(path, raw):
+            # Arithmetic capture has no typed fixture edge. Supplemental native
+            # fixtures use the complete current graph before exact provenance;
+            # source/provider extraction identities remain unchanged.
+            require(_snapshots is None, 'typed fixture entered arithmetic helper capture')
+            historical = reviewed_typed_text(root, path, raw.decode('utf-8'),
+                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')
+            typed_fixtures[path] = raw
+        require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + path)
     texts = {path: raw.decode('utf-8') for path, raw in sources.items()}
     texts.update({path: bound[path].decode('utf-8') for path in providers})
     require(set(shared_helpers.verify_correspondence(texts)) == set(active),
             'shared-helper active endpoints differ')
+    if typed_fixtures and _inputs is None and _operation is None:
+        # Owned views retain their complete final sweep. A standalone typed
+        # fixture must join the same physical image at the terminal root gate.
+        verify(root, exact=True, _expected_sources=typed_fixtures)
     for path, raw in {**sources, **bound}.items():
         require(observe(path) == raw, 'shared-helper input changed during admission: ' + path)
-    return {**expected, **{path: sha(raw) for path, raw in sources.items()}}
+    return {path: sha(raw) for path, raw in {**sources, **bound}.items()}
 
 
 def shared_helper_proof_bindings(root, *, paths=None, include_roots=(), _inputs=None,
@@ -2100,12 +2159,12 @@ def shared_helper_edges(root, *, paths=None, include_roots=(), _inputs=None,
 
 def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
     """Bind the merged runtime-view authority and every consumed fixture."""
-    runtime_view.steps(root, _operation=_operation)
     raw = _observe_bytes(root, runtime_view.MIGRATION,
         _regular(root, runtime_view.MIGRATION).read_bytes(), _operation=_operation)
     require(sha(raw) == runtime_view.MIGRATION_SHA256,
             'runtime view record changed during admission')
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
+    runtime_view.checked_steps(record)
     leaf = 'tools/carla_lane_oracle/runtime_view_contracts.py'
     expected_inputs = {runtime_view.MIGRATION: runtime_view.MIGRATION_SHA256,
                        leaf: DEPENDENCY_TOOL_SHA256[leaf],
@@ -2114,11 +2173,12 @@ def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
     for path, expected in expected_inputs.items():
         value = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                _operation=_operation)
-        require(sha(value) == expected, 'runtime view bound input changed: ' + path)
+        require(sha(_historical_typed_text(path, value.decode('utf-8'))) == expected,
+                'runtime view bound input changed: ' + path)
         if _snapshots is not None:
             require(_snapshots.setdefault(path, value) == value,
                     'runtime view input changed after consumption: ' + path)
-        result[path] = expected
+        result[path] = sha(value)
     return result
 
 
@@ -2134,27 +2194,29 @@ def _station_bindings(root, *, _snapshots=None, _operation=None):
     if _snapshots is not None:
         require(_snapshots.setdefault(station.MODULE, raw) == raw,
                 'Map changed before station admission')
-    if sha(raw) == station.BEFORE_SHA256:
-        require(source.token_sha256(_physical_text(raw)) == station.BEFORE_TOKEN_SHA256,
+    historical = _historical_typed_text(station.MODULE, raw.decode('utf-8'))
+    if sha(historical) == station.BEFORE_SHA256:
+        require(source.token_sha256(historical) == station.BEFORE_TOKEN_SHA256,
                 'historical fifth Map tokens changed')
         return {}
-    require(sha(raw) in (station.AFTER_SHA256, deviation.AFTER_SHA256),
+    require(sha(historical) in (station.AFTER_SHA256, deviation.AFTER_SHA256),
             'unknown complete station Map bytes')
-    station.predecessor_source(deviation.station_source(raw.decode('utf-8')))
+    station.predecessor_source(deviation.station_source(historical))
     result = {station.MODULE: sha(raw)}
     leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
     fixtures = {leaf: DEPENDENCY_TOOL_SHA256[leaf], **station.TESTS}
-    if sha(raw) == deviation.AFTER_SHA256:
+    if sha(historical) == deviation.AFTER_SHA256:
         deviation_leaf = 'tools/carla_lane_oracle/map_deviation_contracts.py'
         fixtures.update({deviation_leaf: DEPENDENCY_TOOL_SHA256[deviation_leaf], **deviation.TESTS})
     for path, expected in fixtures.items():
         value = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                _operation=_operation)
-        require(sha(value) == expected, 'station correctness fixture changed: ' + path)
+        require(sha(_historical_typed_text(path, value.decode('utf-8'))) == expected,
+                'station correctness fixture changed: ' + path)
         if _snapshots is not None:
             require(_snapshots.setdefault(path, value) == value,
                     'station fixture changed after consumption: ' + path)
-        result[path] = expected
+        result[path] = sha(value)
     require(_observe_bytes(root, station.MODULE,
             _regular(root, station.MODULE).read_bytes(), _operation=_operation) == raw,
             'Map changed during station admission')
@@ -2174,28 +2236,29 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
                 require(_snapshots.setdefault(path, raw) == raw,
                         'witness changed before format admission: ' + path)
             image[path] = raw
-            digest = sha(raw)
+            historical = _historical_typed_text(path, raw.decode('utf-8'))
+            digest = sha(historical)
             if digest == witness_format.BEFORE_SHA256[path]:
-                require(source.token_sha256(raw.decode('utf-8')) ==
+                require(source.token_sha256(historical) ==
                         witness_format.BEFORE_TOKEN_SHA256[path],
                         'historical witness tokens changed: ' + path)
             else:
-                witness_format.predecessor_source(path, raw.decode('utf-8'))
+                witness_format.predecessor_source(path, historical)
                 active = True
-            result[path] = digest
+            result[path] = sha(raw)
         if active:
             leaf = 'tools/carla_lane_oracle/witness_format_contracts.py'
             for path, expected in {leaf: DEPENDENCY_TOOL_SHA256[leaf],
                                    **witness_format.BOUND_INPUTS}.items():
                 raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                      _operation=_operation)
-                require(type(raw) is bytes and sha(raw) == expected,
+                require(type(raw) is bytes and sha(_historical_typed_text(path, raw.decode('utf-8'))) == expected,
                         'witness-format proof input changed: ' + path)
                 if _snapshots is not None:
                     require(_snapshots.setdefault(path, raw) == raw,
                             'witness-format input changed after consumption: ' + path)
                 image[path] = raw
-                result[path] = expected
+                result[path] = sha(raw)
         for path, expected in image.items():
             raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                  _operation=_operation)
@@ -2206,7 +2269,102 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
         _operation_fail(_operation, error)
 
 
-def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None):
+def _historical_typed_text(path, text):
+    """Pure named provenance projection; never replace a captured input."""
+    return typed_boundary.historical_source(str(path), text)
+
+
+def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
+    """Bind the complete new source graph and current native closure once."""
+    try:
+        _operation_check(_operation, root)
+        marker = 'extensions/carla/polynomial.mojo'
+        marker_raw = _observe_bytes(root, marker, _regular(root, marker).read_bytes(),
+                                    _operation=_operation)
+        if not typed_boundary.is_current(marker, marker_raw):
+            # A local-cubic graph cannot borrow historical polynomial storage.
+            # Each exact semantic endpoint must advance in the same operation.
+            for path in conditioned_cubic.SOURCE_PATHS:
+                raw = marker_raw if path == marker else _observe_bytes(
+                    root, path, _regular(root, path).read_bytes(), _operation=_operation)
+                require(not typed_boundary.is_current(path, raw),
+                        'mixed historical and conditioned source graph: ' + path)
+            return {}
+        image = {}
+        for path in typed_boundary.SOURCE_PATHS:
+            raw = marker_raw if path == marker else _observe_bytes(
+                root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(type(raw) is bytes, 'typed source is not physical bytes: ' + path)
+            image[path] = raw
+        typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
+        leaves = ('tools/carla_lane_oracle/typed_boundary_contracts.py',
+                  'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
+        conditioned_inputs = {}
+        for path, historical_digest in conditioned_cubic.BINDING_INPUTS.items():
+            if path in typed_boundary.EDGES:
+                edge = typed_boundary.edge(path)
+                require(edge['before_sha256'] == historical_digest,
+                        'typed input misses fixed conditioned witness/provider: ' + path)
+                # verify_sources above reconstructed this complete predecessor.
+                # Receipts bind current formatted bytes, not the old witness SHA.
+                conditioned_inputs[path] = edge['after_sha256']
+            else:
+                conditioned_inputs[path] = historical_digest
+        expected = {**typed_boundary.CURRENT_DEPENDENCIES, **typed_boundary.NEW_INPUTS, **typed_boundary.TESTS,
+                    **typed_boundary.BINDING_INPUTS, **conditioned_inputs,
+                    **{path: DEPENDENCY_TOOL_SHA256[path] for path in leaves}}
+        for path, digest in expected.items():
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(sha(raw) == digest, 'typed boundary bound input changed: ' + path)
+            require(path not in image or image[path] == raw, 'typed input changed after source admission: ' + path)
+            image[path] = raw
+        for path, raw in image.items():
+            if _snapshots is not None:
+                require(_snapshots.setdefault(path, raw) == raw, 'typed input changed after consumption: ' + path)
+            require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                   _operation=_operation) == raw,
+                    'typed input changed during admission: ' + path)
+        return {path: sha(raw) for path, raw in image.items()}
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
+def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _input_owner=None):
+    """Admit physical current bytes before returning historical provenance."""
+    path = str(path)
+    edge = typed_boundary.EDGES.get(path)
+    if edge is None:
+        return text
+    try:
+        if not (typed_boundary.is_current(path, text) or
+                source.token_sha256(text) == edge['after_token_sha256']):
+            return text
+        _operation_check(_operation, root)
+        raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+        require(typed_boundary.is_current(path, raw),
+                'typed physical input is not the exact reviewed endpoint: ' + path)
+        physical_text = raw.decode('utf-8')
+        require(type(text) is str and source.token_sha256(text) == source.token_sha256(physical_text),
+                'supplied typed source differs from physical input: ' + path)
+        _observe_text(root, path, text, _operation=_operation, mode='physical',
+                      supplied=True, _checked_raw=raw)
+        require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
+        if _inputs is not None:
+            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid typed source owner')
+            require(_inputs.raw(_input_owner, root, path) == raw, 'typed owner image changed: ' + path)
+        elif _operation is None:
+            verify(root, exact=True)
+        else:
+            _operation_record(_operation, root, exact=True)
+        require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
+                               _operation=_operation) == raw,
+                'typed source changed during provenance reconstruction: ' + path)
+        return _historical_typed_text(path, physical_text)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
+def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None, _expected_sources=None):
     """Check actual complete current endpoints and all premises without caches."""
     root = Path(root)
     try:
@@ -2224,14 +2382,28 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             require(type(_expected_lane_raw) is bytes, 'expected lane observation is not bytes')
             require(snapshots[SOURCE_PATHS[2]] == _expected_lane_raw,
                     'lane observation changed before current admission')
-        for path, raw in snapshots.items():
-            text = _physical_text(raw)
+        if _expected_sources is not None:
+            require(_capture is None and type(_expected_sources) is dict,
+                    'invalid supplied source capture request')
+            for path, expected in _expected_sources.items():
+                require(type(path) is str and _canonical_relative_text(path)
+                        and type(expected) is bytes, 'invalid supplied source capture value')
+                physical = _regular(root, path)
+                if path not in snapshots:
+                    snapshots[path] = physical.read_bytes()
+                require(snapshots[path] == expected,
+                        'supplied source observation changed before admission: ' + path)
+        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots,
+            _operation=_capture if type(_capture) is _InvariantInputs else None)
+        for path in SOURCE_PATHS:
+            raw = snapshots[path]
+            text = _historical_typed_text(path, _physical_text(raw))
             supplied_view = (root / path).read_text(encoding='utf-8')
-            require(source.token_sha256(supplied_view) == source.token_sha256(text),
+            require(source.token_sha256(supplied_view) == source.token_sha256(_physical_text(raw)),
                     'supplied and physical source views differ: ' + path)
             item = record['sources'][path]
-            require((not exact or sha(raw) == AFTER_SHA256[path])
-                    and source.token_sha256(_physical_text(raw)) == item['after_token_sha256']
+            require((not exact or sha(text) == AFTER_SHA256[path])
+                    and source.token_sha256(text) == item['after_token_sha256']
                     and source.token_sha256(text) == item['after_token_sha256'],
                     'unreviewed complete live endpoint: ' + path)
             if path == SOURCE_PATHS[2]:
@@ -2249,6 +2421,7 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
                           | set(record['native_dependency_inventory']) | helper_closure
                           | {path for path in helper_bindings if path.endswith('.mojo')}
+                          | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else set())
                           | (set(_capture._resolver_paths) if _capture is not None else set()))
         # Coverage origin files cannot enter Mojo module lookup. Admit only
         # exact sidecar coordinates of reviewed Mojo inputs at include roots;
@@ -2273,11 +2446,28 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         require(entries == record['entry_directories'], 'maintained entrypoint directories changed')
         require(dependency_inventory(root, roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,
                                      _known=known, _snapshots=snapshots)
-                == set(record['dependency_inventory']) | helper_closure, 'production import inventory changed')
+                == (set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings else
+                    set(record['dependency_inventory']) | helper_closure), 'production import inventory changed')
         native_found = _native_dependency_inventory(root, witnesses=NATIVE_WITNESSES,
             _known=known, _snapshots=snapshots)
-        require(native_found == set(record['native_dependency_inventory']) | helper_closure,
+        require(native_found == (set(typed_boundary.NATIVE_CLOSURE) if typed_bindings else
+                set(record['native_dependency_inventory']) | helper_closure),
                 'native witness import inventory changed')
+        if typed_bindings:
+            current_native = set()
+            test_paths = tuple(path for path in typed_boundary.TESTS if path.endswith('.mojo'))
+            for parent in sorted({str(Path(path).parent) for path in test_paths}):
+                current_native.update(dependency_inventory(root,
+                    roots=tuple(path for path in test_paths if str(Path(path).parent) == parent),
+                    entries=(parent,), _known=known, _snapshots=snapshots))
+            require(current_native == set(typed_boundary.TYPED_NATIVE_CLOSURE),
+                    'typed native test import inventory changed')
+            current_production = dependency_inventory(root,
+                roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, *typed_boundary.NEW_INPUTS)
+                    if path.endswith('.mojo') and not path.startswith(('tests/', 'tools/', 'examples/', 'bench/'))),
+                entries=entries, _known=known, _snapshots=snapshots)
+            require(current_production == set(typed_boundary.TYPED_PRODUCTION_CLOSURE),
+                    'typed production import inventory changed')
         ledger_raw = _regular(root, CONSUMER_LEDGER).read_bytes()
         require(sha(ledger_raw) == CONSUMER_LEDGER_SHA256, 'unreviewed consumer ledger')
         snapshots[CONSUMER_LEDGER] = ledger_raw
@@ -2307,7 +2497,10 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                             and expected == witness_format.BEFORE_SHA256[path],
                             'format edge does not extend immutable witness: ' + path)
                     expected = witness_bindings[path]
-                require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' + path)
+                historical = _historical_typed_text(path, raw.decode('utf-8')).encode('utf-8') if path in typed_boundary.EDGES and typed_bindings else raw
+                if historical != raw and expected == sha(raw):
+                    expected = sha(historical)
+                require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
         production = set() if _capture is not None else None
@@ -2321,6 +2514,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             expected_inventory[station.MODULE] = {'tokens_sha256': (
                 deviation.AFTER_TOKEN_SHA256 if station_bindings[station.MODULE] == deviation.AFTER_SHA256
                 else station.AFTER_TOKEN_SHA256)}
+        if typed_bindings:
+            expected_inventory = typed_boundary.INVENTORY
         require(observed_inventory == expected_inventory, 'production caller/use inventory changed')
         for path, raw in {**bound, **snapshots}.items():
             require(_regular(root, path).read_bytes() == raw, 'input changed during verification: ' + path)
@@ -2361,12 +2556,12 @@ def reviewed_text(root, path, text=None, *, _operation=None):
     """
     path = str(path)
     if text is None:
-        text = _regular(root, path).read_text(encoding='utf-8')
+        text = _observe_text(root, path, _regular(root, path).read_text(encoding='utf-8'),
+                             _operation=_operation, mode='physical')
+    text = reviewed_typed_text(root, path, text, _operation=_operation)
     if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
         return text
     require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied successor source: ' + path)
-    if _operation is not None:
-        _observe_text(root, path, text, _operation=_operation, mode='physical', supplied=True)
     return predecessor_source(root, path, _operation=_operation)
 
 
@@ -2380,7 +2575,7 @@ def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
                 'supplied and physical lane observation views differ')
         if digest == BEFORE_TOKEN_SHA256[path]:
             return text, None
-        require(digest == AFTER_TOKEN_SHA256[path],
+        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, expected_raw),
                 'unreviewed supplied successor source: ' + path)
         road = 'extensions/carla/road.mojo'
         road_raw = _regular(root, road).read_bytes()
@@ -2389,7 +2584,7 @@ def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
         _observe_text(root, path, text, _operation=_operation, mode='physical', supplied=True)
         record = (verify(root, _expected_lane_raw=expected_raw) if _operation is None else
                   _operation_record(_operation, root, expected_lane_raw=expected_raw))
-        require(sha(road_raw) == record['unchanged_inputs'][road],
+        require(sha(_historical_typed_text(road, road_raw.decode('utf-8'))) == record['unchanged_inputs'][road],
                 'road observation changed before current admission')
         item = record['sources'][path]
         return reverse_exact(path, item['after_source'], item), road_raw
@@ -2405,11 +2600,25 @@ def reviewed_sources(root, texts):
                and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p]}
     if not changed:
         return dict(texts)
-    record = verify(root)
+    physical_inputs = {}
+    for path, text in texts.items():
+        raw = _regular(root, path).read_bytes()
+        require(source.token_sha256(text) == source.token_sha256(_physical_text(raw)),
+                'supplied successor source differs from physical input: ' + path)
+        physical_inputs[path] = raw
+    record = verify(root, _expected_sources=physical_inputs)
     result = dict(texts)
     # A successor operation may not mix a historical supplied endpoint with
     # current ones, or smuggle an unrelated fabricated supplied source view.
     for path, text in texts.items():
+        physical = _regular(root, path).read_bytes()
+        require(physical == physical_inputs[path],
+                'supplied successor physical input changed during admission: ' + path)
+        require(source.token_sha256(text) == source.token_sha256(_physical_text(physical)),
+                'supplied successor source differs from physical input: ' + path)
+        # Only canonical physical bytes enter the exact typed inverse; caller
+        # comments have already been compared by the public supplied-view rule.
+        text = _historical_typed_text(path, _physical_text(physical))
         if path in SOURCE_PATHS:
             item = record['sources'][path]
             require(source.token_sha256(text) == item['after_token_sha256'],
@@ -2417,8 +2626,9 @@ def reviewed_sources(root, texts):
             result[path] = reverse_exact(path, item['after_source'], item)
         else:
             raw = _regular(root, path).read_bytes()
-            require(source.token_sha256(text) == source.token_sha256(_physical_text(raw)),
+            require(raw == physical and source.token_sha256(text) == source.token_sha256(_historical_typed_text(path, _physical_text(raw))),
                     'unreviewed unrelated supplied source: ' + path)
+            result[path] = text
     return result
 
 
@@ -2437,7 +2647,9 @@ def reviewed_sum2_callers(root, *, _operation=None):
                                     _operation=_operation, mode='physical', supplied=True, _checked_raw=raw)
             require(source.token_sha256(supplied) == source.token_sha256(text),
                     'Sum2 caller supplied and physical views differ: ' + path)
-            changed = any(declaration_sha256(text, name) not in expected
+            typed_current = typed_boundary.is_current(path, text)
+            text = _historical_typed_text(path, text)
+            changed = typed_current or any(declaration_sha256(text, name) not in expected
                           for name, expected in functions.items())
             if changed:
                 require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path],
@@ -2462,11 +2674,22 @@ def reviewed_sum2_callers(root, *, _operation=None):
     return {}
 
 
-def reviewed_lane_before_center_text(root, text=None):
+def reviewed_lane_before_center_text(root, text=None, *, _operation=None):
     path = SOURCE_PATHS[2]
+    supplied_raw = None
     if text is not None:
-        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied center source')
-    item = verify(root)['sources'][path]
+        supplied_raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                      _operation=_operation)
+        require(source.token_sha256(text) == source.token_sha256(_physical_text(supplied_raw)),
+                'unreviewed supplied center source')
+    item = (verify(root, _expected_lane_raw=supplied_raw) if _operation is None else
+            _operation_record(_operation, root, expected_lane_raw=supplied_raw))['sources'][path]
+    if supplied_raw is not None:
+        require(source.token_sha256(_historical_typed_text(path, _physical_text(supplied_raw)))
+                == AFTER_TOKEN_SHA256[path], 'unreviewed supplied center source')
+        require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
+                               _operation=_operation) == supplied_raw,
+                'supplied center physical input changed during admission')
     return reverse_center_exact(item['after_source'], item)
 
 
@@ -2476,6 +2699,37 @@ def verified_edges(root, *, include_roots=(), _operation=None):
     return {path: {'path': path, **{field: item[field] for field in
             ('before_sha256', 'after_sha256', 'before_token_sha256', 'after_token_sha256')}}
             for path, item in record['sources'].items()}
+
+
+def typed_successor_edges(root, *, _operation=None):
+    """Return explicit current edges, separately from immutable old records."""
+    try:
+        marker = 'extensions/carla/polynomial.mojo'
+        raw = _observe_bytes(root, marker, _regular(root, marker).read_bytes(),
+                             _operation=_operation)
+        if not typed_boundary.is_current(marker, raw):
+            return {}
+        if _operation is None:
+            verify(root, exact=True)
+        else:
+            _operation_record(_operation, root, exact=True)
+        result = {}
+        for path in typed_boundary.SOURCE_PATHS:
+            current = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                     _operation=_operation)
+            require(typed_boundary.is_current(path, current),
+                    'typed successor physical endpoint changed: ' + path)
+            edge = typed_boundary.edge(path)
+            edge['scope'] = 'explicit historical provenance; current typed API admission'
+            if path in conditioned_cubic.SOURCE_PATHS:
+                edge['conditioned_graph'] = {
+                    'before_sha256': conditioned_cubic.BEFORE_SHA256[path],
+                    'after_sha256': conditioned_cubic.AFTER_SHA256[path],
+                    'scope': 'new local-coefficient graph; no scalar bit-equivalence claim'}
+            result[path] = edge
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
 
 
 def digest_edges(root, *, include_roots=()):
@@ -2494,6 +2748,14 @@ def station_proof_bindings(root, *, _operation=None):
     try:
         executing = executing_checker_bindings()
         result = _station_bindings(root, _operation=_operation)
+        if result.get(station.MODULE) == typed_boundary.EDGES[station.MODULE]['after_sha256']:
+            # The public typed receipt requires the complete current graph.
+            # Keep _station_bindings itself nonrecursive for verify's capture.
+            if _operation is None:
+                verify(root, exact=True)
+            else:
+                _operation_record(_operation, root, exact=True)
+            result.update(_typed_boundary_bindings(root, _operation=_operation))
         leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
         require(result.get(leaf) == executing[leaf],
                 'station receipt lacks its actual executing leaf')
@@ -2521,6 +2783,7 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         # Receipts name the actual admitted Map and its bound native inputs.
         # The immutable record remains a historical premise, never a live hash.
         result.update(_station_bindings(root, _operation=_operation))
+        result.update(_typed_boundary_bindings(root, _operation=_operation))
         result.update(_witness_format_bindings(root, _operation=_operation))
         result.update(_runtime_view_bindings(root, _operation=_operation))
         result.update(shared_helper_proof_bindings(root, include_roots=include_roots,
