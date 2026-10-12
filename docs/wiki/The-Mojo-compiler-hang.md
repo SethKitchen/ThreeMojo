@@ -59,6 +59,39 @@ A struct value that is built again in two nested loops, and read after them, als
 
 Four nested loops in one function hang codegen too, as `render/target.mojo` notes. Keep at most two loops in a function, and call a function for the inner two.
 
+## A deadlock in the compile-time interpreter on Mojo 1.1.0
+
+A `startswith` call that the compile-time interpreter runs can deadlock `mojo build`. The compiler then uses no CPU and never exits. The coverage runtime no longer calls `startswith` at compile time. It compares a byte slice of the name with `==`.
+
+### What happened
+
+Each `and` and `or` in a compound decision gets a check, `node`, that runs at compile time. See [Truth-conversion limit](Coverage-tool#truth-conversion-limit). `node` called two helper functions, and they called `StaticString.startswith`.
+
+The instrumented `loaders/collada.mojo` did not build. In the full CI audit on `c6bb3ce`, `test_collada` and `test_collada_rig` wrote 29 or 30 probe records at compile time, and then no more. Both captures ran until the capture deadline stopped them. Without instrumentation, both suites build and pass.
+
+`gdb` showed every compiler thread in `sem_wait`. With `--num-threads 1` the one thread waits on a semaphore that no other thread can post. It is a deadlock, not slow code generation.
+
+### How it was found
+
+Each build had the other modules uninstrumented. A build that used no CPU for 90 seconds counted as a hang.
+
+| Instrumented in `loaders/collada.mojo` | Build |
+|---|---|
+| Every function | Hangs |
+| The first or the second half of the functions | Builds |
+| Only `build_material` and `build_geometry` | Hangs |
+| Those two, with plain branch probes in place of MC/DC in one of them | Builds |
+| Those two, with `_cov_eval_truth[True]` in place of the `node` checks | Builds |
+| Those two, with a `node` that compares reflected names with `==` only | Builds |
+| Those two, with a `node` that calls `startswith` on constant names | Hangs |
+| Those two, with a `node` that compares `name[byte=0:n]` with `==` | Builds |
+
+The pair is not special. Many decisions in `build_material` hang with the one decision in `build_geometry`. A struct of `comptime` members that still calls `startswith` also hangs. Refactoring the loops of the two functions does not help.
+
+### The rule
+
+Code that runs at compile time in the coverage runtime must not call `startswith`. A `comptime` slice compared with `==` gives the same result. `_Operand` in `coverage/runtime.mojo` holds these checks.
+
 ## Reproduce it
 
 Two files, identical except for the flag type. Do not add `repro_bool.mojo` to any build target. Time-box it:

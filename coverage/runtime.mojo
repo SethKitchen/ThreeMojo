@@ -467,28 +467,44 @@ def leaf[
     )
 
 
-def _pure(name: StaticString) -> Bool:
-    """Return True for a type whose operands convert to Bool without probes.
+struct _Operand[T: AnyType]:
+    """An operand type's name, and whether the fixed `leaf` overloads take it.
+
+    `node` runs in the compile-time interpreter when Mojo instantiates a
+    function with a compound decision. A `startswith` call there deadlocked
+    Mojo 1.1.0 when it built `loaders/collada.mojo` under instrumentation.
+    These members therefore compare a byte slice with `==`. See "A deadlock
+    in the compile-time interpreter" on the wiki's Mojo compiler hang page.
+
+    Parameters:
+        T: The operand type.
+    """
+
+    comptime name = reflect[Self.T].name()
+    """The type's name, as Mojo 1.1.0 spells it."""
+
+    comptime optional = (
+        Self.name.byte_length() >= 9 and Self.name[byte=0:9] == "Optional["
+    ) or (
+        Self.name.byte_length() >= 34
+        and Self.name[byte=0:34] == "std.collections.optional.Optional["
+    )
+    """True for an Optional, with or without its module."""
+
+    comptime pure = (
+        Self.name == "Bool"
+        or Self.name == "SIMD[DType.bool, 1]"
+        or Self.name == "SIMD[DType.int, 1]"
+        or Self.name == "String"
+        or (Self.name.byte_length() >= 5 and Self.name[byte=0:5] == "List[")
+        or Self.optional
+    )
+    """True for a type whose operands convert to Bool without probes.
 
     These are the fixed `leaf` overloads. Pinned Mojo 1.1.0 names prelude
     types without a module and every source type with its module, so a source
     type cannot take one of these names.
     """
-    return (
-        name == "Bool"
-        or name == "SIMD[DType.bool, 1]"
-        or name == "SIMD[DType.int, 1]"
-        or name == "String"
-        or name.startswith("List[")
-        or _optional(name)
-    )
-
-
-def _optional(name: StaticString) -> Bool:
-    """Return True for an Optional type name, with or without its module."""
-    return name.startswith("Optional[") or name.startswith(
-        "std.collections.optional.Optional["
-    )
 
 
 def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
@@ -509,15 +525,15 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     Returns:
         True if the instrumented operator keeps the native truth semantics.
     """
-    comptime left = reflect[L].name()
-    comptime right = reflect[R].name()
-    comptime native = reflect[N].name()
-    comptime rewritten = reflect[I].name()
-    comptime if _pure(left) and _pure(right) and _pure(native):
+    comptime left = _Operand[L].name
+    comptime right = _Operand[R].name
+    comptime native = _Operand[N].name
+    comptime rewritten = _Operand[I].name
+    comptime if _Operand[L].pure and _Operand[R].pure and _Operand[N].pure:
         # An Optional can itself be an Optional's element. Both operands
         # being Optional does not rule out a wrap that changes emptiness to
         # presence. Preserve only the same Optional type on both sides.
-        return not _optional(native) or (left == native and right == native)
+        return not _Operand[N].optional or (left == native and right == native)
     comptime if native == "Bool":
         return rewritten == "Bool"
     # Same-type: one native type, kept by one recording proxy type.

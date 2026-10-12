@@ -240,6 +240,8 @@ See [Benchmarks](Benchmarks#pmrem-and-the-coverage-run) for the numbers.
 
 A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrumenter emits an `Int` counter instead. See [The Mojo compiler hang](The-Mojo-compiler-hang).
 
+A `startswith` call in the compile-time operator check can deadlock the compiler. The runtime compares a byte slice with `==` instead. See [A deadlock in the compile-time interpreter](The-Mojo-compiler-hang#a-deadlock-in-the-compile-time-interpreter-on-mojo-110).
+
 ## Capture storage
 
 The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
