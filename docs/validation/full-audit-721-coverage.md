@@ -17,7 +17,7 @@ The suite list is every test suite that can reach a measured module through the 
 make -B coverage AFFECTED= MAKEFILES=<selection> COV_BUDGET=200000 JOBS=3
 ```
 
-The machine was a shared 4-vCPU Intel Xeon VM with a 15 GB memory limit. The capture was resumed twice with `make coverage-capture` for the suites that had not finished: once after a two-hour session limit, and once for two render suites that the memory limit had stopped. Each capture is complete for its suite, and `make coverage-report` checked a capture and its receipt for all 190 suites.
+The machine was a shared 4-vCPU Intel Xeon VM with a 15 GB memory limit. The capture was resumed twice with `make coverage-capture` for unfinished suites. The first restart followed a two-hour session limit. The second ran two render suites stopped by the memory limit. Each capture is complete for its suite, and `make coverage-report` checked a capture and its receipt for all 190 suites.
 
 ## Results
 
@@ -41,11 +41,11 @@ The obligations of issue #721 were closed by the source changes and witness test
 - `junction_bounds`: the endpoint refusals after full-cell admission (`tests/test_carla_junction_endpoint_refusals.mojo`) and the strict cut order.
 - `lane_refinement`: the finite-width admission, the post-local natural exclusion, the center refusal (`tests/test_carla_lane_center_bound_phase.mojo`) and the chord endpoint refusals (`tests/test_carla_chord_endpoint_refusals.mojo`).
 
-The loop proofs that cover these modules keep their historical review hashes. They admit the current sources only through the reviewed full-audit cleanup edge in `tools/carla_lane_oracle/full_audit_cleanup_contracts.py`, which binds the exact before and after bytes, the inverse spans and the bound tests.
+The loop proofs that cover these modules keep their historical review hashes. They admit the current sources only through the reviewed full-audit cleanup edge in `tools/carla_lane_oracle/full_audit_cleanup_contracts.py`. That edge binds the exact before and after bytes, the inverse spans and the bound tests.
 
 ## Platforms
 
-Coverage captures run only on Linux x86-64. The last-endpoint junction refusal needs x86 denormals-are-zero. On the macOS arm64 runner the same suite runs the first-endpoint control and prints `LAST_DAZ_CAPABILITY_UNAVAILABLE`; it claims no last-endpoint witness, and no coverage result depends on it. See [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#platform-specific-witnesses).
+Coverage captures run only on Linux x86-64. The last-endpoint junction refusal needs x86 denormals-are-zero. On the macOS arm64 runner, the same suite runs the first-endpoint control and prints `LAST_DAZ_CAPABILITY_UNAVAILABLE`. It claims no last-endpoint witness. No coverage result depends on it. See [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#platform-specific-witnesses).
 
 ## Limits
 
