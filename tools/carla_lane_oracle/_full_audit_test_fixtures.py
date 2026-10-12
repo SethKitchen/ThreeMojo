@@ -66,6 +66,8 @@ def copy_current_root(case, source, *, destination=None):
     paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
     # The accepted-successor consumer also binds this proof document.
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
+    # Supplemental witness-format proof inputs are physically copied too.
+    paths.update(cleanup.witness_format.BOUND_INPUTS)
     for group in cleanup.BOUND_GROUPS:
         paths.update(record[group])
     # Entry-point/import/caller discovery scans all Mojo sources, including
