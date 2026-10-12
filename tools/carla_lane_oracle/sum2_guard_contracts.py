@@ -8,7 +8,18 @@ order. Actual token-bound function spans prevent comment/docstring decoys.
 This does not execute or qualify native volatile loads or floating-point state.
 """
 from functools import lru_cache
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import os
 from pathlib import Path
@@ -101,6 +112,7 @@ def _observe_text(root, path, text, *, _operation=None, mode='default'):
         root, path, text, _operation=_operation, mode=mode)
 
 
+
 def _observe_bytes(root, path, payload, *, _operation=None):
     if _operation is None:
         return payload
@@ -109,6 +121,7 @@ def _observe_bytes(root, path, payload, *, _operation=None):
     else:
         import full_audit_cleanup_contracts as full_audit
     return full_audit._observe_bytes(root, path, payload, _operation=_operation)
+
 
 
 def _checked_production_paths(root, paths, *, _operation=None):
@@ -189,8 +202,8 @@ def protected_inventory(root, *, verified_lane_predecessor=None,
                 part.startswith('.')
                 for part in relative.parts):
             continue
-        text = _observe_text(root, relative.as_posix(), path.read_text(),
-                             _operation=_operation)
+        text = _typed_source.historical_text(root, relative.as_posix(), _observe_text(root, relative.as_posix(), path.read_text(),
+                             _operation=_operation), _operation=_operation)
         if verified_cleanup_predecessors and relative.as_posix() in verified_cleanup_predecessors:
             text = verified_cleanup_predecessors[relative.as_posix()]
         if relative.as_posix() == cache_key.MODULE and verified_lane_predecessor is not None:
@@ -356,8 +369,8 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
     operation_args = {} if _operation is None else {'_operation': _operation}
-    pins = json.loads(_observe_text(root, PINS, (root / PINS).read_text(),
-                                    _operation=_operation),
+    pins = json.loads(_typed_source.historical_text(root, PINS, _observe_text(root, PINS, (root / PINS).read_text(),
+                                    _operation=_operation), _operation=_operation),
                       object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
                           'public_doc_migration_sha256', 'final_source_freeze_sha256',
@@ -375,12 +388,12 @@ def verify(root, *, _operation=None):
     require(pins['containing_model_removal_sha256'] == CONTAINING_MODEL_REMOVAL_SHA256,
             'unreviewed containing-model removal lineage')
     require(pins['winner_sign_migration_sha256'] == WINNER_SIGN_MIGRATION_SHA256 and
-            hashlib.sha256((root/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_bytes()).hexdigest() == WINNER_SIGN_MIGRATION_SHA256,
+            hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/winner-sign-query-migration.json', (root/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_bytes(), _operation=_operation)).hexdigest() == WINNER_SIGN_MIGRATION_SHA256,
             'unreviewed winner/sign-query source migration')
     require(set(pins['callers']) == set(CALLERS), 'wrong Sum2 guard caller modules')
-    helper = _observe_text(
+    helper = _typed_source.historical_text(root, 'extensions/carla/curve_sum2.mojo', _observe_text(
         root, 'extensions/carla/curve_sum2.mojo',
-        (root/'extensions/carla/curve_sum2.mojo').read_text(), _operation=_operation)
+        (root/'extensions/carla/curve_sum2.mojo').read_text(), _operation=_operation), _operation=_operation)
     require(significant(helper) == significant(pins['helper_source']),
             'Sum2 complete guard/helper token graph changed')
     # This fixed CALLERS-only discriminator is not partial source admission.
@@ -408,13 +421,13 @@ def verify(root, *, _operation=None):
         require(set(record) == {'routing', 'functions'} and set(record['functions']) == set(names),
                 'wrong Sum2 guard caller function set: ' + module)
         path = 'extensions/carla/' + module + '.mojo'
-        text = _observe_text(root, path, (root / path).read_text(),
-                             _operation=_operation)
+        physical_text = _observe_text(root, path, (root / path).read_text(), _operation=_operation)
+        text = _typed_source.historical_text(root, path, physical_text, _operation=_operation)
         if path != cache_key.MODULE and path in cleanup_predecessors:
             text = cleanup_predecessors[path]
         if path == cache_key.MODULE:
             try:
-                text = cache_key.reviewed_text(root, path, text, **operation_args)
+                text = cache_key.reviewed_text(root, path, physical_text, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                  + module + ' (' + str(error) + ')') from error
@@ -428,15 +441,15 @@ def verify(root, *, _operation=None):
                         from . import seed_count_contracts as seed_count
                     else:
                         import seed_count_contracts as seed_count
-                    text = seed_count.reviewed_text(root, path, text, **operation_args)
+                    text = seed_count.reviewed_text(root, path, physical_text, **operation_args)
                 except (ValueError, OSError) as error:
                     raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                      + module + ' (' + str(error) + ')') from error
                 # Read and validate the physical extraction before normalizing
                 # its upper RHS. Historical reconstruction alone is insufficient.
-                live_map = _observe_bytes(
+                live_map = _typed_source.historical_bytes(root, path, _observe_bytes(
                     root, path, (root/path).read_bytes(),
-                    _operation=_operation).decode('utf-8')
+                    _operation=_operation), _operation=_operation).decode('utf-8')
                 live_observables = (
                     seed_count.score_live_observables(live_map)
                     if seed_count.sha(live_map) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
