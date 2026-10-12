@@ -29,10 +29,13 @@ remain separate gates.
 
 ## Lookup scope of newly bound native consumers
 
-The additional current native closure imports ten namespace families which
-were absent from the historical CARLA closure: `animation`, `cameras`, `core`,
+The current native closure imports ten additional namespace families.
+These families were absent from the historical CARLA closure. They are
+`animation`, `cameras`, `core`,
 `exporters`, `geometries`, `lights`, `materials`, `objects`, `postprocessing`,
-and `renderers`. Their bare namespace names are protected at the repository
+and `renderers`.
+
+Their bare namespace names are protected at the repository
 root, every physically discovered maintained `main` directory, and every
 explicitly bound native/compile-fail test directory. `render` keeps the separate
 qualified main-branch rule. All pre-333 families retain their previous policy.
@@ -43,18 +46,23 @@ include roots retain the conservative policy with no scoped exception.
 The concrete benign case is `assets/geometries/`, an asset directory outside
 those lookup roots. It is not individually allowlisted. The maintained Mojo
 resolver (`tools/affected.py:resolve`) searches the compiled entry directory
-and `-I` repository root for qualified imports; it does not prepend the parent
-of each imported library. Consequently a library's `geometries.shape` import
+and `-I` repository root for qualified imports. It does not prepend the parent
+of each imported library.
+
+Consequently a library's `geometries.shape` import
 cannot resolve to `assets/geometries/shape.mojo`. An explicit
 `assets.geometries.shape` import can, and would add its physical exact prefixes
 to the bound closure. A newly added entry in `assets` changes the complete
-source and entry census and is refused. This rule does not authorize new
-relative-import syntax: all current dependency bytes and import inventories
-remain exact, so adding such an import is refused before reuse of a proof.
+source and entry census and is refused.
 
-The new resolver regression tests cover the asset case, every old-family
-refusal, root/test/production-entry competitors, package/compiled alternates,
-qualified imports from libraries, and a newly introduced entry root. Current
+This rule does not authorize new relative-import syntax. All current
+dependency bytes and import inventories remain exact. A new relative import
+is refused before reuse of a proof.
+
+The new resolver regression tests cover the asset case and every old-family
+refusal. They cover root/test/production-entry competitors, package/compiled
+alternates, qualified imports from libraries, and a newly introduced entry root.
+Current
 owned-operation tests add late source/provider/native-witness changes,
 namespace/table mutation, symlinks, new packages/entries and sticky caught
 failures.
@@ -70,9 +78,12 @@ root. This independently supports excluding `assets/geometries/` when
 Adding such an entry or a qualified asset import changes the captured entry
 or exact import inventory and cannot reuse an existing admission.
 
-`carla-namespace-lookup-333.json` binds the exact script, frozen protocol,
-compiler version, six case outcomes and build streams. The 300-second outer
-protocol retained 40-second build and 5-second program limits. It completed
+`carla-namespace-lookup-333.json` summarizes the completed witness. It binds
+the exact probe script, compiler version, six case outcomes and time limits.
+The original protocol and build logs are retained separately. This portable
+summary does not replace raw evidence or admit a current source graph.
+
+The 300-second outer protocol retained 40-second build and 5-second program limits. It completed
 in 18.72 seconds with source, SDK and protocol unchanged and no live children.
 This lookup qualification is separate from final current-graph admission.
 
@@ -116,8 +127,8 @@ The following are isolated diagnostics, not final aggregate acceptance:
   The narrow dispatch regression then passed in both modes.
 - The next runtime trial reached the unchanged 45-second limit at 45.073
   seconds. A separately authorized diagnostic-only run on the identical source
-  completed with status PASS in 62.45 body seconds (62.61 stage seconds), with
-  unchanged source, SDK and protocol and no remaining children. This establishes
+  completed with status PASS in 62.45 body seconds (62.61 stage seconds).
+  Source, SDK and protocol were unchanged, and no children remained. This establishes
   source correctness for that diagnostic endpoint, not a pass of the 45-second
   maintained gate. It used no result cache or changed physical-read policy.
 - All 60 checker source/AST controls passed normally and under optimized
@@ -136,7 +147,7 @@ The following are isolated diagnostics, not final aggregate acceptance:
 Each consumer preserves its original physical read. Owned reads are observed
 before any historical projection. Where a public adapter accepts a supplied
 text view, that view's tokens must first match the independently read current
-physical bytes. Only those canonical physical bytes may enter an exact typed
+physical bytes. Only those canonical physical bytes can enter an exact typed
 inverse; caller comments never authorize a changed physical file. Stale
 historical supplied tokens cannot stand in for current source.
 
@@ -173,14 +184,16 @@ defaults. Wrapped public token helpers keep their effects and failure behavior.
 
 The V10 native composition retains every V7 production byte and the formatted
 conditioned-cubic witness. Eight newly introduced quantity tests or negative
-fixtures changed: three repair the finite-overflow and retained Float32 storage
-expectations, and five use the existing valid World fixture setup before the
-same deliberately wrong quantity argument. These changes were independently
+fixtures changed. Three repair the finite-overflow and retained Float32 storage
+expectations. Five use the existing valid World fixture setup before the same
+deliberately wrong quantity argument.
+
+These changes were independently
 reviewed and executed through the native qualification lane.
 
 A complete source/native closure regeneration, rather than an assumed digest
 substitution, took 7.149 seconds under pinned Python. It retained all 212 exact
-source edges, all import-closure sets, 234 new inputs and 383 native test inputs;
-only those eight identities changed in the three current-input tables. The
+source edges, all import-closure sets, 234 new inputs and 383 native test inputs.
+Only those eight identities changed in the three current-input tables. The
 240 independently replayed compile-fail expectations are also bound to their
 reviewed final bytes. Historical source and oracle records remain unchanged.
