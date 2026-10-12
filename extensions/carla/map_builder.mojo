@@ -443,6 +443,10 @@ struct MapBuilder(Movable):
             b: Its rate of change.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         self.create_lane_width_si(lane, s.value, a.value, b, c.value, d.value)
 
@@ -464,6 +468,10 @@ struct MapBuilder(Movable):
             b: Its rate of change.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(a)
@@ -494,6 +502,10 @@ struct MapBuilder(Movable):
             b: Its rate of change.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         self.create_lane_border_si(lane, s.value, a.value, b, c.value, d.value)
 
@@ -515,6 +527,10 @@ struct MapBuilder(Movable):
             b: Its rate of change.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(a)
@@ -541,6 +557,10 @@ struct MapBuilder(Movable):
             s: Where the record starts, in meters along the road.
             inner: The lift at the inner edge, in meters.
             outer: The lift at the outer edge, in meters.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or either height
+                is nonfinite.
         """
         self.create_lane_height_si(lane, s.value, inner.value, outer.value)
 
@@ -558,6 +578,10 @@ struct MapBuilder(Movable):
             s: Where the record starts, in meters along the road.
             inner: The lift at the inner edge, in meters.
             outer: The lift at the outer edge, in meters.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or either height
+                is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(inner)
@@ -583,6 +607,9 @@ struct MapBuilder(Movable):
             surface: The surface's name.
             friction: Its friction coefficient.
             roughness: Its roughness.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         self.create_lane_material_si(
             lane, s.value, surface, friction, roughness
@@ -604,6 +631,9 @@ struct MapBuilder(Movable):
             surface: The surface's name.
             friction: Its friction coefficient.
             roughness: Its roughness.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
 
@@ -620,6 +650,9 @@ struct MapBuilder(Movable):
             lane: The lane.
             s: Where the record starts, in meters along the road.
             value: The rule's text.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         self.create_lane_rule_si(lane, s.value, value)
 
@@ -632,6 +665,9 @@ struct MapBuilder(Movable):
             lane: The lane.
             s: Where the record starts, in meters along the road.
             value: The rule's text.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
 
@@ -655,6 +691,10 @@ struct MapBuilder(Movable):
             back: Meters of sight back.
             left: Meters of sight left.
             right: Meters of sight right.
+
+        Raises:
+            Error: If the station or any sight distance is nonfinite or
+                negative.
         """
         self.create_lane_visibility_si(
             lane, s.value, forward.value, back.value, left.value, right.value
@@ -678,6 +718,10 @@ struct MapBuilder(Movable):
             back: Meters of sight back.
             left: Meters of sight left.
             right: Meters of sight right.
+
+        Raises:
+            Error: If the station or any sight distance is nonfinite or
+                negative.
         """
         _ = _nonnegative_si(s)
         _ = _nonnegative_si(forward)
@@ -698,6 +742,9 @@ struct MapBuilder(Movable):
             lane: The lane.
             s: Where the record starts, in meters along the road.
             restriction: Who may use the lane.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         self.create_lane_access_si(lane, s.value, restriction)
 
@@ -710,6 +757,9 @@ struct MapBuilder(Movable):
             lane: The lane.
             s: Where the record starts, in meters along the road.
             restriction: Who may use the lane.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
 
@@ -723,16 +773,15 @@ struct MapBuilder(Movable):
         s: Length64,
         max: Velocity64,
     ) raises:
-        """Checked typed boundary. Add a numeric lane speed without dropping its source unit.
+        """Add a checked lane speed from a quantity.
 
         Args:
             lane: The lane.
             s: Where the record starts, in meters along the road.
-            max: The finite nonnegative limit in the source unit.
-            unit: The source unit; omitted means m/s.
+            max: The finite nonnegative speed quantity.
 
         Raises:
-            Error: If the source number or unit is invalid.
+            Error: If the station or speed is nonfinite or negative.
         """
         self.create_lane_speed_opendrive(lane, s.value, max.value, "m/s")
 
@@ -815,6 +864,10 @@ struct MapBuilder(Movable):
             type_name: The name of the mark's `type` child.
             type_width: The width of the mark's `type` child.
             is_rht: The traffic rule of the lane's road.
+
+        Raises:
+            Error: If the station, width, height, or type width is nonfinite
+                or negative.
         """
         self.create_road_mark_si(
             lane,
@@ -865,6 +918,10 @@ struct MapBuilder(Movable):
             type_name: The name of the mark's `type` child.
             type_width: The width of the mark's `type` child.
             is_rht: The traffic rule of the lane's road.
+
+        Raises:
+            Error: If the station, width, height, or type width is nonfinite
+                or negative.
         """
         _ = _nonnegative_si(s)
         _ = _nonnegative_si(width)
@@ -913,6 +970,10 @@ struct MapBuilder(Movable):
             s: Where the line starts, in meters along the road.
             rule: The line's rule.
             width: The line's width, in meters.
+
+        Raises:
+            Error: If a dimensional value is nonfinite, or the station,
+                painted length, gap, or width is negative.
         """
         self.create_road_mark_type_line_si(
             lane,
@@ -950,6 +1011,10 @@ struct MapBuilder(Movable):
             s: Where the line starts, in meters along the road.
             rule: The line's rule.
             width: The line's width, in meters.
+
+        Raises:
+            Error: If a dimensional value is nonfinite, or the station,
+                painted length, gap, or width is negative.
         """
         _ = _nonnegative_si(length)
         _ = _nonnegative_si(space)
@@ -992,6 +1057,10 @@ struct MapBuilder(Movable):
             b: The slope.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         self.add_road_elevation_profile_si(
             road, s.value, a.value, b, c.value, d.value
@@ -1015,6 +1084,10 @@ struct MapBuilder(Movable):
             b: The slope.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(a)
@@ -1045,6 +1118,10 @@ struct MapBuilder(Movable):
             b: Its rate of change.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         self.create_section_offset_si(
             road, s.value, a.value, b, c.value, d.value
@@ -1068,6 +1145,10 @@ struct MapBuilder(Movable):
             b: Its rate of change.
             c: The quadratic term, per meter.
             d: The cubic term, per square meter.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or any polynomial
+                coefficient is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(a)
@@ -1087,17 +1168,16 @@ struct MapBuilder(Movable):
         type: String,
         max: Velocity64,
     ) raises:
-        """Checked typed boundary. Add a numeric road speed without dropping its unit.
+        """Add a checked road speed from a quantity.
 
         Args:
             road: The road's index.
             s: Where the record starts, in meters.
             type: The road type; the compatibility record type stays Town.
-            max: The finite nonnegative source limit.
-            unit: The source unit; omitted means m/s.
+            max: The finite nonnegative speed quantity.
 
         Raises:
-            Error: If the number or unit is invalid.
+            Error: If the station or speed is nonfinite or negative.
         """
         self.create_road_speed_opendrive(road, s.value, type, max.value, "m/s")
 
@@ -1183,6 +1263,10 @@ struct MapBuilder(Movable):
             width: Its width, in meters.
             length: Its length, in meters.
             points: Its outline's corners.
+
+        Raises:
+            Error: If a dimensional value or corner coordinate is nonfinite,
+                or the station, width, or length is negative.
         """
         self.add_road_object_crosswalk_si(
             road,
@@ -1229,6 +1313,10 @@ struct MapBuilder(Movable):
             width: Its width, in meters.
             length: Its length, in meters.
             points: Its outline's corners.
+
+        Raises:
+            Error: If a dimensional value or corner coordinate is nonfinite,
+                or the station, width, or length is negative.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(t)
