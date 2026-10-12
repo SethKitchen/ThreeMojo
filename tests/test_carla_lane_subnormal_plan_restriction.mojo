@@ -18,7 +18,9 @@ from tests.test_carla_cross_candidate_certificates import _road
 
 def test_planar_restriction_removes_a_subnormal_nonminimizing_cell() raises:
     var road = _road(width=2e-200)
-    road.info.elevations[0].polynomial = CubicPolynomial(0, 1e-40, 0, 0, 0)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
+        0, 1e-40, 0, 0, 0
+    )
     var at = bitcast[DType.float64](UInt64(0x1E6BB67AE8584CAA))
     var low = _next_down(at)
     var high = _next_up(at)
