@@ -35,4 +35,4 @@ edge and reuses this witness admission rather than repinning these records.
 
 Source equivalence is not native qualification. The four witnesses still need
 fresh native and coverage execution on the final source under the existing
-limits; Python controls must run in both ordinary and optimized modes.
+limits. Python controls must run in both ordinary and optimized modes.
