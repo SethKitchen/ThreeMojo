@@ -197,7 +197,7 @@ Follow these rules in the converted rasterizer and device-helper code:
 
 `make check-gpu-air` requires one nonempty AIR module for each discovered, plainly named kernel launch. Each generated record prints `function_name` and AIR from the same compiler result. `!air.kernel` metadata must select a complete, `metal.kernel`-marked definition with that exact symbol. Missing, duplicate or reused entry names fail the check.
 
-Every `enqueue_function` reference in the two GPU modules must name a local, non-parameterized top-level kernel. Imported kernels, specialized launches and other unsupported syntax fail before emission. Comments and strings do not count as launches.
+Every `enqueue_function` reference in the three GPU modules, `render/gpu.mojo`, `render/gpu_vxgi.mojo` and `extensions/water/gpu.mojo`, must name a local, non-parameterized top-level kernel. Imported kernels, specialized launches and other unsupported syntax fail before emission. Comments and strings do not count as launches.
 
 Source-name prefixes can be ambiguous because the pinned emitter truncates names and includes specialization text. The check uses the exact compiler-returned symbol. Other metadata forms fail closed.
 
@@ -206,6 +206,22 @@ The checker compares direct-call argument and return types with definitions or d
 This check covers supported call types. It does not validate every LLVM rule or execute GPU code. It needs MAX, but it needs no GPU and no Apple toolchain. CI runs it.
 
 The first compile of a changed `rasterize_kernel` takes about 15 minutes on an Apple M4 Max. Metal caches the result, and a later compile of the same kernel takes seconds.
+
+## Kernel size on Metal
+
+Keep each expensive helper at one call site in `rasterize_kernel`. Mojo marks every function `alwaysinline` for Metal, also one marked `@no_inline`. So each call site copies the whole callee into the kernel.
+
+The Metal compiler in macOS 26.7 crashes on a kernel that holds too many copies of some code. The crash is in `MTLCompilerService`, a `SmallVector` that cannot grow. Mojo reports only "Failed to create compute pipeline state", after several retries. The offline translator in the Metal Toolchain compiles the same AIR. The size of the kernel does not predict the crash, but fewer copies make it go away.
+
+Follow these rules in the rasterizer and in the code it calls:
+
+- Run node programs through one `run_nodes` call in a loop over the outputs. The fragment outputs and `thickness_of` do this.
+- Shape a light's shadow at one call site. Each lighting function walks every light in one loop through `_light_slot`, and `_light_through` calls `shape.shaped` once for every kind.
+- Read a node program's texture through `NodeSource.sample_either`, so that a plain read and an explicit-gradient read share one footprint.
+- Use one call site in a loop for each read of `_sample_filtered`, `_sample_level` and `_fetch`.
+- Keep exponent-tagged expansions (`math/scaled_products.mojo`) out of code that runs for each texel. `_principal_axes` divides by a power of two instead.
+
+The first run of a changed kernel compiles it in about four minutes on an M4 Max. Metal caches the result. Run one GPU test first, and check that it passes before you start the whole suite. A crash shows as `MTLCompilerService` reports in `~/Library/Logs/DiagnosticReports`.
 
 ## Teardown
 
