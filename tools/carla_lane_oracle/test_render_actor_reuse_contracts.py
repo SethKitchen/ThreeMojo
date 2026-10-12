@@ -14,6 +14,20 @@ import winner_sign_contracts as winner
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# This module's fixed byte/line/body assertions describe the historical main
+# graph. The #333 current graph has separate physical admission/mutation tests.
+_CURRENT_SOURCE_ROOT = ROOT
+
+
+def setUpModule():
+    global ROOT
+    import _full_audit_test_fixtures as historical_fixtures
+    owner = type('HistoricalModuleFixture', (), {
+        'addCleanup': staticmethod(unittest.addModuleCleanup)})()
+    ROOT = historical_fixtures.copy_historical_boundary_root(owner, _CURRENT_SOURCE_ROOT)
+    unittest.addModuleCleanup(globals().__setitem__, 'ROOT', _CURRENT_SOURCE_ROOT)
+
+
 def patched_bytes(target, changed):
     read = Path.read_bytes
     return patch.object(Path, 'read_bytes',
