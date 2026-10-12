@@ -89,9 +89,6 @@ struct GnssDescription(ImplicitlyCopyable):
     def latitude_stddev_angle(self) raises -> Angle:
         """Return the checked latitude stddev as a quantity.
 
-        Args:
-            self: The raw CARLA settings.
-
         Returns:
             The latitude stddev with its unit.
 
@@ -103,9 +100,6 @@ struct GnssDescription(ImplicitlyCopyable):
 
     def latitude_bias_angle(self) raises -> Angle:
         """Return the checked latitude bias as a quantity.
-
-        Args:
-            self: The raw CARLA settings.
 
         Returns:
             The latitude bias with its unit.
@@ -119,12 +113,11 @@ struct GnssDescription(ImplicitlyCopyable):
     def set_latitude_noise(mut self, stddev: Angle, bias: Angle) raises:
         """Set the latitude noise after checking both quantities.
 
+        Both raw CARLA fields are updated together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw CARLA fields are updated together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -139,9 +132,6 @@ struct GnssDescription(ImplicitlyCopyable):
     def longitude_stddev_angle(self) raises -> Angle:
         """Return the checked longitude stddev as a quantity.
 
-        Args:
-            self: The raw CARLA settings.
-
         Returns:
             The longitude stddev with its unit.
 
@@ -153,9 +143,6 @@ struct GnssDescription(ImplicitlyCopyable):
 
     def longitude_bias_angle(self) raises -> Angle:
         """Return the checked longitude bias as a quantity.
-
-        Args:
-            self: The raw CARLA settings.
 
         Returns:
             The longitude bias with its unit.
@@ -169,12 +156,11 @@ struct GnssDescription(ImplicitlyCopyable):
     def set_longitude_noise(mut self, stddev: Angle, bias: Angle) raises:
         """Set the longitude noise after checking both quantities.
 
+        Both raw CARLA fields are updated together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw CARLA fields are updated together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
@@ -189,9 +175,6 @@ struct GnssDescription(ImplicitlyCopyable):
     def altitude_stddev_length(self) raises -> Length:
         """Return the checked altitude stddev as a quantity.
 
-        Args:
-            self: The raw CARLA settings.
-
         Returns:
             The altitude stddev with its unit.
 
@@ -203,9 +186,6 @@ struct GnssDescription(ImplicitlyCopyable):
 
     def altitude_bias_length(self) raises -> Length:
         """Return the checked altitude bias as a quantity.
-
-        Args:
-            self: The raw CARLA settings.
 
         Returns:
             The altitude bias with its unit.
@@ -219,12 +199,11 @@ struct GnssDescription(ImplicitlyCopyable):
     def set_altitude_noise(mut self, stddev: Length, bias: Length) raises:
         """Set the altitude noise after checking both quantities.
 
+        Both raw CARLA fields are updated together.
+
         Args:
             stddev: The nonnegative standard deviation.
             bias: The signed bias.
-
-        Returns:
-            Nothing; both raw CARLA fields are updated together.
 
         Raises:
             Error: If a converted value is nonfinite or the deviation is negative.
