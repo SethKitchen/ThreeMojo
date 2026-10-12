@@ -68,24 +68,39 @@ The existing `HairLook.shadows` limit still bounds the darkness. The scalp-facin
 
 This proxy is not the moving density volume. The ambient term uses that proxy. Direct self-shadow uses the rebuilt density field.
 
-## Reference scenes and checks
+## Reference scenes and requirements
 
-The acceptance scenes are procedural. They add no scanned reference data.
+The strand path has thirteen measurable visual requirements. The CPU rasterizer meets all of them. The [reference report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-reference-298.md) states each requirement and its measurement.
 
-- Fine silhouettes: horizontal subpixel fibers with zero, half and full opacity
-- Crossing strands: two colors at distinct depths, reversed submission order and repeated frames
-- Opaque occlusion: a foreground surface covering all strand samples
-- Backlight: the existing Marschner TT and TRT controls with dynamic optical-depth attenuation
-- Moving long hair: retained positions, changing tangents and shading fields, with a rebuilt density volume
-- Cast shadows: directional, spot and point light maps with opacity, layer and visibility controls
+![Fine fibers and their ground truth, crossing layers, and a curtain that is self-shadowed, backlit and moving](out/hair_reference.png)
 
-`test_hair_coverage` checks image and depth behavior. Its short-strand control checks visibility, bounded sample energy and the response to width. It does not assert analytic cap-area conservation. `test_hair_dynamic_fields` checks projected-area conservation, moving shadow direction, motion fields and retained allocations.
+`extensions/humanoid/skeleton/head/hair/reference.mojo` builds the scenes. They are procedural and add no reference data.
 
-`test_strand_hash` checks fixed unsigned-integer witnesses and state packing. The original wide-line, material-flag, hair and simulation suites remain compatibility controls. `test_gpu` includes device-only partial-coverage and cast-shadow parity fixtures.
+- Fine silhouettes: `add_fine_silhouettes` draws tilted fibers of one width and one opacity.
+- Crossing strands: `add_crossing_strands` draws two layers at distinct depths, wide or fine.
+- Self-shadow, backlight and moving long hair: `HairReferenceRig` hangs four rows of long guide and follower strands. `advance` steps them in the wind.
+- Cast shadow: `HairReferenceRig(receiver=True)` adds a receiver plane and a shadow-casting light.
 
-The selected open-source targets remain the existing Frostbitten Hair WebGPU shading and dynamics model and TressFX guide/follower construction. They guide the visual comparisons. This implementation does not reproduce their complete renderer. The existing pinned asset revisions and licenses remain in [Converted assets](Converted-assets) and `THIRD-PARTY-NOTICES.md`.
+The coverage ground truth is the same scene with solid coverage at eight times the size, box-filtered and multiplied by the opacity. `supersampled_coverage`, `coverage_samples`, `total_coverage_error` and `block_coverage_error` compare the two. The requirements are:
 
-The new coverage, density grid and procedural scenes add no third-party asset or implementation dependency.
+- Coverage: no bias beyond three binomial standard deviations. The error after a 16-pixel filter has a limit for each width from a quarter pixel to two pixels.
+- Transparency: where two layers cross, the visible fractions match alpha compositing within 0.05. Submission order, worker count and repetition do not change a sample.
+- Self-shadow: rows farther from a front light are darker, a denser volume is darker, and no row falls below `1 - HairLook.shadows` of the first.
+- Backlight: the TT lobe brightens a backlit curtain at least 1.5 times and adds less than one percent under a front light. The optical depth decreases toward the light.
+- Moving long hair: repeatable frames, covered samples within five percent of the rest pose, and a rebuilt density volume.
+- Cast shadow: the receiver darkens, and more opaque strands darken it more.
+
+`examples/hair_reference.mojo` renders the image above with the CPU rasterizer. `test_hair_reference_scenes` checks the requirements. `test_gpu` draws the same scenes on the GPU rasterizer and requires the same image. Those device tests compile for `sm_80` without a GPU, but no device has run them yet.
+
+`test_hair_coverage` checks opaque occlusion, light-map samples for directional, spot and point lights and short subpixel caps. It does not assert analytic cap-area conservation. `test_hair_dynamic_fields` checks projected-area conservation, moving shadow direction, motion fields and retained allocations. `test_strand_hash` checks fixed unsigned-integer witnesses and state packing.
+
+### The selected strategy
+
+Keep stochastic coverage with opaque depth for strands, the stochastic light depth map for cast shadows and the density volume for self-shadow. This strategy is order-independent by construction, and both rasterizers share its arithmetic. It does not blend, so thin and transparent fibers show noise. There is no temporal accumulation to remove that noise.
+
+The selected open-source reference is Frostbitten Hair WebGPU, with TressFX for guide and follower construction. Frostbitten rasterizes strands in software with analytic anti-aliasing, and blends them front to back in depth slices. This port does not reproduce that renderer. The report compares the two feature by feature. The pinned revisions and licenses remain in [Converted assets](Converted-assets) and `THIRD-PARTY-NOTICES.md`.
+
+The strand path does not depend on the generic OIT pass of issue [251](https://github.com/SethKitchen/ThreeMojo/issues/251). That weighted blended pass keeps one layer for each draw at each pixel, and a groom is one draw that covers itself. It also selects only transparent materials, and strand materials are opaque.
 
 ## CPU stage costs
 
