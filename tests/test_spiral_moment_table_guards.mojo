@@ -32,7 +32,7 @@ from std.testing import TestSuite, assert_equal, assert_true, assert_false
 
 
 def _geometry() raises -> RoadGeometry:
-    var result = RoadGeometry(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
+    var result = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
     result.curvature_end = 0.05
     return result^
 
