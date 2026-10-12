@@ -20,6 +20,39 @@ The port follows `LibCarla/source/carla/trafficmanager` at CARLA commit `1360bb9
 | `traffic_manager_shared` | `TrafficManagerShared`, the frames, `TrafficCommand`, `CommandKind` and `TrafficAction`. |
 | `traffic_manager_constants` | The constants of CARLA's `Constants.h`, with their units. |
 
+## Actor id boundaries
+
+An actor argument must be an `ActorId`. Its value must fit an unsigned
+32-bit integer: 0 through 4294967295. A constructed `ActorId(-1)` or
+`ActorId(4294967296)` raises before a lookup, cache return or state change.
+The check also applies to actor ids in command records, light-state lists
+and stage input frames.
+
+Zero remains the valid `NO_ACTOR` sentinel. Unknown ids within the range
+keep the documented defaults or no-op removal behavior. Operations that
+need a living or tracked actor still require one. Thus registration refuses
+zero and unknown ids, but an unset parameter query can return its default.
+
+Parameter getters, actor-set queries, shared-buffer queries, command
+factories and `VehicleLightStage.update_world_info` now raise on an invalid
+actor id. Callers must propagate or handle that error. A query of an unknown
+valid id does not become an invalid-id error.
+
+Bulk insert, remove, register, unregister and command application check all
+input ids before they change state. Registration also checks that every
+actor is alive before it registers any actor. Light-state updates check the
+whole list before replacing the prior lights or weather. Path push and pop
+check the actor before they change the path. These rules prevent partial
+changes for invalid ids. They do not promise rollback for other world errors
+during command execution.
+
+`tests/test_carla_traffic_actor_boundaries.mojo` covers negative ids,
+unsigned overflow, zero, the maximum valid id, default queries and unchanged
+state after refusal. The existing
+`tests/compile_fail/an_actor_id_is_not_a_bare_int.mojo` proves that a bare
+integer is not an actor id. Internal integer dictionary keys keep their
+storage representation; public entry points establish the id contract.
+
 ## Drive vehicles with the traffic manager
 
 The traffic manager needs a world in synchronous mode with a fixed step. Register the vehicles, set the parameters, and call `tick` in place of `world.tick`.
@@ -257,6 +290,7 @@ explain why proven corrections take priority over upstream defects.
 - The remote traffic manager, its server and its client are not ported. They are a network transport.
 - Asynchronous mode has no worker thread. The caller calls `step`.
 - The world never makes an actor dormant. A caller can mark one with `ACTOR_DORMANT`.
+- Actor inputs refuse values outside UInt32 before reading or changing state. Zero remains valid. Invalid bulk inputs do not partly register, unregister or update actors. These checks affect constructed invalid ids; valid scenario ids and recording formats are unchanged.
 - CARLA walks hash sets in hash order. Here a set of actors is sorted by id.
 - Where CARLA reads past the end of an empty list, the port raises an error or stops the walk. Each docstring says which.
 - A NaN pedal, which CARLA sends for a desired speed of zero, goes to the world as zero.
