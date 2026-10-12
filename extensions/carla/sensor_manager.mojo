@@ -475,14 +475,10 @@ struct SensorManager(Movable):
     def __init__(out self):
         """Create an empty manager at the default CAM epoch offset zero.
 
-        Args:
-            None.
+        This constructor does not throw.
 
         Returns:
             The manager with no listened sensors.
-
-        Raises:
-            Never.
         """
         self.slots = List[_Slot]()
         self.generation_delta0 = 0
@@ -491,15 +487,15 @@ struct SensorManager(Movable):
     def from_cam_epoch_milliseconds(generation_delta0: Int) -> SensorManager:
         """Set an exact integer CAM epoch offset without a float conversion.
 
+        The Int representation supplies the signed range. This factory does
+        not throw.
+
         Args:
             generation_delta0: Signed milliseconds since 2004-01-01 UTC.
                 Every representable Int is retained, including pre-epoch values.
 
         Returns:
             An empty manager with the unchanged source epoch offset.
-
-        Raises:
-            Never; the Int representation supplies the signed range.
         """
         var manager = SensorManager()
         manager.generation_delta0 = generation_delta0
