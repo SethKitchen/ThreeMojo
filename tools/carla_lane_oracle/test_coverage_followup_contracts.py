@@ -13,23 +13,44 @@ import winner_sign_contracts as winner
 import border_parser_contracts as border
 ROOT=Path(__file__).resolve().parents[2]
 
+
 class CoverageFollowupContracts(unittest.TestCase):
     def test_current_cleanup_adds_exactly_one_canonical_dependency(self):
+        prior_successors = cleanup_fixtures.WINNER_PRE_BORDER_SUCCESSORS
+        new_dependency = cleanup_fixtures.WINNER_FULL_AUDIT_NEW_DEPENDENCY
         result = winner.verify(ROOT)
-        self.assertEqual((result['reviewed_cleanup_successors'],
-                          result['canonical_dependencies_unchanged']), (20, 92))
+        current = cleanup_fixtures.assert_winner_canonical_partition(
+            self, ROOT, result, prior_successors | {border.MODULE, new_dependency},
+            (20, 92))
+        canonical = json.loads((ROOT/winner.MIGRATION).read_bytes())['canonical_source_unchanged']
+        full_audit = cleanup_fixtures.cleanup
+        self.assertEqual({path for path in full_audit.SOURCE_PATHS
+                          if canonical[path] == full_audit.BEFORE_SHA256[path]},
+                         {new_dependency})
         historical = cleanup_fixtures.historical_root(self, ROOT)
+        for name in full_audit.SOURCE_PATHS:
+            self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(),
+                             full_audit.AFTER_SHA256[name])
+            self.assertEqual(hashlib.sha256((historical/name).read_bytes()).hexdigest(),
+                             full_audit.BEFORE_SHA256[name])
         path = historical/border.MODULE
         original = path.read_text()
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), border.AFTER_SHA256)
         record = border.read_record(historical)
-        for text, expected in ((original, (19, 93)),
-                (border.predecessor_source(original, record), (18, 94))):
-            with self.subTest(expected=expected):
-                path.write_text(text)
-                result = winner.verify(historical)
-                self.assertEqual((result['reviewed_cleanup_successors'],
-                                  result['canonical_dependencies_unchanged']), expected)
-        path.write_text(original)
+        states = ((original, (19, 93), {border.MODULE}),
+                  (border.predecessor_source(original, record), (18, 94), set()))
+        try:
+            for text, expected, border_paths in states:
+                with self.subTest(expected=expected):
+                    path.write_text(text)
+                    result = winner.verify(historical)
+                    changed = cleanup_fixtures.assert_winner_canonical_partition(
+                        self, historical, result, prior_successors | border_paths, expected)
+                    self.assertEqual(current - changed,
+                                     {new_dependency} | ({border.MODULE} - border_paths))
+                    self.assertEqual(changed - current, set())
+        finally:
+            path.write_text(original)
 
     def test_six_module_edges_and_shared_source_chain(self):
         record=followup.verify(ROOT);prior=invariant.read_record(ROOT)
@@ -40,11 +61,15 @@ class CoverageFollowupContracts(unittest.TestCase):
         self.assertEqual(step['before_sha256'],prior['sources']['extensions/carla/curve_sample_dispatch.mojo']['after_sha256'])
         historical = cleanup_fixtures.historical_root(self, ROOT)
         result=winner.verify(historical)
-        # Four reviewed #333 runtime boundary edges join each state.
+        # Retain the pre-extraction counts; the physical fixture keeps
+        # the three shared-helper successors in either border-parser state.
         expected = {border.BEFORE_SHA256: (18, 94), border.AFTER_SHA256: (19, 93)}
         parser_sha = hashlib.sha256((historical/border.MODULE).read_bytes()).hexdigest()
         self.assertIn(parser_sha, expected)
-        self.assertEqual((result['reviewed_cleanup_successors'],result['canonical_dependencies_unchanged']),expected[parser_sha])
+        border_paths = {border.MODULE} if parser_sha == border.AFTER_SHA256 else set()
+        prior_successors = cleanup_fixtures.WINNER_PRE_BORDER_SUCCESSORS
+        cleanup_fixtures.assert_winner_canonical_partition(
+            self, historical, result, prior_successors | border_paths, expected[parser_sha])
         self.assertEqual(len(prior['sources'])+4,8)
         self.assertEqual(112-8,104)
 
