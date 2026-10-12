@@ -52,8 +52,8 @@ def test_unresolved_quadrature_cells_spend_global_steps() raises:
 
 def test_sufficient_counted_proof_retains_original_bounds_and_terms() raises:
     var road = _road(SPIRAL)
-    var first = road.lane_transform(0, 0, 0.1).location
-    var last = road.lane_transform(0, 0, 2.1).location
+    var first = road.lane_transform_meters(0, 0, 0.1).location
+    var last = road.lane_transform_meters(0, 0, 2.1).location
     var original_capture = _SpiralRootCapture()
     var counted_capture = _SpiralRootCapture()
     var original = _chord_certificate_capture(
