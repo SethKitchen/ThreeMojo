@@ -850,7 +850,7 @@ def test_stop_and_affected_waypoints() raises:
 
 def test_landmark_queries() raises:
     var world = _world()
-    var start = world.map.waypoint_xodr(
+    var start = world.map.waypoint_xodr_float32(
         RoadId(1), LaneId(-1), Length(10, METER)
     ).value()
     var ahead = world.get_traffic_lights_from_waypoint(start, Length64(38))
@@ -862,7 +862,7 @@ def test_landmark_queries() raises:
     assert_equal(len(further), 2)
     assert_equal(further[0], L2001)
     assert_equal(further[1], L2005)
-    var end = world.map.waypoint_xodr(
+    var end = world.map.waypoint_xodr_float32(
         RoadId(2), LaneId(1), Length(49, METER)
     ).value()
     assert_equal(
@@ -882,7 +882,7 @@ def test_landmark_queries() raises:
     for bad in [inf[DType.float64](), nan[DType.float64](), -1.0]:
         with assert_raises(contains="light search distance"):
             _ = world.get_traffic_lights_from_waypoint(start, Length64(bad))
-    var east = world.map.waypoint_xodr(
+    var east = world.map.waypoint_xodr_float32(
         RoadId(2), LaneId(-1), Length(0, METER)
     ).value()
     # Ahead on road 2 are the 60 km/h sign and light 2003. The light's
@@ -1215,16 +1215,16 @@ def test_stop_sign_machine() raises:
     assert_equal(len(sign.timers), 3)
     sign.timers = [2.0]
     for _ in range(7):
-        assert_equal(len(sign.tick_timers(0.25)), 0)
+        assert_equal(len(sign.tick_timers_seconds(0.25)), 0)
     # The check at 2 s finds B and waits another second.
-    orders = sign.tick_timers(0.25)
+    orders = sign.tick_timers_seconds(0.25)
     assert_equal(len(orders), 1)
     assert_equal(orders[0].state.value, RED.value)
     assert_equal(sign.timers[0], 1.0)
     sign.end_check(b)
     assert_equal(len(sign.vehicles_to_check), 0)
-    _ = sign.tick_timers(0.25)
-    orders = sign.tick_timers(0.25)
+    _ = sign.tick_timers_seconds(0.25)
+    orders = sign.tick_timers_seconds(0.25)
     assert_equal(len(orders), 1)
     assert_equal(orders[0].vehicle, a)
     assert_equal(orders[0].state.value, GREEN.value)
@@ -1249,15 +1249,15 @@ def test_yield_sign_machine() raises:
     assert_equal(len(sign.vehicles_to_check), 1)
     sign.end_check(b)
     sign.end_check(b)
-    _ = sign.tick_timers(0.25)
-    orders = sign.tick_timers(0.25)
+    _ = sign.tick_timers_seconds(0.25)
+    orders = sign.tick_timers_seconds(0.25)
     assert_equal(orders[len(orders) - 1].state.value, GREEN.value)
     # A check with no vehicle anywhere gives no order.
     var idle = TrafficSign(
         SignalId("2"), YIELD_SIGN, _pose(0, 0, 0, 0), Velocity(0)
     )
     idle.end_check(ActorId(5))
-    assert_equal(len(idle.tick_timers(0.5)), 0)
+    assert_equal(len(idle.tick_timers_seconds(0.5)), 0)
     # A vehicle in both lists leaves the check list.
     var c = ActorId(3)
     _ = sign.begin_check(c)
