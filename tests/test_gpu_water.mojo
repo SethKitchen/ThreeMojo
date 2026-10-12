@@ -20,6 +20,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from extensions.water.frame import WaterScene, _radiance_image, camera_look
 from extensions.water.gpu import GpuWater
+from extensions.water.optics import hash12
 from extensions.water.pebbles import PebbleBed
 from extensions.water.resolution import SpectrumResolution
 from extensions.water.view import CAUSTICS, FRAME
@@ -31,17 +32,23 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.math import isfinite
+from std.memory import bitcast
 from std.pathlib import Path
-from std.sys import has_nvidia_gpu_accelerator
+from std.ffi import external_call
+from std.sys import (
+    CompilationTarget,
+    has_accelerator,
+    has_apple_gpu_accelerator,
+)
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 
 
 def _skipped(name: String) -> Bool:
     # An early return looks like a pass, so a skip says so.
-    if has_nvidia_gpu_accelerator():
+    if has_accelerator():
         return False
-    print("SKIP (no NVIDIA GPU):", name)
+    print("SKIP (no GPU):", name)
     return True
 
 
@@ -291,16 +298,39 @@ def test_a_failed_frame_leaves_the_gpu_and_the_image_usable() raises:
 
 
 def _resident_bytes() raises -> Int:
-    # Linux reports resident pages second in /proc/self/statm.
-    var fields = Path("/proc/self/statm").read_text().split(" ")
-    return Int(fields[1]) * 4096
+    comptime if CompilationTarget.is_macos():
+        # macOS has no /proc. `getrusage` gives the peak resident size in
+        # bytes, the fifth word. A peak that does not grow means the size
+        # did not grow.
+        var usage = Array[Int64, 18](fill=0)
+        if external_call["getrusage", Int32](Int32(0), usage.unsafe_ptr()) != 0:
+            raise Error("getrusage failed")
+        return Int(usage[4])
+    else:
+        # Linux reports resident pages second in /proc/self/statm.
+        var fields = Path("/proc/self/statm").read_text().split(" ")
+        return Int(fields[1]) * 4096
+
+
+def _released(probe: DeviceContext, empty: UInt) raises -> Bool:
+    # Free device memory is back where it was, within 1 MiB. Not asked of a
+    # GPU that shares the system's memory; see `_device_memory_is_its_own`.
+    if not _device_memory_is_its_own():
+        return True
+    return probe.get_memory_info()[0] + (1 << 20) >= empty
+
+
+def _device_memory_is_its_own() -> Bool:
+    # An Apple GPU shares the system's memory, so the free memory a context
+    # reports moves with every other process on the machine.
+    return not has_apple_gpu_accelerator()
 
 
 def test_gpu_resources_stay_bounded_and_are_released() raises:
     if _skipped("gpu resources stay bounded and are released"):
         return
     # A separate context reads free device memory for the whole device.
-    var probe = DeviceContext(api="cuda")
+    var probe = DeviceContext()
     var empty = probe.get_memory_info()[0]
     var scene = _scene()
     var sizes = [(64, 48), (97, 61), (128, 72)]
@@ -322,28 +352,32 @@ def test_gpu_resources_stay_bounded_and_are_released() raises:
             var size = sizes[frame % 3]
             _ = _gpu(gpu, scene, -0.72, size[0], size[1])
             lowest = min(lowest, probe.get_memory_info()[0])
-        # Sixty frames at three sizes leave free memory where warm-up
-        # left it. Allocator caching settles in the warm-up frames.
-        assert_true(
-            probe.get_memory_info()[0] + (1 << 20) >= settled, String(round)
-        )
-        # Free memory read after each frame stays within 16 MiB of where
-        # warm-up left it. This is a post-frame reading, not the in-frame
-        # peak; see the storage bound in the GPU water report.
-        assert_true(settled - lowest <= 16 << 20, String(settled - lowest))
+        if _device_memory_is_its_own():
+            # Sixty frames at three sizes leave free memory where warm-up
+            # left it. Allocator caching settles in the warm-up frames.
+            assert_true(
+                probe.get_memory_info()[0] + (1 << 20) >= settled,
+                String(round),
+            )
+            # Free memory read after each frame stays within 16 MiB of
+            # where warm-up left it. This is a post-frame reading, not the
+            # in-frame peak; see the storage bound in the GPU water report.
+            assert_true(settled - lowest <= 16 << 20, String(settled - lowest))
         # Host memory does not grow with the frame count.
         assert_true(_resident_bytes() - host <= 32 << 20)
         # Dropping the object releases its context and its buffers.
         _ = gpu^
-        assert_true(
-            probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
-        )
+        if _device_memory_is_its_own():
+            assert_true(
+                probe.get_memory_info()[0] + (1 << 20) >= empty,
+                String(round),
+            )
 
 
 def test_gpu_water_releases_after_construction_and_failure() raises:
     if _skipped("gpu water releases after construction and failure"):
         return
-    var probe = DeviceContext(api="cuda")
+    var probe = DeviceContext()
     var empty = probe.get_memory_info()[0]
     var scene = _scene()
     for failing in [False, True]:
@@ -354,15 +388,13 @@ def test_gpu_water_releases_after_construction_and_failure() raises:
                 _ = _gpu(gpu, scene, -0.72, 64, 48)
         # Dropped with no frame, or after a failed one.
         _ = gpu^
-        assert_true(
-            probe.get_memory_info()[0] + (1 << 20) >= empty, String(failing)
-        )
+        assert_true(_released(probe, empty), String(failing))
 
 
 def test_a_failed_construction_releases_and_the_next_one_works() raises:
     if _skipped("a failed construction releases and the next one works"):
         return
-    var probe = DeviceContext(api="cuda")
+    var probe = DeviceContext()
     var empty = probe.get_memory_info()[0]
     var scene = _scene()
     var bed = _bed()
@@ -371,16 +403,69 @@ def test_a_failed_construction_releases_and_the_next_one_works() raises:
         # fails. Its buffer and its context are released.
         with assert_raises(contains="failed after its first copy"):
             _ = GpuWater(bed, _fail_after_first_upload=True)
-        assert_true(
-            probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
-        )
+        assert_true(_released(probe, empty), String(round))
         # The next construction works and shades as the CPU does.
         var gpu = GpuWater(bed)
         _agree(_gpu(gpu, scene, -0.72, 48, 32), _cpu(scene, bed, -0.72, 48, 32))
         _ = gpu^
-        assert_true(
-            probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
+        assert_true(_released(probe, empty), String(round))
+
+
+struct _HashKernels:
+    """Keep device-only entries out of the host test discovery list."""
+
+    @staticmethod
+    def hash_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Hash each pair of device inputs."""
+        from max.gpu import global_idx
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        output[unsafe_offset=at] = hash12(
+            inputs[unsafe_offset=2 * at], inputs[unsafe_offset=2 * at + 1]
         )
+
+
+def test_both_backends_hash_water_to_the_same_bits() raises:
+    # Apple GPUs have no Float64. The hash rounds each step in Float32, and
+    # the low bits it reads must not depend on the backend.
+    if _skipped("water hash"):
+        return
+    comptime count = 4096
+    var inputs = List[Float32](capacity=2 * count)
+    for at in range(count):
+        var scale = Float32(10) ** Float32(at % 7 - 2)
+        inputs.append((Float32(at) * 0.6180339 - 1250.0) * scale)
+        inputs.append((Float32(at) * 0.4142135 + 3.25) * scale)
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    var output = context.enqueue_create_buffer[DType.float32](count)
+    context.enqueue_function[_HashKernels.hash_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(count),
+        grid_dim=(count // 64,),
+        block_dim=(64,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(count):
+            assert_equal(
+                bitcast[DType.uint32](host[at]),
+                bitcast[DType.uint32](
+                    hash12(inputs[2 * at], inputs[2 * at + 1])
+                ),
+            )
 
 
 def main() raises:

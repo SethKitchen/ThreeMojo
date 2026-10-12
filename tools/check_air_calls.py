@@ -30,7 +30,7 @@ import tokenize
 ROOT = Path(__file__).resolve().parent.parent
 # Kernels are launched from these modules. Every `enqueue_function`
 # reference must resolve to a supported, plainly named local kernel.
-MODULES = ('render/gpu.mojo', 'render/gpu_vxgi.mojo')
+MODULES = ('render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo')
 TARGET = 'metal:4'
 SEPARATOR = '; ===== kernel '
 ENTRY = '; ===== entry '
