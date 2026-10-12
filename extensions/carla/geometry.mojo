@@ -155,6 +155,12 @@ struct DirectedPoint(ImplicitlyCopyable):
             z: Up, in meters.
             tangent: The heading, in radians.
             pitch: The elevation slope.
+
+        Returns:
+            The new DirectedPoint record with the supplied source fields.
+
+        Raises:
+            Error: If a coordinate, tangent, or pitch is nonfinite.
         """
         _ = _finite_si(x)
         _ = _finite_si(y)
@@ -194,12 +200,12 @@ struct DirectedPoint(ImplicitlyCopyable):
         """Create a directed point.
 
         Args:
+            raw: The private raw-storage construction capability.
             x: East, in meters.
             y: North, in meters.
             z: Up, in meters.
             tangent: The heading, in radians.
-            pitch: The elevation slope.
-        """
+            pitch: The elevation slope."""
         self.x = x
         self.y = y
         self.z = z
@@ -211,6 +217,9 @@ struct DirectedPoint(ImplicitlyCopyable):
 
         Args:
             offset: How far to move. Plus is to the right of the heading.
+
+        Raises:
+            Error: If the offset or either computed coordinate is nonfinite.
         """
         var t = _finite_si(Float64(offset.value))
         var x = _finite_si(self.x + t * sin(self.tangent))
@@ -223,6 +232,9 @@ struct DirectedPoint(ImplicitlyCopyable):
 
         Returns:
             The tangent, counter-clockwise from plus x.
+
+        Raises:
+            Error: If the stored tangent is nonfinite.
         """
         return Angle64(_finite_si(self.tangent), RADIAN)
 
@@ -246,9 +258,6 @@ struct DirectedPoint(ImplicitlyCopyable):
     def x_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw x compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -259,9 +268,6 @@ struct DirectedPoint(ImplicitlyCopyable):
 
     def y_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw y compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -274,9 +280,6 @@ struct DirectedPoint(ImplicitlyCopyable):
     def z_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw z compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -287,9 +290,6 @@ struct DirectedPoint(ImplicitlyCopyable):
 
     def tangent_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw tangent compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -410,6 +410,10 @@ struct RoadGeometry(Copyable, Movable):
             heading: Start heading, counter-clockwise from plus x.
             length: Length along the line. It must be positive.
 
+        Returns:
+            The common geometry record with its Float32 inputs widened to
+            Float64.
+
         Raises:
             Error: If `kind` is not valid, `s` is negative, or `length`
                 is not positive.
@@ -439,6 +443,7 @@ struct RoadGeometry(Copyable, Movable):
         precision. This form keeps them too.
 
         Args:
+            raw: The private raw-storage construction capability.
             kind: Which record this is.
             s: Where it starts along the road, in meters.
             x: Start east, in meters.
@@ -512,9 +517,6 @@ struct RoadGeometry(Copyable, Movable):
     def end_s(self) raises -> Length64:
         """Return the finite Float64 end station.
 
-        Args:
-            None.
-
         Returns:
             The start station plus length in meters.
 
@@ -528,6 +530,10 @@ struct RoadGeometry(Copyable, Movable):
 
         Returns:
             `s` plus `length`, in meters.
+
+        Raises:
+            Error: If the station is negative, the length is not positive, or
+                either value or their sum is nonfinite.
         """
         _ = _nonnegative_si(self.s)
         _ = _positive_si(self.length)
@@ -539,12 +545,17 @@ struct RoadGeometry(Copyable, Movable):
         """Return the point `dist` into the record, `PosFromDist`.
 
         Args:
-            max_steps: The maximum logical spiral pieces or stored table samples.
             dist: Distance from the record's start. It is clamped to the
                 record.
+            max_steps: The maximum logical spiral pieces or stored table samples.
 
         Returns:
             The point and heading, with z zero.
+
+        Raises:
+            Error: If the distance or geometry is invalid, the work limit is
+                not positive or is exhausted, or an intermediate or result is
+                nonfinite.
         """
         return self.pos_at_meters(Float64(dist.value), max_steps)
 
@@ -554,8 +565,8 @@ struct RoadGeometry(Copyable, Movable):
         """Evaluate a typed Float64 distance into this record.
 
         Args:
-            max_steps: The maximum logical spiral pieces or stored table samples.
             dist: A finite distance, clamped to the record.
+            max_steps: The maximum logical spiral pieces or stored table samples.
 
         Returns:
             Its point and heading without a Float32 conversion.
@@ -571,8 +582,8 @@ struct RoadGeometry(Copyable, Movable):
         """Evaluate an explicit meter compatibility distance.
 
         Args:
-            max_steps: The maximum logical spiral pieces or stored table samples.
             dist: A finite distance in meters, clamped to the record.
+            max_steps: The maximum logical spiral pieces or stored table samples.
 
         Returns:
             Its point and heading.
@@ -861,9 +872,6 @@ struct RoadGeometry(Copyable, Movable):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -874,9 +882,6 @@ struct RoadGeometry(Copyable, Movable):
 
     def x_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw x compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -889,9 +894,6 @@ struct RoadGeometry(Copyable, Movable):
     def y_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw y compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -902,9 +904,6 @@ struct RoadGeometry(Copyable, Movable):
 
     def length_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw length compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -917,9 +916,6 @@ struct RoadGeometry(Copyable, Movable):
     def heading_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw heading compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -931,9 +927,6 @@ struct RoadGeometry(Copyable, Movable):
     def curvature_start_quantity(self) raises -> InverseLength64:
         """Read the checked typed view of the raw curvature_start compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -944,9 +937,6 @@ struct RoadGeometry(Copyable, Movable):
 
     def curvature_end_quantity(self) raises -> InverseLength64:
         """Read the checked typed view of the raw curvature_end compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1097,6 +1087,10 @@ def with_spiral_si(
 
     Returns:
         The record, now a spiral.
+
+    Raises:
+        Error: If the base geometry is invalid or either curvature is
+            nonfinite.
     """
     _check_geometry_base(base)
     _ = _finite_si(curvature_start)
@@ -1125,7 +1119,6 @@ def poly3_from_coefficients(
     The table samples u every 0.3 meters, as CARLA's `PreComputeSpline`.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         s: Where it starts along the road.
         x: Start east.
         y: Start north.
@@ -1135,6 +1128,7 @@ def poly3_from_coefficients(
         b: The linear term.
         c: The quadratic term, per meter.
         d: The cubic term, per square meter.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The record.
@@ -1163,15 +1157,20 @@ def with_poly3_si(
     """Make a record a cubic v(u), `GeometryPoly3`, and sample it.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         base: The common part: start, heading and length.
         a: The constant term of v, in meters.
         b: The linear term.
         c: The quadratic term, per meter.
         d: The cubic term, per square meter.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The record, now a poly3 with its table.
+
+    Raises:
+        Error: If the base or coefficients are invalid, the sample budget is
+            below two or exhausted, sampling cannot advance, or a computed
+            value is nonfinite.
     """
     _check_geometry_base(base)
     if max_samples < 2:
@@ -1235,7 +1234,6 @@ def param_poly3_from_coefficients(
     CARLA's `PreComputeSpline`.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         s: Where it starts along the road.
         x: Start east.
         y: Start north.
@@ -1244,6 +1242,7 @@ def param_poly3_from_coefficients(
         u: The cubic u(p), in meters.
         v: The cubic v(p), in meters.
         p_range: What p runs over.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The record.
@@ -1271,11 +1270,11 @@ def with_param_poly3_from_coefficients(
     """Make a record a parametric cubic, `GeometryParamPoly3`, and sample it.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         base: The common part: start, heading and length.
         u: The cubic u(p), in meters.
         v: The cubic v(p), in meters.
         p_range: What p runs over.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The record, now a paramPoly3 with its table.
@@ -1418,12 +1417,12 @@ def with_poly3(
     """Set a typed Float64 distance polynomial on a record.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         base: The source record.
         a: Its constant length.
         b: Its dimensionless slope.
         c: Its quadratic coefficient per meter.
         d: Its cubic coefficient per square meter.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The sampled cubic record.
@@ -1511,7 +1510,6 @@ def poly3(
     """Create a checked Float64 local cubic record.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         s: Its start station.
         x: Its east coordinate.
         y: Its north coordinate.
@@ -1521,6 +1519,7 @@ def poly3(
         b: Its dimensionless slope.
         c: Its quadratic coefficient per meter.
         d: Its cubic coefficient per square meter.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The sampled cubic record.
@@ -1561,6 +1560,9 @@ struct NormalizedCubic(ImplicitlyCopyable):
             b: The linear length coefficient.
             c: The quadratic length coefficient.
             d: The cubic length coefficient.
+
+        Returns:
+            The initialized NormalizedCubic record.
 
         Raises:
             Error: If any coefficient is not finite.
@@ -1649,10 +1651,10 @@ def with_param_poly3(
     """Set an arc-length-parametrized cubic using station-unit coefficients.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         base: The common geometry record.
         u: The u coordinate as a polynomial of meter station.
         v: The v coordinate as a polynomial of meter station.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The sampled geometry in arc-length parameter mode.
@@ -1674,10 +1676,10 @@ def with_param_poly3_normalized(
     """Set a normalized-parametric cubic with all-length coefficients.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         base: The common geometry record.
         u: The u coordinate as a polynomial of dimensionless p.
         v: The v coordinate as a polynomial of dimensionless p.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The sampled geometry in normalized parameter mode.
@@ -1707,7 +1709,6 @@ def param_poly3(
     """Create a Float64 arc-length-parametric cubic.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         s: The start station.
         x: The start east coordinate.
         y: The start north coordinate.
@@ -1715,6 +1716,7 @@ def param_poly3(
         length: The positive curve length.
         u: The u polynomial with station-unit coefficients.
         v: The v polynomial with station-unit coefficients.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The checked geometry.
@@ -1743,7 +1745,6 @@ def param_poly3_normalized(
     """Create a Float64 cubic of normalized dimensionless p.
 
     Args:
-        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
         s: The start station.
         x: The start east coordinate.
         y: The start north coordinate.
@@ -1751,6 +1752,7 @@ def param_poly3_normalized(
         length: The positive curve length.
         u: The u polynomial with all-length coefficients.
         v: The v polynomial with all-length coefficients.
+        max_samples: The maximum emitted table samples; exhaustion refuses the geometry.
 
     Returns:
         The checked geometry.
