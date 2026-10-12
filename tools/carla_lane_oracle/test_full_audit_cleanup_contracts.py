@@ -457,6 +457,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
         for leaf in ('map_station_contracts.py', 'runtime_view_contracts.py'):
             path = 'tools/carla_lane_oracle/' + leaf
             supplemental[path] = cleanup.DEPENDENCY_TOOL_SHA256[path]
+        supplemental.update(cleanup._witness_format_bindings(self.root))
         expected.update(supplemental)
         self.assertEqual(set(bindings), expected)
         self.assertEqual({path: bindings[path] for path in supplemental}, supplemental)
