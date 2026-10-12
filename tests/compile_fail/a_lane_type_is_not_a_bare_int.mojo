@@ -8,7 +8,9 @@
 from extensions.carla.road import LaneSection
 from extensions.carla.road_info import SectionId
 
+from units.si import Length64
+
 
 def main() raises:
-    var section = LaneSection(SectionId(0), 0.0)
+    var section = LaneSection(SectionId(0), Length64(0.0))
     print(len(section.lanes_of_type(2)))
