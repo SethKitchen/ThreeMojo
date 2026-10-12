@@ -75,7 +75,7 @@ Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent 
 
 A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor. `PhysicsWorld.step` consumes forces for one step. A controller must apply its force before each step. `CarlaPhysics.tick` retains external forces across its substeps and rebuilds vehicle forces per substep.
 
-Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints remain separate work. The opt-in [sphere/static-mesh continuous mode](Continuous-collision) has an explicit support and precision boundary. Moving-ground tire coupling is described in [CARLA physics](CARLA-physics#moving-supports).
+Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints remain separate work. The opt-in [continuous collision mode](Continuous-collision) has an explicit support and precision boundary. Moving-ground tire coupling is described in [CARLA physics](CARLA-physics#moving-supports).
 
 ## Free rotational integration
 
@@ -127,4 +127,4 @@ The production sweep and existing world ray path stay unchanged. [Owned query sn
 
 ## Continuous collision
 
-The opt-in [sphere/static-mesh sweep](Continuous-collision) handles fast, centered dynamic spheres and rotation-locked capsules against one-sided static triangles. It supports multiple impacts and transactional failure. Other shapes and interacting moving bodies are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.
+The opt-in [continuous collision mode](Continuous-collision) handles fast dynamic spheres, capsules, and boxes and hulls that cannot turn, against one-sided static triangles. It also sweeps moving spheres and rotation-locked capsules against each other. It supports multiple impacts and transactional failure. Turning boxes and hulls, moving meshes and other unsupported cases are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.
