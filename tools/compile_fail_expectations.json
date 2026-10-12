@@ -1704,14 +1704,15 @@
   "tests/compile_fail/a_lane_change_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 14,
         "column": 27,
-        "line": 12,
         "message": "no matching function in initialization"
       }
     ],
     "notes": [
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'width'",
       "candidate not viable: unexpected argument",
       "candidate not viable: value passed to 'lane_change' cannot be converted from 'IntLiteral[3]' to 'LaneChange'"
     ]
@@ -1719,8 +1720,8 @@
   "tests/compile_fail/a_lane_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 16,
         "column": 33,
-        "line": 14,
         "message": "invalid call to 'contains_lane': value passed to 'id' cannot be converted from 'IntLiteral[-1]' to 'LaneId'"
       }
     ],
@@ -1731,14 +1732,15 @@
   "tests/compile_fail/a_lane_marking_color_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 14,
         "column": 27,
-        "line": 12,
         "message": "no matching function in initialization"
       }
     ],
     "notes": [
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'width'",
       "candidate not viable: unexpected argument",
       "candidate not viable: value passed to 'color' cannot be converted from 'IntLiteral[4]' to 'LaneMarkingColor'"
     ]
@@ -1746,14 +1748,15 @@
   "tests/compile_fail/a_lane_marking_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 14,
         "column": 27,
-        "line": 12,
         "message": "no matching function in initialization"
       }
     ],
     "notes": [
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'width'",
       "candidate not viable: unexpected argument",
       "candidate not viable: value passed to 'type' cannot be converted from 'IntLiteral[2]' to 'LaneMarkingType'"
     ]
@@ -1761,8 +1764,8 @@
   "tests/compile_fail/a_lane_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 16,
         "column": 37,
-        "line": 14,
         "message": "invalid call to 'lanes_of_type': value passed to 'lane_type' cannot be converted from 'IntLiteral[2]' to 'LaneType'"
       }
     ],
@@ -1941,13 +1944,14 @@
   "tests/compile_fail/a_mark_lane_change_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 14,
         "column": 34,
-        "line": 12,
         "message": "no matching function in initialization"
       }
     ],
     "notes": [
       "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'is_rht'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: unexpected argument",
       "candidate not viable: value passed to 'lane_change' cannot be converted from 'IntLiteral[1]' to 'MarkLaneChange'"
@@ -2315,8 +2319,8 @@
   "tests/compile_fail/a_param_poly3_range_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 24,
         "column": 9,
-        "line": 22,
         "message": "invalid call to 'param_poly3': value passed to 'p_range' cannot be converted from 'IntLiteral[0]' to 'ParamPoly3Range'"
       }
     ],
@@ -2363,9 +2367,9 @@
   "tests/compile_fail/a_path_state_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "column": 24,
         "line": 13,
-        "message": "invalid call to 'winner': value passed to 'state' cannot be converted from 'IntLiteral[0]' to 'PathState'"
+        "column": 31,
+        "message": "invalid call to 'winner_meters': value passed to 'state' cannot be converted from 'IntLiteral[0]' to 'PathState'"
       }
     ],
     "notes": [
@@ -2397,29 +2401,25 @@
   "tests/compile_fail/a_pedestrian_age_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "column": 33,
-        "line": 16,
-        "message": "no matching function in initialization"
+        "line": 17,
+        "column": 29,
+        "message": "invalid call to 'from_meters_per_second': value passed to 'age' cannot be converted from 'IntLiteral[2]' to 'PedestrianAge'"
       }
     ],
     "notes": [
-      "candidate not viable: missing required argument: 'copy'",
-      "candidate not viable: missing required argument: 'move'",
-      "candidate not viable: value passed to 'age' cannot be converted from 'IntLiteral[2]' to 'PedestrianAge'"
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_pedestrian_gender_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "column": 33,
-        "line": 16,
-        "message": "no matching function in initialization"
+        "line": 17,
+        "column": 14,
+        "message": "invalid call to 'from_meters_per_second': value passed to 'gender' cannot be converted from 'IntLiteral[1]' to 'PedestrianGender'"
       }
     ],
     "notes": [
-      "candidate not viable: missing required argument: 'copy'",
-      "candidate not viable: missing required argument: 'move'",
-      "candidate not viable: value passed to 'gender' cannot be converted from 'IntLiteral[1]' to 'PedestrianGender'"
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_pelvis_bone_is_not_a_bare_int.mojo": {
@@ -2765,15 +2765,13 @@
   "tests/compile_fail/a_road_geometry_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "column": 25,
-        "line": 13,
-        "message": "no matching function in initialization"
+        "line": 14,
+        "column": 9,
+        "message": "invalid call to 'from_float32': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'RoadGeometryKind'"
       }
     ],
     "notes": [
-      "candidate not viable: missing required argument: 'copy'",
-      "candidate not viable: missing required argument: 'move'",
-      "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'RoadGeometryKind'"
+      "function declared here"
     ]
   },
   "tests/compile_fail/a_road_id_is_not_a_bare_int.mojo": {
@@ -2885,14 +2883,15 @@
   "tests/compile_fail/a_section_id_is_not_a_bare_int.mojo": {
     "errors": [
       {
+        "line": 14,
         "column": 30,
-        "line": 12,
         "message": "no matching function in initialization"
       }
     ],
     "notes": [
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
       "candidate not viable: value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'SectionId'"
     ]
   },
@@ -2933,8 +2932,8 @@
   "tests/compile_fail/a_sensor_type_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "column": 29,
         "line": 20,
+        "column": 29,
         "message": "invalid call to 'sensor_header': value passed to 'type' cannot be converted from 'IntLiteral[5]' to 'SensorType'"
       }
     ],
@@ -5141,6 +5140,455 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/carla_config_dvs_refractory_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 42,
+        "message": "invalid call to 'set_refractory_period': value passed to 'value' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_dvs_refractory_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 42,
+        "message": "invalid call to 'set_refractory_period': value passed to 'value' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_dvs_refractory_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 41,
+        "message": "invalid call to 'set_refractory_period': value passed to 'value' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_gnss_angle_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 39,
+        "message": "invalid call to 'set_latitude_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_gnss_angle_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'set_latitude_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_gnss_angle_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'set_latitude_noise': value passed to 'stddev' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_gnss_length_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 38,
+        "message": "invalid call to 'set_altitude_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_gnss_length_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 41,
+        "message": "invalid call to 'set_altitude_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_gnss_length_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'set_altitude_noise': value passed to 'stddev' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_derivative_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 41,
+        "message": "invalid call to 'kannala_brandt_derivative': value passed to 'theta' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_derivative_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 42,
+        "message": "invalid call to 'kannala_brandt_derivative': value passed to 'theta' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_derivative_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 42,
+        "message": "invalid call to 'kannala_brandt_derivative': value passed to 'theta' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_fade_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 34,
+        "message": "invalid call to 'set_fov_fade_size': value passed to 'value' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_fade_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 35,
+        "message": "invalid call to 'set_fov_fade_size': value passed to 'value' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_fade_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 35,
+        "message": "invalid call to 'set_fov_fade_size': value passed to 'value' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_polynomial_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 41,
+        "message": "invalid call to 'kannala_brandt_polynomial': value passed to 'theta' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_polynomial_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 42,
+        "message": "invalid call to 'kannala_brandt_polynomial': value passed to 'theta' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_lens_polynomial_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 42,
+        "message": "invalid call to 'kannala_brandt_polynomial': value passed to 'theta' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_rgb_blur_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 46,
+        "message": "invalid call to 'set_depth_blur_distance': value passed to 'value' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_rgb_blur_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 46,
+        "message": "invalid call to 'set_depth_blur_distance': value passed to 'value' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_rgb_blur_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 45,
+        "message": "invalid call to 'set_depth_blur_distance': value passed to 'value' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_rgb_shutter_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'set_shutter_speed': value passed to 'value' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(1)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_rgb_shutter_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 43,
+        "message": "invalid call to 'set_shutter_speed': value passed to 'value' cannot be converted from 'Quantity[Int(0), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_rgb_shutter_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 39,
+        "message": "invalid call to 'set_shutter_speed': value passed to 'value' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_config_weather_angle_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'sun_azimuth' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+    ]
+  },
+  "tests/compile_fail/carla_config_weather_angle_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'sun_azimuth' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+    ]
+  },
+  "tests/compile_fail/carla_config_weather_angle_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'sun_azimuth' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+    ]
+  },
+  "tests/compile_fail/carla_config_weather_distance_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'fog_distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_config_weather_distance_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'fog_distance' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_config_weather_distance_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'fog_distance' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_epoch333_cam_requires_named_milliseconds.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument"
+    ]
+  },
+  "tests/compile_fail/carla_epoch333_recorder_begin_requires_named_unix_seconds.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 44,
+        "message": "invalid call to 'begin': value passed to 'saved_dir' cannot be converted from 'IntLiteral[1234]' to 'String'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_epoch333_recorder_start_requires_named_unix_seconds.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 51,
+        "message": "invalid call to 'start': value passed to 'saved_dir' cannot be converted from 'IntLiteral[1234]' to 'String'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_epoch333_sensor_manager_requires_named_milliseconds.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument"
+    ]
+  },
   "tests/compile_fail/carla_event_camera_time_rejects_float32_duration.mojo": {
     "errors": [
       {
@@ -5173,6 +5621,501 @@
         "line": 13,
         "column": 39,
         "message": "invalid call to 'simulate': value passed to 'elapsed' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_acceleration_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 22,
+        "column": 40,
+        "message": "invalid call to 'set_acceleration_noise': value passed to 'x' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-2), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-2)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_acceleration_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 23,
+        "message": "invalid call to 'set_acceleration_noise': value passed to 'x' cannot be converted from 'Quantity[Int(1), Int(0), Int(-2), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-2), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_acceleration_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 22,
+        "column": 41,
+        "message": "invalid call to 'set_acceleration_noise': value passed to 'x' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(-2), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_angle_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 35,
+        "message": "invalid call to 'set_heading_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_angle_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 36,
+        "message": "invalid call to 'set_heading_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_angle_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 36,
+        "message": "invalid call to 'set_heading_noise': value passed to 'stddev' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_interval_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'min_interval' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_interval_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'min_interval' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_interval_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'min_interval' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_length_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 35,
+        "message": "invalid call to 'set_altitude_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_length_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 38,
+        "message": "invalid call to 'set_altitude_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_length_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 37,
+        "message": "invalid call to 'set_altitude_noise': value passed to 'stddev' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_velocity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 36,
+        "message": "invalid call to 'set_velocity_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_velocity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 40,
+        "message": "invalid call to 'set_velocity_noise': value passed to 'stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_cam_velocity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 37,
+        "message": "invalid call to 'set_velocity_noise': value passed to 'stddev' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_ellipsoid_length_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'semi_major_axis' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_ellipsoid_length_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'semi_major_axis' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_ellipsoid_length_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 18,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'semi_major_axis' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_location_angle_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'latitude' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_location_angle_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'latitude' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_location_angle_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'latitude' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_offset_length_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'x' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_offset_length_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'x' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_offset_length_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'x' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_projection_angle_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 33,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'lat_0' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_projection_angle_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 33,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'lat_0' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_projection_angle_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 33,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'lat_0' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_distance_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 34,
+        "message": "invalid call to 'winner': value passed to 'distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_distance_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 33,
+        "message": "invalid call to 'winner': value passed to 'distance' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_distance_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 34,
+        "message": "invalid call to 'winner': value passed to 'distance' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_frequency_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 40,
+        "message": "invalid call to 'set_carrier_frequency': value passed to 'frequency' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_frequency_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 45,
+        "message": "invalid call to 'set_carrier_frequency': value passed to 'frequency' cannot be converted from 'Quantity[Int(0), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_frequency_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 41,
+        "message": "invalid call to 'set_carrier_frequency': value passed to 'frequency' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_height_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 44,
+        "message": "invalid call to 'two_ray': value passed to 'tx' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_height_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 43,
+        "message": "invalid call to 'two_ray': value passed to 'tx' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_geo_radio_height_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 44,
+        "message": "invalid call to 'two_ray': value passed to 'tx' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
       }
     ],
     "notes": [
@@ -5299,6 +6242,1084 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/carla_map333_body_size_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 31,
+        "message": "invalid call to 'body_geometry': value passed to 'length' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_body_size_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 31,
+        "message": "invalid call to 'body_geometry': value passed to 'length' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_body_size_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 30,
+        "message": "invalid call to 'body_geometry': value passed to 'length' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_curvature_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 19,
+        "message": "invalid call to 'add_road_geometry_arc': value passed to 'curvature' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_curvature_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 22,
+        "message": "invalid call to 'add_road_geometry_arc': value passed to 'curvature' cannot be converted from 'Quantity[Int(-1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_curvature_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 16,
+        "message": "invalid call to 'add_road_geometry_arc': value passed to 'curvature' cannot be converted from 'Float64' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_heading_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 61,
+        "message": "invalid call to 'add_road_geometry_line': value passed to 'heading' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_heading_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 56,
+        "message": "invalid call to 'add_road_geometry_line': value passed to 'heading' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_heading_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 58,
+        "message": "invalid call to 'add_road_geometry_line': value passed to 'heading' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_length_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 28,
+        "column": 19,
+        "message": "invalid call to 'add_road': value passed to 'length' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_length_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 34,
+        "message": "invalid call to 'add_road': value passed to 'length' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_length_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 35,
+        "message": "invalid call to 'add_road': value passed to 'length' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_profile_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 19,
+        "message": "invalid call to 'create_lane_width': value passed to 'c' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_profile_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 22,
+        "message": "invalid call to 'create_lane_width': value passed to 'c' cannot be converted from 'Quantity[Int(-1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_builder_profile_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 58,
+        "message": "invalid call to 'create_lane_width': value passed to 'c' cannot be converted from 'Float64' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_distance_area_result_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 45,
+        "message": "cannot implicitly convert 'Area' value to 'Length'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_distance_area_result_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 45,
+        "message": "cannot implicitly convert 'Area' value to 'Area64'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'",
+      "'Area64' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_distance_area_result_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 46,
+        "message": "cannot implicitly convert 'Area' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_geometry_heading_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'length'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'heading' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_geometry_heading_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'length'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'heading' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_geometry_heading_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'length'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'heading' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_geometry_station_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'length'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_geometry_station_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'length'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_geometry_station_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'length'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_map_distance_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 35,
+        "message": "invalid call to 'next': value passed to 'distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_map_distance_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 31,
+        "message": "invalid call to 'next': value passed to 'distance' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_map_distance_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 32,
+        "message": "invalid call to 'next': value passed to 'distance' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_mesh_station_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 59,
+        "message": "invalid call to 'generate_lane': value passed to 's_start' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_mesh_station_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 55,
+        "message": "invalid call to 'generate_lane': value passed to 's_start' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_mesh_station_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 56,
+        "message": "invalid call to 'generate_lane': value passed to 's_start' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_navigation_height_result_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 16,
+        "message": "cannot implicitly convert 'Length' value to 'Duration'"
+      }
+    ],
+    "notes": [
+      "'Duration' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_navigation_height_result_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 16,
+        "message": "cannot implicitly convert 'Length' value to 'Length64'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'",
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_navigation_height_result_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 16,
+        "message": "cannot implicitly convert 'Length' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_pid_duration_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 21,
+        "column": 26,
+        "message": "invalid call to 'run': value passed to 'dt' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_pid_duration_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 21,
+        "column": 30,
+        "message": "invalid call to 'run': value passed to 'dt' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_pid_duration_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 21,
+        "column": 27,
+        "message": "invalid call to 'run': value passed to 'dt' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_constant_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'a' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_constant_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'a' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_constant_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'a' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_cubic_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(-2)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'd' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(-2), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_cubic_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'd' cannot be converted from 'Quantity[Int(-2), Int(0), Int(0), Int(0)]' to 'Quantity[Int(-2), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_cubic_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'd' cannot be converted from 'Float64' to 'Quantity[Int(-2), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_quadratic_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'c' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_quadratic_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'c' cannot be converted from 'Quantity[Int(-1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_quadratic_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 'c' cannot be converted from 'Float64' to 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_station_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 36,
+        "message": "invalid call to 'evaluate': value passed to 'x' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_station_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 32,
+        "message": "invalid call to 'evaluate': value passed to 'x' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_polynomial_station_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 33,
+        "message": "invalid call to 'evaluate': value passed to 'x' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_angle_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'tangent'",
+      "candidate not viable: value passed to 'tangent' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_angle_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'tangent'",
+      "candidate not viable: value passed to 'tangent' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_angle_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'tangent'",
+      "candidate not viable: value passed to 'tangent' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_length_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 23,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'z'",
+      "candidate not viable: value passed to 'v' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_length_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 23,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'z'",
+      "candidate not viable: value passed to 'v' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_length_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 23,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'z'",
+      "candidate not viable: value passed to 'v' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_search_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 39,
+        "message": "invalid call to 'info_index': value passed to 's' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_search_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 35,
+        "message": "invalid call to 'info_index': value passed to 's' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_search_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 36,
+        "message": "invalid call to 'info_index': value passed to 's' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_station_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'value'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_station_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'value'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_record_station_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 25,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'value'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_road_length_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 13,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'is_rht'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'length' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_road_length_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 13,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'is_rht'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'length' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_road_length_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 13,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'is_rht'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'length' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_road_query_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 39,
+        "message": "invalid call to 'directed_point': value passed to 's' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_road_query_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 35,
+        "message": "invalid call to 'directed_point': value passed to 's' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_road_query_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 36,
+        "message": "invalid call to 'directed_point': value passed to 's' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_roadside_station_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 34,
+        "message": "invalid call to 'roadside': value passed to 's' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_roadside_station_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 30,
+        "message": "invalid call to 'roadside': value passed to 's' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_roadside_station_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 31,
+        "message": "invalid call to 'roadside': value passed to 's' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_sign_duration_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 34,
+        "column": 32,
+        "message": "invalid call to 'tick_timers': value passed to 'dt' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_sign_duration_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 34,
+        "column": 36,
+        "message": "invalid call to 'tick_timers': value passed to 'dt' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_sign_duration_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 34,
+        "column": 33,
+        "message": "invalid call to 'tick_timers': value passed to 'dt' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_stride_velocity_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 22,
+        "message": "invalid call to 'stride': value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_stride_velocity_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 26,
+        "message": "invalid call to 'stride': value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_stride_velocity_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 20,
+        "column": 23,
+        "message": "invalid call to 'stride': value passed to 'speed' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_map333_waypoint_station_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 17,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_waypoint_station_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 17,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_map333_waypoint_station_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 24,
+        "column": 17,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 's'",
+      "candidate not viable: value passed to 's' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
   "tests/compile_fail/carla_measurement_time_is_not_a_raw_float64.mojo": {
     "errors": [
       {
@@ -5309,6 +7330,1021 @@
     ],
     "notes": [
       "'Duration64' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_arc_builder_rejects_mode_switch_quantity.mojo": {
+    "errors": [
+      {
+        "line": 34,
+        "column": 9,
+        "message": "invalid call to 'add_road_geometry_param_poly3': unexpected argument"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_arc_builder_rejects_normalized_quantity.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 77,
+        "message": "invalid call to 'add_road_geometry_param_poly3': value passed to 'u' cannot be converted from 'NormalizedCubic' to 'CubicPolynomial'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_arc_geometry_rejects_mode_switch_quantity.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 39,
+        "message": "invalid call to 'with_param_poly3': value passed to 'max_samples' cannot be converted from 'ParamPoly3Range' to 'Int'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_arc_geometry_rejects_normalized_quantity.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 33,
+        "message": "invalid call to 'with_param_poly3': value passed to 'u' cannot be converted from 'NormalizedCubic' to 'CubicPolynomial'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_collision_extension_result_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 60,
+        "message": "cannot implicitly convert 'Length' value to 'Duration'"
+      }
+    ],
+    "notes": [
+      "'Duration' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_collision_extension_result_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 60,
+        "message": "cannot implicitly convert 'Length' value to 'Length64'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'",
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_collision_extension_result_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 59,
+        "message": "cannot implicitly convert 'Length' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_collision_margin_result_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 76,
+        "message": "cannot implicitly convert 'Tuple[Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]]' value to 'Tuple[Bool, Optional[Quantity[Int(0), Int(0), Int(1), Int(0)]]]'"
+      }
+    ],
+    "notes": [
+      ".Ts.values` of the first value is 'Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]' but the second value is 'Bool, Optional[Quantity[Int(0), Int(0), Int(1), Int(0)]]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_collision_margin_result_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 76,
+        "message": "cannot implicitly convert 'Tuple[Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]]' value to 'Tuple[Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]]]'"
+      }
+    ],
+    "notes": [
+      ".Ts.values` of the first value is 'Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]' but the second value is 'Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_collision_margin_result_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 75,
+        "message": "cannot implicitly convert 'Tuple[Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]]' value to 'Tuple[Bool, Optional[Float32]]'"
+      }
+    ],
+    "notes": [
+      ".Ts.values` of the first value is 'Bool, Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]' but the second value is 'Bool, Optional[Float32]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_dvs_angle_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 30,
+        "message": "invalid call to 'dvs_data': value passed to 'fov' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_dvs_angle_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 31,
+        "message": "invalid call to 'dvs_data': value passed to 'fov' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_dvs_angle_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 31,
+        "message": "invalid call to 'dvs_data': value passed to 'fov' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_flow_angle_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 39,
+        "message": "invalid call to 'optical_flow_data': value passed to 'fov' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_flow_angle_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 40,
+        "message": "invalid call to 'optical_flow_data': value passed to 'fov' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_flow_angle_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 40,
+        "message": "invalid call to 'optical_flow_data': value passed to 'fov' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_fog_extinction_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 40,
+        "message": "cannot implicitly convert 'InverseLength' value to 'Length'"
+      }
+    ],
+    "notes": [
+      "'InverseLength' is aka 'Quantity[Int(-1), Int(0), Int(0), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_fog_extinction_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 49,
+        "message": "cannot implicitly convert 'InverseLength' value to 'InverseLength64'"
+      }
+    ],
+    "notes": [
+      "'InverseLength' is aka 'Quantity[Int(-1), Int(0), Int(0), Int(0)]'",
+      "'InverseLength64' is aka 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_fog_extinction_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 41,
+        "message": "cannot implicitly convert 'InverseLength' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'InverseLength' is aka 'Quantity[Int(-1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_image_angle_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 28,
+        "column": 33,
+        "message": "invalid call to 'image_data': value passed to 'fov' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_image_angle_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 28,
+        "column": 34,
+        "message": "invalid call to 'image_data': value passed to 'fov' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_image_angle_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 28,
+        "column": 34,
+        "message": "invalid call to 'image_data': value passed to 'fov' cannot be converted from 'Float32' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_loft_lengths_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 9,
+        "message": "invalid call to 'loft': value passed to 'stations' cannot be converted from list literal to 'List[Quantity[Int(1), Int(0), Int(0), Int(0)]]'"
+      }
+    ],
+    "notes": [
+      "function declared here",
+      "try resolving the overloaded function first"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_loft_lengths_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 9,
+        "message": "invalid call to 'loft': value passed to 'stations' cannot be converted from list literal to 'List[Quantity[Int(1), Int(0), Int(0), Int(0)]]'"
+      }
+    ],
+    "notes": [
+      "function declared here",
+      "try resolving the overloaded function first"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_loft_lengths_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 9,
+        "message": "invalid call to 'loft': value passed to 'stations' cannot be converted from list literal to 'List[Quantity[Int(1), Int(0), Int(0), Int(0)]]'"
+      }
+    ],
+    "notes": [
+      "function declared here",
+      "try resolving the overloaded function first"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_motion_base_offset_result_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 55,
+        "message": "cannot implicitly convert 'Length' value to 'Duration'"
+      }
+    ],
+    "notes": [
+      "'Duration' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_motion_base_offset_result_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 55,
+        "message": "cannot implicitly convert 'Length' value to 'Length64'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'",
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_motion_base_offset_result_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 54,
+        "message": "cannot implicitly convert 'Length' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_motion_target_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 30,
+        "column": 67,
+        "message": "invalid call to 'get_turn_target_velocity': value passed to 'max_target_velocity' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_motion_target_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 31,
+        "column": 19,
+        "message": "invalid call to 'get_turn_target_velocity': value passed to 'max_target_velocity' cannot be converted from 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_motion_target_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 30,
+        "column": 68,
+        "message": "invalid call to 'get_turn_target_velocity': value passed to 'max_target_velocity' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_normalized_builder_rejects_arc_quantity.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 77,
+        "message": "invalid call to 'add_road_geometry_param_poly3_normalized': value passed to 'u' cannot be converted from 'CubicPolynomial' to 'NormalizedCubic'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_normalized_coefficient_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(-1)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'c' cannot be converted from 'Quantity[Int(-1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_normalized_coefficient_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'c' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_normalized_coefficient_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 23,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'c' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_normalized_geometry_rejects_arc_quantity.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 44,
+        "message": "invalid call to 'with_param_poly3_normalized': value passed to 'u' cannot be converted from 'CubicPolynomial' to 'NormalizedCubic'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_pedestrian_speeds_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 30,
+        "column": 29,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'speeds'",
+      "candidate not viable: value passed to 'speeds' cannot be converted from list literal to 'List[Quantity[Int(1), Int(0), Int(-1), Int(0)]]'",
+      "try resolving the overloaded function first"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_pedestrian_speeds_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 30,
+        "column": 29,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'speeds'",
+      "candidate not viable: value passed to 'speeds' cannot be converted from list literal to 'List[Quantity[Int(1), Int(0), Int(-1), Int(0)]]'",
+      "try resolving the overloaded function first"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_pedestrian_speeds_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 30,
+        "column": 29,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'speeds'",
+      "candidate not viable: value passed to 'speeds' cannot be converted from list literal to 'List[Quantity[Int(1), Int(0), Int(-1), Int(0)]]'",
+      "try resolving the overloaded function first"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_point_distance_squared_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 42,
+        "message": "cannot implicitly convert 'Area' value to 'Length'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_point_distance_squared_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 42,
+        "message": "cannot implicitly convert 'Area' value to 'Area64'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'",
+      "'Area64' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_point_distance_squared_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 43,
+        "message": "cannot implicitly convert 'Area' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_polygon_optional_result_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 21,
+        "column": 56,
+        "message": "cannot implicitly convert 'Optional[Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]]' value to 'Optional[Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]]'"
+      }
+    ],
+    "notes": [
+      ".T.length of the first value is 'Int(1)' but the second value is 'Int(0)'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_polygon_optional_result_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 21,
+        "column": 52,
+        "message": "cannot implicitly convert 'Optional[Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]]' value to 'Optional[Quantity[Int(1), Int(0), Int(0), Int(0)]]'"
+      }
+    ],
+    "notes": [
+      ".T.dtype of the first value is 'DType.float64' but the second value is 'DType.float32'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_polygon_optional_result_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 21,
+        "column": 53,
+        "message": "cannot implicitly convert 'Optional[Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]]' value to 'Optional[Float64]'"
+      }
+    ],
+    "notes": [
+      ".T of the first type is 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' but the second type is 'Float64'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_radar_velocity_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 23,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'depth'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'velocity' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_radar_velocity_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 23,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'depth'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'velocity' cannot be converted from 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_radar_velocity_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 23,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'depth'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'velocity' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_recorder_counter_time_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 30,
+        "message": "invalid call to 'set_frame': value passed to 'delta_seconds' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_recorder_counter_time_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 30,
+        "message": "invalid call to 'set_frame': value passed to 'delta_seconds' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_recorder_counter_time_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 29,
+        "message": "invalid call to 'set_frame': value passed to 'delta_seconds' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_recorder_frame_time_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 34,
+        "message": "invalid call to 'write_frame': value passed to 'delta_seconds' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_recorder_frame_time_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 34,
+        "message": "invalid call to 'write_frame': value passed to 'delta_seconds' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_recorder_frame_time_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 33,
+        "message": "invalid call to 'write_frame': value passed to 'delta_seconds' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_replay_angle_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 28,
+        "message": "invalid call to 'lerp_angle': value passed to 'a' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_replay_angle_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 25,
+        "message": "invalid call to 'lerp_angle': value passed to 'a' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_replay_angle_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 26,
+        "column": 27,
+        "message": "invalid call to 'lerp_angle': value passed to 'a' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(0), Int(1), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_road_info_speed_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'type'",
+      "candidate not viable: value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_road_info_speed_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'type'",
+      "candidate not viable: value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(-1), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_road_info_speed_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 22,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: missing required argument: 'type'",
+      "candidate not viable: value passed to 'speed' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_segment_distance_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 49,
+        "message": "cannot implicitly convert 'Length64' value to 'Duration64'"
+      }
+    ],
+    "notes": [
+      "'Duration64' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'",
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_segment_distance_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 45,
+        "message": "cannot implicitly convert 'Length64' value to 'Length'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'",
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_segment_distance_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 46,
+        "message": "cannot implicitly convert 'Length64' value to 'Float64'"
+      }
+    ],
+    "notes": [
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_sensor_header_time_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 46,
+        "message": "invalid call to 'sensor_header': value passed to 'timestamp' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_sensor_header_time_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 46,
+        "message": "invalid call to 'sensor_header': value passed to 'timestamp' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_sensor_header_time_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 27,
+        "column": 45,
+        "message": "invalid call to 'sensor_header': value passed to 'timestamp' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_time_packet_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 22,
+        "column": 53,
+        "message": "invalid call to 'time_packet': value passed to 'time' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_time_packet_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 22,
+        "column": 53,
+        "message": "invalid call to 'time_packet': value passed to 'time' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_time_packet_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 22,
+        "column": 52,
+        "message": "invalid call to 'time_packet': value passed to 'time' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_walker_speed_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 47,
+        "message": "invalid call to 'set_walker_speed': value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_walker_speed_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 51,
+        "message": "invalid call to 'set_walker_speed': value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_walker_speed_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 29,
+        "column": 48,
+        "message": "invalid call to 'set_walker_speed': value passed to 'speed' cannot be converted from 'Float32' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_waypoint_distance_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 33,
+        "column": 41,
+        "message": "cannot implicitly convert 'Length' value to 'Duration'"
+      }
+    ],
+    "notes": [
+      "'Duration' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_waypoint_distance_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 33,
+        "column": 41,
+        "message": "cannot implicitly convert 'Length' value to 'Length64'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'",
+      "'Length64' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_waypoint_distance_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 33,
+        "column": 40,
+        "message": "cannot implicitly convert 'Length' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_waypoint_distance_squared_quantity_rejects_dimension.mojo": {
+    "errors": [
+      {
+        "line": 33,
+        "column": 47,
+        "message": "cannot implicitly convert 'Area' value to 'Length'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'",
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_waypoint_distance_squared_quantity_rejects_precision.mojo": {
+    "errors": [
+      {
+        "line": 33,
+        "column": 47,
+        "message": "cannot implicitly convert 'Area' value to 'Area64'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'",
+      "'Area64' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_remaining333_waypoint_distance_squared_quantity_rejects_raw.mojo": {
+    "errors": [
+      {
+        "line": 33,
+        "column": 48,
+        "message": "cannot implicitly convert 'Area' value to 'Float32'"
+      }
+    ],
+    "notes": [
+      "'Area' is aka 'Quantity[Int(2), Int(0), Int(0), Int(0)]'"
     ]
   },
   "tests/compile_fail/carla_speed_adapter_rejects_length.mojo": {
@@ -5327,8 +8363,8 @@
   "tests/compile_fail/carla_speed_kind_rejects_raw_int.mojo": {
     "errors": [
       {
-        "column": 19,
         "line": 13,
+        "column": 19,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SpeedLimitKind'"
       }
     ],
