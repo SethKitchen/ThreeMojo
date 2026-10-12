@@ -541,7 +541,9 @@ def test_a_sphere_between_closing_paddles_is_bounded() raises:
     assert_true(abs(roomy.bodies[1].linear_velocity.x) > 40)
 
 
-def test_a_kinematic_capsule_is_refused() raises:
+def test_a_lone_kinematic_capsule_or_spun_sphere_follows_its_velocity() raises:
+    # Kinematic capsules and spinning kinematic spheres are supported. Alone
+    # they take the integrator's path.
     var world = _world()
     var capsule = RigidBody(
         KINEMATIC,
@@ -550,16 +552,17 @@ def test_a_kinematic_capsule_is_refused() raises:
         Vector3(0, 0, 0),
         Quaternion.identity(),
     )
+    capsule.linear_velocity = Vector3(1, 0, 0)
     _ = world.add_body(capsule^)
-    with assert_raises(contains="kinematic spheres only"):
-        world.step(Duration(0.01))
-    # A split-correction spin counts as spin.
+    world.step(Duration(0.01))
+    assert_almost_equal(world.bodies[0].position.x, 0.01, atol=1e-7)
+    # A split-correction spin turns it as the integrator does.
     var pushed = _world()
     var sphere = _paddle(0, 0)
     sphere.push_angular = Vector3(0, 1, 0)
     _ = pushed.add_body(sphere^)
-    with assert_raises(contains="kinematic sphere without spin"):
-        pushed.step(Duration(0.01))
+    pushed.step(Duration(0.01))
+    assert_equal(pushed.contact_count, 0)
 
 
 def main() raises:

@@ -262,15 +262,22 @@ def _neighbors(kind: Int, brute: Bool) raises -> PhysicsWorld:
 
 
 def test_a_refused_box_or_hull_step_keeps_pending_forces() raises:
-    # The second support check runs after forces change velocities. A
-    # shape that can reach another moving body is refused there, and the
-    # step must give back the forces and the velocities.
+    # The support checks run after forces change velocities. A force that
+    # sends the upper shape past the radius-relative travel bound is
+    # refused there, and the step must give back the forces and the
+    # velocities. Without it, the two shapes step together.
     for kind in [_BOX, _HULL]:
         var indexed = _neighbors(kind, False)
         var brute = _neighbors(kind, True)
+        indexed.bodies[3].force = Vector3(0, 0, 1e10)
+        brute.bodies[3].force = Vector3(0, 0, 1e10)
         _failure_pair(indexed, brute, 0.01)
-        with assert_raises(contains="must not reach another moving body"):
+        with assert_raises(contains="radius-relative precision bound"):
             indexed.step(Duration(0.01))
+        indexed.bodies[3].force = Vector3(1, -2, 3)
+        brute.bodies[3].force = Vector3(1, -2, 3)
+        _step_pair(indexed, brute, 0.01)
+        assert_true(indexed.bodies[2].position.z < indexed.bodies[3].position.z)
 
 
 def _tumbler(brute: Bool) raises -> PhysicsWorld:

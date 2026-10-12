@@ -358,7 +358,7 @@ def test_budgets_and_neighbors_fail_closed() raises:
     _ = bounce.add_body(falling^)
     with assert_raises(contains="impact limit exhausted"):
         bounce.step(Duration(0.1))
-    # A turning body must be alone in its group.
+    # A turning body can share a group with another moving body.
     var pair = _world()
     _ = pair.add_body(_capsule(Vector3(0, 0, 2), Quaternion.identity()))
     var ball = RigidBody(
@@ -369,8 +369,8 @@ def test_budgets_and_neighbors_fail_closed() raises:
         Quaternion.identity(),
     )
     _ = pair.add_body(ball^)
-    with assert_raises(contains="must not reach another moving body"):
-        pair.step(Duration(0.01))
+    pair.step(Duration(0.01))
+    assert_true(pair.bodies[2].position.z > pair.bodies[1].position.z)
 
 
 def test_a_straight_slow_drop_and_skipped_triangles() raises:
@@ -445,8 +445,15 @@ def test_more_refused_settings() raises:
     sphere.set_shape_pose(Vector3(0.2, 0, 0), Quaternion.identity())
     sphere.set_center_of_mass(Vector3(0, 0, 0))
     sphere.set_kind(KINEMATIC)
+    sphere.linear_velocity = Vector3(1, 0, 0)
+    sphere.angular_velocity = Vector3(0, 0, 2)
     _ = kinematic.add_body(sphere^)
-    with assert_raises(contains="kinematic shape centered"):
+    # An offset, spinning kinematic sphere is supported. Alone, it follows
+    # the integrator, and it still keeps the offset limit.
+    kinematic.step(Duration(0.01))
+    assert_almost_equal(kinematic.bodies[1].position.x, 0.01, atol=1e-6)
+    kinematic.bodies[1].shape_position = Vector3(20000, 0, 0)
+    with assert_raises(contains="offsets must be at most"):
         kinematic.step(Duration(0.01))
 
 

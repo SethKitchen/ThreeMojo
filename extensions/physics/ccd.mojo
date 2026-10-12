@@ -4,7 +4,9 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Analytic sphere and rotation-locked capsule sweeps against the front of
-static triangles.
+static triangles, and the geometry of conservative advancement for turning
+and coupled bodies: convex cores, their clearance and clear time, contact
+points, and the plastic contact solver.
 
 This module uses Float64 intermediates, not exact predicates. The world
 opts in through a typed mode and checks its narrower supported domain.
@@ -874,3 +876,526 @@ def _sweep_convex_triangle(
     if not _approaches(travel, normal):
         return miss
     return _SweepHit(max(entry, Float64(0)), normal)
+
+
+@fieldwise_init
+struct _Core(Copyable, Movable):
+    """A convex shape: the hull of its points, grown by a radius.
+
+    A sphere has one point and a capsule two. A box, a hull or a triangle
+    has its corners, its faces as unit normals with corner lists, counter-
+    clockwise seen from outside, and its edges as corner pairs. Over a
+    sub-step each point moves at its own velocity. The rigid path leaves
+    that line by at most bend t^2 / 2, in the plane across the unit spin
+    axis `axis`. A triangle has one face and no motion. `face_axes` and
+    `edge_axes` name the faces and edges whose directions differ from
+    every earlier one's, up to sign: the separating-axis test needs only
+    those.
+    """
+
+    var points: List[SIMD[DType.float64, 4]]
+    var speeds: List[SIMD[DType.float64, 4]]
+    var radius: Float64
+    var normals: List[SIMD[DType.float64, 4]]
+    var face_start: List[Int]
+    var face_corners: List[Int]
+    var edge_a: List[Int]
+    var edge_b: List[Int]
+    var bend: Float64
+    var axis: SIMD[DType.float64, 4]
+    var face_axes: List[Int]
+    var edge_axes: List[Int]
+
+
+def _triangle_core(triangle: Triangle) -> _Core:
+    # The triangle's front normal; validated triangles have one.
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var face = _wide_cross(b - a, c - a)
+    var none = SIMD[DType.float64, 4](0)
+    return _Core(
+        [a, b, c],
+        [none, none, none],
+        0,
+        [face / sqrt(_wide_dot(face, face))],
+        [0, 3],
+        [0, 1, 2],
+        [0, 1, 2],
+        [1, 2, 0],
+        0,
+        none,
+        [0],
+        [0, 1, 2],
+    )
+
+
+def _distinct(directions: List[SIMD[DType.float64, 4]]) -> List[Int]:
+    """Return the indices of directions not parallel to an earlier one.
+
+    Two directions are parallel when their cross product is below 1e-9 of
+    the product of their lengths. Opposite directions are parallel.
+
+    Args:
+        directions: The nonzero directions.
+
+    Returns:
+        The indices, in order.
+    """
+    var out = List[Int]()
+    for i in range(len(directions)):  # pragma: no branch
+        var fresh = True
+        for j in out:
+            var cross = _wide_cross(directions[i], directions[j])
+            if _wide_dot(cross, cross) <= 1e-18 * _wide_dot(
+                directions[i], directions[i]
+            ) * _wide_dot(directions[j], directions[j]):
+                fresh = False
+                break
+        if fresh:
+            out.append(i)
+    return out^
+
+
+def _over_face(p: SIMD[DType.float64, 4], core: _Core, f: Int) -> Bool:
+    # Whether p projects onto face f, a convex polygon, along its normal.
+    var normal = core.normals[f]
+    var first = core.face_start[f]
+    var count = core.face_start[f + 1] - first
+    for k in range(count):  # pragma: no branch
+        var a = core.points[core.face_corners[first + k]]
+        var b = core.points[core.face_corners[first + (k + 1) % count]]
+        if _wide_dot(_wide_cross(b - a, p - a), normal) < 0:
+            return False
+    return True
+
+
+def _polygon_point(
+    p: SIMD[DType.float64, 4], core: _Core, f: Int
+) -> SIMD[DType.float64, 4]:
+    # The point of face f, a convex polygon, closest to p.
+    var normal = core.normals[f]
+    var first = core.face_start[f]
+    var count = core.face_start[f + 1] - first
+    var origin = core.points[core.face_corners[first]]
+    var flat = p - normal * _wide_dot(p - origin, normal)
+    if _over_face(p, core, f):
+        return flat
+    var best = flat
+    var distance = Float64(1e300)
+    for k in range(count):  # pragma: no branch
+        var a = core.points[core.face_corners[first + k]]
+        var b = core.points[core.face_corners[first + (k + 1) % count]]
+        var at = _on_segment(p, a, b - a)
+        var square = _wide_dot(p - at, p - at)
+        if square < distance:
+            distance = square
+            best = at
+    return best
+
+
+def _hull_distance(p: SIMD[DType.float64, 4], core: _Core) -> Float64:
+    """Return a distance from a point to a core's hull, radius excluded.
+
+    A triangle gives the exact distance, negative for a point behind its
+    face that projects onto it. A solid gives the largest signed
+    face-plane distance, which is negative inside and at most the true
+    distance outside. A sphere or capsule gives the exact distance to its
+    point or segment.
+
+    Args:
+        p: The point.
+        core: The shape.
+
+    Returns:
+        The distance, in meters.
+    """
+    if len(core.normals) == 1:
+        if _over_face(p, core, 0):
+            return _wide_dot(p - core.points[0], core.normals[0])
+        var gap = p - _polygon_point(p, core, 0)
+        return sqrt(_wide_dot(gap, gap))
+    if len(core.normals) > 1:
+        var most = Float64(-1e300)
+        for f in range(len(core.normals)):  # pragma: no branch
+            var origin = core.points[core.face_corners[core.face_start[f]]]
+            most = max(most, _wide_dot(p - origin, core.normals[f]))
+        return most
+    var start = core.points[0]
+    var axis = core.points[len(core.points) - 1] - start
+    var at = start
+    if _wide_dot(axis, axis) > 0:
+        at = _on_segment(p, start, axis)
+    return sqrt(_wide_dot(p - at, p - at))
+
+
+def _separate(
+    x: _Core,
+    y: _Core,
+    axis: SIMD[DType.float64, 4],
+    mut best: Float64,
+    mut normal: SIMD[DType.float64, 4],
+):
+    # Keep this axis, either way along it, when it separates the hulls
+    # more than the best so far. Parallel edges give no axis.
+    var square = _wide_dot(axis, axis)
+    if square == 0:
+        return
+    var unit = axis / sqrt(square)
+    var mine = _project(x.points, unit)
+    var theirs = _project(y.points, unit)
+    if mine[0] - theirs[1] > best:
+        best = mine[0] - theirs[1]
+        normal = unit
+    if theirs[0] - mine[1] > best:
+        best = theirs[0] - mine[1]
+        normal = -unit
+
+
+def _core_gap(
+    x: _Core, y: _Core, near: Float64
+) raises -> Tuple[Float64, SIMD[DType.float64, 4]]:
+    """Return the clearance of two cores and the unit normal from y to x.
+
+    Two round shapes use the closest points of their segments. Otherwise
+    the separating-axis test runs over each face normal, each cross
+    product of an edge of x with an edge of y, and, for a triangle y, its
+    side normals and each edge of x crossed with its face. These axes are
+    complete for every pair this module forms. A positive axis proves the
+    hulls apart, and the exact distance then comes from each corner
+    against each face polygon of the other and each edge pair, when the
+    axis leaves at most `near` of clearance. A wider axis clearance is
+    kept as a lower bound. Otherwise the axis of least overlap gives a
+    negative clearance.
+
+    Args:
+        x: The first shape, a moving body.
+        y: The second shape, a moving body or a triangle.
+        near: The axis clearance below which the exact distance is found.
+
+    Returns:
+        The clearance, which is the hull distance less both radii, and the
+        normal.
+
+    Raises:
+        Error: If two round shapes overlap past their segments.
+    """
+    var radii = x.radius + y.radius
+    if len(x.normals) == 0 and len(y.normals) == 0:
+        var gap = _segment_gap(
+            x.points[0],
+            x.points[len(x.points) - 1] - x.points[0],
+            y.points[0],
+            y.points[len(y.points) - 1] - y.points[0],
+        )
+        if gap[0] == 0:
+            raise Error(
+                "CCD round shapes overlap past their axes; step rolled back"
+            )
+        return (gap[0] - radii, gap[1])
+    var best = Float64(-1e300)
+    var normal = SIMD[DType.float64, 4](0)
+    for f in x.face_axes:
+        _separate(x, y, x.normals[f], best, normal)
+    for f in y.face_axes:
+        _separate(x, y, y.normals[f], best, normal)
+    for e in x.edge_axes:
+        var edge = x.points[x.edge_b[e]] - x.points[x.edge_a[e]]
+        for g in y.edge_axes:
+            _separate(
+                x,
+                y,
+                _wide_cross(
+                    edge, y.points[y.edge_b[g]] - y.points[y.edge_a[g]]
+                ),
+                best,
+                normal,
+            )
+        if len(y.normals) == 1:
+            _separate(x, y, _wide_cross(edge, y.normals[0]), best, normal)
+    if len(y.normals) == 1:
+        for g in range(3):  # pragma: no branch
+            _separate(
+                x,
+                y,
+                _wide_cross(
+                    y.points[y.edge_b[g]] - y.points[y.edge_a[g]], y.normals[0]
+                ),
+                best,
+                normal,
+            )
+    if best <= 0 or best - radii > near:
+        return (best - radii, normal)
+    # Apart: each closest pair is a corner on a face or two edges.
+    var distance = Float64(1e300)
+    for p in x.points:  # pragma: no branch
+        for f in range(len(y.normals)):
+            var gap = p - _polygon_point(p, y, f)
+            var length = sqrt(_wide_dot(gap, gap))
+            if length < distance:
+                distance = length
+                normal = gap / length
+    for q in y.points:  # pragma: no branch
+        for f in range(len(x.normals)):
+            var gap = _polygon_point(q, x, f) - q
+            var length = sqrt(_wide_dot(gap, gap))
+            if length < distance:
+                distance = length
+                normal = gap / length
+    for e in range(len(x.edge_a)):
+        for g in range(len(y.edge_a)):
+            var pair = _segment_gap(
+                x.points[x.edge_a[e]],
+                x.points[x.edge_b[e]] - x.points[x.edge_a[e]],
+                y.points[y.edge_a[g]],
+                y.points[y.edge_b[g]] - y.points[y.edge_a[g]],
+            )
+            if pair[0] < distance:
+                distance = pair[0]
+                normal = pair[1]
+    return (distance - radii, normal)
+
+
+def _bend_along(core: _Core, normal: SIMD[DType.float64, 4]) -> Float64:
+    # A rigid point's path bends across the spin axis only, so its deviation
+    # along the normal is at most bend times the normal's part across it.
+    var across = normal - core.axis * _wide_dot(normal, core.axis)
+    return core.bend * sqrt(_wide_dot(across, across)) * 1.000000000000001
+
+
+def _first_root(room: Float64, rate: Float64, curvature: Float64) -> Float64:
+    # The first positive root of room + rate t - curvature t^2 / 2, for a
+    # positive room, or 1e300 when it never reaches zero.
+    if curvature > 0:
+        var root = sqrt(rate * rate + 2 * curvature * room)
+        # The rationalized closing root keeps progress for tiny curvature.
+        if rate < 0:
+            return 2 * room / (root - rate)
+        return (rate + root) / curvature
+    if rate < 0:
+        return room / -rate
+    return 1e300
+
+
+def _core_clear(
+    x: _Core,
+    y: _Core,
+    clearance: Float64,
+    normal: SIMD[DType.float64, 4],
+    tolerance: Float64,
+) -> Float64:
+    """Return how long two moving cores stay clear along a fixed normal.
+
+    Along a fixed unit normal, the hulls' separation is the least gap of a
+    point of x over a point of y. Each point moves on its straight line
+    within its core's bend, so each pair's gap is at least its linear gap
+    less the summed bends times t^2 / 2. For shapes apart by more than
+    the tolerance, the result is the first time that bound reaches zero.
+    For shapes within the tolerance, it is the first time the bound
+    reaches the tolerance below zero, or below the present clearance when
+    the shapes overlap.
+
+    Args:
+        x: The first shape.
+        y: The second shape.
+        clearance: Their clearance from `_core_gap`.
+        normal: Its normal, from y to x.
+        tolerance: The deepening that the bound may allow.
+
+    Returns:
+        The time, or 1e300 for no limit.
+    """
+    # Apart, the bound aims at contact itself; touching within the
+    # tolerance, it may deepen by the tolerance, so a sliding contact
+    # still advances.
+    var allowance = Float64(0)
+    if clearance <= tolerance:
+        allowance = tolerance + max(-clearance, Float64(0))
+    var radii = x.radius + y.radius
+    var curvature = _bend_along(x, normal) + _bend_along(y, normal)
+    var limit = Float64(1e300)
+    for p in range(len(x.points)):  # pragma: no branch
+        for q in range(len(y.points)):  # pragma: no branch
+            var room = (
+                _wide_dot(x.points[p] - y.points[q], normal) - radii + allowance
+            )
+            var rate = _wide_dot(x.speeds[p] - y.speeds[q], normal)
+            limit = min(limit, _first_root(room, rate, curvature))
+    return limit
+
+
+def _core_contacts(
+    x: _Core,
+    y: _Core,
+    normal: SIMD[DType.float64, 4],
+    band: Float64,
+) -> List[SIMD[DType.float64, 4]]:
+    """Return the contact points of two cores that touch within a band.
+
+    Two round shapes touch at their closest points. Otherwise a corner of
+    either shape within the band of the other is a point, and so is the
+    closest point of two edges whose interiors come within the band. Each
+    point lies on the surface of x, or of y for y's corners. The caller
+    drops repeated points.
+
+    Args:
+        x: The first shape.
+        y: The second shape.
+        normal: Their normal from `_core_gap`, from y to x.
+        band: The widest gap a point may have.
+
+    Returns:
+        The points, in order: x's corners, y's corners, then edge pairs.
+    """
+    var found = List[SIMD[DType.float64, 4]]()
+    var radii = x.radius + y.radius
+    if len(x.normals) == 0 and len(y.normals) == 0:
+        var axis = x.points[len(x.points) - 1] - x.points[0]
+        var gap = _segment_gap(
+            x.points[0],
+            axis,
+            y.points[0],
+            y.points[len(y.points) - 1] - y.points[0],
+        )
+        found.append(x.points[0] + axis * gap[2] - normal * x.radius)
+        return found^
+    for p in x.points:  # pragma: no branch
+        if _hull_distance(p, y) - radii <= band:
+            found.append(p - normal * x.radius)
+    for q in y.points:  # pragma: no branch
+        if _hull_distance(q, x) - radii <= band:
+            found.append(q + normal * y.radius)
+    for e in range(len(x.edge_a)):
+        var start = x.points[x.edge_a[e]]
+        var edge = x.points[x.edge_b[e]] - start
+        for g in range(len(y.edge_a)):
+            var other = y.points[y.edge_a[g]]
+            var side = y.points[y.edge_b[g]] - other
+            var pair = _segment_gap(start, edge, other, side)
+            if pair[0] - radii > band:
+                continue
+            # Ends of either edge are corners, found above.
+            var at = start + edge * pair[2]
+            var along = _wide_dot(at - other, side) / _wide_dot(side, side)
+            if min(pair[2], along) > 0 and max(pair[2], along) < 1:
+                found.append(at - normal * x.radius)
+    return found^
+
+
+def _ccd_qp(
+    matrix: List[Float64], closing: List[Float64]
+) raises -> List[Float64]:
+    """Solve the plastic contact problem by an active-set method.
+
+    The impulses x >= 0 minimize x^T A x / 2 + b^T x, so the closing
+    speeds w = A x + b end nonnegative and x_c w_c = 0. A = J M^-1 J^T is
+    positive semidefinite. The method is Lawson and Hanson's nonnegative
+    least squares, run on A and b. It adds the contact whose closing
+    speed is most negative, lowest index first on a tie, solves the active
+    contacts to zero closing speed, and steps back to keep each impulse
+    nonnegative. On the solution x^T A x = -b^T x, so the impulses change
+    the kinetic energy by -x^T A x / 2: they cannot add any.
+
+    Args:
+        matrix: A, row-major, m by m.
+        closing: b, the closing speeds before the impulses.
+
+    Returns:
+        The impulses.
+
+    Raises:
+        Error: If no impulses can open every contact, as when a kinematic
+            body drives a body into a mesh, or the method does not end.
+    """
+    var m = len(closing)
+    var scale = Float64(0)
+    var largest = Float64(0)
+    for c in range(m):
+        scale = max(scale, abs(closing[c]))
+        for d in range(m):  # pragma: no branch
+            largest = max(largest, abs(matrix[c * m + d]))
+    var tolerance = scale * 1e-9
+    var impulse = List[Float64](length=m, fill=0)
+    var active = List[Bool](length=m, fill=False)
+    for _ in range(4 * m + 8):  # pragma: no branch
+        # The most negative closing speed of an inactive contact.
+        var pick = -1
+        var most = tolerance
+        for c in range(m):
+            if active[c]:
+                continue
+            var speed = closing[c]
+            for d in range(m):  # pragma: no branch
+                speed += matrix[c * m + d] * impulse[d]
+            if -speed > most:
+                most = -speed
+                pick = c
+        if pick < 0:
+            return impulse^
+        active[pick] = True
+        for _ in range(m + 1):  # pragma: no branch
+            var trial = _active_solve(matrix, closing, active, largest)
+            var alpha = Float64(1)
+            for c in range(m):  # pragma: no branch
+                if active[c] and trial[c] <= 0:
+                    alpha = min(alpha, impulse[c] / (impulse[c] - trial[c]))
+            for c in range(m):  # pragma: no branch
+                if active[c]:
+                    impulse[c] += alpha * (trial[c] - impulse[c])
+            if alpha == 1:
+                break
+            for c in range(m):  # pragma: no branch
+                if active[c] and impulse[c] <= 0:
+                    active[c] = False
+                    impulse[c] = 0
+    raise Error("CCD could not resolve simultaneous contacts; step rolled back")
+
+
+def _active_solve(
+    matrix: List[Float64],
+    closing: List[Float64],
+    active: List[Bool],
+    largest: Float64,
+) raises -> List[Float64]:
+    # Solve A_SS x_S = -b_S by elimination with partial pivoting; the
+    # inactive impulses are zero.
+    var m = len(closing)
+    var index = List[Int]()
+    for c in range(m):  # pragma: no branch
+        if active[c]:
+            index.append(c)
+    var size = len(index)
+    var width = size + 1
+    var rows = List[Float64](length=size * width, fill=0)
+    for r in range(size):  # pragma: no branch
+        for s in range(size):  # pragma: no branch
+            rows[r * width + s] = matrix[index[r] * m + index[s]]
+        rows[r * width + size] = -closing[index[r]]
+    for column in range(size):  # pragma: no branch
+        var pivot = column
+        for r in range(column + 1, size):
+            if abs(rows[r * width + column]) > abs(
+                rows[pivot * width + column]
+            ):
+                pivot = r
+        if abs(rows[pivot * width + column]) <= largest * 1e-12:
+            raise Error(
+                "CCD could not resolve simultaneous contacts; step rolled back"
+            )
+        for s in range(width):  # pragma: no branch
+            var swap = rows[column * width + s]
+            rows[column * width + s] = rows[pivot * width + s]
+            rows[pivot * width + s] = swap
+        for r in range(column + 1, size):
+            var factor = (
+                rows[r * width + column] / rows[column * width + column]
+            )
+            for s in range(column, width):  # pragma: no branch
+                rows[r * width + s] -= factor * rows[column * width + s]
+    var out = List[Float64](length=m, fill=0)
+    for r in reversed(range(size)):  # pragma: no branch
+        var value = rows[r * width + size]
+        for s in range(r + 1, size):
+            value -= rows[r * width + s] * out[index[s]]
+        out[index[r]] = value / rows[r * width + r]
+    return out^

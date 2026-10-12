@@ -301,13 +301,12 @@ def test_ghosts_modes_and_reentry() raises:
     assert_equal(world.contact_count, 0)
     world.bodies[0].collides = True
     world.bodies[1].set_kind(KINEMATIC)
-    # A kinematic sphere passes through static meshes. With spin it is
-    # refused.
+    # A kinematic sphere passes through static meshes, with spin too.
     world.step(Duration(0.01))
     assert_equal(world.contact_count, 0)
     world.bodies[1].angular_velocity = Vector3(0, 0, 1)
-    with assert_raises(contains="kinematic sphere without spin"):
-        world.step(Duration(0.01))
+    world.step(Duration(0.01))
+    assert_equal(world.contact_count, 0)
     world.bodies[1].angular_velocity = Vector3(0, 0, 0)
     world.bodies[1].collides = False
     world.step(Duration(0.01))
@@ -345,9 +344,16 @@ def test_support_and_finite_failures_are_atomic() raises:
             # Offsets turn a body, up to 10000 m.
             world.bodies[1].shape_position = Vector3(20000, 0, 0)
         elif choice == 5:
-            # A kinematic sphere must stay centered.
-            world.bodies[1].center_of_mass = Vector3(1, 0, 0)
-            world.bodies[1].set_kind(KINEMATIC)
+            # A static primitive is refused.
+            _ = world.add_body(
+                RigidBody(
+                    STATIC,
+                    Shape.sphere(Length(0.05)),
+                    Mass(0),
+                    Vector3(5, 0, 0),
+                    Quaternion.identity(),
+                )
+            )
         elif choice == 6:
             var inertia = world.bodies[1].inverse_inertia()
             inertia.elements[1] = 1
@@ -375,16 +381,16 @@ def test_support_and_finite_failures_are_atomic() raises:
         elif choice == 14:
             world.bodies[1].force = Vector3(1, 2, 3e38)
         elif choice == 15:
-            # A kinematic capsule is refused.
-            _ = world.add_body(
-                RigidBody(
-                    KINEMATIC,
-                    Shape.capsule(Length(0.05), Length(0.05)),
-                    Mass(1),
-                    Vector3(0, 0, 0.3),
-                    Quaternion.identity(),
-                )
+            # A kinematic capsule keeps the half-height limit.
+            var capsule = RigidBody(
+                KINEMATIC,
+                Shape.capsule(Length(0.05), Length(0.05)),
+                Mass(1),
+                Vector3(0, 0, 0.3),
+                Quaternion.identity(),
             )
+            capsule.shape.half_height = 20000
+            _ = world.add_body(capsule^)
         else:
             world.bounce_threshold = nan[DType.float32]()
         var position = world.bodies[1].position
@@ -623,7 +629,11 @@ def test_scalar_settings_and_extra_support_rejections() raises:
         if choice == 0:
             world.bodies[1].set_kind(STATIC)
         elif choice == 1:
+            # A box that can turn needs a positive definite tensor.
             world.bodies[1].shape = Shape.box(Length(1), Length(1), Length(1))
+            var tensor = world.bodies[1].inverse_inertia()
+            tensor.elements[1] = 1
+            world.bodies[1].set_inverse_inertia(tensor)
         elif choice == 2:
             world.bodies[1].material = PhysicsMaterial(-1, 0)
         elif choice == 3:

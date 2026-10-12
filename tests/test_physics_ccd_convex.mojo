@@ -62,7 +62,9 @@ def _cube(
 
 
 def _flat() -> Triangle:
-    return Triangle(Vector3(-10, -10, 0), Vector3(10, -10, 0), Vector3(0, 10, 0))
+    return Triangle(
+        Vector3(-10, -10, 0), Vector3(10, -10, 0), Vector3(0, 10, 0)
+    )
 
 
 def test_the_separating_axis_sweep() raises:
@@ -130,7 +132,9 @@ def test_an_edge_meets_a_vertical_fin() raises:
     # from 1 m: its edge, 0.5 sqrt(2) from its center, meets the fin.
     var fin = Triangle(Vector3(0, -1, -1), Vector3(0, 1, -1), Vector3(0, 0, 1))
     var box = Polyhedron.box(Vector3(0.5, 0.5, 0.5))
-    var turn = Quaternion(0, 0, Float32(sin(0.3926990817)), Float32(cos(0.3926990817)))
+    var turn = Quaternion(
+        0, 0, Float32(sin(0.3926990817)), Float32(cos(0.3926990817))
+    )
     var corners = List[SIMD[DType.float64, 4]]()
     for corner in box.vertices:
         var at = turn.rotate(corner)
@@ -157,7 +161,9 @@ def _floor() raises -> RigidBody:
     )
 
 
-def _box(z: Float32, velocity: Vector3, bounce: Float32 = 0) raises -> RigidBody:
+def _box(
+    z: Float32, velocity: Vector3, bounce: Float32 = 0
+) raises -> RigidBody:
     var body = RigidBody(
         DYNAMIC,
         Shape.box(Length(0.5), Length(0.5), Length(0.5)),
@@ -280,8 +286,9 @@ def test_a_hull_on_an_indexed_floor_matches_the_full_scan() raises:
 
 
 def test_boxes_fail_closed() raises:
-    # A turning box, a box that reaches another moving body, and one
-    # impact too many all refuse the step and leave it unchanged.
+    # A box that cannot turn but spins, and one impact too many, refuse
+    # the step and leave it unchanged. A box that reaches another moving
+    # body steps with it.
     var world = _world()
     _ = world.add_body(_floor())
     var turning = _box(0.6, Vector3(0, 0, -30))
@@ -293,8 +300,8 @@ def test_boxes_fail_closed() raises:
     var pair = _world()
     _ = pair.add_body(_box(0.6, Vector3(0, 0, -30)))
     _ = pair.add_body(_box(2, Vector3(0, 0, 0)))
-    with assert_raises(contains="must not reach another moving body"):
-        pair.step(Duration(0.01))
+    pair.step(Duration(0.01))
+    assert_true(pair.bodies[1].position.z > pair.bodies[0].position.z)
     var limited = _world()
     limited.ccd_max_impacts = 1
     _ = limited.add_body(_floor())
