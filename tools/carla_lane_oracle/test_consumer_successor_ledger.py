@@ -17,6 +17,20 @@ import render_actor_reuse_contracts as reuse
 import runtime_boundary_contracts as boundary
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+# This module's fixed byte/line/body assertions describe the historical main
+# graph. The #333 current graph has separate physical admission/mutation tests.
+_CURRENT_SOURCE_ROOT = ROOT
+
+
+def setUpModule():
+    global ROOT
+    import _full_audit_test_fixtures as historical_fixtures
+    owner = type('HistoricalModuleFixture', (), {
+        'addCleanup': staticmethod(unittest.addModuleCleanup)})()
+    ROOT = historical_fixtures.copy_historical_boundary_root(owner, _CURRENT_SOURCE_ROOT)
+    unittest.addModuleCleanup(globals().__setitem__, 'ROOT', _CURRENT_SOURCE_ROOT)
 CONSUMER = 'extensions/carla/actor.mojo'
 BOUND_TEST = 'tests/test_carla_agents.mojo'
 
@@ -365,7 +379,7 @@ class RecordIntegrationTests(unittest.TestCase):
 
     def setUp(self):
         import _full_audit_test_fixtures as fixtures
-        self.root = fixtures.copy_current_root(self, ROOT)
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         self.before = (self.root/CONSUMER).read_bytes()
         self.after = self.before + b'\n# A reviewed consumer edge.\n'
         self.tests = {BOUND_TEST: sha((self.root/BOUND_TEST).read_bytes())}
