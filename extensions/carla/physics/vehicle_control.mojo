@@ -252,6 +252,9 @@ struct PID(ImplicitlyCopyable):
 
         Returns:
             The output, from minus one to one.
+
+        Raises:
+            Error: If the time step is nonfinite or not positive.
         """
         return self.run_seconds(input, dt.value)
 
@@ -264,6 +267,9 @@ struct PID(ImplicitlyCopyable):
 
         Returns:
             The output, from minus one to one.
+
+        Raises:
+            Error: If the time step is nonfinite or not positive.
         """
         _ = _positive_si(Float64(dt))
         return self._run_si(input, dt)
