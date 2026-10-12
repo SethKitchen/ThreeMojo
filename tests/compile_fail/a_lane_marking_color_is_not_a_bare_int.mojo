@@ -7,7 +7,9 @@
 
 from extensions.carla.road_info import CHANGE_NONE, LaneMarking, SOLID
 
+from units.si import Length64
+
 
 def main() raises:
-    var mark = LaneMarking(SOLID, 4, CHANGE_NONE, 0.15)
+    var mark = LaneMarking(SOLID, 4, CHANGE_NONE, Length64(0.15))
     print(mark.width)
