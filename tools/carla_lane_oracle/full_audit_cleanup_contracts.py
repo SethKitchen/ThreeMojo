@@ -47,6 +47,7 @@ try:
         from . import map_deviation_contracts as deviation
         from . import runtime_view_contracts as runtime_view
         from . import shared_helper_contracts as shared_helpers
+        from . import witness_format_contracts as witness_format
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
@@ -55,6 +56,7 @@ try:
         import map_deviation_contracts as deviation
         import runtime_view_contracts as runtime_view
         import shared_helper_contracts as shared_helpers
+        import witness_format_contracts as witness_format
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -135,7 +137,8 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/runtime_view_contracts.py': '0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',
+ 'tools/carla_lane_oracle/runtime_view_contracts.py': '0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/map_deviation_contracts.py': '741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',
@@ -211,7 +214,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/map_station_contracts.py',
                  'tools/carla_lane_oracle/shared_helper_contracts.py',
                  'tools/carla_lane_oracle/runtime_view_contracts.py',
-                 'tools/carla_lane_oracle/map_deviation_contracts.py')
+                 'tools/carla_lane_oracle/map_deviation_contracts.py',
+                 'tools/carla_lane_oracle/witness_format_contracts.py')
 
 
 def _center_require(ok, message):
@@ -678,7 +682,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -716,7 +720,7 @@ def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
-               vars(deviation))
+               vars(deviation), vars(witness_format))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -2157,6 +2161,51 @@ def _station_bindings(root, *, _snapshots=None, _operation=None):
     return result
 
 
+def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
+    """Admit four fixed witness formats without acquiring production context."""
+    try:
+        _operation_check(_operation, root)
+        image, result, active = {}, {}, False
+        for path in witness_format.SOURCE_PATHS:
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                 _operation=_operation)
+            require(type(raw) is bytes, 'witness is not physical bytes: ' + path)
+            if _snapshots is not None:
+                require(_snapshots.setdefault(path, raw) == raw,
+                        'witness changed before format admission: ' + path)
+            image[path] = raw
+            digest = sha(raw)
+            if digest == witness_format.BEFORE_SHA256[path]:
+                require(source.token_sha256(raw.decode('utf-8')) ==
+                        witness_format.BEFORE_TOKEN_SHA256[path],
+                        'historical witness tokens changed: ' + path)
+            else:
+                witness_format.predecessor_source(path, raw.decode('utf-8'))
+                active = True
+            result[path] = digest
+        if active:
+            leaf = 'tools/carla_lane_oracle/witness_format_contracts.py'
+            for path, expected in {leaf: DEPENDENCY_TOOL_SHA256[leaf],
+                                   **witness_format.BOUND_INPUTS}.items():
+                raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                     _operation=_operation)
+                require(type(raw) is bytes and sha(raw) == expected,
+                        'witness-format proof input changed: ' + path)
+                if _snapshots is not None:
+                    require(_snapshots.setdefault(path, raw) == raw,
+                            'witness-format input changed after consumption: ' + path)
+                image[path] = raw
+                result[path] = expected
+        for path, expected in image.items():
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                 _operation=_operation)
+            require(type(raw) is bytes and raw == expected,
+                    'witness-format input changed during admission: ' + path)
+        return result if active else {}
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
 def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None):
     """Check actual complete current endpoints and all premises without caches."""
     root = Path(root)
@@ -2234,6 +2283,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         snapshots[CONSUMER_LEDGER] = ledger_raw
         _runtime_view_bindings(root, _snapshots=snapshots)
         station_bindings = _station_bindings(root, _snapshots=snapshots)
+        witness_bindings = _witness_format_bindings(root, _snapshots=snapshots,
+            _operation=_capture if type(_capture) is _InvariantInputs else None)
         bound = {}
         for group in BOUND_GROUPS:
             for path, expected in record[group].items():
@@ -2250,6 +2301,12 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                             and expected == helper_edges[path]['before_sha256'],
                             'helper edge does not extend immutable input: ' + path)
                     expected = helper_edges[path]['after_sha256']
+                if path in witness_bindings:
+                    require(path in witness_format.SOURCE_PATHS
+                            and group in ('native_witnesses', 'native_dependency_inputs')
+                            and expected == witness_format.BEFORE_SHA256[path],
+                            'format edge does not extend immutable witness: ' + path)
+                    expected = witness_bindings[path]
                 require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
@@ -2464,6 +2521,7 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         # Receipts name the actual admitted Map and its bound native inputs.
         # The immutable record remains a historical premise, never a live hash.
         result.update(_station_bindings(root, _operation=_operation))
+        result.update(_witness_format_bindings(root, _operation=_operation))
         result.update(_runtime_view_bindings(root, _operation=_operation))
         result.update(shared_helper_proof_bindings(root, include_roots=include_roots,
                                                   _operation=_operation))
