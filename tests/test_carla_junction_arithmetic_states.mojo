@@ -38,7 +38,7 @@ from tests._spiral_domain_controls import _road
 def _line(
     x: Float64 = 0.0, y: Float64 = 0.0, length: Float64 = 20.0
 ) raises -> Road:
-    return _road(RoadGeometry(LINE, 0.0, x, y, 0.0, length))
+    return _road(RoadGeometry.from_meters(LINE, 0.0, x, y, 0.0, length))
 
 
 def _valid(road: Road) raises:
@@ -70,7 +70,7 @@ def test_equal_station_certification_covers_its_canonical_point() raises:
 
 def test_adjacent_stations_certify_both_midpoint_rounding_directions() raises:
     var road = _line()
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         0.0, 1.0, 0.0, 0.0, 0.0
     )
     _valid(road)
@@ -94,10 +94,10 @@ def test_adjacent_stations_certify_both_midpoint_rounding_directions() raises:
 def test_one_ulp_section_skips_an_empty_interior_but_keeps_endpoints() raises:
     var end = _next_up(1.0)
     var road = _line(length=end)
-    var section = road.add_section(SectionId(1), 1.0)
+    var section = road.add_section_meters(SectionId(1), 1.0)
     _ = road.sections[section].add_lane(LaneId(-1))
     road.sections[section].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(1.0, CubicPolynomial.constant(3.5))
+        RoadInfoLaneWidth._from_si(1.0, CubicPolynomial._constant_si(3.5))
     )
     _valid(road)
     var box = _lane_section_box(road, section, 0)
@@ -109,7 +109,9 @@ def test_finite_double_endpoints_refuse_public_coordinate_overflow() raises:
     for axis in range(4):
         var road = _line(1e40 if axis == 1 else 0.0, 1e40 if axis == 2 else 0.0)
         if axis == 3:
-            road.info.elevations[0].polynomial = CubicPolynomial.constant(1e40)
+            road.info.elevations[0].polynomial = CubicPolynomial._constant_si(
+                1e40
+            )
         _valid(road)
         var work = _MapBuildWork(MapBuildBudget())
         if axis == 0:
@@ -139,9 +141,9 @@ def test_finite_extreme_origins_refuse_each_overflowing_proposal_face() raises:
                 sign * maximum if axis == 1 else 0.0,
             )
             if axis == 2:
-                road.info.elevations[0].polynomial = CubicPolynomial.constant(
-                    sign * maximum
-                )
+                road.info.elevations[
+                    0
+                ].polynomial = CubicPolynomial._constant_si(sign * maximum)
             _valid(road)
             # Canonical points still fit. Only the necessary outward proposal
             # padding exceeds one selected Float32 face.
@@ -157,7 +159,7 @@ def test_finite_extreme_origins_refuse_each_overflowing_proposal_face() raises:
 
 def test_centered_reexpansion_overflow_keeps_the_original_finite_bound() raises:
     var road = _line()
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         0.0, 1e308, -8e307, 0.0, 0.0
     )
     _valid(road)
@@ -174,14 +176,14 @@ def test_centered_reexpansion_overflow_keeps_the_original_finite_bound() raises:
     assert_equal(bound.low, original.low)
     assert_equal(bound.high, original.high)
     assert_true(
-        bound.contains(road.info.elevations[0].polynomial.evaluate(2.0))
+        bound.contains(road.info.elevations[0].polynomial.evaluate_meters(2.0))
     )
     assert_equal(work.terms, 128)
 
 
 def test_finite_polynomial_overflow_exhausts_numerical_certification() raises:
     var road = _line()
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         -1.7e308, 1.7e308, 1e307, 0.0, 0.0
     )
     _valid(road)
