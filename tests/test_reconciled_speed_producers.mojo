@@ -27,17 +27,17 @@ def test_zero_speed_numbers_with_and_without_exponents() raises:
 
 def test_builder_numeric_speed_records_keep_their_units() raises:
     var builder = MapBuilder()
-    var r = builder.add_road(
+    var r = builder.add_road_si(
         RoadId(1), "road", 10.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    var sec = builder.add_road_section(r, SectionId(0), 0.0)
+    var sec = builder.add_road_section_si(r, SectionId(0), 0.0)
     _ = builder.add_road_section_lane(
         r, sec, LaneId(-1), LANE_DRIVING, False, LaneId(0), LaneId(0)
     )
-    builder.create_lane_speed(
-        builder.lane(RoadId(1), LaneId(-1), 0.0), 0.0, 13.5, "m/s"
+    builder.create_lane_speed_opendrive(
+        builder.lane_si(RoadId(1), LaneId(-1), 0.0), 0.0, 13.5, "m/s"
     )
-    builder.create_road_speed(r, 0.0, "town", 50.0, "km/h")
+    builder.create_road_speed_opendrive(r, 0.0, "town", 50.0, "km/h")
     assert_equal(builder.roads[r].info.speeds[0].unit, "km/h")
     assert_equal(
         builder.roads[r].sections[0].lanes[0].info.speeds[0].unit, "m/s"
