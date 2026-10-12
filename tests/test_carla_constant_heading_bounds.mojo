@@ -129,25 +129,26 @@ def test_diagonal_line_has_curvature_and_completes_with_original_limits() raises
     var heading = bitcast[DType.float64](UInt64(0x3FE921FB54442D18))
     var low = bitcast[DType.float64](UInt64(0x3D19000000000000))
     var high = bitcast[DType.float64](UInt64(0x402C48C5DE911B7E))
-    var road = Road(
+    var road = Road._from_si(
         RoadId(14), "diagonal", length, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(3.5))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(3.5))
     )
     road.info.geometries.append(
-        RoadInfoGeometry(
-            0.0, RoadGeometry(LINE, 0.0, 55.0, -10.0, heading, length)
+        RoadInfoGeometry._from_si(
+            0.0,
+            RoadGeometry.from_meters(LINE, 0.0, 55.0, -10.0, heading, length),
         )
     )
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     var query = Vector3(55.25, 5.0, 3.0)
     var domain = _lane_jet(road, 0, 0, low, high)
