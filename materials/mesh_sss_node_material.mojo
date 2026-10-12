@@ -29,6 +29,7 @@ set one takes three.js's default. Both rasterizers call `scatters`,
 from lights.lighting import Reflected
 from materials.material import MaterialKind, PHYSICAL
 from materials.nodes import (
+    Lanes,
     NodeInputs,
     NodeSource,
     THICKNESS_AMBIENT_NODE,
@@ -93,21 +94,12 @@ def scatters[S: NodeSource](source: S, noded: Bool, kind: MaterialKind) -> Bool:
     )
 
 
-def _number[
-    S: NodeSource
-](
-    source: S, output: NodeOutput, inputs: NodeInputs, default: Float32
-) -> Float32:
-    """Return what a `float` output computes, or the default where the
-    graph does not set it."""
-    if has_output(source, output):
-        return run_nodes(source, output, inputs)[0]
-    return default
-
-
 def thickness_of[S: NodeSource](source: S, inputs: NodeInputs) -> Thickness:
     """Return a fragment's six thickness nodes, each run once, or three.js's
     default where the graph does not set it.
+
+    One `run_nodes` call in a loop runs all six. A GPU inlines every call,
+    so each call site copies the whole interpreter into the kernel.
 
     Args:
         source: The fragment's program, one `scatters` answered True for.
@@ -116,26 +108,33 @@ def thickness_of[S: NodeSource](source: S, inputs: NodeInputs) -> Thickness:
     Returns:
         The color and the five numbers.
     """
-    var color = run_nodes(source, THICKNESS_COLOR_NODE, inputs)
+    var outputs: Array[NodeOutput, 6] = [
+        THICKNESS_COLOR_NODE,
+        THICKNESS_DISTORTION_NODE,
+        THICKNESS_AMBIENT_NODE,
+        THICKNESS_ATTENUATION_NODE,
+        THICKNESS_POWER_NODE,
+        THICKNESS_SCALE_NODE,
+    ]
+    var values: Array[Lanes, 6] = [
+        Lanes(0),
+        Lanes(DEFAULT_THICKNESS_DISTORTION),
+        Lanes(DEFAULT_THICKNESS_AMBIENT),
+        Lanes(DEFAULT_THICKNESS_ATTENUATION),
+        Lanes(DEFAULT_THICKNESS_POWER),
+        Lanes(DEFAULT_THICKNESS_SCALE),
+    ]
+    for index in range(6):  # pragma: no branch
+        # `scatters` has asked for the color; the numbers are optional.
+        if index == 0 or has_output(source, outputs[index]):
+            values[index] = run_nodes(source, outputs[index], inputs)
     return Thickness(
-        Vector3(color[0], color[1], color[2]),
-        _number(
-            source,
-            THICKNESS_DISTORTION_NODE,
-            inputs,
-            DEFAULT_THICKNESS_DISTORTION,
-        ),
-        _number(
-            source, THICKNESS_AMBIENT_NODE, inputs, DEFAULT_THICKNESS_AMBIENT
-        ),
-        _number(
-            source,
-            THICKNESS_ATTENUATION_NODE,
-            inputs,
-            DEFAULT_THICKNESS_ATTENUATION,
-        ),
-        _number(source, THICKNESS_POWER_NODE, inputs, DEFAULT_THICKNESS_POWER),
-        _number(source, THICKNESS_SCALE_NODE, inputs, DEFAULT_THICKNESS_SCALE),
+        Vector3(values[0][0], values[0][1], values[0][2]),
+        values[1][0],
+        values[2][0],
+        values[3][0],
+        values[4][0],
+        values[5][0],
     )
 
 
