@@ -22,6 +22,11 @@ from std.memory import stack_allocation
 from std.sys._libc_errno import ErrNo, get_errno, set_errno
 from std.reflection import reflect
 from std.sys import is_defined
+from std.traits import (
+    IsTriviallyCopyable,
+    IsTriviallyDeinitable,
+    IsTriviallyMovable,
+)
 
 comptime LINE_PREFIX = "COVLINE:"
 comptime BRANCH_PREFIX = "COVBRANCH:"
@@ -41,15 +46,6 @@ comptime _bitwise[T: AnyType] = (
     and downcast[T, _Copied].__move_ctor_is_trivial
     and downcast[T, _Copied].__del__is_trivial
 ) if conforms_to(T, _Copied) else False
-
-# True if a native one-type operator can select a `T` without running source
-# code. It moves a temporary, and it copies an implicitly copyable retained
-# value and later destroys the copy. A value that is not implicitly copyable
-# cannot be retained in a one-type operator.
-comptime _plain[T: AnyType] = (
-    downcast[T, Movable].__move_ctor_is_trivial
-    and (_bitwise[T] if conforms_to(T, _Copied) else True)
-) if conforms_to(T, Movable) else False
 
 
 @inline(.never)
@@ -265,13 +261,12 @@ def leaf[
     T: Movable, //
 ](
     value: Optional[T], mut values: List[Int], id: StaticString, index: Int
-) -> Bool where _plain[Optional[T]]:
+) -> Bool:
     """Record a standard-library operand with a pure truth conversion.
 
-    A one-type operator selects an `Optional` by a move or a copy. That runs
-    the element's own move, copy and destructor code. Only an `Optional` whose
-    selection runs no source code uses this overload. Another `Optional` uses
-    a recording proxy, as a custom operand does.
+    A one-type operator selects an `Optional` by a move or a copy. That can
+    run the element's own move, copy and destructor code. `node` refuses such
+    an operator, because this probe records only the truth.
 
     Args:
         value: The original truth-testable operand, borrowed without copying.
@@ -373,9 +368,11 @@ struct _BorrowedLeaf[
     """A borrowed retained operand that records each native truth conversion.
 
     The type keeps the operand origin, so Mojo keeps the operand alive. A
-    native mixed-type `and` or `or` converts the borrowed operand once and
-    does not copy it. A native same-type operator selects an owned copy or
-    move of the operand. `node` refuses a same-type operator of these proxies.
+    surrounding `not` converts the borrowed operand once and does not copy it.
+    A native mixed-type `and` or `or` also converts it once, but a custom
+    merge can replace that conversion, so `node` refuses the form. A native
+    same-type operator selects an owned copy or move of the operand. `node`
+    refuses a same-type operator of these proxies too.
     """
 
     var value: Pointer[Self.T, Self.value_origin]
@@ -458,10 +455,11 @@ def leaf[
     The native `and`, `or`, `not` and truth context convert the proxy as they
     would the operand.
 
-    Another operand is converted here once, and then destroyed. A native
-    two-type operator or `not` also converts a temporary once, at once, and
-    then destroys it. A native one-type operator moves the selected operand
-    into its result instead, so `node` refuses it: the probes are `Bool`.
+    Another operand is converted here once, and then destroyed. `not` also
+    converts a temporary once, at once, and then destroys it. A native
+    one-type operator moves the selected operand into its result instead, so
+    `node` refuses it: the probes are `Bool`. `node` also refuses a two-type
+    operator of a custom operand.
 
     Args:
         value: The temporary operand, never copied.
@@ -500,11 +498,13 @@ def leaf[
 ) -> _Retained[T, value_origin, origin]:
     """Probe a retained custom operand in a recording proxy.
 
-    Native mixed-type `and` or `or` converts a retained operand once, without
-    a copy, so a borrowing proxy keeps it. Native same-type `and` or `or`
-    copies or moves a retained operand into its result, and converts that
-    value again. A borrowing proxy cannot copy or move the operand, so `node`
-    refuses a same-type operator whose result is a borrowing proxy.
+    A surrounding `not` converts a retained operand once, without a copy, so
+    a borrowing proxy keeps it. `node` refuses a native mixed-type `and` or
+    `or` of a custom operand, because a custom merge can replace its
+    conversion. Native same-type `and` or `or` copies or moves a retained
+    operand into its result, and converts that value again. A borrowing proxy
+    cannot copy or move the operand, so `node` refuses a same-type operator
+    whose result is a borrowing proxy.
 
     A bitwise operand is copied into an owning proxy instead. Its copy, move
     and destruction run no source code, so the extra copy is not observable.
@@ -638,8 +638,8 @@ struct _Right[N: AnyType](TrivialRegisterPassable):
         mut values: List[Int],
         id: StaticString,
         index: Int,
-    ) -> Bool where _plain[Optional[T]]:
-        """Record a plain retained `Optional` right operand.
+    ) -> Bool:
+        """Record a retained `Optional` right operand.
 
         Parameters:
             T: The element type.
@@ -690,14 +690,15 @@ struct _Right[N: AnyType](TrivialRegisterPassable):
         ref[origin] values: List[Int],
         id: StaticString,
         index: Int,
-    ) -> _Temporary[downcast[Self.N, _Owned], origin] where (
-        conforms_to(Self.N, _Owned) and not _bitwise[Self.N]
+    ) -> _Temporary[downcast[Self.N, _Owned], origin] where conforms_to(
+        Self.N, _Owned
     ):
         """Own a right operand of the operator's result type.
 
         Mojo copies a retained operand into `value`, or moves it at its last
         use, as the native operator does. A temporary binds without a move.
-        A bitwise operand uses the `leaf` probes: they give the same result.
+        A fixed pure overload is preferred where one applies. The only
+        constraint is a trait conformance, so a generic caller can prove it.
 
         Parameters:
             origin: The operand buffer's origin.
@@ -856,15 +857,54 @@ def _borrowed(name: StaticString) -> Bool:
     return name.startswith(prefix)
 
 
+def _standard_string_optional[
+    T: AnyType, Candidate: Movable & Deinitable = String
+]() -> Bool:
+    """Recognize only standard String and its standard Optional wrappers.
+
+    Standard String copy and destruction manage storage without invoking
+    user payload methods. Keep this existing standard-value case separate
+    from arbitrary custom payloads with observable lifecycle methods.
+    """
+    comptime if T == Candidate:
+        return True
+    # Each canonical Optional wrapper lengthens its reflected name. Length
+    # only stops the search; admission always requires exact type identity.
+    comptime if (
+        reflect[Candidate].name().byte_length()
+        >= reflect[T].name().byte_length()
+    ):
+        return False
+    return _standard_string_optional[T, Optional[Candidate]]()
+
+
+def _optional_lifecycle[T: AnyType]() -> Bool:
+    """Check the operations omitted by an Optional-valued selection.
+
+    A move-only value can retain its original destructor. A selected retained
+    copy creates another object, so both its copy and destruction must have
+    no user-visible effects. String uses the fixed standard-value rule.
+    """
+    comptime if not IsTriviallyMovable[T]:
+        return False
+    comptime if not conforms_to(T, ImplicitlyCopyable):
+        return True
+    return (
+        IsTriviallyCopyable[T] and IsTriviallyDeinitable[T]
+    ) or _standard_string_optional[T]()
+
+
 def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     """Check that probes keep one `and`/`or` operator's native semantics.
 
-    Mojo tests a same-type operand again in the enclosing context and converts
-    mixed-type operands once. An implicit conversion can also join two operand
-    types. The probes keep the native operator, so it must choose the same
-    semantics for the proxies. Fixed pure operands become `Bool`. They are
-    exact unless an implicit `Optional` wrap replaces a value with presence.
-    Only a plain `Optional` is a fixed pure operand: see `_plain`.
+    Mojo tests a same-type operand again in the enclosing context. Without a
+    type join, it converts each evaluated mixed-type operand once. An implicit
+    conversion can join two operand types. The probes keep the native operator,
+    so its proxy types must select the same semantics. Fixed pure operands
+    become `Bool`. An implicit `Optional` wrap can replace a value with
+    presence. An Optional-valued selection also needs the lifecycle check.
+    A custom type merge can itself return `Bool`, so a native `Bool` result
+    alone cannot prove that the operator used mixed-type Boolean fallback.
     A same-type result must be an owning proxy: a borrowing proxy cannot copy
     or move the retained left operand that the native operator selects. A
     temporary with a user-defined move constructor is already `Bool`, so a
@@ -879,30 +919,31 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     Returns:
         True if the instrumented operator keeps the native truth semantics.
     """
-    comptime native = reflect[N].name()
-    comptime rewritten = reflect[I].name()
-    # A Bool result kept Bool is exact whatever the operands are: the pure
-    # branch below keeps a non-Optional result, and the Bool branch asks
-    # only for a Bool rewrite. Answer it before the operand reflections.
-    # Pinned Mojo 1.1.0 deadlocks a build whose module holds many
-    # operand reflections, such as the instrumented COLLADA loader, and
-    # most operators join two Bool comparisons.
-    comptime if native == "Bool" and rewritten == "Bool":
+    # Fixed Bool operands and results already pass the pure-type branch.
+    # Check actual type identity before reflected-name classification. This
+    # keeps all four query arguments relevant without reflecting this tuple.
+    comptime if L == Bool and R == Bool and N == Bool and I == Bool:
         return True
     comptime left = reflect[L].name()
     comptime right = reflect[R].name()
-    # A one-type `Optional` operator moves or copies the selected operand,
-    # and with it the element. Only a plain `Optional` became `Bool`.
-    comptime collapsed = not _optional(native) or (
-        _plain[L] and _plain[R] and _plain[N]
-    )
-    comptime if _pure(left) and _pure(right) and _pure(native) and collapsed:
+    comptime native = reflect[N].name()
+    comptime rewritten = reflect[I].name()
+    comptime if _pure(left) and _pure(right) and _pure(native):
         # An Optional can itself be an Optional's element. Both operands
         # being Optional does not rule out a wrap that changes emptiness to
         # presence. Preserve only the same Optional type on both sides.
-        return not _optional(native) or (left == native and right == native)
+        comptime if _optional(native):
+            return (
+                left == native and right == native and _optional_lifecycle[N]()
+            )
+        return True
     comptime if native == "Bool":
-        return rewritten == "Bool"
+        # A custom __merge_with__ may return Bool and run source-visible
+        # code after the left truth test. Proxies erase that merge and use
+        # Boolean fallback instead, with the same reflected result type.
+        # The pinned reflection API cannot inspect applicable overloads.
+        # Refuse this ambiguity rather than silently change execution.
+        return False
     # Same-type: one native type, kept by one recording proxy type. The
     # native operator selects an owned copy or move of a retained operand.
     # A borrowing proxy selects only the borrow, so it cannot keep that.
@@ -935,9 +976,11 @@ def truth[T: Boolable, //, kept: Bool](value: T) -> Bool:
         " would change how an and/or operator joins its operand types. The"
         " cause is an implicit conversion between operand types, a one-type"
         " operator that selects a retained operand whose copy runs source"
-        " code, or a one-type operator over a type with a user-defined move"
-        " constructor. Do not exclude the source; see the coverage"
-        " truth-conversion limit."
+        " code, a one-type operator over a type with a user-defined move"
+        " constructor, a custom mixed-type operator whose Bool result cannot"
+        " distinguish a user-defined merge from Boolean fallback, or an"
+        " Optional result with observable copy, move, or destructor effects."
+        " Do not exclude the source; see the coverage truth-conversion limit."
     )
     return value.__bool__()
 

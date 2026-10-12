@@ -21,7 +21,13 @@ from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
 from extensions.carla.map_validation import _preflight_road_records
 from math.vector3 import Vector3
 from std.math import isfinite
-from std.testing import TestSuite, assert_equal, assert_false, assert_raises, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 from tests._lazy_taylor_controls import _whole_certificate
 from tests.test_carla_cross_candidate_certificates import _road
 
@@ -60,9 +66,20 @@ def test_real_line_overflow_width_reaches_depth_refusal_with_bounded_work() rais
     # One cell and depth zero rule out recursive search or a large workload.
     with assert_raises(contains="numerical accuracy limit"):
         _run_lane_search(
-            road, 0, 0, low, high, location, certificate, pending^,
-            _ClosedIntervals(), List[_ClosedInterval](),
-            (Float64(0.0), Float64(1.0)), 1, 6, 0,
+            road,
+            0,
+            0,
+            low,
+            high,
+            location,
+            certificate,
+            pending^,
+            _ClosedIntervals(),
+            List[_ClosedInterval](),
+            (Float64(0.0), Float64(1.0)),
+            1,
+            6,
+            0,
         )
     assert_equal(certificate.nodes, 1)
     # One initial incumbent, three edge/center samples, one whole enclosure,

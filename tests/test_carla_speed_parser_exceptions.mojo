@@ -8,7 +8,10 @@ must independently raise, and read_speed_number must translate that actual
 exception. No injected parser or synthetic coverage trace is used.
 """
 
-from extensions.carla.speed_limits import _speed_decimal_syntax, read_speed_number
+from extensions.carla.speed_limits import (
+    _speed_decimal_syntax,
+    read_speed_number,
+)
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
