@@ -78,12 +78,12 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Physics safety
 
-- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): turning capsules, offset shapes, translating boxes and hulls, moving pairs and kinematic spheres work; turning boxes and hulls remain refused [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
-
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 7</summary>
+<summary>Implemented: 8</summary>
+
+- [x] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): turning boxes and hulls, kinematic shapes and coupled turning bodies advance conservatively; moving meshes and static primitives stay refused [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
 
 - [x] [Owned physics query snapshots](https://github.com/SethKitchen/ThreeMojo/wiki/Physics-query-snapshots): frozen geometry, materials and capture-scoped historical owners, with unchanged live-world raycasts [#633](https://github.com/SethKitchen/ThreeMojo/issues/633)
 
