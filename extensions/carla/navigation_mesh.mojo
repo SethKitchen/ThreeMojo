@@ -43,6 +43,8 @@ box of 2 m across and 4 m up are CARLA's, from
 of the numbers are this port's own choices.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _positive_si
+
 from extensions.carla.agents import point_in_polygon
 from extensions.carla.map import EPSILON, Map
 from extensions.carla.road_info import (
@@ -425,7 +427,55 @@ struct NavPolygon(Copyable, Movable):
                 return False
         return True
 
-    def height_at(self, point: Vector3) -> Float32:
+    def height_at(self, point: Vector3) raises -> Length:
+        """Checked typed boundary. Return the polygon's height under a point.
+
+        Args:
+            point: A point inside the polygon in the x-y plane.
+
+        Returns:
+            The height of the fan triangle that holds the point best: the
+            one whose smallest barycentric weight is largest.
+
+        Raises:
+            Error: If the point or a stored vertex is nonfinite, the polygon
+                has fewer than three vertices or plan-area magnitude below 1e-6, or the result
+                is nonfinite.
+        """
+        return Length(self.height_at_si(point))
+
+    def height_at_si(self, point: Vector3) raises -> Float32:
+        """Explicit source-unit compatibility adapter. Return the polygon's height under a point.
+
+        Args:
+            point: A point inside the polygon in the x-y plane.
+
+        Returns:
+            The height of the fan triangle that holds the point best: the
+            one whose smallest barycentric weight is largest.
+
+        Raises:
+            Error: If the point or a stored vertex is nonfinite, the polygon
+                has fewer than three vertices or plan-area magnitude below 1e-6, or the result
+                is nonfinite.
+        """
+        _ = _finite_si(Float64(point.x))
+        _ = _finite_si(Float64(point.y))
+        _ = _finite_si(Float64(point.z))
+        if len(self.vertices) < 3:
+            raise Error("A polygon needs three corners")
+        for vertex in self.vertices:
+            _ = _finite_si(Float64(vertex.x))
+            _ = _finite_si(Float64(vertex.y))
+            _ = _finite_si(Float64(vertex.z))
+        var area = _finite_si(_signed_area(self.vertices))
+        if abs(area) < 1e-6:
+            raise Error("A polygon needs an area")
+        var value = self._height_at_si(point)
+        _ = _finite_si(Float64(value))
+        return value
+
+    def _height_at_si(self, point: Vector3) -> Float32:
         """Return the polygon's height under a point.
 
         Args:
@@ -465,7 +515,7 @@ struct NavPolygon(Copyable, Movable):
             in the x-y plane, else the nearest point of the border.
         """
         if self.contains(point):
-            return Vector3(point.x, point.y, self.height_at(point))
+            return Vector3(point.x, point.y, self._height_at_si(point))
         var best = self.vertices[0]
         var best_d = Float64.MAX
         var n = len(self.vertices)
@@ -1284,7 +1334,7 @@ def build_navigation_mesh(
         for sec in range(len(road.sections)):  # pragma: no branch
             var s0 = road.sections[sec].s
             var stations = _stations(
-                s0, s0 + road.section_length(sec), step, cuts
+                s0, s0 + road._section_length_si(sec), step, cuts
             )
             # A lane section holds lane 0 at least.
             for ln in range(len(road.sections[sec].lanes)):  # pragma: no branch
@@ -1296,8 +1346,8 @@ def build_navigation_mesh(
                     continue
                 # A section's start and end are two stations.
                 for k in range(len(stations) - 1):  # pragma: no branch
-                    var a = road.lane_corners(sec, ln, stations[k])
-                    var b = road.lane_corners(sec, ln, stations[k + 1])
+                    var a = road._lane_corners_si(sec, ln, stations[k])
+                    var b = road._lane_corners_si(sec, ln, stations[k + 1])
                     var quad = List[Vector3]()
                     quad.append(a[0])
                     quad.append(a[1])

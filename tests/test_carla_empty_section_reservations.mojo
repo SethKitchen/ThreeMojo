@@ -36,18 +36,20 @@ from std.testing import (
 
 
 def _empty_section() raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "empty section", 4.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 4.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 4.0)
+        )
     )
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     return road^
 

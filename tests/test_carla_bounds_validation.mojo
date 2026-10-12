@@ -16,7 +16,7 @@ from extensions.carla.geometry import (
     POLY3,
     RoadGeometry,
     _Sample,
-    with_poly3,
+    with_poly3_si as with_poly3,
 )
 from extensions.carla.junction_bounds import (
     _geometry_rates,
@@ -52,7 +52,7 @@ from tests.test_carla_junction_bounds import _road
 def test_clamped_curved_geometry_has_zero_rates() raises:
     var builder = MapBuilder()
     var r = _road(builder, 1, 2, -1)
-    builder.add_road_geometry_arc(r, 0, 0, 0, 0, 2, 0.5)
+    builder.add_road_geometry_arc_si(r, 0, 0, 0, 0, 2, 0.5)
     var geometry = builder.roads[r].info.geometries[0].geometry.copy()
     var active = _geometry_rates(geometry, 0, 1)
     assert_equal(active[0], 0.5)
@@ -66,7 +66,7 @@ def test_clamped_curved_geometry_has_zero_rates() raises:
 def test_repeated_sample_abscissa_is_refused() raises:
     var builder = MapBuilder()
     var r = _road(builder, 1, 2, -1)
-    builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+    builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
     var geometry = builder.roads[r].info.geometries[0].geometry.copy()
     geometry.kind = POLY3
     geometry.samples = [
@@ -81,7 +81,7 @@ def test_each_missing_span_record_is_refused() raises:
     for kind in range(3):
         var builder = MapBuilder()
         var r = _road(builder, 1, 2, -1)
-        builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+        builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
         if kind == 0:
             builder.roads[r].info.geometries.clear()
         elif kind == 1:
@@ -97,7 +97,7 @@ def test_nonfinite_and_reversed_section_intervals_are_refused() raises:
     for kind in range(4):
         var builder = MapBuilder()
         var r = _road(builder, 1, 2, -1)
-        builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+        builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
         if kind == 0:
             builder.roads[r].sections[0].s = inf[DType.float64]()
         elif kind == 1:
@@ -119,15 +119,19 @@ def test_nonfinite_bounds_fail_before_sampling() raises:
     for kind in range(3):
         var builder = MapBuilder()
         var r = _road(builder, 1, 2, -1)
-        builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+        builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
         if kind == 0:
             builder.roads[r].info.lane_offsets[0].polynomial.c = 1e307
         elif kind == 1:
-            builder.roads[r].info.lane_offsets[0].polynomial = CubicPolynomial(
+            builder.roads[r].info.lane_offsets[
+                0
+            ].polynomial = CubicPolynomial._from_coefficients(
                 inf[DType.float64](), 0, 0, 0, 0
             )
         else:
-            builder.roads[r].info.elevations[0].polynomial = CubicPolynomial(
+            builder.roads[r].info.elevations[
+                0
+            ].polynomial = CubicPolynomial._from_coefficients(
                 inf[DType.float64](), 0, 0, 0, 0
             )
         var work = _MapBuildWork(MapBuildBudget())
@@ -138,21 +142,21 @@ def test_nonfinite_bounds_fail_before_sampling() raises:
 def test_lane_transform_refuses_missing_geometry_and_nonfinite_slope() raises:
     var builder = MapBuilder()
     var r = _road(builder, 1, 2, -1)
-    builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+    builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
     builder.roads[r].info.geometries.clear()
     with assert_raises(contains="no geometry"):
-        _ = builder.roads[r].lane_transform(0, 0, 0)
-    builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+        _ = builder.roads[r].lane_transform_meters(0, 0, 0)
+    builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
     # At s=1, 1e308*s^2 is finite, while its derivative 2e308 overflows.
     builder.roads[r].info.lane_offsets[0].polynomial.c = 1e308
     with assert_raises(contains="offset or derivative is not representable"):
-        _ = builder.roads[r].lane_transform(0, 0, 1)
+        _ = builder.roads[r].lane_transform_meters(0, 0, 1)
 
 
 def test_only_y_lane_derivative_overflow_is_refused() raises:
     var builder = MapBuilder()
     var r = _road(builder, 1, 2, -1)
-    builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+    builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
     ref geometry = builder.roads[r].info.geometries[0].geometry
     geometry.kind = POLY3
     geometry.heading = 0.7853981633974483
@@ -163,14 +167,14 @@ def test_only_y_lane_derivative_overflow_is_refused() raises:
     # Both stored differences are finite. Rotation cancels dx, while
     # adding their positive y contributions exceeds Float64 range.
     with assert_raises(contains="Lane center derivative is not representable"):
-        _ = builder.roads[r].lane_transform(0, 0, 0)
+        _ = builder.roads[r].lane_transform_meters(0, 0, 0)
 
 
 def test_curved_lane_slope_and_elevation_disable_constant_arc_shortcut() raises:
     for elevated in [False, True]:
         var builder = MapBuilder()
         var r = _road(builder, 1, 2, -1)
-        builder.add_road_geometry_arc(r, 0, 0, 0, 0, 2, 0.5)
+        builder.add_road_geometry_arc_si(r, 0, 0, 0, 0, 2, 0.5)
         if elevated:
             builder.roads[r].info.elevations[0].polynomial.c = 1
         else:
@@ -181,7 +185,7 @@ def test_curved_lane_slope_and_elevation_disable_constant_arc_shortcut() raises:
             var s = Float64(i) / 17.0
             assert_true(
                 box.contains_point(
-                    builder.roads[r].lane_transform(0, 0, s).location
+                    builder.roads[r].lane_transform_meters(0, 0, s).location
                 )
             )
 
@@ -189,11 +193,11 @@ def test_curved_lane_slope_and_elevation_disable_constant_arc_shortcut() raises:
 def test_nonfinite_record_start_refuses_junction_proposal() raises:
     var builder = MapBuilder()
     var r = _road(builder, 1, 2, -1)
-    builder.add_road_geometry_line(r, 0, 0, 0, 0, 2)
+    builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 2)
     var ordinary = _lane_section_box(builder.roads[r], 0, 0)
     assert_true(
         ordinary.contains_point(
-            builder.roads[r].lane_transform(0, 0, 1).location
+            builder.roads[r].lane_transform_meters(0, 0, 1).location
         )
     )
     builder.roads[r].sections[0].lanes[0].info.widths[0].s = nan[
@@ -211,7 +215,7 @@ def test_nonfinite_record_start_refuses_junction_proposal() raises:
 def test_incomplete_sample_tables_keep_reference_bounds_unknown() raises:
     for count in range(2):
         var geometry = with_poly3(
-            RoadGeometry(POLY3, 0.0, 0.0, 0.0, 0.0, 1.0),
+            RoadGeometry.from_meters(POLY3, 0.0, 0.0, 0.0, 0.0, 1.0),
             0.0,
             0.1,
             0.0,
@@ -236,7 +240,9 @@ def test_incomplete_sample_tables_keep_reference_bounds_unknown() raises:
 
 def test_each_missing_lane_bound_record_is_refused() raises:
     for kind in range(3):
-        var road = _proof_road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 20.0))
+        var road = _proof_road(
+            RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 20.0)
+        )
         var ordinary = _lane_jet(road, 0, 0, 2.125, 2.25)
         _canonical_contains(road, 0, ordinary, 2.125)
         _canonical_contains(road, 0, ordinary, 2.25)
@@ -262,7 +268,7 @@ def test_spiral_proof_cannot_replace_sampled_geometry_bounds() raises:
     _canonical_contains(spiral_road, 0, owned, 2.125)
     _canonical_contains(spiral_road, 0, owned, 2.25)
     var geometry = with_poly3(
-        RoadGeometry(POLY3, 0.0, 0.0, 0.0, 0.0, 20.0),
+        RoadGeometry.from_meters(POLY3, 0.0, 0.0, 0.0, 0.0, 20.0),
         0.0,
         0.1,
         0.0,

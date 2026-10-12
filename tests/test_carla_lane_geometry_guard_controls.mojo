@@ -25,7 +25,7 @@ def test_tiny_arc_radius_overflow_preserves_finite_offset_and_tangent() raises:
     # The inverse radius overflows, but curvature, offset and displacement
     # are finite. The circular result converges to a line with finite offset.
     for curvature in [Float64(1e-310), Float64(-1e-310)]:
-        var geometry = RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 4.0)
+        var geometry = RoadGeometry.from_meters(ARC, 0.0, 0.0, 0.0, 0.0, 4.0)
         geometry.curvature_start = curvature
         geometry.curvature_end = curvature
         var point = _lane_arc_offset(geometry, 3.0, 2.0)
@@ -40,7 +40,7 @@ def test_tiny_arc_radius_overflow_preserves_finite_offset_and_tangent() raises:
 
 
 def test_canonical_derivative_checks_distance_and_heading_independently() raises:
-    var geometry = RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 4.0)
+    var geometry = RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 4.0)
     with assert_raises(contains="finite distance and heading"):
         _ = _lane_geometry_derivative_at(geometry, nan[DType.float64]())
     geometry.heading = nan[DType.float64]()
@@ -51,7 +51,7 @@ def test_canonical_derivative_checks_distance_and_heading_independently() raises
 
 
 def test_canonical_derivative_keeps_both_clamped_sides_zero() raises:
-    var geometry = RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 4.0)
+    var geometry = RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 4.0)
     for distance in [-1.0, 5.0]:
         assert_equal(
             _lane_geometry_derivative_at(geometry, distance), (0.0, 0.0, 0.0)

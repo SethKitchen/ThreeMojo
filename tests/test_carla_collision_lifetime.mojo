@@ -170,7 +170,9 @@ def test_removal_recomputes_survivor_boundary_and_pair_distances() raises:
     _empty_caches(stage)
     _same_lock(stage.collision_locks[3], survivor)
     assert_false(1 in stage.collision_locks)
-    assert_equal(stage.get_bounding_box_extension(ActorId(1), shared), 2.5)
+    assert_equal(
+        stage.get_bounding_box_extension_meters(ActorId(1), shared), 2.5
+    )
     var after = stage.get_geodesic_boundary(ActorId(1), shared)
     assert_equal(after[0].x, 60.0)
     assert_equal(after[len(after) - 1].x, 60.0)
@@ -196,7 +198,9 @@ def test_no_candidate_update_after_removal_keeps_fresh_distance() raises:
     var stage = CollisionStage()
     stage.update(0, shared)
     assert_true(shared.collision_frame[0].hazard)
-    assert_true(stage.get_bounding_box_extension(ActorId(1), shared) > 9.0)
+    assert_true(
+        stage.get_bounding_box_extension_meters(ActorId(1), shared) > 9.0
+    )
     stage.clear_cycle_cache()
     # Removing lead 2 must preserve a different survivor's lock on ego 1.
     var inbound = CollisionLock(6.0, 5.0, ActorId(1))
@@ -220,7 +224,7 @@ def test_no_candidate_update_after_removal_keeps_fresh_distance() raises:
         shared.collision_frame[0].available_distance_margin.value > 1e30
     )
     assert_almost_equal(
-        stage.get_bounding_box_extension(ActorId(1), shared),
+        stage.get_bounding_box_extension_meters(ActorId(1), shared),
         2.5 + 1.8 * 1.8,
         atol=1e-5,
     )
@@ -509,7 +513,9 @@ def test_episode_reset_does_not_reuse_old_lead_distances() raises:
     assert_false(tm.shared.collision_frame[0].hazard)
     assert_false(next_follower.value in tm.collision_stage.collision_locks)
     assert_equal(
-        tm.collision_stage.get_bounding_box_extension(next_follower, tm.shared),
+        tm.collision_stage.get_bounding_box_extension_meters(
+            next_follower, tm.shared
+        ),
         2.5,
     )
     tm.stop()

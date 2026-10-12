@@ -23,9 +23,9 @@ from extensions.carla.geometry import (
     LINE,
     SPIRAL,
     NORMALIZED,
-    with_param_poly3,
-    with_poly3,
-    with_spiral,
+    with_param_poly3_from_coefficients as with_param_poly3,
+    with_poly3_si as with_poly3,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.junction_bounds import (
     _certify_junction_span,
@@ -56,7 +56,9 @@ def test_valid_record_and_tangent_domains_keep_conservative_fallbacks() raises:
     var road = _line()
     road.info.geometries[0].geometry.length = 10.0
     road.info.geometries.append(
-        RoadInfoGeometry(10.0, RoadGeometry(LINE, 10.0, 10.0, 0.0, 0.0, 10.0))
+        RoadInfoGeometry._from_si(
+            10.0, RoadGeometry.from_meters(LINE, 10.0, 10.0, 0.0, 0.0, 10.0)
+        )
     )
     _valid(road)
     var ordinary = _lane_value_bound(road, 0, 0, 9.0, 9.5)
@@ -70,7 +72,11 @@ def test_valid_record_and_tangent_domains_keep_conservative_fallbacks() raises:
         assert_true(heading.contains(_curve_atan2(low_y, 1.0)))
         assert_true(heading.contains(_curve_atan2(3.0, 1.0)))
     var poly = with_poly3(
-        RoadGeometry(POLY3, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0, 0.1, 0.0, 0.0
+        RoadGeometry.from_meters(POLY3, 0.0, 0.0, 0.0, 0.0, 1.0),
+        0.0,
+        0.1,
+        0.0,
+        0.0,
     )
     var poly_road = _road(poly.copy())
     _valid(poly_road)
@@ -85,7 +91,7 @@ def test_grouped_lane_refuses_separate_y_and_z_arithmetic_overflow() raises:
     var maximum = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     for axis in range(3):
         var geometry = with_spiral(
-            RoadGeometry(
+            RoadGeometry.from_meters(
                 SPIRAL,
                 0.0,
                 0.0,
@@ -100,10 +106,14 @@ def test_grouped_lane_refuses_separate_y_and_z_arithmetic_overflow() raises:
         if axis == 1:
             road.sections[0].lanes[0].info.widths[
                 0
-            ].polynomial = CubicPolynomial.constant(maximum)
-            road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.0)
+            ].polynomial = CubicPolynomial._constant_si(maximum)
+            road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(
+                0.0
+            )
         elif axis == 2:
-            road.info.elevations[0].polynomial = CubicPolynomial(
+            road.info.elevations[
+                0
+            ].polynomial = CubicPolynomial._from_coefficients(
                 -1.7e308, 1.7e308, 1e307, 0.0, 0.0
             )
         _valid(road)
@@ -131,7 +141,7 @@ def test_grouped_lane_refuses_separate_y_and_z_arithmetic_overflow() raises:
 def test_valid_width_record_join_requires_split() raises:
     var road = _line()
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(10.0, CubicPolynomial.constant(4.0))
+        RoadInfoLaneWidth._from_si(10.0, CubicPolynomial._constant_si(4.0))
     )
     _valid(road)
     for low in [9.0, 10.0]:

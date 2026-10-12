@@ -29,7 +29,7 @@ from std.testing import TestSuite, assert_equal, assert_false
 
 
 def _road(first_refuses: Bool, last_refuses: Bool) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1),
         "bounded endpoint preflight",
         4.0,
@@ -38,26 +38,30 @@ def _road(first_refuses: Bool, last_refuses: Bool) raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(1.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(1.0))
     )
-    var first = RoadGeometry(SPIRAL if first_refuses else LINE, 0, 0, 0, 0, 2)
+    var first = RoadGeometry.from_meters(
+        SPIRAL if first_refuses else LINE, 0, 0, 0, 0, 2
+    )
     first.curvature_start = 2e9
     first.curvature_end = 2e9
-    var last = RoadGeometry(SPIRAL if last_refuses else LINE, 2, 2, 0, 0, 2)
+    var last = RoadGeometry.from_meters(
+        SPIRAL if last_refuses else LINE, 2, 2, 0, 0, 2
+    )
     last.curvature_start = 2e9
     last.curvature_end = 2e9
-    road.info.geometries.append(RoadInfoGeometry(0.0, first^))
-    road.info.geometries.append(RoadInfoGeometry(2.0, last^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, first^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(2.0, last^))
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)
     assert_false(validation.exhausted)

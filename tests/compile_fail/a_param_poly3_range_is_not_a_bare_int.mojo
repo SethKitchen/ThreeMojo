@@ -5,7 +5,9 @@
 
 """A paramPoly3 range must be a `ParamPoly3Range`, not a bare integer."""
 
-from extensions.carla.geometry import param_poly3
+from extensions.carla.geometry import (
+    param_poly3_from_coefficients as param_poly3,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from units.si import Angle, Length, METER, RADIAN
 
@@ -17,8 +19,8 @@ def main() raises:
         Length(0.0, METER),
         Angle(0.0, RADIAN),
         Length(1.0, METER),
-        CubicPolynomial(0, 1, 0, 0, 0),
-        CubicPolynomial(0, 0, 0, 0, 0),
+        CubicPolynomial.from_coefficients(0, 1, 0, 0, 0),
+        CubicPolynomial.from_coefficients(0, 0, 0, 0, 0),
         0,
     )
     print(g.length)

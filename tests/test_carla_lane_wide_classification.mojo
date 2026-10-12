@@ -56,15 +56,17 @@ def test_zero_squared_score_does_not_certify_coincident_center() raises:
     )
     var roads = parsed.roads.copy()
     var tiny = Float64(1e-200)
-    roads[0].info.lane_offsets[0].polynomial = CubicPolynomial.constant(-tiny)
+    roads[0].info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(
+        -tiny
+    )
     var right = roads[0].sections[0].lane_index(LaneId(-1))
     var left = roads[0].sections[0].lane_index(LaneId(1))
     roads[0].sections[0].lanes[right].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(2.0 * tiny)
+    ].polynomial = CubicPolynomial._constant_si(2.0 * tiny)
     roads[0].sections[0].lanes[left].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(2.0 * tiny)
+    ].polynomial = CubicPolynomial._constant_si(2.0 * tiny)
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var point = Vector3(0, 0, 0)
     var right_center = map.roads[0]._lane_point(0, right, 0.5)

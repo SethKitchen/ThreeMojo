@@ -1,7 +1,13 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Explicit pure-selector successor; no reachability or coverage waiver."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import io
 import json
 if __package__:
@@ -25,7 +31,7 @@ def require(value, message):
 
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256, 'unreviewed selector migration')
     return json.loads(payload, object_pairs_hook=source.unique_keys)
 
@@ -57,13 +63,13 @@ def verify_premises(root, *, _return_current_admission=False):
             'invalid current-admission output request')
     record = read_record(root)
     old = prior.read_record(root)
-    require(hashlib.sha256((root/prior.MIGRATION).read_bytes()).hexdigest() == record['prior_migration_sha256'], 'prior migration changed')
+    require(hashlib.sha256(_typed_source.historical_bytes(root, root/prior.MIGRATION, (root/prior.MIGRATION).read_bytes())).hexdigest() == record['prior_migration_sha256'], 'prior migration changed')
     path = record['path']
     require(guard.significant(record['before_source']) == guard.significant(old['modules'][path]['source']), 'wrong immediate predecessor')
-    require(guard.significant((root/path).read_text()) == guard.significant(record['after_source']), 'selector or context graph/name changed')
+    require(guard.significant(_typed_source.historical_text(root, root/path, (root/path).read_text())) == guard.significant(record['after_source']), 'selector or context graph/name changed')
     for name, item in old['modules'].items():
         if name != path:
-            actual = (root/name).read_text()
+            actual = _typed_source.historical_text(root, root/name, (root/name).read_text())
             if guard.significant(actual) != guard.significant(item['source']):
                 if __package__:
                     from . import reviewed_cleanup_contracts as words
@@ -75,7 +81,7 @@ def verify_premises(root, *, _return_current_admission=False):
         if name == 'extensions/carla/lane_refinement.mojo':
             text, observed_raw = _lane_observation(root)
         else:
-            text = (root/name).read_text()
+            text = _typed_source.historical_text(root, root/name, (root/name).read_text())
         actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
         if (name == 'extensions/carla/lane_refinement.mojo'
                 and guard.significant(actual) != guard.significant(expected)):
@@ -107,10 +113,11 @@ def verify_premises(root, *, _return_current_admission=False):
                 raise ValueError('rounded LINE selector contract: unreadable observation: ' + name) from error
             require(source.token_sha256(supplied) == source.token_sha256(text),
                     'consumer source text/bytes disagree: ' + name)
+            text = _typed_source.historical_text(root, name, text)
         elif selected:
             text, observed_raw = _lane_observation(root)
         else:
-            text = (root/item['path']).read_text()
+            text = _typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text())
         actual = guard.declaration(text, item['name'], tuple(item['owner']))
         if selected and lane_predecessor is None and guard.significant(actual) != guard.significant(item['source']):
             text, observed_road = full_audit._reviewed_lane_observation(root, text, observed_raw)
@@ -122,7 +129,7 @@ def verify_premises(root, *, _return_current_admission=False):
             actual = guard.declaration(text, item['name'], tuple(item['owner']))
         require(guard.significant(actual) == guard.significant(item['source']), 'prior consumer/reference changed: ' + item['name'])
     item=record['reference']
-    actual=guard.declaration((root/item['path']).read_text(),item['name'],())
+    actual=guard.declaration(_typed_source.historical_text(root, root/item['path'], (root/item['path']).read_text()),item['name'],())
     require(guard.significant(actual) == guard.significant(item['source']), 'immediate predecessor native reference changed')
     if lane_predecessor is not None:
         for name, expected_raw in (('extensions/carla/lane_refinement.mojo', lane_raw),
@@ -145,8 +152,8 @@ def _verify(root, *, _operation=None):
     if _operation is not None:
         full_audit._operation_check(_operation, root)
     record = verify_premises(root) if _operation is None else _verify_premises(root, _operation=_operation)
-    require(source.token_sha256(full_audit._observe_text(
-        root, record['path'], (root/record['path']).read_text(), _operation=_operation))
+    require(source.token_sha256(_typed_source.historical_text(root, record['path'], full_audit._observe_text(
+        root, record['path'], (root/record['path']).read_text(), _operation=_operation), _operation=_operation))
         == record['after_token_sha256'], 'complete selector successor changed')
     return record
 
@@ -161,8 +168,8 @@ def _verify_for_pin_pair(root, *, _operation=None):
     else:
         record, observed_current_admission = _verify_premises(
             root, _return_current_admission=True, _operation=_operation)
-    require(source.token_sha256(full_audit._observe_text(
-        root, record['path'], (root/record['path']).read_text(), _operation=_operation))
+    require(source.token_sha256(_typed_source.historical_text(root, record['path'], full_audit._observe_text(
+        root, record['path'], (root/record['path']).read_text(), _operation=_operation), _operation=_operation))
         == record['after_token_sha256'], 'complete selector successor changed')
     return record, observed_current_admission
 
@@ -176,13 +183,13 @@ def _verify_premises(root, *, _return_current_admission=False, _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
     old = prior.read_record(root)
-    require(hashlib.sha256((root/prior.MIGRATION).read_bytes()).hexdigest() == record['prior_migration_sha256'], 'prior migration changed')
+    require(hashlib.sha256(_typed_source.historical_bytes(root, root/prior.MIGRATION, (root/prior.MIGRATION).read_bytes(), _operation=_operation)).hexdigest() == record['prior_migration_sha256'], 'prior migration changed')
     path = record['path']
     require(guard.significant(record['before_source']) == guard.significant(old['modules'][path]['source']), 'wrong immediate predecessor')
-    require(guard.significant(full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation)) == guard.significant(record['after_source']), 'selector or context graph/name changed')
+    require(guard.significant(_typed_source.historical_text(root, path, full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == guard.significant(record['after_source']), 'selector or context graph/name changed')
     for name, item in old['modules'].items():
         if name != path:
-            actual = full_audit._observe_text(root, name, (root/name).read_text(), _operation=_operation)
+            actual = _typed_source.historical_text(root, name, full_audit._observe_text(root, name, (root/name).read_text(), _operation=_operation), _operation=_operation)
             if guard.significant(actual) != guard.significant(item['source']):
                 if __package__:
                     from . import reviewed_cleanup_contracts as words
@@ -194,7 +201,7 @@ def _verify_premises(root, *, _return_current_admission=False, _operation=None):
         if name == 'extensions/carla/lane_refinement.mojo':
             text, observed_raw = _lane_observation(root, **operation_args)
         else:
-            text = full_audit._observe_text(root, name, (root/name).read_text(), _operation=_operation)
+            text = _typed_source.historical_text(root, name, full_audit._observe_text(root, name, (root/name).read_text(), _operation=_operation), _operation=_operation)
         actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
         if (name == 'extensions/carla/lane_refinement.mojo'
                 and guard.significant(actual) != guard.significant(expected)):
@@ -228,10 +235,11 @@ def _verify_premises(root, *, _return_current_admission=False, _operation=None):
                 raise ValueError('rounded LINE selector contract: unreadable observation: ' + name) from error
             require(source.token_sha256(supplied) == source.token_sha256(text),
                     'consumer source text/bytes disagree: ' + name)
+            text = _typed_source.historical_text(root, name, text, _operation=_operation)
         elif selected:
             text, observed_raw = _lane_observation(root, **operation_args)
         else:
-            text = full_audit._observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
+            text = _typed_source.historical_text(root, item['path'], full_audit._observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation)
         actual = guard.declaration(text, item['name'], tuple(item['owner']))
         if selected and lane_predecessor is None and guard.significant(actual) != guard.significant(item['source']):
             text, observed_road = full_audit._reviewed_lane_observation(root, text, observed_raw, **operation_args)
@@ -243,7 +251,7 @@ def _verify_premises(root, *, _return_current_admission=False, _operation=None):
             actual = guard.declaration(text, item['name'], tuple(item['owner']))
         require(guard.significant(actual) == guard.significant(item['source']), 'prior consumer/reference changed: ' + item['name'])
     item=record['reference']
-    actual=guard.declaration(full_audit._observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation),item['name'],())
+    actual=guard.declaration(_typed_source.historical_text(root, item['path'], full_audit._observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation),item['name'],())
     require(guard.significant(actual) == guard.significant(item['source']), 'immediate predecessor native reference changed')
     if lane_predecessor is not None:
         for name, expected_raw in (('extensions/carla/lane_refinement.mojo', lane_raw),

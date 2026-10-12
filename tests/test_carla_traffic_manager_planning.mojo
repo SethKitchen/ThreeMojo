@@ -335,34 +335,42 @@ def test_collision_handling_follow_rule() raises:
     var east = Vector3(1, 0, 0)
     # 30 m of room, more than 2 s 10 m/s + 2 m: the other's 5 m/s, held
     # to a fall of 8 % of 10 m/s.
-    var far = stage.collision_handling(_hazard(30), False, v, east, 12, shared)
+    var far = stage.collision_handling_meters_per_second(
+        _hazard(30), False, v, east, 12, shared
+    )
     assert_false(far[0])
     _near(far[1], 9.2)
     # 10 m: at least 12 km/h, the other's 5 m/s; the same fall.
-    var mid = stage.collision_handling(_hazard(10), False, v, east, 12, shared)
+    var mid = stage.collision_handling_meters_per_second(
+        _hazard(10), False, v, east, 12, shared
+    )
     assert_false(mid[0])
     _near(mid[1], 9.2)
     # Within 0.2 m: a full stop.
     assert_true(
-        stage.collision_handling(_hazard(0.1), False, v, east, 12, shared)[0]
+        stage.collision_handling_meters_per_second(
+            _hazard(0.1), False, v, east, 12, shared
+        )[0]
     )
     # Closing on nothing: no relative speed, but still inside 0.2 m.
     _put(shared, 2, 0, 0, 0, 10)
-    var same = stage.collision_handling(
+    var same = stage.collision_handling_meters_per_second(
         _hazard(0.1), False, v, east, 12, shared
     )
     assert_true(same[0])
-    var clear = stage.collision_handling(_hazard(5), False, v, east, 12, shared)
+    var clear = stage.collision_handling_meters_per_second(
+        _hazard(5), False, v, east, 12, shared
+    )
     assert_false(clear[0])
     _near(clear[1], 12)
     # A light already stops the vehicle: the hazard is ignored.
-    var light = stage.collision_handling(
+    var light = stage.collision_handling_meters_per_second(
         _hazard(0.1), True, v, east, 12, shared
     )
     assert_false(light[0])
     _near(light[1], 12)
     # A target below the fall's floor stays the target.
-    var low = stage.collision_handling(
+    var low = stage.collision_handling_meters_per_second(
         CollisionHazardData(Length(0), NO_ACTOR, False),
         False,
         v,
@@ -373,7 +381,7 @@ def test_collision_handling_follow_rule() raises:
     _near(low[1], 5)
     # Slow and close: 12 km/h, and no fall to cap it.
     _put(shared, 2, 0, 0, 0, 0)
-    var slow = stage.collision_handling(
+    var slow = stage.collision_handling_meters_per_second(
         _hazard(1), False, Vector3(1, 0, 0), east, 12, shared
     )
     _near(slow[1], 3.3333333)
@@ -389,12 +397,14 @@ def test_turn_and_landmark_speeds() raises:
         SimpleWaypointIndex(61),
         SimpleWaypointIndex(62),
     ]
-    var straight_speed = stage.get_turn_target_velocity(straight, 8, shared)
+    var straight_speed = stage.get_turn_target_velocity_meters_per_second(
+        straight, 8, shared
+    )
     assert_false(isinf(straight_speed))
     assert_true(straight_speed > 1e19)
     assert_equal(min(Float32(8), straight_speed), 8.0)
     assert_equal(
-        stage.get_turn_target_velocity(
+        stage.get_turn_target_velocity_meters_per_second(
             [SimpleWaypointIndex(60), SimpleWaypointIndex(61)], 8, shared
         ),
         8.0,
@@ -402,7 +412,7 @@ def test_turn_and_landmark_speeds() raises:
     # The 60 km/h sign 10 m ahead of a car aiming at 25 m/s: 17.619.
     _put(shared, 1, 140, 1.75, 0, 0)
     _near(
-        stage.get_landmark_target_velocity(
+        stage.get_landmark_target_velocity_meters_per_second(
             SimpleWaypointIndex(88),
             Vector3(140, 1.75, 0),
             ActorId(1),
@@ -414,7 +424,7 @@ def test_turn_and_landmark_speeds() raises:
     )
     # Aiming at 10 m/s, under the sign's speed: no change.
     _near(
-        stage.get_landmark_target_velocity(
+        stage.get_landmark_target_velocity_meters_per_second(
             SimpleWaypointIndex(88),
             Vector3(140, 1.75, 0),
             ActorId(1),
@@ -427,7 +437,7 @@ def test_turn_and_landmark_speeds() raises:
     # With a desired speed, CARLA compares 36 (km/h) with 10 (m/s).
     shared.parameters.set_desired_speed(ActorId(1), Velocity(10.0))
     _near(
-        stage.get_landmark_target_velocity(
+        stage.get_landmark_target_velocity_meters_per_second(
             SimpleWaypointIndex(88),
             Vector3(140, 1.75, 0),
             ActorId(1),
@@ -439,7 +449,7 @@ def test_turn_and_landmark_speeds() raises:
     )
     # No landmark ahead of lane -2.
     assert_equal(
-        stage.get_landmark_target_velocity(
+        stage.get_landmark_target_velocity_meters_per_second(
             SimpleWaypointIndex(28),
             Vector3(140, 5.25, 0),
             ActorId(1),
@@ -451,7 +461,7 @@ def test_turn_and_landmark_speeds() raises:
     )
     # The node is near the sign, the vehicle far behind it: out of reach.
     assert_equal(
-        stage.get_landmark_target_velocity(
+        stage.get_landmark_target_velocity_meters_per_second(
             SimpleWaypointIndex(88),
             Vector3(100, 1.75, 0),
             ActorId(1),
@@ -476,7 +486,7 @@ def test_light_stop_and_other_sign_speeds() raises:
         _put(shared, 1, 80, 1.75, 0, 0)
         # From road 1's node at x = 80, the light 15 m on.
         _near(
-            stage.get_landmark_target_velocity(
+            stage.get_landmark_target_velocity_meters_per_second(
                 SimpleWaypointIndex(16),
                 Vector3(80, 1.75, 0),
                 ActorId(1),
@@ -561,31 +571,39 @@ def test_wide_turn_offset() raises:
     _put(shared, 1, 100, 1.75, 0, 3, half_length=5.5)
     var bus = ActorId(1)
     # Not large yet.
-    assert_equal(stage.calculate_base_offset(bus, path, True, 1, shared), 0.0)
+    assert_equal(
+        stage.calculate_base_offset_meters(bus, path, True, 1, shared), 0.0
+    )
     shared.large_vehicles[1] = LargeVehicle(Length(17.955367), True)
-    assert_equal(stage.calculate_base_offset(bus, path, False, 1, shared), 0.0)
+    assert_equal(
+        stage.calculate_base_offset_meters(bus, path, False, 1, shared), 0.0
+    )
     # 72 % of the junction left: -1.2342, a swing out to the left.
     _near(
-        stage.calculate_base_offset(bus, path, True, 1, shared),
+        stage.calculate_base_offset_meters(bus, path, True, 1, shared),
         -1.2341793,
         1e-3,
     )
     _near(
-        stage.calculate_base_offset(bus, path, True, 10, shared),
+        stage.calculate_base_offset_meters(bus, path, True, 10, shared),
         0.2570375,
         1e-3,
     )
     shared.large_vehicles[1] = LargeVehicle(Length(17.955367), False)
     _near(
-        stage.calculate_base_offset(bus, path, True, 16, shared),
+        stage.calculate_base_offset_meters(bus, path, True, 16, shared),
         -0.1519261,
         1e-3,
     )
     shared.large_vehicles[1] = LargeVehicle(Length(0), False)
-    assert_equal(stage.calculate_base_offset(bus, path, True, 1, shared), 0.0)
+    assert_equal(
+        stage.calculate_base_offset_meters(bus, path, True, 1, shared), 0.0
+    )
     shared.large_vehicles[1] = LargeVehicle(Length(17.955367), True)
     shared.parameters.set_large_vehicle_wide_turn(bus, False)
-    assert_equal(stage.calculate_base_offset(bus, path, True, 1, shared), 0.0)
+    assert_equal(
+        stage.calculate_base_offset_meters(bus, path, True, 1, shared), 0.0
+    )
 
 
 def test_wide_turn_side() raises:

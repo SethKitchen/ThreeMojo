@@ -59,7 +59,7 @@ from extensions.carla.spiral_domain_proof import (
 from extensions.carla.spiral_roundoff_proof import _try_spiral_roundoff_envelope
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from math.vector3 import Vector3
 from std.math import ceil, inf, isfinite
 
@@ -67,9 +67,11 @@ from std.math import ceil, inf, isfinite
 def _polynomial_jet(
     polynomial: CubicPolynomial, s: _Jet, shift: Float64 = 0.0
 ) -> _Jet:
-    return (_Jet.constant(polynomial.a) - _Jet.constant(shift)) + s * (
+    var local = s - _Jet.constant(polynomial.s)
+    return (_Jet.constant(polynomial.a) - _Jet.constant(shift)) + local * (
         _Jet.constant(polynomial.b)
-        + s * (_Jet.constant(polynomial.c) + s * _Jet.constant(polynomial.d))
+        + local
+        * (_Jet.constant(polynomial.c) + local * _Jet.constant(polynomial.d))
     )
 
 

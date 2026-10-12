@@ -17,7 +17,7 @@ from extensions.carla.curve_trig import _curve_cos, _curve_sin
 from extensions.carla.geometry import LINE
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index, LaneId
+from extensions.carla.road_info import info_index_meters as info_index, LaneId
 from std.math import inf
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true, assert_false
@@ -136,13 +136,15 @@ def test_constant_point_producers_and_real_road_refusals() raises:
     var lower = bitcast[DType.float64](UInt64(623) << UInt64(52))
     var upper = bitcast[DType.float64](UInt64(1423) << UInt64(52))
     for value in [Float64(0.0), -0.0, lower, -lower, 3.5, -3.5, upper, -upper]:
-        var point = _rounded_constant(CubicPolynomial.constant(value))
+        var point = _rounded_constant(CubicPolynomial._constant_si(value))
         assert_true(point.known)
         assert_equal(point.low, point.high)
         var road = _rotated(0.0)
         road.sections[0].lanes[0].id = LaneId(0)
-        road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(value)
-        road.info.elevations[0].polynomial = CubicPolynomial.constant(value)
+        road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(
+            value
+        )
+        road.info.elevations[0].polynomial = CubicPolynomial._constant_si(value)
         assert_true(_compare(road, 0.25, 29.75))
     for value in [
         tiny,
@@ -153,25 +155,27 @@ def test_constant_point_producers_and_real_road_refusals() raises:
         -inf[DType.float64](),
     ]:
         var road = _rotated(0.0)
-        road.info.elevations[0].polynomial = CubicPolynomial.constant(value)
+        road.info.elevations[0].polynomial = CubicPolynomial._constant_si(value)
         assert_false(_compare(road, 0.25, 29.75))
-        road.info.elevations[0].polynomial = CubicPolynomial.constant(0.0)
-        road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(value)
+        road.info.elevations[0].polynomial = CubicPolynomial._constant_si(0.0)
+        road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(
+            value
+        )
         assert_false(_compare(road, 0.25, 29.75))
     # Each rounded operation still refuses an unsupported result.
     var road = _rotated(0.0)
     road.sections[0].lanes[0].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(lower)
+    ].polynomial = CubicPolynomial._constant_si(lower)
     assert_false(_compare(road, 0.25, 29.75))
     road.sections[0].lanes[0].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(2.0 * upper)
+    ].polynomial = CubicPolynomial._constant_si(2.0 * upper)
     assert_false(_compare(road, 0.25, 29.75))
     road.sections[0].lanes[0].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(upper)
-    road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(-upper)
+    ].polynomial = CubicPolynomial._constant_si(upper)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(-upper)
     assert_false(_compare(road, 0.25, 29.75))
 
 

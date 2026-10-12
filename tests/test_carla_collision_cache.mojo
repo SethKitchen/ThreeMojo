@@ -363,7 +363,9 @@ def test_nearby_actor_on_a_separate_path_is_not_a_hazard() raises:
     )
     # The strip's upper edge is y=2.75, the other's lower edge y=4.25.
     assert_equal(geometry.inter_geodesic_distance, 1.5)
-    var result = stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)
+    var result = stage.negotiate_collision_meters(
+        ActorId(1), ActorId(2), 0, shared
+    )
     assert_false(result[0])
     assert_true(result[1] > 1e30)
     assert_false(1 in stage.collision_locks)

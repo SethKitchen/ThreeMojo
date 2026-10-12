@@ -29,7 +29,7 @@ from extensions.carla.road_info import (
     RoadInfoLaneWidth,
     SectionId,
     SignalId,
-    info_index,
+    info_index_meters as info_index,
 )
 from math.vector3 import Vector3
 from std.math import inf
@@ -55,12 +55,14 @@ def _one_lane_many_equal_sections(count: Int, lane_id: Int = -1) raises -> Map:
     var road = _road()
     road.sections.clear()
     for i in range(count):
-        var section = LaneSection(SectionId(i), 0.0)
+        var section = LaneSection._from_si(SectionId(i), 0.0)
         if i == count - 1:
-            var lane = Lane(LaneId(lane_id), SectionId(i), 0.0)
+            var lane = Lane._from_si(LaneId(lane_id), SectionId(i), 0.0)
             lane.type = LANE_DRIVING
             lane.info.widths.append(
-                RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+                RoadInfoLaneWidth._from_si(
+                    0.0, CubicPolynomial._constant_si(2.0)
+                )
             )
             section.lanes.append(lane^)
         road.sections.append(section^)
@@ -353,7 +355,7 @@ def test_sign_query_rejects_negative_selected_index_with_retained_work() raises:
 
 def test_static_sign_loop_still_reserves_its_query() raises:
     var map = _one_lane_many_equal_sections(64)
-    var signal = Signal(
+    var signal = Signal._from_si(
         RoadId(1),
         SignalId("static"),
         2.0,
@@ -458,8 +460,8 @@ def test_sign_graph_fallback_preserves_branch_merge_order_and_step_words() raise
     _link(map, 1, 6)
     _link(map, 3, 4)
     _link(map, 3, 5)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 3.0)
-    var expected = map.next(start, 6.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
+    var expected = map.next_meters(start, 6.0)
     assert_equal(len(expected), 4)
     for i in range(4):
         var ids = [4, 5, 2, 6]
@@ -512,11 +514,11 @@ def test_sign_graph_keeps_lane_zero_and_two_way_cycle_rules() raises:
     _link(map, 1, 999, 0)
     _link(map, 1, 2)
     _link(map, 2, 1)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 3.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
     var work = _MapBuildWork(MapBuildBudget())
     var result = map._next_with_build_work(start, 2.0, work)
     assert_equal(len(result), 0)
-    _same_waypoints(result, map.next(start, 2.0))
+    _same_waypoints(result, map.next_meters(start, 2.0))
 
 
 def test_sign_graph_finishes_after_lists_and_propagates_late_errors() raises:
@@ -525,9 +527,9 @@ def test_sign_graph_finishes_after_lists_and_propagates_late_errors() raises:
     _link(map, 1, 3)
     _link(map, 3, 1)
     _link(map, 3, 999)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 3.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
     with assert_raises(contains="no road with that id"):
-        _ = map.next(start, 2.0)
+        _ = map.next_meters(start, 2.0)
     var work = _MapBuildWork(MapBuildBudget())
     with assert_raises(contains="no road with that id"):
         _ = map._next_with_build_work(start, 2.0, work)
@@ -543,8 +545,8 @@ def test_sign_graph_keeps_equal_merge_order_and_duplicate_edges() raises:
     _link(map, 1, 2)
     _link(map, 3, 4)
     _link(map, 3, 5)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 3.0)
-    var expected = map.next(start, 6.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
+    var expected = map.next_meters(start, 6.0)
     assert_equal(len(expected), 5)
     var ids = [2, 6, 4, 5, 2]
     for i in range(5):
@@ -555,11 +557,11 @@ def test_sign_graph_keeps_equal_merge_order_and_duplicate_edges() raises:
 
 def test_sign_graph_crosses_section_and_reverse_road_boundaries() raises:
     var road = _road()
-    var section = LaneSection(SectionId(1), 2.0)
-    var lane = Lane(LaneId(-1), SectionId(1), 2.0)
+    var section = LaneSection._from_si(SectionId(1), 2.0)
+    var lane = Lane._from_si(LaneId(-1), SectionId(1), 2.0)
     lane.type = LANE_DRIVING
     lane.info.widths.append(
-        RoadInfoLaneWidth(2.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(2.0, CubicPolynomial._constant_si(2.0))
     )
     section.lanes.append(lane^)
     road.sections.append(section^)
@@ -569,8 +571,8 @@ def test_sign_graph_crosses_section_and_reverse_road_boundaries() raises:
     map.roads[0].sections[0].lanes[0].next_lanes.append(
         LaneKey(RoadId(1), SectionId(1), LaneId(-1))
     )
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 1.5)
-    var expected = map.next(start, 1.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 1.5)
+    var expected = map.next_meters(start, 1.0)
     assert_equal(expected[0].section_id, SectionId(1))
     var work = _MapBuildWork(MapBuildBudget())
     _same_waypoints(map._next_with_build_work(start, 1.0, work), expected)
@@ -578,8 +580,8 @@ def test_sign_graph_crosses_section_and_reverse_road_boundaries() raises:
     for i in range(2):
         reverse.roads[i].sections[0].lanes[0].id = LaneId(1)
     _link(reverse, 1, 2, 1)
-    start = Waypoint(RoadId(1), SectionId(0), LaneId(1), 1.0)
-    expected = reverse.next(start, 2.0)
+    start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(1), 1.0)
+    expected = reverse.next_meters(start, 2.0)
     assert_equal(expected[0].road_id, RoadId(2))
     work = _MapBuildWork(MapBuildBudget())
     _same_waypoints(reverse._next_with_build_work(start, 2.0, work), expected)
@@ -592,7 +594,7 @@ def test_sign_graph_longer_cycles_exhaust_without_recursion() raises:
     _link(map, 3, 1)
     for i in range(3):
         map.roads[i].length = 0.0
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 0.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 0.0)
     var work = _MapBuildWork(MapBuildBudget(1, max_steps=500))
     with assert_raises(contains="step budget"):
         _ = map._next_with_build_work(start, 1.0, work)
@@ -606,7 +608,7 @@ def test_sign_graph_refuses_nonfinite_or_invalid_metadata_with_retained_work() r
     for kind in range(8):
         var map = _graph_map(2)
         _link(map, 1, 2)
-        var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 3.0)
+        var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
         var distance = 2.0
         var expected: String
         if kind == 0:
@@ -651,16 +653,16 @@ def test_sign_graph_refuses_nonfinite_or_invalid_metadata_with_retained_work() r
 
 def test_sign_graph_same_road_different_lane_is_not_a_return_cycle() raises:
     var map = _graph_map(2)
-    var lane = Lane(LaneId(-2), SectionId(0), 0.0)
+    var lane = Lane._from_si(LaneId(-2), SectionId(0), 0.0)
     lane.type = LANE_DRIVING
     lane.info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
     map.roads[0].sections[0].lanes.append(lane^)
     _link(map, 1, 2)
     _link(map, 2, 1, -2)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 3.0)
-    var expected = map.next(start, 12.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
+    var expected = map.next_meters(start, 12.0)
     assert_equal(len(expected), 1)
     assert_equal(expected[0].road_id, RoadId(1))
     assert_equal(expected[0].section_id, SectionId(0))
@@ -672,11 +674,11 @@ def test_sign_graph_same_road_different_lane_is_not_a_return_cycle() raises:
 
 def test_sign_graph_same_road_and_lane_later_section_is_not_a_return_cycle() raises:
     var first = _road(1)
-    var section = LaneSection(SectionId(1), 2.0)
-    var lane = Lane(LaneId(-1), SectionId(1), 2.0)
+    var section = LaneSection._from_si(SectionId(1), 2.0)
+    var lane = Lane._from_si(LaneId(-1), SectionId(1), 2.0)
     lane.type = LANE_DRIVING
     lane.info.widths.append(
-        RoadInfoLaneWidth(2.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(2.0, CubicPolynomial._constant_si(2.0))
     )
     section.lanes.append(lane^)
     first.sections.append(section^)
@@ -691,8 +693,8 @@ def test_sign_graph_same_road_and_lane_later_section_is_not_a_return_cycle() rai
     map.roads[1].sections[0].lanes[0].next_lanes.append(
         LaneKey(RoadId(1), SectionId(1), LaneId(-1))
     )
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 1.5)
-    var expected = map.next(start, 11.5)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 1.5)
+    var expected = map.next_meters(start, 11.5)
     assert_equal(len(expected), 1)
     assert_equal(expected[0].road_id, RoadId(1))
     assert_equal(expected[0].section_id, SectionId(1))
@@ -704,9 +706,9 @@ def test_sign_graph_same_road_and_lane_later_section_is_not_a_return_cycle() rai
 
 def test_sign_graph_tiny_leaf_has_exact_three_step_admission() raises:
     var map = _graph_map(1)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 2.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 2.0)
     for distance in [Float64(1e-16), Float64(EPSILON)]:
-        var expected = map.next(start, distance)
+        var expected = map.next_meters(start, distance)
         var exact = _MapBuildWork(MapBuildBudget(1, max_steps=3))
         _same_waypoints(
             map._next_with_build_work(start, distance, exact), expected
@@ -744,7 +746,7 @@ def test_sign_graph_refuses_a_nonfinite_section_origin() raises:
     map.roads[0].sections[0].s = bitcast[DType.float64](
         UInt64(0x7FF8000000000000)
     )
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 1.0)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 1.0)
     var work = _MapBuildWork(MapBuildBudget())
     with assert_raises(contains="invalid length"):
         _ = map._next_with_build_work(start, 1.0, work)
@@ -992,13 +994,13 @@ def test_sign_graph_refuses_rounded_same_section_overflow() raises:
     map.roads[0].sections[0].s = bitcast[DType.float64](
         UInt64(0x7C5288F5635A6592)
     )
-    var start = Waypoint(
+    var start = Waypoint._from_si(
         RoadId(1),
         SectionId(0),
         LaneId(-1),
         bitcast[DType.float64](UInt64(0x7FD14D4C7C789E87)),
     )
-    var remaining = map.roads[0].section_length(0) - (
+    var remaining = map.roads[0].section_length_meters(0) - (
         start.s - map.roads[0].sections[0].s
     )
     assert_equal(bitcast[DType.uint64](remaining), UInt64(0x7FE75959C1C3B0BC))

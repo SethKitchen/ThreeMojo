@@ -49,7 +49,7 @@ from tests.carla_fixed_s_fixture import _fixed_geometry
 def _information(kind: Int = 4) raises -> InformationSet:
     var info = InformationSet()
     info.geometries.append(
-        RoadInfoGeometry(0.0, _fixed_geometry(kind, 0.0, 0.0))
+        RoadInfoGeometry._from_si(0.0, _fixed_geometry(kind, 0.0, 0.0))
     )
     return info^
 
@@ -90,7 +90,7 @@ def _assert_sample_refused(info: InformationSet) raises:
 
 
 def _empty_road(length: Float64 = 10.0) raises -> Road:
-    return Road(
+    return Road._from_si(
         RoadId(1),
         "validation records",
         length,
@@ -105,21 +105,21 @@ def _populated_road() raises -> Road:
     var road = _empty_road()
     road.info = _information()
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     _ = road.sections[0].add_lane(LaneId(1))
     for lane in range(2):
         road.sections[0].lanes[lane].type = LANE_DRIVING
         road.sections[0].lanes[lane].info.widths.append(
-            RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+            RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
         )
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(5.0, CubicPolynomial.constant(3.0))
+        RoadInfoLaneWidth._from_si(5.0, CubicPolynomial._constant_si(3.0))
     )
     return road^
 

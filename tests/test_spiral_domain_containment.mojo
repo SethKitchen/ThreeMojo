@@ -324,16 +324,20 @@ def test_selected_and_inner_width_expressions_remain_fresh() raises:
     _ = road.sections[0].add_lane(LaneId(-2))
     var inner = road.sections[0].lane_index(LaneId(-1))
     var outer = road.sections[0].lane_index(LaneId(-2))
-    road.sections[0].lanes[inner].info.widths[0].polynomial = CubicPolynomial(
+    road.sections[0].lanes[inner].info.widths[
+        0
+    ].polynomial = CubicPolynomial._from_coefficients(
         3.0, 0.125, 0.002, 0.0, 0.0
     )
     road.sections[0].lanes[outer].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial(2.0, 0.05, 0.001, 0.0, 0.0))
+        RoadInfoLaneWidth._from_si(
+            0.0, CubicPolynomial._from_coefficients(2.0, 0.05, 0.001, 0.0, 0.0)
+        )
     )
-    road.info.lane_offsets[0].polynomial = CubicPolynomial(
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._from_coefficients(
         0.5, 0.01, -0.002, 0.0, 0.0
     )
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         1.0, 0.02, 0.005, 0.001, 0.0
     )
     var proof = _proof(road, 2.125, 2.25, lane=outer)
@@ -349,18 +353,26 @@ def test_record_crossings_do_not_create_a_partial_root_capture() raises:
     for kind in range(4):
         var road = _road(_geometry())
         if kind == 0:
-            road.info.geometries.append(RoadInfoGeometry(2.1875, _geometry()))
+            road.info.geometries.append(
+                RoadInfoGeometry._from_si(2.1875, _geometry())
+            )
         elif kind == 1:
             road.info.elevations.append(
-                RoadInfoElevation(2.1875, CubicPolynomial.constant(2.0))
+                RoadInfoElevation._from_si(
+                    2.1875, CubicPolynomial._constant_si(2.0)
+                )
             )
         elif kind == 2:
             road.info.lane_offsets.append(
-                RoadInfoLaneOffset(2.1875, CubicPolynomial.constant(0.75))
+                RoadInfoLaneOffset._from_si(
+                    2.1875, CubicPolynomial._constant_si(0.75)
+                )
             )
         else:
             road.sections[0].lanes[0].info.widths.append(
-                RoadInfoLaneWidth(2.1875, CubicPolynomial.constant(4.0))
+                RoadInfoLaneWidth._from_si(
+                    2.1875, CubicPolynomial._constant_si(4.0)
+                )
             )
         var captured = _SpiralRootCapture()
         var point = _lane_jet_capture(road, 0, 0, 2.125, 2.25, captured)

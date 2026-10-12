@@ -55,7 +55,9 @@ def _geometry(
     origin: Float64 = 0.0,
     length: Float64 = 100.0,
 ) raises -> RoadGeometry:
-    var g = RoadGeometry(SPIRAL, 0.0, origin, -origin, heading, length)
+    var g = RoadGeometry.from_meters(
+        SPIRAL, 0.0, origin, -origin, heading, length
+    )
     g.curvature_start = k0
     g.curvature_end = k1
     return g^

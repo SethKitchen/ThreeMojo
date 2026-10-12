@@ -42,27 +42,27 @@ from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 
 def _road(var geometry: RoadGeometry) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "certificate", 1.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(1.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(1.0))
     )
     return road^
 
 
 def test_expansion_uses_the_same_interior_clamp_branch() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
     var query = Vector3(0.25, 0, 0)
     var domain = _scaled_point_distance_jet(
         _lane_jet(road, 0, 0, 0, 1), query, 0.25
@@ -107,7 +107,7 @@ def test_expansion_anchor_keeps_closed_domain_at_resolution_limits() raises:
 
 
 def test_normalization_does_not_enlarge_the_acceptance_budget() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
     var point: Array[Float64, 3] = [3.0, 0.0, 0.0]
     var query: Array[Float64, 3] = [0.0, 0.0, 0.0]
     var scale = _point_gap_scale(point, query)
@@ -129,7 +129,9 @@ def test_finite_parameter_midpoint_avoids_span_overflow() raises:
 
 
 def test_full_sampled_box_is_cached_without_quarter_point_assumptions() raises:
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0
+    )
     for s in [0.0, 0.25, 0.5, 0.75, 1.0]:
         geometry.samples.append(_Sample(2.0 * s - 1.0, 2.0, s, 1.0, 0.0))
     var road = _road(geometry^)
@@ -152,7 +154,7 @@ def test_full_sampled_box_is_cached_without_quarter_point_assumptions() raises:
 
 
 def test_unresolved_enclosure_keeps_the_candidate() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
     var certificate = _chord_certificate(
         road, 0, 0, 0, 1, Vector3(0, 0, 0), Vector3(1, 0, 0), max_terms=0
     )
@@ -176,7 +178,9 @@ def test_lower_certificate_is_rechecked_after_the_budget_shrinks() raises:
 
 
 def test_enclosure_budget_includes_subdivision_and_endpoint_terms() raises:
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0
+    )
     for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
         geometry.samples.append(_Sample(t, 0.0, t, 1.0, 0.0))
     var sampled = _road(geometry^)
@@ -185,7 +189,7 @@ def test_enclosure_budget_includes_subdivision_and_endpoint_terms() raises:
     )
     assert_equal(unresolved[2], 3)
     assert_equal(unresolved[0], inf[DType.float64]())
-    var line = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
+    var line = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0))
     var before_endpoints = _chord_certificate(
         line, 0, 0, 0, 1, Vector3(0, 0, 0), Vector3(1, 0, 0), max_terms=2
     )
@@ -195,7 +199,9 @@ def test_enclosure_budget_includes_subdivision_and_endpoint_terms() raises:
     assert_equal(before_endpoints[2], 1)
     assert_equal(with_endpoints[2], 3)
     var limit = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
-    var extreme = _road(RoadGeometry(LINE, 0.0, limit, 0.0, 0.0, 1.0))
+    var extreme = _road(
+        RoadGeometry.from_meters(LINE, 0.0, limit, 0.0, 0.0, 1.0)
+    )
     assert_equal(extreme._lane_center(0, 0, 0.0)[0], limit)
     assert_equal(extreme._lane_center(0, 0, 1.0)[0], limit)
     var limited = _chord_certificate(

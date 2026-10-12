@@ -17,15 +17,19 @@ import full_audit_cleanup_contracts as cleanup
 import _full_audit_test_fixtures as fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
+
 LEAF = 'tools/carla_lane_oracle/map_station_contracts.py'
 
 
 class StationLeafControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.historical_root = fixtures.copy_historical_boundary_root(owner, ROOT)
         # The physical Map can be the later deviation endpoint (#685). Its
         # exact inverse gives the station endpoint that these controls bind.
-        cls.current = deviation.station_source((ROOT/station.MODULE).read_text())
+        cls.current = deviation.station_source((cls.historical_root/station.MODULE).read_text())
         cls.before = station.predecessor_source(cls.current)
 
     def test_exact_sixth_edge_reconstructs_all_five_unchanged_predecessors(self):
@@ -45,8 +49,8 @@ class StationLeafControls(unittest.TestCase):
         for inverse, expected in variants:
             text = inverse(text)
             self.assertEqual(seed.sha(text), expected)
-        self.assertEqual(seed.sha(seed.predecessor_source(text, seed.read_record(ROOT))), seed.BEFORE_SHA256)
-        self.assertEqual(seed.score_successor_source(ROOT), self.before)
+        self.assertEqual(seed.sha(seed.predecessor_source(text, seed.read_record(self.historical_root))), seed.BEFORE_SHA256)
+        self.assertEqual(seed.score_successor_source(self.historical_root), self.before)
 
     def test_unknown_raw_and_token_endpoints_reject(self):
         for text in (self.before, self.current+'\n# unknown\n',
@@ -116,7 +120,7 @@ class StationLeafControls(unittest.TestCase):
             for name in (seed.MIGRATION, *seed.SCORE_TESTS):
                 target = root/name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((ROOT/name).read_bytes())
+                target.write_bytes((self.historical_root/name).read_bytes())
             with self.assertRaisesRegex(ValueError, 'unknown score-helper successor'):
                 seed.verify_score(root)
             extra = root/'extensions/carla/extra.mojo'
@@ -160,7 +164,7 @@ class StationLeafControls(unittest.TestCase):
 
 class StationIntegrationControls(unittest.TestCase):
     def setUp(self):
-        self.root = fixtures.copy_current_root(self, ROOT)
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         # Hold the fixture at the station endpoint. The deviation successor
         # has its own controls in test_map_deviation_contracts.
         self.current = deviation.station_source(
@@ -258,6 +262,49 @@ class StationIntegrationControls(unittest.TestCase):
             with self.assertRaises(cleanup._OperationCoherenceError): winner.verify(self.root)
         self.assertEqual(injected, [True]); self.assertTrue(caught)
         self.assertEqual((self.root/station.MODULE).read_bytes(), self.current)
+
+
+class StationCurrentIntegrationControls(StationIntegrationControls):
+    """Repeat the physical authority/refusal matrix on the typed current Map."""
+
+    def setUp(self):
+        self.root = fixtures.copy_current_root(self, ROOT)
+        self.current = (self.root/station.MODULE).read_bytes()
+        historical = cleanup.typed_boundary.historical_source(
+            station.MODULE, self.current.decode())
+        self.before = station.predecessor_source(
+            deviation.station_source(historical)).encode()
+
+    def test_sixth_and_fifth_edges_retain_exact_historical_chain_and_receipts(self):
+        # The old five/six-edge claims stay in the historical class above.
+        # Their current descendant binds the new physical Map and native tests.
+        edge = cleanup.typed_boundary.edge(station.MODULE)
+        self.assertEqual(edge['before_sha256'], deviation.AFTER_SHA256)
+        self.assertEqual(edge['after_sha256'], cleanup.sha(self.current))
+        record = cleanup.read_record(self.root)
+        bound = cleanup.proof_bindings(self.root)
+        self.assertEqual(bound[station.MODULE], cleanup.sha(self.current))
+        for name in (*station.TESTS, LEAF):
+            self.assertEqual(bound[name], cleanup.sha((self.root/name).read_bytes()))
+        for group in ('unchanged_inputs', 'native_dependency_inputs'):
+            self.assertEqual(record[group][station.MODULE], station.BEFORE_SHA256)
+        self.assertEqual(seed.verify(self.root)['edges'][-2], station.edge())
+        self.assertEqual((self.root/station.MODULE).read_bytes(), self.current)
+        with self.map_state(self.before):
+            with self.assertRaises(ValueError): cleanup.verify(self.root)
+
+    def test_crossed_station_census_endpoints_and_extra_caller_reject(self):
+        seed.verify_score_caller_inventory(self.root, station_edge=True)
+        with self.assertRaisesRegex(ValueError, 'endpoint differs'):
+            seed.verify_score_caller_inventory(self.root, station_edge=False)
+        # Reverting one physical Map cannot turn a typed graph into an old one.
+        with self.map_state(self.before):
+            with self.assertRaises(ValueError): cleanup.verify(self.root)
+        extra = self.root/'extensions/carla/station_extra.mojo'
+        extra.write_text('from extensions.carla.map import _chord_station_delta\n')
+        with self.assertRaises(ValueError):
+            seed.verify_score_caller_inventory(self.root, station_edge=True)
+        with self.assertRaises(ValueError): cleanup.verify(self.root)
 
 
 if __name__ == '__main__':

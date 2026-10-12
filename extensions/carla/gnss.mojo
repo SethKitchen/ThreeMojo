@@ -24,6 +24,7 @@ from extensions.carla.sensor_attributes import (
 )
 from extensions.carla.sensor_noise import SensorRandom
 from math.vector3 import Vector3
+from units.si import Angle, Length, DEGREE, METER
 
 
 struct GnssDescription(ImplicitlyCopyable):
@@ -48,6 +49,171 @@ struct GnssDescription(ImplicitlyCopyable):
         self.longitude_bias = 0
         self.altitude_stddev = 0
         self.altitude_bias = 0
+
+    def __init__(
+        out self,
+        noise_seed: Int,
+        latitude_stddev: Angle,
+        latitude_bias: Angle,
+        longitude_stddev: Angle,
+        longitude_bias: Angle,
+        altitude_stddev: Length,
+        altitude_bias: Length,
+    ) raises:
+        """Create typed noise settings with CARLA's Float32 storage.
+
+        Args:
+            noise_seed: The random engine's seed.
+            latitude_stddev: The nonnegative latitude noise deviation.
+            latitude_bias: The signed latitude bias.
+            longitude_stddev: The nonnegative longitude noise deviation.
+            longitude_bias: The signed longitude bias.
+            altitude_stddev: The nonnegative altitude noise deviation.
+            altitude_bias: The signed altitude bias.
+
+        Returns:
+            The initialized receiver settings.
+
+        Raises:
+            Error: If a converted value is nonfinite or a deviation is negative.
+        """
+        self.noise_seed = noise_seed
+        self.latitude_stddev = latitude_stddev.to(DEGREE)
+        self.latitude_bias = latitude_bias.to(DEGREE)
+        self.longitude_stddev = longitude_stddev.to(DEGREE)
+        self.longitude_bias = longitude_bias.to(DEGREE)
+        self.altitude_stddev = altitude_stddev.to(METER)
+        self.altitude_bias = altitude_bias.to(METER)
+        self.validate()
+
+    def latitude_stddev_angle(self) raises -> Angle:
+        """Return the checked latitude stddev as a quantity.
+
+        Returns:
+            The latitude stddev with its unit.
+
+        Raises:
+            Error: If the raw field is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.latitude_stddev, "latitude_stddev")
+        return Angle(self.latitude_stddev, DEGREE)
+
+    def latitude_bias_angle(self) raises -> Angle:
+        """Return the checked latitude bias as a quantity.
+
+        Returns:
+            The latitude bias with its unit.
+
+        Raises:
+            Error: If the raw field is nonfinite.
+        """
+        validate_sensor_float(self.latitude_bias, "latitude_bias")
+        return Angle(self.latitude_bias, DEGREE)
+
+    def set_latitude_noise(mut self, stddev: Angle, bias: Angle) raises:
+        """Set the latitude noise after checking both quantities.
+
+        Both raw CARLA fields are updated together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(DEGREE)
+        var offset = bias.to(DEGREE)
+        validate_sensor_nonnegative(deviation, "latitude_stddev")
+        validate_sensor_float(offset, "latitude_bias")
+        self.latitude_stddev = deviation
+        self.latitude_bias = offset
+
+    def longitude_stddev_angle(self) raises -> Angle:
+        """Return the checked longitude stddev as a quantity.
+
+        Returns:
+            The longitude stddev with its unit.
+
+        Raises:
+            Error: If the raw field is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.longitude_stddev, "longitude_stddev")
+        return Angle(self.longitude_stddev, DEGREE)
+
+    def longitude_bias_angle(self) raises -> Angle:
+        """Return the checked longitude bias as a quantity.
+
+        Returns:
+            The longitude bias with its unit.
+
+        Raises:
+            Error: If the raw field is nonfinite.
+        """
+        validate_sensor_float(self.longitude_bias, "longitude_bias")
+        return Angle(self.longitude_bias, DEGREE)
+
+    def set_longitude_noise(mut self, stddev: Angle, bias: Angle) raises:
+        """Set the longitude noise after checking both quantities.
+
+        Both raw CARLA fields are updated together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(DEGREE)
+        var offset = bias.to(DEGREE)
+        validate_sensor_nonnegative(deviation, "longitude_stddev")
+        validate_sensor_float(offset, "longitude_bias")
+        self.longitude_stddev = deviation
+        self.longitude_bias = offset
+
+    def altitude_stddev_length(self) raises -> Length:
+        """Return the checked altitude stddev as a quantity.
+
+        Returns:
+            The altitude stddev with its unit.
+
+        Raises:
+            Error: If the raw field is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.altitude_stddev, "altitude_stddev")
+        return Length(self.altitude_stddev, METER)
+
+    def altitude_bias_length(self) raises -> Length:
+        """Return the checked altitude bias as a quantity.
+
+        Returns:
+            The altitude bias with its unit.
+
+        Raises:
+            Error: If the raw field is nonfinite.
+        """
+        validate_sensor_float(self.altitude_bias, "altitude_bias")
+        return Length(self.altitude_bias, METER)
+
+    def set_altitude_noise(mut self, stddev: Length, bias: Length) raises:
+        """Set the altitude noise after checking both quantities.
+
+        Both raw CARLA fields are updated together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(METER)
+        var offset = bias.to(METER)
+        validate_sensor_nonnegative(deviation, "altitude_stddev")
+        validate_sensor_float(offset, "altitude_bias")
+        self.altitude_stddev = deviation
+        self.altitude_bias = offset
 
     def validate(self) raises:
         """Reject nonfinite physical settings and invalid domains.
@@ -128,7 +294,7 @@ struct Gnss(Copyable, Movable):
         var lat_error = self.rng.normal(0, d.latitude_stddev)
         var lon_error = self.rng.normal(0, d.longitude_stddev)
         var alt_error = self.rng.normal(0, d.altitude_stddev)
-        return GeoLocation(
+        return GeoLocation._from_raw(
             at.latitude_degrees + Float64(d.latitude_bias) + Float64(lat_error),
             at.longitude_degrees
             + Float64(d.longitude_bias)

@@ -123,7 +123,7 @@ def _offset_cases(rule: String, lane: Int, with_s: Bool) raises:
     for i in range(len(positions)):
         var s = positions[i]
         var map = _road_map(rule, lane, Float64(s))
-        var w = map.waypoint_xodr(
+        var w = map.waypoint_xodr_float32(
             RoadId(1), LaneId(lane), Length(Float32(s), METER)
         ).value()
         assert_equal(map.is_positive_direction(w), with_s)
@@ -172,7 +172,7 @@ def test_short_sections_keep_offsets_inside_the_section() raises:
         for lane in lanes:
             for length in lengths:
                 var map = _road_map(rule, lane, length / 4, "1000001", length)
-                var w = map.waypoint_xodr(
+                var w = map.waypoint_xodr_float32(
                     RoadId(1), LaneId(lane), Length(Float32(length / 4), METER)
                 ).value()
                 var shifted = _shifted(map, w, 3.0)
@@ -332,7 +332,9 @@ def test_junction_offset_uses_resolved_predecessor_lane() raises:
         + _signal(1, 5, "206")
         + '</road><junction id="100" name="test"/></OpenDRIVE>'
     )
-    var w = map.waypoint_xodr(RoadId(2), LaneId(1), Length(5, METER)).value()
+    var w = map.waypoint_xodr_float32(
+        RoadId(2), LaneId(1), Length(5, METER)
+    ).value()
     var before = map.predecessors(w)
     assert_equal(len(before), 1)
     assert_equal(before[0].road_id, RoadId(1))

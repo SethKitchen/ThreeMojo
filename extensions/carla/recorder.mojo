@@ -71,6 +71,9 @@ attachments), `Carla/Sensor/CollisionSensor.cpp` (collisions) and
 `Carla/Weather/Weather.cpp` (weather).
 """
 
+from extensions.carla.quantity_boundary import _nonnegative_si
+from units.si import Duration64
+
 from extensions.carla.actor import (
     ActorId,
     GREEN,
@@ -129,7 +132,7 @@ from extensions.carla.recorder_packets import (
     light_vehicles_packet,
     positions_packet,
     states_packet,
-    time_packet,
+    time_packet_seconds as time_packet,
     traffic_light_times_packet,
     trigger_volumes_packet,
     walker_bones_packet,
@@ -321,10 +324,67 @@ struct Recorder(Movable):
         name: String,
         map_name: String = "",
         additional_data: Bool = False,
+        saved_dir: String = "",
+    ) raises -> String:
+        """Start an empty recording with the current Unix date.
+
+        Args:
+            name: The file name, path, or empty for memory only.
+            map_name: The map name written in the header.
+            additional_data: Whether to include the extra record fields.
+            saved_dir: The folder of a bare file name.
+
+        Returns:
+            The output path, or empty for memory only.
+
+        Raises:
+            Error: If an active recording cannot be stopped.
+        """
+        return self.begin_unix_seconds(
+            name, map_name, additional_data, -1, saved_dir
+        )
+
+    def start(
+        mut self,
+        world: World,
+        name: String,
+        map_name: String = "",
+        additional_data: Bool = False,
+        saved_dir: String = "",
+    ) raises -> String:
+        """Start a world recording with the current Unix date.
+
+        Args:
+            world: The world to record.
+            name: The file name, path, or empty for memory only.
+            map_name: The map name written in the header.
+            additional_data: Whether to include the extra record fields.
+            saved_dir: The folder of a bare file name.
+
+        Returns:
+            The output path, or empty for memory only.
+
+        Raises:
+            Error: If a record is refused or an active file cannot be written.
+        """
+        return self.start_unix_seconds(
+            world, name, map_name, additional_data, -1, saved_dir
+        )
+
+    def begin_unix_seconds(
+        mut self,
+        name: String,
+        map_name: String = "",
+        additional_data: Bool = False,
         date: Int = -1,
         saved_dir: String = "",
     ) raises -> String:
-        """Start an empty recording: write the header and turn on.
+        """Start a recording with an explicit exact integer Unix date.
+
+        This source-format adapter accepts every Int. Nonnegative values
+        are signed i64 seconds since 1970-01-01 UTC without floating-point
+        conversion. The conventional -1 sentinel selects now. Other negative
+        values retain the existing negative-means-now source behavior.
 
         `start` does this, then records the world's actors. A recording
         that runs is stopped first.
@@ -335,8 +395,8 @@ struct Recorder(Movable):
             map_name: The map's name for the header.
             additional_data: Whether to record the velocities, bones,
                 boxes, setups and platform time too.
-            date: The date for the header in seconds since 1970, or -1 for
-                now.
+            date: Exact Unix seconds for the header. Negative values select
+                now; -1 is the conventional sentinel.
             saved_dir: The folder of a bare name.
 
         Returns:
@@ -368,7 +428,7 @@ struct Recorder(Movable):
         self._doors = Dict[Int, List[Bool]]()
         return self.path
 
-    def start(
+    def start_unix_seconds(
         mut self,
         world: World,
         name: String,
@@ -377,7 +437,10 @@ struct Recorder(Movable):
         date: Int = -1,
         saved_dir: String = "",
     ) raises -> String:
-        """Start a recording of a world, `Start`.
+        """Start a world recording with an explicit integer Unix date.
+
+        This source-format adapter preserves the exact nonnegative Int
+        date and the negative-means-now sentinel behavior of begin_unix_seconds.
 
         A recording that runs is stopped first. The header is written, and
         every actor in the world is recorded as made in the first frame,
@@ -390,8 +453,8 @@ struct Recorder(Movable):
             map_name: The map's name for the header.
             additional_data: Whether to record the velocities, bones,
                 boxes, setups and platform time too.
-            date: The date for the header in seconds since 1970, or -1 for
-                now.
+            date: Exact Unix seconds for the header. Negative values select
+                now; -1 is the conventional sentinel.
             saved_dir: The folder of a bare name.
 
         Returns:
@@ -401,7 +464,9 @@ struct Recorder(Movable):
             Error: If a running recording's file cannot be written, or an
                 actor cannot be read.
         """
-        _ = self.begin(name, map_name, additional_data, date, saved_dir)
+        _ = self.begin_unix_seconds(
+            name, map_name, additional_data, date, saved_dir
+        )
         self._weather = world.weather
         # The spectator is always in the list.
         for i in range(len(world.actors)):  # pragma: no branch
@@ -734,7 +799,9 @@ struct Recorder(Movable):
         var elapsed = perf_counter_ns() - self.start_ns
         # CARLA counts whole microseconds.
         var platform = Float64(elapsed // 1000) / 1000000.0
-        self.write_frame(world.delta_seconds, world.elapsed_seconds, platform)
+        self.write_frame_seconds(
+            world.delta_seconds, world.elapsed_seconds, platform
+        )
 
     def tick(mut self, mut world: World) raises -> Int:
         """Tick the world and record the frame.
@@ -795,6 +862,26 @@ struct Recorder(Movable):
 
     def write_frame(
         mut self,
+        delta_seconds: Duration64,
+        visual_time: Duration64,
+        platform_time: Duration64,
+    ) raises:
+        """Write a frame with checked, precision-preserving time quantities.
+
+        Args:
+            delta_seconds: The tick duration.
+            visual_time: The visual effects time.
+            platform_time: The machine time since the start.
+
+        Raises:
+            Error: If a time or a record is invalid.
+        """
+        self.write_frame_seconds(
+            delta_seconds.value, visual_time.value, platform_time.value
+        )
+
+    def write_frame_seconds(
+        mut self,
         delta_seconds: Float64,
         visual_time: Float64,
         platform_time: Float64,
@@ -813,7 +900,9 @@ struct Recorder(Movable):
         Raises:
             Error: If a record is refused.
         """
-        self.frames.set_frame(delta_seconds)
+        _ = _nonnegative_si(visual_time)
+        _ = _nonnegative_si(platform_time)
+        self.frames.set_frame_seconds(delta_seconds)
         self.frames.write_start(self.out)
         time_packet(self.out, PACKET_VISUAL_TIME, visual_time)
         events_add_packet(self.out, self.events_add)

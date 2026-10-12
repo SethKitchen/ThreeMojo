@@ -9,5 +9,5 @@ from extensions.carla.road_info import RoadInfoSpeed
 
 
 def main() raises:
-    var record = RoadInfoSpeed(0, 1, "Town", "m/s")
+    var record = RoadInfoSpeed.from_si(0, 1, "Town", "m/s")
     record.kind = 0

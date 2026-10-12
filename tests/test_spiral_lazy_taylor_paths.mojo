@@ -276,7 +276,7 @@ def test_local_seed_recomputes_scale_and_width_before_cached_acceptance() raises
     var terms = 0
     var before_point = _checked_center(road, 0, 0, 0.55, terms, 10)
     var before_scale = _point_gap_scale(before_point, query)
-    var before_width = road.lane_width(0, 0, 0.55)
+    var before_width = road.lane_width_meters(0, 0, 0.55)
     var result = _refine_lane_certificate(
         road,
         0,
@@ -290,7 +290,7 @@ def test_local_seed_recomputes_scale_and_width_before_cached_acceptance() raises
     )
     assert_equal(before_scale, 0.125)
     assert_equal(result.scale, 0.0625)
-    assert_true(road.lane_width(0, 0, result.s) < before_width)
+    assert_true(road.lane_width_meters(0, 0, result.s) < before_width)
     assert_true(_wide_point_order(result.point, before_point, query) < 0)
     assert_equal(result.terms, 480)
     var score = _refinement_square[3](result.point, query, result.scale)

@@ -48,10 +48,10 @@ def _first_road() raises -> Road:
     var curvature = Float64(1e9 - 1)
     for _ in range(6):
         curvature = _next_down(curvature)
-    var geometry = RoadGeometry(SPIRAL, 0, 0, 0, 0, 2)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0, 0, 0, 0, 2)
     geometry.curvature_start = curvature
     geometry.curvature_end = curvature
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1),
         "direct junction helper refusal",
         2.0,
@@ -60,18 +60,20 @@ def _first_road() raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(-1.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(-1.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry(-1.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(-1.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(-1.0, CubicPolynomial(2.0, 1.0, 0.0, 0.0, 0.0))
+        RoadInfoElevation._from_si(
+            -1.0, CubicPolynomial._from_coefficients(2.0, 1.0, 0.0, 0.0, 0.0)
+        )
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(-1.0, CubicPolynomial.constant(1.0))
+        RoadInfoLaneOffset._from_si(-1.0, CubicPolynomial._constant_si(1.0))
     )
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)
@@ -145,10 +147,10 @@ def _first_endpoint_control() raises:
 def _last_road() raises -> Road:
     var curvature = bitcast[DType.float64](UInt64(13965043853212778490))
     var length = bitcast[DType.float64](UInt64(2022) << UInt64(52))
-    var geometry = RoadGeometry(SPIRAL, 0, 0, 0, 0, length)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0, 0, 0, 0, length)
     geometry.curvature_start = curvature
     geometry.curvature_end = _next_up(curvature)
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1),
         "direct last-end junction helper refusal",
         2.0,
@@ -157,18 +159,20 @@ def _last_road() raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial(2.0, 1.0, 0.0, 0.0, 0.0))
+        RoadInfoElevation._from_si(
+            0.0, CubicPolynomial._from_coefficients(2.0, 1.0, 0.0, 0.0, 0.0)
+        )
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(1.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(1.0))
     )
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)

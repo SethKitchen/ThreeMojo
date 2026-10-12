@@ -716,7 +716,7 @@ def test_pedestrian_definitions() raises:
     assert_equal(adult.attribute("speed").recommended_values[2], "2.8")
     var child = library.at("walker.pedestrian.0048")
     assert_equal(child.attribute("age").value, "child")
-    var p = PedestrianParameters(
+    var p = PedestrianParameters.from_meters_per_second(
         "X9", GENDER_FEMALE, AGE_ADULT, 1, List[Float32]()
     )
     var b = make_pedestrian_definition(p)
@@ -729,13 +729,13 @@ def test_pedestrian_definitions() raises:
     assert_false(PedestrianAge(-1).is_valid())
     with assert_raises(contains="gender or age is not valid"):
         _ = make_pedestrian_definition(
-            PedestrianParameters(
+            PedestrianParameters.from_meters_per_second(
                 "1", PedestrianGender(3), AGE_ADULT, 1, List[Float32]()
             )
         )
     with assert_raises(contains="gender or age is not valid"):
         _ = make_pedestrian_definition(
-            PedestrianParameters(
+            PedestrianParameters.from_meters_per_second(
                 "1", GENDER_OTHER, PedestrianAge(4), 1, List[Float32]()
             )
         )
@@ -863,7 +863,7 @@ def test_weather_compares_every_field() raises:
 
 
 def test_weather_clamps_and_screens() raises:
-    var high = WeatherParameters(
+    var high = WeatherParameters.from_carla(
         150, 150, 150, 150, 400, 100, 150, 5, 2, 150, 150, 9, 9, 150
     )
     var f = _fields(high.clamped())
@@ -885,7 +885,7 @@ def test_weather_clamps_and_screens() raises:
     ]
     for i in range(14):
         assert_almost_equal(f[i], top[i], atol=1e-4)
-    var low = WeatherParameters(
+    var low = WeatherParameters.from_carla(
         -5, -5, -5, -5, -5, -100, -5, -5, -5, -5, -5, -5, -5, -5
     )
     f = _fields(low.clamped())

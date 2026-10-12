@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Finite differential controls preserve v7 owner-classification boundaries."""
+import ast
+import copy
 from contextlib import ExitStack
 from pathlib import Path
 import sys
@@ -55,12 +57,92 @@ def _baseline_cache_verify_frame(frame, *, include_aliases=False):
     return include_aliases and type(namespace.get('__file__')) is str and (Path(namespace['__file__']).absolute() == Path(__file__).absolute().with_name('cache_key_contracts.py')) and (frame.f_code is _live_function_code(namespace.get('verify')))
 
 
-REFERENCE_OPERATION = types.FunctionType(_baseline_operation_frame_kind.__code__, vars(cleanup))
+# Each replacement is one complete reviewed #333 extension. Applying the
+# inverse retains every surrounding predecessor predicate and its old hashes.
+_TYPED_OWNER_EDITS = {
+    'operation': (
+        ("('invariant', 'winner', 'border')",
+         "('invariant', 'winner', 'border', 'runtime', 'sampled')"),
+        ("('coverage_invariant_contracts.py', 'winner_sign_contracts.py', 'border_parser_contracts.py', 'coverage_loop_proofs.py')",
+         "('coverage_invariant_contracts.py', 'winner_sign_contracts.py', 'border_parser_contracts.py', 'check_runtime_support.py', 'check_sampled_values.py', 'coverage_loop_proofs.py')"),
+        ("(('invariant', 'coverage_invariant_contracts.py'), ('winner', 'winner_sign_contracts.py'), ('border', 'border_parser_contracts.py'))",
+         "(('invariant', 'coverage_invariant_contracts.py'), ('winner', 'winner_sign_contracts.py'), ('border', 'border_parser_contracts.py'), ('runtime', 'check_runtime_support.py'), ('sampled', 'check_sampled_values.py'))"),
+    ),
+    'registry': (
+        ("((prefix + 'coverage_invariant_contracts', 'verify'), (prefix + 'winner_sign_contracts', 'verify'), (prefix + 'border_parser_contracts', 'verify'), ('coverage_loop_proofs', 'reviewed_nonempty_loops'), ('tools.coverage_loop_proofs', 'reviewed_nonempty_loops'))",
+         "((prefix + 'coverage_invariant_contracts', 'verify'), (prefix + 'winner_sign_contracts', 'verify'), (prefix + 'border_parser_contracts', 'verify'), (prefix + 'check_runtime_support', 'verify'), (prefix + 'check_sampled_values', 'verify'), ('coverage_loop_proofs', 'reviewed_nonempty_loops'), ('tools.coverage_loop_proofs', 'reviewed_nonempty_loops'))"),
+    ),
+    'owner': (
+        ("{'invariant': 'coverage_invariant_contracts', 'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}",
+         "{'invariant': 'coverage_invariant_contracts', 'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts', 'runtime': 'check_runtime_support', 'sampled': 'check_sampled_values'}"),
+    ),
+    'private': (
+        ("kind not in ('invariant', 'border') or operation._kind != 'winner'",
+         "kind not in ('invariant', 'border') or operation._kind not in ('winner', 'runtime', 'sampled')"),
+    ),
+}
+
+_TYPED_OWNER_EDITS['operation_unguarded'] = (
+    _TYPED_OWNER_EDITS['operation'][0], _TYPED_OWNER_EDITS['operation'][2])
+
+
+def typed_owner_ast(node, *groups, reverse=False):
+    """Invert only exact owner tuples/branches, with exact occurrence counts."""
+    node = copy.deepcopy(node)
+    for group in groups:
+        for before, after in _TYPED_OWNER_EDITS[group]:
+            old, new = (after, before) if reverse else (before, after)
+            expected = ast.dump(ast.parse(old, mode='eval').body, include_attributes=False)
+            replacement = ast.parse(new, mode='eval').body
+            class Replace(ast.NodeTransformer):
+                count = 0
+                def visit(self, item):
+                    if ast.dump(item, include_attributes=False) == expected:
+                        self.count += 1
+                        return ast.copy_location(copy.deepcopy(replacement), item)
+                    return super().visit(item)
+            project = Replace()
+            node = project.visit(node)
+            if project.count != 1:
+                raise AssertionError(('exact typed owner successor', group, old, project.count))
+    return ast.fix_missing_locations(node)
+
+
+def typed_owner_predecessor(node):
+    """Remove both new exact-string arms and the exotic-key dictionary entries."""
+    node = typed_owner_ast(node, 'owner', reverse=True)
+    dispatch = node.body[1]
+    tail = dispatch.body[0]
+    while isinstance(tail, ast.If):
+        if ast.dump(tail.test, include_attributes=False) == ast.dump(
+                ast.parse("kind == 'border'", mode='eval').body, include_attributes=False):
+            expected = ast.parse("if kind == 'runtime':\n    name = 'check_runtime_support'\nelif kind == 'sampled':\n    name = 'check_sampled_values'\nelse:\n    name = None").body[0]
+            if len(tail.orelse) != 1 or ast.dump(tail.orelse[0], include_attributes=False) != ast.dump(expected, include_attributes=False):
+                raise AssertionError('exact typed owner dispatch arms changed')
+            tail.orelse = [ast.copy_location(ast.parse('name = None').body[0], tail.orelse[0])]
+            return ast.fix_missing_locations(node)
+        tail = tail.orelse[0] if len(tail.orelse) == 1 else None
+    raise AssertionError('missing typed owner dispatch arms')
+
+
+def typed_reference(function, *groups):
+    """Extend a frozen reference explicitly; never alter the frozen reference AST."""
+    import inspect
+    node = ast.parse(inspect.getsource(function)).body[0]
+    node = typed_owner_ast(node, *groups)
+    module = ast.Module(body=[node], type_ignores=[])
+    code = next(value for value in compile(module, '<typed-owner-reference>', 'exec').co_consts
+                if isinstance(value, types.CodeType))
+    return types.FunctionType(code, vars(cleanup))
+
+
+REFERENCE_OPERATION = typed_reference(_baseline_operation_frame_kind, 'operation')
 REFERENCE_CACHE = types.FunctionType(_baseline_cache_verify_frame.__code__, vars(cleanup))
 PREFIX = (cleanup.__package__ + '.') if cleanup.__package__ else ''
 REGISTRATIONS = (PREFIX + 'coverage_invariant_contracts', PREFIX + 'winner_sign_contracts',
                  PREFIX + 'border_parser_contracts', 'coverage_loop_proofs',
                  'tools.coverage_loop_proofs', PREFIX + 'cache_key_contracts')
+TYPED_REGISTRATIONS = (PREFIX + 'check_runtime_support', PREFIX + 'check_sampled_values')
 
 
 class OwnerFrameLexicalTests(unittest.TestCase):
@@ -101,7 +183,7 @@ class OwnerFrameLexicalTests(unittest.TestCase):
             if expected is not None: self.assertEqual(new, ('return', expected))
 
     def registered(self):
-        return patch.dict(sys.modules, {name: None for name in REGISTRATIONS})
+        return patch.dict(sys.modules, {name: None for name in (*REGISTRATIONS, *TYPED_REGISTRATIONS)})
 
     def module(self, name, public, filename=None):
         module = types.ModuleType(name)
@@ -111,7 +193,7 @@ class OwnerFrameLexicalTests(unittest.TestCase):
 
     def test_canonical_decorated_owners_and_unrelated_namespace_frames(self):
         with self.registered():
-            for kind, name in zip(('invariant', 'winner', 'border'), REGISTRATIONS[:3]):
+            for kind, name in zip(('invariant', 'winner', 'border', 'runtime', 'sampled'), (*REGISTRATIONS[:3], *TYPED_REGISTRATIONS)):
                 for depth in (0, 1, 2):
                     with self.subTest(kind=kind, depth=depth):
                         public, inner = self.wrapped(depth)
@@ -142,7 +224,8 @@ class OwnerFrameLexicalTests(unittest.TestCase):
         public, inner = self.wrapped()
         with self.registered():
             for name in ('coverage_invariant_contracts.py', 'winner_sign_contracts.py',
-                         'border_parser_contracts.py', 'unrelated.py'):
+                         'border_parser_contracts.py', 'check_runtime_support.py',
+                         'check_sampled_values.py', 'unrelated.py'):
                 for filename in (str(Path(cleanup.__file__).with_name(name)), name, None):
                     with self.subTest(filename=filename):
                         namespace = {'__file__': filename, 'verify': public}
@@ -289,6 +372,73 @@ class OwnerFrameLexicalTests(unittest.TestCase):
                         frame = frame.f_back
                     self.assertIs(frame, nearer)
                     self.assertEqual(found, 'border')
+
+
+class TypedOwnerSuccessorLexicalTests(unittest.TestCase):
+    function = staticmethod(OwnerFrameLexicalTests.function)
+    wrapped = classmethod(OwnerFrameLexicalTests.wrapped.__func__)
+    frame = staticmethod(OwnerFrameLexicalTests.frame)
+    module = OwnerFrameLexicalTests.module
+    registered = OwnerFrameLexicalTests.registered
+
+    def test_new_canonical_owners_and_aliases_have_exact_frame_authority(self):
+        for kind, name in zip(('runtime', 'sampled'), TYPED_REGISTRATIONS):
+            for depth in (0, 1, 2):
+                with self.subTest(owner=kind, wrappers=depth), self.registered():
+                    public, inner = self.wrapped(depth)
+                    module = self.module(name, public)
+                    owned = self.frame(vars(module), inner.__code__)
+                    unrelated = self.frame(vars(module), compile('pass', '<unrelated>', 'exec'))
+                    with patch.dict(sys.modules, {name: module}):
+                        self.assertEqual(cleanup._operation_frame_kind(owned), kind)
+                        self.assertEqual(cleanup._operation_frame_kind(owned, include_aliases=True), kind)
+                        self.assertIsNone(cleanup._operation_frame_kind(unrelated, include_aliases=True))
+                    self.assertIsNone(cleanup._operation_frame_kind(owned))
+                    self.assertEqual(cleanup._operation_frame_kind(owned, include_aliases=True), 'alias_' + kind)
+                    module.__file__ = str(Path(cleanup.__file__).parent/'foreign'/Path(module.__file__).name)
+                    self.assertIsNone(cleanup._operation_frame_kind(owned, include_aliases=True))
+
+    def test_explicit_inverse_preserves_old_hashes_and_refuses_each_new_surface(self):
+        # The shared inverse checks every historical classifier hash before
+        # constructing the enlarged reference domain for differential tests.
+        from test_invariant_operation_inputs import _rc21_original_classifiers
+        text = Path(cleanup.__file__).read_text()
+        self.assertTrue(_rc21_original_classifiers(text))
+        tree = ast.parse(text)
+        for owner in ('_operation_frame_kind', '_owner_module'):
+            original = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == owner)
+            additions = [node for node in ast.walk(original) if isinstance(node, ast.Constant)
+                         and node.value in ('runtime', 'sampled', 'check_runtime_support', 'check_sampled_values',
+                                            'check_runtime_support.py', 'check_sampled_values.py')]
+            self.assertTrue(additions)
+            for index in range(len(additions)):
+                changed = copy.deepcopy(tree)
+                definition = next(node for node in changed.body if isinstance(node, ast.FunctionDef) and node.name == owner)
+                candidates = [node for node in ast.walk(definition) if isinstance(node, ast.Constant)
+                              and node.value in ('runtime', 'sampled', 'check_runtime_support', 'check_sampled_values',
+                                                 'check_runtime_support.py', 'check_sampled_values.py')]
+                candidates[index].value = 'unreviewed_owner'
+                with self.subTest(owner=owner, site=index), self.assertRaises(AssertionError):
+                    _rc21_original_classifiers(ast.unparse(changed))
+
+    def test_new_parent_kinds_keep_private_child_root_and_wrapper_guards(self):
+        module = types.ModuleType('private_typed_child')
+        exec('def verify(): pass\ndef _verify_owned(): pass', vars(module))
+        for kind in ('winner', 'runtime', 'sampled', 'invariant', 'unreviewed'):
+            for fault in (None, 'root', 'caller', 'token', 'child'):
+                with self.subTest(parent=kind, fault=fault):
+                    operation = types.SimpleNamespace(_kind=kind, _root='/alpha')
+                    caller = self.frame(vars(module), module._verify_owned.__code__,
+                                        {'_operation': operation, 'root': Path('/alpha')})
+                    frame = self.frame(vars(module), module.verify.__code__,
+                                       {'_operation': operation, 'root': Path('/alpha')}, caller)
+                    if fault == 'root': frame.f_locals['root'] = Path('/foreign')
+                    if fault == 'caller': caller.f_code = compile('pass', '<unrelated>', 'exec')
+                    if fault == 'token': caller.f_locals['_operation'] = object()
+                    child = 'winner' if fault == 'child' else 'invariant'
+                    with patch.object(cleanup, '_owner_module', return_value=module):
+                        actual = cleanup._private_operation_wrapper(frame, child, operation)
+                    self.assertIs(actual, caller if kind in ('winner', 'runtime', 'sampled') and fault is None else None)
 
 
 if __name__ == '__main__':

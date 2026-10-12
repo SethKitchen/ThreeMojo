@@ -17,8 +17,16 @@ from tests._published_seed_selector import _published_first_pass_with_work
 from extensions.carla.road import Road
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import RoadInfoLaneWidth
-from extensions.carla.geometry import LINE, SPIRAL, RoadGeometry, with_spiral
-from extensions.carla.road_info import RoadInfoGeometry, info_index
+from extensions.carla.geometry import (
+    LINE,
+    SPIRAL,
+    RoadGeometry,
+    with_spiral_si as with_spiral,
+)
+from extensions.carla.road_info import (
+    RoadInfoGeometry,
+    info_index_meters as info_index,
+)
 from tests.test_carla_cross_candidate_certificates import _road
 from extensions.carla.lane_refinement import (
     _LaneCertificate,
@@ -393,10 +401,12 @@ def test_clamp_uncertainty_on_either_owner_declines_before_producers() raises:
         var rate = bitcast[DType.float64](
             UInt64(0x3FEFFFFFFFFFFFFF) - UInt64(back)
         )
-        road.info.geometries[0] = RoadInfoGeometry(
+        road.info.geometries[0] = RoadInfoGeometry._from_si(
             0.1,
             with_spiral(
-                RoadGeometry(SPIRAL, 0.1, 0.0, 0.0, 0.0, 1.0), 0.0, rate
+                RoadGeometry.from_meters(SPIRAL, 0.1, 0.0, 0.0, 0.0, 1.0),
+                0.0,
+                rate,
             ),
         )
         for side in range(3):
@@ -477,7 +487,7 @@ def test_exact_range_membership_checks_the_whole_interval() raises:
 def test_uniform_reference_predicate_declines_arithmetic_path_changes() raises:
     var minimum = bitcast[DType.float64](UInt64(0x26F0000000000000))
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0, 0.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0, 0.0
     )
     assert_true(_seed_reference_domain(geometry, 0.0, 0.2, 0.3))
     geometry.curvature_start = 0.25
@@ -515,7 +525,7 @@ def test_uniform_reference_predicate_declines_arithmetic_path_changes() raises:
 def _seed_road(id: Int = 1) raises -> Road:
     var road = _road(id=id)
     road.info.geometries[0].geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.0, 0.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.0, 0.0
     )
     return road^
 
@@ -695,7 +705,7 @@ def test_optional_seed_declines_one_short_winner_term_reserve() raises:
 def _profile_boundary(low: Float64, high: Float64, proposals: Bool) raises:
     var road = _seed_road()
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(high, CubicPolynomial.constant(4.0))
+        RoadInfoLaneWidth._from_si(high, CubicPolynomial._constant_si(4.0))
     )
     var target_road = _seed_road(2)
     var work = _MapQueryWork(MapQueryBudget())
@@ -806,7 +816,7 @@ def test_optional_seed_declines_only_the_expensive_target_node_prefix() raises:
         var lane = target_road.sections[0].add_lane(LaneId(id))
         target_road.sections[0].lanes[lane].type = LANE_DRIVING
         target_road.sections[0].lanes[lane].info.widths.append(
-            RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+            RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
         )
     assert_equal(len(target_road.sections[0].lanes), 15)
     assert_equal(target_road.sections[0].lanes[0].id, LaneId(-1))
@@ -852,7 +862,7 @@ def test_optional_seed_declines_only_the_target_term_reserve() raises:
     var road = _seed_road()
     var target_road = _seed_road(2)
     target_road.info.geometries[0].geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 74.0, 74.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 74.0, 74.0
     )
     var low = Float64(0.25)
     var high = Float64(0.2501)
@@ -1007,10 +1017,12 @@ def test_optional_seed_declines_changed_geometry_owners_and_line_targets() raise
             # normal construction splits these roots before querying them.
             road.info.geometries[0].geometry.length = 0.3
             road.info.geometries.append(
-                RoadInfoGeometry(
+                RoadInfoGeometry._from_si(
                     0.3,
                     with_spiral(
-                        RoadGeometry(SPIRAL, 0.3, 0.3, 0.0, 0.0, 3.7),
+                        RoadGeometry.from_meters(
+                            SPIRAL, 0.3, 0.3, 0.0, 0.0, 3.7
+                        ),
                         0.0,
                         0.0,
                     ),
@@ -1019,10 +1031,12 @@ def test_optional_seed_declines_changed_geometry_owners_and_line_targets() raise
         elif kind == 1:
             target_road.info.geometries[0].geometry.length = 0.3
             target_road.info.geometries.append(
-                RoadInfoGeometry(
+                RoadInfoGeometry._from_si(
                     0.3,
                     with_spiral(
-                        RoadGeometry(SPIRAL, 0.3, 0.3, 0.0, 0.0, 3.7),
+                        RoadGeometry.from_meters(
+                            SPIRAL, 0.3, 0.3, 0.0, 0.0, 3.7
+                        ),
                         0.0,
                         0.0,
                     ),
@@ -1140,14 +1154,14 @@ def _finite_width_overflow_road(
     var road = _seed_road()
     road.length = 0.375
     road.info.geometries[0].geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 0.375), 0.0, 0.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 0.375), 0.0, 0.0
     )
-    var polynomial = CubicPolynomial(2.0, b, c, d, 0.0)
+    var polynomial = CubicPolynomial._from_coefficients(2.0, b, c, d, 0.0)
     assert_true(isfinite(polynomial.a))
     assert_true(isfinite(polynomial.b))
     assert_true(isfinite(polynomial.c))
     assert_true(isfinite(polynomial.d))
-    road.sections[0].lanes[0].info.widths[0] = RoadInfoLaneWidth(
+    road.sections[0].lanes[0].info.widths[0] = RoadInfoLaneWidth._from_si(
         0.0, polynomial
     )
     return road^
@@ -1250,15 +1264,17 @@ def _assert_reference_count_descendants(
     road.info.geometries.clear()
     if origin > 0.0:
         road.info.geometries.append(
-            RoadInfoGeometry(
-                0.0, RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, origin)
+            RoadInfoGeometry._from_si(
+                0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, origin)
             )
         )
     road.info.geometries.append(
-        RoadInfoGeometry(
+        RoadInfoGeometry._from_si(
             origin,
             with_spiral(
-                RoadGeometry(SPIRAL, origin, origin, 0.0, 0.0, length),
+                RoadGeometry.from_meters(
+                    SPIRAL, origin, origin, 0.0, 0.0, length
+                ),
                 curvature_start,
                 curvature_end,
             ),

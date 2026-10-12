@@ -66,7 +66,9 @@ def _m(value: Float32) -> Length:
     return Length(value, METER)
 
 
-def _next_start(record: RoadGeometry) -> Tuple[Float32, Float32, Float32]:
+def _next_start(
+    record: RoadGeometry,
+) raises -> Tuple[Float32, Float32, Float32]:
     var end = record.pos_from_dist(_m(Float32(record.length)))
     return (Float32(end.x), Float32(end.y), Float32(end.tangent))
 
@@ -93,29 +95,31 @@ def build_map() raises -> Map:
     )
     var b = _next_start(second)
     var builder = MapBuilder()
-    var road = builder.add_road(
+    var road = builder.add_road_si(
         RoadId(1), "demo", 130.0, JuncId(-1), RoadId(0), RoadId(0), True
     )
-    builder.add_road_geometry_line(road, 0.0, 0.0, 0.0, 0.0, 40.0)
-    builder.add_road_geometry_spiral(
+    builder.add_road_geometry_line_si(road, 0.0, 0.0, 0.0, 0.0, 40.0)
+    builder.add_road_geometry_spiral_si(
         road, 40.0, Float64(a[0]), Float64(a[1]), Float64(a[2]), 30.0, 0.0, 0.02
     )
-    builder.add_road_geometry_arc(
+    builder.add_road_geometry_arc_si(
         road, 70.0, Float64(b[0]), Float64(b[1]), Float64(b[2]), 60.0, 0.02
     )
-    _ = builder.add_road_section(road, SectionId(0), 0.0)
+    _ = builder.add_road_section_si(road, SectionId(0), 0.0)
     for id in [-2, -1, 0, 1, 2]:
         var kind = LANE_NONE if id == 0 else LANE_DRIVING
         _ = builder.add_road_section_lane(
             road, 0, LaneId(id), kind, False, LaneId(0), LaneId(0)
         )
-        var lane = builder.lane(RoadId(1), LaneId(id), 0.0)
-        builder.create_lane_width(lane, 0.0, 0.0 if id == 0 else 3.5, 0, 0, 0)
+        var lane = builder.lane_si(RoadId(1), LaneId(id), 0.0)
+        builder.create_lane_width_si(
+            lane, 0.0, 0.0 if id == 0 else 3.5, 0, 0, 0
+        )
         # The center line is solid and 0.3 m wide; the lanes between are
         # broken and the outer edges solid, 0.15 m wide.
         var mark = "broken" if abs(id) == 1 else "solid"
         var width = 0.3 if id == 0 else 0.15
-        builder.create_road_mark(
+        builder.create_road_mark_si(
             lane,
             0,
             0.0,
@@ -130,14 +134,14 @@ def build_map() raises -> Map:
             0.0,
             True,
         )
-    builder.create_section_offset(road, 0.0, 0, 0, 0, 0)
-    builder.add_road_elevation_profile(road, 0.0, 0, 0, 0, 0)
+    builder.create_section_offset_si(road, 0.0, 0, 0, 0, 0)
+    builder.add_road_elevation_profile_si(road, 0.0, 0, 0, 0, 0)
     return builder.build()
 
 
 def _lane_transform(map: Map, s: Float64, lane: Int) raises -> CarlaTransform:
     return map.compute_transform(
-        Waypoint(RoadId(1), SectionId(0), LaneId(lane), s)
+        Waypoint.from_si(RoadId(1), SectionId(0), LaneId(lane), s)
     )
 
 

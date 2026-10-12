@@ -50,7 +50,7 @@ from extensions.carla.geometry import (
 from std.math import isfinite
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from math.vector3 import Vector3
 
 
@@ -161,14 +161,15 @@ def _atan2_value(y: _ValueJet, x: _ValueJet) -> _ValueJet:
 def _polynomial_value(
     polynomial: CubicPolynomial, s: _ValueJet, shift: Float64 = 0.0
 ) -> _ValueJet:
+    var local = s - _ValueJet.constant(polynomial.s)
     return (
         _ValueJet.constant(polynomial.a) - _ValueJet.constant(shift)
-    ) + s * (
+    ) + local * (
         _ValueJet.constant(polynomial.b)
-        + s
+        + local
         * (
             _ValueJet.constant(polynomial.c)
-            + s * _ValueJet.constant(polynomial.d)
+            + local * _ValueJet.constant(polynomial.d)
         )
     )
 

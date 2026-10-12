@@ -173,9 +173,9 @@ from extensions.carla.road_info import (
     SectionId,
     SignalId,
     SignalOrientation,
-    info_at,
-    info_index,
-    infos_in_range,
+    _info_at_si as info_at,
+    _info_index_si as info_index,
+    _infos_in_range_si as infos_in_range,
     signal_orientation_of,
 )
 from extensions.carla.rtree import (
@@ -190,7 +190,15 @@ from math.vector3 import Vector3
 from std.hashlib import Hasher
 from std.math import ceil, floor, inf, isfinite, sin, sqrt
 from std.memory import bitcast
-from units.si import DEGREE, Angle, Length, METER, Velocity64
+from extensions.carla.quantity_boundary import (
+    _RAW_SI,
+    _RawSI,
+    _finite_si,
+    _nonnegative_si,
+    _positive_si,
+)
+from units.si import DEGREE, Angle, Length, Length64, METER, Velocity64
+from units.si import Angle64
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
 comptime EPSILON = 10.0 * 2.220446049250313e-16
@@ -201,7 +209,6 @@ comptime DOUBLE_EPSILON = 2.220446049250313e-16
 # --- waypoint -----------------------------------------------------------------
 
 
-@fieldwise_init
 struct Waypoint(Hashable, ImplicitlyCopyable, KeyElement, Writable):
     """A place on the road network, `road/element/Waypoint`."""
 
@@ -210,6 +217,72 @@ struct Waypoint(Hashable, ImplicitlyCopyable, KeyElement, Writable):
     var lane_id: LaneId
     # Meters along the road, in double; see the module docstring.
     var s: Float64
+
+    def __init__(
+        out self,
+        road_id: RoadId,
+        section_id: SectionId,
+        lane_id: LaneId,
+        s: Length64,
+    ) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            road_id: Its source record value.
+            section_id: Its source record value.
+            lane_id: Its source record value.
+            s: Its typed source quantity.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = Waypoint.from_si(road_id, section_id, lane_id, s.value)
+
+    @staticmethod
+    def from_si(
+        road_id: RoadId, section_id: SectionId, lane_id: LaneId, s: Float64
+    ) raises -> Waypoint:
+        """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            road_id: The road identifier.
+            section_id: The lane-section identifier.
+            lane_id: The signed lane identifier.
+            s: The nonnegative station in meters.
+
+        Returns:
+            The new Waypoint record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
+        """
+        _ = _nonnegative_si(s)
+        return Waypoint(_RAW_SI, road_id, section_id, lane_id, s)
+
+    @staticmethod
+    def _from_si(
+        road_id: RoadId, section_id: SectionId, lane_id: LaneId, s: Float64
+    ) -> Waypoint:
+        """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+        """
+        return Waypoint(_RAW_SI, road_id, section_id, lane_id, s)
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        road_id: RoadId,
+        section_id: SectionId,
+        lane_id: LaneId,
+        s: Float64,
+    ):
+        """Create the explicit compatibility record."""
+        self.road_id = road_id
+        self.section_id = section_id
+        self.lane_id = lane_id
+        self.s = s
 
     def _bucket(self) -> Float64:
         return floor(self.s * 200.0)
@@ -259,6 +332,17 @@ struct Waypoint(Hashable, ImplicitlyCopyable, KeyElement, Writable):
             self.s,
             ")",
         )
+
+    def s_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw s compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.s))
 
 
 # --- junctions ----------------------------------------------------------------
@@ -463,6 +547,242 @@ struct Signal(Copyable, Movable):
         out self,
         road_id: RoadId,
         signal_id: SignalId,
+        s: Length64,
+        t: Length64,
+        name: String,
+        dynamic: String,
+        orientation: String,
+        z_offset: Length64,
+        country: String,
+        type: String,
+        subtype: String,
+        value: Float64,
+        unit: String,
+        height: Length64,
+        width: Length64,
+        text: String,
+        h_offset: Angle64,
+        pitch: Angle64,
+        roll: Angle64,
+        value_present: Bool = True,
+    ) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            road_id: Its source record value.
+            signal_id: Its source record value.
+            s: Its typed source quantity.
+            t: Its typed source quantity.
+            name: Its source record value.
+            dynamic: Its source record value.
+            orientation: Its source record value.
+            z_offset: Its typed source quantity.
+            country: Its source record value.
+            type: Its source record value.
+            subtype: Its source record value.
+            value: Its source record value.
+            unit: Its source record value.
+            height: Its typed source quantity.
+            width: Its typed source quantity.
+            text: Its source record value.
+            h_offset: Its typed source quantity.
+            pitch: Its typed source quantity.
+            roll: Its typed source quantity.
+            value_present: Its source record value.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = Signal.from_si(
+            road_id,
+            signal_id,
+            s.value,
+            t.value,
+            name,
+            dynamic,
+            orientation,
+            z_offset.value,
+            country,
+            type,
+            subtype,
+            value,
+            unit,
+            height.value,
+            width.value,
+            text,
+            h_offset.value,
+            pitch.value,
+            roll.value,
+            value_present,
+        )
+
+    @staticmethod
+    def from_si(
+        road_id: RoadId,
+        signal_id: SignalId,
+        s: Float64,
+        t: Float64,
+        name: String,
+        dynamic: String,
+        orientation: String,
+        z_offset: Float64,
+        country: String,
+        type: String,
+        subtype: String,
+        value: Float64,
+        unit: String,
+        height: Float64,
+        width: Float64,
+        text: String,
+        h_offset: Float64,
+        pitch: Float64,
+        roll: Float64,
+        value_present: Bool = True,
+    ) raises -> Signal:
+        """Explicit source-unit compatibility adapter. Create a signal from a file's `signal`.
+
+        Args:
+            road_id: The road it stands on.
+            signal_id: Its id.
+            s: Meters along the road.
+            t: Meters to the left of the reference line.
+            name: Its name.
+            dynamic: "yes" for a signal that changes, such as a light.
+            orientation: "+", "-" or anything else for both.
+            z_offset: Meters up from the road.
+            country: The code of the country whose catalog it is from.
+            type: Its type in that catalog, such as "206".
+            subtype: Its subtype.
+            value: Its value, such as a speed.
+            unit: The unit of the value.
+            height: Its height, in meters.
+            width: Its width, in meters.
+            text: Its text.
+            h_offset: The turn from the road's heading, in radians.
+            pitch: Its pitch, in radians.
+            roll: Its roll, in radians.
+            value_present: Whether the file supplied a numeric value.
+
+        Returns:
+            The new Signal record with the supplied source fields.
+
+        Raises:
+            Error: If an id is not valid.
+        """
+        _ = _nonnegative_si(s)
+        _ = _finite_si(t)
+        _ = _finite_si(z_offset)
+        _ = _nonnegative_si(height)
+        _ = _nonnegative_si(width)
+        _ = _finite_si(h_offset)
+        _ = _finite_si(pitch)
+        _ = _finite_si(roll)
+        return Signal(
+            _RAW_SI,
+            road_id,
+            signal_id,
+            s,
+            t,
+            name,
+            dynamic,
+            orientation,
+            z_offset,
+            country,
+            type,
+            subtype,
+            value,
+            unit,
+            height,
+            width,
+            text,
+            h_offset,
+            pitch,
+            roll,
+            value_present,
+        )
+
+    @staticmethod
+    def _from_si(
+        road_id: RoadId,
+        signal_id: SignalId,
+        s: Float64,
+        t: Float64,
+        name: String,
+        dynamic: String,
+        orientation: String,
+        z_offset: Float64,
+        country: String,
+        type: String,
+        subtype: String,
+        value: Float64,
+        unit: String,
+        height: Float64,
+        width: Float64,
+        text: String,
+        h_offset: Float64,
+        pitch: Float64,
+        roll: Float64,
+        value_present: Bool = True,
+    ) raises -> Signal:
+        """Explicit source-unit compatibility adapter. Create a signal from a file's `signal`.
+
+        Args:
+            road_id: The road it stands on.
+            signal_id: Its id.
+            s: Meters along the road.
+            t: Meters to the left of the reference line.
+            name: Its name.
+            dynamic: "yes" for a signal that changes, such as a light.
+            orientation: "+", "-" or anything else for both.
+            z_offset: Meters up from the road.
+            country: The code of the country whose catalog it is from.
+            type: Its type in that catalog, such as "206".
+            subtype: Its subtype.
+            value: Its value, such as a speed.
+            unit: The unit of the value.
+            height: Its height, in meters.
+            width: Its width, in meters.
+            text: Its text.
+            h_offset: The turn from the road's heading, in radians.
+            pitch: Its pitch, in radians.
+            roll: Its roll, in radians.
+            value_present: Whether the file supplied a numeric value.
+
+        Raises:
+            Error: If an id is not valid.
+        """
+        return Signal(
+            _RAW_SI,
+            road_id,
+            signal_id,
+            s,
+            t,
+            name,
+            dynamic,
+            orientation,
+            z_offset,
+            country,
+            type,
+            subtype,
+            value,
+            unit,
+            height,
+            width,
+            text,
+            h_offset,
+            pitch,
+            roll,
+            value_present,
+        )
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        road_id: RoadId,
+        signal_id: SignalId,
         s: Float64,
         t: Float64,
         name: String,
@@ -485,6 +805,7 @@ struct Signal(Copyable, Movable):
         """Create a signal from a file's `signal`.
 
         Args:
+            raw: The private raw-storage construction capability.
             road_id: The road it stands on.
             signal_id: Its id.
             s: Meters along the road.
@@ -571,6 +892,94 @@ struct Signal(Copyable, Movable):
         """
         return signal_orientation_of(self.orientation_text)
 
+    def s_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw s compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.s))
+
+    def t_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw t compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_finite_si(self.t))
+
+    def z_offset_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw z_offset compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_finite_si(self.z_offset))
+
+    def height_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw height compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.height))
+
+    def width_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw width compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.width))
+
+    def h_offset_quantity(self) raises -> Angle64:
+        """Read the checked typed view of the raw h_offset compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Angle64(_finite_si(self.h_offset))
+
+    def pitch_quantity(self) raises -> Angle64:
+        """Read the checked typed view of the raw pitch compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Angle64(_finite_si(self.pitch))
+
+    def roll_quantity(self) raises -> Angle64:
+        """Read the checked typed view of the raw roll compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Angle64(_finite_si(self.roll))
+
 
 struct Controller(Copyable, Movable):
     """A group of signals that change together, `road/Controller`."""
@@ -641,6 +1050,105 @@ struct RoadObject(Copyable, Movable):
         self.heading = 0.0
         self.pitch = 0.0
         self.roll = 0.0
+
+    def s_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw s compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.s))
+
+    def t_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw t compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_finite_si(self.t))
+
+    def z_offset_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw z_offset compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_finite_si(self.z_offset))
+
+    def valid_length_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw valid_length compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.valid_length))
+
+    def length_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw length compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.length))
+
+    def width_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw width compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.width))
+
+    def heading_quantity(self) raises -> Angle64:
+        """Read the checked typed view of the raw heading compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Angle64(_finite_si(self.heading))
+
+    def pitch_quantity(self) raises -> Angle64:
+        """Read the checked typed view of the raw pitch compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Angle64(_finite_si(self.pitch))
+
+    def roll_quantity(self) raises -> Angle64:
+        """Read the checked typed view of the raw roll compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Angle64(_finite_si(self.roll))
 
 
 # CARLA's `SignalType` catalog: the German StVO numbers OpenDRIVE uses.
@@ -797,18 +1305,88 @@ struct SignalSearchData(Copyable, Movable):
         out self,
         signal: RoadInfoSignal,
         waypoint: Waypoint,
+        accumulated_s: Length64,
+    ) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            signal: Its source record value.
+            waypoint: Its source record value.
+            accumulated_s: Its typed source quantity.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = SignalSearchData.from_si(signal, waypoint, accumulated_s.value)
+
+    @staticmethod
+    def from_si(
+        signal: RoadInfoSignal,
+        waypoint: Waypoint,
         accumulated_s: Float64,
-    ):
-        """Create a result.
+    ) raises -> SignalSearchData:
+        """Explicit source-unit compatibility adapter. Create a result.
+
+        Args:
+            signal: The signal reference found.
+            waypoint: Where it applies.
+            accumulated_s: How far from the start, in meters.
+
+        Returns:
+            The new SignalSearchData record with the supplied source fields.
+
+        Raises:
+            Error: If the accumulated distance is nonfinite or negative.
+        """
+        _ = _nonnegative_si(accumulated_s)
+        return SignalSearchData(_RAW_SI, signal, waypoint, accumulated_s)
+
+    @staticmethod
+    def _from_si(
+        signal: RoadInfoSignal,
+        waypoint: Waypoint,
+        accumulated_s: Float64,
+    ) -> SignalSearchData:
+        """Explicit source-unit compatibility adapter. Create a result.
 
         Args:
             signal: The signal reference found.
             waypoint: Where it applies.
             accumulated_s: How far from the start, in meters.
         """
+        return SignalSearchData(_RAW_SI, signal, waypoint, accumulated_s)
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        signal: RoadInfoSignal,
+        waypoint: Waypoint,
+        accumulated_s: Float64,
+    ):
+        """Create a result.
+
+        Args:
+            raw: The private raw-storage construction capability.
+            signal: The signal reference found.
+            waypoint: Where it applies.
+            accumulated_s: How far from the start, in meters."""
         self.signal = signal.copy()
         self.waypoint = waypoint
         self.accumulated_s = accumulated_s
+
+    def accumulated_s_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw accumulated_s compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.accumulated_s))
 
 
 struct Landmark(Copyable, Movable):
@@ -827,18 +1405,88 @@ struct Landmark(Copyable, Movable):
         out self,
         waypoint: Optional[Waypoint],
         reference: RoadInfoSignal,
+        distance: Length64,
+    ) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            waypoint: Its source record value.
+            reference: Its source record value.
+            distance: Its typed source quantity.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = Landmark.from_si(waypoint, reference, distance.value)
+
+    @staticmethod
+    def from_si(
+        waypoint: Optional[Waypoint],
+        reference: RoadInfoSignal,
         distance: Float64,
-    ):
-        """Create a landmark.
+    ) raises -> Landmark:
+        """Explicit source-unit compatibility adapter. Create a landmark.
+
+        Args:
+            waypoint: Where it applies, or None.
+            reference: The signal reference.
+            distance: Meters from the search's start.
+
+        Returns:
+            The new Landmark record with the supplied source fields.
+
+        Raises:
+            Error: If the distance is nonfinite or negative.
+        """
+        _ = _nonnegative_si(distance)
+        return Landmark(_RAW_SI, waypoint, reference, distance)
+
+    @staticmethod
+    def _from_si(
+        waypoint: Optional[Waypoint],
+        reference: RoadInfoSignal,
+        distance: Float64,
+    ) -> Landmark:
+        """Explicit source-unit compatibility adapter. Create a landmark.
 
         Args:
             waypoint: Where it applies, or None.
             reference: The signal reference.
             distance: Meters from the search's start.
         """
+        return Landmark(_RAW_SI, waypoint, reference, distance)
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        waypoint: Optional[Waypoint],
+        reference: RoadInfoSignal,
+        distance: Float64,
+    ):
+        """Create a landmark.
+
+        Args:
+            raw: The private raw-storage construction capability.
+            waypoint: Where it applies, or None.
+            reference: The signal reference.
+            distance: Meters from the search's start."""
         self.waypoint = waypoint
         self.reference = reference.copy()
         self.distance = distance
+
+    def distance_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw distance compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.distance))
 
 
 def _has_uniform_plan_classification(
@@ -1080,6 +1728,49 @@ def _point_segment_2d(
 
 def segment_distance_2d(
     a1: Vector3, a2: Vector3, b1: Vector3, b2: Vector3
+) raises -> Length64:
+    """Return the checked physical plan distance between two segments.
+
+    Args:
+        a1: The first segment start in meters.
+        a2: The first segment end in meters.
+        b1: The second segment start in meters.
+        b2: The second segment end in meters.
+
+    Returns:
+        Their minimum plan distance; z is ignored.
+
+    Raises:
+        Error: If a plan coordinate or the result is not finite.
+    """
+    return Length64(segment_distance_2d_meters(a1, a2, b1, b2))
+
+
+def segment_distance_2d_meters(
+    a1: Vector3, a2: Vector3, b1: Vector3, b2: Vector3
+) raises -> Float64:
+    """Explicit checked meter adapter for the unchanged segment kernel.
+
+    Args:
+        a1: The first segment start.
+        a2: The first segment end.
+        b1: The second segment start.
+        b2: The second segment end.
+
+    Returns:
+        The raw distance in meters.
+
+    Raises:
+        Error: If a plan coordinate or result is not finite.
+    """
+    for point in [a1, a2, b1, b2]:
+        _ = _finite_si(Float64(point.x))
+        _ = _finite_si(Float64(point.y))
+    return _nonnegative_si(_segment_distance_2d_si(a1, a2, b1, b2))
+
+
+def _segment_distance_2d_si(
+    a1: Vector3, a2: Vector3, b1: Vector3, b2: Vector3
 ) -> Float64:
     """Return the plan distance between two segments, as Boost's.
 
@@ -1154,6 +1845,7 @@ def _map_locate_with_work(
     waypoint: Waypoint,
     mut work: _MapBuildWork,
 ) raises -> Tuple[Int, Int, Int]:
+    _ = _nonnegative_si(waypoint.s)
     work.step()
     if not waypoint.road_id.is_valid():
         raise Error("Road id is not valid")
@@ -1706,6 +2398,7 @@ struct Map(Movable):
         return self.roads[self.road_index(id)]
 
     def _locate(self, waypoint: Waypoint) raises -> Tuple[Int, Int, Int]:
+        _ = _nonnegative_si(waypoint.s)
         var r = self.road_index(waypoint.road_id)
         var section = self.roads[r].section_index(waypoint.section_id)
         var lane = self.roads[r].sections[section].lane_index(waypoint.lane_id)
@@ -1742,7 +2435,7 @@ struct Map(Movable):
 
     def _key(self, key: LaneKey) raises -> Tuple[Int, Int, Int]:
         return self._locate(
-            Waypoint(key.road_id, key.section_id, key.lane_id, 0.0)
+            Waypoint._from_si(key.road_id, key.section_id, key.lane_id, 0.0)
         )
 
     def lane(
@@ -1846,19 +2539,19 @@ struct Map(Movable):
         # `GetDistanceAtStartOfLane`.
         ref r = self.roads[road]
         var s = r.sections[section].s
-        var inset = min(10.0 * EPSILON, r.section_length(section) / 4.0)
+        var inset = min(10.0 * EPSILON, r._section_length_si(section) / 4.0)
         if r.is_positive_direction(r.sections[section].lanes[lane].id):
             return s + inset
-        return s + r.section_length(section) - inset
+        return s + r._section_length_si(section) - inset
 
     def _end_of_lane(self, road: Int, section: Int, lane: Int) -> Float64:
         # `GetDistanceAtEndOfLane`.
         ref r = self.roads[road]
         var s = r.sections[section].s
-        var inset = min(10.0 * EPSILON, r.section_length(section) / 4.0)
+        var inset = min(10.0 * EPSILON, r._section_length_si(section) / 4.0)
         if not r.is_positive_direction(r.sections[section].lanes[lane].id):
             return s + inset
-        return s + r.section_length(section) - inset
+        return s + r._section_length_si(section) - inset
 
     def compute_transform(self, waypoint: Waypoint) raises -> CarlaTransform:
         """Return where a waypoint is, `Map::ComputeTransform`.
@@ -1877,7 +2570,7 @@ struct Map(Movable):
                 SPIRAL uses an unsupported floating-point mode.
         """
         var at = self._locate(waypoint)
-        return self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+        return self.roads[at[0]]._lane_transform_si(at[1], at[2], waypoint.s)
 
     def lane_type(self, waypoint: Waypoint) raises -> LaneType:
         """Return a waypoint's lane type, `Map::GetLaneType`.
@@ -1929,7 +2622,24 @@ struct Map(Movable):
             return road_speed.value().limit()
         return None
 
-    def lane_width(self, waypoint: Waypoint) raises -> Length:
+    def lane_width(self, waypoint: Waypoint) raises -> Length64:
+        """Return a lane width without narrowing its Float64 evaluation.
+
+        Args:
+            waypoint: The lane and station.
+
+        Returns:
+            The finite lane width in meters.
+
+        Raises:
+            Error: If the waypoint or the width is invalid.
+        """
+        var width = self.lane_width_meters(waypoint)
+        if not isfinite(width) or width < 0.0:
+            raise Error("Lane width must be finite and nonnegative")
+        return Length64(width)
+
+    def lane_width_float32(self, waypoint: Waypoint) raises -> Length:
         """Return a waypoint's lane width, `Map::GetLaneWidth`.
 
         Args:
@@ -1942,18 +2652,9 @@ struct Map(Movable):
             Error: If the lane is not in the map, s is past the road's end,
                 or no width record holds at s.
         """
-        var at = self._locate(waypoint)
-        ref road = self.roads[at[0]]
-        if waypoint.s > road.length:
-            raise Error("s is past the end of the road")
-        var width = info_at(
-            road.sections[at[1]].lanes[at[2]].info.widths, waypoint.s
-        )
-        if not Bool(width):
-            raise Error("The lane has no width record at s")
-        return Length(
-            Float32(width.value().polynomial.evaluate(waypoint.s)), METER
-        )
+        var value = Float32(self.lane_width_meters(waypoint))
+        _ = _nonnegative_si(Float64(value))
+        return Length(value, METER)
 
     def lane_width_meters(self, waypoint: Waypoint) raises -> Float64:
         """Return a waypoint's lane width in double, as CARLA computes it.
@@ -1976,7 +2677,9 @@ struct Map(Movable):
         )
         if not Bool(width):
             raise Error("The lane has no width record at s")
-        return width.value().polynomial.evaluate(waypoint.s)
+        return _nonnegative_si(
+            width.value().polynomial._evaluate_si(waypoint.s)
+        )
 
     def junction_id(self, road: RoadId) raises -> JuncId:
         """Return the junction a road belongs to, `Map::GetJunctionId`.
@@ -2105,7 +2808,7 @@ struct Map(Movable):
         if delta <= 0.0:
             return start
         # The foot lies inside the segment's lane, so one step stays in it.
-        return self.next(start, delta)[0]
+        return self.next_meters(start, delta)[0]
 
     def waypoint(
         self, location: Vector3, lane_type: LaneType = LANE_DRIVING
@@ -2718,7 +3421,7 @@ struct Map(Movable):
         var at = self._locate_with_work(start, work)
         ref road = self.roads[at[0]]
         work.step(len(road.sections))
-        var length = road.section_length(at[1])
+        var length = road._section_length_si(at[1])
         var section_start = road.sections[at[1]].s
         if not isfinite(length) or length < 0.0:
             raise Error("CARLA query lane section has an invalid length")
@@ -2775,7 +3478,10 @@ struct Map(Movable):
             if key.lane_id.value == 0:
                 continue
             var target = self._locate_with_work(
-                Waypoint(key.road_id, key.section_id, key.lane_id, 0.0), work
+                Waypoint._from_si(
+                    key.road_id, key.section_id, key.lane_id, 0.0
+                ),
+                work,
             )
             # _start_of_lane scans once in the positive direction and twice
             # in reverse; reserve both without changing its arithmetic.
@@ -2785,7 +3491,9 @@ struct Map(Movable):
                 raise Error("CARLA graph successor has a nonfinite station")
             work.step()
             out.append(
-                Waypoint(key.road_id, key.section_id, key.lane_id, station)
+                Waypoint._from_si(
+                    key.road_id, key.section_id, key.lane_id, station
+                )
             )
         return out^
 
@@ -2830,6 +3538,7 @@ struct Map(Movable):
                     raise Error(
                         "CARLA graph step needs a finite station and distance"
                     )
+                _ = _nonnegative_si(frame.waypoint.s)
                 if not frame.distance > 0.0:
                     raise Error("A step needs a positive distance")
                 if frame.distance <= EPSILON:
@@ -2842,7 +3551,7 @@ struct Map(Movable):
                 var forward = road.is_positive_direction(frame.waypoint.lane_id)
                 var start = road.sections[at[1]].s
                 work.step(len(road.sections))
-                var length = road.section_length(at[1])
+                var length = road._section_length_si(at[1])
                 if not isfinite(start) or not isfinite(length) or length < 0.0:
                     raise Error(
                         "CARLA graph lane section has an invalid length"
@@ -2920,14 +3629,15 @@ struct Map(Movable):
         # Two separately checked debits avoid overflow in twice-the-cost.
         work.charge(1, terms)
         work.charge(0, terms)
-        _ = self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+        _ = self.roads[at[0]]._lane_transform_si(at[1], at[2], waypoint.s)
 
     def waypoint_xodr(
-        self, road_id: RoadId, lane_id: LaneId, s: Length
+        self, road_id: RoadId, lane_id: LaneId, s: Length64
     ) raises -> Optional[Waypoint]:
         """Return the waypoint at a road, a lane and an s, `GetWaypoint`.
 
-        CARLA takes s as a `float`, as `Length` holds it.
+        The station stays in Float64; use the explicit Float32 adapter
+        only for a legacy CARLA float input.
 
         Args:
             road_id: The road.
@@ -2946,13 +3656,33 @@ struct Map(Movable):
         if not self.contains_road(road_id):
             return None
         ref road = self.road(road_id)
-        var at = Float64(s.value)
+        var at = _finite_si(s.value)
         if s.value < 0.0 or at >= road.length:
             return None
-        for index in road.sections_at(at):
+        for index in road._sections_at_si(at):
             if road.sections[index].contains_lane(lane_id):
-                return Waypoint(road_id, road.sections[index].id, lane_id, at)
+                return Waypoint._from_si(
+                    road_id, road.sections[index].id, lane_id, at
+                )
         return None
+
+    def waypoint_xodr_float32(
+        self, road_id: RoadId, lane_id: LaneId, s: Length
+    ) raises -> Optional[Waypoint]:
+        """Look up a legacy Float32 station through an explicit adapter.
+
+        Args:
+            road_id: The road.
+            lane_id: The lane.
+            s: The legacy Float32 station.
+
+        Returns:
+            The matching waypoint, if present.
+
+        Raises:
+            Error: If an id or the station is not valid.
+        """
+        return self.waypoint_xodr(road_id, lane_id, Length64(Float64(s.value)))
 
     # --- walking the network --------------------------------------------------
 
@@ -2976,7 +3706,7 @@ struct Map(Movable):
                 continue
             var at = self._key(key)
             out.append(
-                Waypoint(
+                Waypoint._from_si(
                     key.road_id,
                     key.section_id,
                     key.lane_id,
@@ -3005,7 +3735,7 @@ struct Map(Movable):
                 continue
             var at = self._key(key)
             out.append(
-                Waypoint(
+                Waypoint._from_si(
                     key.road_id,
                     key.section_id,
                     key.lane_id,
@@ -3015,9 +3745,26 @@ struct Map(Movable):
         return out^
 
     def next(
+        self, waypoint: Waypoint, distance: Length64
+    ) raises -> List[Waypoint]:
+        """Return the next result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.next_meters(waypoint, distance.value)
+
+    def next_meters(
         self, waypoint: Waypoint, distance: Float64
     ) raises -> List[Waypoint]:
-        """Return the waypoints a distance ahead, `Map::GetNext`.
+        """Explicit meter compatibility adapter. Return the waypoints a distance ahead, `Map::GetNext`.
 
         Ahead is the way the lane runs. Past the lane's end the walk
         continues on each successor; where two lanes lead back into each
@@ -3038,9 +3785,26 @@ struct Map(Movable):
         return self._step(waypoint, distance, True)
 
     def previous(
+        self, waypoint: Waypoint, distance: Length64
+    ) raises -> List[Waypoint]:
+        """Return the previous result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.previous_meters(waypoint, distance.value)
+
+    def previous_meters(
         self, waypoint: Waypoint, distance: Float64
     ) raises -> List[Waypoint]:
-        """Return the waypoints a distance behind, `Map::GetPrevious`.
+        """Explicit meter compatibility adapter. Return the waypoints a distance behind, `Map::GetPrevious`.
 
         Args:
             waypoint: The start.
@@ -3058,8 +3822,9 @@ struct Map(Movable):
     def _step(
         self, waypoint: Waypoint, distance: Float64, ahead: Bool
     ) raises -> List[Waypoint]:
-        if not (distance > 0.0):
+        if not isfinite(distance) or not (distance > 0.0):
             raise Error("A step needs a positive distance")
+        _ = _nonnegative_si(waypoint.s)
         if distance <= EPSILON:
             return [waypoint]
         var at = self._locate(waypoint)
@@ -3067,7 +3832,7 @@ struct Map(Movable):
         var positive = road.is_positive_direction(waypoint.lane_id)
         var forward = positive if ahead else not positive
         var start = road.sections[at[1]].s
-        var length = road.section_length(at[1])
+        var length = road._section_length_si(at[1])
         var relative = waypoint.s - start
         var remaining = length - relative if forward else relative
         if distance <= remaining:
@@ -3153,8 +3918,24 @@ struct Map(Movable):
 
     # --- waypoint generation ------------------------------------------------------
 
-    def generate_waypoints(self, distance: Float64) raises -> List[Waypoint]:
-        """Return waypoints every `distance` on every driving lane.
+    def generate_waypoints(self, distance: Length64) raises -> List[Waypoint]:
+        """Return the generate waypoints result with a Float64 length.
+
+        Args:
+            distance: The distance or spacing, with its meter unit.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.generate_waypoints_meters(distance.value)
+
+    def generate_waypoints_meters(
+        self, distance: Float64
+    ) raises -> List[Waypoint]:
+        """Explicit meter compatibility adapter. Return waypoints every `distance` on every driving lane.
 
         This is `Map::GenerateWaypoints`: from `EPSILON` along each road,
         every `distance` meters, on each driving lane at that s.
@@ -3168,43 +3949,50 @@ struct Map(Movable):
         Raises:
             Error: If the distance is not positive.
         """
-        if not (distance > 0.0):
+        if not isfinite(distance) or not (distance > 0.0):
             raise Error("Waypoint spacing must be positive")
         var out = List[Waypoint]()
         for road in self.roads:
             var s = EPSILON
             while s < road.length - EPSILON:
-                for index in road.sections_at(s):
+                for index in road._sections_at_si(s):
                     for lane in road.sections[index].lanes:
                         if lane.id.value == 0:
                             continue
                         if lane.type.matches(LANE_DRIVING):
                             out.append(
-                                Waypoint(
+                                Waypoint._from_si(
                                     road.id, road.sections[index].id, lane.id, s
                                 )
                             )
-                s += distance
+                var following = s + distance
+                if not isfinite(following) or following <= s:
+                    raise Error(
+                        "Waypoint spacing cannot advance at this station"
+                    )
+                s = following
         return out^
 
     def _entries(
         self, road: Road, lane_type: LaneType, mut out: List[Waypoint]
     ):
-        for index in road.sections_at(0.0):
+        for index in road._sections_at_si(0.0):
             for lane in road.sections[index].lanes:
                 if road.is_positive_direction(lane.id) and lane.type.matches(
                     lane_type
                 ):
                     out.append(
-                        Waypoint(road.id, road.sections[index].id, lane.id, 0.0)
+                        Waypoint._from_si(
+                            road.id, road.sections[index].id, lane.id, 0.0
+                        )
                     )
-        for index in road.sections_at(road.length):
+        for index in road._sections_at_si(road.length):
             for lane in road.sections[index].lanes:
                 if not road.is_positive_direction(
                     lane.id
                 ) and lane.type.matches(lane_type):
                     out.append(
-                        Waypoint(
+                        Waypoint._from_si(
                             road.id,
                             road.sections[index].id,
                             lane.id,
@@ -3285,7 +4073,7 @@ struct Map(Movable):
                         LANE_DRIVING
                     ):
                         continue
-                    var w = Waypoint(
+                    var w = Waypoint._from_si(
                         road.id,
                         section.id,
                         lane.id,
@@ -3293,7 +4081,7 @@ struct Map(Movable):
                     )
                     var nexts = self.successors(w)
                     if len(nexts) == 0:
-                        var last = Waypoint(
+                        var last = Waypoint._from_si(
                             road.id,
                             section.id,
                             lane.id,
@@ -3335,7 +4123,7 @@ struct Map(Movable):
                     ref lane = section.lanes[ln]
                     if lane.id.value == 0 or not lane.type.matches(lane_type):
                         continue
-                    var start = Waypoint(
+                    var start = Waypoint._from_si(
                         road.id,
                         section.id,
                         lane.id,
@@ -3369,7 +4157,7 @@ struct Map(Movable):
                         continue
                     # Each edge helper can scan strict section successors twice.
                     work.step_product(4, len(road.sections))
-                    var start = Waypoint(
+                    var start = Waypoint._from_si(
                         road.id,
                         section.id,
                         lane.id,
@@ -3440,7 +4228,9 @@ struct Map(Movable):
                 if one.first.road_id == two.first.road_id:
                     continue
                 if (
-                    segment_distance_2d(one.start, one.end, two.start, two.end)
+                    _segment_distance_2d_si(
+                        one.start, one.end, two.start, two.end
+                    )
                     > 2.0
                 ):
                     continue
@@ -3457,10 +4247,33 @@ struct Map(Movable):
     def signals_in_distance(
         self,
         waypoint: Waypoint,
+        distance: Length64,
+        stop_at_junction: Bool = False,
+    ) raises -> List[SignalSearchData]:
+        """Return the signals in distance result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+            stop_at_junction: Whether to stop at a junction.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.signals_in_distance_meters(
+            waypoint, distance.value, stop_at_junction
+        )
+
+    def signals_in_distance_meters(
+        self,
+        waypoint: Waypoint,
         distance: Float64,
         stop_at_junction: Bool = False,
     ) raises -> List[SignalSearchData]:
-        """Return the signals within a distance ahead, `GetSignalsInDistance`.
+        """Explicit meter compatibility adapter. Return the signals within a distance ahead, `GetSignalsInDistance`.
 
         A signal counts when one of its validities holds the waypoint's
         lane. The search follows every successor past the lane's end, and
@@ -3478,12 +4291,14 @@ struct Map(Movable):
         Raises:
             Error: If the lane is not in the map.
         """
+        if not isfinite(distance) or distance < 0.0:
+            raise Error("Signal distance must be finite and nonnegative")
         var at = self._locate(waypoint)
         ref road = self.roads[at[0]]
         var forward = road.is_positive_direction(waypoint.lane_id)
         var relative = waypoint.s - road.sections[at[1]].s
         var remaining = (
-            road.section_length(at[1]) - relative if forward else relative
+            road._section_length_si(at[1]) - relative if forward else relative
         )
         var reach = min(distance, remaining)
         var signed = reach if forward else -reach
@@ -3502,11 +4317,15 @@ struct Map(Movable):
             if not valid:
                 continue
             if to_signal == 0.0:
-                out.append(SignalSearchData(signal, waypoint, to_signal))
+                out.append(
+                    SignalSearchData._from_si(signal, waypoint, to_signal)
+                )
             else:
                 out.append(
-                    SignalSearchData(
-                        signal, self.next(waypoint, to_signal)[0], to_signal
+                    SignalSearchData._from_si(
+                        signal,
+                        self.next_meters(waypoint, to_signal)[0],
+                        to_signal,
                     )
                 )
         if distance <= remaining:
@@ -3521,8 +4340,8 @@ struct Map(Movable):
             if next_road.is_positive_direction(candidate.lane_id):
                 start.s = s
             else:
-                start.s = s + next_road.section_length(c[1])
-            var found = self.signals_in_distance(
+                start.s = s + next_road._section_length_si(c[1])
+            var found = self.signals_in_distance_meters(
                 start, distance - remaining, stop_at_junction
             )
             for i in range(len(found)):
@@ -3594,7 +4413,7 @@ struct Map(Movable):
         else:
             mark = marks_b[0].copy() if a_off else marks_a[1].copy()
         if Bool(mark):
-            out.append(LaneMarking(mark.value()))
+            out.append(LaneMarking._from_si(mark.value()))
         return out^
 
     def all_crosswalk_zones(self) raises -> List[Vector3]:
@@ -3624,10 +4443,10 @@ struct Map(Movable):
                         Angle(0.0, DEGREE),
                     ),
                 )
-                for index in road.sections_at(crosswalk.s):
+                for index in road._sections_at_si(crosswalk.s):
                     var lane = road.sections[index].lane_index(LaneId(0))
                     if lane >= 0:
-                        base = road.lane_transform(index, lane, crosswalk.s)
+                        base = road._lane_transform_si(index, lane, crosswalk.s)
                 var heading = Float32(crosswalk.heading) * _TO_DEGREES
                 var pivot = base
                 pivot.rotation.yaw -= heading
@@ -3652,9 +4471,26 @@ struct Map(Movable):
     # --- client-side helpers ----------------------------------------------------
 
     def next_until_lane_end(
+        self, waypoint: Waypoint, distance: Length64
+    ) raises -> List[Waypoint]:
+        """Return the next until lane end result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.next_until_lane_end_meters(waypoint, distance.value)
+
+    def next_until_lane_end_meters(
         self, waypoint: Waypoint, distance: Float64
     ) raises -> List[Waypoint]:
-        """Return waypoints every `distance` to the lane's end.
+        """Explicit meter compatibility adapter. Return waypoints every `distance` to the lane's end.
 
         This is the client's `Waypoint::GetNextUntilLaneEnd`: steps while
         exactly one lane lies ahead on the same road, then appends the
@@ -3676,9 +4512,26 @@ struct Map(Movable):
         return self._until_end(waypoint, distance, True)
 
     def previous_until_lane_start(
+        self, waypoint: Waypoint, distance: Length64
+    ) raises -> List[Waypoint]:
+        """Return the previous until lane start result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.previous_until_lane_start_meters(waypoint, distance.value)
+
+    def previous_until_lane_start_meters(
         self, waypoint: Waypoint, distance: Float64
     ) raises -> List[Waypoint]:
-        """Return waypoints every `distance` back to the lane's start.
+        """Explicit meter compatibility adapter. Return waypoints every `distance` back to the lane's start.
 
         This corrects the client's `Waypoint::GetPreviousUntilLaneStart`:
         the last step measures what is left in the requested backward
@@ -3707,7 +4560,7 @@ struct Map(Movable):
         var initial = self._locate(waypoint)
         ref road = self.roads[initial[0]]
         var section_start = road.sections[initial[1]].s
-        var section_end = section_start + road.section_length(initial[1])
+        var section_end = section_start + road._section_length_si(initial[1])
         var s = waypoint.s
         if not isfinite(s) or s < section_start or s > section_end:
             raise Error("Waypoint is outside its lane section")
@@ -3780,7 +4633,7 @@ struct Map(Movable):
             .copy()
         )
         if Bool(mark):
-            return LaneMarking(mark.value())
+            return LaneMarking._from_si(mark.value())
         return None
 
     def left_lane_marking(
@@ -3805,7 +4658,7 @@ struct Map(Movable):
             .copy()
         )
         if Bool(mark):
-            return LaneMarking(mark.value())
+            return LaneMarking._from_si(mark.value())
         return None
 
     def lane_change(self, waypoint: Waypoint) raises -> LaneChange:
@@ -3850,10 +4703,33 @@ struct Map(Movable):
     def landmarks_in_distance(
         self,
         waypoint: Waypoint,
+        distance: Length64,
+        stop_at_junction: Bool = False,
+    ) raises -> List[Landmark]:
+        """Return the landmarks in distance result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+            stop_at_junction: Whether to stop at a junction.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.landmarks_in_distance_meters(
+            waypoint, distance.value, stop_at_junction
+        )
+
+    def landmarks_in_distance_meters(
+        self,
+        waypoint: Waypoint,
         distance: Float64,
         stop_at_junction: Bool = False,
     ) raises -> List[Landmark]:
-        """Return the landmarks ahead, `GetAllLandmarksInDistance`.
+        """Explicit meter compatibility adapter. Return the landmarks ahead, `GetAllLandmarksInDistance`.
 
         Each signal reference comes once, at its first find.
 
@@ -3869,7 +4745,7 @@ struct Map(Movable):
             Error: If the lane is not in the map.
         """
         var out = List[Landmark]()
-        for data in self.signals_in_distance(
+        for data in self.signals_in_distance_meters(
             waypoint, distance, stop_at_junction
         ):
             var seen = False
@@ -3878,17 +4754,46 @@ struct Map(Movable):
                     seen = True
             if seen:
                 continue
-            out.append(Landmark(data.waypoint, data.signal, data.accumulated_s))
+            out.append(
+                Landmark._from_si(
+                    data.waypoint, data.signal, data.accumulated_s
+                )
+            )
         return out^
 
     def landmarks_of_type_in_distance(
+        self,
+        waypoint: Waypoint,
+        distance: Length64,
+        type: String,
+        stop_at_junction: Bool = False,
+    ) raises -> List[Landmark]:
+        """Return the landmarks of type in distance result with a Float64 length.
+
+        Args:
+            waypoint: The start waypoint.
+            distance: The distance or spacing, with its meter unit.
+            type: The signal type to keep.
+            stop_at_junction: Whether to stop at a junction.
+
+        Returns:
+            The requested records with unchanged Float64 endpoint arithmetic.
+
+        Raises:
+            Error: If the distance or the selected map records are invalid.
+        """
+        return self.landmarks_of_type_in_distance_meters(
+            waypoint, distance.value, type, stop_at_junction
+        )
+
+    def landmarks_of_type_in_distance_meters(
         self,
         waypoint: Waypoint,
         distance: Float64,
         type: String,
         stop_at_junction: Bool = False,
     ) raises -> List[Landmark]:
-        """Return the landmarks of one type ahead.
+        """Explicit meter compatibility adapter. Return the landmarks of one type ahead.
 
         This is `GetLandmarksOfTypeInDistance`. CARLA checks for repeats
         but never records one, so a reference found twice comes twice.
@@ -3906,12 +4811,14 @@ struct Map(Movable):
             Error: If the lane is not in the map or a signal is missing.
         """
         var out = List[Landmark]()
-        for data in self.signals_in_distance(
+        for data in self.signals_in_distance_meters(
             waypoint, distance, stop_at_junction
         ):
             if self.signal(data.signal.signal_id).type == type:
                 out.append(
-                    Landmark(data.waypoint, data.signal, data.accumulated_s)
+                    Landmark._from_si(
+                        data.waypoint, data.signal, data.accumulated_s
+                    )
                 )
         return out^
 
@@ -3923,7 +4830,7 @@ struct Map(Movable):
         """
         var out = List[Landmark]()
         for reference in self.all_signal_references():
-            out.append(Landmark(None, reference, 0.0))
+            out.append(Landmark._from_si(None, reference, 0.0))
         return out^
 
     def landmarks_from_id(self, id: SignalId) raises -> List[Landmark]:
@@ -3943,7 +4850,7 @@ struct Map(Movable):
         var out = List[Landmark]()
         for reference in self.all_signal_references():
             if reference.signal_id == id:
-                out.append(Landmark(None, reference, 0.0))
+                out.append(Landmark._from_si(None, reference, 0.0))
         return out^
 
     def all_landmarks_of_type(self, type: String) raises -> List[Landmark]:
@@ -3963,7 +4870,7 @@ struct Map(Movable):
         var out = List[Landmark]()
         for reference in self.all_signal_references():
             if self.signal(reference.signal_id).type == type:
-                out.append(Landmark(None, reference, 0.0))
+                out.append(Landmark._from_si(None, reference, 0.0))
         return out^
 
     def landmark_group(self, landmark: Landmark) raises -> List[Landmark]:
@@ -4031,7 +4938,7 @@ struct Map(Movable):
             return waypoint
         var at = self._build_locate(waypoint)
         self._construction_work.step(len(self.roads[at[0]].sections))
-        var length = self.roads[at[0]].section_length(at[1])
+        var length = self.roads[at[0]]._section_length_si(at[1])
         var start = self.roads[at[0]].sections[at[1]].s
         var forward = self.roads[at[0]].is_positive_direction(waypoint.lane_id)
         var relative = waypoint.s - start
@@ -4058,7 +4965,7 @@ struct Map(Movable):
         self._construction_work.step()
         self._construction_work.term(terms)
         self._construction_work.term(terms)
-        return self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+        return self.roads[at[0]]._lane_transform_si(at[1], at[2], waypoint.s)
 
     def _reserve_build_point(
         mut self, road: Int, section: Int, s: Float64
@@ -4302,7 +5209,7 @@ struct Map(Movable):
                         2, len(self.roads[r].sections)
                     )
                     starts.append(
-                        Waypoint(
+                        Waypoint._from_si(
                             self.roads[r].id,
                             section.id,
                             section.lanes[ln].id,
@@ -4316,7 +5223,9 @@ struct Map(Movable):
             var current_t = self._build_transform(current)
             var lane_start = self.roads[at[0]].sections[at[1]].s
             self._construction_work.step(len(self.roads[at[0]].sections))
-            var lane_end = lane_start + self.roads[at[0]].section_length(at[1])
+            var lane_end = lane_start + self.roads[at[0]]._section_length_si(
+                at[1]
+            )
             var positive = self.roads[at[0]].is_positive_direction(
                 start.lane_id
             )

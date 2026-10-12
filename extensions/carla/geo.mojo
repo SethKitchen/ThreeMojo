@@ -21,8 +21,11 @@ an altitude and the ellipsoid's axis in `double`. A `units.si.Angle`
 holds a `Float32`, which keeps a latitude to about a meter only. So the
 degrees and the meters of this module are `Float64`, and the field and
 argument names say the unit. `GeoLocation.latitude_angle` and
-`longitude_angle` give `Angle` values for code that does not need the
-precision. A location in the CARLA frame is a `Vector3` in meters, as
+`longitude_angle` give checked `Angle` values for code that does not need
+the precision. The `latitude_angle64` and `longitude_angle64` views keep
+Float64 arithmetic. Typed constructors accept `Angle64` and `Length64`;
+named raw adapters keep CARLA degree and meter values without a unit
+round trip. A location in the CARLA frame is a `Vector3` in meters, as
 CARLA's `Location` is a `float` vector.
 
 **Numbers.** `std.math` works `log`, `exp` and `pow` out through other
@@ -60,7 +63,8 @@ from std.math import (
     sqrt,
     tan,
 )
-from units.si import DEGREE, Angle
+from units.si import DEGREE, Angle, Angle64, Length64
+from extensions.carla.quantity_boundary import _finite_si, _positive_si
 
 
 def _log(value: Float64) -> Float64:
@@ -79,10 +83,16 @@ def _degrees(radians: Float64) -> Float64:
     return radians * 180.0 / pi
 
 
+def _latitude_degrees(value: Float64) raises -> Float64:
+    _ = _finite_si(value)
+    if value < -90.0 or value > 90.0:
+        raise Error("A latitude must be between -90 and 90 degrees")
+    return value
+
+
 # --- GeoLocation ---------------------------------------------------------------
 
 
-@fieldwise_init
 struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
     """A latitude, a longitude and an altitude, CARLA's `GeoLocation`."""
 
@@ -99,21 +109,134 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
         self.longitude_degrees = 0.0
         self.altitude_meters = 0.0
 
-    def latitude_angle(self) -> Angle:
+    @staticmethod
+    def _from_raw(
+        latitude_degrees: Float64,
+        longitude_degrees: Float64,
+        altitude_meters: Float64,
+    ) -> GeoLocation:
+        var result = GeoLocation()
+        result.latitude_degrees = latitude_degrees
+        result.longitude_degrees = longitude_degrees
+        result.altitude_meters = altitude_meters
+        return result
+
+    @staticmethod
+    def from_degrees_meters(
+        latitude_degrees: Float64,
+        longitude_degrees: Float64,
+        altitude_meters: Float64,
+    ) raises -> GeoLocation:
+        """Read CARLA storage without a precision-changing unit round trip.
+
+        Args:
+            latitude_degrees: The CARLA latitude degrees.
+            longitude_degrees: The CARLA longitude degrees.
+            altitude_meters: The CARLA altitude meters.
+
+        Returns:
+            The checked record with the supplied raw field values.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        var result = GeoLocation._from_raw(
+            latitude_degrees, longitude_degrees, altitude_meters
+        )
+        result.validate()
+        return result
+
+    def validate(self) raises:
+        """Check the raw compatibility fields.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.latitude_degrees)
+        _ = _finite_si(self.longitude_degrees)
+        _ = _finite_si(self.altitude_meters)
+
+    def __init__(
+        out self, latitude: Angle64, longitude: Angle64, altitude: Length64
+    ) raises:
+        """Create a record from quantities without narrowing to Float32.
+
+        Args:
+            latitude: The latitude.
+            longitude: The longitude.
+            altitude: The altitude.
+
+        Returns:
+            The initialized record.
+
+        Raises:
+            Error: If a converted value is nonfinite or outside its domain.
+        """
+        self = GeoLocation.from_degrees_meters(
+            _degrees(latitude.value), _degrees(longitude.value), altitude.value
+        )
+
+    def latitude_angle64(self) raises -> Angle64:
+        """Return the checked latitude degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.latitude_degrees)
+        return Angle64(_finite_si(_radians(self.latitude_degrees)))
+
+    def longitude_angle64(self) raises -> Angle64:
+        """Return the checked longitude degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.longitude_degrees)
+        return Angle64(_finite_si(_radians(self.longitude_degrees)))
+
+    def altitude_length(self) raises -> Length64:
+        """Return the checked altitude meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.altitude_meters)
+        return Length64(self.altitude_meters)
+
+    def latitude_angle(self) raises -> Angle:
         """Return the latitude as an `Angle`.
 
         Returns:
             The latitude, rounded to a `Float32`.
+
+        Raises:
+            Error: If the raw latitude is nonfinite or outside its domain.
         """
+        _ = self.latitude_angle64()
         return Angle(Float32(self.latitude_degrees), DEGREE)
 
-    def longitude_angle(self) -> Angle:
+    def longitude_angle(self) raises -> Angle:
         """Return the longitude as an `Angle`.
 
         Returns:
             The longitude, rounded to a `Float32`.
+
+        Raises:
+            Error: If the raw or converted longitude is nonfinite.
         """
-        return Angle(Float32(self.longitude_degrees), DEGREE)
+        _ = self.longitude_angle64()
+        var result = Angle(Float32(self.longitude_degrees), DEGREE)
+        _ = _finite_si(Float64(result.value))
+        return result
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if the three numbers are equal.
@@ -150,7 +273,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
 # --- Ellipsoid -------------------------------------------------------------------
 
 
-@fieldwise_init
 struct Ellipsoid(Equatable, ImplicitlyCopyable):
     """An ellipsoid of revolution, CARLA's `geom::Ellipsoid`."""
 
@@ -163,6 +285,95 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
         """Create CARLA's default: a sphere of radius 6378137 meters."""
         self.a_meters = 6378137.0
         self.f_inv = inf[DType.float64]()
+
+    @staticmethod
+    def _from_raw(a_meters: Float64, f_inv: Float64) -> Ellipsoid:
+        var result = Ellipsoid()
+        result.a_meters = a_meters
+        result.f_inv = f_inv
+        return result
+
+    @staticmethod
+    def from_meters(a_meters: Float64, f_inv: Float64) raises -> Ellipsoid:
+        """Read CARLA storage without a precision-changing unit round trip.
+
+        Args:
+            a_meters: The CARLA a meters.
+            f_inv: The CARLA f inv.
+
+        Returns:
+            The checked record with the supplied raw field values.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        var result = Ellipsoid._from_raw(a_meters, f_inv)
+        result.validate()
+        return result
+
+    def validate(self) raises:
+        """Check the raw compatibility fields.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        _ = _positive_si(self.a_meters)
+        if not (self.f_inv > 1.0):
+            raise Error("An inverse flattening must exceed one")
+
+    def __init__(
+        out self, semi_major_axis: Length64, inverse_flattening: Float64
+    ) raises:
+        """Create a record from quantities without narrowing to Float32.
+
+        Args:
+            semi_major_axis: The semi major axis.
+            inverse_flattening: The inverse flattening.
+
+        Returns:
+            The initialized record.
+
+        Raises:
+            Error: If a converted value is nonfinite or outside its domain.
+        """
+        self = Ellipsoid.from_meters(semi_major_axis.value, inverse_flattening)
+
+    def semi_major_axis(self) raises -> Length64:
+        """Return the checked a meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _positive_si(self.a_meters)
+        return Length64(self.a_meters)
+
+    def semi_minor_axis(self) raises -> Length64:
+        """Return the checked semi-minor axis.
+
+        Returns:
+            The semi-minor axis in Float64 meters.
+
+        Raises:
+            Error: If the ellipsoid or computed axis is invalid.
+        """
+        self.validate()
+        return Length64(_positive_si(self.b_meters()))
+
+    def from_b(mut self, axis: Length64) raises:
+        """Set the semi-minor axis from a length.
+
+        The flattening is updated after validation.
+
+        Args:
+            axis: A positive axis no larger than the semi-major axis.
+
+        Raises:
+            Error: If an axis is nonfinite or outside its domain.
+        """
+        self.from_b_meters(axis.value)
 
     def f(self) -> Float64:
         """Return the flattening.
@@ -196,13 +407,27 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
         """
         return self.e2() / (1.0 - self.e2())
 
-    def from_b(mut self, b_meters: Float64):
+    def from_b_meters(mut self, b_meters: Float64) raises:
         """Set the flattening from a semi-minor axis, `fromb`.
+
+        The flattening is updated after validation.
 
         Args:
             b_meters: The semi-minor axis, in meters.
+
+        Raises:
+            Error: If an axis is invalid or the minor axis exceeds the major axis.
         """
-        self.f_inv = 1.0 / (1.0 - b_meters / self.a_meters)
+        _ = _positive_si(self.a_meters)
+        _ = _positive_si(b_meters)
+        if b_meters > self.a_meters:
+            raise Error(
+                "The semi-minor axis must not exceed the semi-major axis"
+            )
+        var candidate = 1.0 / (1.0 - b_meters / self.a_meters)
+        if not (candidate > 1.0):
+            raise Error("An inverse flattening must exceed one")
+        self.f_inv = candidate
 
     def from_f(mut self, f: Float64):
         """Set the flattening, `fromf`.
@@ -236,30 +461,29 @@ def named_ellipsoid(name: String) -> Optional[Ellipsoid]:
     """
     var key = name.lower()
     if key == "wgs84":
-        return Ellipsoid(6378137.0, 298.257223563)
+        return Ellipsoid._from_raw(6378137.0, 298.257223563)
     if key == "grs80":
-        return Ellipsoid(6378137.0, 298.257222101)
+        return Ellipsoid._from_raw(6378137.0, 298.257222101)
     if key == "intl":
-        return Ellipsoid(6378388.0, 297.0)
+        return Ellipsoid._from_raw(6378388.0, 297.0)
     if key == "bessel":
-        return Ellipsoid(6377397.155, 299.1528128)
+        return Ellipsoid._from_raw(6377397.155, 299.1528128)
     if key == "clrk66":
-        return Ellipsoid(6378206.4, 294.9786982138)
+        return Ellipsoid._from_raw(6378206.4, 294.9786982138)
     if key == "airy":
-        return Ellipsoid(6377563.396, 299.3249646)
+        return Ellipsoid._from_raw(6377563.396, 299.3249646)
     if key == "wgs72":
-        return Ellipsoid(6378135.0, 298.26)
+        return Ellipsoid._from_raw(6378135.0, 298.26)
     if key == "wgs66":
-        return Ellipsoid(6378145.0, 298.25)
+        return Ellipsoid._from_raw(6378145.0, 298.25)
     if key == "sphere":
-        return Ellipsoid(6370997.0, inf[DType.float64]())
+        return Ellipsoid._from_raw(6370997.0, inf[DType.float64]())
     return None
 
 
 # --- OffsetTransform -----------------------------------------------------------
 
 
-@fieldwise_init
 struct OffsetTransform(Equatable, ImplicitlyCopyable):
     """The OpenDRIVE header `offset`, CARLA's `geom::OffsetTransform`.
 
@@ -274,25 +498,92 @@ struct OffsetTransform(Equatable, ImplicitlyCopyable):
     var offset_sin_h: Float64
 
     def __init__(
-        out self,
+        out self, x: Length64, y: Length64, z: Length64, heading: Angle64
+    ) raises:
+        """Create a checked offset from quantities.
+
+        Args:
+            x: The x offset.
+            y: The y offset.
+            z: The z offset.
+            heading: The heading.
+
+        Returns:
+            The initialized offset.
+
+        Raises:
+            Error: If an input is nonfinite.
+        """
+        self.offset_x_meters = _finite_si(x.value)
+        self.offset_y_meters = _finite_si(y.value)
+        self.offset_z_meters = _finite_si(z.value)
+        var radians = _finite_si(heading.value)
+        self.offset_cos_h = cos(-radians)
+        self.offset_sin_h = sin(-radians)
+
+    @staticmethod
+    def from_meters_radians(
         x_meters: Float64,
         y_meters: Float64,
         z_meters: Float64,
         heading_radians: Float64,
-    ):
-        """Create an offset.
+    ) raises -> OffsetTransform:
+        """Create an offset from CARLA's explicit meter and radian units.
 
         Args:
-            x_meters: The x offset, in meters.
-            y_meters: The y offset, in meters.
-            z_meters: The z offset, in meters.
-            heading_radians: The heading, in radians.
+            x_meters: The x offset in meters.
+            y_meters: The y offset in meters.
+            z_meters: The z offset in meters.
+            heading_radians: The heading in radians.
+
+        Returns:
+            The checked offset without a precision conversion.
+
+        Raises:
+            Error: If an input is nonfinite.
         """
-        self.offset_x_meters = x_meters
-        self.offset_y_meters = y_meters
-        self.offset_z_meters = z_meters
-        self.offset_cos_h = cos(-heading_radians)
-        self.offset_sin_h = sin(-heading_radians)
+        return OffsetTransform(
+            Length64(x_meters),
+            Length64(y_meters),
+            Length64(z_meters),
+            Angle64(heading_radians),
+        )
+
+    def x_offset(self) raises -> Length64:
+        """Return the checked offset x meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.offset_x_meters)
+        return Length64(self.offset_x_meters)
+
+    def y_offset(self) raises -> Length64:
+        """Return the checked offset y meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.offset_y_meters)
+        return Length64(self.offset_y_meters)
+
+    def z_offset(self) raises -> Length64:
+        """Return the checked offset z meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.offset_z_meters)
+        return Length64(self.offset_z_meters)
 
     def apply(self, location: Vector3) -> Vector3:
         """Apply the offset, `ApplyTransformation`.
@@ -363,6 +654,19 @@ struct UtmZone(Equatable, ImplicitlyCopyable, Writable):
         """Return True if the zone is from 1 to 60."""
         return self.value >= 1 and self.value <= 60
 
+    def central_meridian_angle(self) raises -> Angle64:
+        """Return the zone's central meridian with its unit.
+
+        Returns:
+            The meridian as a Float64 angle.
+
+        Raises:
+            Error: If the zone is not between 1 and 60.
+        """
+        if not self.is_valid():
+            raise Error("A UTM zone must be between 1 and 60")
+        return Angle64(_radians(self.central_meridian_degrees()))
+
     def central_meridian_degrees(self) -> Float64:
         """Return the zone's central meridian, 6 zone - 183.
 
@@ -389,7 +693,6 @@ comptime WEB_MERCATOR = ProjectionType(2)
 comptime LAMBERT_CONFORMAL_CONIC = ProjectionType(3)
 
 
-@fieldwise_init
 struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
     """A transverse Mercator projection, `TransverseMercatorParams`."""
 
@@ -402,8 +705,161 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
     var ellps: Ellipsoid
 
     def __init__(out self):
-        """Create CARLA's default: origin 0, 0, scale one, a sphere."""
-        self = TransverseMercatorParams(0.0, 0.0, 1.0, 0.0, 0.0, Ellipsoid())
+        """Create CARLA's default: origin 0, 0, scale one, a sphere.
+
+        Returns:
+            The initialized TransverseMercatorParams record.
+        """
+        self.lat_0_degrees = 0.0
+        self.lon_0_degrees = 0.0
+        self.k = 1.0
+        self.x_0_meters = 0.0
+        self.y_0_meters = 0.0
+        self.ellps = Ellipsoid()
+
+    @staticmethod
+    def _from_raw(
+        lat_0_degrees: Float64,
+        lon_0_degrees: Float64,
+        k: Float64,
+        x_0_meters: Float64,
+        y_0_meters: Float64,
+        ellps: Ellipsoid,
+    ) -> TransverseMercatorParams:
+        var result = TransverseMercatorParams()
+        result.lat_0_degrees = lat_0_degrees
+        result.lon_0_degrees = lon_0_degrees
+        result.k = k
+        result.x_0_meters = x_0_meters
+        result.y_0_meters = y_0_meters
+        result.ellps = ellps
+        return result
+
+    @staticmethod
+    def from_degrees_meters(
+        lat_0_degrees: Float64,
+        lon_0_degrees: Float64,
+        k: Float64,
+        x_0_meters: Float64,
+        y_0_meters: Float64,
+        ellps: Ellipsoid,
+    ) raises -> TransverseMercatorParams:
+        """Read CARLA storage without a precision-changing unit round trip.
+
+        Args:
+            lat_0_degrees: The CARLA lat 0 degrees.
+            lon_0_degrees: The CARLA lon 0 degrees.
+            k: The CARLA k.
+            x_0_meters: The CARLA x 0 meters.
+            y_0_meters: The CARLA y 0 meters.
+            ellps: The CARLA ellps.
+
+        Returns:
+            The checked record with the supplied raw field values.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        var result = TransverseMercatorParams._from_raw(
+            lat_0_degrees, lon_0_degrees, k, x_0_meters, y_0_meters, ellps
+        )
+        result.validate()
+        return result
+
+    def validate(self) raises:
+        """Check the raw compatibility fields.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.lat_0_degrees)
+        _ = _finite_si(self.lon_0_degrees)
+        _ = _finite_si(self.x_0_meters)
+        _ = _finite_si(self.y_0_meters)
+        self.ellps.validate()
+        _ = _positive_si(self.k)
+
+    def __init__(
+        out self,
+        lat_0: Angle64,
+        lon_0: Angle64,
+        scale: Float64,
+        x_0: Length64,
+        y_0: Length64,
+        ellipsoid: Ellipsoid,
+    ) raises:
+        """Create a record from quantities without narrowing to Float32.
+
+        Args:
+            lat_0: The lat 0.
+            lon_0: The lon 0.
+            scale: The scale.
+            x_0: The x 0.
+            y_0: The y 0.
+            ellipsoid: The ellipsoid.
+
+        Returns:
+            The initialized record.
+
+        Raises:
+            Error: If a converted value is nonfinite or outside its domain.
+        """
+        self = TransverseMercatorParams.from_degrees_meters(
+            _degrees(lat_0.value),
+            _degrees(lon_0.value),
+            scale,
+            x_0.value,
+            y_0.value,
+            ellipsoid,
+        )
+
+    def lat_0_angle(self) raises -> Angle64:
+        """Return the checked lat 0 degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.lat_0_degrees)
+        return Angle64(_finite_si(_radians(self.lat_0_degrees)))
+
+    def lon_0_angle(self) raises -> Angle64:
+        """Return the checked lon 0 degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.lon_0_degrees)
+        return Angle64(_finite_si(_radians(self.lon_0_degrees)))
+
+    def x_0_length(self) raises -> Length64:
+        """Return the checked x 0 meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.x_0_meters)
+        return Length64(self.x_0_meters)
+
+    def y_0_length(self) raises -> Length64:
+        """Return the checked y 0 meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.y_0_meters)
+        return Length64(self.y_0_meters)
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if every parameter is equal.
@@ -481,7 +937,6 @@ struct WebMercatorParams(Equatable, ImplicitlyCopyable):
         return self.ellps == other.ellps
 
 
-@fieldwise_init
 struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     """A Lambert conformal conic projection with two standard parallels,
     `LambertConformalConicParams`."""
@@ -495,10 +950,200 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     var ellps: Ellipsoid
 
     def __init__(out self):
-        """Create CARLA's default: parallels at -5 and 5, a sphere."""
-        self = LambertConformalConicParams(
-            0.0, -5.0, 5.0, 0.0, 0.0, 0.0, Ellipsoid()
+        """Create CARLA's default: parallels at -5 and 5, a sphere.
+
+        Returns:
+            The initialized LambertConformalConicParams record.
+        """
+        self.lat_0_degrees = 0.0
+        self.lat_1_degrees = -5.0
+        self.lat_2_degrees = 5.0
+        self.lon_0_degrees = 0.0
+        self.x_0_meters = 0.0
+        self.y_0_meters = 0.0
+        self.ellps = Ellipsoid()
+
+    @staticmethod
+    def _from_raw(
+        lat_0_degrees: Float64,
+        lat_1_degrees: Float64,
+        lat_2_degrees: Float64,
+        lon_0_degrees: Float64,
+        x_0_meters: Float64,
+        y_0_meters: Float64,
+        ellps: Ellipsoid,
+    ) -> LambertConformalConicParams:
+        var result = LambertConformalConicParams()
+        result.lat_0_degrees = lat_0_degrees
+        result.lat_1_degrees = lat_1_degrees
+        result.lat_2_degrees = lat_2_degrees
+        result.lon_0_degrees = lon_0_degrees
+        result.x_0_meters = x_0_meters
+        result.y_0_meters = y_0_meters
+        result.ellps = ellps
+        return result
+
+    @staticmethod
+    def from_degrees_meters(
+        lat_0_degrees: Float64,
+        lat_1_degrees: Float64,
+        lat_2_degrees: Float64,
+        lon_0_degrees: Float64,
+        x_0_meters: Float64,
+        y_0_meters: Float64,
+        ellps: Ellipsoid,
+    ) raises -> LambertConformalConicParams:
+        """Read CARLA storage without a precision-changing unit round trip.
+
+        Args:
+            lat_0_degrees: The CARLA lat 0 degrees.
+            lat_1_degrees: The CARLA lat 1 degrees.
+            lat_2_degrees: The CARLA lat 2 degrees.
+            lon_0_degrees: The CARLA lon 0 degrees.
+            x_0_meters: The CARLA x 0 meters.
+            y_0_meters: The CARLA y 0 meters.
+            ellps: The CARLA ellps.
+
+        Returns:
+            The checked record with the supplied raw field values.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        var result = LambertConformalConicParams._from_raw(
+            lat_0_degrees,
+            lat_1_degrees,
+            lat_2_degrees,
+            lon_0_degrees,
+            x_0_meters,
+            y_0_meters,
+            ellps,
         )
+        result.validate()
+        return result
+
+    def validate(self) raises:
+        """Check the raw compatibility fields.
+
+        Raises:
+            Error: If a dimensional value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.lat_0_degrees)
+        _ = _latitude_degrees(self.lat_1_degrees)
+        _ = _latitude_degrees(self.lat_2_degrees)
+        _ = _finite_si(self.lon_0_degrees)
+        _ = _finite_si(self.x_0_meters)
+        _ = _finite_si(self.y_0_meters)
+        self.ellps.validate()
+
+    def __init__(
+        out self,
+        lat_0: Angle64,
+        lat_1: Angle64,
+        lat_2: Angle64,
+        lon_0: Angle64,
+        x_0: Length64,
+        y_0: Length64,
+        ellipsoid: Ellipsoid,
+    ) raises:
+        """Create a record from quantities without narrowing to Float32.
+
+        Args:
+            lat_0: The lat 0.
+            lat_1: The lat 1.
+            lat_2: The lat 2.
+            lon_0: The lon 0.
+            x_0: The x 0.
+            y_0: The y 0.
+            ellipsoid: The ellipsoid.
+
+        Returns:
+            The initialized record.
+
+        Raises:
+            Error: If a converted value is nonfinite or outside its domain.
+        """
+        self = LambertConformalConicParams.from_degrees_meters(
+            _degrees(lat_0.value),
+            _degrees(lat_1.value),
+            _degrees(lat_2.value),
+            _degrees(lon_0.value),
+            x_0.value,
+            y_0.value,
+            ellipsoid,
+        )
+
+    def lat_0_angle(self) raises -> Angle64:
+        """Return the checked lat 0 degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.lat_0_degrees)
+        return Angle64(_finite_si(_radians(self.lat_0_degrees)))
+
+    def lat_1_angle(self) raises -> Angle64:
+        """Return the checked lat 1 degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.lat_1_degrees)
+        return Angle64(_finite_si(_radians(self.lat_1_degrees)))
+
+    def lat_2_angle(self) raises -> Angle64:
+        """Return the checked lat 2 degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _latitude_degrees(self.lat_2_degrees)
+        return Angle64(_finite_si(_radians(self.lat_2_degrees)))
+
+    def lon_0_angle(self) raises -> Angle64:
+        """Return the checked lon 0 degrees quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.lon_0_degrees)
+        return Angle64(_finite_si(_radians(self.lon_0_degrees)))
+
+    def x_0_length(self) raises -> Length64:
+        """Return the checked x 0 meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.x_0_meters)
+        return Length64(self.x_0_meters)
+
+    def y_0_length(self) raises -> Length64:
+        """Return the checked y 0 meters quantity.
+
+        Returns:
+            The quantity with Float64 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or outside its domain.
+        """
+        _ = _finite_si(self.y_0_meters)
+        return Length64(self.y_0_meters)
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if every parameter is equal.
@@ -691,7 +1336,9 @@ def transform_to_geo_location_transverse_mercator(
     var y = (Float64(location.y) - p.y_0_meters) / p.k
     var m = _meridional_arc(p.ellps.e2(), p.ellps.a_meters, lat_0) + y
     var ll = _tm_inverse(x, m, lon_0, p.ellps)
-    return GeoLocation(_degrees(ll[0]), _degrees(ll[1]), Float64(location.z))
+    return GeoLocation._from_raw(
+        _degrees(ll[0]), _degrees(ll[1]), Float64(location.z)
+    )
 
 
 comptime _UTM_K = 0.9996
@@ -764,7 +1411,9 @@ def transform_to_geo_location_universal_transverse_mercator(
     var x = (Float64(location.x) - _UTM_X_0) / _UTM_K
     var y = (Float64(location.y) - _utm_y_0(p.north)) / _UTM_K
     var ll = _tm_inverse(x, y, lon_0, p.ellps)
-    return GeoLocation(_degrees(ll[0]), _degrees(ll[1]), Float64(location.z))
+    return GeoLocation._from_raw(
+        _degrees(ll[0]), _degrees(ll[1]), Float64(location.z)
+    )
 
 
 def geo_location_to_transform_web_mercator(
@@ -801,7 +1450,9 @@ def transform_to_geo_location_web_mercator(
     """
     var lon = Float64(location.x) / p.ellps.a_meters
     var lat = 2 * atan(_exp(Float64(location.y) / p.ellps.a_meters)) - pi / 2
-    return GeoLocation(_degrees(lat), _degrees(lon), Float64(location.z))
+    return GeoLocation._from_raw(
+        _degrees(lat), _degrees(lon), Float64(location.z)
+    )
 
 
 def _lcc_t(phi: Float64, e: Float64) -> Float64:
@@ -901,7 +1552,9 @@ def transform_to_geo_location_lambert_conformal_conic(
         lat = lat_next
     var lon = _radians(p.lon_0_degrees) + theta / cone.n
     lon = atan2(sin(lon), cos(lon))
-    return GeoLocation(_degrees(lat), _degrees(lon), Float64(location.z))
+    return GeoLocation._from_raw(
+        _degrees(lat), _degrees(lon), Float64(location.z)
+    )
 
 
 # --- GeoProjection -------------------------------------------------------------
@@ -1330,7 +1983,7 @@ def create_ellipsoid(parameters: Dict[String, String]) raises -> Ellipsoid:
         ellps.a_meters = stod(parameters["a"])
         initialized = True
     if "b" in parameters:
-        ellps.from_b(stod(parameters["b"]))
+        ellps.from_b_meters(stod(parameters["b"]))
         initialized = True
     if "f" in parameters:
         ellps.from_f(stod(parameters["f"]))
@@ -1345,7 +1998,7 @@ def create_ellipsoid(parameters: Dict[String, String]) raises -> Ellipsoid:
 
 def create_offset_transform(
     offsets: Dict[String, Float64]
-) -> Optional[OffsetTransform]:
+) raises -> Optional[OffsetTransform]:
     """Read the header `offset`, `CreateOffsetTransform`.
 
     Args:
@@ -1354,10 +2007,13 @@ def create_offset_transform(
     Returns:
         Nothing when there are no attributes, else the offset from `x`, `y`,
         `z` and `hdg`, each zero when it is missing.
+
+    Raises:
+        Error: If a supplied offset or heading is nonfinite.
     """
     if len(offsets) == 0:
         return None
-    return OffsetTransform(
+    return OffsetTransform.from_meters_radians(
         offsets.get("x", 0.0),
         offsets.get("y", 0.0),
         offsets.get("z", 0.0),

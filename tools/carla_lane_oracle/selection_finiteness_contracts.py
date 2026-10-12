@@ -1,4 +1,14 @@
 """Bind local ordered/nonnegative-error selection producers and exact constants."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
 from pathlib import Path
 if __package__:
     from . import source_contracts
@@ -43,7 +53,7 @@ def _producer_text(root, path, *, _operation=None):
             from . import full_audit_cleanup_contracts as full_audit
         else:
             import full_audit_cleanup_contracts as full_audit
-        text = full_audit._observe_text(root, path, text, _operation=_operation)
+        text = _typed_source.historical_text(root, path, full_audit._observe_text(root, path, text, _operation=_operation), _operation=_operation)
     if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
             and source_contracts.token_sha256(text) != EXPECTED[path]):
         if __package__:
@@ -64,18 +74,19 @@ def verify(root, *, _operation=None):
     modules = {p:_producer_text(root,p, _operation=_operation) for p in EXPECTED}
     interval = (root/'extensions/carla/curve_interval.mojo').read_text()
     if _operation is not None:
-        interval = full_audit._observe_text(
-            root, 'extensions/carla/curve_interval.mojo', interval, _operation=_operation)
+        interval = _typed_source.historical_text(root, 'extensions/carla/curve_interval.mojo', full_audit._observe_text(
+            root, 'extensions/carla/curve_interval.mojo', interval, _operation=_operation), _operation=_operation)
     trig = (root/'extensions/carla/curve_trig.mojo').read_text()
     if _operation is not None:
-        trig = full_audit._observe_text(
-            root, 'extensions/carla/curve_trig.mojo', trig, _operation=_operation)
+        trig = _typed_source.historical_text(root, 'extensions/carla/curve_trig.mojo', full_audit._observe_text(
+            root, 'extensions/carla/curve_trig.mojo', trig, _operation=_operation), _operation=_operation)
     return verify_text(modules, interval, trig)
 
 
 def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
     import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
     import json
     if __package__:
         from . import sum2_guard_contracts as guard
@@ -83,7 +94,7 @@ def predecessor_text(root, path, *, _operation=None):
         import sum2_guard_contracts as guard
     root=Path(root)
     verify(root, _operation=_operation)
-    payload=(root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes()
+    payload=_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/selection-finiteness-contract.json', (root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes(), _operation=_operation)
     if hashlib.sha256(payload).hexdigest()!='dcd2c780640775e29a566491679dc6fbf5ab1afa43fbfbae86cb778433cf92e8':
         raise ValueError('Unreviewed selection predecessor record')
     record=json.loads(payload,object_pairs_hook=source_contracts.unique_keys)

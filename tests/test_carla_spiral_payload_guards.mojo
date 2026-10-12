@@ -72,7 +72,7 @@ def test_capture_rejects_missing_and_crossed_geometry_records() raises:
     assert_equal(terms, 144)
     road = _road(_geometry())
     captured.record_at = 0
-    road.info.geometries.append(RoadInfoGeometry(2.2, _geometry()))
+    road.info.geometries.append(RoadInfoGeometry._from_si(2.2, _geometry()))
     terms = 0
     units = 0
     assert_false(

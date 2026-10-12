@@ -8,7 +8,13 @@ digest before, and its exact source and token digests after. The bound
 correctness tests must also be unchanged. Any other consumer change still
 fails closed in both records.
 """
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
 if __package__:
@@ -44,6 +50,7 @@ def _observe_bytes(root, path, payload, *, _operation=None):
     return full_audit._observe_bytes(root, path, payload, _operation=_operation)
 
 
+
 def require(value, message):
     if not value:
         raise ValueError('reviewed render actor reuse successor: ' + message)
@@ -56,8 +63,8 @@ def verify(root, *, _operation=None):
     """
     if _operation is not None:
         _check_operation(root, _operation)
-    raw = _observe_bytes(root, MIGRATION, (root/MIGRATION).read_bytes(),
-                         _operation=_operation)
+    raw = _typed_source.historical_bytes(root, MIGRATION, _observe_bytes(root, MIGRATION, (root/MIGRATION).read_bytes(),
+                         _operation=_operation), _operation=_operation)
     require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact edge')
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
     require(type(record['schema']) is int and record['schema'] == 1
@@ -71,14 +78,14 @@ def verify(root, *, _operation=None):
                               'after_token_sha256'}
                 and edge['before_sha256'] != edge['after_sha256'], 'malformed edge: ' + path)
         current = ledger.endpoint(root, path, edge, _operation=_operation)
-        actual = _observe_bytes(root, path, (root/path).read_bytes(),
-                                _operation=_operation)
+        actual = _typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
+                                _operation=_operation), _operation=_operation)
         require(hashlib.sha256(actual).hexdigest() == current['after_sha256']
                 and source.token_sha256(actual.decode('utf-8')) == current['after_token_sha256'],
                 'unreviewed render actor consumer: ' + path)
         edges[path] = {'path': path, **edge}
     for path, expected in record['correctness_tests'].items():
-        require(hashlib.sha256(_observe_bytes(root, path, (root/path).read_bytes(),
-                                             _operation=_operation)).hexdigest() == expected,
+        require(hashlib.sha256(_typed_source.historical_bytes(root, path, _observe_bytes(root, path, (root/path).read_bytes(),
+                                             _operation=_operation), _operation=_operation)).hexdigest() == expected,
                 'bound render actor test changed: ' + path)
     return edges

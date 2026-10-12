@@ -18,7 +18,7 @@ from extensions.carla.curve_trig import (
 from extensions.carla.geometry import ARC
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from std.math import fma, isfinite
 from std.memory import bitcast
 
@@ -145,9 +145,16 @@ def _rounded_polynomial[
 
 
 def _rounded_constant(polynomial: CubicPolynomial) -> _RoundedBox:
-    if polynomial.b != 0.0 or polynomial.c != 0.0 or polynomial.d != 0.0:
+    if (
+        not _rounded_operand(polynomial.s)
+        or polynomial.b != 0.0
+        or polynomial.c != 0.0
+        or polynomial.d != 0.0
+    ):
         return _RoundedBox.unknown()
-    # For finite s, all variable terms are exact zero in either graph.
+    # The query station and the stored origin must both fit the supported
+    # operand range. Their difference is finite, so every variable term
+    # is exact zero in the conditioned graph.
     return _RoundedBox.point(polynomial.a)
 
 

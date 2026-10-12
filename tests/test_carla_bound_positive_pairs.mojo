@@ -23,9 +23,9 @@ from extensions.carla.geometry import (
     LINE,
     SPIRAL,
     NORMALIZED,
-    with_param_poly3,
-    with_poly3,
-    with_spiral,
+    with_param_poly3_from_coefficients as with_param_poly3,
+    with_poly3_si as with_poly3,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.junction_bounds import (
     _certify_junction_span,
@@ -54,7 +54,7 @@ from tests.test_carla_junction_arithmetic_states import _line, _valid, _point
 
 def test_junction_lower_face_and_monotone_success_are_complete_pairs() raises:
     var road = _line()
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         0.0, 1.0, 0.0, 0.0, 0.0
     )
     _valid(road)
@@ -66,7 +66,7 @@ def test_junction_lower_face_and_monotone_success_are_complete_pairs() raises:
     assert_true(box.contains_point(_point(road, 0, 1.0)))
     # Exact quadratic extrema are [65/64,5/4] on this decreasing span.
     # Horner's broad interval crosses the proposal; monotone endpoints fit.
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         2.0, -2.0, 1.0, 0.0, 0.0
     )
     _valid(road)
@@ -83,7 +83,7 @@ def test_junction_lower_face_and_monotone_success_are_complete_pairs() raises:
 
 def test_large_finite_gradient_requests_a_centered_enclosure() raises:
     var road = _line()
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         0.0, 1e18, 0.0, 0.0, 0.0
     )
     _valid(road)
@@ -102,7 +102,7 @@ def test_large_finite_gradient_requests_a_centered_enclosure() raises:
 
 def test_centered_polynomial_success_preserves_true_values() raises:
     var road = _line()
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         2.0, -2.0, 1.0, 0.0, 0.0
     )
     _valid(road)
@@ -122,20 +122,20 @@ def test_centered_polynomial_success_preserves_true_values() raises:
 
 def test_public_builders_produce_zero_and_mixed_tangent_pairs() raises:
     for kind in range(4):
-        var u = CubicPolynomial(0.0, 0.0, -0.1875, 1.0, 0.0)
+        var u = CubicPolynomial._from_coefficients(0.0, 0.0, -0.1875, 1.0, 0.0)
         var index = 0
         if kind == 1:
-            u = CubicPolynomial(0.0, 0.0, 1.0, 0.0, 0.0)
+            u = CubicPolynomial._from_coefficients(0.0, 0.0, 1.0, 0.0, 0.0)
         elif kind == 2:
-            u = CubicPolynomial(0.0, -1.0, 0.0, 0.0, 0.0)
+            u = CubicPolynomial._from_coefficients(0.0, -1.0, 0.0, 0.0, 0.0)
             index = 1
         elif kind == 3:
-            u = CubicPolynomial(0.0, -0.4, 1.0, 0.0, 0.0)
+            u = CubicPolynomial._from_coefficients(0.0, -0.4, 1.0, 0.0, 0.0)
             index = 1
         var geometry = with_param_poly3(
-            RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 4.0),
+            RoadGeometry.from_meters(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 4.0),
             u,
-            CubicPolynomial.constant(0.0),
+            CubicPolynomial._constant_si(0.0),
             NORMALIZED,
         )
         var road = _road(geometry.copy())

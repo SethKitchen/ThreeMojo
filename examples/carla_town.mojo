@@ -66,7 +66,7 @@ def _lane_pose(
     world: World, road: Int, lane: Int, s: Float64, lift: Float32
 ) raises -> CarlaTransform:
     var pose = world.map.compute_transform(
-        Waypoint(RoadId(road), SectionId(0), LaneId(lane), s)
+        Waypoint.from_si(RoadId(road), SectionId(0), LaneId(lane), s)
     )
     pose.location.z += lift
     return pose

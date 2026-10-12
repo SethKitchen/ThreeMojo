@@ -39,11 +39,13 @@ def _many_sections(count: Int, duplicate_start: Bool = False) raises -> Road:
         var station = Float64(i)
         if duplicate_start and i == 1:
             station = 0.0
-        var section = LaneSection(SectionId(i), station)
-        var lane = Lane(LaneId(-1), SectionId(i), station)
+        var section = LaneSection._from_si(SectionId(i), station)
+        var lane = Lane._from_si(LaneId(-1), SectionId(i), station)
         lane.type = LANE_DRIVING
         lane.info.widths.append(
-            RoadInfoLaneWidth(station, CubicPolynomial.constant(2.0))
+            RoadInfoLaneWidth._from_si(
+                station, CubicPolynomial._constant_si(2.0)
+            )
         )
         section.lanes.append(lane^)
         road.sections.append(section^)
@@ -57,7 +59,7 @@ def _many_lane_junction(count: Int) raises -> MapBuilder:
     road.successor = RoadId(99)
     road.sections[0].lanes.clear()
     for i in range(count):
-        var lane = Lane(LaneId(i + 1), SectionId(0), 0.0)
+        var lane = Lane._from_si(LaneId(i + 1), SectionId(0), 0.0)
         lane.predecessor = LaneId(99)
         lane.successor = LaneId(99)
         road.sections[0].lanes.append(lane^)
@@ -115,7 +117,7 @@ def test_budgeted_locate_refuses_before_section_id_scan() raises:
     var work = _MapBuildWork(MapBuildBudget(1, max_steps=1))
     with assert_raises(contains="step budget"):
         _ = map._locate_with_work(
-            Waypoint(RoadId(1), SectionId(63), LaneId(-1), 63.5), work
+            Waypoint._from_si(RoadId(1), SectionId(63), LaneId(-1), 63.5), work
         )
     assert_equal(work.steps, 1)
 
@@ -124,8 +126,8 @@ def test_equal_start_sections_keep_first_strict_upper_bound() raises:
     var roads = List[Road]()
     roads.append(_many_sections(3, duplicate_start=True))
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
-    assert_equal(map.roads[0].section_length(0), 2.0)
-    assert_equal(map.roads[0].section_length(1), 2.0)
+    assert_equal(map.roads[0].section_length_meters(0), 2.0)
+    assert_equal(map.roads[0].section_length_meters(1), 2.0)
     assert_equal(map.segment_count(), 3)
     assert_equal(map.segment(0)[2].s, map.segment(1)[2].s)
     assert_equal(map.segment(0)[3].s, map.segment(1)[3].s)
@@ -139,7 +141,7 @@ def test_construction_step_preserves_public_same_section_arithmetic() raises:
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var waypoint = map.segment(0)[2]
     for distance in [Float64(1e-12), Float64(0.125), Float64(1.25)]:
-        var reference = map.next(waypoint, distance)[0]
+        var reference = map.next_meters(waypoint, distance)[0]
         var built = map._build_next(waypoint, distance)
         assert_equal(
             bitcast[DType.uint64](reference.s), bitcast[DType.uint64](built.s)

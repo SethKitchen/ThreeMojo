@@ -8,7 +8,11 @@ from extensions.carla.curve_distance import (
 from extensions.carla.lane_distance import (
     _wide_plan_contains,
 )
-from extensions.carla.geometry import SPIRAL, RoadGeometry, with_spiral
+from extensions.carla.geometry import (
+    SPIRAL,
+    RoadGeometry,
+    with_spiral_si as with_spiral,
+)
 from extensions.carla.lane_refinement import (
     _checked_center,
     _local_seed,
@@ -38,7 +42,7 @@ from std.testing import (
 def _spiral_road(id: Int = 1, width: Float64 = 2.0) raises -> Road:
     var road = _road(id=id, width=width)
     road.info.geometries[0].geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.0, 0.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.0, 0.0
     )
     return road^
 

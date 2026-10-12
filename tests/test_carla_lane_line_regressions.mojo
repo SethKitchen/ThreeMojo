@@ -201,17 +201,17 @@ def test_cubic_certification_requires_one_unclamped_record_interval() raises:
     assert_equal(len(road._lane_distance_derivative(0, 0, 0, 75, point)), 0)
     _ = road.info.geometries.pop()
     road.info.elevations.append(
-        RoadInfoElevation(50, CubicPolynomial.constant(0))
+        RoadInfoElevation._from_si(50, CubicPolynomial._constant_si(0))
     )
     assert_equal(len(road._lane_distance_derivative(0, 0, 0, 75, point)), 0)
     _ = road.info.elevations.pop()
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(50, CubicPolynomial.constant(0))
+        RoadInfoLaneOffset._from_si(50, CubicPolynomial._constant_si(0))
     )
     assert_equal(len(road._lane_distance_derivative(0, 0, 0, 75, point)), 0)
     _ = road.info.lane_offsets.pop()
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(50, CubicPolynomial.constant(3.5))
+        RoadInfoLaneWidth._from_si(50, CubicPolynomial._constant_si(3.5))
     )
     assert_equal(len(road._lane_distance_derivative(0, 0, 0, 75, point)), 0)
     var overflow = road.copy()
@@ -287,7 +287,7 @@ def test_line_polynomial_translation_and_far_query_scale() raises:
     roads[0].info.geometries[0].geometry.s = base
     # Keep the target lane center affine, while the other lane's quadratic
     # width ensures that the section-wide affine shortcut cannot mask this.
-    roads[0].info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.0)
+    roads[0].info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(0.0)
     roads[0].sections[0].lanes[2].info.widths[0].polynomial.c = 0.000001
     for i in range(len(roads[0].sections[0].lanes)):
         roads[0].sections[0].lanes[i].distance = base

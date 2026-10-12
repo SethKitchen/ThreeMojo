@@ -90,20 +90,20 @@ from extensions.carla.render_actors import (
     TAIL_GLOW,
     VAN,
     beam_intensity,
-    body_geometry,
+    body_geometry_si as body_geometry,
     body_profile,
-    body_style_of,
-    cabin_geometry,
+    body_style_of_si as body_style_of,
+    cabin_geometry_si as cabin_geometry,
     car_paint,
     clothing,
     headlight_glow,
-    loft,
-    stride,
+    loft_meters as loft,
+    stride_si as stride,
     superellipse,
     tail_light_glow,
     vehicle_color,
     vehicle_model,
-    wheel_inset,
+    wheel_inset_si as wheel_inset,
 )
 from extensions.carla.road_info import (
     JuncId,
@@ -147,7 +147,7 @@ from extensions.carla.town import (
     lamp_posts,
     lumpy_crown,
     road_bounds,
-    roadside,
+    roadside_si as roadside,
     skyline_lots,
     surface_color,
     surface_roughness,
@@ -218,25 +218,25 @@ def _path_map() raises -> Map:
     """Return a 10 m road with a 2 m sidewalk on its right and nothing
     else: no driving lane, no mark, no crosswalk and no signal."""
     var builder = MapBuilder()
-    var road = builder.add_road(
+    var road = builder.add_road_si(
         RoadId(1), "path", 10.0, JuncId(-1), RoadId(0), RoadId(0), True
     )
-    builder.add_road_geometry_line(road, 0.0, 0.0, 0.0, 0.0, 10.0)
-    _ = builder.add_road_section(road, SectionId(0), 0.0)
+    builder.add_road_geometry_line_si(road, 0.0, 0.0, 0.0, 0.0, 10.0)
+    _ = builder.add_road_section_si(road, SectionId(0), 0.0)
     _ = builder.add_road_section_lane(
         road, 0, LaneId(0), LANE_NONE, False, LaneId(0), LaneId(0)
     )
     _ = builder.add_road_section_lane(
         road, 0, LaneId(-1), LANE_SIDEWALK, False, LaneId(0), LaneId(0)
     )
-    builder.create_lane_width(
-        builder.lane(RoadId(1), LaneId(0), 0.0), 0.0, 0.0, 0, 0, 0
+    builder.create_lane_width_si(
+        builder.lane_si(RoadId(1), LaneId(0), 0.0), 0.0, 0.0, 0, 0, 0
     )
-    builder.create_lane_width(
-        builder.lane(RoadId(1), LaneId(-1), 0.0), 0.0, 2.0, 0, 0, 0
+    builder.create_lane_width_si(
+        builder.lane_si(RoadId(1), LaneId(-1), 0.0), 0.0, 2.0, 0, 0, 0
     )
-    builder.create_section_offset(road, 0.0, 0, 0, 0, 0)
-    builder.add_road_elevation_profile(road, 0.0, 0, 0, 0, 0)
+    builder.create_section_offset_si(road, 0.0, 0, 0, 0, 0)
+    builder.add_road_elevation_profile_si(road, 0.0, 0, 0, 0, 0)
     return builder.build()
 
 
@@ -757,29 +757,29 @@ def _world(
     var red = library.at("vehicle.lincoln.mkz")
     red.set_attribute("color", "190,30,28")
     var pose = world.map.compute_transform(
-        Waypoint(RoadId(1), SectionId(0), LaneId(-1), 20.0)
+        Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 20.0)
     )
     pose.location.z += 0.3
     cars.append(world.spawn_actor(red, pose))
     var van = library.at("vehicle.sprinter.mercedes")
     pose = world.map.compute_transform(
-        Waypoint(RoadId(1), SectionId(0), LaneId(1), 30.0)
+        Waypoint._from_si(RoadId(1), SectionId(0), LaneId(1), 30.0)
     )
     pose.location.z += 0.3
     cars.append(world.spawn_actor(van, pose))
     # A second sedan shares the first one's model.
     pose = world.map.compute_transform(
-        Waypoint(RoadId(1), SectionId(0), LaneId(-1), 45.0)
+        Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 45.0)
     )
     pose.location.z += 0.3
     cars.append(world.spawn_actor(library.at("vehicle.lincoln.mkz"), pose))
     pose = world.map.compute_transform(
-        Waypoint(RoadId(1), SectionId(0), LaneId(-2), 26.0)
+        Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-2), 26.0)
     )
     pose.location.z += 1.1
     walker = world.spawn_actor(library.at("walker.pedestrian.0015"), pose)
     pose = world.map.compute_transform(
-        Waypoint(RoadId(1), SectionId(0), LaneId(2), 34.0)
+        Waypoint._from_si(RoadId(1), SectionId(0), LaneId(2), 34.0)
     )
     pose.location.z += 1.1
     _ = world.spawn_actor(library.at("walker.pedestrian.0016"), pose)

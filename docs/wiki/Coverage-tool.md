@@ -97,21 +97,19 @@ A pure truth test does not make every payload lifecycle safe. An operator that r
 
 It keeps move-only values with trivial moves, including values with a custom destructor. For implicitly copyable values, it requires both trivial copying and trivial destruction. Standard `String` and its standard `Optional` wrappers retain the fixed standard-value path. A user-defined wrapper around `String` does not get that exception.
 
-Supported custom `Boolable` operands go into a recording proxy. The native operators convert the proxy at the same points as the operand:
+Supported custom `Boolable` operands convert in their original storage before a Boolean operator, normally under `not`. Retained operands use a borrowing proxy; temporaries convert in place:
 
-- A temporary operand moves into a proxy that owns it. The proxy type has no operand origin, so two temporaries of one type give one proxy type. This move is bitwise, so it runs no source code.
-- A temporary operand with a user-defined move constructor does not move. The probe converts it once in place, records it and returns its `Bool`. `not` also converts a temporary once at that point, and then destroys it.
-- A retained operand whose copy, move and destruction are bitwise is copied into a proxy that owns it. These operations run no source code. Its proxy type is the proxy type of a temporary of the same type, so a one-type operator stays one-type.
-- Another retained operand goes into a proxy that borrows it with its origin. Examples are a variable, a field and a conditional expression with two retained arms. `not` converts the borrowed operand once and does not copy it.
-- The probe of a right operand also gets the native result type of its operator. If the operand has that type, the probe takes the operand as an owned argument. Mojo then copies a retained operand, or moves it at its last use, at the same point as the native operator. The probe repeats the text of its operator, so an operator text longer than 256 bytes gets the plain probe.
+- A temporary operand binds to an owned argument without moving. The probe converts it once in place, records it and returns its `Bool`. `not` also converts a temporary once at that point and then destroys it. An extra owning-proxy move is forbidden even when bitwise. A constructor can record its address, and `__bool__` can observe the relocation.
+- A retained operand goes into a proxy that borrows the original object with its origin. Examples are a variable, a field and a conditional expression with two retained arms. `not` converts the borrowed operand once and does not copy it. Bitwise copying is not an exception: equal stored bytes do not imply equal truth when `__bool__` observes the object's address.
+- The right probe retains the native-result-type overload and the fixed standard-type paths. It adds no owning-proxy move. A custom same-type operator still fails its operator check: preserving the right argument alone cannot preserve the left conversion and selected result. The existing 256-byte operator-text bound is unchanged.
 - Each conversion calls the operand's `__bool__` once. The first conversion records the condition. A later conversion of the same selected operand with a different truth records that hit too, and marks the condition `?`.
 
 Each `and` and `or` operator also gets an unevaluated `type_of` check. It compares the original subexpression with the instrumented one when Mojo instantiates the function, also in generic code. The check fails compilation when the probes would change the semantics of the operator.
 
 These operands fail compilation with a coverage diagnostic:
 
-- A one-type operator whose left operand is retained, and whose copy, move or destruction runs source code. Examples are `copied or other`, `copied or copied` and `copied or Copied(False)`. So is such a right operand of an operator text longer than 256 bytes.
-- A one-type operator over a type with a user-defined move constructor, for example `Moving(False) or Moving(True)`.
+- A one-type operator whose custom left operand is retained, even when copying, moving and destruction are bitwise. Examples are `copied or other`, `copied or copied` and `copied or Copied(False)`. Such a retained right operand is also refused when an operator text longer than 256 bytes cannot use the owned right probe.
+- A one-type operator over custom temporaries, whether their moves are bitwise or user-defined. Examples are `Probe(False) or Probe(True)` and `Moving(False) or Moving(True)`. Selecting and reconverting an owned custom result requires an identity-preserving observation hook that these probes do not have.
 - An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence. This includes a wrap from an empty `Optional[T]` into a present `Optional[Optional[T]]`.
 - A mixed-type operator with a custom operand and a native `Bool` result. This includes a custom operand combined with `Bool`, for example `copied or flag` and `Moving(False) or flag`. The type check cannot distinguish Boolean fallback from a custom merge that also returns `Bool`. Independently declared generic parameters can also select Boolean fallback when both bind to the same concrete type. Such equal bindings do not prove a same-type join; the same refusal applies.
 - An `Optional`-valued operator whose selected move, copy or extra destructor is not covered by the lifecycle checks. This includes custom payload methods and unlisted wrappers with nontrivial operations. The check lacks operand ownership information, so it can conservatively refuse a temporary implicitly copyable payload even when that expression does not copy it. Nested `Optional` payloads are subject to the same check.
@@ -129,11 +127,13 @@ Do not omit the source or its obligations to bypass these limits.
 The native operator converts the left operand first. Then it copies or moves the operand only if it selects the operand. A probe cannot do the same:
 
 - A probe can see a conversion only through a proxy. Mojo makes the proxy when it evaluates the operand, before the conversion.
-- An owning proxy must move or copy the operand into itself at that time. This runs the source code before the conversion, and also when the operator does not select the operand.
+- An owning proxy must move or copy the operand into itself at that time. This can run source code before the conversion, and also when the operator does not select the operand. Even a bitwise copy changes which object is converted: `__bool__` can compare its current address with an address retained before the decision.
 - A borrowing proxy cannot move the operand out later. The caller still owns it and destroys it.
 - Mojo copies a retained operand only if a later statement uses it. Otherwise it moves the operand. Two programs can have the same decision line and differ only in a later statement. The probes of that line are the same in both programs. They cannot make a copy in one program and a move in the other.
 
-A right operand does not have this problem. The native operator selects it when it evaluates it, before any conversion. An owned argument gets the same copy or move at the same point. A left operand with a bitwise copy, move and destruction also does not have this problem, because those operations run no source code.
+A right operand does not have the retained-left selection-timing problem: the native operator selects it when it evaluates it, before any conversion. But moving that owned argument again into a recording proxy can still change the object seen by `__bool__`. A retained left operand must be converted on its original object before selection. A temporary must be converted in its construction storage before selection moves it.
+
+Lifecycle-triviality flags do not establish address-independent truth in either case. A borrowing proxy preserves the first conversion but cannot reproduce the later ownership transfer. Pinned Mojo 1.1.0 therefore refuses custom one-type selection for both retained and temporary operands.
 
 #### Why mixed custom operators are refused
 
@@ -160,13 +160,13 @@ To keep this order, a probe must run the native implicit conversion at that poin
 - A text that always converts, such as a conditional expression whose other arm has the result type, changes other operators. It copies a retained operand of a two-type operator, and it does not compile when there is no conversion between the two types.
 - A lifted left operand also needs the conversion only after its own conversion and only on selection. The only deferred expressions are `and`, `or` and a conditional expression, and these cannot convert, for the reasons above.
 
-The operator check therefore refuses each join, instead of a false vector. This includes an `Optional` wrap of a pure operand, which replaces the value with its presence.
+The operator check therefore refuses each join, instead of a false vector. This includes an `Optional` wrap of a pure operand, which replaces the value with its presence. Early copying followed by a borrowed truth test is insufficient. Caching truth is also insufficient: native selection follows observable truth effects. Later conversions must use the actual selected object.
 
 #### Retry the refused forms on a new Mojo
 
 The refused forms are limits of pinned Mojo 1.1.0. They are not limits of the coverage design. When the toolchain pin moves, test each form again. Admit a form only if the native and instrumented controls agree. These language features can remove a refusal:
 
-- A way to copy or move an operand after its truth test, and only on selection. This removes the one-type refusals for a retained left operand and for a type with a user-defined move constructor.
+- A way to observe the original object's truth and then copy or move it only on native selection, including the compiler's last-use choice. This is needed for retained left operands and temporaries even when their lifecycle operations are bitwise. It must preserve construction storage and use the native object for every later truth test. An extra proxy move is insufficient.
 - A generic implicit conversion, or reflection that can call a conversion between two generic types. This removes the refusal of implicit-conversion joins.
 - A compile-time test for an applicable `__merge_with__`, such as reflection of methods, structural conformance or a standard trait for merges. The proxies can then forward a merge, or the operator check can admit Boolean fallback only when no merge applies. This removes the refusal of mixed-type operators with a custom operand.
 - Reflection that names the origin parameters of a type. This can make the operator check simpler.
@@ -185,17 +185,33 @@ The pinned reflection API names types without their origin parameters. A same-ty
 
 Each tree runs natively with 16 truth assignments and 5 throwing positions, with stable truth tests and with truth tests that change at each conversion. The model also states which trees the operator check admits.
 
-Thirteen supported trees also run with instrumentation. The check compares the exact sequence of operand creation, conversion and destruction, the condition and decision hits, and the vectors. The reducer and the report must refuse each `?` vector. The other 30 trees have a two-type custom operator. Each one must fail instrumented compilation with the coverage diagnostic.
+All 43 original trees remain native/model controls and must fail instrumented compilation with the coverage diagnostic. Thirty have two-type custom operators. Two select retained bitwise-copyable operands, and 11 select custom temporaries. No original tree or source obligation is removed.
 
-A second copy of the trees uses caller-scope names that collide with the instrumenter. Retained operands are named `List`, `Int`, `Bool` and `_cov_eval_finish`. The helpers are named `_cov_eval_leaf`, `_cov_eval_node`, `_cov_eval_buffer`, `_cov_eval_truth`, `_cov_eval_right` and `_cov_branch`. The state is named `_cov_eval_state0` and `_cov_hit`. The check requires that each generated alias and buffer name is absent from the source. The same model must then agree with each log, hit and vector of the supported trees.
+A separate set of 43 positive programs explicitly wraps each custom leaf in double negation before Boolean selection. These are different source programs, not replacements for the original acceptance cases. Each positive program compares exact creation, conversion, destruction, hits and vectors against its own native and instrumented models. It uses the same 16 masks, five throwing positions and stable/changing truth modes.
 
-More supported controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They include retained move-only and copyable operands and non-movable temporaries under `not`, one-parameter generic calls instantiated with two concrete types, and pure one-type operators. A retained right operand of a one-type operator is copied while a later statement uses it, and moved at its last use. A generic function converts a borrowed retained copyable operand with `not` in one instantiation and has two `Bool` operands in the other.
+A second copy of both the original and explicitly negated trees uses caller-scope names that collide with the instrumenter. Retained operands are named `List`, `Int`, `Bool` and `_cov_eval_finish`. The helpers are named `_cov_eval_leaf`, `_cov_eval_node`, `_cov_eval_buffer`, `_cov_eval_truth`, `_cov_eval_right` and `_cov_branch`. The state is named `_cov_eval_state0` and `_cov_hit`. Generated aliases and buffer names must be absent from the supported source. The model must agree with each log, hit and vector.
 
-The original mixed-custom controls remain native-success and instrumented-refusal tests. They include the mixed generic instantiation and retained lifetime cases. The exact previously accepted control with two independent generic parameters also remains a native-success/refusal fixture, including equal concrete bindings. A separate one-parameter fixture checks 64 native/model outputs and 328 ordered line, condition, decision and vector records, including changing truth.
+Control-flow programs cover `while`, `elif`, recursion and eight concurrent tasks. The exact previously admitted owned-operand program remains a native-success/refusal control, including retained right copying and last-use moves. A separately labeled positive variant explicitly negates every custom leaf before its Boolean operators; its native and instrumented runs must agree exactly. Supported cases still include retained move-only and copyable operands and non-movable temporaries under `not`, plus pure standard-type operators. A generic function converts a borrowed retained copyable operand with `not` in one instantiation and has two `Bool` operands in the other.
+
+The original mixed-custom controls remain native-success and instrumented-refusal tests. They include the mixed generic instantiation and retained lifetime cases. The exact previously accepted control with two independent generic parameters also remains a native-success/refusal fixture, including equal concrete bindings. The original one-parameter fixture retains all 64 native/model outputs and its 328-record reference trace, including 24 inconsistent reference vectors, then requires an explicit compilation refusal. A separate explicitly negated one-parameter fixture checks 64 native/model outputs and every actual ordered line, condition, decision and vector record against its own model.
+
+An isolated two-parameter control preserves the original generic function exactly. Its 64 native outputs follow a separate model, and its diagnostic must name that function. The isolated one-parameter control also requires its own function-specific diagnostic.
 
 Twenty more programs compile natively and must fail with the coverage diagnostic. Four have custom merges that return `Bool`, and their native logs must agree with an independent model. In two of them, both operand types merge. In the other two, the merge has a `where` clause that accepts only `Bool`. Mojo calls it in `Gated(x) or flag` and uses Boolean fallback in `Gated(x) or Plain(y)`. Both forms are refused.
 
 Four programs must also print the native copy or move of the selected operand. One of these is a retained `Optional` whose element copy logs itself. Before this change, such an operand became `Bool` and its native copy was lost. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
+
+Identity-sensitive controls compare addresses only within each program. A retained value stores its original payload address; its trivial copy, move and destructor are asserted.
+
+Six positive controls require exact native stdout and interleaved condition, decision and vector records. They cover unary `not`, double negation, retained conditional references and masked operands. Four same-type selections must first compile and run natively. They show original-object truth before selection and copied-object truth afterward. Instrumentation must then fail with the retained-selection diagnostic. The original `not kept or False` regression must remain false with vector `TF`; an owning copy had incorrectly made it true with vector `F-`.
+
+Two additional controls omit trailing retained-value reads. They check direct unary negation and conditional-reference last use against the same native identity oracle.
+
+Nine further positive controls require original constructor-to-truth identity for implicitly copyable, move-only and custom-move temporaries. Three temporary same-type selections must compile and run natively before their exact refusal. Bitwise temporary owning proxies had also inverted their unary-not and selected-result branches. Each identity fixture verifies the maintained builder origin and complete B/C/M denominator.
+
+A direct runtime control converts a real borrowed probe twice while its source truth changes. It must emit the exact `?T` vector, and both the reducer and native reporter must reject it. This retains the fail-closed repeated-conversion guard even though supported negated-leaf programs convert each custom slot only once.
+
+The full custom-compound acceptance contract described in issue #560 is not implemented while these native-valid forms are refused. A refusal protects correctness; it does not implement their full coverage contract.
 
 Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body.
 

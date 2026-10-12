@@ -33,7 +33,7 @@ def _strict_case(word: UInt32, inside: Bool) raises:
     _bits(cached.point[0], 0.5)
     assert_equal(cached.point[1], 0.0)
     assert_equal(cached.point[2], 0.0)
-    var width = road.lane_width(0, 0, cached.s)
+    var width = road.lane_width_meters(0, 0, cached.s)
     _bits(width, 2.0)
     var query: Array[Float64, 3] = [0.5, Float64(y), 0.0]
     # Exact rational stored inputs: the plan distance is |y| and width/2=1.

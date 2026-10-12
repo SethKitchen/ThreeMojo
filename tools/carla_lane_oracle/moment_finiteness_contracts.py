@@ -1,4 +1,14 @@
 """Source-bound finite-intermediate proof for the dynamic moment producer."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
 from pathlib import Path
 
 if __package__:

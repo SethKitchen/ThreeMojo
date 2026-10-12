@@ -128,16 +128,16 @@ from extensions.carla.sensor_attributes import (
 from extensions.carla.sensor_data import (
     SensorType,
     collision_data,
-    dvs_data,
+    dvs_data_degrees as dvs_data,
     gnss_data,
-    image_data,
+    image_data_carla as image_data,
     imu_data,
     lidar_data,
     obstacle_data,
-    optical_flow_data,
+    optical_flow_data_degrees as optical_flow_data,
     radar_data,
     semantic_lidar_data,
-    sensor_header,
+    sensor_header_seconds as sensor_header,
     v2x_cam_data,
     v2x_custom_data,
 )
@@ -468,18 +468,38 @@ struct SensorManager(Movable):
     """The listened sensors of one world, `FSensorManager`."""
 
     var slots: List[_Slot]
-    # Milliseconds from 2004 to the start, for the CAMs' generation time.
+    # Exact signed milliseconds since 2004-01-01 UTC, used modulo 65536
+    # by CAM encoding. Set through from_cam_epoch_milliseconds.
     var generation_delta0: Int
 
-    def __init__(out self, generation_delta0: Int = 0):
-        """Create a manager with no sensors.
+    def __init__(out self):
+        """Create an empty manager at the default CAM epoch offset zero.
 
-        Args:
-            generation_delta0: Milliseconds from 2004-01-01 to the start of
-                the simulation. CARLA reads it from the wall clock.
+        This constructor does not throw.
+
+        Returns:
+            The manager with no listened sensors.
         """
         self.slots = List[_Slot]()
-        self.generation_delta0 = generation_delta0
+        self.generation_delta0 = 0
+
+    @staticmethod
+    def from_cam_epoch_milliseconds(generation_delta0: Int) -> SensorManager:
+        """Set an exact integer CAM epoch offset without a float conversion.
+
+        The Int representation supplies the signed range. This factory does
+        not throw.
+
+        Args:
+            generation_delta0: Signed milliseconds since 2004-01-01 UTC.
+                Every representable Int is retained, including pre-epoch values.
+
+        Returns:
+            An empty manager with the unchanged source epoch offset.
+        """
+        var manager = SensorManager()
+        manager.generation_delta0 = generation_delta0
+        return manager^
 
     def spawn_sensor(
         mut self,
@@ -627,11 +647,11 @@ struct SensorManager(Movable):
             slot.channel_id = attribute_string(a, "channel_id", "Default")
             if k == V2X:
                 var owner = record.parent if record.parent != NO_ACTOR else id
-                slot.ca_service = CaService(
+                slot.ca_service = CaService.from_cam_epoch_milliseconds(
                     world,
                     owner,
-                    attribute_float(a, "gen_cam_min", 0.1),
-                    attribute_float(a, "gen_cam_max", 1.0),
+                    Duration(attribute_float(a, "gen_cam_min", 0.1)),
+                    Duration(attribute_float(a, "gen_cam_max", 1.0)),
                     attribute_bool(a, "fixed_rate", False),
                     CamNoise.from_attributes(a),
                     self.generation_delta0,

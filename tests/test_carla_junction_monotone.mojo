@@ -124,7 +124,9 @@ def test_exact_quadratic_extrema_and_full_error_cover_off_grid_values() raises:
     var road = _road(LINE)
     # f(s)=(s-1)^2+1 decreases on [1/2,7/8]. Its exact endpoint range
     # [65/64,5/4] follows from the square, independently of interval code.
-    road.info.elevations[0].polynomial = CubicPolynomial(2, -2, 1, 0, 0)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
+        2, -2, 1, 0, 0
+    )
     var point = _lane_jet(road, 0, 0, 0.5, 0.875)
     var first = _lane_value_bound(road, 0, 0, 0.5, 0.5)
     var last = _lane_value_bound(road, 0, 0, 0.875, 0.875)
@@ -145,7 +147,9 @@ def test_exact_quadratic_extrema_and_full_error_cover_off_grid_values() raises:
 
 def test_optional_full_and_endpoint_graphs_are_reserved_before_evaluation() raises:
     var road = _road(LINE)
-    road.info.elevations[0].polynomial = CubicPolynomial(2, -2, 1, 0, 0)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
+        2, -2, 1, 0, 0
+    )
     var point = _lane_value_bound(road, 0, 0, 0.5, 0.875)
     var box = Box3(Vector3(-100, -100, 0.99), Vector3(100, 100, 1.26))
     var work = _MapBuildWork(MapBuildBudget())
@@ -236,7 +240,9 @@ def test_optional_full_and_endpoint_graphs_are_reserved_before_evaluation() rais
 
 def test_integrated_certificate_retains_box_and_exact_budget_boundary() raises:
     var road = _road(LINE)
-    road.info.elevations[0].polynomial = CubicPolynomial(2, -2, 1, 0, 0)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
+        2, -2, 1, 0, 0
+    )
     var box = Box3(Vector3(-100, -100, 0.99), Vector3(100, 100, 1.26))
     var expected = box
     var work = _MapBuildWork(MapBuildBudget())
@@ -258,7 +264,7 @@ def test_integrated_certificate_retains_box_and_exact_budget_boundary() raises:
 def test_record_clamp_and_trig_joins_do_not_assert_monotonicity() raises:
     var line = _road(LINE)
     line.info.elevations.append(
-        RoadInfoElevation(0.75, CubicPolynomial.constant(12))
+        RoadInfoElevation._from_si(0.75, CubicPolynomial._constant_si(12))
     )
     var joined = _lane_jet(line, 0, 0, 0.5, 1.0)
     assert_false(_monotone_coordinate(joined[0]))

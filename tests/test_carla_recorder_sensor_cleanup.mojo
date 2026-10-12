@@ -40,7 +40,7 @@ def test_destroyed_sensor_keeps_survivor_state_and_queued_records() raises:
         world, "sensor.other.collision", _pose(0, 0, 0, 0), car
     )
     var recorder = Recorder()
-    _ = recorder.start(world, "", "Town", False, 0)
+    _ = recorder.start_unix_seconds(world, "", "Town", False, 0)
     _ = world.tick()
     # An explicit event avoids depending on contact solver timing.
     world.physics.events = [
@@ -128,7 +128,7 @@ def test_sensor_destroyed_before_first_capture_keeps_add_delete_order() raises:
     var car = _hero(world, _pose(20, 1.75, 0.6, 0))
     var sensor = _spawn(world, "sensor.other.collision", _pose(0, 0, 0, 0), car)
     var recorder = Recorder()
-    _ = recorder.start(world, "", "Town", False, 0)
+    _ = recorder.start_unix_seconds(world, "", "Town", False, 0)
     assert_equal(len(recorder._sensors), 0)
     assert_true(world.destroy_actor(sensor))
     _ = recorder.tick(world)
@@ -157,7 +157,7 @@ def test_sensor_registry_count_plateaus_during_recording() raises:
         world, "sensor.other.collision", _pose(0, 0, 0, 0), car
     )
     var recorder = Recorder()
-    _ = recorder.start(world, "", "Town", False, 0)
+    _ = recorder.start_unix_seconds(world, "", "Town", False, 0)
     _ = recorder.tick(world)
     for _ in range(32):
         var sensor = _spawn(
@@ -178,7 +178,7 @@ def test_sensor_deletion_replays_with_its_original_recorded_id() raises:
     var world = _world()
     var car = _hero(world, _pose(20, 1.75, 0.6, 0))
     var recorder = Recorder()
-    _ = recorder.start(world, "", "Town", False, 0)
+    _ = recorder.start_unix_seconds(world, "", "Town", False, 0)
     # Newly observed sensors emit parent packets in the first capture.
     var gone = _spawn(world, "sensor.other.collision", _pose(0, 0, 0, 0), car)
     var survivor = _spawn(

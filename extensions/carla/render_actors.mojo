@@ -32,6 +32,13 @@ its beams on also casts a spot light down the road.
 The sizes, colors and intensities are this port's own choices.
 """
 
+from extensions.carla.quantity_boundary import (
+    _finite_si,
+    _positive_si,
+    _nonnegative_si,
+)
+from units.si import Velocity
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -226,7 +233,46 @@ comptime SUV = BodyStyle(2)
 comptime VAN = BodyStyle(3)
 
 
-def body_style_of(type_id: String, height: Float32) -> BodyStyle:
+def body_style_of(type_id: String, height: Length) raises -> BodyStyle:
+    """Checked typed boundary. Return the body style of a vehicle blueprint.
+
+    Args:
+        type_id: The blueprint's id, such as `vehicle.mini.cooper`.
+        height: The height of the vehicle's box, in meters.
+
+    Returns:
+        `VAN` for a box taller than 1.9 m; else `HATCHBACK` for a small
+        car (a Mini, a Golf, a Prius, a Micra, a C3, a Fiat or a Seat);
+        else `SUV` for a Patrol, a Jeep, a Wrangler or a Cybertruck; else
+        `SEDAN`.
+
+    Raises:
+        Error: If the height is nonfinite.
+    """
+    return body_style_of_si(type_id, height.value)
+
+
+def body_style_of_si(type_id: String, height: Float32) raises -> BodyStyle:
+    """Explicit source-unit compatibility adapter. Return the body style of a vehicle blueprint.
+
+    Args:
+        type_id: The blueprint's id, such as `vehicle.mini.cooper`.
+        height: The height of the vehicle's box, in meters.
+
+    Returns:
+        `VAN` for a box taller than 1.9 m; else `HATCHBACK` for a small
+        car (a Mini, a Golf, a Prius, a Micra, a C3, a Fiat or a Seat);
+        else `SUV` for a Patrol, a Jeep, a Wrangler or a Cybertruck; else
+        `SEDAN`.
+
+    Raises:
+        Error: If the height is nonfinite.
+    """
+    _ = _finite_si(Float64(height))
+    return _body_style_of_si(type_id, height)
+
+
+def _body_style_of_si(type_id: String, height: Float32) -> BodyStyle:
     """Return the body style of a vehicle blueprint.
 
     Args:
@@ -327,6 +373,87 @@ def _ease(t: Float32) -> Float32:
 
 
 def loft(
+    stations: List[Length],
+    half_width: List[Length],
+    bottom: List[Length],
+    top: List[Length],
+    taper: Float32,
+    ring: Int,
+) raises -> BufferGeometry:
+    """Build a loft from physical section coordinates.
+
+    Args:
+        stations: The section x coordinates.
+        half_width: The section half-widths.
+        bottom: The section bottom y coordinates.
+        top: The section top y coordinates.
+        taper: The dimensionless width reduction, from zero through one.
+        ring: The number of corners per section.
+
+    Returns:
+        The unchanged Float32 geometry.
+
+    Raises:
+        Error: If a dimension, list length, taper or ring is invalid.
+    """
+    var xs = List[Float32]()
+    var widths = List[Float32]()
+    var lows = List[Float32]()
+    var highs = List[Float32]()
+    for value in stations:
+        xs.append(value.value)
+    for value in half_width:
+        widths.append(value.value)
+    for value in bottom:
+        lows.append(value.value)
+    for value in top:
+        highs.append(value.value)
+    return loft_meters(xs, widths, lows, highs, taper, ring)
+
+
+def loft_meters(
+    stations: List[Float32],
+    half_width: List[Float32],
+    bottom: List[Float32],
+    top: List[Float32],
+    taper: Float32,
+    ring: Int,
+) raises -> BufferGeometry:
+    """Explicit checked meter adapter for source section arrays.
+
+    Args:
+        stations: The section x coordinates in meters.
+        half_width: The section half-widths in meters.
+        bottom: The section bottom y coordinates in meters.
+        top: The section top y coordinates in meters.
+        taper: The width reduction from zero through one.
+        ring: The number of corners per section.
+
+    Returns:
+        The unchanged Float32 geometry.
+
+    Raises:
+        Error: If a dimension, list length, taper or ring is invalid.
+    """
+    _ = _finite_si(Float64(taper))
+    if taper < 0 or taper > 1:
+        raise Error("A loft taper must be from zero through one")
+    for value in stations:
+        _ = _finite_si(Float64(value))
+    for value in half_width:
+        _ = _nonnegative_si(Float64(value))
+    for value in bottom:
+        _ = _finite_si(Float64(value))
+    for value in top:
+        _ = _finite_si(Float64(value))
+    if len(bottom) == len(top):
+        for i in range(len(bottom)):
+            if top[i] < bottom[i]:
+                raise Error("A loft top must not be below its bottom")
+    return _loft_si(stations, half_width, bottom, top, taper, ring)
+
+
+def _loft_si(
     stations: List[Float32],
     half_width: List[Float32],
     bottom: List[Float32],
@@ -418,6 +545,57 @@ comptime BODY_RING = 28
 
 
 def body_geometry(
+    length: Length, width: Length, height: Length, style: BodyStyle
+) raises -> BufferGeometry:
+    """Checked typed boundary. Return a vehicle's lower body, below the belt line.
+
+    Seen from above, the body is a superellipse of exponent 8. Seen from
+    the side, it rises from its clearance to the belt line and rounds off
+    at each bumper, with an arch over each axle.
+
+    Args:
+        length: The body's length; x runs forward from its middle.
+        width: Its width, across z.
+        height: The box's height; y runs up from the ground.
+        style: The body style.
+
+    Returns:
+        The body, standing on the ground.
+
+    Raises:
+        Error: If the style is not one of the four.
+    """
+    return body_geometry_si(length.value, width.value, height.value, style)
+
+
+def body_geometry_si(
+    length: Float32, width: Float32, height: Float32, style: BodyStyle
+) raises -> BufferGeometry:
+    """Explicit source-unit compatibility adapter. Return a vehicle's lower body, below the belt line.
+
+    Seen from above, the body is a superellipse of exponent 8. Seen from
+    the side, it rises from its clearance to the belt line and rounds off
+    at each bumper, with an arch over each axle.
+
+    Args:
+        length: The body's length; x runs forward from its middle.
+        width: Its width, across z.
+        height: The box's height; y runs up from the ground.
+        style: The body style.
+
+    Returns:
+        The body, standing on the ground.
+
+    Raises:
+        Error: If the style is not one of the four.
+    """
+    _ = _positive_si(Float64(length))
+    _ = _positive_si(Float64(width))
+    _ = _positive_si(Float64(height))
+    return _body_geometry_si(length, width, height, style)
+
+
+def _body_geometry_si(
     length: Float32, width: Float32, height: Float32, style: BodyStyle
 ) raises -> BufferGeometry:
     """Return a vehicle's lower body, below the belt line.
@@ -439,7 +617,7 @@ def body_geometry(
         Error: If the style is not one of the four.
     """
     var p = body_profile(style)
-    var axle = length / 2 - wheel_inset(length)
+    var axle = length / 2 - _wheel_inset_si(length)
     var arch = WHEEL_RADIUS + Float32(0.07)
     var stations = List[Float32]()
     var half = List[Float32]()
@@ -463,10 +641,63 @@ def body_geometry(
         half.append(width / 2 * superellipse(t, 8))
         bottom.append(bumper + (min(low, belt - 0.1) - bumper) * rounded)
         top.append(bumper + (belt - bumper) * rounded)
-    return loft(stations, half, bottom, top, 0.06, BODY_RING)
+    return _loft_si(stations, half, bottom, top, 0.06, BODY_RING)
 
 
 def cabin_geometry(
+    length: Length, width: Length, height: Length, style: BodyStyle
+) raises -> BufferGeometry:
+    """Checked typed boundary. Return a vehicle's cabin: its glass, its pillars and its roof.
+
+    The cabin rises from the belt line at `cabin_start` to the roof at
+    `roof_start`, runs flat to `roof_end` and falls to the belt line at
+    `cabin_end`. The corners around its top, a pillar at its middle and
+    its roof wear the paint, in group 0; the rest is glass, in group 1.
+
+    Args:
+        length: The body's length.
+        width: The body's width.
+        height: The box's height; the roof stands at it.
+        style: The body style.
+
+    Returns:
+        The cabin, with two groups.
+
+    Raises:
+        Error: If the style is not one of the four.
+    """
+    return cabin_geometry_si(length.value, width.value, height.value, style)
+
+
+def cabin_geometry_si(
+    length: Float32, width: Float32, height: Float32, style: BodyStyle
+) raises -> BufferGeometry:
+    """Explicit source-unit compatibility adapter. Return a vehicle's cabin: its glass, its pillars and its roof.
+
+    The cabin rises from the belt line at `cabin_start` to the roof at
+    `roof_start`, runs flat to `roof_end` and falls to the belt line at
+    `cabin_end`. The corners around its top, a pillar at its middle and
+    its roof wear the paint, in group 0; the rest is glass, in group 1.
+
+    Args:
+        length: The body's length.
+        width: The body's width.
+        height: The box's height; the roof stands at it.
+        style: The body style.
+
+    Returns:
+        The cabin, with two groups.
+
+    Raises:
+        Error: If the style is not one of the four.
+    """
+    _ = _positive_si(Float64(length))
+    _ = _positive_si(Float64(width))
+    _ = _positive_si(Float64(height))
+    return _cabin_geometry_si(length, width, height, style)
+
+
+def _cabin_geometry_si(
     length: Float32, width: Float32, height: Float32, style: BodyStyle
 ) raises -> BufferGeometry:
     """Return a vehicle's cabin: its glass, its pillars and its roof.
@@ -508,7 +739,7 @@ def cabin_geometry(
         top.append(
             belt - Float32(0.06) + (roof - belt + 0.06) * min(rise, fall)
         )
-    var cabin = loft(stations, half, bottom, top, 0.22, BODY_RING)
+    var cabin = _loft_si(stations, half, bottom, top, 0.22, BODY_RING)
     # Sort the triangles into paint and glass.
     var paint = List[Int]()
     var glass = List[Int]()
@@ -546,7 +777,38 @@ def cabin_geometry(
     return cabin^
 
 
-def wheel_inset(length: Float32) -> Float32:
+def wheel_inset(length: Length) raises -> Length:
+    """Checked typed boundary. Return how far each axle stands in from its bumper.
+
+    Args:
+        length: The body's length.
+
+    Returns:
+        A sixth of the length plus 0.1 m.
+
+    Raises:
+        Error: If the length is nonfinite.
+    """
+    return Length(wheel_inset_si(length.value))
+
+
+def wheel_inset_si(length: Float32) raises -> Float32:
+    """Explicit source-unit compatibility adapter. Return how far each axle stands in from its bumper.
+
+    Args:
+        length: The body's length.
+
+    Returns:
+        A sixth of the length plus 0.1 m.
+
+    Raises:
+        Error: If the length is nonfinite.
+    """
+    _ = _finite_si(Float64(length))
+    return _wheel_inset_si(length)
+
+
+def _wheel_inset_si(length: Float32) -> Float32:
     """Return how far each axle stands in from its bumper.
 
     Args:
@@ -599,11 +861,11 @@ def vehicle_model(
         raise Error("A vehicle model needs a box at least 1 x 0.5 x 0.8 m")
     var p = body_profile(style)
     var body_width = width * Float32(0.92)
-    var body = body_geometry(length, body_width, height, style)
-    var cabin = cabin_geometry(length, body_width, height, style)
+    var body = _body_geometry_si(length, body_width, height, style)
+    var cabin = _cabin_geometry_si(length, body_width, height, style)
     var tires = List[BufferGeometry]()
     var rims = List[BufferGeometry]()
-    var axle = length / 2 - wheel_inset(length)
+    var axle = length / 2 - _wheel_inset_si(length)
     # Four wheels.
     for corner in range(4):  # pragma: no branch
         var x = axle if corner < 2 else -axle
@@ -781,7 +1043,38 @@ def clothing(id: ActorId) -> Tuple[Color, Color, Color]:
     return (shirts[a], trousers[b], skins[c])
 
 
-def stride(speed: Float32) -> Angle:
+def stride(speed: Velocity) raises -> Angle:
+    """Checked typed boundary. Return the target swing amplitude at a speed, without a gait phase.
+
+    Args:
+        speed: The walker's speed in meters per second.
+
+    Returns:
+        Twelve degrees per meter per second, up to 30 degrees.
+
+    Raises:
+        Error: If the speed is nonfinite.
+    """
+    return stride_si(speed.value)
+
+
+def stride_si(speed: Float32) raises -> Angle:
+    """Explicit source-unit compatibility adapter. Return the target swing amplitude at a speed, without a gait phase.
+
+    Args:
+        speed: The walker's speed in meters per second.
+
+    Returns:
+        Twelve degrees per meter per second, up to 30 degrees.
+
+    Raises:
+        Error: If the speed is nonfinite.
+    """
+    _ = _finite_si(Float64(speed))
+    return _stride_si(speed)
+
+
+def _stride_si(speed: Float32) -> Angle:
     """Return the target swing amplitude at a speed, without a gait phase.
 
     Args:
@@ -1016,7 +1309,7 @@ struct ActorVisuals(Movable):
                     scene.meshes[m].material = tails
         else:
             var model = self._model(
-                assets, box, body_style_of(type_id, box.extent.z * 2)
+                assets, box, _body_style_of_si(type_id, box.extent.z * 2)
             )
             scene.add_mesh(
                 Mesh(
