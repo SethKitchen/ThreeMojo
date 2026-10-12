@@ -1,17 +1,17 @@
 file	symbol	type	kind	group	type_at_head	dimension	reviewed_class	decision
-extensions/carla/camera_render.mojo	RgbCameraSettings.shutter_speed	Float32	field	internal SI scalar	Float32	time	user configuration	typed constructor; CARLA stores 1/s as a denominator
-extensions/carla/camera_render.mojo	RgbCameraSettings.exposure_speed_up	Float32	field	internal SI scalar	Float32	EV per second	user configuration	typed constructor
-extensions/carla/camera_render.mojo	RgbCameraSettings.exposure_speed_down	Float32	field	internal SI scalar	Float32	EV per second	user configuration	typed constructor
+extensions/carla/camera_render.mojo	RgbCameraSettings.shutter_speed	Float32	field	internal SI scalar	Float32	frequency	attribute mirror	keep raw; CARLA's attribute is the reciprocal of the shutter time
+extensions/carla/camera_render.mojo	RgbCameraSettings.exposure_speed_up	Float32	field	internal SI scalar	Float32	EV per second	attribute mirror	keep raw; EV is a base-2 logarithm, so no SI quantity applies
+extensions/carla/camera_render.mojo	RgbCameraSettings.exposure_speed_down	Float32	field	internal SI scalar	Float32	EV per second	attribute mirror	keep raw; EV is a base-2 logarithm, so no SI quantity applies
 extensions/carla/camera_render.mojo	RgbCameraSettings.motion_blur_max_distortion	Float32	field	internal SI scalar	Float32	none	dimensionless	keep raw; a ratio or a percentage
 extensions/carla/camera_render.mojo	RgbCameraSettings.motion_blur_min_object_screen_size	Float32	field	internal SI scalar	Float32	none	dimensionless	keep raw; a ratio or a percentage
 extensions/carla/camera_render.mojo	RgbCameraSettings.chromatic_aberration_offset	Float32	field	internal SI scalar	Float32	none	dimensionless	keep raw; a ratio or a percentage
 extensions/carla/camera_render.mojo	RgbCameraSettings.blur_radius	Float32	field	internal SI scalar	Float32	pixels	dimensionless	keep raw; a pixel count
 extensions/carla/camera_render.mojo	metered_ev100 ->	Float32	return	internal SI scalar	Float32	none	dimensionless	keep raw; an exposure value is a base-2 logarithm
 extensions/carla/camera_render.mojo	camera_exposure(metered)	Float32	param	internal SI scalar	Float32	none	dimensionless	keep raw; an exposure value is a base-2 logarithm
-extensions/carla/cameras.mojo	compute_angle(distance)	Float32	param	runtime boundary	Float32	length	internal SI scalar	keep raw; a normalized image-plane distance, not a world length
-extensions/carla/cameras.mojo	compute_distance ->	Float32	return	runtime boundary	Float32	length	internal SI scalar	keep raw; a normalized image-plane distance, not a world length
-extensions/carla/cameras.mojo	WideAngleLens.focal_length	Float32	field	runtime boundary	Float32	length	user configuration	typed constructor; CARLA gives the focal length in normalized units
-extensions/carla/cameras.mojo	WideAngleLens.fov_fade_size	Float32	field	runtime boundary	Float32	length	user configuration	typed constructor; CARLA gives the focal length in normalized units
+extensions/carla/cameras.mojo	compute_angle(distance)	Float32	param	runtime boundary	Float32	pixels	dimensionless	keep raw; a distance over the focal length, or a focal length in pixels
+extensions/carla/cameras.mojo	compute_distance ->	Float32	return	runtime boundary	Float32	pixels	dimensionless	keep raw; a distance over the focal length, or a focal length in pixels
+extensions/carla/cameras.mojo	WideAngleLens.focal_length	Float32	field	runtime boundary	Float32	pixels	dimensionless	keep raw; a focal length in pixels
+extensions/carla/cameras.mojo	WideAngleLens.fov_fade_size	Float32	field	runtime boundary	Float32	angle	attribute mirror	keep raw; CARLA's fov_fade_size attribute in degrees
 extensions/carla/cameras.mojo	WideAngleLens.pixel_ray(x)	Float32	param	runtime boundary	Float32	pixels	dimensionless	keep raw; a pixel coordinate
 extensions/carla/cameras.mojo	WideAngleLens.pixel_ray(y)	Float32	param	runtime boundary	Float32	pixels	dimensionless	keep raw; a pixel coordinate
 extensions/carla/cameras.mojo	DVSConfig.positive_threshold	Float32	field	runtime boundary	Float32	none	dimensionless	keep raw; a log-intensity threshold
@@ -64,12 +64,12 @@ extensions/carla/geometry.mojo	RoadGeometry.__init__(y)	Float64	param	pinned map
 extensions/carla/geometry.mojo	RoadGeometry.__init__(length)	Float64	param	pinned map geometry	Float64 and Length	length	pinned map geometry	migrate in the pinned successor change; the typed overload takes Float32 Length and must take Length64
 extensions/carla/geometry.mojo	RoadGeometry.end_s ->	Float64	return	pinned map geometry	Float64	length	pinned map geometry	migrate in the pinned successor change
 extensions/carla/geometry.mojo	RoadGeometry.pos_at(dist)	Float64	param	pinned map geometry	Float64	length	pinned map geometry	migrate in the pinned successor change; pos_from_dist takes Float32 Length and must take Length64
-extensions/carla/gnss.mojo	GnssDescription.latitude_stddev	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor; CARLA gives degrees
-extensions/carla/gnss.mojo	GnssDescription.latitude_bias	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor; CARLA gives degrees
-extensions/carla/gnss.mojo	GnssDescription.longitude_stddev	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor; CARLA gives degrees
-extensions/carla/gnss.mojo	GnssDescription.longitude_bias	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor; CARLA gives degrees
-extensions/carla/gnss.mojo	GnssDescription.altitude_stddev	Float32	field	geodesy and V2X	Float32	length	user configuration	typed constructor
-extensions/carla/gnss.mojo	GnssDescription.altitude_bias	Float32	field	geodesy and V2X	Float32	length	user configuration	typed constructor
+extensions/carla/gnss.mojo	GnssDescription.latitude_stddev	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/gnss.mojo	GnssDescription.latitude_bias	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/gnss.mojo	GnssDescription.longitude_stddev	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/gnss.mojo	GnssDescription.longitude_bias	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/gnss.mojo	GnssDescription.altitude_stddev	Float32	field	geodesy and V2X	Float32	length	raw mirror	done: typed constructor beside the raw field
+extensions/carla/gnss.mojo	GnssDescription.altitude_bias	Float32	field	geodesy and V2X	Float32	length	raw mirror	done: typed constructor beside the raw field
 extensions/carla/imu.mojo	Accelerometer.previous_delta	Float32	field	internal SI scalar	Float32	time	internal state	keep raw
 extensions/carla/lane_invasion.mojo	LaneInvasionEvent.timestamp	Float64	field	runtime boundary	Float64	time	raw mirror	done: elapsed() is the checked Duration64 view
 extensions/carla/lane_invasion.mojo	LaneInvasionEvent.__init__(timestamp)	Float64	param	runtime boundary	Duration64	time	typed	done: Duration64
@@ -182,8 +182,8 @@ extensions/carla/math.mojo	distance_squared_2d ->	Float32	return	internal SI sca
 extensions/carla/math.mojo	squared_length_2d ->	Float32	return	internal SI scalar	Float32	area	internal SI scalar	keep raw; a hot-loop helper
 extensions/carla/math.mojo	length_2d ->	Float32	return	internal SI scalar	Float32	length	internal SI scalar	keep raw; a hot-loop helper
 extensions/carla/math.mojo	Vector3DInt.length ->	Float64	return	internal SI scalar	Float64	length	internal SI scalar	keep raw; integer grid units
-extensions/carla/mesh_factory.mojo	OpendriveGenerationParameters.vertex_width_resolution	Float64	field	internal SI scalar	Float64	length	user configuration	typed constructor
-extensions/carla/mesh_factory.mojo	RoadParameters.vertex_width_resolution	Float32	field	internal SI scalar	Float32	length	user configuration	typed constructor
+extensions/carla/mesh_factory.mojo	OpendriveGenerationParameters.vertex_width_resolution	Float64	field	internal SI scalar	Float64	none	dimensionless	keep raw; a vertex count across a lane
+extensions/carla/mesh_factory.mojo	RoadParameters.vertex_width_resolution	Float32	field	internal SI scalar	Float32	none	dimensionless	keep raw; a vertex count across a lane
 extensions/carla/mesh_factory.mojo	MeshFactory.compute_edges_for_lanemark(s)	Float64	param	internal SI scalar	Float64	length	pinned map geometry	migrate in the pinned successor change
 extensions/carla/mesh_factory.mojo	MeshFactory.compute_edges_for_lanemark(width)	Float64	param	internal SI scalar	Float64	length	pinned map geometry	migrate in the pinned successor change
 extensions/carla/mesh_factory.mojo	MeshFactory.compute_edges_for_lanemark(extra_width)	Float32	param	internal SI scalar	Float32	length	pinned map geometry	migrate in the pinned successor change
@@ -388,30 +388,30 @@ extensions/carla/traffic_manager_state.mojo	large_vehicle_junction_offset_profil
 extensions/carla/transform.mojo	CarlaRotation.pitch	Float32	field	internal SI scalar	Float32	angle	raw mirror	keep raw; the constructor takes Angle
 extensions/carla/transform.mojo	CarlaRotation.yaw	Float32	field	internal SI scalar	Float32	angle	raw mirror	keep raw; the constructor takes Angle
 extensions/carla/transform.mojo	CarlaRotation.roll	Float32	field	internal SI scalar	Float32	angle	raw mirror	keep raw; the constructor takes Angle
-extensions/carla/v2x.mojo	PathLossModel.wavelength	Float64	field	geodesy and V2X	Float64	length	geodesy raw field	typed Length64 adapter; CARLA double
-extensions/carla/v2x.mojo	PathLossModel.winner(distance)	Float64	param	geodesy and V2X	Float64	length	geodesy raw field	typed Length64 adapter; CARLA double
-extensions/carla/v2x.mojo	PathLossModel.two_ray(distance)	Float64	param	geodesy and V2X	Float64	length	geodesy raw field	typed Length64 adapter; CARLA double
-extensions/carla/v2x.mojo	PathLossModel.two_ray_simple(distance)	Float64	param	geodesy and V2X	Float64	length	geodesy raw field	typed Length64 adapter; CARLA double
-extensions/carla/v2x.mojo	PathLossModel.loss(distance)	Float64	param	geodesy and V2X	Float64	length	geodesy raw field	typed Length64 adapter; CARLA double
+extensions/carla/v2x.mojo	PathLossModel.wavelength	Float64	field	geodesy and V2X	Float64	length	internal state	keep raw; derived from the frequency in Float64
+extensions/carla/v2x.mojo	PathLossModel.winner(distance)	Float64	param	geodesy and V2X	Float64	length	raw adapter	done: a Length64 overload gives the same bits
+extensions/carla/v2x.mojo	PathLossModel.two_ray(distance)	Float64	param	geodesy and V2X	Length64	length	raw adapter	done: a Length64 overload gives the same bits
+extensions/carla/v2x.mojo	PathLossModel.two_ray_simple(distance)	Float64	param	geodesy and V2X	Length64	length	raw adapter	done: a Length64 overload gives the same bits
+extensions/carla/v2x.mojo	PathLossModel.loss(distance)	Float64	param	geodesy and V2X	Float64	length	raw adapter	done: a Length64 overload gives the same bits
 extensions/carla/v2x.mojo	speed_value(speed)	Float32	param	geodesy and V2X	Float32	speed	geodesy raw field	keep raw; ETSI CAM encoding
 extensions/carla/v2x.mojo	round_half_away(x)	Float64	param	geodesy and V2X	Float64	none	dimensionless	keep raw; a rounding helper
-extensions/carla/v2x.mojo	CamNoise.latitude_stddev	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.longitude_stddev	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.latitude_bias	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.longitude_bias	Float32	field	geodesy and V2X	Float32	angle	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.altitude_stddev	Float32	field	geodesy and V2X	Float32	length	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.altitude_bias	Float32	field	geodesy and V2X	Float32	length	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.velocity_stddev	Float32	field	geodesy and V2X	Float32	speed	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.yaw_rate_stddev	Float32	field	geodesy and V2X	Float32	angular speed	user configuration	typed constructor
-extensions/carla/v2x.mojo	CamNoise.yaw_rate_bias	Float32	field	geodesy and V2X	Float32	angular speed	user configuration	typed constructor
+extensions/carla/v2x.mojo	CamNoise.latitude_stddev	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/v2x.mojo	CamNoise.longitude_stddev	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/v2x.mojo	CamNoise.latitude_bias	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/v2x.mojo	CamNoise.longitude_bias	Float32	field	geodesy and V2X	Float32	angle	raw mirror	done: typed constructor beside the raw field; CARLA degrees
+extensions/carla/v2x.mojo	CamNoise.altitude_stddev	Float32	field	geodesy and V2X	Float32	length	raw mirror	done: typed constructor beside the raw field
+extensions/carla/v2x.mojo	CamNoise.altitude_bias	Float32	field	geodesy and V2X	Float32	length	raw mirror	done: typed constructor beside the raw field
+extensions/carla/v2x.mojo	CamNoise.velocity_stddev	Float32	field	geodesy and V2X	Float32	speed	raw mirror	done: typed constructor beside the raw field
+extensions/carla/v2x.mojo	CamNoise.yaw_rate_stddev	Float32	field	geodesy and V2X	Float32	angular speed	raw mirror	done: typed constructor beside the raw field
+extensions/carla/v2x.mojo	CamNoise.yaw_rate_bias	Float32	field	geodesy and V2X	Float32	angular speed	raw mirror	done: typed constructor beside the raw field
 extensions/carla/v2x.mojo	CaService.last_cam_timestamp	Float32	field	geodesy and V2X	Float32	time	internal state	keep raw; CARLA float CAM timers
 extensions/carla/v2x.mojo	CaService.last_low_cam_timestamp	Float32	field	geodesy and V2X	Float32	time	internal state	keep raw; CARLA float CAM timers
 extensions/carla/v2x.mojo	CaService.elapsed	Float64	field	geodesy and V2X	Float64	time	internal state	keep raw; CARLA float CAM timers
 extensions/carla/v2x.mojo	CaService.vehicle_speed	Float32	field	geodesy and V2X	Float32	speed	geodesy raw field	keep raw; ETSI CAM encoding
 extensions/carla/v2x.mojo	CaService.last_cam_speed	Float32	field	geodesy and V2X	Float32	speed	geodesy raw field	keep raw; ETSI CAM encoding
-extensions/carla/weather.mojo	WeatherParameters.__init__(sun_azimuth_degrees)	Float32	param	internal SI scalar	Float32	angle	user configuration	typed constructor
-extensions/carla/weather.mojo	WeatherParameters.__init__(sun_altitude_degrees)	Float32	param	internal SI scalar	Float32	angle	user configuration	typed constructor
-extensions/carla/weather.mojo	WeatherParameters.__init__(fog_distance_meters)	Float32	param	internal SI scalar	Float32	length	user configuration	typed constructor
+extensions/carla/weather.mojo	WeatherParameters.__init__(sun_azimuth_degrees)	Float32	param	internal SI scalar	Float32	angle	raw adapter	done: the fields are typed; a typed constructor is beside this one
+extensions/carla/weather.mojo	WeatherParameters.__init__(sun_altitude_degrees)	Float32	param	internal SI scalar	Float32	angle	raw adapter	done: the fields are typed; a typed constructor is beside this one
+extensions/carla/weather.mojo	WeatherParameters.__init__(fog_distance_meters)	Float32	param	internal SI scalar	Float32	length	raw adapter	done: the fields are typed; a typed constructor is beside this one
 extensions/carla/world.mojo	World.elapsed_seconds	Float64	field	runtime boundary	Float64	time	raw mirror	done: Timestamp is the typed view
 extensions/carla/world.mojo	World.delta_seconds	Float64	field	runtime boundary	Float64	time	raw mirror	done: Timestamp is the typed view
 extensions/carla/world.mojo	World.get_traffic_lights_from_waypoint(distance)	Float64	param	runtime boundary	Length64	length	typed	done: Length64

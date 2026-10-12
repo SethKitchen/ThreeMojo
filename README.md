@@ -547,7 +547,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): wide stored-center comparisons and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)
 - [x] [Dimension-safe R-tree packing](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-geometry#find-the-nearest-segment): volume, area, and length costs keep planar and linear trees spatially packed [#583](https://github.com/SethKitchen/ThreeMojo/issues/583)
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
-- [ ] [Double-precision CARLA quantities](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/carla-quantity-inventory-333.md): `Float64` runtime time and distance boundaries and a reviewed inventory. The `ActorId` fixes, the narrowing boundaries and the pinned map group remain open [#333](https://github.com/SethKitchen/ThreeMojo/issues/333)
+- [ ] [Double-precision CARLA quantities](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/carla-quantity-inventory-333.md): `Float64` runtime boundaries, typed sensor settings, checked `ActorId` inputs and a reviewed inventory. The lane oracle edges, the pinned map group and the fixed step remain open [#333](https://github.com/SethKitchen/ThreeMojo/issues/333)
 
 </details>
 

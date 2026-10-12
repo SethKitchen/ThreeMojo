@@ -5,8 +5,12 @@ dimensional value as a raw `Float32` or `Float64`. Each of the 422 scan
 candidates now has a reviewed dimension, class and decision. The document
 also holds the audit of the traffic manager's `ActorId` input boundaries.
 Issue [#333](https://github.com/SethKitchen/ThreeMojo/issues/333) tracks the
-work. The issue stays open: the pinned map group, the user configuration
-records and the `ActorId` defects below still need source changes.
+work.
+
+The issue stays open. The pinned map group and two typed `Float32`
+boundaries need successors that the lane oracle must admit first. The
+source changes on this branch need digest updates in
+`full_audit_cleanup_contracts.py`. See [Lane oracle gate](#lane-oracle-gate).
 
 ## Method
 
@@ -16,19 +20,19 @@ dimension, such as distance, width, time, speed, angle, `s`, `x` or a unit
 suffix. A private name, one with a leading underscore, is not public. The
 scan found 422 candidates.
 
-The review at `main` `8c933ab` adds four columns to
+The review adds four columns to
 [`carla-quantity-inventory-333.tsv`](carla-quantity-inventory-333.tsv):
 
 | Column | Content |
 |---|---|
-| `type_at_head` | The declared type at `8c933ab`, read from the source |
+| `type_at_head` | The declared type on this branch, read from the source |
 | `dimension` | The physical dimension, or `none` for a ratio, gain or count |
 | `reviewed_class` | The class below that sets the rule |
 | `decision` | What to do with the symbol, or `done` and how |
 
 The scan columns stay as they were. The scan `group` came from the file
 alone. The `reviewed_class` is the result of a per-symbol review, and it
-moves 31 candidates out of scope as dimensionless.
+moves 36 candidates out of scope as dimensionless.
 
 The precision-preserving contract exists already. `units.si` defines
 `Length64`, `Duration64` and the other `Float64` quantities. A `Float64`
@@ -39,75 +43,69 @@ that cannot mix with it.
 |---|---:|---|
 | `pinned map geometry` | 210 | Migrate to `Length64` only with successor pins |
 | `serialized` | 42 | Keep raw; the byte format is fixed |
-| `internal state` | 35 | Keep raw; no user supplies it |
-| `geodesy raw field` | 32 | Keep CARLA's raw field; add a typed accessor |
-| `dimensionless` | 31 | Out of scope; no unit type applies |
-| `internal SI scalar` | 30 | Keep raw; a hot-loop or render helper |
-| `user configuration` | 25 | Add a typed constructor; keep the raw field |
-| `raw mirror` | 10 | Done; a checked typed view exists |
+| `dimensionless` | 36 | Out of scope; no unit type applies |
+| `internal state` | 36 | Keep raw; no user supplies it |
+| `internal SI scalar` | 28 | Keep raw; a hot-loop or render helper |
+| `geodesy raw field` | 27 | Keep CARLA's raw field; add a typed accessor |
+| `raw mirror` | 25 | Done; a typed constructor or a checked typed view exists |
+| `raw adapter` | 10 | Done; a named raw adapter beside a typed form |
+| `attribute mirror` | 4 | Keep raw; CARLA's attribute unit has no SI quantity |
 | `typed` | 4 | Done; the boundary takes a quantity |
-| `raw adapter` | 3 | Done; the named raw adapter |
 
 ## Traffic manager ActorId audit
 
-Most traffic manager input boundaries refuse an id that `ActorId.is_valid`
-refuses. Six do not refuse it, or refuse it only after they change state.
+Every traffic manager input boundary that changes state now refuses an id
+that `ActorId.is_valid` refuses, before it changes state. Before this
+branch, six did not refuse it, or refused it only after a partial change.
 The internal integer dictionaries are not evidence of a wrong id: every key
-enters through a checked boundary. The one exception is the registration
-defect in row 2.
+enters through a checked boundary. The one exception was the registration
+defect in row 2, which this branch fixes.
 
 The audit gives each public boundary in `traffic_manager*.mojo` three bad
 ids: `ActorId(-1)`, `ActorId(1 << 32)` and `ActorId(999)`, a valid id that
 names no actor. `tests/test_carla_traffic_manager_actor_ids.mojo` checks
-each boundary that refuses. A scratch probe of the same calls gave the
-results in the "Defect" rows.
+each boundary that refuses, and that a list with one bad id changes
+nothing. A scratch probe of the same calls at `8c933ab` gave the results
+in the "Before" column.
 
-| # | Boundary | Out-of-range id | Valid id, no actor | Finding |
-|---:|---|---|---|---|
-| 1 | The 22 per-actor setters of `TrafficManagerLocal` and `Parameters` | Raises before a change | Stored, as CARLA keys settings by id | Correct |
-| 2 | `TrafficManagerLocal.register_vehicles` | Raises, but earlier ids in the list stay inserted and are not noted by the ALSM | Raises, but the id stays registered until the next `ALSM.update` | Defect: partial change |
-| 3 | `TrafficManagerLocal.unregister_vehicles` | Raises only at `TrackTraffic.delete_actor`, after the id set, its counter, the buffers and the stages change | Ignored, as CARLA does | Defect: partial change |
-| 4 | `TrafficManagerLocal.get_next_action`, `get_action_buffer` | Returns `ROAD_OPTION_VOID` or an empty list | The same | Defect: silent |
-| 5 | `ActorSet.remove` | Ignored; the counter moves | Ignored; the counter moves, as CARLA does | Defect: silent |
-| 6 | `ActorSet.destroy` | Ignored | Ignored | Defect: silent |
-| 7 | `ActorSet.insert` | Raises; earlier ids in the list stay inserted | Inserted | Partial change; see row 2 |
-| 8 | `Parameters` getters, such as `get_lane_offset` | Returns the global default | Returns the global default | Silent query; no state changes |
-| 9 | `ActorSet.contains`, `SimulationState.contains_actor` | False | False | Correct; an out-of-range id is never a member |
-| 10 | `Parameters.remove_actor` | Raises | Ignored | Correct |
-| 11 | `set_simulate_physics`, `is_physics_enabled`, `check_all_frozen` | Raises in `World` | Raises in `World` | Correct |
-| 12 | `apply_batch` with any command | Raises in `World` at the bad command; earlier commands apply, as in CARLA's `ApplyBatchSync` | The same | Correct |
-| 13 | `apply_vehicle_control`, `apply_transform`, `set_vehicle_light_state` | Stores the id; `apply_batch` checks it | The same | Correct; the reader checks |
-| 14 | `TrackTraffic` writers and `SimulationState.add_actor` | Raises before a change | Stored | Correct |
-| 15 | `SimulationState` getters | Raises "does not track" | Raises "does not track" | Correct |
-| 16 | `SimulationState.remove_actor`, `TrackTraffic.get_overlapping_vehicles`, `TrafficManagerShared.buffer` | Ignored, or an empty list | The same | Silent query or no-op |
-| 17 | `remove_actor` of the localization, collision, light and motion stages | Ignored | Ignored | Internal; only `ALSM.remove_actor` calls them |
+| # | Boundary | Out-of-range id | Valid id, no actor | Before | Now |
+|---:|---|---|---|---|---|
+| 1 | The 22 per-actor setters of `TrafficManagerLocal` and `Parameters` | Raises before a change | Stored, as CARLA keys settings by id | Correct | Correct |
+| 2 | `TrafficManagerLocal.register_vehicles` | Raises before a change | Raises before a change | Raised after a partial insert; a dead id stayed registered until the next `ALSM.update` | Fixed |
+| 3 | `TrafficManagerLocal.unregister_vehicles` | Raises before a change | Ignored, as CARLA does | Raised at `TrackTraffic.delete_actor`, after the set, its counter and the stages changed | Fixed |
+| 4 | `TrafficManagerLocal.get_next_action`, `get_action_buffer` | Raises | Void or empty, the documented result | Silent void or empty | Fixed |
+| 5 | `ActorSet.remove` | Raises before the counter moves | Ignored; the counter moves, as CARLA does | Silent; the counter moved | Fixed |
+| 6 | `ActorSet.destroy` | Raises | Ignored | Silent | Fixed |
+| 7 | `ActorSet.insert` | Raises before a change | Inserted | Partial insert | Fixed |
+| 8 | `ALSM.remove_actor` | Raises before a change | Ignored | Raised late | Fixed |
+| 9 | `Parameters` getters, such as `get_lane_offset` | Returns the global default | Returns the global default | The same | Accepted query; see below |
+| 10 | `ActorSet.contains`, `SimulationState.contains_actor` | False | False | The same | Correct; an out-of-range id is never a member |
+| 11 | `Parameters.remove_actor` | Raises | Ignored | The same | Correct |
+| 12 | `set_simulate_physics`, `is_physics_enabled`, `check_all_frozen` | Raises in `World` | Raises in `World` | The same | Correct |
+| 13 | `apply_batch` with any command | Raises in `World` at the bad command; earlier commands apply, as in CARLA's `ApplyBatchSync` | The same | The same | Correct |
+| 14 | `apply_vehicle_control`, `apply_transform`, `set_vehicle_light_state` | Stores the id; `apply_batch` checks it | The same | The same | Correct; the reader checks |
+| 15 | `TrackTraffic` writers and `SimulationState.add_actor` | Raises before a change | Stored | The same | Correct |
+| 16 | `SimulationState` getters | Raises "does not track" | Raises "does not track" | The same | Correct |
+| 17 | `SimulationState.remove_actor`, `TrackTraffic.get_overlapping_vehicles`, `TrafficManagerShared.buffer` | Ignored, or an empty list | The same | The same | Accepted query or no-op |
+| 18 | `remove_actor` of the localization, collision, light and motion stages | Ignored | Ignored | The same | Internal; only `ALSM.remove_actor` calls them, after its check |
 
 ### Fixes
 
-The fix for rows 2 to 6 is in `extensions/carla/traffic_manager.mojo`:
+The fixes are in `extensions/carla/traffic_manager.mojo`. One helper,
+`_check_ids`, refuses a list that holds an out-of-range id:
 
-- `register_vehicles` must check each id with `is_valid` and `World.actor`
+- `register_vehicles` checks each id with `is_valid` and `World.is_alive`
   before it changes the set. Then it inserts the ids and notes each one.
-- `unregister_vehicles` must check each id before it removes one.
-- `get_next_action` and `get_action_buffer` must raise for an out-of-range
-  id. A valid id without a path keeps the documented void result.
-- `ActorSet.remove` and `ActorSet.destroy` must check each id before the
-  counter moves.
+- `unregister_vehicles`, `ActorSet.insert`, `ActorSet.remove` and
+  `ALSM.remove_actor` check each id before a change.
+- `ActorSet.destroy`, `get_next_action` and `get_action_buffer` refuse an
+  out-of-range id. A valid id without a path keeps the void result.
 
-Rows 8 and 16 are queries that do not change state. A strict reading of
-"every boundary that reads one checks it" also makes them raise. That
-change adds `raises` to about 25 getters and to their callers in the
-stages, so it is a separate change.
-
-This change does not edit `traffic_manager.mojo`. The CARLA lane oracle
-pins the file in `border-parser-successor.json` and
-`winner-sign-query-migration.json`. A change needs an edge in
-`tools/carla_lane_oracle/consumer-successor-ledger.json`. The ledger's
-digest is pinned twice: in `consumer_successor_ledger.py` and in
-`full_audit_cleanup_contracts.py` (`CONSUMER_LEDGER_SHA256`), and the
-second file also pins the first. Open PR #739 owns
-`full_audit_cleanup_contracts.py`. The fix must wait until #739 merges, or
-its owner must take the two digest updates.
+Rows 9 and 17 are queries and no-ops that change no state. An out-of-range
+id cannot be stored, so the default or empty answer is the true answer.
+A raising getter would add `raises` to about 25 getters and to their hot
+callers in the stages. CARLA's getters do not refuse an unknown id.
+The review keeps them as they are.
 
 ## Precision-narrowing typed boundaries
 
@@ -116,23 +114,27 @@ it into a `Float64` computation. The `Float32` input loses the digits
 before the `Float64` arithmetic starts. Each one must take the `Float64`
 quantity of the same dimension.
 
-| Boundary | Input | Effect |
-|---|---|---|
-| `RoadGeometry.__init__(kind, s, x, y, heading, length)` and the `arc`, `spiral` helpers | `Length`, `InverseLength` | CARLA takes `double`. Start coordinates near 1e6 m keep only 0.0625 m steps. The `Float64` overload is exact |
-| `RoadGeometry.pos_from_dist(dist)` | `Length` | CARLA's `PosFromDist` takes a `double` |
-| `EpisodeSettings.fixed_delta_seconds`, read by `World.tick` | `Duration` | CARLA stores a `double`. A `Float32` step of 0.05 s is 0.0500000007 s, so one million ticks drift about 0.75 ms from CARLA's clock |
-| `Navigation.update_crowd(manager, delta)` | `Duration` | CARLA reads the `double` delta of the episode timestamp |
-| Agent distances and speeds: `BasicAgent.vehicle_obstacle_detected`, `BasicAgent.generate_lane_change_path`, `is_within_distance`, `BehaviorAgent.car_following_manager`, `LocalPlanner.run_step` | `Length`, `Velocity` | CARLA's Python agents use `double` |
+| Boundary | Input | Effect | State |
+|---|---|---|---|
+| `RoadGeometry.__init__(kind, s, x, y, heading, length)` and the `arc`, `spiral` helpers | `Length`, `InverseLength` | CARLA takes `double`. Start coordinates near 1e6 m keep only 0.0625 m steps. The `Float64` overload is exact | Blocked: pinned map group |
+| `RoadGeometry.pos_from_dist(dist)` | `Length` | CARLA's `PosFromDist` takes a `double` | Blocked: pinned map group |
+| `EpisodeSettings.fixed_delta_seconds`, read by `World.tick`, the sensor manager and `Navigation.update_crowd` | `Duration` | CARLA stores a `double`. A `Float32` step of 0.05 s is 0.0500000007 s, so one million ticks drift about 0.75 ms from CARLA's clock | Blocked: bound tests |
 
 Some typed `Float32` inputs widen into `Float64` arithmetic and are still
 correct, because CARLA takes a `float` there:
 `Map.waypoint_xodr(road_id, lane_id, s)`,
 `DirectedPoint.apply_lateral_offset(offset)` and the `trees_transform`
 distances. The navigation mesh margin and cell size follow Recast, which
-uses `float`.
+uses `float`. The agent distances are compared with `carla.Location`
+values, which are `float` in LibCarla, so a `Float32` `Length` keeps every
+digit that the compared positions hold.
 
-The lane oracle pins every file in the table. The migration needs the
-same ledger edges as the `ActorId` fixes.
+`fixed_delta_seconds` cannot move to `Duration64` on this branch. The
+runtime boundary record binds `tests/test_carla_sensors_world.mojo` and
+`tests/test_carla_world_signals.mojo` by digest, and each sets the field
+with a `Float32` `Duration`. A field of type `Optional[Duration64]` does
+not accept that assignment, so the bound tests would change. A successor
+of `runtime-boundary-successor.json` must rebind them first.
 
 ## Runtime time and distance boundaries
 
@@ -232,15 +234,34 @@ records keep CARLA's raw degree and meter fields. The georeference string
 round trip depends on those fields. `GeoLocation` already has typed
 `latitude_angle` and `longitude_angle` accessors. The altitude and the
 projection offsets need `Length64` accessors, and the projection origins
-need `Float64` angle accessors. The V2X path loss distances need a
-`Length64` adapter. The CAM speeds keep the ETSI encoding.
+need `Float64` angle accessors. `geo.mojo` is pinned by the full-audit and
+seed-count records as well, so these accessors wait with the map group.
+
+`PathLossModel.winner`, `two_ray`, `two_ray_simple` and `loss` now have
+`Length64` overloads. Each overload gives the same bits as the raw
+`Float64` form. The CAM speeds keep the ETSI encoding.
 
 ## User configuration records
 
-`WeatherParameters`, `RgbCameraSettings`, `WideAngleLens`,
-`GnssDescription`, `CamNoise` and the mesh generation parameters hold
-values that a user supplies. The rule is a typed constructor beside the
-raw fields. The raw fields keep CARLA's `float` arithmetic.
+`GnssDescription` and `CamNoise` have typed constructors. They take
+`Angle`, `Length`, `Velocity`, `AngularVelocity` and `Acceleration`, store
+CARLA's degrees, meters and SI values in the raw fields, and validate.
+An angle goes to degrees in `Float32`, so it can differ from a literal in
+degrees by one unit in the last place. `WeatherParameters` already stores
+typed sun angles and a typed fog distance. It now also has a typed
+constructor in CARLA's order beside the raw-degree one.
+`tests/test_carla_typed_configuration.mojo` checks each constructor.
+
+The same test checks the radio distances at 1e7 m plus a 1e-6 m step,
+which a `Float32` cannot hold, and at 3e-300 m. Five compile-fail fixtures
+refuse the wrong dimension and a `Float32` `Length` where a `Length64` is
+required.
+
+`RgbCameraSettings.shutter_speed` and the exposure speeds are CARLA
+attribute values: the reciprocal of a shutter time and EV per second. EV
+is a base-2 logarithm, so no SI quantity applies. `WideAngleLens` holds a
+focal length in pixels and CARLA's `fov_fade_size` attribute in degrees.
+The mesh `vertex_width_resolution` is a vertex count. These stay raw.
 
 ## Serialized compatibility fields
 
@@ -253,24 +274,45 @@ where a runtime caller needs one.
 
 ## Internal state and hot-loop scalars
 
-The vehicle and walker physics, the traffic manager's planning, collision,
-PID and map stages, the render helpers and the 2D math helpers use
-`Float32` scalars in SI units. They port CARLA's `float` arithmetic one to
+The vehicle and walker physics, the traffic manager stages, the render
+helpers and the 2D math helpers use `Float32` scalars in SI units. They port CARLA's `float` arithmetic one to
 one. They are internal state of a public struct, or the result of a
 helper, not an input that a user supplies. They stay raw.
 
 ## Dimensionless candidates
 
-The name filter also matched 31 values without a dimension: PID gains, the
-DVS log-intensity thresholds, exposure values, pixel coordinates, scale
-factors, cosines and the replayer's time factor. No unit type applies, and
-the issue does not cover them.
+The name filter also matched 36 values without a dimension. Examples are
+PID gains, log-intensity thresholds, exposure values, pixel values, scale
+factors, cosines and the replayer's time factor. No unit
+type applies, and the issue does not cover them.
+
+## Lane oracle gate
+
+The lane oracle pins `traffic_manager.mojo`, `gnss.mojo`, `v2x.mojo` and
+`weather.mojo` in `border-parser-successor.json` and
+`winner-sign-query-migration.json`. A reviewed change to one of them needs
+an edge in `tools/carla_lane_oracle/consumer-successor-ledger.json`. The
+four edges are ready in
+[`carla-quantity-333-ledger-edges.json`](carla-quantity-333-ledger-edges.json):
+each starts at the pin, ends at the live source and binds its correctness
+tests.
+
+The edges change the ledger digest. That
+digest is pinned in `consumer_successor_ledger.py`, and
+`full_audit_cleanup_contracts.py` pins both the ledger digest
+(`CONSUMER_LEDGER_SHA256`) and the bytes of `consumer_successor_ledger.py`
+(`DEPENDENCY_TOOL_SHA256`). Open PR #739 owns that file, so this branch
+does not add the edges. The owner of the lane oracle must add the edges
+and update the three digests. `test_consumer_successor_ledger.py` also
+states that the real ledger holds only the seed edge, so its two
+real-ledger tests must name the new edges.
 
 ## Remaining acceptance work
 
-- The `ActorId` fixes for rows 2 to 6, after PR #739 merges.
-- The precision-narrowing boundaries, with the same ledger edges.
-- The pinned map group, together with the conditioned cubic evaluation
-  and the certificate modules that read its coefficients.
-- Typed constructors for the user configuration records.
-- Typed accessors for the geodesy raw fields.
+- The four ledger edges and the three digest updates in the lane oracle.
+- The pinned map group, together with the conditioned cubic evaluation,
+  the certificate modules that read its coefficients and the typed
+  `RoadGeometry` inputs.
+- A successor of the runtime boundary record that rebinds its tests, then
+  `fixed_delta_seconds` as a `Duration64`.
+- Typed accessors for the geodesy raw fields, with the map group.

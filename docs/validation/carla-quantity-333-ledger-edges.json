@@ -1,0 +1,57 @@
+{
+  "issue": 333,
+  "scope": "Proposed consumer-successor-ledger edges for the #333 source changes. Append them to tools/carla_lane_oracle/consumer-successor-ledger.json in this order.",
+  "edges": [
+    {
+      "issue": 333,
+      "path": "extensions/carla/traffic_manager.mojo",
+      "before_sha256": "75abce8cce536efec92c0473971dbb395d06aa9e69edb868cfcee62d53379478",
+      "after_sha256": "50ceeb999d0c4866b946b2a0633e63d6f2d98f8c87d69c362a924b2137eb36cb",
+      "before_token_sha256": "cf5393436662eeb53483e8d376645fcc57246d20b67c1709bae39e54be5fb0ad",
+      "after_token_sha256": "6e5c64a1b93d83d0063934c86cbaac4e70da92e0e3fdd24f4306120809da362d",
+      "correctness_tests": {
+        "tests/test_carla_traffic_manager_actor_ids.mojo": "bbb891f8015f9a1cd570c0b2cd2086ffda0cba9b0cdd526673d61a044fb3931f",
+        "tests/test_carla_traffic_manager_world.mojo": "5edafd51781df088a805a482e37e2adf7ebedbb17d5eb9f3955f2454c600c446",
+        "tests/test_carla_traffic_manager.mojo": "bb0b1b4fc0c97f5341aad0efe113b08df4fba7f89a1c6719ecde7dbe0b35efbf"
+      }
+    },
+    {
+      "issue": 333,
+      "path": "extensions/carla/gnss.mojo",
+      "before_sha256": "5f5a97dbb89416efb9be3e0851b304b2aa46b3002dc7ee51dd3f7df04848085b",
+      "after_sha256": "08c1da3802c8b4b8fe927c54afa167f3a820d9fd7defc1ebff04843d2b93e42f",
+      "before_token_sha256": "b8be38b4b8d86de8e78578bdb08a417e7c62f70bc9eaccb81dfe400c528249d2",
+      "after_token_sha256": "ed9127c01e3eda5dd49a89b647d43ca315abb76918da49ea81912ff46c13fb3d",
+      "correctness_tests": {
+        "tests/test_carla_typed_configuration.mojo": "658ab6898d395cdabf03cd2905f4c5427922eebee59d7c3f0d6e3a378dae8ed5",
+        "tests/compile_fail/carla_gnss_noise_rejects_length_for_angle.mojo": "39dab92e6af6667308bf17711d42de7d8cc8b9f4bc31e6fc367ca87f595dfb49"
+      }
+    },
+    {
+      "issue": 333,
+      "path": "extensions/carla/v2x.mojo",
+      "before_sha256": "b96b383c8c46120978ccddb0bc7f068a2799d6c95b0cf4619a3caea40dd0cc36",
+      "after_sha256": "90ef6abe3a2e7696de7bd081ff17e22fe31600f4f3df6479a4fd550cfc907451",
+      "before_token_sha256": "0e8ab14b2c544581d65fd9b3a26c58ee643c9f2e7acb654658c1afc8b35e9dfb",
+      "after_token_sha256": "23f528c8a37dbe89f3fe2ce07e32cadbf09aedc3dcef6c6d4fabe211ac237246",
+      "correctness_tests": {
+        "tests/test_carla_typed_configuration.mojo": "658ab6898d395cdabf03cd2905f4c5427922eebee59d7c3f0d6e3a378dae8ed5",
+        "tests/compile_fail/carla_cam_noise_rejects_duration_for_speed.mojo": "256c55e5b27ae9e7a25b801f9bd56c717c2c1de75d927d5c55402a80dd51f4ac",
+        "tests/compile_fail/carla_path_loss_distance_rejects_float32_length.mojo": "0846888c29dfd33915ee1d73e0cec6e08c6c5bdfa78ef6aeaf50324048749347",
+        "tests/compile_fail/carla_path_loss_distance_rejects_duration64.mojo": "52a40e7ca2487f01e7008c0de0bb4c9f6dac001c663d7d9f4ffce404eb609723"
+      }
+    },
+    {
+      "issue": 333,
+      "path": "extensions/carla/weather.mojo",
+      "before_sha256": "c498f21bceaf217709f41c1fbf181b507ecd29a6a0d2b019530f1766f83b903c",
+      "after_sha256": "93d842c774318dbe9d5bea1a8bfcb3e7ea514e27d9808099f5fddd5c5587ea87",
+      "before_token_sha256": "537d7c38b76856901b44571a964594c6e74412d41eb2bb11c964e6f32d74f7d9",
+      "after_token_sha256": "e1fe8479d389130334dd3a1eefaf7d348080a48cc5f53daddeef54eeeedd16a3",
+      "correctness_tests": {
+        "tests/test_carla_typed_configuration.mojo": "658ab6898d395cdabf03cd2905f4c5427922eebee59d7c3f0d6e3a378dae8ed5",
+        "tests/compile_fail/carla_weather_fog_distance_rejects_angle.mojo": "eb395c3101ceeb6ba7c527faecced0a5bfc497d58122f9b487ace20164788af4"
+      }
+    }
+  ]
+}
