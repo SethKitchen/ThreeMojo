@@ -195,6 +195,8 @@ Control-flow programs cover `while`, `elif`, recursion and eight concurrent task
 
 The original mixed-custom controls remain native-success and instrumented-refusal tests. They include the mixed generic instantiation and retained lifetime cases. The exact previously accepted control with two independent generic parameters also remains a native-success/refusal fixture, including equal concrete bindings. The original one-parameter fixture retains all 64 native/model outputs and its 328-record reference trace, including 24 inconsistent reference vectors, then requires an explicit compilation refusal. A separate explicitly negated one-parameter fixture checks 64 native/model outputs and every actual ordered line, condition, decision and vector record against its own model.
 
+An isolated two-parameter control preserves the original generic function exactly. Its 64 native outputs follow a separate model, and its diagnostic must name that function. The isolated one-parameter control also requires its own function-specific diagnostic.
+
 Twenty more programs compile natively and must fail with the coverage diagnostic. Four have custom merges that return `Bool`, and their native logs must agree with an independent model. In two of them, both operand types merge. In the other two, the merge has a `where` clause that accepts only `Bool`. Mojo calls it in `Gated(x) or flag` and uses Boolean fallback in `Gated(x) or Plain(y)`. Both forms are refused.
 
 Four programs must also print the native copy or move of the selected operand. One of these is a retained `Optional` whose element copy logs itself. Before this change, such an operand became `Bool` and its native copy was lost. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
@@ -202,6 +204,8 @@ Four programs must also print the native copy or move of the selected operand. O
 Identity-sensitive controls compare addresses only within each program. A retained value stores its original payload address; its trivial copy, move and destructor are asserted.
 
 Six positive controls require exact native stdout and interleaved condition, decision and vector records. They cover unary `not`, double negation, retained conditional references and masked operands. Four same-type selections must first compile and run natively. They show original-object truth before selection and copied-object truth afterward. Instrumentation must then fail with the retained-selection diagnostic. The original `not kept or False` regression must remain false with vector `TF`; an owning copy had incorrectly made it true with vector `F-`.
+
+Two additional controls omit trailing retained-value reads. They check direct unary negation and conditional-reference last use against the same native identity oracle.
 
 Nine further positive controls require original constructor-to-truth identity for implicitly copyable, move-only and custom-move temporaries. Three temporary same-type selections must compile and run natively before their exact refusal. Bitwise temporary owning proxies had also inverted their unary-not and selected-result branches. Each identity fixture verifies the maintained builder origin and complete B/C/M denominator.
 
