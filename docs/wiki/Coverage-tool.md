@@ -87,15 +87,20 @@ Simple decisions accept any `Boolable` value. Their helper borrows the value and
 Compound decisions keep the native `and`, `or` and `not` operators. Pinned Mojo 1.1.0 selects the truth semantics of `and` and `or` from the operand types:
 
 - **One type.** Mojo converts the left operand. It returns the left operand, or the right operand without a conversion. The enclosing operator or truth test converts the selected operand again. In `a or b or c`, a true `a` is converted three times.
-- **Two types.** Mojo converts each evaluated operand to `Bool` once.
+- **Two types without a join.** Mojo converts each evaluated operand to `Bool` once.
 - **An implicit conversion.** Mojo can join two types into one. For example, `Optional[Int](None) or 0` wraps `0` in an `Optional` and is true.
+- **A custom merge.** A type can define `__merge_with__`. Mojo first tests the original left operand, then merges the selected operand. The merge can return `Bool` and change its value or run other source code.
 
 Operands of `Bool`, `SIMD[DType.bool, 1]`, `Int`, `String`, `Optional[T]` and `List[T]` become `Bool` when they are recorded. Their pinned standard-library truth tests read only the value, presence flag or length.
 
-Other `Boolable` operands, which include custom types, go into a recording proxy. The native operators convert the proxy at the same points as the operand:
+A pure truth test does not make every payload lifecycle safe. An operator that returns an `Optional` can copy or move its selected payload. The operator check also tests these omitted operations.
+
+It keeps move-only values with trivial moves, including values with a custom destructor. For implicitly copyable values, it requires both trivial copying and trivial destruction. Standard `String` and its standard `Optional` wrappers retain the fixed standard-value path. A user-defined wrapper around `String` does not get that exception.
+
+Supported custom `Boolable` operands go into a recording proxy. The native operators convert the proxy at the same points as the operand:
 
 - A temporary operand moves into a proxy that owns it. The proxy type has no operand origin, so two temporaries of one type give one proxy type. The extra move must be trivial, because a bitwise move runs no source code.
-- A retained operand, such as a variable or a field, goes into a proxy that borrows it with its origin. A same-type operator must copy a retained operand, so a move-only retained operand is always in a two-type operator.
+- A retained operand, such as a variable or a field, goes into a proxy that borrows it with its origin. A surrounding `not` can convert a move-only retained operand before it participates in `and` or `or`. Raw custom operands in mixed-type operators are refused.
 - Each conversion calls the operand's `__bool__` once. The first conversion records the condition. A later conversion of the same selected operand with a different truth records that hit too, and marks the condition `?`.
 
 Each `and` and `or` operator also gets an unevaluated `type_of` check. It compares the original subexpression with the instrumented one when Mojo instantiates the function, also in generic code. The check fails compilation when the probes would change the semantics of the operator.
@@ -105,18 +110,34 @@ These operands fail compilation with a coverage diagnostic:
 - A retained implicitly copyable custom operand. A same-type operator copies it, and a proxy cannot make that copy.
 - A temporary custom operand with a user-defined move constructor. The proxy would run it one more time.
 - An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence. This includes a wrap from an empty `Optional[T]` into a present `Optional[Optional[T]]`.
+- A mixed-type operator with a custom operand and a native `Bool` result. This includes a custom operand combined with `Bool`. The type check cannot distinguish Boolean fallback from a custom merge that also returns `Bool`. Independently declared generic parameters can also select Boolean fallback when both bind to the same concrete type. Such equal bindings do not prove a same-type join; the same refusal applies.
+- An `Optional`-valued operator whose selected move, copy or extra destructor is not covered by the lifecycle checks. This includes custom payload methods and unlisted wrappers with nontrivial operations. The check lacks operand ownership information, so it can conservatively refuse a temporary implicitly copyable payload even when that expression does not copy it. Nested `Optional` payloads are subject to the same check.
+
+The mixed-type restriction closes a case that previously compiled but changed execution. Two custom types can each merge to `Bool` and invert their stored truth. Native `and` and `or` call the selected merge. The probes previously omitted it and used Boolean fallback. A pinned native control shows opposite final outcomes for both operators across all four truth assignments.
+
+This safety restriction also refuses previously supported mixed custom operands that have no merge. Same-type custom temporaries with trivial moves remain supported. Custom operands converted by `not` can still participate as Boolean operands. Pure standard-library cases remain subject to the Optional-wrap and payload-lifecycle checks. Broader custom support remains open under issue #560.
+
+The Optional restriction closes a separate case that also compiled but changed execution. In the pinned control, retained selected values lose a custom copy and its destructor. Temporary selected values lose a custom move. The final Boolean outcomes still match, so an outcome-only test cannot detect the defect. A direct `List` transfer moves its storage owner, not its elements, and does not require this new restriction. Unary `not` and mixed Boolean fallback do not select an Optional value and remain outside the new check.
 
 Do not omit the source or its obligations to bypass these limits.
 
-The pinned reflection API names types without their origin parameters. A same-type check therefore also needs a proxy as the instrumented result. An operator whose operands differ only by origin keeps its native two-type semantics through distinct proxy types.
+The pinned reflection API names types without their origin parameters. A same-type check therefore also needs a proxy as the instrumented result. Different origins produce distinct proxy types. An operator that therefore selects custom mixed-type semantics is refused too.
 
 [Issue #556](https://github.com/SethKitchen/ThreeMojo/issues/556) fixes standard-library truth conversion. Native and instrumented checks cover optional, string, list and integer operands, including throwing operand expressions and short-circuit order.
 
-[Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) adds custom compound operands. An independent Python model of the native semantics supplies the expected results for 17 decision trees. The trees combine one-type and two-type operators, `not`, temporary and retained operands, `Bool` operands and a conditional-expression operand. Each tree runs with 16 truth assignments and 5 throwing positions, with stable truth tests and with truth tests that change at each conversion. The check compares the exact sequence of operand creation, conversion and destruction, the condition and decision hits, and the vectors. The reducer and the report must refuse each `?` vector.
+[Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) tracks broader custom compound operands. An independent Python model supplies the expected native results for 17 decision trees. The trees combine one-type and two-type operators, `not`, temporary and retained operands, `Bool` operands and a conditional-expression operand. Each tree runs with 16 truth assignments and 5 throwing positions, with stable and changing truth tests.
 
-More native controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They also compare a retained operand without a pinned lifetime, a temporary that cannot move, and pure one-type operators. One generic function runs with one operand type and with two operand types, so each instantiation gets its own check. Ten more programs compile natively and must fail with the coverage diagnostic. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
+Eight supported trees also run with instrumentation. The check compares their exact creation, conversion and destruction order, condition and decision hits, and vectors. The other nine trees must fail instrumented compilation with the coverage diagnostic. The reducer and the report must refuse each `?` vector.
+
+More supported controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They include retained operands and non-movable temporaries under `not`, one-parameter generic calls instantiated with two concrete types, and pure one-type operators.
+
+The original mixed-custom controls remain native-success and instrumented-refusal tests. They include the mixed generic instantiation and retained lifetime cases. The exact previously accepted control with two independent generic parameters also remains a native-success/refusal fixture, including equal concrete bindings. A separate one-parameter fixture checks 64 native/model outputs and 328 ordered line, condition, decision and vector records, including changing truth.
+
+Separate refusal controls cover custom merges and each earlier unsupported form. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
 
 Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body.
+
+Additional Optional controls separate observable copy, move and destructor methods. Native successful programs must receive the specific coverage diagnostic after instrumentation. Supported controls retain pure payloads, Boolean fallback, unary `not`, lists with custom elements and standard strings. They compare the original and instrumented output and preserve the complete source manifest.
 
 ### Evaluation protocol
 
