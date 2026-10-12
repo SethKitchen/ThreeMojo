@@ -462,10 +462,14 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
 
     def test_current_winner_children_borrow_without_finalizing_parent(self):
         import winner_sign_contracts as winner
+        import border_parser_contracts as border
+        import _full_audit_test_fixtures as fixtures
         with self.audit() as events:
             result = winner.verify(self.root)
         self.assertEqual(result['status'], 'PASS')
-        self.assertEqual(result['reviewed_cleanup_successors'], 20)
+        fixtures.assert_winner_canonical_partition(
+            self, self.root, result, fixtures.WINNER_PRE_BORDER_SUCCESSORS | {
+                border.MODULE, fixtures.WINNER_FULL_AUDIT_NEW_DEPENDENCY}, (20, 92))
         self.assert_one_owner(events, 'winner')
         self.assertTrue({'winner', 'invariant', 'border'} <= events['frames'])
 
