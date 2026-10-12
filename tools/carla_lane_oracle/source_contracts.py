@@ -233,10 +233,10 @@ def verify_group(root, group, *, _operation=None):
         text = _observe_text(
             root, path, (root / path).read_text(encoding='utf-8'),
             _operation=_operation, mode='physical')
-        checked = text
+        checked = historical_text(root, path, text, **operation_args)
         if (path in (PREFIX + 'curve_bounds.mojo', PREFIX + 'lane_value_bounds.mojo',
                      PREFIX + 'junction_bounds.mojo')
-                and token_sha256(text) != pins['groups'][group][path]):
+                and token_sha256(checked) != pins['groups'][group][path]):
             if __package__:
                 from . import full_audit_cleanup_contracts as full_audit
             else:
@@ -246,7 +246,7 @@ def verify_group(root, group, *, _operation=None):
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error
-        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:
+        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(checked) != pins['groups'][group][path]:
             if __package__:
                 from . import cache_key_contracts as cache_key
             else:
@@ -256,7 +256,7 @@ def verify_group(root, group, *, _operation=None):
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error
-        elif path == PREFIX + 'map.mojo' and token_sha256(text) != pins['groups'][group][path]:
+        elif path == PREFIX + 'map.mojo' and token_sha256(checked) != pins['groups'][group][path]:
             if __package__:
                 from . import seed_count_contracts as seed_count
             else:
@@ -272,19 +272,75 @@ def verify_group(root, group, *, _operation=None):
     return result
 
 
-def verify_qualifiers(root, filename, text):
-    pins = read_pins(root)
+def verify_qualifiers(root, filename, text, *, _operation=None):
+    pins = read_pins(root, _operation=_operation)
     require(filename in QUALIFIER_FILES, 'unexpected qualifier path')
-    checked = text
+    checked = historical_text(root, PREFIX + filename, text, _operation=_operation)
     if (filename in ('curve_bounds.mojo', 'lane_value_bounds.mojo')
-            and qualifier_sha256(text) != pins['qualifiers'][filename]):
+            and qualifier_sha256(checked) != pins['qualifiers'][filename]):
         if __package__:
             from . import full_audit_cleanup_contracts as full_audit
         else:
             import full_audit_cleanup_contracts as full_audit
         try:
-            checked = full_audit.reviewed_text(root, PREFIX + filename, text)
+            checked = full_audit.reviewed_text(root, PREFIX + filename, text, _operation=_operation)
         except (ValueError, OSError) as error:
             raise ValueError('lexical qualifier/specialization changed: ' + filename) from error
     require(qualifier_sha256(checked) == pins['qualifiers'][filename],
             'lexical qualifier/specialization changed: ' + filename)
+
+
+def _typed_path(root, path):
+    relative = str(path)
+    if not relative.endswith('.mojo'):
+        return None
+    if Path(relative).is_absolute():
+        relative = Path(relative).relative_to(root).as_posix()
+    elif isinstance(path, Path):
+        # Callers passing root/path may use a non-dot relative checkout root.
+        # Canonical module strings remain relative to root, never prefix-stripped.
+        root_text = str(root)
+        if (root_text not in ('', '.') and not Path(root_text).is_absolute()
+                and '..' not in Path(root_text).parts and '..' not in path.parts
+                and relative.startswith(root_text + '/')):
+            relative = relative[len(root_text) + 1:]
+    return relative
+
+
+def historical_text(root, path, text, *, _operation=None, _inputs=None, _input_owner=None):
+    """Expose a fixed historical view only after actual current admission.
+
+    Reads and owned observations stay physical. The conditioned semantic
+    successor, rather than old byte-identity claims, binds the new graph.
+    """
+    relative = _typed_path(root, path)
+    if relative is None:
+        return text
+    if __package__:
+        from . import typed_boundary_contracts as typed
+    else:
+        import typed_boundary_contracts as typed
+    if relative not in typed.EDGES:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as audit
+    else:
+        import full_audit_cleanup_contracts as audit
+    return audit.reviewed_typed_text(root, relative, text, _operation=_operation,
+                                     _inputs=_inputs, _input_owner=_input_owner)
+
+
+def historical_bytes(root, path, raw, *, _operation=None, _inputs=None, _input_owner=None):
+    """Preserve physical reads before one named historical-source projection."""
+    relative = _typed_path(root, path)
+    if relative is None:
+        return raw
+    if __package__:
+        from . import typed_boundary_contracts as typed
+    else:
+        import typed_boundary_contracts as typed
+    if relative not in typed.EDGES:
+        return raw
+    require(type(raw) is bytes, 'historical input is not physical bytes')
+    return historical_text(root, relative, raw.decode('utf-8'), _operation=_operation,
+                           _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')
