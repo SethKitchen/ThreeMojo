@@ -43,6 +43,13 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         paths = set(GROUP_PATHS['canonical_accumulation']) | set(PROTECTED_INPUTS)
         paths.update(json.loads(guard_pin.read_text())['protected_inventory'])
         paths.update(GROUP_PATHS['optional_runtime'])
+        # The shared-helper binding reads its contract and its package inputs,
+        # providers and tests.
+        from tools.carla_lane_oracle import shared_helper_contracts as helpers
+        paths.update((
+            'tools/carla_lane_oracle/shared_helper_contracts.py',
+            'loaders/utf8.mojo', *helpers.PACKAGE_INPUTS, *helpers.PROVIDERS,
+            *helpers.TESTS))
         paths.update('extensions/carla/' + name for name in
                      ('curve_trig.mojo', 'geometry.mojo', 'lane_value_bounds.mojo'))
         for name in paths:
