@@ -55,6 +55,9 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/InMemoryMap.cpp`,
 `SimpleWaypoint.cpp` and `CachedSimpleWaypoint.cpp`.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
+from units.si import Area
+
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.math import vector_angle
 from extensions.carla.road_info import (
@@ -163,7 +166,45 @@ struct WaypointId(Equatable, ImplicitlyCopyable, Writable):
 # --- one node ---------------------------------------------------------------
 
 
-def distance_squared(a: Vector3, b: Vector3) -> Float32:
+def distance_squared(a: Vector3, b: Vector3) raises -> Area:
+    """Return checked squared distance between two meter coordinates.
+
+    Args:
+        a: The first point.
+        b: The second point.
+
+    Returns:
+        The physical squared distance.
+
+    Raises:
+        Error: If a coordinate or result is not finite.
+    """
+    return Area(distance_squared_square_meters(a, b))
+
+
+def distance_squared_square_meters(a: Vector3, b: Vector3) raises -> Float32:
+    """Explicit square-meter adapter, retaining Float32 arithmetic.
+
+    Args:
+        a: The first point in meters.
+        b: The second point in meters.
+
+    Returns:
+        The scalar squared distance in square meters.
+
+    Raises:
+        Error: If a coordinate or result is not finite.
+    """
+    for point in [a, b]:
+        _ = _finite_si(Float64(point.x))
+        _ = _finite_si(Float64(point.y))
+        _ = _finite_si(Float64(point.z))
+    var value = _distance_squared_si(a, b)
+    _ = _nonnegative_si(Float64(value))
+    return value
+
+
+def _distance_squared_si(a: Vector3, b: Vector3) -> Float32:
     """Return the squared distance between two points, CARLA's
     `Math::DistanceSquared`.
 
@@ -269,7 +310,41 @@ struct SimpleWaypoint(Copyable, Movable):
         """
         return len(self.next_waypoints) > 1
 
-    def distance(self, location: Vector3) -> Float32:
+    def distance(self, location: Vector3) raises -> Length:
+        """Return the checked physical distance to a point.
+
+        Args:
+            location: The point in meters.
+
+        Returns:
+            The physical quantity with unchanged Float32 arithmetic.
+
+        Raises:
+            Error: If a coordinate or result is not finite.
+        """
+        return Length(self.distance_meters(location))
+
+    def distance_meters(self, location: Vector3) raises -> Float32:
+        """Explicit checked meters compatibility result.
+
+        Args:
+            location: The point in meters.
+
+        Returns:
+            The scalar result in meters.
+
+        Raises:
+            Error: If a coordinate or result is not finite.
+        """
+        for point in [self.location(), location]:
+            _ = _finite_si(Float64(point.x))
+            _ = _finite_si(Float64(point.y))
+            _ = _finite_si(Float64(point.z))
+        var value = self._distance_si(location)
+        _ = _nonnegative_si(Float64(value))
+        return value
+
+    def _distance_si(self, location: Vector3) -> Float32:
         """Return the distance to a point, `Distance`.
 
         Args:
@@ -280,7 +355,43 @@ struct SimpleWaypoint(Copyable, Movable):
         """
         return (location - self.location()).length()
 
-    def distance_squared(self, location: Vector3) -> Float32:
+    def distance_squared(self, location: Vector3) raises -> Area:
+        """Return the checked physical distance squared to a point.
+
+        Args:
+            location: The point in meters.
+
+        Returns:
+            The physical quantity with unchanged Float32 arithmetic.
+
+        Raises:
+            Error: If a coordinate or result is not finite.
+        """
+        return Area(self.distance_squared_square_meters(location))
+
+    def distance_squared_square_meters(
+        self, location: Vector3
+    ) raises -> Float32:
+        """Explicit checked square-meters compatibility result.
+
+        Args:
+            location: The point in meters.
+
+        Returns:
+            The scalar result in square meters.
+
+        Raises:
+            Error: If a coordinate or result is not finite.
+        """
+        for point in [self.location(), location]:
+            _ = _finite_si(Float64(point.x))
+            _ = _finite_si(Float64(point.y))
+            _ = _finite_si(Float64(point.z))
+        var value = self._distance_squared_si(location)
+        _ = _nonnegative_si(Float64(value))
+        return value
+
+    def _distance_squared_si(self, location: Vector3) -> Float32:
         """Return the squared distance to a point, `DistanceSquared`.
 
         Args:
@@ -289,7 +400,7 @@ struct SimpleWaypoint(Copyable, Movable):
         Returns:
             The squared distance, in square meters.
         """
-        return distance_squared(self.location(), location)
+        return _distance_squared_si(self.location(), location)
 
 
 # --- the cache record ---------------------------------------------------------
@@ -694,7 +805,7 @@ struct InMemoryMap(Movable):
         # 2. The samples, grouped by segment.
         var segments = Dict[String, List[SimpleWaypointIndex]]()
         var keys = List[_SegmentKey]()
-        for w in map.generate_waypoints(Float64(MAP_RESOLUTION.value)):
+        for w in map.generate_waypoints_meters(Float64(MAP_RESOLUTION.value)):
             if map.lane_width_meters(w) > Float64(MIN_LANE_WIDTH.value):
                 var key = _segment_key(w)
                 if key.text() not in segments:
@@ -712,7 +823,7 @@ struct InMemoryMap(Movable):
             var edge = self.waypoints[list[0].value].location()
             for i in range(len(list) - 1):
                 ref current = self.waypoints[list[i].value]
-                if distance_squared(edge, current.location()) > (
+                if _distance_squared_si(edge, current.location()) > (
                     MAX_GEODESIC_GRID_LENGTH.value
                     * MAX_GEODESIC_GRID_LENGTH.value
                 ):
@@ -811,7 +922,7 @@ struct InMemoryMap(Movable):
             )
             var max_splits = max(angle_splits, distance_splits)
             for _ in range(max_splits):
-                var nexts = map.next(
+                var nexts = map.next_meters(
                     self.waypoints[list[i].value].waypoint,
                     distance / Float64(max_splits + 1),
                 )
@@ -1093,7 +1204,7 @@ struct InMemoryMap(Movable):
             var option = RoadOption(record.road_option)
             if not option.is_valid():
                 raise Error("A cached road option is not valid")
-            var found = map.waypoint_xodr(
+            var found = map.waypoint_xodr_float32(
                 RoadId(record.road_id),
                 LaneId(record.lane_id),
                 Length(record.s, METER),
@@ -1240,7 +1351,7 @@ def _neighbors(
 
 def _junction_landmark(map: Map, waypoint: Waypoint) raises -> Bool:
     """Whether a light, a stop sign or a yield sign is within 15 m."""
-    for landmark in map.landmarks_in_distance(waypoint, 15.0):
+    for landmark in map.landmarks_in_distance_meters(waypoint, 15.0):
         var type = map.signal(landmark.reference.signal_id).type
         if type == "1000001" or type == "206" or type == "205":
             return True
