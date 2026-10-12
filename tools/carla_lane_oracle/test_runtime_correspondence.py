@@ -286,7 +286,7 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as folder:
             current = cleanup_fixtures.copy_current_root(
                 self, ROOT, destination=Path(folder)/'current')
-            historical = cleanup_fixtures.copy_current_root(
+            historical = cleanup_fixtures.copy_historical_boundary_root(
                 self, ROOT, destination=Path(folder)/'historical')
             # The sampled historical control retains the exact same Map and
             # four verified predecessors, now with the complete input closure.
@@ -301,18 +301,40 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
             # Runtime support's center extraction requires a complete current
             # lane. The original CLI fixture copied its then-live lane too.
             lane = 'extensions/carla/lane_refinement.mojo'
+            edge = cleanup.typed_boundary.edge(lane)
+            self.assertEqual(edge['before_sha256'], cleanup.AFTER_SHA256[lane])
             self.assertEqual(hashlib.sha256((current/lane).read_bytes()).hexdigest(),
-                             cleanup.AFTER_SHA256[lane])
+                             edge['after_sha256'])
             self.assertEqual(hashlib.sha256((current/cleanup.MIGRATION).read_bytes()).hexdigest(),
                              cleanup.MIGRATION_SHA256)
             self.assertEqual((current/seed_count.MODULE).read_bytes(),
                              (ROOT/seed_count.MODULE).read_bytes())
             for mode in ([], ['-O']):
-                for script in ('check_sampled_values.py', 'check_runtime_support.py'):
-                    root = historical if script == 'check_sampled_values.py' else current
+                for script, root in (
+                        ('check_sampled_values.py', historical),
+                        ('check_sampled_values.py', current),
+                        ('check_runtime_support.py', current)):
                     command = [sys.executable, *mode, '-B', str(Path(__file__).parent/script), '--repo-root', str(root)]
                     positive = subprocess.run(command, capture_output=True, text=True)
                     self.assertEqual(positive.returncode, 0, positive.stdout+positive.stderr)
+                    report = json.loads(positive.stdout)
+                    self.assertEqual(report['repo_root'], str(root.resolve()))
+                    successors = report['typed_boundary_successors']
+                    if root == current:
+                        self.assertEqual(set(successors), set(cleanup.typed_boundary.SOURCE_PATHS))
+                        for name, item in successors.items():
+                            self.assertEqual(item['after_sha256'],
+                                hashlib.sha256((root/name).read_bytes()).hexdigest())
+                            self.assertEqual(item['before_sha256'],
+                                cleanup.typed_boundary.edge(name)['before_sha256'])
+                        for name in cleanup.conditioned_cubic.SOURCE_PATHS:
+                            self.assertIn('conditioned_graph', successors[name])
+                    else:
+                        self.assertEqual(successors, {})
+                    if script == 'check_sampled_values.py':
+                        for name, digest in report['source_sha256'].items():
+                            self.assertEqual(digest, hashlib.sha256(
+                                (root/'extensions/carla'/name).read_bytes()).hexdigest())
                     target = root/'extensions/carla/curve_interval.mojo'; text = target.read_text()
                     target.write_text(text.replace('result = one - two', 'result = two - one', 1))
                     rejected = subprocess.run(command, capture_output=True, text=True)
