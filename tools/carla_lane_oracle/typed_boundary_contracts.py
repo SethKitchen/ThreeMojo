@@ -27146,8 +27146,8 @@ TESTS = {'tests/_lazy_taylor_controls.mojo': 'd8ed0cfd0340e35f471a15ca2ce039962b
  'tests/test_spiral_moment_table_quadrant_fallback.mojo': '942f5699ce2a34da7a6b04279c01728b2b160612d95c90ecdd6bab6838cbf49f',
  'tests/test_spiral_proof_strict_boundary.mojo': '3b6fe71bb99b919619b6112b5667e702b9f5936a02309944f5dedb8610bafa5b',
  'tests/test_spiral_selection_finite_contract.mojo': '3ab6a0c79ef21bf96ad39a52180036f52a671f0a19a0e191692b64a7ac2fd6b2'}
-BINDING_INPUTS = {'docs/validation/carla-namespace-lookup-333.json': '020ab09535eceb4ee5c6f97519b605f31036b58ebc07e2be362f0b7f3593d1f1',
- 'docs/validation/typed-boundary-successor-333.md': 'efe1d331acb7dde42160a739334f22c7e559c5a942e005d2ea062360642cea64',
+BINDING_INPUTS = {'docs/validation/carla-namespace-lookup-333.json': '56e4f180488b04d96ac481f9524670406c62cba7b3b83c343c7beebe9e677e11',
+ 'docs/validation/typed-boundary-successor-333.md': '5476e4cd7cf46a018450b81d5df1ecdac7132aea0ec0a339bf69cd2fd454f326',
  'tools/carla_lane_oracle/envelope_budget_contracts.py': '8f7025ec3d9b6578a93cf5aceafe9c8b6c0cabeb00720b4856e58cf00c35e166',
  'tools/carla_lane_oracle/oracle.py': '61601ed8067aa50da862bfdaae5dfa9f866e2a7d03bc9943835dea3c3b0ff4c3',
  'tools/carla_lane_oracle/probe_typed_namespace_lookup.py': 'e5bd86039476501b33d6b6e8cc3c877604ff6a388a4f87bc69c302bc39eb7461',
@@ -29338,4 +29338,4 @@ def verify_authority():
         'EDGES_SHA256': EDGES_SHA256,
     }
     require(sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) ==
-            '606d3ef3ea4e46ad276af949ccb687fd4b83c31a366ec564cada7014ecc80e42', 'executing authority globals changed')
+            '4b7cf7cc8ff4644787238486256dfaf7a0a410a540b584df403e5ed426cb876b', 'executing authority globals changed')
