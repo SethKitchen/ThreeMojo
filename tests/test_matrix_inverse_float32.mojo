@@ -28,7 +28,7 @@ def assert_scaled_matches_exact[
         var want = exact[1][index]
         var got = scaled[1][index]
         assert_true(
-            abs(got - want) <= abs(want) * Float32(1e-5),
+            got == want or abs(got - want) <= abs(want) * Float32(1e-5),
             String(index, ": ", got, " against ", want),
         )
 
@@ -74,6 +74,21 @@ def test_apple_gpu_inverse_propagates_nonfinite_entries() raises:
     assert_true(
         isnan(_inverse_scaled_float32[2]([nan[DType.float32](), 1, 1, 1])[1][0])
     )
+
+
+def test_apple_gpu_inverse_keeps_extreme_exponents() raises:
+    # 2 ** 127 needs the factor 2 ** -127, which is subnormal and must not
+    # be formed; the other diagonal entry must stay exactly one.
+    var top = Float32(1.7014118346046923e38)
+    var tiny = Float32(1.1754943508222875e-38)
+    var diagonal: Array[Float32, 4] = [top, 0, 0, 1]
+    assert_scaled_matches_exact[2](diagonal)
+    assert_equal(_inverse_scaled_float32[2](diagonal)[1][3], Float32(1))
+    # Scaling the rows first would make the second column subnormal.
+    assert_scaled_matches_exact[2]([Float32(1e30), 1e30, 1e-10, 2e-10])
+    # An inverse entry 2 ** 379 away from its scaled value overflows, as
+    # the exact cofactors' does, after steps of normal powers.
+    assert_scaled_matches_exact[2]([top, tiny, tiny, 0])
 
 
 def main() raises:

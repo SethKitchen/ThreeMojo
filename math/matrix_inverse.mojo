@@ -119,8 +119,32 @@ def _inverse_wide[
 
 
 def _power_of_two(exponent: Int) -> Float32:
-    """Return two to a power from -126 through 127, from its bits."""
+    """Return two to a power from -126 through 127, from its bits.
+
+    Every power in that range is a normal Float32. A smaller one would be
+    subnormal, which an Apple GPU flushes to zero, so callers never ask
+    for one; see `_times_power_of_two`.
+    """
     return bitcast[DType.float32](UInt32(exponent + 127) << 23)
+
+
+def _times_power_of_two(value: Float32, exponent: Int) -> Float32:
+    """Return `value` times two to any power, in steps of normal powers.
+
+    Each step moves the same way, so an intermediate never crosses the
+    result: a product is exact whenever the result itself is a normal
+    Float32, and otherwise rounds once into the subnormal range or to
+    infinity.
+    """
+    var result = value
+    var left = exponent
+    while left > 127:
+        result *= _power_of_two(127)
+        left -= 127
+    while left < -126:
+        result *= _power_of_two(-126)
+        left += 126
+    return result * _power_of_two(left)
 
 
 def _binade(value: Float32) -> Int:
@@ -137,11 +161,15 @@ def _inverse_scaled_float32[
     """Invert with Float32 alone; return zeros if elimination finds the
     matrix singular.
 
-    Each row, then each column, is divided by a power of two near its
-    largest entry. Those divisions are exact, so the scaled matrix has the
-    same inverse up to the same powers. Gauss-Jordan elimination with
-    partial pivoting inverts it, and the powers are multiplied back. A
-    nonfinite entry skips the scaling and propagates as elimination does.
+    Each column, then each row, gets a power of two near its largest entry,
+    chosen from the entries' exponents before any entry changes. Each entry
+    is divided by its row's and its column's power once. The division is
+    exact unless the scaled entry falls below the normal range, which only
+    happens to an entry far smaller than both its row and its column.
+    Gauss-Jordan elimination with partial pivoting inverts the scaled
+    matrix, and the powers are multiplied back, exactly unless an inverse
+    entry itself leaves the normal range. A nonfinite entry skips the
+    scaling and propagates as elimination does.
 
     Unlike the exact cofactors, this decides singularity by a zero pivot,
     so a matrix within rounding of singular can go either way. Apple GPUs
@@ -166,26 +194,37 @@ def _inverse_scaled_float32[
     for index in range(size * size):  # pragma: no branch
         finite = finite and isfinite(entries[index])
     if finite:
-        for row in range(size):  # pragma: no branch
-            var largest = Float32(0)
-            for column in range(size):  # pragma: no branch
-                largest = max(largest, abs(matrix[column * size + row]))
-            if largest == 0:
-                return False, result^
-            row_shift[row] = _binade(largest)
-            var scale = _power_of_two(-row_shift[row])
-            for column in range(size):  # pragma: no branch
-                matrix[column * size + row] *= scale
+        # The exponents are chosen before any entry is scaled: each column
+        # by its largest entry, then each row by its largest entry over
+        # those. An entry is then scaled once. Scaling the rows first could
+        # leave a column of small entries subnormal, and an Apple GPU
+        # flushes them, which makes an invertible matrix singular.
         for column in range(size):  # pragma: no branch
-            var largest = Float32(0)
+            var largest = -1000
             for row in range(size):  # pragma: no branch
-                largest = max(largest, abs(matrix[column * size + row]))
-            if largest == 0:
+                var entry = entries[column * size + row]
+                if entry != 0:
+                    largest = max(largest, _binade(entry))
+            if largest == -1000:
                 return False, result^
-            column_shift[column] = _binade(largest)
-            var scale = _power_of_two(-column_shift[column])
+            column_shift[column] = largest
+        for row in range(size):  # pragma: no branch
+            var largest = -1000
+            for column in range(size):  # pragma: no branch
+                var entry = entries[column * size + row]
+                if entry != 0:
+                    largest = max(
+                        largest, _binade(entry) - column_shift[column]
+                    )
+            if largest == -1000:
+                return False, result^
+            row_shift[row] = largest
+        for column in range(size):  # pragma: no branch
             for row in range(size):  # pragma: no branch
-                matrix[column * size + row] *= scale
+                matrix[column * size + row] = _times_power_of_two(
+                    entries[column * size + row],
+                    -(row_shift[row] + column_shift[column]),
+                )
     for index in range(size):  # pragma: no branch
         inverse[index * size + index] = 1
     for column in range(size):  # pragma: no branch
@@ -221,14 +260,12 @@ def _inverse_scaled_float32[
             inverse[at * size + column] /= pivot
     # M = R M' C with R and C diagonal powers of two, so M's inverse is
     # C^-1 M'^-1 R^-1: entry (i, j) is M'^-1 (i, j) over 2 ** (c_i + r_j).
-    # The shift is at most 252, so two halves keep each power in range.
     for column in range(size):  # pragma: no branch
         for row in range(size):  # pragma: no branch
-            var shift = -(column_shift[row] + row_shift[column])
-            var half = shift // 2
-            result[column * size + row] = (
-                inverse[column * size + row] * _power_of_two(half)
-            ) * _power_of_two(shift - half)
+            result[column * size + row] = _times_power_of_two(
+                inverse[column * size + row],
+                -(column_shift[row] + row_shift[column]),
+            )
     return True, result^
 
 

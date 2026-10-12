@@ -15259,6 +15259,27 @@ struct _ScalarMathKernels:
             output[unsafe_offset=3 * at + component] = values[component]
 
     @staticmethod
+    def wide_inverse_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Invert 2 x 2 matrices through the wide path on the device."""
+        from max.gpu import global_idx
+        from math.matrix_inverse import _inverse_wide
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var entries = Array[Float32, 4](fill=0)
+        for index in range(4):
+            entries[index] = inputs[unsafe_offset=4 * at + index]
+        var inverse = _inverse_wide[2](entries)
+        output[unsafe_offset=5 * at] = Float32(1) if inverse[0] else Float32(0)
+        for index in range(4):
+            output[unsafe_offset=5 * at + 1 + index] = inverse[1][index]
+
+    @staticmethod
     def norm_consumers_kernel(
         output: MutPointer[Float32, MutAnyOrigin],
         inputs: MutPointer[Float32, MutAnyOrigin],
@@ -15526,6 +15547,67 @@ def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
                 assert_true(isfinite(actual) and isfinite(expected[component]))
                 assert_almost_equal(actual, unit, atol=1e-6)
                 assert_almost_equal(actual, expected[component], atol=1e-6)
+
+
+def test_wide_inverses_keep_extreme_exponents_on_the_device() raises:
+    # An Apple GPU inverts these without Float64 and flushes subnormals.
+    # 2 ** 127 needs a factor of 2 ** -127, and row scaling first would
+    # flush the small second column of the mixed matrix.
+    from math.matrix_inverse import _inverse_exact_cofactors
+
+    if skipped_for_lack_of_a_gpu("wide inverses at exponent extremes"):
+        return
+    var top = Float32(1.7014118346046923e38)
+    var inputs: List[Float32] = [
+        top,
+        0,
+        0,
+        1,
+        1e30,
+        1e30,
+        1e-10,
+        2e-10,
+        1e30,
+        0,
+        0,
+        1e-30,
+    ]
+    var count = len(inputs) // 4
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](5 * count)
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[_ScalarMathKernels.wide_inverse_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(count),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(count):
+            var entries = Array[Float32, 4](fill=0)
+            for index in range(4):
+                entries[index] = inputs[4 * at + index]
+            var exact = _inverse_exact_cofactors[2](entries)
+            assert_true(exact[0])
+            assert_equal(host[5 * at], Float32(1), String(at))
+            for index in range(4):
+                var want = exact[1][index]
+                var got = host[5 * at + 1 + index]
+                # 2 ** -127 is subnormal; a flushing device may return 0.
+                if abs(want) < Float32(1.1754943508222875e-38):
+                    assert_true(abs(got) <= abs(want), String(at, index))
+                else:
+                    assert_true(
+                        abs(got - want) <= abs(want) * Float32(1e-5),
+                        String(at, " ", index, ": ", got, " against ", want),
+                    )
 
 
 def norm_consumer_sample(high: Float32, low: Float32) -> Array[Float32, 5]:

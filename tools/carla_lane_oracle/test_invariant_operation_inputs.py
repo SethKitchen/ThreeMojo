@@ -4983,7 +4983,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'cache_key_contracts.py': '4dd8d16b6d7f1d415631cde453f9270cfe58fd6cdf1cd382e4e7cdde4ea076e2',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
         'coverage_loop_proofs.py': '530a5d8f9562cbb2e9ebc8d1270a4b5c4baf02d8e616b8fe41c5e13b5b9e2156',
-        'full_audit_cleanup_contracts.py': 'efd90a065841ffb5e50ccb2c4af5009843f18d7dd19ba9e7c451d534b4071bab',
+        'full_audit_cleanup_contracts.py': 'c731a2ea2d2bebc099f2c4b0d2418d46840db67af6c0d799fd748f212c221275',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
         'seed_count_contracts.py': 'b452184437c1ca5dc2f75b6b12509b1f2939219af4d22e56a135123fefee34d8',

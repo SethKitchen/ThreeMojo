@@ -34,7 +34,7 @@ It creates no new NaN or infinity contract for `_split`.
 ## Apple GPU matrix inverse boundary
 
 The second production endpoint is `math/matrix_inverse.mojo`.
-Its complete SHA256 is `a3f1a562a22b5101f69a2a8df0d3a5560cabc9e3ab87d40437e7eb9093257897`.
+Its complete SHA256 is `1bf500ddd641fa30c3f01ee1e17ccc33063b30a5198a01da20f3d340b04b30da`.
 The predecessor SHA256 is `34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee`.
 The leaf seals two ordered inverse spans that reconstruct every predecessor byte.
 
@@ -46,11 +46,15 @@ The resulting source must equal the complete predecessor.
 The new `_inverse_wide` has one statement that chooses a function at compile time.
 Off an Apple GPU it chooses `_inverse_exact_cofactors`, which is the predecessor's `_inverse_wide` byte for byte.
 So the host and CUDA execute the predecessor's exact cofactors, and no Float64 statement, signature or fallback changes.
-On an Apple GPU, which has no Float64, the block's `_inverse_scaled_float32` scales rows and columns by exact powers of two.
-It then inverts by Float32 Gauss-Jordan elimination with partial pivoting.
+On an Apple GPU, which has no Float64, the block's `_inverse_scaled_float32` picks a power of two for each column and each row from the entries' exponents.
+It divides each entry by its two powers once, in steps of normal powers, then inverts by Float32 Gauss-Jordan elimination with partial pivoting.
+The scaling is exact unless a scaled entry is subnormal, and the final rescaling is exact unless an inverse entry leaves the normal range.
+Singularity is decided by a zero pivot, so a matrix within rounding of singular can go either way, unlike the host's exact cofactors.
 
 The pinned native entry `tests/test_matrix_inverse_float32.mojo` compares the two inverses on the host.
 It covers extreme scales, row exchanges, singular inputs and nonfinite inputs.
+It includes the reviewed counterexamples: `diag(2^127, 1)`, whose row power would be the subnormal `2^-127`, and the mixed matrix `[[1e30, 1e-10], [1e30, 2e-10]]`, whose second column row-first scaling would make subnormal.
+`tests/test_gpu.mojo` runs both on the device.
 Its exact project import closure contains only:
 
 - `tests/test_matrix_inverse_float32.mojo`
