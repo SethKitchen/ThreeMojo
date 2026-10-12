@@ -228,7 +228,7 @@ The Metal compiler in macOS 26.7 crashes on a kernel that holds too many copies 
 
 Follow these rules in the rasterizer and in the code it calls:
 
-- Run node programs through one `run_nodes` call in a loop over the outputs. The fragment outputs and `thickness_of` do this.
+- Run node programs through one `run_nodes` call in a loop over the outputs. The fragment outputs do this.
 - Shape a light's shadow at one call site. Each lighting function walks every light in one loop through `_light_slot`, and `_light_through` calls `shape.shaped` once for every kind.
 - Read a node program's texture through `NodeSource.sample_either`, so that a plain read and an explicit-gradient read share one footprint.
 - Use one call site in a loop for each read of `_sample_filtered`, `_sample_level` and `_fetch`.

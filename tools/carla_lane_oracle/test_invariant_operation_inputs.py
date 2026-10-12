@@ -1200,7 +1200,7 @@ def wrong_frame(root, executing, *, _operation, target):
                 events = []
                 owner = types.SimpleNamespace(_state=state, _checker_receipt=registered,
                     _owner=object(), _executing=types.MappingProxyType(captured),
-                    _resolver_paths=frozenset())
+                    _resolver_paths=frozenset(), _scaled_resolver_paths=frozenset())
                 def check(actual_root):
                     self.assertEqual(actual_root, root)
                     events.append('owner')
