@@ -48,7 +48,7 @@ from materials.material import (
 )
 from render.blend import DST_COLOR_FACTOR, ONE_MINUS_SRC_ALPHA_FACTOR
 from cameras.camera import Camera
-from cameras.orthographic_camera import centered
+from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from materials.material import Material
@@ -16043,3 +16043,129 @@ def test_gpu_rejects_nonfinite_explicit_gradients_before_sampling() raises:
                 for lane in range(4):
                     assert_equal(bitcast[DType.uint32](cpu[lane]), expected)
                     assert_equal(host[lane], expected)
+
+
+def _hair_reference_parity(
+    scene: Scene,
+    assets: Assets,
+    camera: OrthographicCamera,
+    size: Int,
+    lit: Bool = False,
+) raises:
+    """Require one hair reference scene to draw the same on both backends.
+
+    The scene must also cover part of the image, so that two empty images
+    cannot agree.
+    """
+    var renderer = Renderer(size, size)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var lighting = Lighting.uniform()
+    if lit:
+        lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+    var device = render_triangles(
+        frame.whole_corners(),
+        size,
+        size,
+        BACKGROUND,
+        lighting=lighting,
+        draws=frame.draws,
+    )
+    assert_true(count_background(cpu, BACKGROUND) < size * size - 20)
+    # One byte permits only color rounding. A kept or discarded strand
+    # sample that differs is far outside it.
+    assert_equal(count_mismatches(cpu, device, tolerance=1), 0)
+
+
+def test_both_backends_draw_hair_reference_coverage() raises:
+    from extensions.humanoid.skeleton.head.hair.reference import (
+        add_crossing_strands,
+        add_fine_silhouettes,
+        reference_camera,
+    )
+    from objects.line_segments2 import STRAND_LINE_COVERAGE
+
+    if skipped_for_lack_of_a_gpu("hair reference coverage scenes"):
+        return
+    var camera = reference_camera(Length(2, METER))
+    # Fine silhouettes at a half pixel and two pixels, in both orders.
+    for width in [Float32(0.5), 2]:
+        for reverse in [False, True]:
+            var scene = Scene()
+            var assets = Assets()
+            add_fine_silhouettes(
+                scene,
+                assets,
+                12,
+                Length(width / 32, METER),
+                0.65,
+                STRAND_LINE_COVERAGE,
+                reverse,
+            )
+            scene.update()
+            _hair_reference_parity(scene, assets, camera, 64)
+    # Two wide crossing layers, and a weave of fine fibers, in both orders.
+    for count in [1, 8]:
+        for reverse in [False, True]:
+            var scene = Scene()
+            var assets = Assets()
+            add_crossing_strands(
+                scene,
+                assets,
+                count,
+                Length(Float32(1.0) if count == 1 else Float32(0.02), METER),
+                0.65,
+                0.5,
+                STRAND_LINE_COVERAGE,
+                reverse,
+            )
+            scene.update()
+            _hair_reference_parity(scene, assets, camera, 64)
+
+
+def test_both_backends_draw_hair_reference_curtains() raises:
+    from extensions.humanoid.skeleton.head.hair.reference import (
+        HairReferenceRig,
+    )
+    from extensions.humanoid.skeleton.head.hair.shading import HairLook
+
+    if skipped_for_lack_of_a_gpu("hair reference self-shadow and motion"):
+        return
+    var look = HairLook(Vector3(0.3, 0.18, 0.1))
+    var front = HairReferenceRig(look, Vector3(0, 0.3, 1))
+    _hair_reference_parity(front.scene, front.assets, front.camera, 64)
+    var tt = look
+    tt.weight_tt = 1
+    var back = HairReferenceRig(tt, Vector3(0, -0.035, -1))
+    _hair_reference_parity(back.scene, back.assets, back.camera, 64)
+    # Moving long hair: each frame after two more steps.
+    for _ in range(3):
+        front.advance(2)
+        _hair_reference_parity(front.scene, front.assets, front.camera, 64)
+
+
+def test_both_backends_draw_hair_reference_cast_shadow() raises:
+    from extensions.humanoid.skeleton.head.hair.reference import (
+        HairReferenceRig,
+    )
+    from extensions.humanoid.skeleton.head.hair.shading import HairLook
+
+    if skipped_for_lack_of_a_gpu("hair reference cast shadow"):
+        return
+    for opacity in [Float32(0.35), 1]:
+        var rig = HairReferenceRig(
+            HairLook(Vector3(0.3, 0.18, 0.1)),
+            Vector3(0, 0.3, 1),
+            opacity=opacity,
+            receiver=True,
+        )
+        _hair_reference_parity(rig.scene, rig.assets, rig.camera, 64, lit=True)
