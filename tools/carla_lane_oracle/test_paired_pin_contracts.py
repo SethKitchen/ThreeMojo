@@ -41,6 +41,20 @@ import _full_audit_test_fixtures as fixtures
 import test_full_audit_cleanup_contracts as authority_helpers
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+# This module's fixed byte/line/body assertions describe the historical main
+# graph. The #333 current graph has separate physical admission/mutation tests.
+_CURRENT_SOURCE_ROOT = ROOT
+
+
+def setUpModule():
+    global ROOT
+    import _full_audit_test_fixtures as historical_fixtures
+    owner = type('HistoricalModuleFixture', (), {
+        'addCleanup': staticmethod(unittest.addModuleCleanup)})()
+    ROOT = historical_fixtures.copy_historical_boundary_root(owner, _CURRENT_SOURCE_ROOT)
+    unittest.addModuleCleanup(globals().__setitem__, 'ROOT', _CURRENT_SOURCE_ROOT)
 NAMES = ('runtime-source-pins.json', 'sum2-guard-pins.json')
 PIN_DIR = 'tools/carla_lane_oracle'
 LANE = 'extensions/carla/lane_refinement.mojo'
@@ -515,7 +529,7 @@ class PairedPinRealControls(unittest.TestCase):
     """Real physical qualification; all injected faults keep the real gates."""
 
     def setUp(self):
-        self.root = fixtures.copy_current_root(self, ROOT)
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
 
     def test_current_and_historical_exact_outputs_equal_independent_singles(self):
         historical = fixtures.historical_root(self, ROOT)
@@ -771,7 +785,7 @@ class PairedPinRealControls(unittest.TestCase):
             accepted.predecessor_pin_pair(self.root, admission=retained)
 
     def test_distinct_relative_nested_threaded_and_failed_calls_are_fresh(self):
-        other = fixtures.copy_current_root(self, ROOT)
+        other = fixtures.copy_historical_boundary_root(self, ROOT)
         qualify = accepted._verify_current_for_pin_pair
         calls, nested = [], []
         @wraps(qualify)
@@ -826,7 +840,7 @@ class SelectorOutputRealControls(unittest.TestCase):
     """The output flag cannot publish until all actual qualifying checks finish."""
 
     def setUp(self):
-        self.root = fixtures.copy_current_root(self, ROOT)
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
 
     def test_real_modes_identical_read_counts_true_branch_and_public_frame(self):
         verify, read_bytes, read_text, declaration = cleanup.verify, Path.read_bytes, Path.read_text, guard.declaration
