@@ -245,6 +245,9 @@ def body_style_of(type_id: String, height: Length) raises -> BodyStyle:
         car (a Mini, a Golf, a Prius, a Micra, a C3, a Fiat or a Seat);
         else `SUV` for a Patrol, a Jeep, a Wrangler or a Cybertruck; else
         `SEDAN`.
+
+    Raises:
+        Error: If the height is nonfinite.
     """
     return body_style_of_si(type_id, height.value)
 
@@ -261,6 +264,9 @@ def body_style_of_si(type_id: String, height: Float32) raises -> BodyStyle:
         car (a Mini, a Golf, a Prius, a Micra, a C3, a Fiat or a Seat);
         else `SUV` for a Patrol, a Jeep, a Wrangler or a Cybertruck; else
         `SEDAN`.
+
+    Raises:
+        Error: If the height is nonfinite.
     """
     _ = _finite_si(Float64(height))
     return _body_style_of_si(type_id, height)
@@ -779,6 +785,9 @@ def wheel_inset(length: Length) raises -> Length:
 
     Returns:
         A sixth of the length plus 0.1 m.
+
+    Raises:
+        Error: If the length is nonfinite.
     """
     return Length(wheel_inset_si(length.value))
 
@@ -791,6 +800,9 @@ def wheel_inset_si(length: Float32) raises -> Float32:
 
     Returns:
         A sixth of the length plus 0.1 m.
+
+    Raises:
+        Error: If the length is nonfinite.
     """
     _ = _finite_si(Float64(length))
     return _wheel_inset_si(length)
@@ -1039,6 +1051,9 @@ def stride(speed: Velocity) raises -> Angle:
 
     Returns:
         Twelve degrees per meter per second, up to 30 degrees.
+
+    Raises:
+        Error: If the speed is nonfinite.
     """
     return stride_si(speed.value)
 
@@ -1051,6 +1066,9 @@ def stride_si(speed: Float32) raises -> Angle:
 
     Returns:
         Twelve degrees per meter per second, up to 30 degrees.
+
+    Raises:
+        Error: If the speed is nonfinite.
     """
     _ = _finite_si(Float64(speed))
     return _stride_si(speed)
