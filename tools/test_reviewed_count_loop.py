@@ -20,7 +20,8 @@ DEPENDENCY = 'extensions/carla/curve_bounds.mojo'
 
 class ReviewedCountLoopTests(unittest.TestCase):
     def setUp(self):
-        self.cleanup_sources = cleanup_fixtures.verified_predecessors(ROOT)
+        self.repo = protocol.historical_boundary_root(self)
+        self.cleanup_sources = cleanup_fixtures.verified_predecessors(self.repo)
         self.temp = tempfile.TemporaryDirectory(prefix='reviewed count proof ')
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -28,7 +29,7 @@ class ReviewedCountLoopTests(unittest.TestCase):
             path = self.root/name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(self.cleanup_sources[name] if name in self.cleanup_sources
-                             else (ROOT/name).read_bytes())
+                             else (self.repo/name).read_bytes())
 
     def test_exact_named_source_has_only_mandatory_true(self):
         proof = loops.reviewed_nonempty_loops(self.root, MODULE)
@@ -80,7 +81,7 @@ class ReviewedCountLoopTests(unittest.TestCase):
             for base in (fixture.root, fixture.build):
                 path = base/name;path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(self.cleanup_sources[name] if name in self.cleanup_sources
-                                 else (ROOT/name).read_bytes())
+                                 else (self.repo/name).read_bytes())
         extra = (f'L {MODULE} 126\nB {MODULE} 126\nL {MODULE} 127\n'
                  f'B {MODULE} 98\nC {MODULE} 98 0\nM {MODULE} 98 0\n')
         manifest = fixture.build/'manifest.txt'
