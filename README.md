@@ -128,7 +128,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 13</summary>
+<summary>Implemented: 14</summary>
 
 - [x] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives, and a public download of all 47 is verified [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
@@ -155,6 +155,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Complete coverage vectors](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): recursion, exceptions and concurrent calls retain separate evaluation operands [#385](https://github.com/SethKitchen/ThreeMojo/issues/385)
 
 - [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
+
+- [x] [Full-audit CARLA coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#platform-specific-witnesses): witness tests and reviewed loop proofs bring the five failing CARLA modules to 100 percent [#721](https://github.com/SethKitchen/ThreeMojo/issues/721)
 
 - [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): custom operands keep their native conversions and lifetimes. Three unsupported operand forms still fail compilation [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
 
