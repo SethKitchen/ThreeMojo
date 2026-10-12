@@ -149,12 +149,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
     def validate(self) raises:
         """Check the raw compatibility fields.
 
-        Args:
-            self: The stored record.
-
-        Returns:
-            Nothing.
-
         Raises:
             Error: If a dimensional value is nonfinite or outside its domain.
         """
@@ -185,9 +179,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
     def latitude_angle64(self) raises -> Angle64:
         """Return the checked latitude degrees quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -199,9 +190,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
 
     def longitude_angle64(self) raises -> Angle64:
         """Return the checked longitude degrees quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -215,9 +203,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
     def altitude_length(self) raises -> Length64:
         """Return the checked altitude meters quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -230,9 +215,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
     def latitude_angle(self) raises -> Angle:
         """Return the latitude as an `Angle`.
 
-        Args:
-            self: The raw CARLA coordinate.
-
         Returns:
             The latitude, rounded to a `Float32`.
 
@@ -244,9 +226,6 @@ struct GeoLocation(Equatable, ImplicitlyCopyable, Writable):
 
     def longitude_angle(self) raises -> Angle:
         """Return the longitude as an `Angle`.
-
-        Args:
-            self: The raw CARLA coordinate.
 
         Returns:
             The longitude, rounded to a `Float32`.
@@ -335,12 +314,6 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
     def validate(self) raises:
         """Check the raw compatibility fields.
 
-        Args:
-            self: The stored record.
-
-        Returns:
-            Nothing.
-
         Raises:
             Error: If a dimensional value is nonfinite or outside its domain.
         """
@@ -368,9 +341,6 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
     def semi_major_axis(self) raises -> Length64:
         """Return the checked a meters quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -382,9 +352,6 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
 
     def semi_minor_axis(self) raises -> Length64:
         """Return the checked semi-minor axis.
-
-        Args:
-            self: The raw ellipsoid.
 
         Returns:
             The semi-minor axis in Float64 meters.
@@ -398,11 +365,10 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
     def from_b(mut self, axis: Length64) raises:
         """Set the semi-minor axis from a length.
 
+        The flattening is updated after validation.
+
         Args:
             axis: A positive axis no larger than the semi-major axis.
-
-        Returns:
-            Nothing; the flattening is updated after validation.
 
         Raises:
             Error: If an axis is nonfinite or outside its domain.
@@ -444,11 +410,10 @@ struct Ellipsoid(Equatable, ImplicitlyCopyable):
     def from_b_meters(mut self, b_meters: Float64) raises:
         """Set the flattening from a semi-minor axis, `fromb`.
 
+        The flattening is updated after validation.
+
         Args:
             b_meters: The semi-minor axis, in meters.
-
-        Returns:
-            Nothing; the flattening is updated after validation.
 
         Raises:
             Error: If an axis is invalid or the minor axis exceeds the major axis.
@@ -587,9 +552,6 @@ struct OffsetTransform(Equatable, ImplicitlyCopyable):
     def x_offset(self) raises -> Length64:
         """Return the checked offset x meters quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -602,9 +564,6 @@ struct OffsetTransform(Equatable, ImplicitlyCopyable):
     def y_offset(self) raises -> Length64:
         """Return the checked offset y meters quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -616,9 +575,6 @@ struct OffsetTransform(Equatable, ImplicitlyCopyable):
 
     def z_offset(self) raises -> Length64:
         """Return the checked offset z meters quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -701,9 +657,6 @@ struct UtmZone(Equatable, ImplicitlyCopyable, Writable):
     def central_meridian_angle(self) raises -> Angle64:
         """Return the zone's central meridian with its unit.
 
-        Args:
-            self: The UTM zone.
-
         Returns:
             The meridian as a Float64 angle.
 
@@ -752,7 +705,11 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
     var ellps: Ellipsoid
 
     def __init__(out self):
-        """Create CARLA's default: origin 0, 0, scale one, a sphere."""
+        """Create CARLA's default: origin 0, 0, scale one, a sphere.
+
+        Returns:
+            The initialized TransverseMercatorParams record.
+        """
         self.lat_0_degrees = 0.0
         self.lon_0_degrees = 0.0
         self.k = 1.0
@@ -812,12 +769,6 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
     def validate(self) raises:
         """Check the raw compatibility fields.
 
-        Args:
-            self: The stored record.
-
-        Returns:
-            Nothing.
-
         Raises:
             Error: If a dimensional value is nonfinite or outside its domain.
         """
@@ -865,9 +816,6 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
     def lat_0_angle(self) raises -> Angle64:
         """Return the checked lat 0 degrees quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -879,9 +827,6 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
 
     def lon_0_angle(self) raises -> Angle64:
         """Return the checked lon 0 degrees quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -895,9 +840,6 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
     def x_0_length(self) raises -> Length64:
         """Return the checked x 0 meters quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -909,9 +851,6 @@ struct TransverseMercatorParams(Equatable, ImplicitlyCopyable):
 
     def y_0_length(self) raises -> Length64:
         """Return the checked y 0 meters quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -1011,7 +950,11 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     var ellps: Ellipsoid
 
     def __init__(out self):
-        """Create CARLA's default: parallels at -5 and 5, a sphere."""
+        """Create CARLA's default: parallels at -5 and 5, a sphere.
+
+        Returns:
+            The initialized LambertConformalConicParams record.
+        """
         self.lat_0_degrees = 0.0
         self.lat_1_degrees = -5.0
         self.lat_2_degrees = 5.0
@@ -1082,12 +1025,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     def validate(self) raises:
         """Check the raw compatibility fields.
 
-        Args:
-            self: The stored record.
-
-        Returns:
-            Nothing.
-
         Raises:
             Error: If a dimensional value is nonfinite or outside its domain.
         """
@@ -1139,9 +1076,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     def lat_0_angle(self) raises -> Angle64:
         """Return the checked lat 0 degrees quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -1153,9 +1087,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
 
     def lat_1_angle(self) raises -> Angle64:
         """Return the checked lat 1 degrees quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -1169,9 +1100,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     def lat_2_angle(self) raises -> Angle64:
         """Return the checked lat 2 degrees quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -1183,9 +1111,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
 
     def lon_0_angle(self) raises -> Angle64:
         """Return the checked lon 0 degrees quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -1199,9 +1124,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
     def x_0_length(self) raises -> Length64:
         """Return the checked x 0 meters quantity.
 
-        Args:
-            self: The raw CARLA record.
-
         Returns:
             The quantity with Float64 storage.
 
@@ -1213,9 +1135,6 @@ struct LambertConformalConicParams(Equatable, ImplicitlyCopyable):
 
     def y_0_length(self) raises -> Length64:
         """Return the checked y 0 meters quantity.
-
-        Args:
-            self: The raw CARLA record.
 
         Returns:
             The quantity with Float64 storage.
@@ -2088,6 +2007,9 @@ def create_offset_transform(
     Returns:
         Nothing when there are no attributes, else the offset from `x`, `y`,
         `z` and `hdg`, each zero when it is missing.
+
+    Raises:
+        Error: If a supplied offset or heading is nonfinite.
     """
     if len(offsets) == 0:
         return None
