@@ -13,5 +13,7 @@ from extensions.carla.blueprint import (
 
 
 def main() raises:
-    var p = PedestrianParameters("1", 1, AGE_ADULT, 1, List[Float32]())
+    var p = PedestrianParameters.from_meters_per_second(
+        "1", 1, AGE_ADULT, 1, List[Float32]()
+    )
     print(p.id)
