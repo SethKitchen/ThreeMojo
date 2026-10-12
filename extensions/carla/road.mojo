@@ -173,6 +173,12 @@ struct Lane(Copyable, Movable):
             id: The lane's id.
             section_id: The id of the section that holds it.
             distance: Where that section starts, in meters.
+
+        Returns:
+            The new Lane record with the supplied source fields.
+
+        Raises:
+            Error: If the start distance is nonfinite or negative.
         """
         _ = _nonnegative_si(distance)
         return Lane(_RAW_SI, id, section_id, distance)
@@ -198,10 +204,10 @@ struct Lane(Copyable, Movable):
         """Create a lane with no type, no links and no records.
 
         Args:
+            raw: The private raw-storage construction capability.
             id: The lane's id.
             section_id: The id of the section that holds it.
-            distance: Where that section starts, in meters.
-        """
+            distance: Where that section starts, in meters."""
         self.id = id
         self.type = LANE_NONE
         self.level = False
@@ -215,9 +221,6 @@ struct Lane(Copyable, Movable):
 
     def distance_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw distance compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -260,6 +263,9 @@ struct LaneSection(Copyable, Movable):
             id: The section's id within its road.
             s: Where it starts, in meters.
 
+        Returns:
+            The new LaneSection record with the supplied source fields.
+
         Raises:
             Error: If the id is not valid.
         """
@@ -283,6 +289,7 @@ struct LaneSection(Copyable, Movable):
         """Create an empty section.
 
         Args:
+            raw: The private raw-storage construction capability.
             id: The section's id within its road.
             s: Where it starts, in meters.
 
@@ -364,9 +371,6 @@ struct LaneSection(Copyable, Movable):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -451,6 +455,9 @@ struct Road(Copyable, Movable):
             successor: The road or junction after it, 0 for none.
             is_rht: True if traffic keeps to the right.
 
+        Returns:
+            The new Road record with the supplied source fields.
+
         Raises:
             Error: If an id is not valid.
         """
@@ -515,6 +522,7 @@ struct Road(Copyable, Movable):
         """Create a road with no sections and no records, `AddRoad`.
 
         Args:
+            raw: The private raw-storage construction capability.
             id: The road's id.
             name: Its name.
             length: Its length, in meters.
@@ -625,6 +633,9 @@ struct Road(Copyable, Movable):
         Returns:
             From its start to the next section's start, or to the end of
             the road, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
         """
         return Length64(self.section_length_meters(index))
 
@@ -637,6 +648,9 @@ struct Road(Copyable, Movable):
         Returns:
             From its start to the next section's start, or to the end of
             the road, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
         """
         return _finite_si(self._section_length_si(index))
 
@@ -661,6 +675,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             The start of the first section after s, or the road's length.
+
+        Raises:
+            Error: If the station or computed bound is nonfinite.
         """
         return Length64(self.upper_bound_meters(s.value))
 
@@ -672,6 +689,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             The start of the first section after s, or the road's length.
+
+        Raises:
+            Error: If the station or computed bound is nonfinite.
         """
         _ = _finite_si(Float64(s))
         return _finite_si(self._upper_bound_si(s))
@@ -701,6 +721,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             Their indices, in order. None before the first section.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         return self.sections_at_meters(s.value)
 
@@ -715,6 +738,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             Their indices, in order. None before the first section.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         _ = _finite_si(Float64(s))
         return self._sections_at_si(s)
@@ -810,6 +836,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             Each lane's section index and lane index, section by section.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         return self.lanes_by_distance_meters(s.value)
 
@@ -823,6 +852,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             Each lane's section index and lane index, section by section.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         _ = _finite_si(Float64(s))
         return self._lanes_by_distance_si(s)
@@ -853,6 +885,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             Each lane's section index and lane index, in order of id.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         return self.lanes_at_meters(s.value)
 
@@ -867,6 +902,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             Each lane's section index and lane index, in order of id.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         _ = _finite_si(Float64(s))
         return self._lanes_at_si(s)
@@ -911,6 +949,9 @@ struct Road(Copyable, Movable):
         Returns:
             The first section after s with the lane, and the lane's index,
             or None.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         return self.next_lane_meters(s.value, lane_id)
 
@@ -926,6 +967,9 @@ struct Road(Copyable, Movable):
         Returns:
             The first section after s with the lane, and the lane's index,
             or None.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         _ = _finite_si(Float64(s))
         return self._next_lane_si(s, lane_id)
@@ -962,6 +1006,9 @@ struct Road(Copyable, Movable):
         Returns:
             The last section before s with the lane, and the lane's index,
             or None.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         return self.prev_lane_meters(s.value, lane_id)
 
@@ -977,6 +1024,9 @@ struct Road(Copyable, Movable):
         Returns:
             The last section before s with the lane, and the lane's index,
             or None.
+
+        Raises:
+            Error: If the station is nonfinite.
         """
         _ = _finite_si(Float64(s))
         return self._prev_lane_si(s, lane_id)
@@ -1468,6 +1518,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             The length, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
         """
         return Length64(self.lane_length_meters(section))
 
@@ -1479,6 +1532,9 @@ struct Road(Copyable, Movable):
 
         Returns:
             The length, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
         """
         return _finite_si(self._lane_length_si(section))
 
@@ -2225,9 +2281,6 @@ struct Road(Copyable, Movable):
 
     def length_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw length compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
