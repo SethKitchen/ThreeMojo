@@ -348,6 +348,9 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         @wraps(original)
         def finish(operation, root):
             self.assertEqual(operation._state, 'pending')
+            self.assertEqual(operation._scaled_resolver_paths, scaled.NATIVE_CLOSURE)
+            self.assertTrue(any(path.startswith('render/')
+                                for path in operation._resolver_paths))
             owners.append(operation)
             target.write_bytes(b'# late unrelated source path\n')
             return original(operation, root)
@@ -355,7 +358,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         try:
             with patch.object(cleanup._InvariantInputs, 'finish', finish):
                 with self.assertRaisesRegex(cleanup._OperationCoherenceError,
-                        'scaled source path census changed during historical operation'):
+                        'render entry path census changed during historical operation'):
                     winner.verify(self.root)
         finally:
             if target.exists():
@@ -363,6 +366,62 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         self.assertEqual(len(owners), 1)
         self.assertEqual(owners[0]._state, 'closed')
         self.assertTrue(owners[0]._failed)
+
+        self.assertFalse(owners[0]._scaled_resolver_paths)
+
+    def test_pending_math_census_refuses_source_created_after_render_census(self):
+        import winner_sign_contracts as winner
+        fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
+        cache_key = cleanup._sibling('cache_key')
+        original_paths = cache_key.input_paths
+        original_finish = cleanup._InvariantInputs.finish
+        target = self.root/'tests/scaled_between_censuses.mojo'
+        owners = []
+
+        @wraps(original_paths)
+        def input_paths(root):
+            paths = original_paths(root)
+            caller = sys._getframe(1)
+            if (caller.f_globals is not vars(cleanup)
+                    or caller.f_code is not original_finish.__code__):
+                return paths
+            operation = caller.f_locals['self']
+            self.assertEqual(operation._state, 'pending')
+            self.assertEqual(operation._scaled_resolver_paths, scaled.NATIVE_CLOSURE)
+            self.assertTrue(any(path.startswith('render/')
+                                for path in operation._resolver_paths))
+            self.assertFalse(owners)
+            self.assertFalse(target.exists())
+
+            def after_real_render_discovery():
+                # Yield every real path unchanged. Create the file only after
+                # the preserved render census has consumed its original view.
+                discovered = set()
+                for path in paths:
+                    if path.suffix == '.mojo':
+                        discovered.add(path.as_posix())
+                    yield path
+                self.assertEqual(discovered, operation._known)
+                owners.append(operation)
+                target.write_bytes(b'# source created between final censuses\n')
+
+            return after_real_render_discovery()
+
+        try:
+            with patch.object(cache_key, 'input_paths', input_paths):
+                with self.assertRaisesRegex(cleanup._OperationCoherenceError,
+                        'scaled source path census changed during historical operation'):
+                    winner.verify(self.root)
+            self.assertTrue(target.is_file())
+        finally:
+            if target.exists():
+                target.unlink()
+        self.assertEqual(len(owners), 1)
+        self.assertEqual(owners[0]._state, 'closed')
+        self.assertTrue(owners[0]._failed)
+        self.assertFalse(owners[0]._scaled_resolver_paths)
+        self.assertFalse(owners[0]._resolver_paths)
+        self.assertFalse(owners[0]._discoveries)
 
 
 
