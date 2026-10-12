@@ -37,7 +37,7 @@ from extensions.carla.road_info import (
     RoadInfoGeometry,
     RoadInfoLaneOffset,
     RoadInfoLaneWidth,
-    info_index,
+    info_index_meters as info_index,
 )
 from math.vector3 import Vector3
 from std.math import inf
@@ -119,11 +119,13 @@ def test_complete_cover_contains_canonical_centers_and_independent_fixtures() ra
 
 def test_between_quarter_peak_is_enclosed_as_a_complete_interval() raises:
     var road = _sampled_road(1.0)
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0
+    )
     geometry.samples.append(_Sample(0.0, 0.0, 0.0, 1.0, 0.0))
     geometry.samples.append(_Sample(0.125, 0.005, 0.125, 1.0, 0.0))
     geometry.samples.append(_Sample(1.0, 0.0, 1.0, 1.0, 0.0))
-    road.info.geometries[0] = RoadInfoGeometry(0.0, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry^)
     _assert_full_cells(road, 0.0, 1.0)
     var terms = 0
     var cover = _sampled_lane_box_cover(road, 0, 0, 0, 1, terms).value()
@@ -242,7 +244,7 @@ def test_record_changes_do_not_create_a_partial_cover() raises:
     var road = _sampled_road(1.0)
     var other = _sampled_road(1.0)
     road.info.geometries.append(
-        RoadInfoGeometry(0.5, other.info.geometries[0].geometry.copy())
+        RoadInfoGeometry._from_si(0.5, other.info.geometries[0].geometry.copy())
     )
     var terms = 0
     assert_false(Bool(_sampled_lane_box_cover(road, 0, 0, 0, 1, terms)))
@@ -251,15 +253,21 @@ def test_record_changes_do_not_create_a_partial_cover() raises:
         road = _sampled_road(1.0)
         if which == 0:
             road.info.elevations.append(
-                RoadInfoElevation(0.5, CubicPolynomial.constant(1.0))
+                RoadInfoElevation._from_si(
+                    0.5, CubicPolynomial._constant_si(1.0)
+                )
             )
         elif which == 1:
             road.info.lane_offsets.append(
-                RoadInfoLaneOffset(0.5, CubicPolynomial.constant(3.0))
+                RoadInfoLaneOffset._from_si(
+                    0.5, CubicPolynomial._constant_si(3.0)
+                )
             )
         else:
             road.sections[0].lanes[0].info.widths.append(
-                RoadInfoLaneWidth(0.5, CubicPolynomial.constant(3.0))
+                RoadInfoLaneWidth._from_si(
+                    0.5, CubicPolynomial._constant_si(3.0)
+                )
             )
         terms = 0
         assert_false(Bool(_sampled_lane_box_cover(road, 0, 0, 0, 1, terms)))
@@ -466,7 +474,7 @@ def test_stable_sampled_cells_charge_exactly_one_term_each() raises:
     # An unrelated later record must not change any cell's selected record.
     var later = _sampled_road(1.0)
     road.info.geometries.append(
-        RoadInfoGeometry(2.0, later.info.geometries[0].geometry.copy())
+        RoadInfoGeometry._from_si(2.0, later.info.geometries[0].geometry.copy())
     )
     for kind in [POLY3, PARAM_POLY3]:
         road.info.geometries[0].geometry.kind = kind
@@ -495,10 +503,10 @@ def test_stable_sampled_cells_charge_exactly_one_term_each() raises:
     road.info.geometries[0].s = 0.5
     road.info.geometries[0].geometry.kind = SPIRAL
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, later.info.geometries[0].geometry.copy())
+        RoadInfoGeometry._from_si(0.0, later.info.geometries[0].geometry.copy())
     )
     road.info.geometries.append(
-        RoadInfoGeometry(2.0, later.info.geometries[0].geometry.copy())
+        RoadInfoGeometry._from_si(2.0, later.info.geometries[0].geometry.copy())
     )
     assert_equal(info_index(road.info.geometries, 0.0), 1)
     assert_equal(info_index(road.info.geometries, 1.0), 1)
