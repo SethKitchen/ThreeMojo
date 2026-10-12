@@ -1443,8 +1443,19 @@ def _typed_construction_boundary_loops(root, current, *, include_roots=(), _oper
     if (_operation is None and not _final_unowned_typed_loop_bindings(
             root, bindings, include_roots=include_roots)):
         return {}
-    # Observe every bound current input again after the independent census.
+    # The receipt has disjoint executing-checker and source-input domains.
+    # Recheck both physical images. A checker copy is not a source observation;
+    # the owner separately retains this consumed premise through finalization.
+    try:
+        executing = cleanup.executing_checker_bindings(root)
+        cleanup.require(all(bindings.get(path) == digest
+                            for path, digest in executing.items()),
+                        'construction receipt checker image changed')
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        cleanup._operation_fail(_operation, error)
     for path, expected in bindings.items():
+        if path in executing:
+            continue
         raw = _coverage_observe_bytes(root, path,
             relative_source(root, path, **operation_args).read_bytes(),
             _operation=_operation)
