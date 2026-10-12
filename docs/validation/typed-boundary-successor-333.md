@@ -158,6 +158,33 @@ Equal historical projections cannot conceal a typed-to-historical physical
 swap. Standalone census and explicitly named historical pure-helper branches
 retain their narrower historical contracts and grant no current admission.
 
+Owned source observations and executing checker inputs use separate tables.
+A receipt that consumes checker copies also registers that premise.
+Finalization checks those copied files and the live executing code.
+Both checks use the original captured checker identity.
+A historical owner that consumes no such receipt keeps its original scope.
+
+The translated-station runner also composes the existing deviation inverse.
+This applies only to the historical `Map._subdivide_segment` method pin.
+The inverse removes the added segment certificate field from that view.
+It does not change the sampled-station or midpoint arithmetic.
+Complete current admission and final physical checks still bind that field.
+All 21 original method pins remain unchanged.
+
+The reference-helper compatibility successor binds two native files.
+The frozen helper uses the existing nonthrowing private lookup kernel.
+Its finite guards and reservation debits remain unchanged.
+The importer retains its three tests and adds invalid-bound comparisons.
+Its new exact edge reconstructs the complete historical importer.
+The resulting inventory has 213 source edges and 384 native test inputs.
+These bindings do not establish a compiler or runtime pass.
+
+The oracle uses the existing public runtime verifier for its source obligations.
+This verifier includes the original canonical-accumulation and Sum2 checks.
+It observes consumed inputs within its existing bounded operation.
+The oracle retains separate initial and final physical graph checks.
+Its fixture formulas and arithmetic remain unchanged.
+
 
 ## Reconstruction workload
 
