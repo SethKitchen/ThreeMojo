@@ -38,6 +38,7 @@ from extensions.carla.traffic_manager_map import (
 from extensions.carla.traffic_manager_parameters import Parameters
 from extensions.carla.traffic_manager_random import RandomGenerator
 from extensions.carla.traffic_manager_state import (
+    _check_actor_id,
     SimulationState,
     TrackTraffic,
 )
@@ -124,7 +125,7 @@ def no_command() -> TrafficCommand:
 
 def apply_vehicle_control(
     actor: ActorId, control: VehicleControl
-) -> TrafficCommand:
+) raises -> TrafficCommand:
     """Return CARLA's `Command::ApplyVehicleControl`.
 
     Args:
@@ -133,7 +134,11 @@ def apply_vehicle_control(
 
     Returns:
         The command.
+
+    Raises:
+        Error: If an actor id is not valid.
     """
+    _ = _check_actor_id(actor)
     return TrafficCommand(
         APPLY_VEHICLE_CONTROL, actor, control, _origin(), LIGHTS_NONE
     )
@@ -141,7 +146,7 @@ def apply_vehicle_control(
 
 def apply_transform(
     actor: ActorId, transform: CarlaTransform
-) -> TrafficCommand:
+) raises -> TrafficCommand:
     """Return CARLA's `Command::ApplyTransform`.
 
     Args:
@@ -150,7 +155,11 @@ def apply_transform(
 
     Returns:
         The command.
+
+    Raises:
+        Error: If an actor id is not valid.
     """
+    _ = _check_actor_id(actor)
     return TrafficCommand(
         APPLY_TRANSFORM, actor, VehicleControl(), transform, LIGHTS_NONE
     )
@@ -158,7 +167,7 @@ def apply_transform(
 
 def set_vehicle_light_state(
     actor: ActorId, lights: VehicleLightState
-) -> TrafficCommand:
+) raises -> TrafficCommand:
     """Return CARLA's `Command::SetVehicleLightState`.
 
     Args:
@@ -167,7 +176,11 @@ def set_vehicle_light_state(
 
     Returns:
         The command.
+
+    Raises:
+        Error: If an actor id is not valid.
     """
+    _ = _check_actor_id(actor)
     return TrafficCommand(
         SET_VEHICLE_LIGHT_STATE, actor, VehicleControl(), _origin(), lights
     )
@@ -231,7 +244,7 @@ struct TrafficManagerShared(Movable):
         self.tl_frame = List[Bool]()
         self.control_frame = List[TrafficCommand]()
 
-    def buffer(self, actor: ActorId) -> List[SimpleWaypointIndex]:
+    def buffer(self, actor: ActorId) raises -> List[SimpleWaypointIndex]:
         """Return a copy of a vehicle's path.
 
         Args:
@@ -239,7 +252,11 @@ struct TrafficManagerShared(Movable):
 
         Returns:
             Its path, or an empty one.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor)
         return self.buffer_map.get(actor.value, List[SimpleWaypointIndex]())
 
     def reset_frames(mut self):
