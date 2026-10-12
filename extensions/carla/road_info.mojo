@@ -478,11 +478,25 @@ trait RoadInfo(Copyable, Movable):
     """A record that starts at a distance along its road, `RoadInfo`."""
 
     def distance(self) raises -> Length64:
-        """Return the checked typed start station."""
+        """Return the checked typed start station.
+
+        Returns:
+            The record's starting station as a Float64 length.
+
+        Raises:
+            Error: If the implementing record has an invalid station.
+        """
         ...
 
     def distance_meters(self) raises -> Float64:
-        """Read the checked explicit meter compatibility view."""
+        """Read the checked explicit meter compatibility view.
+
+        Returns:
+            The record's starting station in meters.
+
+        Raises:
+            Error: If the implementing record has an invalid station.
+        """
         ...
 
     def _distance_si(self) -> Float64:
@@ -514,6 +528,18 @@ struct RoadInfoGeometry(RoadInfo):
     @staticmethod
     def from_si(s: Float64, geometry: RoadGeometry) raises -> RoadInfoGeometry:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            geometry: The geometry record, including its sampled state when
+                required.
+
+        Returns:
+            The new RoadInfoGeometry record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or the supplied
+                geometry record is invalid.
         """
         _ = _nonnegative_si(s)
         _check_geometry_record(geometry)
@@ -533,9 +559,6 @@ struct RoadInfoGeometry(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -546,9 +569,6 @@ struct RoadInfoGeometry(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -563,9 +583,6 @@ struct RoadInfoGeometry(RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -602,6 +619,18 @@ struct RoadInfoElevation(ImplicitlyCopyable, RoadInfo):
         s: Float64, polynomial: CubicPolynomial
     ) raises -> RoadInfoElevation:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            polynomial: The local cubic coefficients and origin in their
+                source units.
+
+        Returns:
+            The new RoadInfoElevation record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or a polynomial
+                coefficient or origin is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = CubicPolynomial.from_coefficients(
@@ -625,9 +654,6 @@ struct RoadInfoElevation(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -638,9 +664,6 @@ struct RoadInfoElevation(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -655,9 +678,6 @@ struct RoadInfoElevation(ImplicitlyCopyable, RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -694,6 +714,18 @@ struct RoadInfoLaneOffset(ImplicitlyCopyable, RoadInfo):
         s: Float64, polynomial: CubicPolynomial
     ) raises -> RoadInfoLaneOffset:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            polynomial: The local cubic coefficients and origin in their
+                source units.
+
+        Returns:
+            The new RoadInfoLaneOffset record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or a polynomial
+                coefficient or origin is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = CubicPolynomial.from_coefficients(
@@ -717,9 +749,6 @@ struct RoadInfoLaneOffset(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -730,9 +759,6 @@ struct RoadInfoLaneOffset(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -747,9 +773,6 @@ struct RoadInfoLaneOffset(ImplicitlyCopyable, RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -786,6 +809,18 @@ struct RoadInfoLaneWidth(ImplicitlyCopyable, RoadInfo):
         s: Float64, polynomial: CubicPolynomial
     ) raises -> RoadInfoLaneWidth:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            polynomial: The local cubic coefficients and origin in their
+                source units.
+
+        Returns:
+            The new RoadInfoLaneWidth record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or a polynomial
+                coefficient or origin is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = CubicPolynomial.from_coefficients(
@@ -809,9 +844,6 @@ struct RoadInfoLaneWidth(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -822,9 +854,6 @@ struct RoadInfoLaneWidth(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -839,9 +868,6 @@ struct RoadInfoLaneWidth(ImplicitlyCopyable, RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -881,6 +907,18 @@ struct RoadInfoLaneBorder(ImplicitlyCopyable, RoadInfo):
         s: Float64, polynomial: CubicPolynomial
     ) raises -> RoadInfoLaneBorder:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            polynomial: The local cubic coefficients and origin in their
+                source units.
+
+        Returns:
+            The new RoadInfoLaneBorder record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or a polynomial
+                coefficient or origin is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = CubicPolynomial.from_coefficients(
@@ -904,9 +942,6 @@ struct RoadInfoLaneBorder(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -917,9 +952,6 @@ struct RoadInfoLaneBorder(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -934,9 +966,6 @@ struct RoadInfoLaneBorder(ImplicitlyCopyable, RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -978,6 +1007,18 @@ struct RoadInfoLaneHeight(ImplicitlyCopyable, RoadInfo):
         s: Float64, inner: Float64, outer: Float64
     ) raises -> RoadInfoLaneHeight:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            inner: The signed inner-edge height in meters.
+            outer: The signed outer-edge height in meters.
+
+        Returns:
+            The new RoadInfoLaneHeight record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or either height
+                is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(inner)
@@ -1003,9 +1044,6 @@ struct RoadInfoLaneHeight(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1016,9 +1054,6 @@ struct RoadInfoLaneHeight(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1034,9 +1069,6 @@ struct RoadInfoLaneHeight(ImplicitlyCopyable, RoadInfo):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1048,9 +1080,6 @@ struct RoadInfoLaneHeight(ImplicitlyCopyable, RoadInfo):
     def inner_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw inner compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1061,9 +1090,6 @@ struct RoadInfoLaneHeight(ImplicitlyCopyable, RoadInfo):
 
     def outer_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw outer compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1114,6 +1140,19 @@ struct RoadInfoLaneMaterial(RoadInfo):
         s: Float64, surface: String, friction: Float64, roughness: Float64
     ) raises -> RoadInfoLaneMaterial:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            surface: The source surface name.
+            friction: The source dimensionless friction coefficient.
+            roughness: The source dimensionless roughness value.
+
+        Returns:
+            The new RoadInfoLaneMaterial record with the supplied source
+            fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
         return RoadInfoLaneMaterial(_RAW_SI, s, surface, friction, roughness)
@@ -1143,9 +1182,6 @@ struct RoadInfoLaneMaterial(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1156,9 +1192,6 @@ struct RoadInfoLaneMaterial(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1173,9 +1206,6 @@ struct RoadInfoLaneMaterial(RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1232,6 +1262,21 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
         right: Float64,
     ) raises -> RoadInfoLaneVisibility:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            forward: The nonnegative forward sight distance in meters.
+            back: The nonnegative rear sight distance in meters.
+            left: The nonnegative left sight distance in meters.
+            right: The nonnegative right sight distance in meters.
+
+        Returns:
+            The new RoadInfoLaneVisibility record with the supplied source
+            fields.
+
+        Raises:
+            Error: If the station or any sight distance is nonfinite or
+                negative.
         """
         _ = _nonnegative_si(s)
         _ = _nonnegative_si(forward)
@@ -1271,9 +1316,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1284,9 +1326,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1302,9 +1341,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1315,9 +1351,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
 
     def forward_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw forward compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1330,9 +1363,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
     def back_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw back compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1344,9 +1374,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
     def left_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw left compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1357,9 +1384,6 @@ struct RoadInfoLaneVisibility(ImplicitlyCopyable, RoadInfo):
 
     def right_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw right compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1394,6 +1418,16 @@ struct RoadInfoLaneAccess(RoadInfo):
     @staticmethod
     def from_si(s: Float64, restriction: String) raises -> RoadInfoLaneAccess:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            restriction: The source access restriction text.
+
+        Returns:
+            The new RoadInfoLaneAccess record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
         return RoadInfoLaneAccess(_RAW_SI, s, restriction)
@@ -1412,9 +1446,6 @@ struct RoadInfoLaneAccess(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1425,9 +1456,6 @@ struct RoadInfoLaneAccess(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1442,9 +1470,6 @@ struct RoadInfoLaneAccess(RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1479,6 +1504,16 @@ struct RoadInfoLaneRule(RoadInfo):
     @staticmethod
     def from_si(s: Float64, value: String) raises -> RoadInfoLaneRule:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            value: The source rule text.
+
+        Returns:
+            The new RoadInfoLaneRule record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
         return RoadInfoLaneRule(_RAW_SI, s, value)
@@ -1497,9 +1532,6 @@ struct RoadInfoLaneRule(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1510,9 +1542,6 @@ struct RoadInfoLaneRule(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1527,9 +1556,6 @@ struct RoadInfoLaneRule(RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1562,9 +1588,8 @@ struct RoadInfoSpeed(RoadInfo):
 
         Args:
             s: Its typed source quantity.
-            speed: Its source record value.
+            speed: The finite nonnegative speed quantity.
             type: Its source record value.
-            unit: Its source record value.
 
         Returns:
             A record with unchanged source precision and layout.
@@ -1585,6 +1610,9 @@ struct RoadInfoSpeed(RoadInfo):
             speed: The finite nonnegative source number.
             type: The retained record type.
             unit: The source speed unit; omitted means m/s for road/lane data.
+
+        Returns:
+            The new RoadInfoSpeed record with the supplied source fields.
 
         Raises:
             Error: If the number or source unit is invalid.
@@ -1620,6 +1648,7 @@ struct RoadInfoSpeed(RoadInfo):
         """Create a checked numeric source record.
 
         Args:
+            raw: The private raw-storage construction capability.
             s: Where the record starts, in meters.
             speed: The finite nonnegative source number.
             type: The retained record type.
@@ -1693,9 +1722,6 @@ struct RoadInfoSpeed(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1706,9 +1732,6 @@ struct RoadInfoSpeed(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1723,9 +1746,6 @@ struct RoadInfoSpeed(RoadInfo):
 
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1797,6 +1817,23 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
         width: Float64,
     ) raises -> RoadInfoMarkTypeLine:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative record station in meters.
+            road_mark_id: The source road-mark identifier.
+            length: The nonnegative painted-line length in meters.
+            space: The nonnegative gap length in meters.
+            t_offset: The signed lateral offset in meters.
+            rule: The source line rule text.
+            width: The nonnegative line width in meters.
+
+        Returns:
+            The new RoadInfoMarkTypeLine record with the supplied source
+            fields.
+
+        Raises:
+            Error: If a dimensional value is nonfinite, or the station, line
+                length, gap, or width is negative.
         """
         _ = _nonnegative_si(s)
         _ = _nonnegative_si(length)
@@ -1846,9 +1883,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -1859,9 +1893,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -1877,9 +1908,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1890,9 +1918,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
 
     def length_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw length compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1905,9 +1930,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
     def space_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw space compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1919,9 +1941,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
     def t_offset_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw t_offset compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -1932,9 +1951,6 @@ struct RoadInfoMarkTypeLine(ImplicitlyCopyable, RoadInfo):
 
     def width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw width compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -1988,6 +2004,12 @@ struct RoadInfoMarkRecord(RoadInfo):
         Args:
             s: Where the mark starts, in meters.
             road_mark_id: The mark's index within its lane.
+
+        Returns:
+            The new RoadInfoMarkRecord record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative.
         """
         _ = _nonnegative_si(s)
         return RoadInfoMarkRecord(_RAW_SI, s, road_mark_id)
@@ -2008,9 +2030,9 @@ struct RoadInfoMarkRecord(RoadInfo):
         0.15 meters wide, no lane change, right-hand traffic.
 
         Args:
+            raw: The private raw-storage construction capability.
             s: Where the mark starts, in meters.
-            road_mark_id: The mark's index within its lane.
-        """
+            road_mark_id: The mark's index within its lane."""
         self = RoadInfoMarkRecord._from_si(
             s,
             road_mark_id,
@@ -2108,6 +2130,13 @@ struct RoadInfoMarkRecord(RoadInfo):
             type_name: The `name` of the mark's `type` child.
             type_width: The `width` of the mark's `type` child.
             is_rht: True if the road keeps traffic to the right.
+
+        Returns:
+            The new RoadInfoMarkRecord record with the supplied source fields.
+
+        Raises:
+            Error: If a station or extent is nonfinite or negative, or the
+                lane-change value is invalid.
         """
         _ = _nonnegative_si(s)
         _ = _nonnegative_si(width)
@@ -2197,6 +2226,7 @@ struct RoadInfoMarkRecord(RoadInfo):
         """Create a record from a file's `roadMark`.
 
         Args:
+            raw: The private raw-storage construction capability.
             s: Where the mark starts, in meters.
             road_mark_id: The mark's index within its lane.
             type: The mark's `type`, such as "solid".
@@ -2208,8 +2238,7 @@ struct RoadInfoMarkRecord(RoadInfo):
             height: The paint's height, in meters.
             type_name: The `name` of the mark's `type` child.
             type_width: The `width` of the mark's `type` child.
-            is_rht: True if the road keeps traffic to the right.
-        """
+            is_rht: True if the road keeps traffic to the right."""
         self.s = s
         self.road_mark_id = road_mark_id
         self.type = type
@@ -2227,9 +2256,6 @@ struct RoadInfoMarkRecord(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -2240,9 +2266,6 @@ struct RoadInfoMarkRecord(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -2258,9 +2281,6 @@ struct RoadInfoMarkRecord(RoadInfo):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2271,9 +2291,6 @@ struct RoadInfoMarkRecord(RoadInfo):
 
     def width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw width compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2286,9 +2303,6 @@ struct RoadInfoMarkRecord(RoadInfo):
     def height_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw height compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2299,9 +2313,6 @@ struct RoadInfoMarkRecord(RoadInfo):
 
     def type_width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw type_width compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2323,9 +2334,6 @@ struct CrosswalkPoint(ImplicitlyCopyable):
     def u_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw u compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2337,9 +2345,6 @@ struct CrosswalkPoint(ImplicitlyCopyable):
     def v_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw v compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2350,9 +2355,6 @@ struct CrosswalkPoint(ImplicitlyCopyable):
 
     def z_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw z compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2381,6 +2383,17 @@ struct CrosswalkPoint(ImplicitlyCopyable):
     @staticmethod
     def from_si(u: Float64, v: Float64, z: Float64) raises -> CrosswalkPoint:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            u: The local longitudinal coordinate in meters.
+            v: The local lateral coordinate in meters.
+            z: The local height in meters.
+
+        Returns:
+            The new CrosswalkPoint record with the supplied source fields.
+
+        Raises:
+            Error: If any coordinate is nonfinite.
         """
         _ = _finite_si(u)
         _ = _finite_si(v)
@@ -2482,6 +2495,26 @@ struct RoadInfoCrosswalk(RoadInfo):
         points: List[CrosswalkPoint],
     ) raises -> RoadInfoCrosswalk:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            s: The nonnegative road station in meters.
+            name: The source crosswalk name.
+            t: The signed lateral offset in meters.
+            z_offset: The signed height offset in meters.
+            heading: The heading in radians.
+            pitch: The pitch in radians.
+            roll: The roll in radians.
+            orientation: The source orientation text.
+            width: The nonnegative crosswalk width in meters.
+            length: The nonnegative crosswalk length in meters.
+            points: The local boundary corners, each in meters.
+
+        Returns:
+            The new RoadInfoCrosswalk record with the supplied source fields.
+
+        Raises:
+            Error: If a dimensional value or corner coordinate is nonfinite,
+                or the station, width, or length is negative.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(t)
@@ -2572,9 +2605,6 @@ struct RoadInfoCrosswalk(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -2585,9 +2615,6 @@ struct RoadInfoCrosswalk(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -2603,9 +2630,6 @@ struct RoadInfoCrosswalk(RoadInfo):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2616,9 +2640,6 @@ struct RoadInfoCrosswalk(RoadInfo):
 
     def t_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw t compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2631,9 +2652,6 @@ struct RoadInfoCrosswalk(RoadInfo):
     def z_offset_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw z_offset compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2644,9 +2662,6 @@ struct RoadInfoCrosswalk(RoadInfo):
 
     def heading_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw heading compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2659,9 +2674,6 @@ struct RoadInfoCrosswalk(RoadInfo):
     def pitch_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw pitch compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2672,9 +2684,6 @@ struct RoadInfoCrosswalk(RoadInfo):
 
     def roll_quantity(self) raises -> Angle64:
         """Read the checked typed view of the raw roll compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2687,9 +2696,6 @@ struct RoadInfoCrosswalk(RoadInfo):
     def width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw width compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2700,9 +2706,6 @@ struct RoadInfoCrosswalk(RoadInfo):
 
     def length_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw length compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -2788,6 +2791,21 @@ struct RoadInfoSignal(RoadInfo):
         validities: List[LaneValidity],
     ) raises -> RoadInfoSignal:
         """Explicit source-unit compatibility adapter. Create the explicit compatibility record.
+
+        Args:
+            signal_id: The signal identifier.
+            road_id: The road identifier.
+            s: The nonnegative road station in meters.
+            t: The signed lateral offset in meters.
+            orientation_text: The source orientation text.
+            validities: The retained lane-validity records.
+
+        Returns:
+            The new RoadInfoSignal record with the supplied source fields.
+
+        Raises:
+            Error: If the station is nonfinite or negative, or the lateral
+                offset is nonfinite.
         """
         _ = _nonnegative_si(s)
         _ = _finite_si(t)
@@ -2831,9 +2849,6 @@ struct RoadInfoSignal(RoadInfo):
     def distance(self) raises -> Length64:
         """Return the checked typed start station.
 
-        Args:
-            None.
-
         Returns:
             The record's finite Float64 start station.
 
@@ -2844,9 +2859,6 @@ struct RoadInfoSignal(RoadInfo):
 
     def distance_meters(self) raises -> Float64:
         """Read the checked explicit meter compatibility view.
-
-        Args:
-            None.
 
         Returns:
             The unchanged Float64 start station in meters.
@@ -2870,9 +2882,6 @@ struct RoadInfoSignal(RoadInfo):
     def s_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw s compatibility field.
 
-        Args:
-            None.
-
         Returns:
             The same finite Float64 value with its unit.
 
@@ -2883,9 +2892,6 @@ struct RoadInfoSignal(RoadInfo):
 
     def t_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw t compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
@@ -3170,6 +3176,13 @@ struct LaneMarking(ImplicitlyCopyable, Writable):
 
         Args:
             info: The record.
+
+        Returns:
+            The initialized LaneMarking record.
+
+        Raises:
+            Error: If the source width is nonfinite or negative, or its lane-
+                change value is invalid.
         """
         self = LaneMarking.from_si(info)
 
@@ -3182,6 +3195,13 @@ struct LaneMarking(ImplicitlyCopyable, Writable):
 
         Args:
             info: The record.
+
+        Returns:
+            The new LaneMarking record with the supplied source fields.
+
+        Raises:
+            Error: If the source width is nonfinite or negative, or its lane-
+                change value is invalid.
         """
         _ = _nonnegative_si(info.width)
         if not info.lane_change.is_valid():
@@ -3207,8 +3227,8 @@ struct LaneMarking(ImplicitlyCopyable, Writable):
         the left on a left-hand one; "decrease" the other way.
 
         Args:
-            info: The record.
-        """
+            raw: The private raw-storage construction capability.
+            info: The record."""
         self.type = lane_marking_type_of(info.type)
         self.color = lane_marking_color_of(info.color)
         self.width = info.width
@@ -3260,6 +3280,9 @@ struct LaneMarking(ImplicitlyCopyable, Writable):
             lane_change: Which way a vehicle may cross.
             width: The paint's width, in meters.
 
+        Returns:
+            The new LaneMarking record with the supplied source fields.
+
         Raises:
             Error: If the type, the color or the lane change is not valid.
         """
@@ -3297,6 +3320,7 @@ struct LaneMarking(ImplicitlyCopyable, Writable):
         """Create a marking from its parts.
 
         Args:
+            raw: The private raw-storage construction capability.
             type: How the edge is painted.
             color: The paint's color.
             lane_change: Which way a vehicle may cross.
@@ -3344,9 +3368,6 @@ struct LaneMarking(ImplicitlyCopyable, Writable):
 
     def width_quantity(self) raises -> Length64:
         """Read the checked typed view of the raw width compatibility field.
-
-        Args:
-            None.
 
         Returns:
             The same finite Float64 value with its unit.
