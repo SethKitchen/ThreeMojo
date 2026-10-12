@@ -24,6 +24,7 @@ from extensions.carla.sensor_attributes import (
 )
 from extensions.carla.sensor_noise import SensorRandom
 from math.vector3 import Vector3
+from units.si import DEGREE, METER, Angle, Length
 
 
 struct GnssDescription(ImplicitlyCopyable):
@@ -48,6 +49,43 @@ struct GnssDescription(ImplicitlyCopyable):
         self.longitude_bias = 0
         self.altitude_stddev = 0
         self.altitude_bias = 0
+
+    def __init__(
+        out self,
+        noise_seed: Int,
+        latitude_stddev: Angle,
+        latitude_bias: Angle,
+        longitude_stddev: Angle,
+        longitude_bias: Angle,
+        altitude_stddev: Length,
+        altitude_bias: Length,
+    ) raises:
+        """Create the settings from typed quantities.
+
+        The raw fields keep CARLA's degrees and meters. An angle goes to
+        degrees in `Float32`, so it can differ from a literal in degrees
+        by one unit in the last place.
+
+        Args:
+            noise_seed: The seed of the noise.
+            latitude_stddev: The deviation of the latitude noise.
+            latitude_bias: The bias of the latitude.
+            longitude_stddev: The deviation of the longitude noise.
+            longitude_bias: The bias of the longitude.
+            altitude_stddev: The deviation of the altitude noise.
+            altitude_bias: The bias of the altitude.
+
+        Raises:
+            Error: If a setting is nonfinite or a deviation is negative.
+        """
+        self.noise_seed = noise_seed
+        self.latitude_stddev = latitude_stddev.to(DEGREE)
+        self.latitude_bias = latitude_bias.to(DEGREE)
+        self.longitude_stddev = longitude_stddev.to(DEGREE)
+        self.longitude_bias = longitude_bias.to(DEGREE)
+        self.altitude_stddev = altitude_stddev.to(METER)
+        self.altitude_bias = altitude_bias.to(METER)
+        self.validate()
 
     def validate(self) raises:
         """Reject nonfinite physical settings and invalid domains.

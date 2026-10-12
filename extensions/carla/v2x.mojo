@@ -116,11 +116,19 @@ from std.math import (
     sqrt,
 )
 from units.si import (
+    DEGREE,
+    METER_PER_SECOND,
+    METER_PER_SECOND_SQUARED,
     RADIAN,
+    RADIAN_PER_SECOND,
     Acceleration,
+    Angle,
+    AngularVelocity,
     Duration,
     Length,
+    Length64,
     METER,
+    Velocity,
 )
 
 comptime SPEED_OF_LIGHT = 299792458.0
@@ -394,6 +402,53 @@ struct PathLossModel(ImplicitlyCopyable):
             + Float64(Float32(18.2)) * log10(f)
         )
 
+    def winner(self, state: PathState, distance: Length64) raises -> Float32:
+        """Return the WINNER+ loss of a typed distance.
+
+        The distance keeps every `Float64` digit.
+
+        Args:
+            state: The path state.
+            distance: The distance.
+
+        Returns:
+            The loss, in dB.
+
+        Raises:
+            Error: If the state is not valid.
+        """
+        return self.winner(state, distance.value)
+
+    def two_ray(
+        self, distance: Length64, tx: Length64, rx: Length64
+    ) -> Float64:
+        """Return the full two-ray loss of typed lengths.
+
+        Args:
+            distance: The line-of-sight distance.
+            tx: The sender's antenna height.
+            rx: The receiver's antenna height.
+
+        Returns:
+            The loss, in dB.
+        """
+        return self.two_ray(distance.value, tx.value, rx.value)
+
+    def two_ray_simple(
+        self, distance: Length64, tx: Length64, rx: Length64
+    ) -> Float32:
+        """Return the far-field two-ray loss of typed lengths.
+
+        Args:
+            distance: The distance.
+            tx: The sender's antenna height.
+            rx: The receiver's antenna height.
+
+        Returns:
+            The loss, in dB.
+        """
+        return self.two_ray_simple(distance.value, tx.value, rx.value)
+
     def two_ray(self, distance: Float64, tx: Float64, rx: Float64) -> Float64:
         """Return the full two-ray ground reflection loss,
         `CalculateTwoRayPathLoss`.
@@ -570,6 +625,48 @@ struct PathLossModel(ImplicitlyCopyable):
                 free + self.nlos_vehicle_loss(source, destination, obstacles)
             )
         return path + rng.normal(0, self.fading_stddev(state))
+
+    def loss(
+        self,
+        state: PathState,
+        source: Vector3,
+        destination: Vector3,
+        distance: Length64,
+        tx: Length64,
+        rx: Length64,
+        obstacles: List[Vector3],
+        mut rng: SensorRandom,
+    ) raises -> Float32:
+        """Return the loss of one link with typed lengths.
+
+        The lengths keep every `Float64` digit.
+
+        Args:
+            state: The path state.
+            source: The receiver, in meters.
+            destination: The sender, in meters.
+            distance: The distance, at least `d_ref`.
+            tx: The receiver's antenna height over the reference.
+            rx: The sender's antenna height over the reference.
+            obstacles: The vehicle edges in the way.
+            rng: The sensor's engine, for the fading.
+
+        Returns:
+            The path loss plus the shadow fading, in dB.
+
+        Raises:
+            Error: If the state is not valid.
+        """
+        return self.loss(
+            state,
+            source,
+            destination,
+            distance.value,
+            tx.value,
+            rx.value,
+            obstacles,
+            rng,
+        )
 
     def received_power(
         self, sender_power: Float32, loss: Float32
@@ -1077,6 +1174,66 @@ struct CamNoise(ImplicitlyCopyable):
         self.yaw_rate_stddev = 0
         self.yaw_rate_bias = 0
         self.acceleration_stddev = Vector3(0, 0, 0)
+
+    def __init__(
+        out self,
+        latitude_stddev: Angle,
+        longitude_stddev: Angle,
+        latitude_bias: Angle,
+        longitude_bias: Angle,
+        altitude_stddev: Length,
+        altitude_bias: Length,
+        heading_stddev: Angle,
+        heading_bias: Angle,
+        velocity_stddev: Velocity,
+        yaw_rate_stddev: AngularVelocity,
+        yaw_rate_bias: AngularVelocity,
+        acceleration_stddev_x: Acceleration,
+        acceleration_stddev_y: Acceleration,
+        acceleration_stddev_z: Acceleration,
+    ) raises:
+        """Create the noise from typed quantities.
+
+        The raw fields keep CARLA's degrees, meters, m/s, rad/s and m/s^2.
+        An angle goes to degrees in `Float32`, so it can differ from a
+        literal in degrees by one unit in the last place.
+
+        Args:
+            latitude_stddev: The deviation of the latitude noise.
+            longitude_stddev: The deviation of the longitude noise.
+            latitude_bias: The bias of the latitude.
+            longitude_bias: The bias of the longitude.
+            altitude_stddev: The deviation of the altitude noise.
+            altitude_bias: The bias of the altitude.
+            heading_stddev: The deviation of the heading noise.
+            heading_bias: The bias of the heading.
+            velocity_stddev: The deviation of the speed noise.
+            yaw_rate_stddev: The deviation of the yaw rate noise.
+            yaw_rate_bias: The bias of the yaw rate.
+            acceleration_stddev_x: The deviation of the forward acceleration.
+            acceleration_stddev_y: The deviation of the lateral acceleration.
+            acceleration_stddev_z: The deviation of the vertical acceleration.
+
+        Raises:
+            Error: If a setting is nonfinite or a deviation is negative.
+        """
+        self.latitude_stddev = latitude_stddev.to(DEGREE)
+        self.longitude_stddev = longitude_stddev.to(DEGREE)
+        self.latitude_bias = latitude_bias.to(DEGREE)
+        self.longitude_bias = longitude_bias.to(DEGREE)
+        self.altitude_stddev = altitude_stddev.to(METER)
+        self.altitude_bias = altitude_bias.to(METER)
+        self.heading_stddev = heading_stddev.to(DEGREE)
+        self.heading_bias = heading_bias.to(DEGREE)
+        self.velocity_stddev = velocity_stddev.to(METER_PER_SECOND)
+        self.yaw_rate_stddev = yaw_rate_stddev.to(RADIAN_PER_SECOND)
+        self.yaw_rate_bias = yaw_rate_bias.to(RADIAN_PER_SECOND)
+        self.acceleration_stddev = Vector3(
+            acceleration_stddev_x.to(METER_PER_SECOND_SQUARED),
+            acceleration_stddev_y.to(METER_PER_SECOND_SQUARED),
+            acceleration_stddev_z.to(METER_PER_SECOND_SQUARED),
+        )
+        self.validate()
 
     def validate(self) raises:
         """Reject nonfinite physical settings and invalid domains.

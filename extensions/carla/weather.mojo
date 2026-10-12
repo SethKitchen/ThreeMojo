@@ -103,6 +103,57 @@ struct WeatherParameters(Equatable, ImplicitlyCopyable, Writable):
         self.rayleigh_scattering_scale = rayleigh_scattering_scale
         self.dust_storm = dust_storm
 
+    def __init__(
+        out self,
+        cloudiness: Float32,
+        precipitation: Float32,
+        precipitation_deposits: Float32,
+        wind_intensity: Float32,
+        sun_azimuth_angle: Angle,
+        sun_altitude_angle: Angle,
+        fog_density: Float32,
+        fog_distance: Length,
+        fog_falloff: Float32,
+        wetness: Float32,
+        scattering_intensity: Float32,
+        mie_scattering_scale: Float32,
+        rayleigh_scattering_scale: Float32,
+        dust_storm: Float32,
+    ):
+        """Create a weather in CARLA's argument order from typed angles and
+        a typed fog distance.
+
+        Args:
+            cloudiness: Percent of the sky covered.
+            precipitation: Percent of rain.
+            precipitation_deposits: Percent of the road under puddles.
+            wind_intensity: Percent of wind.
+            sun_azimuth_angle: The sun's bearing.
+            sun_altitude_angle: The sun's height.
+            fog_density: Percent of fog.
+            fog_distance: Where the fog starts.
+            fog_falloff: How fast the fog thins with height.
+            wetness: Percent of wetness on the camera's view.
+            scattering_intensity: How much light the fog scatters.
+            mie_scattering_scale: The scattering by large particles.
+            rayleigh_scattering_scale: The scattering by the air.
+            dust_storm: Percent of dust.
+        """
+        self.cloudiness = cloudiness
+        self.precipitation = precipitation
+        self.precipitation_deposits = precipitation_deposits
+        self.wind_intensity = wind_intensity
+        self.sun_azimuth_angle = sun_azimuth_angle
+        self.sun_altitude_angle = sun_altitude_angle
+        self.fog_density = fog_density
+        self.fog_distance = fog_distance
+        self.fog_falloff = fog_falloff
+        self.wetness = wetness
+        self.scattering_intensity = scattering_intensity
+        self.mie_scattering_scale = mie_scattering_scale
+        self.rayleigh_scattering_scale = rayleigh_scattering_scale
+        self.dust_storm = dust_storm
+
     def __eq__(self, other: Self) -> Bool:
         """Return True if every field is equal, as CARLA compares.
 

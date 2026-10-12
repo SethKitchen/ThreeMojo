@@ -5141,6 +5141,22 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/carla_cam_noise_rejects_duration_for_speed.mojo": {
+    "errors": [
+      {
+        "line": 22,
+        "column": 17,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'velocity_stddev' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0)]'"
+    ]
+  },
   "tests/compile_fail/carla_event_camera_time_rejects_float32_duration.mojo": {
     "errors": [
       {
@@ -5177,6 +5193,22 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_gnss_noise_rejects_length_for_angle.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 24,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'latitude_stddev' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(0), Int(0), Int(0), Int(1)]'"
     ]
   },
   "tests/compile_fail/carla_lane_invasion_event_time_rejects_float32_duration.mojo": {
@@ -5311,6 +5343,36 @@
       "'Duration64' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
     ]
   },
+  "tests/compile_fail/carla_path_loss_distance_rejects_duration64.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 43,
+        "message": "no matching method in call to 'two_ray_simple'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: value passed to 'distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Float64'",
+      "candidate not viable: value passed to 'distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_path_loss_distance_rejects_float32_length.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 32,
+        "message": "no matching method in call to 'two_ray'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      ".dtype of the first value is 'DType.float64' but the second value is 'DType.float32'",
+      "candidate not viable: value passed to 'distance' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Float64'",
+      "candidate not viable: value passed to 'distance' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+    ]
+  },
   "tests/compile_fail/carla_speed_adapter_rejects_length.mojo": {
     "errors": [
       {
@@ -5376,6 +5438,23 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'elapsed' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_weather_fog_distance_rejects_angle.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: unexpected argument",
+      "candidate not viable: value passed to 'fog_distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0)]'",
+      "candidate not viable: value passed to 'sun_azimuth_degrees' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(1)]' to 'Float32'"
     ]
   },
   "tests/compile_fail/collision_detection_is_not_a_bare_int.mojo": {
