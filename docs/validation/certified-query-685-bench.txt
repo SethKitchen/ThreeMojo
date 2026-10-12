@@ -1,4 +1,42 @@
 # Certified lane query on assets/carla/town.xodr (#685)
+
+## Item 1 merged: per-segment deviation
+revision: branch claude/carla-721-703-685 (main d0dd733 plus item 1), bench/carla_certified_query_bench.mojo
+build: mojo build -I . --Werror -o cqb bench/carla_certified_query_bench.mojo
+run: three times; each run times the query as built (certified) and with the global deviation on every segment (global-deviation, the earlier code path)
+mojo: Mojo 1.1.0 (8189361e)
+cpu: Intel(R) Xeon(R) Processor @ 2.80GHz, 4 vCPU shared cloud VM, one thread; load average 15 to 18 from other jobs during the runs
+os: Linux 6.18.44
+
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,1400.5906057075313,183.73,8534.554,32.689463019250255,1.67983789260385,1854.9807497467073,43.709726443769
+global-deviation,1642.979142181696,256.554,8805.875,38.77912867274569,2.986322188449848,1982.7178318135766,43.709726443769
+answer_differences 0
+zero-deviation-bound,1261.323861364404,137.929,7652.14,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.43907406000000004
+item6_saving_bound_us_per_query 28.706190494164137
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,1406.1723844984795,180.648,8488.859,32.689463019250255,1.67983789260385,1854.9807497467073,43.709726443769
+global-deviation,1575.44125092874,266.983,8651.063,38.77912867274569,2.986322188449848,1982.7178318135766,43.709726443769
+answer_differences 0
+zero-deviation-bound,1268.281755994598,115.595,8333.273,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.47531502
+item6_saving_bound_us_per_query 31.075585537568386
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,1421.5691925025337,195.778,8453.811,32.689463019250255,1.67983789260385,1854.9807497467073,43.709726443769
+global-deviation,1461.708263086795,261.14,8301.112,38.77912867274569,2.986322188449848,1982.7178318135766,43.709726443769
+answer_differences 0
+zero-deviation-bound,1102.5916686930093,118.031,6117.077,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.5668529
+item6_saving_bound_us_per_query 37.060233823809526
+
+## Earlier measurement, before item 1 was merged
 revision: main 058cbbc1 plus bench/carla_certified_query_bench.mojo (before), and the same with the item 1 skip (after)
 build: mojo build -I . --Werror -o cqb bench/carla_certified_query_bench.mojo
 run: three times each
@@ -6,7 +44,7 @@ mojo: Mojo 1.1.0 (8189361e)
 cpu: AMD Ryzen 9 5900X, one thread
 os: Linux 6.18.33.1-microsoft-standard-WSL2, WSL 2
 
-## before
+### before
 segments 987 queries 1974
 curve_deviation_m 1.0002308808622429
 run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
@@ -29,7 +67,7 @@ zero-deviation-bound,310.52039040864565,75.611,1196.779,28.99898682877406,1.2026
 center_eval_us 0.15224674000000002
 item6_saving_bound_us_per_query 11.80799184093212
 
-## after (item 1)
+### after (item 1)
 segments 987 queries 1974
 curve_deviation_m 1.0002308808622429
 run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query

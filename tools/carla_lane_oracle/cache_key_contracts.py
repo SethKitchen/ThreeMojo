@@ -108,13 +108,11 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                 from . import seed_count_contracts as seed_count
             else:
                 import seed_count_contracts as seed_count
-            require(hashlib.sha256(physical).hexdigest() in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256},
+            require(hashlib.sha256(physical).hexdigest() in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                     'score-helper view needs the exact physical Map')
             require(source.token_sha256(text) == source.token_sha256(
                         _inputs.text_default(_input_owner, root, rel.as_posix()))
-                    == (seed_count.station.AFTER_TOKEN_SHA256
-                        if hashlib.sha256(physical).hexdigest() == seed_count.station.AFTER_SHA256
-                        else seed_count.SCORE_AFTER_TOKEN_SHA256),
+                    == seed_count.score_family_token_sha256(hashlib.sha256(physical).hexdigest()),
                     'unreviewed supplied score-helper source')
         else:
             text = _inputs.text_default(_input_owner, root, rel.as_posix())
@@ -134,12 +132,11 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                     physical = full_audit._observe_bytes(root, rel.as_posix(), physical, _operation=_operation)
             physical_digest = hashlib.sha256(physical).hexdigest()
             supplied_tokens = source.token_sha256(text)
-            if (physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}
-                    or supplied_tokens in {seed_count.SCORE_AFTER_TOKEN_SHA256, seed_count.station.AFTER_TOKEN_SHA256}):
-                require(physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256},
+            if (physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
+                    or supplied_tokens in {seed_count.SCORE_AFTER_TOKEN_SHA256, seed_count.station.AFTER_TOKEN_SHA256, seed_count.deviation.AFTER_TOKEN_SHA256}):
+                require(physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                         'score-helper view needs the exact physical Map')
-                require(supplied_tokens == (seed_count.station.AFTER_TOKEN_SHA256
-                        if physical_digest == seed_count.station.AFTER_SHA256 else seed_count.SCORE_AFTER_TOKEN_SHA256),
+                require(supplied_tokens == seed_count.score_family_token_sha256(physical_digest),
                         'unreviewed supplied score-helper source')
                 # Qualify the actual helper/caller and dependencies before
                 # mapping identifier ordinals to the exact preceding graph.

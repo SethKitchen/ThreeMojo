@@ -90,12 +90,11 @@ def inventory(root, *, verified_lane_predecessor=None, _operation=None):
                 full_audit._observe_bytes(root, rel.as_posix(), physical, _operation=_operation)
             physical_digest = hashlib.sha256(physical).hexdigest()
             supplied_tokens = source.token_sha256(text)
-            if (physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}
-                    or supplied_tokens in {seed_count.SCORE_AFTER_TOKEN_SHA256, seed_count.station.AFTER_TOKEN_SHA256}):
-                require(physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256},
+            if (physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
+                    or supplied_tokens in {seed_count.SCORE_AFTER_TOKEN_SHA256, seed_count.station.AFTER_TOKEN_SHA256, seed_count.deviation.AFTER_TOKEN_SHA256}):
+                require(physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                         'score-helper view needs the exact physical Map')
-                require(supplied_tokens == (seed_count.station.AFTER_TOKEN_SHA256
-                        if physical_digest == seed_count.station.AFTER_SHA256 else seed_count.SCORE_AFTER_TOKEN_SHA256),
+                require(supplied_tokens == seed_count.score_family_token_sha256(physical_digest),
                         'unreviewed supplied score-helper source')
                 seed_count.verify_score(root, **operation_args)
                 final_raw = path.read_bytes()

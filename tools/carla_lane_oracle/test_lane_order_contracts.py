@@ -26,7 +26,7 @@ class LaneOrderContracts(unittest.TestCase):
             if rel == 'extensions/carla/map.mojo':
                 import seed_count_contracts as seed
                 text = (self.source/rel).read_bytes().decode()
-                if seed.sha(text) in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}:
+                if seed.sha(text) in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
                     seed.verify_score(self.source)
                     text = seed.score_family_predecessor_source(text)
                 dest.write_text(text)
