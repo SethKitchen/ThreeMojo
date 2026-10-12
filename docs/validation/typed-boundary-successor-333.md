@@ -176,6 +176,7 @@ The frozen helper uses the existing nonthrowing private lookup kernel.
 Its finite guards and reservation debits remain unchanged.
 The importer retains its three tests and adds invalid-bound comparisons.
 Its new exact edge reconstructs the complete historical importer.
+
 The resulting inventory has 213 source edges and 384 native test inputs.
 These bindings do not establish a compiler or runtime pass.
 
