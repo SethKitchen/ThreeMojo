@@ -10,4 +10,4 @@ from extensions.carla.v2x import PathLossModel, PropagationParams
 
 def main() raises:
     var model = PathLossModel(PropagationParams())
-    print(model.winner(0, 100.0))
+    print(model.winner_meters(0, 100.0))
