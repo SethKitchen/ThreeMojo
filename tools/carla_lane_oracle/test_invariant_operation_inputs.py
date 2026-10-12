@@ -192,7 +192,10 @@ class OperationAdapterFakeFrameControls(unittest.TestCase):
 
     @contextmanager
     def selector_fixture(self):
-        with tempfile.TemporaryDirectory(prefix='invariant-selector-fake-') as directory:
+        # macOS temporary roots can have a symbolic /var ancestor. Normalize
+        # only the fixture's parent; production must still reject aliased input.
+        with tempfile.TemporaryDirectory(
+                prefix='invariant-selector-fake-', dir=Path(tempfile.gettempdir()).resolve()) as directory:
             root = Path(directory)
             raw = {'selector.mojo': b'fake', 'reference.mojo': b'fake',
                    selector.prior.MIGRATION: b'fake', LANE: b'current scope', ROAD: b'road source'}
@@ -218,6 +221,38 @@ class OperationAdapterFakeFrameControls(unittest.TestCase):
                     patch.object(cleanup, '_reviewed_lane_observation', return_value=('old scope', raw[ROAD])), \
                     patch.object(guard, 'declaration', declaration):
                 yield root, raw, record, interpreted
+
+    def test_selector_fixture_under_symbolic_temp_root_keeps_controls(self):
+        with tempfile.TemporaryDirectory(
+                prefix='invariant-selector-temp-alias-', dir=Path(tempfile.gettempdir()).resolve()) as directory:
+            parent = Path(directory)
+            physical = parent/'physical'
+            physical.mkdir()
+            symbolic = parent/'symbolic'
+            symbolic.symlink_to(physical, target_is_directory=True)
+            with patch.object(tempfile, 'tempdir', str(symbolic)):
+                self.assertEqual(Path(tempfile.gettempdir()), symbolic)
+                for control in (
+                        self.test_private_selector_positive_result_and_physical_read_order_match_public,
+                        self.test_private_selector_consumed_b_stops_before_declaration,
+                        self.test_private_selector_supplied_comments_keep_token_equivalence):
+                    with self.subTest(control=control.__name__):
+                        control()
+                        self.assertEqual(list(physical.iterdir()), [])
+                with self.selector_fixture() as (root, raw, record, interpreted):
+                    self.assertEqual(root.parent, physical)
+                    self.assertEqual(root, root.resolve())
+                    self.assertEqual(cleanup._regular(root, LANE).read_bytes(), raw[LANE])
+                    with self.assertRaisesRegex(cleanup.ContractError, 'symbolic root or ancestor'):
+                        cleanup._regular(symbolic/root.name, LANE)
+                    for kind in ('root', 'ancestor', 'leaf'):
+                        message = 'symbolic root or ancestor' if kind == 'root' else 'symlink input'
+                        with self.subTest(alias=kind), paired_helpers.alias(root, LANE, kind):
+                            with self.assertRaisesRegex(cleanup.ContractError, message):
+                                cleanup._regular(root, LANE)
+                        self.assertEqual(cleanup._regular(root, LANE).read_bytes(), raw[LANE])
+                self.assertFalse(root.exists())
+                self.assertEqual(list(physical.iterdir()), [])
 
     def test_private_selector_positive_result_and_physical_read_order_match_public(self):
         with self.selector_fixture() as (root, raw, record, interpreted), self.fake_image(root, raw) as operation:
@@ -462,10 +497,14 @@ class BoundedOwnerCurrentControls(unittest.TestCase):
 
     def test_current_winner_children_borrow_without_finalizing_parent(self):
         import winner_sign_contracts as winner
+        import border_parser_contracts as border
+        import _full_audit_test_fixtures as fixtures
         with self.audit() as events:
             result = winner.verify(self.root)
         self.assertEqual(result['status'], 'PASS')
-        self.assertEqual(result['reviewed_cleanup_successors'], 20)
+        fixtures.assert_winner_canonical_partition(
+            self, self.root, result, fixtures.WINNER_PRE_BORDER_SUCCESSORS | {
+                border.MODULE, fixtures.WINNER_FULL_AUDIT_NEW_DEPENDENCY}, (20, 92))
         self.assert_one_owner(events, 'winner')
         self.assertTrue({'winner', 'invariant', 'border'} <= events['frames'])
 
@@ -921,10 +960,9 @@ class BoundedOwnerSyntheticBoundaryControls(unittest.TestCase):
     def test_negative_frame_filter_matches_unfiltered_results_and_errors(self):
         import types
         node = copy.deepcopy(function_ast(cleanup, '_operation_frame_kind'))
-        # Remove exactly the reviewed absolute-path/plain-function negative
-        # filter. Keep all authoritative comparisons and exceptional behavior.
-        filter_node = next(statement for statement in node.body if isinstance(statement, ast.If)
-                           and 'filename.startswith' in ast.unparse(statement.test))
+        # Remove the complete reviewed negative filter at its exact location.
+        # Keep all authoritative comparisons and exceptional behavior.
+        filter_node = _rc21_negative_filter(node)
         node.body.remove(filter_node)
         node.name = '_unfiltered_frame_kind'
         namespace = dict(vars(cleanup))
@@ -1031,6 +1069,89 @@ def _rc21_outcome(call, input_flag=_rc21_UNSET):
     except Exception as error:
         return {'exception': type(error).__module__ + '.' + type(error).__qualname__, 'message': str(error)}
 
+def _rc21_expect_ast(node, expected, detail):
+    _rc21_require(_rc21_hashlib.sha256(_rc21_ast_key(node).encode()).hexdigest() == expected, detail)
+
+
+def _rc21_negative_filter(tree):
+    # Fixed position and complete subtree: reject changed or moved filters.
+    node = tree.body[3]
+    _rc21_expect_ast(node, 'dd29d074291dc2aa6d0471f3ea5ea61d8f6ed3dea6ced680fc179fa18bfeb84b',
+                     'complete reviewed V11 operation negative filter AST drift')
+    return node
+
+
+def _rc21_original_classifiers(new_text):
+    """Invert only exact reviewed V14, V11, V8 and original alias-guard edits."""
+    module = _rc21_ast.parse(new_text)
+    old_defs = {node.name: node for node in module.body
+                if isinstance(node, (_rc21_ast.FunctionDef, _rc21_ast.ClassDef))}
+    old_defs.pop('_different_alias_leaf')
+    operation = old_defs['_operation_frame_kind']
+    cache = old_defs['_cache_verify_frame']
+    owner = old_defs['_owner_module']
+
+    # V14 captured live-helper identities are exact assignments immediately
+    # after the helper, not new cache or owner authority.
+    helper_index = module.body.index(old_defs['_live_function_code'])
+    for offset, expected in (
+            (1, '21abf36fc99d9d8fccb2df493c51bc07d44374c13026e1297fe42afc77fba4ca'),
+            (2, 'aa58adbcee1ebccf3a9978bde4b8b01e18ceaed35fed3e7689c2c93b9c982587')):
+        _rc21_expect_ast(module.body[helper_index + offset], expected,
+                         ('V14 live-helper capture', offset))
+
+    # V14 cache helper-frame rejection is one exact new If after the original
+    # alias-leaf guard. The owner dispatch retains the original assignment in
+    # its else branch; only that exact branch is used for the inverse.
+    _rc21_expect_ast(cache.body[8], 'a460808e6b3a9bf5d10acd12f88a7d8eaa89004a66271bc30aeb9287f15f0dfc',
+                     'V14 cache real-frame negative guard AST drift')
+    del cache.body[8]
+    _rc21_expect_ast(cache, '430c1279085af0c279ec1e0d3ca166bdb5de822af0f3c8595246a489d3a211e8',
+                     'complete V13 cache classifier AST drift')
+    _rc21_expect_ast(owner.body[1], '73a7cd0ab7fe92a00574301143c48c926cf3f46080c65edc3fc5f35b09b42553',
+                     'V14 exact-string owner dispatch AST drift')
+    owner.body[1] = owner.body[1].orelse[0]
+    _rc21_expect_ast(owner, 'a5f60b07d07556090def6d3490be5dfeef8197ef71d8e3ff13efce5c110d4860',
+                     'complete original owner helper AST drift')
+
+    # V11 expanded just the two plain-candidate predicates. Restore the exact
+    # original generator from its preserved fallback, including its return body.
+    negative = _rc21_negative_filter(operation)
+    _rc21_expect_ast(_rc21_ast.Module(body=negative.body[1:4], type_ignores=[]),
+                     'f9db65cf09a857bb6a52f12785632601d4d0bed5c50d80dfaf28b6857a1de362',
+                     'V11 two-candidate expansion AST drift')
+    original_all = negative.body[2].orelse[0].value
+    original_all.func.id = 'all'
+    original_if = negative.body[3]
+    original_if.test = original_all
+    negative.body[1:4] = [original_if]
+    _rc21_expect_ast(operation, '7fb32652f190b1f87b8e794aa549193d808d048f5ebc1a5656b6eaf80e96f611',
+                     'complete V10 operation classifier AST drift')
+
+    # V8 added one wrapped-negative block and one __main__ leaf conjunct.
+    # Their fixed locations and complete ASTs must match before removal.
+    _rc21_expect_ast(negative.body[2], '4d30aa850d4f93f1ed75f9e648d376ee834b8544348d7c39ff9345dd88d309e8',
+                     'V8 wrapped-negative filter AST drift')
+    del negative.body[2]
+    _rc21_expect_ast(operation, 'f944d5d5c8b841659e9e573fdfa5dc1d04e73b3680b93b31eef5357a84769516',
+                     'complete V7 operation classifier AST drift')
+    main_test = cache.body[5].test
+    _rc21_expect_ast(main_test.values[4], '5b917f2e256600ae88f3c9554802a9068254f812797dfb2e5acb70f05ae8499f',
+                     'V8 cache __main__ leaf conjunct AST drift')
+    del main_test.values[4]
+    _rc21_expect_ast(cache, 'acb1064c8282d433ad178057445119fddc352572af638a8964f6515fbc27d859',
+                     'complete V7 cache classifier AST drift')
+
+    guards = {'_operation_frame_kind': 'cba84dcfda3a51af833b0c31fab1af75e6315e2ad074f741e9175d51362ff010', '_cache_verify_frame': 'd7cbe42a90b3841722f4cc2f13c0c99279c20289ffbacb13a9e77387199b0d1e'}
+    originals = {'_operation_frame_kind': '39b16f4014f5723842f04d3913d6cb7aaef23abddfd182ae6ffbbd316e0205d0', '_cache_verify_frame': 'f52cba9ca558a0db0d9acfd0701d035b297add0863943af5e619dfe99ec71390'}
+    for name, guard_hash in guards.items():
+        tree = old_defs[name]
+        _rc21_expect_ast(tree.body[7], guard_hash, (name, 'one exact reviewed guard at original position'))
+        del tree.body[7]
+        _rc21_expect_ast(tree, originals[name], (name, 'complete original classifier AST drift'))
+    return old_defs
+
+
 def _rc21_main():
     global _rc21_CHECK_COUNT
     _rc21_CHECK_COUNT = 0
@@ -1042,21 +1163,15 @@ def _rc21_main():
     new_defs = _rc21_definitions(new_text)
     helper_hash = '3def29f2a78a9b5b66185e4df1a416e9db5b931aeee0edec7febe89bf25db2eb'
     _rc21_require(_rc21_hashlib.sha256(_rc21_ast_key(new_defs['_different_alias_leaf']).encode()).hexdigest() == helper_hash, 'reviewed classifier helper AST drift')
-    guards = {'_operation_frame_kind': 'cba84dcfda3a51af833b0c31fab1af75e6315e2ad074f741e9175d51362ff010', '_cache_verify_frame': 'd7cbe42a90b3841722f4cc2f13c0c99279c20289ffbacb13a9e77387199b0d1e'}
-    originals = {'_operation_frame_kind': '39b16f4014f5723842f04d3913d6cb7aaef23abddfd182ae6ffbbd316e0205d0', '_cache_verify_frame': 'f52cba9ca558a0db0d9acfd0701d035b297add0863943af5e619dfe99ec71390'}
-    old_defs = dict(new_defs)
-    old_defs.pop('_different_alias_leaf')
-    for name, guard_hash in guards.items():
-        tree = _rc21_ast.parse(_rc21_ast.get_source_segment(new_text, new_defs[name])).body[0]
-        removed = [node for node in tree.body if isinstance(node, _rc21_ast.If) and _rc21_hashlib.sha256(_rc21_ast_key(node).encode()).hexdigest() == guard_hash]
-        _rc21_require(len(removed) == 1, (name, 'one exact reviewed guard'))
-        tree.body = [node for node in tree.body if node is not removed[0]]
-        _rc21_require(_rc21_hashlib.sha256(_rc21_ast_key(tree).encode()).hexdigest() == originals[name], (name, 'complete original classifier AST drift'))
-        old_defs[name] = tree
+    old_defs = _rc21_original_classifiers(new_text)
     compiled = compile(new_raw, str(after), 'exec', dont_inherit=True, optimize=_rc21_sys.flags.optimize)
     code_by_name = {code.co_name: code for code in compiled.co_consts if isinstance(code, _rc21_types.CodeType)}
-    for name in (*guards, '_owner_module', '_different_alias_leaf'):
+    for name in ('_operation_frame_kind', '_cache_verify_frame', '_owner_module',
+                 '_different_alias_leaf', '_live_function_code'):
         _rc21_require(code_by_name[name] == getattr(cleanup, name).__code__, (name, 'live classifier source binding'))
+    _rc21_require(cleanup._LIVE_FUNCTION_CODE is cleanup._live_function_code
+                    and cleanup._LIVE_FUNCTION_CODE_CODE is cleanup._live_function_code.__code__,
+                    'reviewed live-helper capture binding')
     modules = {name: _reviewed_mechanics_module(name) for name in ('coverage_invariant_contracts', 'winner_sign_contracts', 'border_parser_contracts', 'cache_key_contracts', 'lane_order_contracts', 'coverage_followup_contracts', 'coverage_loop_proofs')}
     _rc21_require(all((_rc21_Path(module.__file__).absolute().is_relative_to(root) for module in modules.values())), 'canonical fixture module roots')
     names = ('_owner_module', '_cache_verify_frame', '_operation_frame_kind')
@@ -1606,7 +1721,7 @@ class ReviewedRelativePathMechanics(_rm_unittest.TestCase):
 
 # Exact reviewed consumed-value boundaries only. Source spans are derived at runtime.
 # Tuple: module, original owner, physical expression, expected count, selections.
-# Each selection is (index, legacy site suffix, comparator mode, narrow binding kind).
+# Each selection is (index, stable site suffix, comparator mode, narrow binding kind).
 _OPERATION_REACHED_READ_SPECS = (
     ('tools/carla_lane_oracle/consumer_successor_ledger.py', '_read',
      'audit._regular(root, path).read_bytes()', 1, ((0, '82:1', 'bytes', 'observe'),)),
@@ -1793,7 +1908,23 @@ _OPERATION_REACHED_READ_SPECS = (
     ('tools/coverage_loop_proofs.py', 'file_sha256',
      'stream.read(1 << 20)', 1, ((0, '157:1', 'stream_read', 'stream_read'),)),
     ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
-     'path.read_bytes()', 3, ((0, '798:1', 'bytes', 'observe'), (2, '828:1', 'bytes', 'observe'))),
+     'path.read_bytes()', 4, ((0, '798:1', 'bytes', 'observe'),
+                            (1, 'shared-helper-source-final', 'bytes', 'observe'),
+                            (2, 'cleanup-source-final', 'bytes', 'local_raw_residual'),
+                            (3, '828:1', 'bytes', 'observe'))),
+    # Only the exact shared-helper successor branch added to this owner.
+    # Its checker, provider and package samples retain their physical values.
+    ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
+     'relative_source(root, leaf, **operation_args).read_bytes()', 2,
+     ((0, 'shared-helper-checker-first', 'bytes', 'observe'),
+      (1, 'shared-helper-checker-final', 'bytes', 'observe'))),
+    ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
+     'relative_source(root, provider, **operation_args).read_bytes()', 2,
+     ((0, 'shared-helper-provider-first', 'bytes', 'observe'),
+      (1, 'shared-helper-provider-final', 'bytes', 'observe'))),
+    ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
+     'relative_source(root, package, **operation_args).read_bytes()', 1,
+     ((0, 'shared-helper-package-first', 'bytes', 'observe'),)),
     ('tools/coverage_loop_proofs.py', '_historical_reviewed_nonempty_loops',
      'relative_source(root, path.as_posix(), **operation_args).read_text()', 1, ((0, '853:1', 'default', 'observe'),)),
     ('tools/coverage_loop_proofs.py', '_construction_boundary_callers',
@@ -1831,6 +1962,18 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
                         and ast.dump(item, include_attributes=False) == key),
                        key=lambda item: (item.lineno, item.col_offset))
         case.assertEqual(len(calls), expected_count, (relative, owner, expression))
+        if (relative, owner, expression) == (
+                'tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes', 'path.read_bytes()'):
+            # The original cleanup reread is an exact local raw comparison,
+            # not an operation observation. Keep it explicit as a residual of
+            # the four current owners, and preserve its rejection predicate.
+            parents = {child: parent for parent in ast.walk(node)
+                       for child in ast.iter_child_nodes(parent)}
+            comparison = parents[calls[2]]
+            statement = parents[comparison]
+            expected = ast.parse('if path.read_bytes() != raw:\n    return None').body[0]
+            case.assertEqual(ast.dump(statement, include_attributes=False),
+                             ast.dump(expected, include_attributes=False))
         for index, suffix, mode, binding in selections:
             call = calls[index]
             if mode == 'default_or_map_supplied':
@@ -2047,6 +2190,8 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
                 primitive_entries.append(entry)
             value = original(path, *args, **kwargs)
             if operation is not None:
+                case.assertNotEqual(found[3], 'local_raw_residual',
+                    'cleanup local comparator entered an owned route; review its binding')
                 case.assertIn(found[3], ('observe', 'local_s', 'base'))
                 entry['returned'] = True
                 record_read(found, operation, path, value, frame)
@@ -2373,15 +2518,26 @@ class OperationReachedBindingControls(unittest.TestCase):
         )
         owners = []
         for kind, core, run in routes:
-            with self.subTest(owner=kind), self.audit(core) as events, _operation_reached_bindings(
-                    self, code_root, self.root, (cleanup, coverage_core)) as summarize:
-                result = run()
-                self.assertTrue(result)
-                operation = self.assert_one_owner(events, kind, core)
-                self.assertTrue(all(operation is not previous for previous in owners))
-                owners.append(operation)
-                report = summarize(operation, kind)
-            print('OPERATION_REACHED_BINDINGS ' + json.dumps(report, sort_keys=True))
+            with self.subTest(owner=kind):
+                with self.audit(core) as events, _operation_reached_bindings(
+                        self, code_root, self.root, (cleanup, coverage_core)) as summarize:
+                    result = run()
+                    self.assertTrue(result)
+                    operation = self.assert_one_owner(events, kind, core)
+                    self.assertTrue(all(operation is not previous for previous in owners))
+                    owners.append(operation)
+                    report = summarize(operation, kind)
+                    # These local coverage-theorem branches are outside all
+                    # four owned routes. Never report them as exercised owner
+                    # observations merely because their AST addresses exist.
+                    self.assertLessEqual({
+                        'tools/coverage_loop_proofs.py:' + suffix for suffix in (
+                            'cleanup-source-final', 'shared-helper-source-final',
+                            'shared-helper-checker-first', 'shared-helper-checker-final',
+                            'shared-helper-provider-first', 'shared-helper-provider-final',
+                            'shared-helper-package-first')},
+                        set(report['residual_unreached_sites']))
+                print('OPERATION_REACHED_BINDINGS ' + json.dumps(report, sort_keys=True))
 
 
 
@@ -2399,11 +2555,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
         'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '2b6dbe7483d3c9ceb2ee9914158d99fcd8c1d87f9298f797edac150a78457f67',
-        'full_audit_cleanup_contracts.py': 'a182c861c55962fb749b2c0aa6b7a5c0466674b474e1c6b67dd6ed621dc44f25',
+        'coverage_loop_proofs.py': '5ff27bce19c760ed0fa760e48a99e17a5541c9d90b576502a8a6170d43ed18c2',
+        'full_audit_cleanup_contracts.py': '8aa6bab51c36b4e4758f59ada1114cb153d251ab480b4939e474966e711be2c2',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': 'd5b16ad9ef253250c5cceffe2fe82ca6f013526f574974e5b952c81ee012a4c4',
+        'seed_count_contracts.py': '2efb1ef199bbc34dca9ac48e817cf17116e2156ead7cd586df2074be1d8abca5',
         'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
     }
 
@@ -2530,6 +2686,68 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                     return checked
                 stack.enter_context(patch.object(module, name, install(original)))
             yield
+
+    def test_shared_helper_local_final_reread_rejects_and_recovers(self):
+        """Exercise the new local theorem seam without fabricating an owner."""
+        from functools import wraps
+        loops, core = self.coverage()
+        module = 'extensions/carla/lane_distance'
+        path = 'extensions/carla/curve_distance.mojo'
+        physical = (self.root/path).read_bytes()
+        site = self._site(loops._reviewed_dependency_hashes, 948, 'path.read_bytes()')
+        baseline = loops.reviewed_nonempty_loops(self.root, module)
+        self.assertEqual(set(baseline), {50})
+        self.assertEqual(baseline[50]['dependency_sha256'][path],
+                         hashlib.sha256(physical).hexdigest())
+        for fault in ('changed', 'io'):
+            with self.subTest(fault=fault):
+                original_read = Path.read_bytes
+                original_observe = loops._coverage_observe_bytes
+                injected, marked, observed = [], [], []
+                failure = PermissionError('shared-helper final reread denied')
+
+                @wraps(original_read)
+                def read(actual, *args, **kwargs):
+                    value = original_read(actual, *args, **kwargs)
+                    frame = sys._getframe(1)
+                    if site(frame) and actual == self.root/path:
+                        self.assertEqual(injected, [])
+                        self.assertIsNone(frame.f_locals['_operation'])
+                        self.assertEqual(frame.f_locals['raw'], physical)
+                        self.assertEqual(value, physical)
+                        injected.append(frame)
+                        if fault == 'io':
+                            raise failure
+                        value += b'\n# changed final helper read\n'
+                        marked.append(value)
+                    return value
+
+                @wraps(original_observe)
+                def observe(root, name, value, *, _operation=None):
+                    if marked and value is marked[0]:
+                        self.assertEqual((root, name), (self.root, path))
+                        self.assertIsNone(_operation)
+                        self.assertIs(sys._getframe(1), injected[0])
+                        observed.append(value)
+                    return original_observe(root, name, value, _operation=_operation)
+
+                with self.audit(core) as events, patch.object(Path, 'read_bytes', read), \
+                        patch.object(loops, '_coverage_observe_bytes', observe):
+                    result = loops.reviewed_nonempty_loops(self.root, module)
+                self.assertEqual(result, {})
+                self.assertEqual(len(injected), 1)
+                self.assertEqual(observed, marked)
+                self.assertEqual(len(observed), 1 if fault == 'changed' else 0)
+                self.assertEqual(events['admissions'], [])
+                self.assertEqual(events['finalizers'], [])
+                self.assertIs(Path.read_bytes, original_read)
+                self.assertEqual((self.root/path).read_bytes(), physical)
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, module), baseline)
+                print('COVERAGE_HELPER_FINAL_CONTROL ' + json.dumps({
+                    'fault': fault, 'module': module, 'path': path,
+                    'site': 'shared-helper-source-final', 'owned': False,
+                    'reached': len(injected), 'refused': True, 'restored': True},
+                    sort_keys=True))
 
     def test_distinct_pending_observation_reconciles_at_real_publication(self):
         from functools import wraps
@@ -2718,8 +2936,8 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
     def _lease_sites(self, cache, seed):
         return (
             self._site(cache.inventory, 106, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
-            self._site(seed.verify_score, 583, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
-            self._site(seed.verify_score, 612, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(seed.verify_score, 636, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(seed.verify_score, 665, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
             self._site(cache.inventory, 153, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
         )
 
@@ -2740,7 +2958,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1157,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1196,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -2928,13 +3146,13 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         from functools import wraps
         loops, core = self.coverage()
         from carla_lane_oracle import seed_count_contracts as seed
-        production_site = self._site(seed.verify_score_caller_inventory, 486,
+        production_site = self._site(seed.verify_score_caller_inventory, 539,
                                      'guard.production_mojo_paths(root)')
         known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1471,
+        production_catch = self._site(core._operation_production_paths, 1532,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1326,
+        known_catch = self._site(loops.construction_boundary_loops, 1332,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
@@ -3074,10 +3292,129 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
 class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
     """Pure root spelling conversion; no input admission or cached authority."""
 
-    _V35_MODULE_AST_SHA = '6a067fc226ce7cd9473d1364d8ead8ab0a07f0b0845cbcbdf60872a31130af82'
+    _V35_CALLER_AST = {
+        '_CacheInputs._check_context': '6e5b17072ca307797a39ef291fd0fee1ba431a0a5dfddde1e7ceda0672c9921d',
+        '_private_operation_wrapper': '85e1d09445b46b340c3ba5b4973463a685b14487845a07cd365420295c61c29c',
+    }
     _HELPER_AST_SHA = '280c064b53770cbdb8239251de6a5e629884a9f491b5979911058b100c6f0312'
+    _ROOT_BUILTINS = ('__import__', 'all', 'getattr', 'isinstance', 'len', 'list', 'next', 'str',
+                      'type', 'vars', 'ImportError', 'OSError', 'ValueError',
+                      'TypeError', 'RuntimeError')
+
+    @staticmethod
+    def _one_definition(body, name):
+        matches = [node for node in body if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+                   and node.name == name]
+        if len(matches) != 1:
+            raise AssertionError(('one root-conversion definition', name))
+        return matches[0]
+
+    @staticmethod
+    def _binding_sites(body, names):
+        # This is a finite declaration/rebinding check, not a source evaluator.
+        # Do not descend into unrelated function or class local namespaces.
+        sites = []
+        for statement in body:
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                bound = {statement.name}
+            else:
+                bound = set()
+                for node in ast.walk(statement):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        bound.add(node.name)
+                    elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                        bound.update(alias.asname or alias.name.split('.')[0] for alias in node.names)
+                    elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                        bound.add(node.id)
+                    elif isinstance(node, ast.ExceptHandler) and node.name:
+                        bound.add(node.name)
+                    elif isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                        target = node.value
+                        while isinstance(target, (ast.Attribute, ast.Subscript)):
+                            target = target.value
+                        if isinstance(target, ast.Name):
+                            bound.add(target.id)
+            if bound.intersection(names):
+                sites.append(statement)
+        return sites
+
+    def _assert_root_projection(self, tree, source_tree):
+        definitions = {name: self._one_definition(tree.body, name) for name in
+                       ('_absolute_root_text', '_CacheInputs', '_private_operation_wrapper',
+                        '_owner_module', 'require', 'ContractError')}
+        helper = copy.deepcopy(definitions['_absolute_root_text'])
+        condition = helper.body[1].body[1].body[1]
+        _rc21_expect_ast(condition.test, '54e8dec820940f1e9f7fa3db81947711670b43becdf24ef3a4c4fd7a62e60c38',
+                         'V10 root-string condition AST drift')
+        condition.test = ast.parse("text == '/' or (text.startswith('/') and all("
+                                   "part not in ('', '.', '..') for part in text[1:].split('/')))",
+                                   mode='eval').body
+        _rc21_expect_ast(helper, self._HELPER_AST_SHA, 'complete original root helper AST drift')
+
+        cls = definitions['_CacheInputs']
+        context = self._one_definition(cls.body, '_check_context')
+        self.assertEqual(self._binding_sites(cls.body, {'_check_context'}), [context])
+        header = copy.deepcopy(cls)
+        header.body = []
+        _rc21_expect_ast(header, '4e8b41b5eb76c028593ead8ae5d8bf20afaed0df8f1a5a124de6e3923e1e50c8',
+                         'root-conversion owner class header AST drift')
+        for name, node in (('_CacheInputs._check_context', context),
+                           ('_private_operation_wrapper', definitions['_private_operation_wrapper'])):
+            original, count = self._reverse(node)
+            self.assertEqual(count, 1)
+            _rc21_expect_ast(original, self._V35_CALLER_AST[name], (name, 'complete V35 caller AST drift'))
+        # Retain the original two-site assertion across the complete module.
+        without_helper = copy.deepcopy(tree)
+        without_helper.body = [node for node in without_helper.body
+                               if not isinstance(node, ast.FunctionDef) or node.name != '_absolute_root_text']
+        _, count = self._reverse(without_helper)
+        self.assertEqual(count, 2)
+
+        for name, expected in (
+                ('require', '531a60a4ed0275a1b20c7a1dfade0631ab04a8f49bc6c143fd5895c687b322e1'),
+                ('ContractError', 'a2c26b3043e0cbb0f8e9f746710f1dd081901375b1feeeec02a62e11d5f3b587')):
+            _rc21_expect_ast(definitions[name], expected, (name, 'root-conversion dependency AST drift'))
+        owner = copy.deepcopy(definitions['_owner_module'])
+        _rc21_expect_ast(owner.body[1], '73a7cd0ab7fe92a00574301143c48c926cf3f46080c65edc3fc5f35b09b42553',
+                         'V14 root-conversion owner dispatch AST drift')
+        owner.body[1] = owner.body[1].orelse[0]
+        _rc21_expect_ast(owner, 'a5f60b07d07556090def6d3490be5dfeef8197ef71d8e3ff13efce5c110d4860',
+                         'complete original root-conversion owner helper AST drift')
+
+        watched = set(definitions) | set(self._ROOT_BUILTINS) | {'Path', 'PosixPath', 'os', 'sys', 'types', 'source', '__package__'}
+        imports = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))
+                   and self._binding_sites([node], watched)]
+        self.assertEqual([ast_key(node) for node in imports], [ast_key(node) for node in ast.parse(
+            'import types\nimport os\nfrom pathlib import Path, PosixPath\nimport sys').body])
+        routes = [node for node in tree.body if isinstance(node, ast.Try)
+                  and any(isinstance(child, (ast.Import, ast.ImportFrom))
+                          and any(alias.asname == 'source' for alias in child.names) for child in ast.walk(node))]
+        self.assertEqual(len(routes), 1)
+        route = copy.deepcopy(routes[0])
+        # Project unrelated sibling imports only. Preserve package routing,
+        # exception handling and every binding relevant to this closure.
+        for branch in (route.body[0].body, route.body[0].orelse):
+            branch[:] = [node for node in branch if not isinstance(node, (ast.Import, ast.ImportFrom))
+                         or self._binding_sites([node], watched)]
+        _rc21_expect_ast(route, '718148af9e25144b4b3f6f8b8ceef51c21dd18ad5c5160f2931e41eb77860e60',
+                         'root-conversion source import route AST drift')
+        allowed = [*definitions.values(), *imports, routes[0]]
+        self.assertEqual(self._binding_sites(tree.body, watched),
+                         [node for node in tree.body if node in allowed])
+
+        scope = self._one_definition(source_tree.body, 'lexical_memo_scope')
+        _rc21_expect_ast(scope, '00d14c23b4efc7ab3aec27e257848bf15c652a028f8c88a589f9fb30bdd3007c',
+                         'root-conversion lexical scope identity AST drift')
+        scope_bindings = self._binding_sites(source_tree.body, {'lexical_memo_scope', 'contextmanager'})
+        self.assertEqual(len(scope_bindings), 2)
+        self.assertEqual(ast_key(scope_bindings[0]), ast_key(ast.parse('from contextlib import contextmanager').body[0]))
+        self.assertIs(scope_bindings[1], scope)
 
     def _checked_functions(self):
+        import abc
+        import builtins
+        import contextlib
+        import os
         import pathlib
         import types
         if (cleanup.os.name != 'posix' or sys.version_info[:2] != (3, 12)
@@ -3087,7 +3424,9 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
         tree = ast.parse(raw)
         helper = next(item for item in tree.body
                       if isinstance(item, ast.FunctionDef) and item.name == '_absolute_root_text')
-        self.assertEqual(hashlib.sha256(ast_key(helper).encode()).hexdigest(), self._HELPER_AST_SHA)
+        source_raw = Path(source.__file__).read_bytes()
+        source_tree = ast.parse(source_raw)
+        self._assert_root_projection(tree, source_tree)
         compiled = compile(raw, cleanup.__file__, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
         codes = [item for item in compiled.co_consts if isinstance(item, types.CodeType)
                  and item.co_name == '_absolute_root_text']
@@ -3100,6 +3439,58 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
             pending.extend(item for item in code.co_consts if isinstance(item, types.CodeType))
         self.assertEqual(core_codes['_CacheInputs._check_context'], cleanup._CacheInputs._check_context.__code__)
         self.assertEqual(core_codes['_private_operation_wrapper'], cleanup._private_operation_wrapper.__code__)
+        for name in ('require', '_owner_module'):
+            self.assertEqual(core_codes[name], getattr(cleanup, name).__code__)
+        self.assertEqual(cleanup.ContractError.__bases__, (ValueError, RuntimeError))
+        functions = (cleanup._absolute_root_text, cleanup._CacheInputs._check_context,
+                     cleanup._private_operation_wrapper, cleanup.require, cleanup._owner_module)
+        for function in functions:
+            self.assertIs(function.__globals__, vars(cleanup))
+        for name, value in (('os', os), ('sys', sys), ('types', types), ('source', source),
+                            ('Path', pathlib.Path), ('PosixPath', pathlib.PosixPath)):
+            self.assertIs(getattr(cleanup, name), value)
+        self.assertIs(types.FunctionType, type(cleanup.require))
+        self.assertIs(types.CodeType, type(cleanup.require.__code__))
+        for name in self._ROOT_BUILTINS:
+            self.assertNotIn(name, vars(cleanup))
+            for function in functions:
+                self.assertIs(function.__builtins__[name], getattr(builtins, name))
+        # The bridge reads this decorated function's identity; it never executes
+        # its memo body. Bind both layers without pulling in memo internals.
+        source_compiled = compile(source_raw, source.__file__, 'exec', dont_inherit=True,
+                                  optimize=sys.flags.optimize)
+        scope_code = next(code for code in source_compiled.co_consts
+                          if isinstance(code, types.CodeType) and code.co_name == 'lexical_memo_scope')
+        self.assertIs(source.contextmanager, contextlib.contextmanager)
+        self.assertEqual(source.lexical_memo_scope.__wrapped__.__code__, scope_code)
+        self.assertIs(source.lexical_memo_scope.__wrapped__.__globals__, vars(source))
+        context_raw = Path(contextlib.__file__).read_bytes()
+        pending = [compile(context_raw, contextlib.__file__, 'exec', dont_inherit=True,
+                           optimize=sys.flags.optimize)]
+        context_codes = {}
+        while pending:
+            code = pending.pop()
+            context_codes[code.co_qualname] = code
+            pending.extend(item for item in code.co_consts if isinstance(item, types.CodeType))
+        self.assertEqual(context_codes['contextmanager'], contextlib.contextmanager.__code__)
+        self.assertEqual(context_codes['contextmanager.<locals>.helper'], source.lexical_memo_scope.__code__)
+        self.assertIs(source.lexical_memo_scope.__globals__, vars(contextlib))
+        self.assertEqual(source.lexical_memo_scope.__code__.co_freevars, ('func',))
+        self.assertIs(source.lexical_memo_scope.__closure__[0].cell_contents,
+                      source.lexical_memo_scope.__wrapped__)
+        self.assertEqual(context_codes['ContextDecorator.__call__'], contextlib.ContextDecorator.__call__.__code__)
+        self.assertIs(contextlib.contextmanager.__globals__, vars(contextlib))
+        self.assertIs(contextlib.ContextDecorator.__call__.__globals__, vars(contextlib))
+        manager = contextlib._GeneratorContextManager
+        self.assertIs(type(manager), abc.ABCMeta)
+        self.assertEqual(manager.__bases__, (contextlib._GeneratorContextManagerBase,
+                         contextlib.AbstractContextManager, contextlib.ContextDecorator))
+        for owner, names in ((manager, ('__enter__', '__exit__')),
+                             (contextlib._GeneratorContextManagerBase, ('__init__', '_recreate_cm'))):
+            for name in names:
+                method = vars(owner)[name]
+                self.assertEqual(context_codes[owner.__name__ + '.' + name], method.__code__)
+                self.assertIs(method.__globals__, vars(contextlib))
         # Bind the reference implementation to actual checked stdlib source,
         # independently of interpreter optimization or relocation.
         stdlib = Path(pathlib.__file__).read_bytes()
@@ -3154,19 +3545,57 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
     def test_only_two_original_root_expressions_change(self):
         # Native fallback is checked even outside the scoped POSIX layout matrix.
         self.assertEqual(cleanup._absolute_root_text('relative'), str(Path('relative').absolute()))
-        tree, helper = self._checked_functions()
-        tree.body.remove(helper)
-        original, count = self._reverse(tree)
-        self.assertEqual(count, 2)
-        self.assertEqual(hashlib.sha256(ast_key(original).encode()).hexdigest(), self._V35_MODULE_AST_SHA)
-        changed = copy.deepcopy(original)
-        context = next(item for item in changed.body if isinstance(item, ast.ClassDef)
-                       and item.name == '_CacheInputs')
-        context = next(item for item in context.body if getattr(item, 'name', None) == '_check_context')
-        cwd = next(item for item in ast.walk(context) if isinstance(item, ast.Call)
-                   and ast_key(item) == ast_key(ast.parse('Path.cwd()', mode='eval').body))
-        cwd.func.attr = 'home'
-        self.assertNotEqual(hashlib.sha256(ast_key(changed).encode()).hexdigest(), self._V35_MODULE_AST_SHA)
+        self._checked_functions()
+
+    def test_projection_accepts_unrelated_source_change(self):
+        tree = ast.parse(Path(cleanup.__file__).read_bytes())
+        source_tree = ast.parse(Path(source.__file__).read_bytes())
+        unrelated = self._one_definition(tree.body, 'native_support_mapping')
+        unrelated.body.insert(0, ast.Pass())
+        self._assert_root_projection(tree, source_tree)
+
+    def test_projection_rejects_relevant_source_and_binding_changes(self):
+        original = ast.parse(Path(cleanup.__file__).read_bytes())
+        original_source = ast.parse(Path(source.__file__).read_bytes())
+        for mutation in ('require', 'exception_base', 'owner', 'path_import', 'package_route',
+                         'builtin_rebinding', 'class_header', 'method_rebinding', 'method_duplicate',
+                         'conditional_method_rebinding', 'scope_decorator', 'caller_cwd'):
+            tree, source_tree = copy.deepcopy(original), copy.deepcopy(original_source)
+            definitions = {node.name: node for node in tree.body
+                           if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+            if mutation == 'require':
+                definitions['require'].body[0].test = ast.Constant(False)
+            elif mutation == 'exception_base':
+                definitions['ContractError'].bases[0] = ast.Name(id='TypeError', ctx=ast.Load())
+            elif mutation == 'owner':
+                definitions['_owner_module'].body[1].test = ast.Constant(False)
+            elif mutation == 'path_import':
+                node = next(node for node in tree.body if isinstance(node, ast.ImportFrom) and node.module == 'pathlib')
+                node.module = 'unreviewed_pathlib'
+            elif mutation == 'package_route':
+                node = next(node for node in tree.body if isinstance(node, ast.Try))
+                node.body[0].test = ast.Constant(True)
+            elif mutation == 'builtin_rebinding':
+                tree.body.append(ast.parse('str = unreviewed_str').body[0])
+            elif mutation == 'class_header':
+                definitions['_CacheInputs'].decorator_list.append(ast.Name(id='unreviewed_decorator', ctx=ast.Load()))
+            elif mutation == 'method_rebinding':
+                definitions['_CacheInputs'].body.append(ast.parse('_check_context = unreviewed_context').body[0])
+            elif mutation == 'method_duplicate':
+                context = self._one_definition(definitions['_CacheInputs'].body, '_check_context')
+                definitions['_CacheInputs'].body.append(copy.deepcopy(context))
+            elif mutation == 'conditional_method_rebinding':
+                definitions['_CacheInputs'].body.append(ast.parse(
+                    'if True:\n    def _check_context(self, root): pass').body[0])
+            elif mutation == 'scope_decorator':
+                self._one_definition(source_tree.body, 'lexical_memo_scope').decorator_list = []
+            else:
+                context = self._one_definition(definitions['_CacheInputs'].body, '_check_context')
+                cwd = next(node for node in ast.walk(context) if isinstance(node, ast.Call)
+                           and ast_key(node) == ast_key(ast.parse('Path.cwd()', mode='eval').body))
+                cwd.func.attr = 'home'
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
+                self._assert_root_projection(tree, source_tree)
 
     def test_fresh_values_callbacks_and_fallback_errors_match(self):
         from pathlib import PosixPath, PurePosixPath, PureWindowsPath
