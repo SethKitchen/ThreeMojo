@@ -52,6 +52,9 @@ nothing. The stream token that CARLA puts in a sensor's actor record is
 a network handle; it is written empty.
 """
 
+from extensions.carla.quantity_boundary import _nonnegative_si
+from units.si import DEGREE, Duration64
+
 from extensions.carla.actor import (
     Actor,
     ActorId,
@@ -329,6 +332,29 @@ struct ByteWriter(Movable):
 
 
 def sensor_header(
+    type: SensorType,
+    frame: Int,
+    timestamp: Duration64,
+    transform: CarlaTransform,
+) raises -> List[UInt8]:
+    """Write a sensor header with a checked Float64 simulation time.
+
+    Args:
+        type: The sensor's registry place.
+        frame: The frame number.
+        timestamp: The nonnegative simulation time.
+        transform: The sensor pose.
+
+    Returns:
+        The unchanged 48-byte CARLA header.
+
+    Raises:
+        Error: If the time or sensor type is invalid.
+    """
+    return sensor_header_seconds(type, frame, timestamp.value, transform)
+
+
+def sensor_header_seconds(
     type: SensorType, frame: Int, timestamp: Float64, transform: CarlaTransform
 ) raises -> List[UInt8]:
     """Write a message's header, `SensorHeaderSerializer::Serialize`.
@@ -345,6 +371,7 @@ def sensor_header(
     Raises:
         Error: If the type is not valid.
     """
+    _ = _nonnegative_si(timestamp)
     if not type.is_valid():
         raise Error("A sensor type must name a place in the registry")
     var w = ByteWriter()
@@ -366,7 +393,28 @@ def _image_header(mut w: ByteWriter, width: Int, height: Int, fov: Float32):
     w.f32(fov)
 
 
-def image_data(image: Framebuffer, fov: Float32) raises -> List[UInt8]:
+def image_data(
+    image: Framebuffer, fov: Angle, wide_angle: Bool = False
+) raises -> List[UInt8]:
+    """Write an image with an explicit field-of-view quantity.
+
+    Args:
+        image: The image.
+        fov: The field of view.
+        wide_angle: Write vertical radians instead of pinhole degrees.
+
+    Returns:
+        The unchanged CARLA image layout.
+
+    Raises:
+        Error: If the angle is invalid or a pixel cannot be read.
+    """
+    return image_data_carla(
+        image, fov.to(RADIAN) if wide_angle else fov.to(DEGREE)
+    )
+
+
+def image_data_carla(image: Framebuffer, fov: Float32) raises -> List[UInt8]:
     """Write an image, `ImageSerializer`.
 
     Args:
@@ -381,6 +429,7 @@ def image_data(image: Framebuffer, fov: Float32) raises -> List[UInt8]:
     Raises:
         Error: Never for a valid image; a pixel read is passed on.
     """
+    _ = _nonnegative_si(Float64(fov))
     var w = ByteWriter()
     _image_header(w, image.width, image.height, fov)
     for y in range(image.height):  # pragma: no branch
@@ -394,6 +443,26 @@ def image_data(image: Framebuffer, fov: Float32) raises -> List[UInt8]:
 
 
 def optical_flow_data(
+    width: Int, height: Int, fov: Angle, flow: List[Float32]
+) raises -> List[UInt8]:
+    """Write optical flow with a checked angular field of view.
+
+    Args:
+        width: Pixels across.
+        height: Pixels down.
+        fov: The horizontal field of view.
+        flow: Two scalar flow components per pixel.
+
+    Returns:
+        The CARLA bytes, with the angle stored in degrees.
+
+    Raises:
+        Error: If the angle or flow length is invalid.
+    """
+    return optical_flow_data_degrees(width, height, fov.to(DEGREE), flow)
+
+
+def optical_flow_data_degrees(
     width: Int, height: Int, fov: Float32, flow: List[Float32]
 ) raises -> List[UInt8]:
     """Write an optical flow image, `OpticalFlowImageSerializer`.
@@ -410,6 +479,7 @@ def optical_flow_data(
     Raises:
         Error: If `flow` does not hold two numbers a pixel.
     """
+    _ = _nonnegative_si(Float64(fov))
     if len(flow) != 2 * width * height:
         raise Error("An optical flow image needs two numbers a pixel")
     var w = ByteWriter()
@@ -420,8 +490,28 @@ def optical_flow_data(
 
 
 def dvs_data(
+    width: Int, height: Int, fov: Angle, events: List[DVSEvent]
+) raises -> List[UInt8]:
+    """Write DVS events with a checked angular field of view.
+
+    Args:
+        width: Pixels across.
+        height: Pixels down.
+        fov: The horizontal field of view.
+        events: The unchanged integer-nanosecond wire records.
+
+    Returns:
+        The CARLA bytes, with the angle stored in degrees.
+
+    Raises:
+        Error: If the angle is invalid.
+    """
+    return dvs_data_degrees(width, height, fov.to(DEGREE), events)
+
+
+def dvs_data_degrees(
     width: Int, height: Int, fov: Float32, events: List[DVSEvent]
-) -> List[UInt8]:
+) raises -> List[UInt8]:
     """Write an event camera's events, `DVSEventArraySerializer`.
 
     Args:
@@ -433,6 +523,7 @@ def dvs_data(
     Returns:
         The 12-byte header, then 13 packed bytes an event.
     """
+    _ = _nonnegative_si(Float64(fov))
     var w = ByteWriter()
     _image_header(w, width, height, fov)
     for e in events:
