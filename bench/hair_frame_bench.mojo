@@ -32,7 +32,15 @@ thread that walks every primitive, so its cost grows with pixels times
 strand segments. Measure it at a small size first.
 
 It reports the median, the 95th percentile and the slowest frame of each
-stage. The numbers describe the machine that runs it.
+stage. The numbers describe the machine that runs it, so it prints the
+CPU model that Linux reports and the logical core count first.
+
+After the timed frames it counts the visible strands of the last CPU
+frame. A strand is visible when one of its points projects into the image
+and no stored depth is nearer than that point. Then it prints PASS or FAIL
+against the 16.667 millisecond budget of 60 frames per second, from the
+median whole frame. A GPU run prints its own verdict from the median frame
+with the GPU raster.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -57,7 +65,7 @@ from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from lights.lighting import Lighting
-from render.framebuffer import Color
+from render.framebuffer import Color, Framebuffer
 from render.gpu import GpuRenderer
 from render.rasterizer import SHADE_TEXTURE
 from renderers.renderer import Renderer, camera_position, toward_camera
@@ -112,7 +120,38 @@ def _report(label: String, var times: List[Int]) -> String:
     )
 
 
+def _cpu_model() -> String:
+    # Linux only. Other systems print that the model is unknown.
+    try:
+        with open("/proc/cpuinfo", "r") as info:
+            for line in info.read().split("\n"):
+                if line.startswith("model name"):
+                    return String(line.split(":", 1)[1].strip())
+    except:
+        pass
+    return "unknown"
+
+
+def _verdict(label: String, var times: List[Int]) -> String:
+    var median = _percentile(_sorted(times^), 0.5)
+    var result = String("FAIL")
+    if median <= BUDGET_MS:
+        result = "PASS"
+    return (
+        "60 fps at 1920x1080, "
+        + label
+        + ": "
+        + result
+        + " (median "
+        + String(median)
+        + " ms, budget "
+        + String(BUDGET_MS)
+        + " ms)"
+    )
+
+
 def main() raises:
+    print("CPU", _cpu_model(), "; logical cores", num_logical_cores())
     var frames = 10
     var gpu_width = 0
     var gpu_height = 0
@@ -241,6 +280,7 @@ def main() raises:
     var reads = List[Int]()
     var cpu_total = List[Int]()
     var gpu_total = List[Int]()
+    var last = Framebuffer(1, 1, Color(0, 0, 0))
     var device = Optional[GpuRenderer]()
     if gpu:
         device = GpuRenderer(gpu_width, gpu_height)
@@ -252,7 +292,7 @@ def main() raises:
         var shaded = perf_counter_ns()
         hair.shade(assets, lights, eye, ambient)
         var rendered = perf_counter_ns()
-        _ = renderer.render(scene, assets, camera)
+        last = renderer.render(scene, assets, camera)
         var prepared_cpu = perf_counter_ns()
         _ = renderer.prepare_frame(scene, assets, camera)
         var done_cpu = perf_counter_ns()
@@ -306,15 +346,30 @@ def main() raises:
             draws.append(Int(gpu_drawn - gpu_drawing))
             reads.append(Int(gpu_read - gpu_drawn))
             gpu_total.append(Int((rendered - stepped) + (gpu_read - gpu_start)))
+    # Visible strands of the last CPU frame: a point inside the image that
+    # no stored depth hides. The tolerance is far below the depth step
+    # between two hair layers.
+    var shown = 0
+    for s in range(strands):
+        for i in range(hair.groom.starts[s], hair.groom.starts[s + 1]):
+            var q = screen.transform_point(hair.groom.points[i])
+            if q.x >= 0 and q.y >= 0 and q.x < WIDTH and q.y < HEIGHT:
+                if q.z <= last.depth_at(Int(q.x), Int(q.y)) + 1e-5:
+                    shown += 1
+                    break
+    print("visible strands in the last CPU frame", shown, "of", strands)
+    var verdict = _verdict("frame with cpu render", cpu_total.copy())
     print(_report("step+write", steps^))
     print(_report("shade", shades^))
     print(_report("cpu prepare (diagnostic, not in the frame)", cpu_prepares^))
     print(_report("cpu render", cpu^))
     print(_report("frame with cpu render", cpu_total^))
+    print(verdict)
     if gpu:
         print(_report("gpu prepare", prepares^))
         print(_report("gpu draw", draws^))
         print(_report("gpu read back", reads^))
+        print(_verdict("frame with gpu raster", gpu_total.copy()))
         print(_report("frame with gpu raster", gpu_total^))
     else:
         print("The GPU stages did not run: no GPU, or no size given.")

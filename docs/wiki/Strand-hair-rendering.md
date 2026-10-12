@@ -2,7 +2,7 @@
 
 The strand path uses feathered ribbons with stochastic sample coverage. A kept sample writes opaque depth. A rejected sample reveals the surface behind it. This is an approximation of transparency.
 
-It does not use sorted alpha blending. Issue [298](https://github.com/SethKitchen/ThreeMojo/issues/298) stays open until the required device and visual qualification is complete.
+It does not use sorted alpha blending. The CPU rasterizer meets the thirteen reference requirements. Issue [298](https://github.com/SethKitchen/ThreeMojo/issues/298) stays open until a GPU device runs the parity tests and the 1080p benchmark.
 
 ## Draw a groom
 
@@ -124,8 +124,17 @@ On that machine a whole render at 4 workers fell from about 1.8 seconds to about
 
 ## Hardware qualification
 
-`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU. The GPU rasterizer is slower for this scene.
+No machine meets the 1920 by 1080, 60 frames-per-second target yet. A frame at that rate has a 16.667 millisecond budget. `bench/hair_frame_bench.mojo` times a whole frame by stage. It prints the CPU model, the visible strand count and a PASS or FAIL line against that budget.
 
-A 1920 by 1080 frame at 60 frames per second has a 16.667 millisecond budget. A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
+| Machine | Rasterizer | Visible strands | Median frame | Result |
+|---|---|---:|---:|---|
+| Intel Xeon at 2.80 GHz, 4 logical cores, shared cloud VM | CPU, 4 workers | 4,498 of 10,185 | 5,550 ms | FAIL |
+| AMD Ryzen 9 5900X, 24 logical cores | CPU, 24 workers | Not counted | 791 ms | FAIL |
 
-Measure a mixed scene with body triangles and many thin strands at several worker counts. Require the same image before comparing worker throughput or pending-vertex flush cost. A result from a smaller image, a smaller groom or a compile-only check cannot qualify this target. The physical-device frame-time and selected-reference visual comparisons are still required.
+The [named-machine report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-1080p-298.md) gives the Xeon breakdown. The simulation, density and shading take about 117 milliseconds there. Strand triangle preparation and rasterization take about 5.4 seconds. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) gives the Ryzen breakdown.
+
+The GPU result is pending. The current device rasterizer walks every primitive for each pixel, which is too slow for this scene. The repository owner reports tile-binned GPU strand drawing on a separate branch. A device run of the bench, with `gpu 1920 1080` on its command line, must give the GPU verdict.
+
+A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
+
+Measure a mixed scene with body triangles and many thin strands at several worker counts. Require the same image before comparing worker throughput or pending-vertex flush cost. A result from a smaller image, a smaller groom or a compile-only check cannot qualify this target.
