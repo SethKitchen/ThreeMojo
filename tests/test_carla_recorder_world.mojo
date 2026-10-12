@@ -103,14 +103,14 @@ from extensions.carla.replayer_helper import (
     NOT_CREATED,
     find_traffic_sign_at,
     interpolated_transform,
-    lerp_angle,
+    lerp_angle_degrees as lerp_angle,
     process_door_vehicle,
     process_event_add,
     process_event_parent,
     process_position,
     process_state_traffic_light,
     set_camera_position,
-    set_walker_speed,
+    set_walker_speed_centimeters_per_second as set_walker_speed,
 )
 from extensions.carla.recorder_packets import (
     PACKET_SCENE_LIGHT,
@@ -261,7 +261,7 @@ def test_record_and_replay_world_with_utf8_signal_ids() raises:
     world.traffic_lights.lights[0].sign_id = SignalId(light_id)
     world.signs[0].sign_id = SignalId(sign_id)
     var recorder = Recorder()
-    _ = recorder.start(world, "", "Town", False, 0)
+    _ = recorder.start_unix_seconds(world, "", "Town", False, 0)
     for frame in range(1, 4):
         assert_equal(recorder.tick(world), frame)
         var snapshot = world.get_snapshot()
@@ -305,7 +305,7 @@ def test_the_first_frame_holds_the_worlds_actors() raises:
     var car = _hero(world, _pose(10, 1.75, 0.5, 30))
     var r = Recorder()
     assert_false(r.is_enabled())
-    _ = r.start(world, "", "Town", False, 1234)
+    _ = r.start_unix_seconds(world, "", "Town", False, 1234)
     assert_true(r.is_enabled())
     _ = r.tick(world)
     var bytes = r.bytes()
@@ -366,7 +366,7 @@ def test_the_first_frame_holds_the_worlds_actors() raises:
 def test_events_are_found_by_comparing_frames() raises:
     var world = _world()
     var r = Recorder()
-    _ = r.start(world, "", "Town", False, 0)
+    _ = r.start_unix_seconds(world, "", "Town", False, 0)
     _ = r.tick(world)
     var car = _spawn(world, "vehicle.lincoln.mkz", _pose(20, 1.75, 0.5, 0))
     var walker = _spawn(world, "walker.pedestrian.0015", _pose(40, -4, 1.2, 90))
@@ -458,7 +458,7 @@ def test_additional_data() raises:
         ),
     )
     var r = Recorder()
-    _ = r.start(world, "", "Town", True, 0)
+    _ = r.start_unix_seconds(world, "", "Town", True, 0)
     var car = _spawn(world, "vehicle.lincoln.mkz", _pose(20, 1.75, 0.5, 0))
     world.set_target_velocity(car, Vector3(3, 0, 0))
     _ = r.tick(world)
@@ -527,7 +527,7 @@ def test_collision_sensor_hits_are_recorded() raises:
     # A sensor with no parent hears nothing.
     _ = _spawn(world, "sensor.other.collision", _pose(0, 0, 0, 0))
     var r = Recorder()
-    _ = r.start(world, "", "Town", False, 0)
+    _ = r.start_unix_seconds(world, "", "Town", False, 0)
     world.set_target_velocity(car, Vector3(15, 0, 0))
     var hit = False
     for _ in range(20):
@@ -555,7 +555,7 @@ def test_collisions_keep_one_record_a_pair() raises:
     var r = Recorder()
     r.add_collision(world, car, NO_ACTOR)
     assert_equal(len(r.collisions), 0)
-    _ = r.start(world, "", "Town", False, 0)
+    _ = r.start_unix_seconds(world, "", "Town", False, 0)
     r.add_collision(world, car, NO_ACTOR)
     r.add_collision(world, car, NO_ACTOR)
     r.add_collision(world, NO_ACTOR, car)
@@ -587,7 +587,7 @@ def test_recorder_calls_do_nothing_when_off() raises:
     assert_equal(len(r.bikers), 0)
     assert_equal(len(r.wheels), 0)
     # Without additional data the setups are not kept.
-    _ = r.start(world, "", "Town", False)
+    _ = r.start_unix_seconds(world, "", "Town", False)
     r.add_physics_control(world, ActorId(1))
     assert_equal(len(r.physics_controls), 0)
     # The date defaults to now.
@@ -598,7 +598,7 @@ def test_recorder_calls_do_nothing_when_off() raises:
 def test_stop_writes_the_file() raises:
     var world = _world()
     var r = Recorder()
-    var path = r.start(
+    var path = r.start_unix_seconds(
         world, "recorder_test.log", "Town", False, 0, temporary_path("")
     )
     assert_equal(path, temporary_path("recorder_test.log"))
@@ -608,8 +608,10 @@ def test_stop_writes_the_file() raises:
     var written = Path(path).read_bytes()
     assert_equal(len(written), len(bytes))
     # A second start stops the first and starts again.
-    _ = r.start(world, temporary_path("recorder_test2.log"), "Town", False, 0)
-    _ = r.start(world, "", "Town", False, 0)
+    _ = r.start_unix_seconds(
+        world, temporary_path("recorder_test2.log"), "Town", False, 0
+    )
+    _ = r.start_unix_seconds(world, "", "Town", False, 0)
     assert_true(Path(temporary_path("recorder_test2.log")).exists())
     r.stop()
 
@@ -674,7 +676,7 @@ def _record(frames: Int) raises -> _Recording:
     var prop = _spawn(world, "util.actor.empty", _prop_pose(0))
     world.set_target_velocity(car, Vector3(5, 0, 0))
     var r = Recorder()
-    _ = r.start(world, "", "Town", False, 0)
+    _ = r.start_unix_seconds(world, "", "Town", False, 0)
     var out = _Recording()
     for k in range(frames):
         world.set_transform(prop, _prop_pose(k))
@@ -830,7 +832,7 @@ def test_heroes_and_the_spectator() raises:
     var hero = _hero(world, _pose(20, 1.75, 0.5, 0))
     var other = _spawn(world, "vehicle.mini.cooper", _pose(40, 1.75, 0.5, 0))
     var r = Recorder()
-    _ = r.start(world, "", "Town", False, 0)
+    _ = r.start_unix_seconds(world, "", "Town", False, 0)
     world.set_transform(world.get_spectator(), _pose(1, 2, 30, 0))
     for _ in range(4):
         _ = r.tick(world)
@@ -860,7 +862,7 @@ def _log_for_replay(world: World) raises -> List[UInt8]:
     var light = LogVector.from_meters(world.get_location(ActorId(2)))
     var r = Recorder()
     # With additional data, so the walker's bones are written.
-    _ = r.begin("", "Town", True, 0)
+    _ = r.begin_unix_seconds("", "Town", True, 0)
     var hero: List[RecordedAttribute] = [
         RecordedAttribute(ATTRIBUTE_STRING, "role_name", "hero"),
         RecordedAttribute(ATTRIBUTE_STRING, "color", "not a color"),
@@ -935,7 +937,7 @@ def _log_for_replay(world: World) raises -> List[UInt8]:
             ActorId(11), LogVector(4000, -400, 120), LogVector(0, 0, 90)
         ),
     ]
-    r.write_frame(0, 0, 0)
+    r.write_frame_seconds(0, 0, 0)
     r.states.append(RecordedTrafficLight(ActorId(20), True, 1.25, YELLOW))
     r.states.append(RecordedTrafficLight(ActorId(10), False, 0, RED))
     r.vehicles.append(
@@ -984,7 +986,7 @@ def _log_for_replay(world: World) raises -> List[UInt8]:
             ActorId(11), LogVector(4000, -300, 120), LogVector(0, 0, 90)
         ),
     ]
-    r.write_frame(0.05, 0.05, 0)
+    r.write_frame_seconds(0.05, 0.05, 0)
     r.events_del.append(RecordedEventDel(ActorId(11)))
     # An actor that was never made is removed too: nothing happens.
     r.events_del.append(RecordedEventDel(ActorId(21)))
@@ -1007,13 +1009,13 @@ def _log_for_replay(world: World) raises -> List[UInt8]:
             ActorId(10), LogVector(2200, 175, 50), LogVector(0, 0, 0)
         ),
     ]
-    r.write_frame(0.05, 0.1, 0)
+    r.write_frame_seconds(0.05, 0.1, 0)
     r.positions = [
         RecordedPosition(
             ActorId(10), LogVector(2300, 175, 50), LogVector(0, 0, 0)
         ),
     ]
-    r.write_frame(0.05, 0.15, 0)
+    r.write_frame_seconds(0.05, 0.15, 0)
     return r.bytes()
 
 
@@ -1289,7 +1291,7 @@ def test_recording_edges() raises:
     _ = world.destroy_actor(gone)
     var car = _spawn(world, "vehicle.lincoln.mkz", _pose(20, 1.75, 0.5, 0))
     var r = Recorder()
-    _ = r.start(world, "", "Town", True, 0)
+    _ = r.start_unix_seconds(world, "", "Town", True, 0)
     assert_equal(len(r.trigger_volumes), 4)
     for e in r.events_add:
         if e.database_id.value == 1:
@@ -1365,15 +1367,15 @@ def test_ignoring_heroes_part_way() raises:
 
 def _empty_packets_log() raises -> List[UInt8]:
     var r = Recorder()
-    _ = r.begin("", "M", False, 0)
-    r.write_frame(0, 0, 0)
-    r.frames.set_frame(0.05)
+    _ = r.begin_unix_seconds("", "M", False, 0)
+    r.write_frame_seconds(0, 0, 0)
+    r.frames.set_frame_seconds(0.05)
     r.frames.write_start(r.out)
     write_packet(r.out, PACKET_SCENE_LIGHT, [UInt8(0), UInt8(0)])
     write_packet(r.out, PACKET_WEATHER, [UInt8(0), UInt8(0)])
     write_packet(r.out, PACKET_POSITION, [UInt8(0), UInt8(0)])
     r.frames.write_end(r.out)
-    r.write_frame(0.05, 0, 0)
+    r.write_frame_seconds(0.05, 0, 0)
     return r.bytes()
 
 
