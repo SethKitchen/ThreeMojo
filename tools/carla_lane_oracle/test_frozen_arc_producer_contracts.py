@@ -236,7 +236,8 @@ class FrozenArcPublicDiagnosticControls(unittest.TestCase):
 
     def test_physical_historical_runtime_pin_rejection_stays_at_its_existing_layer(self):
         import _full_audit_test_fixtures as fixtures
-        root = fixtures.historical_root(self, ROOT)
+        # ROOT is already historical; derive a fresh one from the current tree.
+        root = fixtures.historical_root(self, _CURRENT_SOURCE_ROOT)
         self.assertEqual(frozen.verify(root), frozen.read_record(root))
         path = root/source.PINS
         original = path.read_bytes()
