@@ -18,6 +18,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import sys
 import types
 import textwrap
 import tokenize
@@ -35,6 +36,9 @@ else:
     import map_deviation_contracts as deviation
     import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
+
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
+
 
 def _sibling_tool(name):
     """Load the executing checker's fixed sibling, independent of sys.path."""
@@ -885,7 +889,7 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
             'live fresh-environment guard or ordered debits changed')
 
 
-def verify(root, *, _operation=None, _expected_raw=None):
+def _verify_seed_body(root, *, _operation=None, _expected_raw=None):
     """Verify the exact edge, live arithmetic dependencies and regression input."""
     root = Path(root)
     record = read_record(root, **({} if _operation is None else {'_operation': _operation}))
@@ -915,6 +919,29 @@ def verify(root, *, _operation=None, _expected_raw=None):
                  full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation))
     require(final_raw == current_raw, 'Map changed during verification')
     return edge
+
+
+
+def _verify_standalone(root, *, _expected_raw=None):
+    """One fresh canonical invocation; historical inputs keep lazy admission."""
+    _operation, owns = full_audit._operation_enter(root, 'seed')
+    try:
+        result = _verify_seed_body(root, _operation=_operation, _expected_raw=_expected_raw)
+        if owns:
+            _operation.finish(root)
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        full_audit._operation_fail(_operation, error)
+    finally:
+        if owns:
+            _operation.close()
+
+
+def verify(root, *, _operation=None, _expected_raw=None):
+    """Verify the exact edge, live arithmetic dependencies and regression input."""
+    if _operation is not None:
+        return _verify_seed_body(root, _operation=_operation, _expected_raw=_expected_raw)
+    return _verify_standalone(root, _expected_raw=_expected_raw)
 
 
 def historical_source(root, *, _operation=None):
