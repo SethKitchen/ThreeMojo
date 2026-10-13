@@ -29552,8 +29552,1602 @@ HISTORICAL_INVENTORY = {'extensions/carla/curve_bounds.mojo': {'tokens_sha256': 
 HISTORICAL_EDGES_SHA256 = 'df6f624e80c263102b9d717cb8f83bec06bae26e11e4c36276a135935106e45d'
 
 # Reviewed common-758 repair endpoints. Original records remain above.
-EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8159b0fbdaaa44ee428242c874bf592a6d500233611c85ab2803d462f9eada7b',
-                               'after_token_sha256': '4c62ad65d81762209b60f3564b8dcc1689bc9e931a35fcf2e245ed2411614925',
+EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/geometry.mojo': {'after_sha256': '374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e',
+                                    'after_token_sha256': 'c75e56e0b6863b5676c988ab3570695b68daccfbffc5f942417ce1e330616934',
+                                    'before_sha256': 'eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c',
+                                    'before_token_sha256': 'a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb',
+                                    'edits': [[36,
+                                               43,
+                                               [],
+                                               ['from extensions.carla.quantity_boundary import '
+                                                '(\n',
+                                                '    _RAW_SI,\n',
+                                                '    _RawSI,\n',
+                                                '    _finite_si,\n',
+                                                '    _nonnegative_si,\n',
+                                                '    _positive_si,\n',
+                                                ')\n']],
+                                              [51, 53, [], ['    Angle64,\n', '    Length64,\n']],
+                                              [54,
+                                               56,
+                                               [],
+                                               ['    InverseLength64,\n', '    InverseArea64,\n']],
+                                              [116,
+                                               193,
+                                               [],
+                                               ['        x: Length64,\n',
+                                                '        y: Length64,\n',
+                                                '        z: Length64,\n',
+                                                '        tangent: Angle64,\n',
+                                                '        pitch: Float64 = 0.0,\n',
+                                                '    ) raises:\n',
+                                                '        """Create a checked typed record without '
+                                                'changing scalar storage.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            x: Its typed source quantity.\n',
+                                                '            y: Its typed source quantity.\n',
+                                                '            z: Its typed source quantity.\n',
+                                                '            tangent: Its typed source quantity.\n',
+                                                '            pitch: Its source record value.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            A record with unchanged source '
+                                                'precision and layout.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a quantity is not finite or '
+                                                'another field is invalid.\n',
+                                                '        """\n',
+                                                '        self = DirectedPoint.from_si(\n',
+                                                '            x.value, y.value, z.value, '
+                                                'tangent.value, pitch\n',
+                                                '        )\n',
+                                                '\n',
+                                                '    @staticmethod\n',
+                                                '    def from_si(\n',
+                                                '        x: Float64,\n',
+                                                '        y: Float64,\n',
+                                                '        z: Float64,\n',
+                                                '        tangent: Float64,\n',
+                                                '        pitch: Float64 = 0.0,\n',
+                                                '    ) raises -> DirectedPoint:\n',
+                                                '        """Explicit source-unit compatibility '
+                                                'adapter. Create a directed point.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            x: East, in meters.\n',
+                                                '            y: North, in meters.\n',
+                                                '            z: Up, in meters.\n',
+                                                '            tangent: The heading, in radians.\n',
+                                                '            pitch: The elevation slope.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The new DirectedPoint record with the '
+                                                'supplied source fields.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a coordinate, tangent, or '
+                                                'pitch is nonfinite.\n',
+                                                '        """\n',
+                                                '        _ = _finite_si(x)\n',
+                                                '        _ = _finite_si(y)\n',
+                                                '        _ = _finite_si(z)\n',
+                                                '        _ = _finite_si(tangent)\n',
+                                                '        _ = _finite_si(pitch)\n',
+                                                '        return DirectedPoint(_RAW_SI, x, y, z, '
+                                                'tangent, pitch)\n',
+                                                '\n',
+                                                '    @staticmethod\n',
+                                                '    def _from_si(\n',
+                                                '        x: Float64,\n',
+                                                '        y: Float64,\n',
+                                                '        z: Float64,\n',
+                                                '        tangent: Float64,\n',
+                                                '        pitch: Float64 = 0.0,\n',
+                                                '    ) -> DirectedPoint:\n',
+                                                '        """Explicit source-unit compatibility '
+                                                'adapter. Create a directed point.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            x: East, in meters.\n',
+                                                '            y: North, in meters.\n',
+                                                '            z: Up, in meters.\n',
+                                                '            tangent: The heading, in radians.\n',
+                                                '            pitch: The elevation slope.\n',
+                                                '        """\n',
+                                                '        return DirectedPoint(_RAW_SI, x, y, z, '
+                                                'tangent, pitch)\n',
+                                                '\n',
+                                                '    def __init__(\n',
+                                                '        out self,\n',
+                                                '        raw: _RawSI,\n']],
+                                              [202,
+                                               203,
+                                               [],
+                                               ['            raw: The private raw-storage '
+                                                'construction capability.\n']],
+                                              [207,
+                                               208,
+                                               ['            pitch: The elevation slope.\n',
+                                                '        """\n'],
+                                               ['            pitch: The elevation slope."""\n']],
+                                              [214,
+                                               215,
+                                               ['    def apply_lateral_offset(mut self, offset: '
+                                                'Length):\n'],
+                                               ['    def apply_lateral_offset(mut self, offset: '
+                                                'Length) raises:\n']],
+                                              [219,
+                                               222,
+                                               [],
+                                               ['\n',
+                                                '        Raises:\n',
+                                                '            Error: If the offset or either '
+                                                'computed coordinate is nonfinite.\n']],
+                                              [223,
+                                               228,
+                                               ['        var t = Float64(offset.value)\n',
+                                                '        self.x += t * sin(self.tangent)\n',
+                                                '        self.y -= t * cos(self.tangent)\n'],
+                                               ['        var t = '
+                                                '_finite_si(Float64(offset.value))\n',
+                                                '        var x = _finite_si(self.x + t * '
+                                                'sin(self.tangent))\n',
+                                                '        var y = _finite_si(self.y - t * '
+                                                'cos(self.tangent))\n',
+                                                '        self.x = x\n',
+                                                '        self.y = y\n']],
+                                              [229,
+                                               230,
+                                               ['    def heading(self) -> Angle:\n'],
+                                               ['    def heading(self) raises -> Angle64:\n']],
+                                              [234,
+                                               237,
+                                               [],
+                                               ['\n',
+                                                '        Raises:\n',
+                                                '            Error: If the stored tangent is '
+                                                'nonfinite.\n']],
+                                              [238,
+                                               239,
+                                               ['        return Angle(Float32(self.tangent), '
+                                                'RADIAN)\n'],
+                                               ['        return Angle64(_finite_si(self.tangent), '
+                                                'RADIAN)\n']],
+                                              [256,
+                                               300,
+                                               [],
+                                               ['\n',
+                                                '    def x_quantity(self) raises -> Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'x compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return Length64(_finite_si(self.x))\n',
+                                                '\n',
+                                                '    def y_quantity(self) raises -> Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'y compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return Length64(_finite_si(self.y))\n',
+                                                '\n',
+                                                '    def z_quantity(self) raises -> Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'z compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return Length64(_finite_si(self.z))\n',
+                                                '\n',
+                                                '    def tangent_quantity(self) raises -> '
+                                                'Angle64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'tangent compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'Angle64(_finite_si(self.tangent))\n']],
+                                              [326,
+                                               329,
+                                               ['    # A poly3 uses `u_poly` as v(u). A paramPoly3 '
+                                                'uses both.\n',
+                                                '    var u_poly: CubicPolynomial\n',
+                                                '    var v_poly: CubicPolynomial\n'],
+                                               ['    # A poly3 uses `_u_poly` as v(u). A '
+                                                'paramPoly3 uses both.\n',
+                                                '    var _u_poly: CubicPolynomial\n',
+                                                '    var _v_poly: CubicPolynomial\n']],
+                                              [333,
+                                               395,
+                                               [],
+                                               ['        kind: RoadGeometryKind,\n',
+                                                '        s: Length64,\n',
+                                                '        x: Length64,\n',
+                                                '        y: Length64,\n',
+                                                '        heading: Angle64,\n',
+                                                '        length: Length64,\n',
+                                                '    ) raises:\n',
+                                                '        """Create a record with typed Float64 '
+                                                'station, coordinates and heading.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            kind: The plan-view record kind.\n',
+                                                '            s: Its nonnegative start station.\n',
+                                                '            x: Its east coordinate.\n',
+                                                '            y: Its north coordinate.\n',
+                                                '            heading: Its heading in radians.\n',
+                                                '            length: Its positive length.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            A record that retains every input '
+                                                'bit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a value is not finite or '
+                                                'its domain is invalid.\n',
+                                                '        """\n',
+                                                '        self = RoadGeometry(\n',
+                                                '            _RAW_SI,\n',
+                                                '            kind,\n',
+                                                '            s.value,\n',
+                                                '            x.value,\n',
+                                                '            y.value,\n',
+                                                '            heading.value,\n',
+                                                '            length.value,\n',
+                                                '        )\n',
+                                                '\n',
+                                                '    @staticmethod\n',
+                                                '    def from_meters(\n',
+                                                '        kind: RoadGeometryKind,\n',
+                                                '        s: Float64,\n',
+                                                '        x: Float64,\n',
+                                                '        y: Float64,\n',
+                                                '        heading: Float64,\n',
+                                                '        length: Float64,\n',
+                                                '    ) raises -> RoadGeometry:\n',
+                                                '        """Read an explicit meter/radian '
+                                                'compatibility record without narrowing.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            kind: The plan-view record kind.\n',
+                                                '            s: Its nonnegative start station in '
+                                                'meters.\n',
+                                                '            x: Its east coordinate in meters.\n',
+                                                '            y: Its north coordinate in meters.\n',
+                                                '            heading: Its heading in radians.\n',
+                                                '            length: Its positive length in '
+                                                'meters.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The unchanged finite source values.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a value is not finite or '
+                                                'its domain is invalid.\n',
+                                                '        """\n',
+                                                '        return RoadGeometry(_RAW_SI, kind, s, x, '
+                                                'y, heading, length)\n',
+                                                '\n',
+                                                '    @staticmethod\n',
+                                                '    def from_float32(\n']],
+                                              [401,
+                                               402,
+                                               ['    ) raises:\n'],
+                                               ['    ) raises -> RoadGeometry:\n']],
+                                              [412,
+                                               416,
+                                               [],
+                                               ['        Returns:\n',
+                                                '            The common geometry record with its '
+                                                'Float32 inputs widened to\n',
+                                                '            Float64.\n',
+                                                '\n']],
+                                              [420,
+                                               421,
+                                               ['        self = RoadGeometry(\n'],
+                                               ['        return RoadGeometry.from_meters(\n']],
+                                              [431, 432, [], ['        raw: _RawSI,\n']],
+                                              [445,
+                                               446,
+                                               [],
+                                               ['            raw: The private raw-storage '
+                                                'construction capability.\n']],
+                                              [457,
+                                               462,
+                                               [],
+                                               ['        _ = _finite_si(s)\n',
+                                                '        _ = _finite_si(x)\n',
+                                                '        _ = _finite_si(y)\n',
+                                                '        _ = _finite_si(heading)\n',
+                                                '        _ = _finite_si(length)\n']],
+                                              [468,
+                                               469,
+                                               [],
+                                               ['        _ = _finite_si(s + length)\n']],
+                                              [477,
+                                               479,
+                                               ['        self.u_poly = '
+                                                'CubicPolynomial.constant(0.0)\n',
+                                                '        self.v_poly = '
+                                                'CubicPolynomial.constant(0.0)\n'],
+                                               ['        self._u_poly = '
+                                                'CubicPolynomial._constant_si(0.0)\n',
+                                                '        self._v_poly = '
+                                                'CubicPolynomial._constant_si(0.0)\n']],
+                                              [481,
+                                               528,
+                                               ['    def end_s(self) -> Float64:\n'],
+                                               ['    def u_coefficients(\n',
+                                                '        self,\n',
+                                                '    ) -> Tuple[Float64, Float64, Float64, '
+                                                'Float64, Float64]:\n',
+                                                '        """Read raw local u coefficients and '
+                                                'origin in the source parameter units.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The original a, b, c, d and parameter '
+                                                'origin. Normalized mode\n',
+                                                '            has four length coefficients; '
+                                                'arc-length mode has station units.\n',
+                                                '            This raw tuple does not assert either '
+                                                'dimensional contract.\n',
+                                                '        """\n',
+                                                '        return (\n',
+                                                '            self._u_poly.a,\n',
+                                                '            self._u_poly.b,\n',
+                                                '            self._u_poly.c,\n',
+                                                '            self._u_poly.d,\n',
+                                                '            self._u_poly.s,\n',
+                                                '        )\n',
+                                                '\n',
+                                                '    def v_coefficients(\n',
+                                                '        self,\n',
+                                                '    ) -> Tuple[Float64, Float64, Float64, '
+                                                'Float64, Float64]:\n',
+                                                '        """Read raw local v coefficients and '
+                                                'origin in the source parameter units.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The original a, b, c, d and parameter '
+                                                'origin, without a typed\n',
+                                                '            interpretation of the common CARLA '
+                                                'coefficient storage.\n',
+                                                '        """\n',
+                                                '        return (\n',
+                                                '            self._v_poly.a,\n',
+                                                '            self._v_poly.b,\n',
+                                                '            self._v_poly.c,\n',
+                                                '            self._v_poly.d,\n',
+                                                '            self._v_poly.s,\n',
+                                                '        )\n',
+                                                '\n',
+                                                '    def end_s(self) raises -> Length64:\n',
+                                                '        """Return the finite Float64 end '
+                                                'station.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The start station plus length in '
+                                                'meters.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the sum is not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'Length64(_finite_si(self.end_s_meters()))\n',
+                                                '\n',
+                                                '    def end_s_meters(self) raises -> Float64:\n']],
+                                              [532,
+                                               536,
+                                               [],
+                                               ['\n',
+                                                '        Raises:\n',
+                                                '            Error: If the station is negative, '
+                                                'the length is not positive, or\n',
+                                                '                either value or their sum is '
+                                                'nonfinite.\n']],
+                                              [537,
+                                               540,
+                                               ['        return self.s + self.length\n'],
+                                               ['        _ = _nonnegative_si(self.s)\n',
+                                                '        _ = _positive_si(self.length)\n',
+                                                '        return _finite_si(self.s + '
+                                                'self.length)\n']],
+                                              [541,
+                                               544,
+                                               ['    def pos_from_dist(self, dist: Length) -> '
+                                                'DirectedPoint:\n'],
+                                               ['    def pos_from_dist(\n',
+                                                '        self, dist: Length, max_steps: Int = '
+                                                '4194304\n',
+                                                '    ) raises -> DirectedPoint:\n']],
+                                              [549,
+                                               550,
+                                               [],
+                                               ['            max_steps: The maximum logical spiral '
+                                                'pieces or stored table samples.\n']],
+                                              [553,
+                                               558,
+                                               [],
+                                               ['\n',
+                                                '        Raises:\n',
+                                                '            Error: If the distance or geometry is '
+                                                'invalid, the work limit is\n',
+                                                '                not positive or is exhausted, or '
+                                                'an intermediate or result is\n',
+                                                '                nonfinite.\n']],
+                                              [559,
+                                               560,
+                                               ['        return '
+                                                'self.pos_at(Float64(dist.value))\n'],
+                                               ['        return '
+                                                'self.pos_at_meters(Float64(dist.value), '
+                                                'max_steps)\n']],
+                                              [561,
+                                               623,
+                                               ['    def pos_at(self, dist: Float64) -> '
+                                                'DirectedPoint:\n'],
+                                               ['    def pos_at(\n',
+                                                '        self, dist: Length64, max_steps: Int = '
+                                                '4194304\n',
+                                                '    ) raises -> DirectedPoint:\n',
+                                                '        """Evaluate a typed Float64 distance into '
+                                                'this record.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            dist: A finite distance, clamped to '
+                                                'the record.\n',
+                                                '            max_steps: The maximum logical spiral '
+                                                'pieces or stored table samples.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            Its point and heading without a '
+                                                'Float32 conversion.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the distance or stored '
+                                                'record is invalid.\n',
+                                                '        """\n',
+                                                '        return self.pos_at_meters(dist.value, '
+                                                'max_steps)\n',
+                                                '\n',
+                                                '    def pos_at_meters(\n',
+                                                '        self, dist: Float64, max_steps: Int = '
+                                                '4194304\n',
+                                                '    ) raises -> DirectedPoint:\n',
+                                                '        """Evaluate an explicit meter '
+                                                'compatibility distance.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            dist: A finite distance in meters, '
+                                                'clamped to the record.\n',
+                                                '            max_steps: The maximum logical spiral '
+                                                'pieces or stored table samples.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            Its point and heading.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the distance or stored '
+                                                'record is invalid.\n',
+                                                '        """\n',
+                                                '        _ = _finite_si(dist)\n',
+                                                '        if max_steps <= 0:\n',
+                                                '            raise Error("Geometry query work '
+                                                'limit must be positive")\n',
+                                                '        if len(self.samples) > max_steps:\n',
+                                                '            raise Error("Geometry query exceeds '
+                                                'its sample work limit")\n',
+                                                '        _check_geometry_record(self)\n',
+                                                '        if self.kind == SPIRAL:\n',
+                                                '            var d = min(max(dist, 0.0), '
+                                                'self.length)\n',
+                                                '            var rate = _finite_si(\n',
+                                                '                (self.curvature_end - '
+                                                'self.curvature_start) / self.length\n',
+                                                '            )\n',
+                                                '            var reach = max(\n',
+                                                '                abs(self.curvature_start),\n',
+                                                '                '
+                                                'abs(_finite_si(self.curvature_start + rate * '
+                                                'd)),\n',
+                                                '            )\n',
+                                                '            var work = ceil(_finite_si(d * (1.0 + '
+                                                'reach)))\n',
+                                                '            if work >= 9223372036854775807.0 or '
+                                                'work >= Float64(max_steps):\n',
+                                                '                raise Error("Geometry query '
+                                                'exceeds its spiral work limit")\n',
+                                                '            _ = _finite_si(\n',
+                                                '                self.heading + d * '
+                                                '(self.curvature_start + 0.5 * rate * d)\n',
+                                                '            )\n',
+                                                '        var point = self._pos_at_si(dist)\n',
+                                                '        _ = _finite_si(point.x)\n',
+                                                '        _ = _finite_si(point.y)\n',
+                                                '        _ = _finite_si(point.z)\n',
+                                                '        _ = _finite_si(point.tangent)\n',
+                                                '        _ = _finite_si(point.pitch)\n',
+                                                '        return point\n',
+                                                '\n',
+                                                '    def _pos_at_si(self, dist: Float64) -> '
+                                                'DirectedPoint:\n']],
+                                              [634,
+                                               635,
+                                               ['            return DirectedPoint(\n'],
+                                               ['            return DirectedPoint._from_si(\n']],
+                                              [646,
+                                               685,
+                                               ['    def distance_to(self, point: Vector3) -> '
+                                                'Tuple[Float32, Float32]:\n'],
+                                               ['    def distance_to(self, point: Vector3) raises '
+                                                '-> Tuple[Length, Length]:\n',
+                                                '        """Return typed distances from the '
+                                                'retained CARLA Float32 calculation.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                "            point: A query point in CARLA's "
+                                                'Float32 coordinate layout.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The distance along the record and '
+                                                'distance from it.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a coordinate or result is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        var result = '
+                                                'self.distance_to_meters(point)\n',
+                                                '        return (Length(result[0]), '
+                                                'Length(result[1]))\n',
+                                                '\n',
+                                                '    def distance_to_meters(\n',
+                                                '        self, point: Vector3\n',
+                                                '    ) raises -> Tuple[Float32, Float32]:\n',
+                                                '        """Use the explicit meter adapter for '
+                                                "CARLA's reference distance query.\n",
+                                                '\n',
+                                                '        Args:\n',
+                                                "            point: A query point in CARLA's "
+                                                'Float32 coordinate layout.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The unchanged finite Float32 '
+                                                'distances in meters.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a coordinate or result is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        _check_geometry_record(self)\n',
+                                                '        _ = _finite_si(Float64(point.x))\n',
+                                                '        _ = _finite_si(Float64(point.y))\n',
+                                                '        _ = _finite_si(Float64(point.z))\n',
+                                                '        var result = '
+                                                'self._distance_to_si(point)\n',
+                                                '        _ = _finite_si(Float64(result[0]))\n',
+                                                '        _ = _finite_si(Float64(result[1]))\n',
+                                                '        return result\n',
+                                                '\n',
+                                                '    def _distance_to_si(self, point: Vector3) -> '
+                                                'Tuple[Float32, Float32]:\n']],
+                                              [701,
+                                               702,
+                                               ['            var end = self.pos_at(self.length)\n'],
+                                               ['            var end = '
+                                                'self._pos_at_si(self.length)\n']],
+                                              [727,
+                                               728,
+                                               ['        return DirectedPoint(x, y, 0.0, '
+                                                'tangent)\n'],
+                                               ['        return DirectedPoint._from_si(x, y, 0.0, '
+                                                'tangent)\n']],
+                                              [746,
+                                               747,
+                                               ['        return DirectedPoint(\n'],
+                                               ['        return DirectedPoint._from_si(\n']],
+                                              [864,
+                                               865,
+                                               ['        return DirectedPoint(\n'],
+                                               ['        return DirectedPoint._from_si(\n']],
+                                              [870,
+                                               947,
+                                               [],
+                                               ['\n',
+                                                '    def s_quantity(self) raises -> Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                's compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'Length64(_nonnegative_si(self.s))\n',
+                                                '\n',
+                                                '    def x_quantity(self) raises -> Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'x compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return Length64(_finite_si(self.x))\n',
+                                                '\n',
+                                                '    def y_quantity(self) raises -> Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'y compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return Length64(_finite_si(self.y))\n',
+                                                '\n',
+                                                '    def length_quantity(self) raises -> '
+                                                'Length64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'length compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'Length64(_positive_si(self.length))\n',
+                                                '\n',
+                                                '    def heading_quantity(self) raises -> '
+                                                'Angle64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'heading compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'Angle64(_finite_si(self.heading))\n',
+                                                '\n',
+                                                '    def curvature_start_quantity(self) raises -> '
+                                                'InverseLength64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'curvature_start compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'InverseLength64(_finite_si(self.curvature_start))\n',
+                                                '\n',
+                                                '    def curvature_end_quantity(self) raises -> '
+                                                'InverseLength64:\n',
+                                                '        """Read the checked typed view of the raw '
+                                                'curvature_end compatibility field.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The same finite Float64 value with '
+                                                'its unit.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If the mutable raw value is '
+                                                'not finite.\n',
+                                                '        """\n',
+                                                '        return '
+                                                'InverseLength64(_finite_si(self.curvature_end))\n']],
+                                              [984,
+                                               985,
+                                               ['    return RoadGeometry(LINE, s, x, y, heading, '
+                                                'length)\n'],
+                                               ['    return RoadGeometry.from_float32(LINE, s, x, '
+                                                'y, heading, length)\n']],
+                                              [1012,
+                                               1015,
+                                               ['    return with_arc(\n',
+                                                '        RoadGeometry(ARC, s, x, y, heading, '
+                                                'length), Float64(curvature.value)\n'],
+                                               ['    return with_arc_si(\n',
+                                                '        RoadGeometry.from_float32(ARC, s, x, y, '
+                                                'heading, length),\n',
+                                                '        Float64(curvature.value),\n']],
+                                              [1018,
+                                               1021,
+                                               ['def with_arc(var base: RoadGeometry, curvature: '
+                                                'Float64) raises -> RoadGeometry:\n'],
+                                               ['def with_arc_si(\n',
+                                                '    var base: RoadGeometry, curvature: Float64\n',
+                                                ') raises -> RoadGeometry:\n']],
+                                              [1033,
+                                               1036,
+                                               [],
+                                               ['    _check_geometry_base(base)\n',
+                                                '    _ = _finite_si(curvature)\n',
+                                                '\n']],
+                                              [1070,
+                                               1072,
+                                               ['    return with_spiral(\n',
+                                                '        RoadGeometry(SPIRAL, s, x, y, heading, '
+                                                'length),\n'],
+                                               ['    return with_spiral_si(\n',
+                                                '        RoadGeometry.from_float32(SPIRAL, s, x, '
+                                                'y, heading, length),\n']],
+                                              [1077,
+                                               1078,
+                                               ['def with_spiral(\n'],
+                                               ['def with_spiral_si(\n']],
+                                              [1079,
+                                               1080,
+                                               [') -> RoadGeometry:\n'],
+                                               [') raises -> RoadGeometry:\n']],
+                                              [1089,
+                                               1093,
+                                               [],
+                                               ['\n',
+                                                '    Raises:\n',
+                                                '        Error: If the base geometry is invalid or '
+                                                'either curvature is\n',
+                                                '            nonfinite.\n']],
+                                              [1094,
+                                               1098,
+                                               [],
+                                               ['    _check_geometry_base(base)\n',
+                                                '    _ = _finite_si(curvature_start)\n',
+                                                '    _ = _finite_si(curvature_end)\n',
+                                                '\n']],
+                                              [1104,
+                                               1105,
+                                               ['def poly3(\n'],
+                                               ['def poly3_from_coefficients(\n']],
+                                              [1114,
+                                               1115,
+                                               [],
+                                               ['    max_samples: Int = 4194304,\n']],
+                                              [1130,
+                                               1131,
+                                               [],
+                                               ['        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n']],
+                                              [1138,
+                                               1146,
+                                               ['    return with_poly3(RoadGeometry(POLY3, s, x, '
+                                                'y, heading, length), a, b, c, d)\n'],
+                                               ['    return with_poly3_si(\n',
+                                                '        RoadGeometry.from_float32(POLY3, s, x, y, '
+                                                'heading, length),\n',
+                                                '        a,\n',
+                                                '        b,\n',
+                                                '        c,\n',
+                                                '        d,\n',
+                                                '        max_samples=max_samples,\n',
+                                                '    )\n']],
+                                              [1148,
+                                               1156,
+                                               ['def with_poly3(\n',
+                                                '    var base: RoadGeometry, a: Float64, b: '
+                                                'Float64, c: Float64, d: Float64\n',
+                                                ') -> RoadGeometry:\n'],
+                                               ['def with_poly3_si(\n',
+                                                '    var base: RoadGeometry,\n',
+                                                '    a: Float64,\n',
+                                                '    b: Float64,\n',
+                                                '    c: Float64,\n',
+                                                '    d: Float64,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n']],
+                                              [1164,
+                                               1165,
+                                               [],
+                                               ['        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n']],
+                                              [1168,
+                                               1173,
+                                               [],
+                                               ['\n',
+                                                '    Raises:\n',
+                                                '        Error: If the base or coefficients are '
+                                                'invalid, the sample budget is\n',
+                                                '            below two or exhausted, sampling '
+                                                'cannot advance, or a computed\n',
+                                                '            value is nonfinite.\n']],
+                                              [1174,
+                                               1182,
+                                               [],
+                                               ['    _check_geometry_base(base)\n',
+                                                '    if max_samples < 2:\n',
+                                                '        raise Error("Geometry sampling needs a '
+                                                'budget of at least two samples")\n',
+                                                '    _ = _finite_si(a)\n',
+                                                '    _ = _finite_si(b)\n',
+                                                '    _ = _finite_si(c)\n',
+                                                '    _ = _finite_si(d)\n',
+                                                '\n']],
+                                              [1183,
+                                               1184,
+                                               ['    base.u_poly = CubicPolynomial(a, b, c, d, '
+                                                '0.0)\n'],
+                                               ['    base._u_poly = '
+                                                'CubicPolynomial.from_coefficients(a, b, c, d, '
+                                                '0.0)\n']],
+                                              [1189,
+                                               1194,
+                                               ['        0.0, base.u_poly.evaluate(0.0), 0.0, 1.0, '
+                                                'base.u_poly.tangent(0.0)\n'],
+                                               ['        0.0,\n',
+                                                '        base._u_poly._evaluate_si(0.0),\n',
+                                                '        0.0,\n',
+                                                '        1.0,\n',
+                                                '        base._u_poly._tangent_si(0.0),\n']],
+                                              [1196,
+                                               1205,
+                                               ['    while total < base.length + delta_u:\n',
+                                                '        u += delta_u\n',
+                                                '        var v = base.u_poly.evaluate(u)\n'],
+                                               ['    var target = _finite_si(base.length + '
+                                                'delta_u)\n',
+                                                '    while total < target:\n',
+                                                '        if len(base.samples) >= max_samples:\n',
+                                                '            raise Error("Geometry sampling '
+                                                'exhausted its sample budget")\n',
+                                                '        var next_u = _finite_si(u + delta_u)\n',
+                                                '        # u gains 0.3 a sample; it stalls only '
+                                                'after about 9e15 samples.\n',
+                                                '        debug_assert(next_u > u, "Geometry '
+                                                'sampling advances its parameter")\n',
+                                                '        u = next_u\n',
+                                                '        var v = '
+                                                '_finite_si(base._u_poly._evaluate_si(u))\n']],
+                                              [1207,
+                                               1214,
+                                               ['        total += sqrt(du * du + dv * dv)\n',
+                                                '        last = _Sample(u, v, total, 1.0, '
+                                                'base.u_poly.tangent(u))\n'],
+                                               ['        var next_total = _finite_si(total + '
+                                                'sqrt(du * du + dv * dv))\n',
+                                                '        if not (next_total > total):\n',
+                                                '            raise Error("Geometry sampling cannot '
+                                                'advance its length")\n',
+                                                '        total = next_total\n',
+                                                '        last = _Sample(\n',
+                                                '            u, v, total, 1.0, '
+                                                '_finite_si(base._u_poly._tangent_si(u))\n',
+                                                '        )\n']],
+                                              [1215,
+                                               1216,
+                                               [],
+                                               ['    _check_geometry_record(base)\n']],
+                                              [1219,
+                                               1220,
+                                               ['def param_poly3(\n'],
+                                               ['def param_poly3_from_coefficients(\n']],
+                                              [1228,
+                                               1229,
+                                               [],
+                                               ['    max_samples: Int = 4194304,\n']],
+                                              [1244,
+                                               1245,
+                                               [],
+                                               ['        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n']],
+                                              [1253,
+                                               1259,
+                                               ['    return with_param_poly3(\n',
+                                                '        RoadGeometry(PARAM_POLY3, s, x, y, '
+                                                'heading, length), u, v, p_range\n'],
+                                               ['    return with_param_poly3_from_coefficients(\n',
+                                                '        RoadGeometry.from_float32(PARAM_POLY3, s, '
+                                                'x, y, heading, length),\n',
+                                                '        u,\n',
+                                                '        v,\n',
+                                                '        p_range,\n',
+                                                '        max_samples=max_samples,\n']],
+                                              [1262,
+                                               1263,
+                                               ['def with_param_poly3(\n'],
+                                               ['def with_param_poly3_from_coefficients(\n']],
+                                              [1267,
+                                               1268,
+                                               [],
+                                               ['    max_samples: Int = 4194304,\n']],
+                                              [1276,
+                                               1277,
+                                               [],
+                                               ['        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n']],
+                                              [1284,
+                                               1287,
+                                               [],
+                                               ['    _check_geometry_base(base)\n',
+                                                '    if max_samples < 2:\n',
+                                                '        raise Error("Geometry sampling needs a '
+                                                'budget of at least two samples")\n']],
+                                              [1289,
+                                               1300,
+                                               [],
+                                               ['    _ = _nonnegative_si(base.s)\n',
+                                                '    _ = _positive_si(base.length)\n',
+                                                '    _ = _finite_si(base.x)\n',
+                                                '    _ = _finite_si(base.y)\n',
+                                                '    _ = _finite_si(base.heading)\n',
+                                                '    for polynomial in [u, v]:  # pragma: no '
+                                                'branch\n',
+                                                '        _ = _finite_si(polynomial.a)\n',
+                                                '        _ = _finite_si(polynomial.b)\n',
+                                                '        _ = _finite_si(polynomial.c)\n',
+                                                '        _ = _finite_si(polynomial.d)\n',
+                                                '        _ = _finite_si(polynomial.s)\n']],
+                                              [1301,
+                                               1303,
+                                               ['    base.u_poly = u\n', '    base.v_poly = v\n'],
+                                               ['    base._u_poly = u\n',
+                                                '    base._v_poly = v\n']],
+                                              [1304,
+                                               1310,
+                                               ['    var intervals = max(Int(base.length / 0.5), '
+                                                '5)\n'],
+                                               ['    var work = _finite_si(base.length / 0.5)\n',
+                                                '    if work >= 9223372036854775807.0 or work >= '
+                                                'Float64(max_samples):\n',
+                                                '        raise Error("Geometry sampling exceeds '
+                                                'its sample budget")\n',
+                                                '    var intervals = max(Int(work), 5)\n',
+                                                '    if intervals >= max_samples:\n',
+                                                '        raise Error("Geometry sampling exceeds '
+                                                'its sample budget")\n']],
+                                              [1315,
+                                               1320,
+                                               ['        u.evaluate(0.0), v.evaluate(0.0), 0.0, '
+                                                'u.tangent(0.0), v.tangent(0.0)\n'],
+                                               ['        _finite_si(u._evaluate_si(0.0)),\n',
+                                                '        _finite_si(v._evaluate_si(0.0)),\n',
+                                                '        0.0,\n',
+                                                '        _finite_si(u._tangent_si(0.0)),\n',
+                                                '        _finite_si(v._tangent_si(0.0)),\n']],
+                                              [1323,
+                                               1329,
+                                               ['        p += delta_p\n',
+                                                '        var pu = u.evaluate(p)\n',
+                                                '        var pv = v.evaluate(p)\n'],
+                                               ['        var next_p = _finite_si(p + delta_p)\n',
+                                                '        if not (next_p > p):\n',
+                                                '            raise Error("Geometry sampling cannot '
+                                                'advance its parameter")\n',
+                                                '        p = next_p\n',
+                                                '        var pu = _finite_si(u._evaluate_si(p))\n',
+                                                '        var pv = '
+                                                '_finite_si(v._evaluate_si(p))\n']],
+                                              [1331,
+                                               1339,
+                                               ['        var total = last.s + sqrt(du * du + dv * '
+                                                'dv)\n',
+                                                '        last = _Sample(pu, pv, total, '
+                                                'u.tangent(p), v.tangent(p))\n'],
+                                               ['        var total = _finite_si(last.s + sqrt(du * '
+                                                'du + dv * dv))\n',
+                                                '        last = _Sample(\n',
+                                                '            pu,\n',
+                                                '            pv,\n',
+                                                '            total,\n',
+                                                '            _finite_si(u._tangent_si(p)),\n',
+                                                '            _finite_si(v._tangent_si(p)),\n',
+                                                '        )\n']],
+                                              [1344,
+                                               1345,
+                                               [],
+                                               ['    _check_geometry_record(base)\n']],
+                                              [1346,
+                                               1805,
+                                               [],
+                                               ['\n',
+                                                '\n',
+                                                'def line(\n',
+                                                '    s: Length64, x: Length64, y: Length64, '
+                                                'heading: Angle64, length: Length64\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Create a checked Float64 line record.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        s: Its start station.\n',
+                                                '        x: Its east coordinate.\n',
+                                                '        y: Its north coordinate.\n',
+                                                '        heading: Its heading.\n',
+                                                '        length: Its positive length.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        A line with unchanged Float64 inputs.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If any value is not finite or its '
+                                                'domain is invalid.\n',
+                                                '    """\n',
+                                                '    return RoadGeometry(LINE, s, x, y, heading, '
+                                                'length)\n',
+                                                '\n',
+                                                '\n',
+                                                'def with_arc(\n',
+                                                '    var base: RoadGeometry, curvature: '
+                                                'InverseLength64\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Set the typed Float64 curvature of an '
+                                                'arc.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        base: The source record.\n',
+                                                '        curvature: Its finite nonzero '
+                                                'curvature.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The arc record.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If curvature is not finite or is '
+                                                'zero.\n',
+                                                '    """\n',
+                                                '    return with_arc_si(base^, curvature.value)\n',
+                                                '\n',
+                                                '\n',
+                                                'def with_spiral(\n',
+                                                '    var base: RoadGeometry,\n',
+                                                '    curvature_start: InverseLength64,\n',
+                                                '    curvature_end: InverseLength64,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Set the typed Float64 endpoint curvatures '
+                                                'of a spiral.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        base: The source record.\n',
+                                                '        curvature_start: Its finite start '
+                                                'curvature.\n',
+                                                '        curvature_end: Its finite end '
+                                                'curvature.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The spiral record.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If a curvature is not finite.\n',
+                                                '    """\n',
+                                                '    return with_spiral_si(base^, '
+                                                'curvature_start.value, curvature_end.value)\n',
+                                                '\n',
+                                                '\n',
+                                                'def with_poly3(\n',
+                                                '    var base: RoadGeometry,\n',
+                                                '    a: Length64,\n',
+                                                '    b: Float64,\n',
+                                                '    c: InverseLength64,\n',
+                                                '    d: InverseArea64,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Set a typed Float64 distance polynomial on '
+                                                'a record.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        base: The source record.\n',
+                                                '        a: Its constant length.\n',
+                                                '        b: Its dimensionless slope.\n',
+                                                '        c: Its quadratic coefficient per meter.\n',
+                                                '        d: Its cubic coefficient per square '
+                                                'meter.\n',
+                                                '        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The sampled cubic record.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If a coefficient is not finite.\n',
+                                                '    """\n',
+                                                '    return with_poly3_si(\n',
+                                                '        base^, a.value, b, c.value, d.value, '
+                                                'max_samples=max_samples\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'def arc(\n',
+                                                '    s: Length64,\n',
+                                                '    x: Length64,\n',
+                                                '    y: Length64,\n',
+                                                '    heading: Angle64,\n',
+                                                '    length: Length64,\n',
+                                                '    curvature: InverseLength64,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Create a checked Float64 arc record.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        s: Its start station.\n',
+                                                '        x: Its east coordinate.\n',
+                                                '        y: Its north coordinate.\n',
+                                                '        heading: Its heading.\n',
+                                                '        length: Its positive length.\n',
+                                                '        curvature: Its finite nonzero '
+                                                'curvature.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The arc record.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If an input is not finite or its '
+                                                'domain is invalid.\n',
+                                                '    """\n',
+                                                '    return with_arc(RoadGeometry(ARC, s, x, y, '
+                                                'heading, length), curvature)\n',
+                                                '\n',
+                                                '\n',
+                                                'def spiral(\n',
+                                                '    s: Length64,\n',
+                                                '    x: Length64,\n',
+                                                '    y: Length64,\n',
+                                                '    heading: Angle64,\n',
+                                                '    length: Length64,\n',
+                                                '    curvature_start: InverseLength64,\n',
+                                                '    curvature_end: InverseLength64,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Create a checked Float64 spiral record.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        s: Its start station.\n',
+                                                '        x: Its east coordinate.\n',
+                                                '        y: Its north coordinate.\n',
+                                                '        heading: Its heading.\n',
+                                                '        length: Its positive length.\n',
+                                                '        curvature_start: Its start curvature.\n',
+                                                '        curvature_end: Its end curvature.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The spiral record.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If an input is not finite or its '
+                                                'domain is invalid.\n',
+                                                '    """\n',
+                                                '    return with_spiral(\n',
+                                                '        RoadGeometry(SPIRAL, s, x, y, heading, '
+                                                'length),\n',
+                                                '        curvature_start,\n',
+                                                '        curvature_end,\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'def poly3(\n',
+                                                '    s: Length64,\n',
+                                                '    x: Length64,\n',
+                                                '    y: Length64,\n',
+                                                '    heading: Angle64,\n',
+                                                '    length: Length64,\n',
+                                                '    a: Length64,\n',
+                                                '    b: Float64,\n',
+                                                '    c: InverseLength64,\n',
+                                                '    d: InverseArea64,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Create a checked Float64 local cubic '
+                                                'record.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        s: Its start station.\n',
+                                                '        x: Its east coordinate.\n',
+                                                '        y: Its north coordinate.\n',
+                                                '        heading: Its heading.\n',
+                                                '        length: Its positive length.\n',
+                                                '        a: Its constant length.\n',
+                                                '        b: Its dimensionless slope.\n',
+                                                '        c: Its quadratic coefficient per meter.\n',
+                                                '        d: Its cubic coefficient per square '
+                                                'meter.\n',
+                                                '        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The sampled cubic record.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If an input is not finite or its '
+                                                'domain is invalid.\n',
+                                                '    """\n',
+                                                '    return with_poly3(\n',
+                                                '        RoadGeometry(POLY3, s, x, y, heading, '
+                                                'length),\n',
+                                                '        a,\n',
+                                                '        b,\n',
+                                                '        c,\n',
+                                                '        d,\n',
+                                                '        max_samples=max_samples,\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'struct NormalizedCubic(ImplicitlyCopyable):\n',
+                                                '    """A length-valued cubic of a dimensionless '
+                                                'normalized parameter.\n',
+                                                '\n',
+                                                '    Every coefficient is a length. This is '
+                                                'deliberately a different type\n',
+                                                '    from a road-station CubicPolynomial; raw '
+                                                'CARLA storage is shared only\n',
+                                                '    after the parameter mode has been selected '
+                                                'explicitly.\n',
+                                                '    """\n',
+                                                '\n',
+                                                '    var a: Length64\n',
+                                                '    var b: Length64\n',
+                                                '    var c: Length64\n',
+                                                '    var d: Length64\n',
+                                                '\n',
+                                                '    def __init__(\n',
+                                                '        out self, a: Length64, b: Length64, c: '
+                                                'Length64, d: Length64\n',
+                                                '    ) raises:\n',
+                                                '        """Create finite coefficients for a '
+                                                'normalized parameter.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            a: The constant length coefficient.\n',
+                                                '            b: The linear length coefficient.\n',
+                                                '            c: The quadratic length '
+                                                'coefficient.\n',
+                                                '            d: The cubic length coefficient.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The initialized NormalizedCubic '
+                                                'record.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If any coefficient is not '
+                                                'finite.\n',
+                                                '        """\n',
+                                                '        self.a = Length64(_finite_si(a.value))\n',
+                                                '        self.b = Length64(_finite_si(b.value))\n',
+                                                '        self.c = Length64(_finite_si(c.value))\n',
+                                                '        self.d = Length64(_finite_si(d.value))\n',
+                                                '\n',
+                                                '    @staticmethod\n',
+                                                '    def from_meters(\n',
+                                                '        a: Float64, b: Float64, c: Float64, d: '
+                                                'Float64\n',
+                                                '    ) raises -> NormalizedCubic:\n',
+                                                '        """Read four explicit meter-valued '
+                                                'normalized source coefficients.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            a: The constant coefficient in '
+                                                'meters.\n',
+                                                '            b: The linear coefficient in '
+                                                'meters.\n',
+                                                '            c: The quadratic coefficient in '
+                                                'meters.\n',
+                                                '            d: The cubic coefficient in meters.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The checked normalized polynomial '
+                                                'without narrowing.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If any coefficient is not '
+                                                'finite.\n',
+                                                '        """\n',
+                                                '        return NormalizedCubic(\n',
+                                                '            Length64(a), Length64(b), '
+                                                'Length64(c), Length64(d)\n',
+                                                '        )\n',
+                                                '\n',
+                                                '    def _coefficients(self) raises -> '
+                                                'CubicPolynomial:\n',
+                                                '        return '
+                                                'CubicPolynomial.from_coefficients(\n',
+                                                '            self.a.value, self.b.value, '
+                                                'self.c.value, self.d.value, 0\n',
+                                                '        )\n',
+                                                '\n',
+                                                '    def evaluate(self, p: Float64) raises -> '
+                                                'Length64:\n',
+                                                '        """Evaluate at a finite dimensionless '
+                                                'normalized coordinate.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            p: The parameter, between zero and '
+                                                'one inclusive.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The physical value in Float64 '
+                                                'precision.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a coefficient, parameter or '
+                                                'result is invalid.\n',
+                                                '        """\n',
+                                                '        _ = _finite_si(p)\n',
+                                                '        if p < 0 or p > 1:\n',
+                                                '            raise Error(\n',
+                                                '                "A normalized polynomial '
+                                                'parameter must be from zero"\n',
+                                                '                " through one"\n',
+                                                '            )\n',
+                                                '        var polynomial = self._coefficients()\n',
+                                                '        return '
+                                                'Length64(_finite_si(polynomial._evaluate_si(p)))\n',
+                                                '\n',
+                                                '    def tangent(self, p: Float64) raises -> '
+                                                'Length64:\n',
+                                                '        """Differentiate with respect to the '
+                                                'dimensionless parameter.\n',
+                                                '\n',
+                                                '        Args:\n',
+                                                '            p: The parameter, between zero and '
+                                                'one inclusive.\n',
+                                                '\n',
+                                                '        Returns:\n',
+                                                '            The length-valued derivative, not a '
+                                                'dimensionless station slope.\n',
+                                                '\n',
+                                                '        Raises:\n',
+                                                '            Error: If a coefficient, parameter or '
+                                                'result is invalid.\n',
+                                                '        """\n',
+                                                '        _ = _finite_si(p)\n',
+                                                '        if p < 0 or p > 1:\n',
+                                                '            raise Error(\n',
+                                                '                "A normalized polynomial '
+                                                'parameter must be from zero"\n',
+                                                '                " through one"\n',
+                                                '            )\n',
+                                                '        var polynomial = self._coefficients()\n',
+                                                '        return '
+                                                'Length64(_finite_si(polynomial._tangent_si(p)))\n',
+                                                '\n',
+                                                '\n',
+                                                'def with_param_poly3(\n',
+                                                '    var base: RoadGeometry,\n',
+                                                '    u: CubicPolynomial,\n',
+                                                '    v: CubicPolynomial,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Set an arc-length-parametrized cubic using '
+                                                'station-unit coefficients.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        base: The common geometry record.\n',
+                                                '        u: The u coordinate as a polynomial of '
+                                                'meter station.\n',
+                                                '        v: The v coordinate as a polynomial of '
+                                                'meter station.\n',
+                                                '        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The sampled geometry in arc-length '
+                                                'parameter mode.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If a value is invalid or the curve '
+                                                'does not move.\n',
+                                                '    """\n',
+                                                '    return with_param_poly3_from_coefficients(\n',
+                                                '        base^, u, v, ARC_LENGTH, '
+                                                'max_samples=max_samples\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'def with_param_poly3_normalized(\n',
+                                                '    var base: RoadGeometry,\n',
+                                                '    u: NormalizedCubic,\n',
+                                                '    v: NormalizedCubic,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Set a normalized-parametric cubic with '
+                                                'all-length coefficients.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        base: The common geometry record.\n',
+                                                '        u: The u coordinate as a polynomial of '
+                                                'dimensionless p.\n',
+                                                '        v: The v coordinate as a polynomial of '
+                                                'dimensionless p.\n',
+                                                '        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The sampled geometry in normalized '
+                                                'parameter mode.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If a value is invalid or the curve '
+                                                'does not move.\n',
+                                                '    """\n',
+                                                '    return with_param_poly3_from_coefficients(\n',
+                                                '        base^,\n',
+                                                '        u._coefficients(),\n',
+                                                '        v._coefficients(),\n',
+                                                '        NORMALIZED,\n',
+                                                '        max_samples=max_samples,\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'def param_poly3(\n',
+                                                '    s: Length64,\n',
+                                                '    x: Length64,\n',
+                                                '    y: Length64,\n',
+                                                '    heading: Angle64,\n',
+                                                '    length: Length64,\n',
+                                                '    u: CubicPolynomial,\n',
+                                                '    v: CubicPolynomial,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Create a Float64 arc-length-parametric '
+                                                'cubic.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        s: The start station.\n',
+                                                '        x: The start east coordinate.\n',
+                                                '        y: The start north coordinate.\n',
+                                                '        heading: The heading.\n',
+                                                '        length: The positive curve length.\n',
+                                                '        u: The u polynomial with station-unit '
+                                                'coefficients.\n',
+                                                '        v: The v polynomial with station-unit '
+                                                'coefficients.\n',
+                                                '        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The checked geometry.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If a value is invalid or the curve '
+                                                'does not move.\n',
+                                                '    """\n',
+                                                '    return with_param_poly3(\n',
+                                                '        RoadGeometry(PARAM_POLY3, s, x, y, '
+                                                'heading, length),\n',
+                                                '        u,\n',
+                                                '        v,\n',
+                                                '        max_samples=max_samples,\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'def param_poly3_normalized(\n',
+                                                '    s: Length64,\n',
+                                                '    x: Length64,\n',
+                                                '    y: Length64,\n',
+                                                '    heading: Angle64,\n',
+                                                '    length: Length64,\n',
+                                                '    u: NormalizedCubic,\n',
+                                                '    v: NormalizedCubic,\n',
+                                                '    max_samples: Int = 4194304,\n',
+                                                ') raises -> RoadGeometry:\n',
+                                                '    """Create a Float64 cubic of normalized '
+                                                'dimensionless p.\n',
+                                                '\n',
+                                                '    Args:\n',
+                                                '        s: The start station.\n',
+                                                '        x: The start east coordinate.\n',
+                                                '        y: The start north coordinate.\n',
+                                                '        heading: The heading.\n',
+                                                '        length: The positive curve length.\n',
+                                                '        u: The u polynomial with all-length '
+                                                'coefficients.\n',
+                                                '        v: The v polynomial with all-length '
+                                                'coefficients.\n',
+                                                '        max_samples: The maximum emitted table '
+                                                'samples; exhaustion refuses the geometry.\n',
+                                                '\n',
+                                                '    Returns:\n',
+                                                '        The checked geometry.\n',
+                                                '\n',
+                                                '    Raises:\n',
+                                                '        Error: If a value is invalid or the curve '
+                                                'does not move.\n',
+                                                '    """\n',
+                                                '    return with_param_poly3_normalized(\n',
+                                                '        RoadGeometry(PARAM_POLY3, s, x, y, '
+                                                'heading, length),\n',
+                                                '        u,\n',
+                                                '        v,\n',
+                                                '        max_samples=max_samples,\n',
+                                                '    )\n',
+                                                '\n',
+                                                '\n',
+                                                'def _check_geometry_base(base: RoadGeometry) '
+                                                'raises:\n',
+                                                '    """Validate a mutable common record before '
+                                                'shape conversion or sampling."""\n',
+                                                '    if not base.kind.is_valid():\n',
+                                                '        raise Error("Road geometry kind is not '
+                                                'valid")\n',
+                                                '    _ = _nonnegative_si(base.s)\n',
+                                                '    _ = _positive_si(base.length)\n',
+                                                '    _ = _finite_si(base.x)\n',
+                                                '    _ = _finite_si(base.y)\n',
+                                                '    _ = _finite_si(base.heading)\n',
+                                                '    _ = _finite_si(base.s + base.length)\n',
+                                                '\n',
+                                                '\n',
+                                                'def _check_geometry_record(base: RoadGeometry) '
+                                                'raises:\n',
+                                                '    """Check a complete geometry before a public '
+                                                'record/query consumes it."""\n',
+                                                '    _check_geometry_base(base)\n',
+                                                '    if base.kind == ARC or base.kind == SPIRAL:\n',
+                                                '        _ = _finite_si(base.curvature_start)\n',
+                                                '        _ = _finite_si(base.curvature_end)\n',
+                                                '    if base.kind == ARC and base.curvature_start '
+                                                '== 0:\n',
+                                                '        raise Error("An arc needs nonzero '
+                                                'curvature")\n',
+                                                '    if base.kind == POLY3 or base.kind == '
+                                                'PARAM_POLY3:\n',
+                                                '        if len(base.samples) < 2:\n',
+                                                '            raise Error("A sampled geometry needs '
+                                                'at least two samples")\n',
+                                                '        var previous = Float64(-1)\n',
+                                                '        for sample in base.samples:  # pragma: no '
+                                                'branch\n',
+                                                '            _ = _finite_si(sample.u)\n',
+                                                '            _ = _finite_si(sample.v)\n',
+                                                '            _ = _finite_si(sample.tu)\n',
+                                                '            _ = _finite_si(sample.tv)\n',
+                                                '            _ = _nonnegative_si(sample.s)\n',
+                                                '            if not (sample.s > previous):\n',
+                                                '                raise Error("Geometry sample '
+                                                'lengths must strictly increase")\n',
+                                                '            previous = sample.s\n',
+                                                '        if base.samples[0].s != 0:\n',
+                                                '            raise Error("Geometry samples must '
+                                                'begin at zero length")\n']]]},
+ 'extensions/carla/map.mojo': {'after_sha256': 'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df',
+                               'after_token_sha256': '0263ba183b30437b826ada3ceedb3d2c5a3664dc95245743a17209f568607b79',
                                'before_sha256': '0e2d282fcd6c70217e7413b7febe40619af070f7adbeaefa3fd56d95562c404b',
                                'before_token_sha256': '8e900de7c4c82cba9ced3e09fa2360e39d1474f0a715d2bebf1ebc1603bd9977',
                                'edits': [(175,
@@ -30438,7 +32032,8 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                            '        Error: If a plan coordinate or result is not '
                                            'finite.\n',
                                            '    """\n',
-                                           '    for point in [a1, a2, b1, b2]:\n',
+                                           '    for point in [a1, a2, b1, b2]:  # pragma: no '
+                                           'branch\n',
                                            '        _ = _finite_si(Float64(point.x))\n',
                                            '        _ = _finite_si(Float64(point.y))\n',
                                            '    return _nonnegative_si(_segment_distance_2d_si(a1, '
@@ -30457,6 +32052,11 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                            'refusal. Public\n',
                                            '    # station guards belong to their checked entry '
                                            'points.\n']),
+                                         (2204,
+                                          2205,
+                                          ['        for at in range(1 << level):\n'],
+                                          ['        for at in range(1 << level):  # pragma: no '
+                                           'branch\n']),
                                          (2402,
                                           2403,
                                           [],
@@ -30507,6 +32107,21 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                            '                "Speed-limit station must be finite '
                                            'and within the road"\n',
                                            '            )\n']),
+                                         (2611,
+                                          2616,
+                                          ['        if (\n',
+                                           '            not isfinite(waypoint.s)\n',
+                                           '            or waypoint.s < 0\n',
+                                           '            or waypoint.s > road.length\n',
+                                           '        ):\n'],
+                                          ['        # The first check already refuses a nonfinite '
+                                           'or negative\n',
+                                           '        # station, and _locate refuses it again. So '
+                                           'only the far end\n',
+                                           '        # of the road can still refuse the station '
+                                           'here; the message\n',
+                                           '        # names both limits.\n',
+                                           '        if waypoint.s > road.length:\n']),
                                          (2630,
                                           2648,
                                           ['    def lane_width(self, waypoint: Waypoint) raises -> '
@@ -30527,9 +32142,10 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                            'invalid.\n',
                                            '        """\n',
                                            '        var width = self.lane_width_meters(waypoint)\n',
-                                           '        if not isfinite(width) or width < 0.0:\n',
-                                           '            raise Error("Lane width must be finite and '
-                                           'nonnegative")\n',
+                                           '        # lane_width_meters refuses a nonfinite or '
+                                           'negative width.\n',
+                                           '        debug_assert(isfinite(width) and width >= 0.0, '
+                                           '"A width is checked")\n',
                                            '        return Length64(width)\n',
                                            '\n',
                                            '    def lane_width_float32(self, waypoint: Waypoint) '
@@ -30570,6 +32186,41 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                           2817,
                                           ['        return self.next(start, delta)[0]\n'],
                                           ['        return self.next_meters(start, delta)[0]\n']),
+                                         (3002,
+                                          3003,
+                                          ['        for certificate in certificates:\n'],
+                                          ['        for certificate in certificates:  # pragma: no '
+                                           'branch\n']),
+                                         (3009,
+                                          3010,
+                                          ['            for i in range(len(indices)):\n'],
+                                          ['            for i in range(len(indices)):  # pragma: '
+                                           'no branch\n']),
+                                         (3031,
+                                          3032,
+                                          ['            for i in range(len(indices)):\n'],
+                                          ['            for i in range(len(indices)):  # pragma: '
+                                           'no branch\n']),
+                                         (3103,
+                                          3104,
+                                          ['                for value in metadata:\n'],
+                                          ['                for value in metadata:  # pragma: no '
+                                           'branch\n']),
+                                         (3108,
+                                          3109,
+                                          ['                for candidate in certificates:\n'],
+                                          ['                for candidate in certificates:  # '
+                                           'pragma: no branch\n']),
+                                         (3117,
+                                          3118,
+                                          ['                for _ in range(4):\n'],
+                                          ['                for _ in range(4):  # pragma: no '
+                                           'branch\n']),
+                                         (3126,
+                                          3127,
+                                          ['                for _ in range(10):\n'],
+                                          ['                for _ in range(10):  # pragma: no '
+                                           'branch\n']),
                                          (3429,
                                           3430,
                                           ['        var length = road.section_length(at[1])\n'],
@@ -31022,6 +32673,12 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                            'road.section_length(initial[1])\n'],
                                           ['        var section_end = section_start + '
                                            'road._section_length_si(initial[1])\n']),
+                                         (4571,
+                                          4572,
+                                          ['        if not isfinite(s) or s < section_start or s > '
+                                           'section_end:\n'],
+                                          ['        if s < section_start or s > section_end:  # s '
+                                           'is finite (see above).\n']),
                                          (4642,
                                           4643,
                                           ['            return LaneMarking(mark.value())\n'],
@@ -31182,8 +32839,8 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                            'self.roads[at[0]]._section_length_si(\n',
                                            '                at[1]\n',
                                            '            )\n'])]},
- 'extensions/carla/map_builder.mojo': {'after_sha256': '4646b215316dc28b0163a133abe5a187e2cdcdf55e4cf740770aee0dcd8de34f',
-                                       'after_token_sha256': 'e1d96c8c2aa97ed94f36d026e50d4bffa52588cfb7fd032314b37053bd0f96f4',
+ 'extensions/carla/map_builder.mojo': {'after_sha256': 'f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c',
+                                       'after_token_sha256': '4d153beee1e83966264af944bf260597fbf727785eb193d3710a3b5a0c33a977',
                                        'before_sha256': '4092bfc42e1ab091b272da89d1079675ce8fabddd77de573a91df6911aeede61',
                                        'before_token_sha256': '627ce91ee8d9626d9a326dd950dc85da6ca273e1fdc045128d3f119186207765',
                                        'edits': [(55,
@@ -33186,8 +34843,10 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                                    'reference to a signal, '
                                                    '`AddSignalReference`.\n']),
                                                  (2188,
-                                                  2220,
-                                                  [],
+                                                  2222,
+                                                  ['        if s < 0.0:\n',
+                                                   '            raise Error("A signal reference '
+                                                   'cannot sit before s = 0")\n'],
                                                   ['        return self.add_signal_reference_si(\n',
                                                    '            road, signal_id, s.value, t.value, '
                                                    'orientation\n',
@@ -33227,7 +34886,11 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                                    '        """\n',
                                                    '        _ = _nonnegative_si(s)\n',
                                                    '        _ = _finite_si(t)\n',
-                                                   '\n']),
+                                                   '\n',
+                                                   '        # _nonnegative_si above already '
+                                                   'refuses s < 0.\n',
+                                                   '        debug_assert(s >= 0.0, "A signal '
+                                                   'reference cannot sit before s = 0")\n']),
                                                  (2227,
                                                   2228,
                                                   ['            RoadInfoSignal(\n'],
@@ -33282,7 +34945,1093 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                                   ['    return '
                                                    'map.roads[at[0]]._lane_width_si(at[1], at[2], '
                                                    'waypoint.s)\n'])]},
- 'extensions/carla/opendrive.mojo': {'after_sha256': '32290a0f2c5804e13504554fa89ecbeaefb67809ccc1903f04d2b51c3815a6c1',
+ 'extensions/carla/math.mojo': {'after_sha256': '9fa94b3bb8850c4f6d282ef70795004c2c1217f22fd1c1a6eee448c8ac62ee2e',
+                                'after_token_sha256': '30b49cf1a3c0a3c99f994d43ef50baf33bb2677f831b89c326df24999b121780',
+                                'before_sha256': 'e02aa0a1d41c17403120ebe1bd4672c2d5a41bb81aac66f1abb7e9a1cb42d147',
+                                'before_token_sha256': 'd1edaacfb9717cdb9acd4a9333beb8c6375f7f9699fab67048e503715fbf9086',
+                                'edits': [[38,
+                                           41,
+                                           [],
+                                           ['\n',
+                                            'from extensions.carla.quantity_boundary import '
+                                            '_finite_si, _positive_si\n',
+                                            'from units.si import Area\n']],
+                                          [89,
+                                           129,
+                                           ['def distance_squared_2d(a: Vector3, b: Vector3) -> '
+                                            'Float32:\n'],
+                                           ['def distance_squared_2d(a: Vector3, b: Vector3) '
+                                            'raises -> Area:\n',
+                                            '    """Checked typed boundary. Return the squared '
+                                            'distance in the x-y plane, `DistanceSquared2D`.\n',
+                                            '\n',
+                                            '    Args:\n',
+                                            '        a: The first point, in meters.\n',
+                                            '        b: The second point, in meters.\n',
+                                            '\n',
+                                            '    Returns:\n',
+                                            '        The squared distance, in square meters.\n',
+                                            '\n',
+                                            '    Raises:\n',
+                                            '        Error: If an x or y coordinate or the '
+                                            'squared-distance result is\n',
+                                            '            nonfinite.\n',
+                                            '    """\n',
+                                            '    return Area(distance_squared_2d_si(a, b))\n',
+                                            '\n',
+                                            '\n',
+                                            'def distance_squared_2d_si(a: Vector3, b: Vector3) '
+                                            'raises -> Float32:\n',
+                                            '    """Explicit source-unit compatibility adapter. '
+                                            'Return the squared distance in the x-y plane, '
+                                            '`DistanceSquared2D`.\n',
+                                            '\n',
+                                            '    Args:\n',
+                                            '        a: The first point, in meters.\n',
+                                            '        b: The second point, in meters.\n',
+                                            '\n',
+                                            '    Returns:\n',
+                                            '        The squared distance, in square meters.\n',
+                                            '\n',
+                                            '    Raises:\n',
+                                            '        Error: If an x or y coordinate or the '
+                                            'squared-distance result is\n',
+                                            '            nonfinite.\n',
+                                            '    """\n',
+                                            '    for point in [a, b]:  # pragma: no branch\n',
+                                            '        _ = _finite_si(Float64(point.x))\n',
+                                            '        _ = _finite_si(Float64(point.y))\n',
+                                            '    var value = _distance_squared_2d_si(a, b)\n',
+                                            '    _ = _finite_si(Float64(value))\n',
+                                            '    return value\n',
+                                            '\n',
+                                            '\n',
+                                            'def _distance_squared_2d_si(a: Vector3, b: Vector3) '
+                                            '-> Float32:\n']],
+                                          [153,
+                                           154,
+                                           ['    return Length(sqrt(distance_squared_2d(a, b)), '
+                                            'METER)\n'],
+                                           ['    return Length(sqrt(_distance_squared_2d_si(a, '
+                                            'b)), METER)\n']],
+                                          [192,
+                                           193,
+                                           ['    var l2 = distance_squared_2d(v, w)\n'],
+                                           ['    var l2 = _distance_squared_2d_si(v, w)\n']]]},
+ 'extensions/carla/mesh_factory.mojo': {'after_sha256': '291679187df49469796893a4885903f003253493d0a928e5b4fb33a2d970f7b6',
+                                        'after_token_sha256': '86fed5c3ee47a6c9d4cff8259b34c458b920c578b5628d4361a84faf91965c5b',
+                                        'before_sha256': '38326e9369f608929b97ee9cffd32f7febc659e31afb024cf6d078178c0439ef',
+                                        'before_token_sha256': 'cf50d15bb9661b5fda6f86a9165f0bd635618a6e4413e2cf40ead3a9ef76cb5a',
+                                        'edits': [[54,
+                                                   57,
+                                                   [],
+                                                   ['from extensions.carla.quantity_boundary '
+                                                    'import _finite_si, _positive_si\n',
+                                                    'from units.si import Length64\n',
+                                                    '\n']],
+                                                  [81,
+                                                   82,
+                                                   ['    info_at,\n'],
+                                                   ['    _info_at_si as info_at,\n']],
+                                                  [534,
+                                                   535,
+                                                   ['        return '
+                                                    'Float64(self.road_param.resolution.value)\n'],
+                                                   ['        return '
+                                                    '_positive_si(Float64(self.road_param.resolution.value))\n']],
+                                                  [536,
+                                                   540,
+                                                   ['    def _width_vertices(self) -> Int:\n'],
+                                                   ['    def _width_vertices(self) raises -> '
+                                                    'Int:\n',
+                                                    '        _ = '
+                                                    '_finite_si(Float64(self.road_param.vertex_width_resolution))\n',
+                                                    '        if '
+                                                    'self.road_param.vertex_width_resolution > '
+                                                    'Float32(4194304):\n',
+                                                    '            raise Error("Mesh width exceeds '
+                                                    'the finite vertex work limit")\n']],
+                                                  [550,
+                                                   552,
+                                                   [],
+                                                   ['        _ = _finite_si(s_start)\n',
+                                                    '        _ = _finite_si(s_end)\n']],
+                                                  [559,
+                                                   561,
+                                                   [],
+                                                   ['                if len(out) >= 4194304:\n',
+                                                    '                    raise Error("Mesh '
+                                                    'sampling exhausted its row work limit")\n']],
+                                                  [562,
+                                                   563,
+                                                   ['                s += step\n'],
+                                                   ['                s = _mesh_next_station(s, '
+                                                    'step)\n']],
+                                                  [571,
+                                                   573,
+                                                   [],
+                                                   ['        _ = _finite_si(s_start)\n',
+                                                    '        _ = _finite_si(s_end)\n']],
+                                                  [577,
+                                                   579,
+                                                   [],
+                                                   ['            if len(out) >= 4194304:\n',
+                                                    '                raise Error("Mesh sampling '
+                                                    'exhausted its row work limit")\n']],
+                                                  [580,
+                                                   581,
+                                                   ['            s += step\n'],
+                                                   ['            s = _mesh_next_station(s, '
+                                                    'step)\n']],
+                                                  [589,
+                                                   593,
+                                                   ['        return (start + EPSILON, start + '
+                                                    'road.section_length(section) - EPSILON)\n'],
+                                                   ['        return (\n',
+                                                    '            start + EPSILON,\n',
+                                                    '            start + '
+                                                    'road._section_length_si(section) - EPSILON,\n',
+                                                    '        )\n']],
+                                                  [618,
+                                                   620,
+                                                   ['            var edges = '
+                                                    'road.lane_corners(section, lane, s, '
+                                                    'self._extra())\n',
+                                                    '            var offsets = '
+                                                    'road.lane_edge_offsets(\n'],
+                                                   ['            var edges = '
+                                                    'road._lane_corners_si(section, lane, s, '
+                                                    'self._extra())\n',
+                                                    '            var offsets = '
+                                                    'road._lane_edge_offsets_si(\n']],
+                                                  [628,
+                                                   684,
+                                                   [],
+                                                   ['        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Length64,\n',
+                                                    '        s_end: Length64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Checked typed boundary. Return a '
+                                                    "lane's strip from one s to another, "
+                                                    '`Generate(lane, a, b)`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            Two vertices a row. Lane 0 has '
+                                                    'none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        return self.generate_lane_si(\n',
+                                                    '            road, section, lane, '
+                                                    's_start.value, s_end.value\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def generate_lane_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Float64,\n',
+                                                    '        s_end: Float64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Explicit source-unit compatibility '
+                                                    "adapter. Return a lane's strip from one s to "
+                                                    'another, `Generate(lane, a, b)`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            Two vertices a row. Lane 0 has '
+                                                    'none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        _ = _finite_si(Float64(s_start))\n',
+                                                    '        _ = _finite_si(Float64(s_end))\n',
+                                                    '        return self._generate_lane_si(road, '
+                                                    'section, lane, s_start, s_end)\n',
+                                                    '\n',
+                                                    '    def _generate_lane_si(\n']],
+                                                  [727,
+                                                   728,
+                                                   ['        return self.generate_lane(road, '
+                                                    'section, lane, span[0], span[1])\n'],
+                                                   ['        return self._generate_lane_si(road, '
+                                                    'section, lane, span[0], span[1])\n']],
+                                                  [744,
+                                                   746,
+                                                   [],
+                                                   ['        if len(rows) > 4194304 // across:\n',
+                                                    '            raise Error("Mesh tessellation '
+                                                    'exceeds its vertex work limit")\n']],
+                                                  [749,
+                                                   751,
+                                                   ['            var edges = '
+                                                    'road.lane_corners(section, lane, s, '
+                                                    'self._extra())\n',
+                                                    '            var offsets = '
+                                                    'road.lane_edge_offsets(\n'],
+                                                   ['            var edges = '
+                                                    'road._lane_corners_si(section, lane, s, '
+                                                    'self._extra())\n',
+                                                    '            var offsets = '
+                                                    'road._lane_edge_offsets_si(\n']],
+                                                  [774,
+                                                   832,
+                                                   [],
+                                                   ['        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Length64,\n',
+                                                    '        s_end: Length64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Checked typed boundary. Return a '
+                                                    'lane with several vertices across, '
+                                                    '`GenerateTesselated`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            `vertex_width_resolution` '
+                                                    'vertices a row, at least two, and\n',
+                                                    "            CARLA's grid coordinates in "
+                                                    '`uv1`. Lane 0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        return self.generate_tesselated_si(\n',
+                                                    '            road, section, lane, '
+                                                    's_start.value, s_end.value\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def generate_tesselated_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Float64,\n',
+                                                    '        s_end: Float64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Explicit source-unit compatibility '
+                                                    'adapter. Return a lane with several vertices '
+                                                    'across, `GenerateTesselated`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            `vertex_width_resolution` '
+                                                    'vertices a row, at least two, and\n',
+                                                    "            CARLA's grid coordinates in "
+                                                    '`uv1`. Lane 0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        _ = _finite_si(Float64(s_start))\n',
+                                                    '        _ = _finite_si(Float64(s_end))\n',
+                                                    '        return '
+                                                    'self._generate_tesselated_si(road, section, '
+                                                    'lane, s_start, s_end)\n',
+                                                    '\n',
+                                                    '    def _generate_tesselated_si(\n']],
+                                                  [877,
+                                                   880,
+                                                   ['        return self.generate_tesselated(road, '
+                                                    'section, lane, span[0], span[1])\n'],
+                                                   ['        return '
+                                                    'self._generate_tesselated_si(\n',
+                                                    '            road, section, lane, span[0], '
+                                                    'span[1]\n',
+                                                    '        )\n']],
+                                                  [898,
+                                                   900,
+                                                   ['            var e = '
+                                                    'road.lane_corners(section, lane, s, '
+                                                    'self._extra())\n',
+                                                    '            var t = '
+                                                    'road.lane_edge_offsets(section, lane, s, '
+                                                    'self._extra())\n'],
+                                                   ['            var e = '
+                                                    'road._lane_corners_si(section, lane, s, '
+                                                    'self._extra())\n',
+                                                    '            var t = '
+                                                    'road._lane_edge_offsets_si(section, lane, s, '
+                                                    'self._extra())\n']],
+                                                  [924,
+                                                   992,
+                                                   [],
+                                                   ['        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Length64,\n',
+                                                    '        s_end: Length64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Checked typed boundary. Return a '
+                                                    'lane as a raised block, '
+                                                    '`GenerateSidewalk(lane, a, b)`.\n',
+                                                    '\n',
+                                                    '        Each row is six vertices: one meter '
+                                                    'below the first edge, the\n',
+                                                    '        first edge twice, the second edge '
+                                                    'twice, and one meter below it.\n',
+                                                    '        The top wears the sidewalk kind on a '
+                                                    'sidewalk lane and the road\n',
+                                                    '        kind on any other; the two sides wear '
+                                                    'the curb kind.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    "            The block, with CARLA's "
+                                                    'coordinates 0 to 3 across in `uv1`.\n',
+                                                    '            Lane 0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        return self.generate_sidewalk_si(\n',
+                                                    '            road, section, lane, '
+                                                    's_start.value, s_end.value\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def generate_sidewalk_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Float64,\n',
+                                                    '        s_end: Float64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Explicit source-unit compatibility '
+                                                    'adapter. Return a lane as a raised block, '
+                                                    '`GenerateSidewalk(lane, a, b)`.\n',
+                                                    '\n',
+                                                    '        Each row is six vertices: one meter '
+                                                    'below the first edge, the\n',
+                                                    '        first edge twice, the second edge '
+                                                    'twice, and one meter below it.\n',
+                                                    '        The top wears the sidewalk kind on a '
+                                                    'sidewalk lane and the road\n',
+                                                    '        kind on any other; the two sides wear '
+                                                    'the curb kind.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    "            The block, with CARLA's "
+                                                    'coordinates 0 to 3 across in `uv1`.\n',
+                                                    '            Lane 0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        _ = _finite_si(Float64(s_start))\n',
+                                                    '        _ = _finite_si(Float64(s_end))\n',
+                                                    '        return '
+                                                    'self._generate_sidewalk_si(road, section, '
+                                                    'lane, s_start, s_end)\n',
+                                                    '\n',
+                                                    '    def _generate_sidewalk_si(\n']],
+                                                  [1042,
+                                                   1043,
+                                                   ['        return self.generate_sidewalk(road, '
+                                                    'section, lane, span[0], span[1])\n'],
+                                                   ['        return '
+                                                    'self._generate_sidewalk_si(road, section, '
+                                                    'lane, span[0], span[1])\n']],
+                                                  [1129,
+                                                   1130,
+                                                   ['            var edges = '
+                                                    'road.lane_corners(section, lane, s, '
+                                                    'self._extra())\n'],
+                                                   ['            var edges = '
+                                                    'road._lane_corners_si(section, lane, s, '
+                                                    'self._extra())\n']],
+                                                  [1143,
+                                                   1199,
+                                                   [],
+                                                   ['        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Length64,\n',
+                                                    '        s_end: Length64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Checked typed boundary. Return a '
+                                                    "wall on a lane's first edge, "
+                                                    '`GenerateRightWall`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            A strip `wall_height` high. Lane '
+                                                    '0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        return self.generate_right_wall_si(\n',
+                                                    '            road, section, lane, '
+                                                    's_start.value, s_end.value\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def generate_right_wall_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Float64,\n',
+                                                    '        s_end: Float64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Explicit source-unit compatibility '
+                                                    "adapter. Return a wall on a lane's first "
+                                                    'edge, `GenerateRightWall`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            A strip `wall_height` high. Lane '
+                                                    '0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        _ = _finite_si(Float64(s_start))\n',
+                                                    '        _ = _finite_si(Float64(s_end))\n',
+                                                    '        return '
+                                                    'self._generate_right_wall_si(road, section, '
+                                                    'lane, s_start, s_end)\n',
+                                                    '\n',
+                                                    '    def _generate_right_wall_si(\n']],
+                                                  [1227,
+                                                   1283,
+                                                   [],
+                                                   ['        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Length64,\n',
+                                                    '        s_end: Length64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Checked typed boundary. Return a '
+                                                    "wall on a lane's second edge, "
+                                                    '`GenerateLeftWall`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            A strip `wall_height` high. Lane '
+                                                    '0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        return self.generate_left_wall_si(\n',
+                                                    '            road, section, lane, '
+                                                    's_start.value, s_end.value\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def generate_left_wall_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s_start: Float64,\n',
+                                                    '        s_end: Float64,\n',
+                                                    '    ) raises -> BufferGeometry:\n',
+                                                    '        """Explicit source-unit compatibility '
+                                                    "adapter. Return a wall on a lane's second "
+                                                    'edge, `GenerateLeftWall`.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s_start: Where to start, in '
+                                                    'meters along the road.\n',
+                                                    '            s_end: Where to end.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    '            A strip `wall_height` high. Lane '
+                                                    '0 has none.\n',
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If the resolution is not '
+                                                    'positive, or a record is\n',
+                                                    '                missing.\n',
+                                                    '        """\n',
+                                                    '        _ = _finite_si(Float64(s_start))\n',
+                                                    '        _ = _finite_si(Float64(s_end))\n',
+                                                    '        return '
+                                                    'self._generate_left_wall_si(road, section, '
+                                                    'lane, s_start, s_end)\n',
+                                                    '\n',
+                                                    '    def _generate_left_wall_si(\n']],
+                                                  [1366,
+                                                   1368,
+                                                   ['        var length = '
+                                                    'road.section_length(section)\n',
+                                                    '        var max_len = '
+                                                    'Float64(self.road_param.max_road_len.value)\n'],
+                                                   ['        var length = '
+                                                    'road._section_length_si(section)\n',
+                                                    '        var max_len = '
+                                                    '_positive_si(Float64(self.road_param.max_road_len.value))\n']],
+                                                  [1370,
+                                                   1372,
+                                                   [],
+                                                   ['        _ = _finite_si(s)\n',
+                                                    '        _ = _finite_si(s_end)\n']],
+                                                  [1373,
+                                                   1375,
+                                                   [],
+                                                   ['            if len(out) >= 4194304:\n',
+                                                    '                raise Error("Mesh chunking '
+                                                    'exhausted its work limit")\n']],
+                                                  [1376,
+                                                   1377,
+                                                   ['            s += max_len\n'],
+                                                   ['            s = _mesh_next_station(s, '
+                                                    'max_len)\n']],
+                                                  [1383,
+                                                   1384,
+                                                   ['            road.section_length(section)\n'],
+                                                   ['            '
+                                                    'road._section_length_si(section)\n']],
+                                                  [1513,
+                                                   1517,
+                                                   ['            return '
+                                                    'self.generate_tesselated(road, section, lane, '
+                                                    's_start, s_end)\n',
+                                                    '        return self.generate_sidewalk(road, '
+                                                    'section, lane, s_start, s_end)\n'],
+                                                   ['            return '
+                                                    'self._generate_tesselated_si(\n',
+                                                    '                road, section, lane, s_start, '
+                                                    's_end\n',
+                                                    '            )\n',
+                                                    '        return '
+                                                    'self._generate_sidewalk_si(road, section, '
+                                                    'lane, s_start, s_end)\n']],
+                                                  [1518,
+                                                   1519,
+                                                   ['    def _link_width(self, lane_type: '
+                                                    'LaneType) -> Int:\n'],
+                                                   ['    def _link_width(self, lane_type: '
+                                                    'LaneType) raises -> Int:\n']],
+                                                  [1525,
+                                                   1526,
+                                                   ['    def _link_kinds(self, lane_type: '
+                                                    'LaneType) -> List[SurfaceKind]:\n'],
+                                                   ['    def _link_kinds(self, lane_type: '
+                                                    'LaneType) raises -> List[SurfaceKind]:\n']],
+                                                  [1773,
+                                                   1842,
+                                                   [],
+                                                   ['        s: Length64,\n',
+                                                    '        width: Length64,\n',
+                                                    '        extra_width: Length,\n',
+                                                    '    ) raises -> Tuple[Vector3, Vector3]:\n',
+                                                    '        """Checked typed boundary. Return a '
+                                                    "mark's two edges, "
+                                                    '`ComputeEdgesForLanemark`.\n',
+                                                    '\n',
+                                                    "        The mark runs from the lane's first "
+                                                    'edge toward its second, one\n',
+                                                    '        mark width. A lane of no width '
+                                                    'borrows the direction of the first\n',
+                                                    '        lane of its section that has one.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s: The distance along the road, '
+                                                    'in meters.\n',
+                                                    "            width: The mark's width, in "
+                                                    'meters.\n',
+                                                    '            extra_width: The junction '
+                                                    'widening to pass on.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    "            The lane's first edge and the "
+                                                    "mark's other edge.\n",
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If a record is missing.\n',
+                                                    '        """\n',
+                                                    '        return '
+                                                    'self.compute_edges_for_lanemark_si(\n',
+                                                    '            road, section, lane, s.value, '
+                                                    'width.value, extra_width.value\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def compute_edges_for_lanemark_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n',
+                                                    '        s: Float64,\n',
+                                                    '        width: Float64,\n',
+                                                    '        extra_width: Float32,\n',
+                                                    '    ) raises -> Tuple[Vector3, Vector3]:\n',
+                                                    '        """Explicit source-unit compatibility '
+                                                    "adapter. Return a mark's two edges, "
+                                                    '`ComputeEdgesForLanemark`.\n',
+                                                    '\n',
+                                                    "        The mark runs from the lane's first "
+                                                    'edge toward its second, one\n',
+                                                    '        mark width. A lane of no width '
+                                                    'borrows the direction of the first\n',
+                                                    '        lane of its section that has one.\n',
+                                                    '\n',
+                                                    '        Args:\n',
+                                                    '            road: The road.\n',
+                                                    "            section: The section's index.\n",
+                                                    "            lane: The lane's index in the "
+                                                    'section.\n',
+                                                    '            s: The distance along the road, '
+                                                    'in meters.\n',
+                                                    "            width: The mark's width, in "
+                                                    'meters.\n',
+                                                    '            extra_width: The junction '
+                                                    'widening to pass on.\n',
+                                                    '\n',
+                                                    '        Returns:\n',
+                                                    "            The lane's first edge and the "
+                                                    "mark's other edge.\n",
+                                                    '\n',
+                                                    '        Raises:\n',
+                                                    '            Error: If a record is missing.\n',
+                                                    '        """\n',
+                                                    '        _ = _finite_si(Float64(s))\n',
+                                                    '        _ = _finite_si(Float64(width))\n',
+                                                    '        _ = '
+                                                    '_finite_si(Float64(extra_width))\n',
+                                                    '        return '
+                                                    'self._compute_edges_for_lanemark_si(\n',
+                                                    '            road, section, lane, s, width, '
+                                                    'extra_width\n',
+                                                    '        )\n',
+                                                    '\n',
+                                                    '    def _compute_edges_for_lanemark_si(\n',
+                                                    '        self,\n',
+                                                    '        road: Road,\n',
+                                                    '        section: Int,\n',
+                                                    '        lane: Int,\n']],
+                                                  [1866,
+                                                   1867,
+                                                   ['        var edges = '
+                                                    'road.lane_corners(section, lane, s, '
+                                                    'extra_width)\n'],
+                                                   ['        var edges = '
+                                                    'road._lane_corners_si(section, lane, s, '
+                                                    'extra_width)\n']],
+                                                  [1875,
+                                                   1876,
+                                                   ['                var e = '
+                                                    'road.lane_corners(section, other, s, '
+                                                    'extra_width)\n'],
+                                                   ['                var e = '
+                                                    'road._lane_corners_si(section, other, s, '
+                                                    'extra_width)\n']],
+                                                  [1892,
+                                                   1893,
+                                                   ['        var right = road.directed_point(s)\n'],
+                                                   ['        var right = '
+                                                    'road._directed_point_si(s)\n']],
+                                                  [1908,
+                                                   1909,
+                                                   ['        var s_end = s_start + '
+                                                    'road.section_length(section)\n'],
+                                                   ['        var s_end = s_start + '
+                                                    'road._section_length_si(section)\n']],
+                                                  [1911, 1912, [], ['        var steps = 0\n']],
+                                                  [1913,
+                                                   1916,
+                                                   [],
+                                                   ['            if steps >= 4194304:\n',
+                                                    '                raise Error("Lane mark '
+                                                    'sampling exhausted its work limit")\n',
+                                                    '            steps += 1\n']],
+                                                  [1920,
+                                                   1921,
+                                                   ['            var info = '
+                                                    'LaneMarking(found.value())\n'],
+                                                   ['            var info = '
+                                                    'LaneMarking._from_si(found.value())\n']],
+                                                  [1927,
+                                                   1928,
+                                                   ['                    e = '
+                                                    'self.compute_edges_for_lanemark(\n'],
+                                                   ['                    e = '
+                                                    'self._compute_edges_for_lanemark_si(\n']],
+                                                  [1933,
+                                                   1934,
+                                                   ['                s += step\n'],
+                                                   ['                s = _mesh_next_station(s, '
+                                                    'step)\n']],
+                                                  [1935,
+                                                   1936,
+                                                   ['                var e = '
+                                                    'self.compute_edges_for_lanemark(\n'],
+                                                   ['                var e = '
+                                                    'self._compute_edges_for_lanemark_si(\n']],
+                                                  [1939,
+                                                   1941,
+                                                   ['                s = min(s + step * 3.0, '
+                                                    's_end)\n',
+                                                    '                e = '
+                                                    'self.compute_edges_for_lanemark(\n'],
+                                                   ['                s = min(_mesh_next_station(s, '
+                                                    'step * 3.0), s_end)\n',
+                                                    '                e = '
+                                                    'self._compute_edges_for_lanemark_si(\n']],
+                                                  [1946,
+                                                   1947,
+                                                   ['                s += step * 3.0\n'],
+                                                   ['                s = _mesh_next_station(s, '
+                                                    'step * 3.0)\n']],
+                                                  [1948,
+                                                   1949,
+                                                   ['                s += step\n'],
+                                                   ['                s = _mesh_next_station(s, '
+                                                    'step)\n']],
+                                                  [1954,
+                                                   1955,
+                                                   ['        var width = '
+                                                    'LaneMarking(info_at(marks, '
+                                                    's).value()).width\n'],
+                                                   ['        var width = '
+                                                    'LaneMarking._from_si(info_at(marks, '
+                                                    's).value()).width\n']],
+                                                  [1959,
+                                                   1960,
+                                                   ['            e = '
+                                                    'self.compute_edges_for_lanemark(\n'],
+                                                   ['            e = '
+                                                    'self._compute_edges_for_lanemark_si(\n']],
+                                                  [2171,
+                                                   2180,
+                                                   ['    var nx = Int((high.x - low.x) / size) + '
+                                                    '1\n',
+                                                    '    var ny = Int((high.y - low.y) / size) + '
+                                                    '1\n'],
+                                                   ['    _ = _positive_si(Float64(size))\n',
+                                                    '    var x_count = _finite_si(Float64((high.x '
+                                                    '- low.x) / size))\n',
+                                                    '    var y_count = _finite_si(Float64((high.y '
+                                                    '- low.y) / size))\n',
+                                                    '    if x_count >= 4194304 or y_count >= '
+                                                    '4194304:  # Both are >= 0 (above).\n',
+                                                    '        raise Error("Mesh chunk grid exceeds '
+                                                    'its finite work limit")\n',
+                                                    '    var nx = Int(x_count) + 1\n',
+                                                    '    var ny = Int(y_count) + 1\n',
+                                                    '    if nx > 4194304 // ny:\n',
+                                                    '        raise Error("Mesh chunk grid exceeds '
+                                                    'its cell work limit")\n']],
+                                                  [2260,
+                                                   2262,
+                                                   ['        var s = section.s + '
+                                                    'road.section_length(0) * 0.5\n',
+                                                    '        var at = road.lane_transform(0, lane, '
+                                                    's).location\n'],
+                                                   ['        var s = section.s + '
+                                                    'road._section_length_si(0) * 0.5\n',
+                                                    '        var at = road._lane_transform_si(0, '
+                                                    'lane, s).location\n']],
+                                                  [2311,
+                                                   2313,
+                                                   ['                        the_lane.distance + '
+                                                    'road.section_length(section) * 0.5\n'],
+                                                   ['                        the_lane.distance\n',
+                                                    '                        + '
+                                                    'road._section_length_si(section) * 0.5\n']],
+                                                  [2314,
+                                                   2315,
+                                                   ['                    var w = '
+                                                    'map.waypoint_xodr(\n'],
+                                                   ['                    var w = '
+                                                    'map.waypoint_xodr_float32(\n']],
+                                                  [2414,
+                                                   2417,
+                                                   [],
+                                                   ['    _ = '
+                                                    '_positive_si(Float64(distance_between_trees.value))\n',
+                                                    '    _ = _finite_si(Float64(s_offset.value))\n',
+                                                    '    _ = '
+                                                    '_finite_si(Float64(distance_from_border.value))\n']],
+                                                  [2444,
+                                                   2448,
+                                                   ['            var s_end = section.s + '
+                                                    'road.section_length(sec)\n'],
+                                                   ['            var s_end = section.s + '
+                                                    'road._section_length_si(sec)\n',
+                                                    '            _ = _finite_si(s)\n',
+                                                    '            _ = _finite_si(s_end)\n',
+                                                    '            var steps = 0\n']],
+                                                  [2449,
+                                                   2454,
+                                                   ['                if road.lane_width(sec, ln, '
+                                                    's) != 0.0:\n',
+                                                    '                    var edges = '
+                                                    'road.lane_corners(sec, ln, s, 0.0)\n'],
+                                                   ['                if steps >= 4194304:\n',
+                                                    '                    raise Error("Tree '
+                                                    'sampling exhausted its work limit")\n',
+                                                    '                steps += 1\n',
+                                                    '                if road._lane_width_si(sec, '
+                                                    'ln, s) != 0.0:\n',
+                                                    '                    var edges = '
+                                                    'road._lane_corners_si(sec, ln, s, 0.0)\n']],
+                                                  [2461,
+                                                   2464,
+                                                   ['                        s += '
+                                                    'Float64(distance_between_trees.value)\n'],
+                                                   ['                        s = '
+                                                    '_mesh_next_station(\n',
+                                                    '                            s, '
+                                                    'Float64(distance_between_trees.value)\n',
+                                                    '                        )\n']],
+                                                  [2472,
+                                                   2473,
+                                                   ['                    var rotation = '
+                                                    'road.lane_transform(sec, ln, s).rotation\n'],
+                                                   ['                    var rotation = '
+                                                    'road._lane_transform_si(sec, ln, '
+                                                    's).rotation\n']],
+                                                  [2484,
+                                                   2485,
+                                                   ['                s += '
+                                                    'Float64(distance_between_trees.value)\n'],
+                                                   ['                s = _mesh_next_station(s, '
+                                                    'Float64(distance_between_trees.value))\n']],
+                                                  [2592,
+                                                   2601,
+                                                   [],
+                                                   ['\n',
+                                                    '\n',
+                                                    'def _mesh_next_station(s: Float64, step: '
+                                                    'Float64) raises -> Float64:\n',
+                                                    '    """Advance one finite mesh station or '
+                                                    'refuse unrepresentable progress."""\n',
+                                                    '    _ = _positive_si(step)\n',
+                                                    '    var following = _finite_si(s + step)\n',
+                                                    '    if not (following > s):\n',
+                                                    '        raise Error("Mesh sampling cannot '
+                                                    'advance its station")\n',
+                                                    '    return following\n']]]},
+ 'extensions/carla/navigation_mesh.mojo': {'after_sha256': '9e02190556addad6e00c58b4c2416b83f51e88eb6ec2051d69533db2c271724a',
+                                           'after_token_sha256': '3e0cf9c47c85a955a9b8704bd6622b0a30ff15bf8c9f1a279fbd2835371f96dc',
+                                           'before_sha256': '7062918ed17cae12cef32bf7801a0f7d56a99ca2993fea32214247ee2c86a841',
+                                           'before_token_sha256': 'fe85c7b438104fa920c03408dcd57ebc7926e0039b75b5d6440ccf5fc6481c1b',
+                                           'edits': [[44,
+                                                      46,
+                                                      [],
+                                                      ['\n',
+                                                       'from extensions.carla.quantity_boundary '
+                                                       'import _finite_si, _positive_si\n']],
+                                                     [429,
+                                                      478,
+                                                      ['    def height_at(self, point: Vector3) -> '
+                                                       'Float32:\n'],
+                                                      ['    def height_at(self, point: Vector3) '
+                                                       'raises -> Length:\n',
+                                                       '        """Checked typed boundary. Return '
+                                                       "the polygon's height under a point.\n",
+                                                       '\n',
+                                                       '        Args:\n',
+                                                       '            point: A point inside the '
+                                                       'polygon in the x-y plane.\n',
+                                                       '\n',
+                                                       '        Returns:\n',
+                                                       '            The height of the fan triangle '
+                                                       'that holds the point best: the\n',
+                                                       '            one whose smallest barycentric '
+                                                       'weight is largest.\n',
+                                                       '\n',
+                                                       '        Raises:\n',
+                                                       '            Error: If the point or a '
+                                                       'stored vertex is nonfinite, the polygon\n',
+                                                       '                has fewer than three '
+                                                       'vertices or plan-area magnitude below '
+                                                       '1e-6, or the result\n',
+                                                       '                is nonfinite.\n',
+                                                       '        """\n',
+                                                       '        return '
+                                                       'Length(self.height_at_si(point))\n',
+                                                       '\n',
+                                                       '    def height_at_si(self, point: Vector3) '
+                                                       'raises -> Float32:\n',
+                                                       '        """Explicit source-unit '
+                                                       'compatibility adapter. Return the '
+                                                       "polygon's height under a point.\n",
+                                                       '\n',
+                                                       '        Args:\n',
+                                                       '            point: A point inside the '
+                                                       'polygon in the x-y plane.\n',
+                                                       '\n',
+                                                       '        Returns:\n',
+                                                       '            The height of the fan triangle '
+                                                       'that holds the point best: the\n',
+                                                       '            one whose smallest barycentric '
+                                                       'weight is largest.\n',
+                                                       '\n',
+                                                       '        Raises:\n',
+                                                       '            Error: If the point or a '
+                                                       'stored vertex is nonfinite, the polygon\n',
+                                                       '                has fewer than three '
+                                                       'vertices or plan-area magnitude below '
+                                                       '1e-6, or the result\n',
+                                                       '                is nonfinite.\n',
+                                                       '        """\n',
+                                                       '        _ = _finite_si(Float64(point.x))\n',
+                                                       '        _ = _finite_si(Float64(point.y))\n',
+                                                       '        _ = _finite_si(Float64(point.z))\n',
+                                                       '        if len(self.vertices) < 3:\n',
+                                                       '            raise Error("A polygon needs '
+                                                       'three corners")\n',
+                                                       '        for vertex in self.vertices:  # '
+                                                       'pragma: no branch\n',
+                                                       '            _ = '
+                                                       '_finite_si(Float64(vertex.x))\n',
+                                                       '            _ = '
+                                                       '_finite_si(Float64(vertex.y))\n',
+                                                       '            _ = '
+                                                       '_finite_si(Float64(vertex.z))\n',
+                                                       '        var area = '
+                                                       '_finite_si(_signed_area(self.vertices))\n',
+                                                       '        if abs(area) < 1e-6:\n',
+                                                       '            raise Error("A polygon needs '
+                                                       'an area")\n',
+                                                       '        var value = '
+                                                       'self._height_at_si(point)\n',
+                                                       '        _ = _finite_si(Float64(value))\n',
+                                                       '        return value\n',
+                                                       '\n',
+                                                       '    def _height_at_si(self, point: '
+                                                       'Vector3) -> Float32:\n']],
+                                                     [517,
+                                                      518,
+                                                      ['            return Vector3(point.x, '
+                                                       'point.y, self.height_at(point))\n'],
+                                                      ['            return Vector3(point.x, '
+                                                       'point.y, self._height_at_si(point))\n']],
+                                                     [1336,
+                                                      1337,
+                                                      ['                s0, s0 + '
+                                                       'road.section_length(sec), step, cuts\n'],
+                                                      ['                s0, s0 + '
+                                                       'road._section_length_si(sec), step, '
+                                                       'cuts\n']],
+                                                     [1348,
+                                                      1350,
+                                                      ['                    var a = '
+                                                       'road.lane_corners(sec, ln, stations[k])\n',
+                                                       '                    var b = '
+                                                       'road.lane_corners(sec, ln, stations[k + '
+                                                       '1])\n'],
+                                                      ['                    var a = '
+                                                       'road._lane_corners_si(sec, ln, '
+                                                       'stations[k])\n',
+                                                       '                    var b = '
+                                                       'road._lane_corners_si(sec, ln, stations[k '
+                                                       '+ 1])\n']]]},
+ 'extensions/carla/opendrive.mojo': {'after_sha256': 'd52196984072615a26914a45133a513d1ec6e4ba194f093d5335b2b1b7a92ce7',
                                      'after_token_sha256': 'f055b85ae58b2add489cb1fbc8d1d8952b74209838e7bab5b4c5dd4202c7965f',
                                      'before_sha256': '9ff9b750af2c1c1a92fe3f3dfe1e49566e9d6f8c39a3576e0d4cf542bc8cdc28',
                                      'before_token_sha256': '1d29eeea907706d3b63c0898f00490ffea8470cd061c7e3383ed907b26f809ce',
@@ -33355,6 +36104,19 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                                 ['                    CubicPolynomial(\n'],
                                                 ['                    '
                                                  'CubicPolynomial.from_coefficients(\n']),
+                                               (624,
+                                                627,
+                                                ['        # Finite, ordered bounds retain the '
+                                                 "section's start. A nonfinite\n",
+                                                 '        # endpoint can leave this list empty '
+                                                 'before builder validation.\n',
+                                                 '        for k in range(len(starts)):\n'],
+                                                ['        # Finite, ordered bounds retain the '
+                                                 "section's start, and the\n",
+                                                 '        # builder refuses a nonfinite section '
+                                                 'start or end before this.\n',
+                                                 '        for k in range(len(starts)):  # pragma: '
+                                                 'no branch\n']),
                                                (664,
                                                 665,
                                                 ['        var lane = builder.lane(road_id, '
@@ -33650,7 +36412,7 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                                        '0)\n'],
                                                       ['            set_walker_speed(world, id, '
                                                        'Velocity(0))\n'])]},
- 'extensions/carla/road.mojo': {'after_sha256': '92c5f66b1ee93d80e36fe1c59c3f8c716f942d782adcaa2bb5b40bc5b8454aa5',
+ 'extensions/carla/road.mojo': {'after_sha256': 'a53c48d28b33fb4f5f26316be902e57607a56012edb5f0b025241df1c0092b04',
                                 'after_token_sha256': '567ff145049fd6a23b0390e52b4e17de032666c27c121bf9badb494afe28d40a',
                                 'before_sha256': '4e5857371a9de89c6e41f74e3cdc421760be45603446dd2b2a471f22b53dfd0c',
                                 'before_token_sha256': '7893ed53d2fafca05a7b3d3467dd80735711d3bde32f0885373996a5aa7578a7',
@@ -35169,7 +37931,8 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                             '        _ = _finite_si(Float64(extra_width))\n',
                                             '        var result = self._lane_corners_si(section, '
                                             'lane, s, extra_width)\n',
-                                            '        for point in [result[0], result[1]]:\n',
+                                            '        for point in [result[0], result[1]]:  # '
+                                            'pragma: no branch\n',
                                             '            _ = _finite_si(Float64(point.x))\n',
                                             '            _ = _finite_si(Float64(point.y))\n',
                                             '            _ = _finite_si(Float64(point.z))\n',
@@ -35303,6 +38066,663 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                             '        return '
                                             'Length64(_nonnegative_si(self.length))\n',
                                             '\n'])]},
+ 'extensions/carla/traffic_manager_collision.mojo': {'after_sha256': 'b9ee47331258a1c06f47ff60fe56fcb848d7e3c5a7c7cca3ef53de636eddd1ee',
+                                                     'after_token_sha256': '2adffb8345dd6e6b743618d9f0ee0ad97b3c1e5d73ea98fee843a03c36431a7f',
+                                                     'before_sha256': '0af2bfde92c55900bb862886fd9d2ca3b6f6920f1acc412379dbdf1380da2952',
+                                                     'before_token_sha256': 'cee18ff4833eefd954bc2a05452c7aa8d2e98e35218c8acc3b78aa0bfe4f80ed',
+                                                     'edits': [[47,
+                                                                51,
+                                                                [],
+                                                                ['from '
+                                                                 'extensions.carla.quantity_boundary '
+                                                                 'import _finite_si, '
+                                                                 '_nonnegative_si\n',
+                                                                 'from std.math import isfinite\n',
+                                                                 'from std.collections import '
+                                                                 'Optional\n',
+                                                                 '\n']],
+                                                               [52,
+                                                                53,
+                                                                ['from extensions.carla.map import '
+                                                                 'segment_distance_2d\n'],
+                                                                ['from extensions.carla.map import '
+                                                                 '_segment_distance_2d_si as '
+                                                                 'segment_distance_2d\n']],
+                                                               [71,
+                                                                74,
+                                                                ['from '
+                                                                 'extensions.carla.traffic_manager_map '
+                                                                 'import distance_squared\n'],
+                                                                ['from '
+                                                                 'extensions.carla.traffic_manager_map '
+                                                                 'import (\n',
+                                                                 '    _distance_squared_si as '
+                                                                 'distance_squared,\n',
+                                                                 ')\n']],
+                                                               [79,
+                                                                80,
+                                                                [],
+                                                                ['    _check_actor_id,\n']],
+                                                               [87,
+                                                                88,
+                                                                ['from units.si import Length\n'],
+                                                                ['from units.si import Length, '
+                                                                 'Length64\n']],
+                                                               [134,
+                                                                183,
+                                                                ['def polygon_distance(a: '
+                                                                 'List[Vector3], b: List[Vector3]) '
+                                                                 '-> Float64:\n'],
+                                                                ['def polygon_distance(\n',
+                                                                 '    a: List[Vector3], b: '
+                                                                 'List[Vector3]\n',
+                                                                 ') raises -> '
+                                                                 'Optional[Length64]:\n',
+                                                                 '    """Return a polygon '
+                                                                 'separation, absent when either '
+                                                                 'polygon is empty.\n',
+                                                                 '\n',
+                                                                 '    Args:\n',
+                                                                 "        a: The first polygon's "
+                                                                 'meter coordinates.\n',
+                                                                 "        b: The second polygon's "
+                                                                 'meter coordinates.\n',
+                                                                 '\n',
+                                                                 '    Returns:\n',
+                                                                 '        A finite nonnegative '
+                                                                 'distance, or None for an empty '
+                                                                 'polygon.\n',
+                                                                 '\n',
+                                                                 '    Raises:\n',
+                                                                 '        Error: If a plan '
+                                                                 'coordinate or a nonempty result '
+                                                                 'is not finite.\n',
+                                                                 '    """\n',
+                                                                 '    var value = '
+                                                                 'polygon_distance_meters(a, b)\n',
+                                                                 '    if len(a) == 0 or len(b) == '
+                                                                 '0:\n',
+                                                                 '        return None\n',
+                                                                 '    return Length64(value)\n',
+                                                                 '\n',
+                                                                 '\n',
+                                                                 'def polygon_distance_meters(\n',
+                                                                 '    a: List[Vector3], b: '
+                                                                 'List[Vector3]\n',
+                                                                 ') raises -> Float64:\n',
+                                                                 '    """Explicit checked meter '
+                                                                 'adapter; empty polygons retain '
+                                                                 'positive infinity.\n',
+                                                                 '\n',
+                                                                 '    Args:\n',
+                                                                 "        a: The first polygon's "
+                                                                 'meter coordinates.\n',
+                                                                 "        b: The second polygon's "
+                                                                 'meter coordinates.\n',
+                                                                 '\n',
+                                                                 '    Returns:\n',
+                                                                 '        The raw separation, or '
+                                                                 'positive infinity for an empty '
+                                                                 'polygon.\n',
+                                                                 '\n',
+                                                                 '    Raises:\n',
+                                                                 '        Error: If a plan '
+                                                                 'coordinate or a nonempty result '
+                                                                 'is not finite.\n',
+                                                                 '    """\n',
+                                                                 '    for point in a:\n',
+                                                                 '        _ = '
+                                                                 '_finite_si(Float64(point.x))\n',
+                                                                 '        _ = '
+                                                                 '_finite_si(Float64(point.y))\n',
+                                                                 '    for point in b:\n',
+                                                                 '        _ = '
+                                                                 '_finite_si(Float64(point.x))\n',
+                                                                 '        _ = '
+                                                                 '_finite_si(Float64(point.y))\n',
+                                                                 '    var value = '
+                                                                 '_polygon_distance_si(a, b)\n',
+                                                                 '    if len(a) > 0 and len(b) > '
+                                                                 '0:\n',
+                                                                 '        _ = '
+                                                                 '_nonnegative_si(value)\n',
+                                                                 '    return value\n',
+                                                                 '\n',
+                                                                 '\n',
+                                                                 'def _polygon_distance_si(a: '
+                                                                 'List[Vector3], b: List[Vector3]) '
+                                                                 '-> Float64:\n']],
+                                                               [274,
+                                                                276,
+                                                                ['            Error: If the index '
+                                                                 'is out of range, or a tracked '
+                                                                 'vehicle has\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid, or the index is '
+                                                                 'out of range,\n',
+                                                                 '                or a tracked '
+                                                                 'vehicle has\n']],
+                                                               [337,
+                                                                338,
+                                                                ['                    var result = '
+                                                                 'self.negotiate_collision(\n'],
+                                                                ['                    var result = '
+                                                                 'self._negotiate_collision_si(\n']],
+                                                               [378,
+                                                                379,
+                                                                ['            Error: Never; the '
+                                                                 'keys are collected before '
+                                                                 'removal.\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid.\n']],
+                                                               [380,
+                                                                381,
+                                                                [],
+                                                                ['        _ = '
+                                                                 '_check_actor_id(actor)\n']],
+                                                               [401,
+                                                                437,
+                                                                [],
+                                                                ['    ) raises -> Length:\n',
+                                                                 '        """Read the checked '
+                                                                 'physical stage result.\n',
+                                                                 '\n',
+                                                                 '        Args:\n',
+                                                                 '            actor: The source '
+                                                                 'actor.\n',
+                                                                 '            shared: The source '
+                                                                 'shared.\n',
+                                                                 '\n',
+                                                                 '        Returns:\n',
+                                                                 '            The physical result; '
+                                                                 'an absent collision margin means '
+                                                                 'no yield.\n',
+                                                                 '\n',
+                                                                 '        Raises:\n',
+                                                                 '            Error: If a '
+                                                                 'quantity, actor id or tracked '
+                                                                 'state is invalid.\n',
+                                                                 '        """\n',
+                                                                 '        return '
+                                                                 'Length(self.get_bounding_box_extension_meters(actor, '
+                                                                 'shared))\n',
+                                                                 '\n',
+                                                                 '    def '
+                                                                 'get_bounding_box_extension_meters(\n',
+                                                                 '        self, actor: ActorId, '
+                                                                 'shared: TrafficManagerShared\n',
+                                                                 '    ) raises -> Float32:\n',
+                                                                 '        """Explicit checked '
+                                                                 'meters stage compatibility '
+                                                                 'adapter.\n',
+                                                                 '\n',
+                                                                 '        Args:\n',
+                                                                 '            actor: The source '
+                                                                 'actor.\n',
+                                                                 '            shared: The source '
+                                                                 'shared.\n',
+                                                                 '\n',
+                                                                 '        Returns:\n',
+                                                                 '            The scalar CARLA '
+                                                                 'result in meters; collision '
+                                                                 'no-yield retains positive '
+                                                                 'infinity.\n',
+                                                                 '\n',
+                                                                 '        Raises:\n',
+                                                                 '            Error: If a '
+                                                                 'quantity, actor id or tracked '
+                                                                 'state is invalid.\n',
+                                                                 '        """\n',
+                                                                 '        var result = '
+                                                                 'self._get_bounding_box_extension_si(actor, '
+                                                                 'shared)\n',
+                                                                 '        _ = '
+                                                                 '_finite_si(Float64(result))\n',
+                                                                 '        return result\n',
+                                                                 '\n',
+                                                                 '    def '
+                                                                 '_get_bounding_box_extension_si(\n',
+                                                                 '        self, actor: ActorId, '
+                                                                 'shared: TrafficManagerShared\n']],
+                                                               [451,
+                                                                452,
+                                                                ['            Error: If the '
+                                                                 'vehicle is not tracked.\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid, or the vehicle '
+                                                                 'is not tracked.\n']],
+                                                               [488,
+                                                                489,
+                                                                ['            Error: If the actor '
+                                                                 'is not tracked.\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid, or the actor is '
+                                                                 'not tracked.\n']],
+                                                               [527,
+                                                                528,
+                                                                ['            Error: If the actor '
+                                                                 'is not tracked.\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid, or the actor is '
+                                                                 'not tracked.\n']],
+                                                               [529,
+                                                                530,
+                                                                [],
+                                                                ['        _ = '
+                                                                 '_check_actor_id(actor)\n']],
+                                                               [541,
+                                                                542,
+                                                                ['                '
+                                                                 'self.get_bounding_box_extension(actor, '
+                                                                 'shared),\n'],
+                                                                ['                '
+                                                                 'self._get_bounding_box_extension_si(actor, '
+                                                                 'shared),\n']],
+                                                               [610,
+                                                                611,
+                                                                ['            Error: If an actor '
+                                                                 'is not tracked.\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid, or an actor is '
+                                                                 'not tracked.\n']],
+                                                               [612,
+                                                                614,
+                                                                [],
+                                                                ['        _ = '
+                                                                 '_check_actor_id(reference)\n',
+                                                                 '        _ = '
+                                                                 '_check_actor_id(other)\n']],
+                                                               [631,
+                                                                635,
+                                                                ['                '
+                                                                 'polygon_distance(reference_box, '
+                                                                 'other_geodesic),\n',
+                                                                 '                '
+                                                                 'polygon_distance(other_box, '
+                                                                 'reference_geodesic),\n',
+                                                                 '                '
+                                                                 'polygon_distance(reference_geodesic, '
+                                                                 'other_geodesic),\n',
+                                                                 '                '
+                                                                 'polygon_distance(reference_box, '
+                                                                 'other_box),\n'],
+                                                                ['                '
+                                                                 '_polygon_distance_si(reference_box, '
+                                                                 'other_geodesic),\n',
+                                                                 '                '
+                                                                 '_polygon_distance_si(other_box, '
+                                                                 'reference_geodesic),\n',
+                                                                 '                '
+                                                                 '_polygon_distance_si(reference_geodesic, '
+                                                                 'other_geodesic),\n',
+                                                                 '                '
+                                                                 '_polygon_distance_si(reference_box, '
+                                                                 'other_box),\n']],
+                                                               [646,
+                                                                704,
+                                                                [],
+                                                                ['        mut self,\n',
+                                                                 '        reference: ActorId,\n',
+                                                                 '        other: ActorId,\n',
+                                                                 '        look_ahead_index: Int,\n',
+                                                                 '        shared: '
+                                                                 'TrafficManagerShared,\n',
+                                                                 '    ) raises -> Tuple[Bool, '
+                                                                 'Optional[Length]]:\n',
+                                                                 '        """Read the checked '
+                                                                 'physical stage result.\n',
+                                                                 '\n',
+                                                                 '        Args:\n',
+                                                                 '            reference: The '
+                                                                 'source reference.\n',
+                                                                 '            other: The source '
+                                                                 'other.\n',
+                                                                 '            look_ahead_index: '
+                                                                 'The source look ahead index.\n',
+                                                                 '            shared: The source '
+                                                                 'shared.\n',
+                                                                 '\n',
+                                                                 '        Returns:\n',
+                                                                 '            The physical result; '
+                                                                 'an absent collision margin means '
+                                                                 'no yield.\n',
+                                                                 '\n',
+                                                                 '        Raises:\n',
+                                                                 '            Error: If a '
+                                                                 'quantity, actor id or tracked '
+                                                                 'state is invalid.\n',
+                                                                 '        """\n',
+                                                                 '        var result = '
+                                                                 'self.negotiate_collision_meters(\n',
+                                                                 '            reference, other, '
+                                                                 'look_ahead_index, shared\n',
+                                                                 '        )\n',
+                                                                 '        if not result[0]:\n',
+                                                                 '            return (False, '
+                                                                 'Optional[Length]())\n',
+                                                                 '        return (True, '
+                                                                 'Optional[Length](Length(result[1])))\n',
+                                                                 '\n',
+                                                                 '    def '
+                                                                 'negotiate_collision_meters(\n',
+                                                                 '        mut self,\n',
+                                                                 '        reference: ActorId,\n',
+                                                                 '        other: ActorId,\n',
+                                                                 '        look_ahead_index: Int,\n',
+                                                                 '        shared: '
+                                                                 'TrafficManagerShared,\n',
+                                                                 '    ) raises -> Tuple[Bool, '
+                                                                 'Float32]:\n',
+                                                                 '        """Explicit checked '
+                                                                 'meters stage compatibility '
+                                                                 'adapter.\n',
+                                                                 '\n',
+                                                                 '        Args:\n',
+                                                                 '            reference: The '
+                                                                 'source reference.\n',
+                                                                 '            other: The source '
+                                                                 'other.\n',
+                                                                 '            look_ahead_index: '
+                                                                 'The source look ahead index.\n',
+                                                                 '            shared: The source '
+                                                                 'shared.\n',
+                                                                 '\n',
+                                                                 '        Returns:\n',
+                                                                 '            The scalar CARLA '
+                                                                 'result in meters; collision '
+                                                                 'no-yield retains positive '
+                                                                 'infinity.\n',
+                                                                 '\n',
+                                                                 '        Raises:\n',
+                                                                 '            Error: If a '
+                                                                 'quantity, actor id or tracked '
+                                                                 'state is invalid.\n',
+                                                                 '        """\n',
+                                                                 '        var result = '
+                                                                 'self._negotiate_collision_si(\n',
+                                                                 '            reference, other, '
+                                                                 'look_ahead_index, shared\n',
+                                                                 '        )\n',
+                                                                 '        if result[0]:\n',
+                                                                 '            _ = '
+                                                                 '_finite_si(Float64(result[1]))\n',
+                                                                 '        # Without a hazard the '
+                                                                 'margin stays at positive '
+                                                                 'infinity.\n',
+                                                                 '        debug_assert(result[0] '
+                                                                 'or result[1] == '
+                                                                 'inf[DType.float32](), "No '
+                                                                 'yield")\n',
+                                                                 '        return result\n',
+                                                                 '\n',
+                                                                 '    def '
+                                                                 '_negotiate_collision_si(\n']],
+                                                               [729,
+                                                                731,
+                                                                ['            Error: If an actor '
+                                                                 'is not tracked, or the vehicle '
+                                                                 'has no path.\n'],
+                                                                ['            Error: If an actor '
+                                                                 'id is not valid, an actor is not '
+                                                                 'tracked, or\n',
+                                                                 '                the vehicle has '
+                                                                 'no path.\n']],
+                                                               [732,
+                                                                734,
+                                                                [],
+                                                                ['        _ = '
+                                                                 '_check_actor_id(reference)\n',
+                                                                 '        _ = '
+                                                                 '_check_actor_id(other)\n']],
+                                                               [754,
+                                                                758,
+                                                                ['        var ego_extension = '
+                                                                 'self.get_bounding_box_extension(reference, '
+                                                                 'shared)\n',
+                                                                 '        var other_extension = '
+                                                                 'self.get_bounding_box_extension(other, '
+                                                                 'shared)\n'],
+                                                                ['        var ego_extension = '
+                                                                 'self._get_bounding_box_extension_si(\n',
+                                                                 '            reference, shared\n',
+                                                                 '        )\n',
+                                                                 '        var other_extension = '
+                                                                 'self._get_bounding_box_extension_si(other, '
+                                                                 'shared)\n']]]},
+ 'extensions/carla/traffic_manager_map.mojo': {'after_sha256': '620d3f33e995acbd5c37fcf3141022f3451b0e4413893739e4b7411d48a1acf8',
+                                               'after_token_sha256': '6a1d73a7b1427017eeea99c25b852209a74e37d273baffccb282fabf07e6d5fc',
+                                               'before_sha256': '6dd214eef706346be535c24d8506f9373456676bba9192fc213c7854e541e4be',
+                                               'before_token_sha256': '9ccd8165b01e86250463c396abbd0660954239e742d5ba2c92eaec19fb643a55',
+                                               'edits': [[56,
+                                                          59,
+                                                          [],
+                                                          ['\n',
+                                                           'from '
+                                                           'extensions.carla.quantity_boundary '
+                                                           'import _finite_si, _nonnegative_si\n',
+                                                           'from units.si import Area\n']],
+                                                         [168,
+                                                          207,
+                                                          ['def distance_squared(a: Vector3, b: '
+                                                           'Vector3) -> Float32:\n'],
+                                                          ['def distance_squared(a: Vector3, b: '
+                                                           'Vector3) raises -> Area:\n',
+                                                           '    """Return checked squared distance '
+                                                           'between two meter coordinates.\n',
+                                                           '\n',
+                                                           '    Args:\n',
+                                                           '        a: The first point.\n',
+                                                           '        b: The second point.\n',
+                                                           '\n',
+                                                           '    Returns:\n',
+                                                           '        The physical squared '
+                                                           'distance.\n',
+                                                           '\n',
+                                                           '    Raises:\n',
+                                                           '        Error: If a coordinate or '
+                                                           'result is not finite.\n',
+                                                           '    """\n',
+                                                           '    return '
+                                                           'Area(distance_squared_square_meters(a, '
+                                                           'b))\n',
+                                                           '\n',
+                                                           '\n',
+                                                           'def distance_squared_square_meters(a: '
+                                                           'Vector3, b: Vector3) raises -> '
+                                                           'Float32:\n',
+                                                           '    """Explicit square-meter adapter, '
+                                                           'retaining Float32 arithmetic.\n',
+                                                           '\n',
+                                                           '    Args:\n',
+                                                           '        a: The first point in '
+                                                           'meters.\n',
+                                                           '        b: The second point in '
+                                                           'meters.\n',
+                                                           '\n',
+                                                           '    Returns:\n',
+                                                           '        The scalar squared distance in '
+                                                           'square meters.\n',
+                                                           '\n',
+                                                           '    Raises:\n',
+                                                           '        Error: If a coordinate or '
+                                                           'result is not finite.\n',
+                                                           '    """\n',
+                                                           '    for point in [a, b]:  # pragma: no '
+                                                           'branch\n',
+                                                           '        _ = '
+                                                           '_finite_si(Float64(point.x))\n',
+                                                           '        _ = '
+                                                           '_finite_si(Float64(point.y))\n',
+                                                           '        _ = '
+                                                           '_finite_si(Float64(point.z))\n',
+                                                           '    var value = '
+                                                           '_distance_squared_si(a, b)\n',
+                                                           '    _ = '
+                                                           '_nonnegative_si(Float64(value))\n',
+                                                           '    return value\n',
+                                                           '\n',
+                                                           '\n',
+                                                           'def _distance_squared_si(a: Vector3, '
+                                                           'b: Vector3) -> Float32:\n']],
+                                                         [312,
+                                                          347,
+                                                          ['    def distance(self, location: '
+                                                           'Vector3) -> Float32:\n'],
+                                                          ['    def distance(self, location: '
+                                                           'Vector3) raises -> Length:\n',
+                                                           '        """Return the checked physical '
+                                                           'distance to a point.\n',
+                                                           '\n',
+                                                           '        Args:\n',
+                                                           '            location: The point in '
+                                                           'meters.\n',
+                                                           '\n',
+                                                           '        Returns:\n',
+                                                           '            The physical quantity with '
+                                                           'unchanged Float32 arithmetic.\n',
+                                                           '\n',
+                                                           '        Raises:\n',
+                                                           '            Error: If a coordinate or '
+                                                           'result is not finite.\n',
+                                                           '        """\n',
+                                                           '        return '
+                                                           'Length(self.distance_meters(location))\n',
+                                                           '\n',
+                                                           '    def distance_meters(self, '
+                                                           'location: Vector3) raises -> '
+                                                           'Float32:\n',
+                                                           '        """Explicit checked meters '
+                                                           'compatibility result.\n',
+                                                           '\n',
+                                                           '        Args:\n',
+                                                           '            location: The point in '
+                                                           'meters.\n',
+                                                           '\n',
+                                                           '        Returns:\n',
+                                                           '            The scalar result in '
+                                                           'meters.\n',
+                                                           '\n',
+                                                           '        Raises:\n',
+                                                           '            Error: If a coordinate or '
+                                                           'result is not finite.\n',
+                                                           '        """\n',
+                                                           '        for point in [self.location(), '
+                                                           'location]:  # pragma: no branch\n',
+                                                           '            _ = '
+                                                           '_finite_si(Float64(point.x))\n',
+                                                           '            _ = '
+                                                           '_finite_si(Float64(point.y))\n',
+                                                           '            _ = '
+                                                           '_finite_si(Float64(point.z))\n',
+                                                           '        var value = '
+                                                           'self._distance_si(location)\n',
+                                                           '        _ = '
+                                                           '_nonnegative_si(Float64(value))\n',
+                                                           '        return value\n',
+                                                           '\n',
+                                                           '    def _distance_si(self, location: '
+                                                           'Vector3) -> Float32:\n']],
+                                                         [357,
+                                                          394,
+                                                          ['    def distance_squared(self, '
+                                                           'location: Vector3) -> Float32:\n'],
+                                                          ['    def distance_squared(self, '
+                                                           'location: Vector3) raises -> Area:\n',
+                                                           '        """Return the checked physical '
+                                                           'distance squared to a point.\n',
+                                                           '\n',
+                                                           '        Args:\n',
+                                                           '            location: The point in '
+                                                           'meters.\n',
+                                                           '\n',
+                                                           '        Returns:\n',
+                                                           '            The physical quantity with '
+                                                           'unchanged Float32 arithmetic.\n',
+                                                           '\n',
+                                                           '        Raises:\n',
+                                                           '            Error: If a coordinate or '
+                                                           'result is not finite.\n',
+                                                           '        """\n',
+                                                           '        return '
+                                                           'Area(self.distance_squared_square_meters(location))\n',
+                                                           '\n',
+                                                           '    def '
+                                                           'distance_squared_square_meters(\n',
+                                                           '        self, location: Vector3\n',
+                                                           '    ) raises -> Float32:\n',
+                                                           '        """Explicit checked '
+                                                           'square-meters compatibility result.\n',
+                                                           '\n',
+                                                           '        Args:\n',
+                                                           '            location: The point in '
+                                                           'meters.\n',
+                                                           '\n',
+                                                           '        Returns:\n',
+                                                           '            The scalar result in '
+                                                           'square meters.\n',
+                                                           '\n',
+                                                           '        Raises:\n',
+                                                           '            Error: If a coordinate or '
+                                                           'result is not finite.\n',
+                                                           '        """\n',
+                                                           '        for point in [self.location(), '
+                                                           'location]:  # pragma: no branch\n',
+                                                           '            _ = '
+                                                           '_finite_si(Float64(point.x))\n',
+                                                           '            _ = '
+                                                           '_finite_si(Float64(point.y))\n',
+                                                           '            _ = '
+                                                           '_finite_si(Float64(point.z))\n',
+                                                           '        var value = '
+                                                           'self._distance_squared_si(location)\n',
+                                                           '        _ = '
+                                                           '_nonnegative_si(Float64(value))\n',
+                                                           '        return value\n',
+                                                           '\n',
+                                                           '    def _distance_squared_si(self, '
+                                                           'location: Vector3) -> Float32:\n']],
+                                                         [402,
+                                                          403,
+                                                          ['        return '
+                                                           'distance_squared(self.location(), '
+                                                           'location)\n'],
+                                                          ['        return '
+                                                           '_distance_squared_si(self.location(), '
+                                                           'location)\n']],
+                                                         [807,
+                                                          808,
+                                                          ['        for w in '
+                                                           'map.generate_waypoints(Float64(MAP_RESOLUTION.value)):\n'],
+                                                          ['        for w in '
+                                                           'map.generate_waypoints_meters(Float64(MAP_RESOLUTION.value)):\n']],
+                                                         [825,
+                                                          826,
+                                                          ['                if '
+                                                           'distance_squared(edge, '
+                                                           'current.location()) > (\n'],
+                                                          ['                if '
+                                                           '_distance_squared_si(edge, '
+                                                           'current.location()) > (\n']],
+                                                         [924,
+                                                          925,
+                                                          ['                var nexts = '
+                                                           'map.next(\n'],
+                                                          ['                var nexts = '
+                                                           'map.next_meters(\n']],
+                                                         [1206,
+                                                          1207,
+                                                          ['            var found = '
+                                                           'map.waypoint_xodr(\n'],
+                                                          ['            var found = '
+                                                           'map.waypoint_xodr_float32(\n']],
+                                                         [1353,
+                                                          1354,
+                                                          ['    for landmark in '
+                                                           'map.landmarks_in_distance(waypoint, '
+                                                           '15.0):\n'],
+                                                          ['    for landmark in '
+                                                           'map.landmarks_in_distance_meters(waypoint, '
+                                                           '15.0):\n']]]},
  'tests/test_carla_junction_bounds.mojo': {'after_sha256': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
                                            'after_token_sha256': 'c2ca46f3dbc2e7a8cf2e265126a17f98ae05e2734b3b619d8e47cec26eeb4926',
                                            'before_sha256': 'f8493d6ae43fff6446476fa536127373094d1d10c4f0d63af000d3741db6c053',
@@ -36289,11 +39709,17 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8
                                                                   '23)\n',
                                                                   '\n',
                                                                   '\n'])]}}}
-EDGE_SHA256 = {**HISTORICAL_EDGE_SHA256, **{'extensions/carla/map.mojo': 'bb69a38845f9823ce5fe707b68be8c45e561bd11fc9c37c43b253689238faa3f',
- 'extensions/carla/map_builder.mojo': '6ad7c907ee260b8d98f1f764eab9a9f89c66eaf029a268e5a62be0ae9aa0c1d9',
- 'extensions/carla/opendrive.mojo': '05f31f369679a08564857f2a9653da082f72ad4b627e064727f3e18b8355b986',
+EDGE_SHA256 = {**HISTORICAL_EDGE_SHA256, **{'extensions/carla/geometry.mojo': '8d58038f61a3e42b96f4329847e42a7821403410dd3c204b4f27001cef9d34e8',
+ 'extensions/carla/map.mojo': 'c3788efcb454024783075143224bbc7c691c05b218a02f1d08456700edccc7e5',
+ 'extensions/carla/map_builder.mojo': 'f4797d374506ec0973dceb09030c5ab2a1d536f673a46df0f62c3501da44f48d',
+ 'extensions/carla/math.mojo': '9450ae752ff62ce1065111e591523a6a825772511f88e2222ddd982308f2b9d8',
+ 'extensions/carla/mesh_factory.mojo': '410ec85c278c743159b566666a4ec1eb1492abddd002edb725b621135e72b98a',
+ 'extensions/carla/navigation_mesh.mojo': 'de00b12408fba9b1d4036f42968307f17a2ee80c4381fe8123f253e48eb9e507',
+ 'extensions/carla/opendrive.mojo': '4ef1af46cc94e0c1c4eaf6c5bf2edc9bf321e7cde84410d62fee7892229d896a',
  'extensions/carla/replayer_helper.mojo': 'badce20743015c933af22e7278105eba34195311bd89538d7f4a330418d89041',
- 'extensions/carla/road.mojo': '1110de3999d37e681b355c72a2f2f71f79e799da6ee5f08d4e917f2c40d6da38',
+ 'extensions/carla/road.mojo': '2380f5aeed1a8ff72f2e4e33582b6164a7edcf18dc0edd5540f0e3343381114c',
+ 'extensions/carla/traffic_manager_collision.mojo': '20c4418fb705485b786091a2348f0c4e4e84855319aa3d6a5d8b6a380feef991',
+ 'extensions/carla/traffic_manager_map.mojo': '6fceb866646c176719fbbd2a4045d4a3f14acc956f91a8584f4cae0a32f96488',
  'tests/test_carla_junction_bounds.mojo': '4029dc27f807ce6a5b37cb1436153e167b5fd31b41b848bc9c1d14b9a8759f1a',
  'tests/test_carla_lane_borders.mojo': '9476014425ab1ed004137cb37799895b4a98be95cbd7631196e34d1a848d4118',
  'tests/test_carla_lane_search_positive_controls.mojo': '757f71f80395fd98a841a7485e9d9856f6100cbc23f8fcbd54f41f392665c52a',
@@ -36306,21 +39732,27 @@ TESTS = {**HISTORICAL_TESTS, **{'tests/test_carla_junction_bounds.mojo': 'bc5871
  'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
-COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'fc3d5ebc581a4ed27327a222f2e1fd6f18f29a218d9fdfa7e83e52361c610434'}}
-CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/map.mojo': '8159b0fbdaaa44ee428242c874bf592a6d500233611c85ab2803d462f9eada7b',
- 'extensions/carla/map_builder.mojo': '4646b215316dc28b0163a133abe5a187e2cdcdf55e4cf740770aee0dcd8de34f',
- 'extensions/carla/opendrive.mojo': '32290a0f2c5804e13504554fa89ecbeaefb67809ccc1903f04d2b51c3815a6c1',
+COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'a9604922edb02d37abc4d71c081a2b2ad753870d89bf70b42bfa864438699510'}}
+CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/geometry.mojo': '374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e',
+ 'extensions/carla/map.mojo': 'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df',
+ 'extensions/carla/map_builder.mojo': 'f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c',
+ 'extensions/carla/math.mojo': '9fa94b3bb8850c4f6d282ef70795004c2c1217f22fd1c1a6eee448c8ac62ee2e',
+ 'extensions/carla/mesh_factory.mojo': '291679187df49469796893a4885903f003253493d0a928e5b4fb33a2d970f7b6',
+ 'extensions/carla/navigation_mesh.mojo': '9e02190556addad6e00c58b4c2416b83f51e88eb6ec2051d69533db2c271724a',
+ 'extensions/carla/opendrive.mojo': 'd52196984072615a26914a45133a513d1ec6e4ba194f093d5335b2b1b7a92ce7',
  'extensions/carla/replayer_helper.mojo': 'f9f625ec0f0500a80a2bb839cabe01311bb08c7e403d70198dae245f8477b1fa',
- 'extensions/carla/road.mojo': '92c5f66b1ee93d80e36fe1c59c3f8c716f942d782adcaa2bb5b40bc5b8454aa5',
+ 'extensions/carla/road.mojo': 'a53c48d28b33fb4f5f26316be902e57607a56012edb5f0b025241df1c0092b04',
+ 'extensions/carla/traffic_manager_collision.mojo': 'b9ee47331258a1c06f47ff60fe56fcb848d7e3c5a7c7cca3ef53de636eddd1ee',
+ 'extensions/carla/traffic_manager_map.mojo': '620d3f33e995acbd5c37fcf3141022f3451b0e4413893739e4b7411d48a1acf8',
  'tests/test_carla_junction_bounds.mojo': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
  'tests/test_carla_lane_borders.mojo': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
  'tests/test_carla_lane_search_positive_controls.mojo': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
  'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
-INVENTORY = {**HISTORICAL_INVENTORY, **{'extensions/carla/map.mojo': {'tokens_sha256': '4c62ad65d81762209b60f3564b8dcc1689bc9e931a35fcf2e245ed2411614925'},
- 'extensions/carla/map_builder.mojo': {'tokens_sha256': 'e1d96c8c2aa97ed94f36d026e50d4bffa52588cfb7fd032314b37053bd0f96f4'}}}
-EDGES_SHA256 = '2e87b0b62c06eb5ad10ad4654c549daea8413c28706da36702405dd9ff9d2803'
+INVENTORY = {**HISTORICAL_INVENTORY, **{'extensions/carla/map.mojo': {'tokens_sha256': '0263ba183b30437b826ada3ceedb3d2c5a3664dc95245743a17209f568607b79'},
+ 'extensions/carla/map_builder.mojo': {'tokens_sha256': '4d153beee1e83966264af944bf260597fbf727785eb193d3710a3b5a0c33a977'}}}
+EDGES_SHA256 = '00edb161fffd69cb1569e2d311f8ea6d51b8c1a3316f34c41107587c9f332168'
 
 # One exact branch-specific four-record diagnostic extension.
 EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
@@ -36727,7 +40159,7 @@ def verify_authority():
         'EDGES_SHA256': EDGES_SHA256,
     }
     require(sha(json.dumps(current_payload, sort_keys=True, separators=(',', ':'))) ==
-            'b174a8879eab43e672ea02314ec7edf56dc6bd953a86fa634bdd2c808e7d9e4f', 'executing current repair authority globals changed')
+            '2c904391178d159981497ede78ae776f64bcc8325a0a0ebd24c501516e15777d', 'executing current repair authority globals changed')
     require(BINDING_INPUTS == {
         **COMMON_BINDING_INPUTS,
         EXPECTATION_SUCCESSOR['path']: EXPECTATION_SUCCESSOR['after_sha256'],
@@ -36736,4 +40168,4 @@ def verify_authority():
     extension = {'BINDING_INPUTS': BINDING_INPUTS,
                  'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
     require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
-            'c930baaf727f532b9fb428c444b5eb8c6d0a100773a6c0ae471b2aa978107168', 'expectation successor authority changed')
+            '6fc6eead59862fcc3598faa3d6b2321204455100e7f3553ebb03389c51303c6c', 'expectation successor authority changed')

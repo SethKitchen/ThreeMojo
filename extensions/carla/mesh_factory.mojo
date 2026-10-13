@@ -2172,7 +2172,7 @@ def generate_chunked_mesh(
     _ = _positive_si(Float64(size))
     var x_count = _finite_si(Float64((high.x - low.x) / size))
     var y_count = _finite_si(Float64((high.y - low.y) / size))
-    if x_count < 0 or y_count < 0 or x_count >= 4194304 or y_count >= 4194304:
+    if x_count >= 4194304 or y_count >= 4194304:  # Both are >= 0 (above).
         raise Error("Mesh chunk grid exceeds its finite work limit")
     var nx = Int(x_count) + 1
     var ny = Int(y_count) + 1

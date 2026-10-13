@@ -151,7 +151,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': '8e0dd854501e37063fec5642364f14edafc71218554399c1a8bbca1f60b59f4a',
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': '81d0ea17d9194461d384e808ce829c7edf5be373ac25b8dc9040ab0d9e85befd',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
@@ -979,7 +979,8 @@ def _render_lookup_args(paths, entries):
     Exact module and package prefixes never use this namespace-only exception.
     The caller checks the complete physical source/entry inventory before and
     after the operation; adding a new entry or import cannot reuse this scope.
-    Include-root calls intentionally omit these arguments and stay conservative.
+    verify() also applies this census to coverage include roots: they mirror
+    the source tree, so their compiled lookup directories are the same.
     """
     render = any(path.startswith('render/') for path in paths)
     typed = any(path.split('/')[0] in ('animation', 'cameras', 'core', 'exporters',
@@ -2463,11 +2464,14 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         # Coverage origin files cannot enter Mojo module lookup. Admit only
         # exact sidecar coordinates of reviewed Mojo inputs at include roots;
         # generation_origins and capture verification still bind their bytes.
+        # An include root mirrors the source tree, so its compiled lookup
+        # directories are the root's census; nested leaves elsewhere are inert.
         include_resolver_paths = resolver_paths | {path + '.cov-origin'
             for path in resolver_paths if path.endswith('.mojo')}
+        include_lookup = _render_lookup_args(include_resolver_paths, record['entry_directories'])
         require(resolver_unshadowed(root, resolver_paths,
                     **_render_lookup_args(resolver_paths, record['entry_directories']))
-                and all(resolver_unshadowed(location, include_resolver_paths)
+                and all(resolver_unshadowed(location, include_resolver_paths, **include_lookup)
                         for location in include_roots),
                 'unreviewed alternate, compiled, package, symlink or std resolver surface')
         known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'}
@@ -2560,7 +2564,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                 'source path inventory changed during verification')
         require(resolver_unshadowed(root, resolver_paths,
                     **_render_lookup_args(resolver_paths, record['entry_directories']))
-                and all(resolver_unshadowed(location, include_resolver_paths) for location in include_roots),
+                and all(resolver_unshadowed(location, include_resolver_paths, **include_lookup)
+                        for location in include_roots),
                 'resolver surface changed during verification')
         if _capture is not None:
             _regular(root, MIGRATION)
