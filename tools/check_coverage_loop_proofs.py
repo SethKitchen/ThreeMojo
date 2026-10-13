@@ -583,6 +583,20 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         shadow.unlink()
     require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
     check_generated_receipt_owner(stage, mojo, compiler, flags)
+    # Reuse this genuine stage for root-only borrowing and final-stage guards.
+    # Test-module import support is local to this explicit maintained entrypoint.
+    saved_path = list(sys.path)
+    try:
+        sys.path.insert(0, str(ROOT/'tools/carla_lane_oracle'))
+        from carla_lane_oracle import test_invariant_operation_inputs as owner_controls
+    finally:
+        sys.path[:] = saved_path
+    root_only = owner_controls.check_generated_root_only_borrowing(
+        ROOT, stage, mojo, compiler, flags)
+    require(root_only == {'completed': [
+        'root-only-seed-and-shared-positive', 'root-only-wrong-nonempty-root',
+        'root-only-stage-tamper-at-finish'], 'fresh_receipts': 3},
+        'Maintained root-only receipt controls did not complete')
     return len(expected)
 
 
