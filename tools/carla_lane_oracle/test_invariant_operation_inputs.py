@@ -3390,9 +3390,10 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
     ),
-    'coverage_loop_proofs.py': ((25, 27, (), ('\n', '_EXECUTED_MODULE_CODE = sys._getframe().f_code\n')),
- (332,
-  411,
+    'coverage_loop_proofs.py': ((13, 14, (), ('import importlib.util\n',)),
+ (26, 28, (), ('\n', '_EXECUTED_MODULE_CODE = sys._getframe().f_code\n')),
+ (333,
+  412,
   (),
   ('\n',
    '\n',
@@ -3482,20 +3483,44 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            token.string for token in expected[0])[3:-1]:\n',
    '        return None\n',
    '    return new_rows[index][0]\n')),
- (922,
-  923,
+ (923,
+  924,
   ('    if _operation is not None and include_roots != ():\n',
    "        cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))\n"),
   ('    cleanup._operation_include_context(_operation, root, include_roots)\n',)),
- (976,
-  977,
+ (977,
+  1002,
   ('        if _operation is not None and include_roots != ():\n',
    "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
    "roots'))\n"),
-  ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
- (979, 981, (), ('        if not (root / name).is_file():\n', '            return None  # An absent dependency only withholds this proof.\n',)),
- (986,
-  1001,
+  ('        cleanup._operation_include_context(_operation, root, include_roots)\n',
+   '    # A partial producer may contain a local reviewed theorem without its\n',
+   '    # unrelated sibling prerequisites. Absence is established by the frozen\n',
+   '    # producer census before any read; consumed or current admission failures\n',
+   '    # are never downgraded to a missing proof.\n',
+   "    if (_operation is not None and _operation._kind == 'generated_receipt'\n",
+   "            and _operation._state == 'pending'\n",
+   '            and not bindings.keys() <= _operation._receipt_source_digests.keys()):\n',
+   '        from carla_lane_oracle import typed_boundary_contracts as typed\n',
+   '        try:\n',
+   '            typed.verify_authority()\n',
+   '        except (ValueError, TypeError, KeyError, AttributeError) as error:\n',
+   '            cleanup._operation_fail(_operation, error)\n',
+   '        captured = _operation._receipt_source_digests\n',
+   '        # Exact current and intermediate successor endpoints keep their\n',
+   '        # existing admission path. Only historical bytes (or the explicitly\n',
+   '        # paired density repair) can make an absent sibling inapplicable.\n',
+   '        current = any(name in typed.EDGES and captured.get(name) == '
+   "typed.EDGES[name]['after_sha256']\n",
+   '                      for name in bindings)\n',
+   '        historical = all(captured[name] == expected or (\n',
+   '            name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256\n',
+   '            and captured[name] == DENSITY_AFTER_SHA256)\n',
+   '            for name, expected in bindings.items() if name in captured)\n',
+   '        if not current and historical:\n',
+   '            return None\n')),
+ (1009,
+  1024,
   (),
   ('        physical_digest = digest\n',
    '        from carla_lane_oracle import typed_boundary_contracts as typed\n',
@@ -3512,29 +3537,29 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            # This exact inverse now supplies historical provenance only.\n',
    "            checked = typed.historical_source(name, raw.decode('utf-8'))\n",
    "            digest = sha256(checked.encode('utf-8'))\n")),
- (1007,
-  1008,
+ (1030,
+  1031,
   ('            actual[name] = digest\n',),
   ('            actual[name] = physical_digest\n',)),
- (1066,
-  1067,
+ (1089,
+  1090,
   ('                actual[name] = digest\n',),
   ('                actual[name] = physical_digest\n',)),
- (1071,
-  1075,
+ (1094,
+  1098,
   ('                actual.update(cleanup.proof_bindings(root, include_roots=include_roots))\n',
    '                if path.read_bytes() != raw:\n'),
   ('                actual.update(cleanup.proof_bindings(\n',
    '                    root, include_roots=include_roots, **operation_args))\n',
    '                if _coverage_observe_bytes(root, name, path.read_bytes(),\n',
    '                                           _operation=_operation) != raw:\n')),
- (1076,
-  1077,
+ (1099,
+  1100,
   ('                actual[name] = digest\n',),
   ('                actual[name] = physical_digest\n',)),
- (1095, 1096, ('        actual[name] = digest\n',), ('        actual[name] = physical_digest\n',)),
- (1097,
-  1111,
+ (1118, 1119, ('        actual[name] = digest\n',), ('        actual[name] = physical_digest\n',)),
+ (1120,
+  1134,
   (),
   ('\n',
    '\n',
@@ -3550,14 +3575,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        return False\n',
    '    return all(sha256(relative_source(root,name).read_bytes()) == digest\n',
    '               for name,digest in bindings.items())\n')),
- (1123,
-  1124,
+ (1146,
+  1147,
   ('        if _operation is not None and include_roots != ():\n',
    "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
    "roots'))\n"),
   ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
- (1155,
-  1183,
+ (1178,
+  1206,
   ('    return {line: {\n',
    "        'line': line, 'kind': kind, 'cardinality': minimum,\n",
    "        'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',\n",
@@ -3593,14 +3618,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        if _operation is not None and isinstance(error, (OSError, UnicodeError)):\n',
    '            cleanup._operation_fail(_operation, error)\n',
    '        return {}\n')),
- (1191,
-  1192,
+ (1214,
+  1215,
   ('        if _operation is not None and include_roots != ():\n',
    "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
    "roots'))\n"),
   ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
- (1201,
-  1214,
+ (1224,
+  1237,
   ("        if (module == 'extensions/carla/map'\n",),
   ('        from carla_lane_oracle import typed_boundary_contracts as typed\n',
    "        module_path = module + '.mojo'\n",
@@ -3615,38 +3640,38 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            if line is None:\n',
    '                return None\n',
    "        if (not typed_current and module == 'extensions/carla/map'\n")),
- (1233,
-  1234,
+ (1256,
+  1257,
   ('        if ((module, line) in _CLEANUP_LOOP_ROWS\n',),
   ('        if (not typed_current and (module, line) in _CLEANUP_LOOP_ROWS\n',)),
- (1242,
-  1247,
+ (1265,
+  1270,
   (),
   ('            paths = tuple(cache_key.input_paths(Path(root)))\n',
    '            if _operation is not None:\n',
    '                cleanup._operation_known_paths(root, frozenset(\n',
    "                    path.as_posix() for path in paths if path.suffix == '.mojo'),\n",
    '                    _operation=_operation)\n')),
- (1248,
-  1249,
+ (1271,
+  1272,
   ('                path.as_posix() for path in cache_key.input_paths(Path(root))\n',),
   ('                path.as_posix() for path in paths\n',)),
- (1250,
-  1253,
+ (1273,
+  1276,
   ('                and re.search(pattern,\n',
    '                              relative_source(root, path.as_posix()).read_text())\n'),
   ('                and re.search(pattern, _coverage_observe_text(root, path.as_posix(),\n',
    '                    relative_source(root, path.as_posix(), **operation_args).read_text(),\n',
    '                    _operation=_operation))\n')),
- (1272,
-  1276,
+ (1295,
+  1299,
   (),
   ('        if (typed_current and _operation is None\n',
    '                and not _final_unowned_typed_loop_bindings(\n',
    '                    root, actual_bindings, include_roots=include_roots)):\n',
    '            return None\n')),
- (1416,
-  1479,
+ (1439,
+  1502,
   (),
   ('def _typed_construction_boundary_loops(root, current, *, include_roots=(), _operation=None):\n',
    '    """Re-admit the nonempty-list theorem for the exact typed current graph.\n',
@@ -3712,14 +3737,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    }}\n',
    '\n',
    '\n')),
- (1486,
-  1487,
+ (1509,
+  1510,
   ('        if _operation is not None and include_roots != ():\n',
    "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
    "roots'))\n"),
   ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
- (1488,
-  1496,
+ (1511,
+  1519,
   (),
   ('        from carla_lane_oracle import typed_boundary_contracts as typed\n',
    "        name = 'extensions/carla/map.mojo'\n",
@@ -3729,15 +3754,15 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        if typed.is_current(name, current):\n',
    '            return _typed_construction_boundary_loops(\n',
    '                root, current, include_roots=include_roots, **operation_args)\n')),
- (1525,
-  1529,
+ (1548,
+  1552,
   ('                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name])\n',),
   ('                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name]) and not (\n',
    '                name in cleanup.scaled_float32.SOURCE_PATHS\n',
    '                and expected[name] == cleanup.scaled_float32.BEFORE_SHA256[name]\n',
    '                and actual[name] == cleanup.scaled_float32.AFTER_SHA256[name])\n')),
- (1545,
-  1552,
+ (1568,
+  1575,
   (),
   ('        scaled_bindings = cleanup.scaled_float32_proof_bindings(\n',
    '            root, include_roots=include_roots, **operation_args)\n',
@@ -3746,9 +3771,9 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '                if expected.get(name) != cleanup.scaled_float32.BEFORE_SHA256[name]:\n',
    '                    return {}\n',
    '                expected[name] = cleanup.scaled_float32.AFTER_SHA256[name]\n')),
- (1570, 1571, (), ('        actual.update(scaled_bindings)\n',)),
- (1595,
-  1606,
+ (1593, 1594, (), ('        actual.update(scaled_bindings)\n',)),
+ (1618,
+  1629,
   ('def reviewed_nonempty_loops(root, module, *, include_roots=()):\n',),
   ('def _receipt_reviewed_nonempty_loops(root, module, *, include_roots, _operation):\n',
    '    """The direct generated receipt alone lends its immutable image to rows."""\n',
@@ -3762,21 +3787,21 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '\n',
    '\n',
    'def reviewed_nonempty_loops(root, module, *, include_roots=(), _operation=None):\n')),
- (1607,
-  1608,
+ (1630,
+  1631,
   ('    _operation, owns_operation = None, False\n',),
   ('    owns_operation = False\n',)),
- (1610, 1611, ('    if bounded:\n',), ('    if bounded or _operation is not None:\n',)),
- (1614,
-  1618,
+ (1633, 1634, ('    if bounded:\n',), ('    if bounded or _operation is not None:\n',)),
+ (1637,
+  1641,
   ('        if bounded:\n',),
   ('        if _operation is not None:\n',
    '            cleanup._operation_include_context(_operation, root, include_roots)\n',
    "            cleanup.require(_operation._kind == 'generated_receipt', 'foreign generated row "
    "owner')\n",
    '        elif bounded:\n')),
- (1856,
-  1898,
+ (1879,
+  1963,
   ('    proofs = []\n',
    '    for module in modules:\n',
    "        name = module + '.mojo'\n",
@@ -3812,22 +3837,56 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    'generation,\n',
    "        'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
    '                                        capture_cache=capture_cache, suites=suites)}\n',
-   '    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
-   '    _operation = cleanup._receipt_operation_enter(root, build, _receipt_seed)\n',
+   '    cleanup = None\n',
+   "    if importlib.util.find_spec('carla_lane_oracle') is None:\n",
+   '        # Standalone plain receipts need no CARLA semantic authority. A known\n',
+   '        # reviewed source may never silently become a plain-only receipt.\n',
+   '        reviewed_modules = (set(REVIEWED_LOOP_RULES)\n',
+   '                            | {row[0] for row in GUARDED_LOOP_RULES}\n',
+   "                            | {'renderers/renderer', 'extensions/carla/map',\n",
+   "                               DENSITY_SOURCE.removesuffix('.mojo')})\n",
+   "        if reviewed_modules & {name.removesuffix('.mojo') for name in "
+   "generation['modules']}:\n",
+   "            raise ValueError('Reviewed loop authority is unavailable')\n",
+   '    else:\n',
+   '        # A present but broken authority installation is an error, not fallback.\n',
+   '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+   '    _plain_seed = canonical(_receipt_seed) if cleanup is None else None\n',
+   '    _operation = (None if cleanup is None else\n',
+   '                  cleanup._receipt_operation_enter(root, build, _receipt_seed))\n',
    '    try:\n',
-   '        _operation._receipt_inputs_check()\n',
+   '        if _operation is None:\n',
+   "            check_capture_inputs({'receipt': json.loads(_plain_seed)}, root, build)\n",
+   '            if not all(_density_stdlib_unshadowed(location) for location in (root, build)):\n',
+   "                raise ValueError('Plain receipt resolver surface changed')\n",
+   '        else:\n',
+   '            _operation._receipt_inputs_check()\n',
    '        proofs = []\n',
    '        for module in modules:\n',
    "            name = module + '.mojo'\n",
    '            original = relative_source(root, name)\n',
    '            if name not in inputs:\n',
    "                raise ValueError('Missing instrumented module: ' + module)\n",
-   "            text = cleanup._observe_text(root, name, original.read_text(encoding='utf-8'),\n",
-   "                                         _operation=_operation, mode='physical')\n",
+   "            text = original.read_text(encoding='utf-8')\n",
+   '            if _operation is None:\n',
+   '                source_raw = original.read_bytes()\n',
+   "                with io.TextIOWrapper(io.BytesIO(source_raw), encoding='utf-8', newline=None) "
+   'as reader:\n',
+   '                    observed_text = reader.read()\n',
+   "                if (sha256(source_raw) != json.loads(_plain_seed)['root_inputs'][name]\n",
+   '                        or text != observed_text):\n',
+   "                    raise ValueError('Plain receipt consumed source differs from generation: ' "
+   '+ name)\n',
+   '            else:\n',
+   '                text = cleanup._observe_text(root, name, text,\n',
+   "                                             _operation=_operation, mode='physical')\n",
    '            candidates = constant_loops(text)\n',
-   '            reviewed = _receipt_reviewed_nonempty_loops(root, module, '
+   '            reviewed = ({} if _operation is None else\n',
+   '                        _receipt_reviewed_nonempty_loops(root, module, '
    'include_roots=(build,),\n',
-   '                                                        _operation=_operation)\n',
+   '                                                         _operation=_operation))\n',
+   '            if _operation is not None:\n',
+   '                cleanup._operation_check(_operation, root)\n',
    '            if candidates.keys() & reviewed.keys():\n',
    "                raise ValueError('Conflicting reviewed loop proof: ' + module)\n",
    '            candidates.update(reviewed)\n',
@@ -3839,19 +3898,31 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    "                    raise ValueError('Loop proof conflicts with compound decision: ' + "
    'module)\n',
    "                proofs.append({'module': module, **candidates[line],\n",
-   "                               'source_sha256': inputs[name]['source']})\n",
+   "                               'source_sha256': "
+   "(json.loads(_plain_seed)['root_inputs'][name]\n",
+   "                                   if _operation is None else inputs[name]['source'])})\n",
    '        counts = _counts(records)\n',
    "        counts['proven_impossible'] = len(proofs)\n",
    "        counts['required_total'] = counts['potential_total'] - len(proofs)\n",
-   "        result = {**json.loads(_operation._receipt_seed), 'proofs': proofs, 'denominator': "
+   '        if _operation is None:\n',
+   '            if canonical(_receipt_seed) != _plain_seed:\n',
+   "                raise ValueError('Plain receipt seed changed after consumption')\n",
+   "            result = {**json.loads(_plain_seed), 'proofs': proofs, 'denominator': counts}\n",
+   "            check_capture_inputs({'receipt': result}, root, build)\n",
+   '            if not all(_density_stdlib_unshadowed(location) for location in (root, build)):\n',
+   "                raise ValueError('Plain receipt resolver surface changed')\n",
+   '        else:\n',
+   "            result = {**json.loads(_operation._receipt_seed), 'proofs': proofs, 'denominator': "
    'counts}\n',
-   '        _operation.finish(root)\n',
+   '            _operation.finish(root)\n',
    '        return result\n',
    '    except BaseException as error:\n',
-   '        _operation._invalidate(error)\n',
+   '        if _operation is not None:\n',
+   '            _operation._invalidate(error)\n',
    '        raise\n',
    '    finally:\n',
-   '        _operation.close()\n'))),
+   '        if _operation is not None:\n',
+   '            _operation.close()\n'))),
     'full_audit_cleanup_contracts.py': ((50,
   53,
   (),
@@ -3879,7 +3950,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    " 'tools/carla_lane_oracle/consumer_successor_ledger.py': "
    "'8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',\n"),
   ("DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': "
-   "'8b5b5f1312c4c3135a1ed4f7ba20d315a40fe816bd855199100ca6ca23dfeba4',\n",)),
+   "'99c6bc76b583780dce74ecd28a804da26c0ad4029e8b3a029c1ca2bb186dd5b1',\n",)),
  (148,
   158,
   (" 'tools/carla_lane_oracle/source_contracts.py': "
@@ -6949,10 +7020,10 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
     # These are only the nineteen reviewed generated-receipt additions.  Keep
     # the two original root-optimization sites visible to the module-wide check.
     _GENERATED_ROOT_CALLS = (('_operation_include_context',
-      ('body', 1, 'body', 1, 'body', 1, 'value', 'args', 0, 'left', 'args', 0, 'elt'),
+      ('body', 1, 'body', 1, 'body', 1, 'value', 'args', 0, 'elt'),
       '9dbdc0cf9877bde8fd710b1cfb4d7f14d49452c49a15d18026fb30810de6d995',
       ('body', 1, 'body', 1, 'body', 1),
-      '5962b9271148e830a7e1c80f55347e9c10b00b8986c63e8c0f453620a6a28cee'),
+      'f1c33b6980c708f8fbb31feaa61dbacd1f0dec125c9dadca859abfdc8d35bcd2'),
      ('_private_operation_wrapper',
       ('body', 1, 'body', 4, 'body', 0, 'test', 'values', 1, 'left'),
       '753c654e9c3eb1ca6d5f73abe70ed43c502e8ed896a61c5ec4d18b7fcec974ca',
@@ -8509,6 +8580,144 @@ class StandaloneSeedCurrentControls(unittest.TestCase):
         self.closed(owners[1], False)
         self.assertEqual(counts['full'], 2)
         self.assertEqual(counts['typed'], 2)
+
+
+def check_generated_root_only_borrowing(root, stage, mojo, compiler, flags):
+    """Explicit real-stage controls, called by the owned mutation-fixture adapter.
+
+    This helper does not generate, copy, or rebind a stage. Its caller supplies
+    the independently writable stage after complete producer admission.
+    Source inputs remain read-only; only an independent staged file is changed.
+    Existing unittest discovery and its method inventory are unchanged.
+    """
+    import os
+    import coverage_loop_proofs as proofs
+    from carla_lane_oracle import full_audit_cleanup_contracts as audit
+    from carla_lane_oracle import seed_count_contracts as seed
+    root, stage = Path(root).resolve(), Path(stage).resolve()
+    sealed = Path(__file__).resolve().parents[2]
+    audit.require(stage != sealed and not stage.is_relative_to(sealed),
+                  'Root-only controls require an independent writable stage')
+    expected = proofs.read_receipt(stage/'loop-proofs.json')['receipt']
+    settings = {'mojo': [mojo], 'suites': expected['execution']['suites'],
+                'capture_cache': proofs._expand_path(expected['execution']['cache'], root, stage)}
+    helper_paths = ('extensions/carla/render_sky.mojo', 'extensions/carla/render_weather.mojo')
+    labels = ('root-only-seed-and-shared-positive', 'root-only-wrong-nonempty-root',
+              'root-only-stage-tamper-at-finish')
+    completed, retained_owners = [], []
+    for label in labels:
+        audit.require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+                      'Root-only source fixture changed before control')
+        proofs.check_capture_inputs({'receipt': expected}, root, stage)
+        audit.require(sys.getprofile() is None, 'Root-only controls require an unprofiled thread')
+        owners, fired, caught, restores = [], [], [], []
+        def profile(frame, event, value):
+            if event == 'return' and frame.f_code is audit._receipt_operation_enter.__code__:
+                owners.append(value)
+            if (fired or event != 'return'
+                    or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__):
+                return
+            fired.append(True)
+            audit.require(len(owners) == 1 and type(value) is dict and value,
+                          'Root-only control missed the real receipt binding return')
+            owner = owners[0]
+            audit.require(owner._kind == 'generated_receipt' and owner._state == 'active'
+                          and owner._owner_frame.f_code is proofs.build_receipt.__code__
+                          and owner._owner_frame.f_locals.get('_operation') is owner,
+                          'Root-only control requires its actual active build_receipt frame')
+            include_context = owner._include_roots
+            audit.require(include_context == (str(stage),), 'Generated stage context changed')
+            if label == labels[0]:
+                result = seed.verify(root, _operation=owner)
+                audit.require(result['path'] == seed.MODULE
+                              and result['before_sha256'] == seed.BEFORE_SHA256
+                              and result['after_sha256'] == seed.deviation.AFTER_SHA256
+                              and result['edges'][-1] == seed.deviation.edge(),
+                              'Root-only seed borrow lost the exact current historical chain')
+            helpers = audit.shared_helper_proof_bindings(
+                root, paths=helper_paths, _operation=owner)
+            audit.require(helpers and set(helper_paths) <= helpers.keys()
+                          and any(path.startswith('render/') for path in helpers)
+                          and owner._state == 'active' and not owner._failed
+                          and owner._include_roots == include_context,
+                          'Root-only shared-helper borrow changed the generated context')
+            if label == labels[1]:
+                try:
+                    audit.shared_helper_proof_bindings(root, paths=helper_paths,
+                        include_roots=(stage/'foreign',), _operation=owner)
+                except ValueError as error:
+                    audit.require('operation include root changed' in str(error),
+                                  'Wrong include root did not reach the context comparison')
+                    caught.append(True)
+                else:
+                    raise AssertionError('Wrong nonempty generated include root was accepted')
+                audit.require(owner._include_roots == include_context and owner._failed,
+                              'Caught wrong-root failure lost context or sticky refusal')
+                try:
+                    audit._operation_check(owner, root)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError('Failed root-only owner was reusable')
+            elif label == labels[2]:
+                relative = 'extensions/animals/anatomy/render.mojo'
+                target = stage/relative
+                audit.require(target.is_file() and not target.is_symlink()
+                              and target.stat().st_nlink == 1,
+                              'Stage mutation requires an independent regular file')
+                for original in (root/relative, sealed/relative):
+                    if original.exists():
+                        audit.require((target.stat().st_dev, target.stat().st_ino)
+                                      != (original.stat().st_dev, original.stat().st_ino),
+                                      'Stage mutation aliases a source inode')
+                raw, mode = target.read_bytes(), target.stat().st_mode & 0o777
+                def restore():
+                    target.unlink()
+                    with target.open('xb') as stream:
+                        stream.write(raw)
+                    os.chmod(target, mode)
+                restores.append(restore)
+                target.unlink()
+                with target.open('xb') as stream:
+                    stream.write(raw + b'\n# root-only borrow must retain final stage checks\n')
+                os.chmod(target, mode)
+        print('Root-only START '+label, flush=True)
+        try:
+            sys.setprofile(profile)
+            try:
+                actual = proofs.build_receipt(root, stage, compiler, flags, **settings)
+            except ValueError as error:
+                audit.require(label != labels[0] and fired == [True],
+                              'Root-only control refused before its actual borrow')
+                if label == labels[2]:
+                    audit.require('consumed operation bytes changed: extensions/animals/anatomy/render.mojo' in str(error)
+                                  or 'render entry source changed: extensions/animals/anatomy/render.mojo' in str(error),
+                                  'Stage tamper did not reach a generated-input refusal')
+            else:
+                audit.require(label == labels[0]
+                              and proofs.canonical(actual) == proofs.canonical(expected),
+                              'Root-only negative escaped or positive receipt changed')
+            finally:
+                sys.setprofile(None)
+            audit.require(fired == [True] and len(owners) == 1
+                          and owners[0]._state == 'closed'
+                          and owners[0]._failed == (label != labels[0])
+                          and owners[0]._owner_frame is None
+                          and owners[0]._receipt_seed is None,
+                          'Root-only receipt did not close with the expected outcome')
+            audit.require(caught == ([True] if label == labels[1] else []),
+                          'Root-only caught-refusal observation changed')
+            retained_owners.append(owners[0])
+        finally:
+            for restore in reversed(restores):
+                restore()
+        proofs.check_capture_inputs({'receipt': expected}, root, stage)
+        completed.append(label)
+        print('Root-only DONE '+label, flush=True)
+    audit.require(len({id(owner) for owner in retained_owners}) == len(labels),
+                  'Root-only controls reused an owner across receipts')
+    audit.require(completed == list(labels), 'Root-only control census changed')
+    return {'completed': completed, 'fresh_receipts': len(labels)}
 
 
 if __name__ == '__main__':

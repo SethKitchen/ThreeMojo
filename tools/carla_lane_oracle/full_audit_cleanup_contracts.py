@@ -143,7 +143,7 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': '8b5b5f1312c4c3135a1ed4f7ba20d315a40fe816bd855199100ca6ca23dfeba4',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': '99c6bc76b583780dce74ecd28a804da26c0ad4029e8b3a029c1ca2bb186dd5b1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/conditioned_cubic_contracts.py': 'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',

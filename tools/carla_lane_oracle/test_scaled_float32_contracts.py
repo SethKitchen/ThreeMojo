@@ -136,6 +136,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
             self.assertEqual(record[group][scaled.MATH], scaled.BEFORE_SHA256[scaled.MATH])
 
     def test_historical_and_mixed_endpoints_keep_truthful_receipts(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         original = {name: (self.root/name).read_bytes() for name in scaled.SOURCE_PATHS}
         try:
             for name in scaled.SOURCE_PATHS:
@@ -155,17 +156,19 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
             import coverage_loop_proofs as loops
         expected = dict(loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256)
         for historical in (False, True):
-            if historical:
-                fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
-            rows = loops.construction_boundary_loops(self.root)
-            self.assertEqual(len(rows), 1)
-            receipt = next(iter(rows.values()))['dependency_sha256']
-            for name in (scaled.MATH, scaled.LEAF, *scaled.TESTS, *scaled.PACKAGE_INPUTS, *scaled.PROVIDER_INPUTS):
-                self.assertEqual(receipt[name], hashlib.sha256((self.root/name).read_bytes()).hexdigest())
-            self.assertEqual(loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256, expected)
-            self.assertEqual(expected[scaled.MATH], scaled.BEFORE_SHA256[scaled.MATH])
-            with self.changed(scaled.MATH, (self.root/scaled.MATH).read_bytes() + b'\n# changed\n'):
-                self.assertEqual(loops.construction_boundary_loops(self.root), {})
+            with self.subTest(endpoint='historical' if historical else 'current'):
+                if historical:
+                    self.root = fixtures.copy_historical_boundary_root(self, ROOT)
+                    fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
+                rows = loops.construction_boundary_loops(self.root)
+                self.assertEqual(len(rows), 1)
+                receipt = next(iter(rows.values()))['dependency_sha256']
+                for name in (scaled.MATH, scaled.LEAF, *scaled.TESTS, *scaled.PACKAGE_INPUTS, *scaled.PROVIDER_INPUTS):
+                    self.assertEqual(receipt[name], hashlib.sha256((self.root/name).read_bytes()).hexdigest())
+                self.assertEqual(loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256, expected)
+                self.assertEqual(expected[scaled.MATH], scaled.BEFORE_SHA256[scaled.MATH])
+                with self.changed(scaled.MATH, (self.root/scaled.MATH).read_bytes() + b'\n# changed\n'):
+                    self.assertEqual(loops.construction_boundary_loops(self.root), {})
 
     def test_new_witness_leaf_and_package_changes_or_denials_fail(self):
         read = Path.read_bytes
@@ -233,6 +236,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         self.assertTrue(caught)
 
     def test_historical_owner_final_reread_keeps_python_witness_bound(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         import winner_sign_contracts as winner
         original = cleanup.scaled_float32_edges
         name = 'tools/carla_lane_oracle/test_scaled_float32_contracts.py'
@@ -296,6 +300,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         self.assertFalse(owners[0]._scaled_resolver_paths)
 
     def test_pending_final_sweep_binds_math_python_proof(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         import winner_sign_contracts as winner
         fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
         original = cleanup._InvariantInputs.finish
@@ -325,6 +330,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         self.assertFalse(owners[0]._scaled_resolver_paths)
 
     def test_pending_final_sweep_refuses_late_native_compiled_shadow(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         import winner_sign_contracts as winner
         fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
         original = cleanup._InvariantInputs.finish
@@ -353,6 +359,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         self.assertFalse(owners[0]._scaled_resolver_paths)
 
     def test_pending_final_sweep_refuses_late_unrelated_source_census(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         import winner_sign_contracts as winner
         fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
         original = cleanup._InvariantInputs.finish
@@ -384,6 +391,7 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
         self.assertFalse(owners[0]._scaled_resolver_paths)
 
     def test_pending_math_census_refuses_source_created_after_render_census(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         import winner_sign_contracts as winner
         fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
         cache_key = cleanup._sibling('cache_key')
