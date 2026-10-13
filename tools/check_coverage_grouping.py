@@ -3221,7 +3221,7 @@ def helper_bodies(text):
                   if line.startswith((f'def {name}[', f'def {name}('))]
         assert len(starts) == 1, (name, starts)
         end = starts[0] + 1
-        while end < len(lines) and (not lines[end] or lines[end][0] in ' )]'):
+        while end < len(lines) and (not lines[end] or lines[end][0] in ' )'):
             end += 1
         body = '\n'.join(lines[starts[0]:end])
         body = re.sub(r'"""(.|\n)*?"""', '', body)
