@@ -379,17 +379,18 @@ def test_arc_cancellation_and_large_s_polynomial_rounding() raises:
     shifted.add_road_geometry_line_si(sr, 0, 0, 0, 0, 100001)
     shifted.add_road_elevation_profile_si(sr, 100000, 0, 0, 0, 1)
     var bounds = _lane_section_box(shifted.roads[sr], 0, 0)
-    for i in range(1001):
-        var s = 100000.0 + Float64(i) / 1000.0
-        assert_true(
-            bounds.contains_point(
-                shifted.roads[sr].lane_transform_meters(0, 0, s).location
-            )
-        )
-    # This polynomial is intentionally ill-conditioned in global s.
-    # The wider numerical envelope must not be mislabeled 1 cm tight.
-    assert_true(bounds.min.z < -0.25)
-    assert_true(bounds.max.z > 1.25)
+    for i in range(1025):
+        var delta = Float64(i) / 1024.0
+        var s = 100000.0 + delta
+        var point = shifted.roads[sr].lane_transform_meters(0, 0, s).location
+        # Dyadic stations and local cube products are exact in Float64;
+        # only the existing final Float32 location storage rounds them.
+        assert_equal(point.z, Float32(delta * delta * delta))
+        assert_true(bounds.contains_point(point))
+    # Local coefficients avoid the old global-origin cancellation envelope.
+    # Retain both enclosure and an independent one-centimeter quality bound.
+    assert_true(bounds.min.z <= 0.0 and bounds.max.z >= 1.0)
+    assert_true(bounds.min.z >= -0.01 and bounds.max.z <= 1.01)
 
 
 def test_excessive_subdivision_uses_complete_envelope() raises:
