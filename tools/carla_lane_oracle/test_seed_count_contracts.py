@@ -164,7 +164,8 @@ class SeedCountSuccessorTests(unittest.TestCase):
         for text in (self.after+'\n# physical change\n',
                      self.after.replace('\n', '\r\n'), self.before):
             with self.subTest(digest=seed.sha(text)), self.live_after({MAP:text.encode()}):
-                with self.assertRaisesRegex(ValueError, 'exact physical after Map'):
+                # #333 compares the supplied view with physical bytes first.
+                with self.assertRaisesRegex(ValueError, 'exact physical after Map|unreviewed supplied Map source'):
                     seed.reviewed_text(ROOT, MAP, self.after)
 
     def test_supplied_view_rechecks_live_dependencies(self):
@@ -183,7 +184,9 @@ class SeedCountSuccessorTests(unittest.TestCase):
                 return (self.after if reads == 1 else self.before).encode()
             return read(path, *args, **kwargs)
         with patch.object(Path, 'read_bytes', changed):
-            with self.assertRaisesRegex(ValueError, 'after Map did not activate'):
+            # #333 rereads the observed Map before delegating; either layer refuses.
+            with self.assertRaisesRegex(ValueError, 'after Map did not activate|'
+                                        'Map observation changed before delegated verification'):
                 seed.reviewed_text(ROOT, MAP, self.after)
 
     def test_supplied_view_rejects_after_before_after_read_sequence(self):
@@ -199,7 +202,9 @@ class SeedCountSuccessorTests(unittest.TestCase):
                 return read(path, *args, **kwargs)+b'\n# changed live dependency\n'
             return read(path, *args, **kwargs)
         with patch.object(Path, 'read_bytes', changed):
-            with self.assertRaisesRegex(ValueError, 'after Map did not activate'):
+            # #333 rereads the observed Map before delegating; either layer refuses.
+            with self.assertRaisesRegex(ValueError, 'after Map did not activate|'
+                                        'Map observation changed before delegated verification'):
                 seed.reviewed_text(ROOT, MAP, self.after)
         self.assertEqual(reads, 2)
 
