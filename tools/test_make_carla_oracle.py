@@ -5,7 +5,6 @@
 import os
 from pathlib import Path
 import re
-import shlex
 import subprocess
 import tempfile
 import unittest
@@ -89,13 +88,31 @@ class CarlaOracleWiringTests(unittest.TestCase):
 
     def test_linux_and_macos_ci_invoke_the_official_tool_target(self):
         workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        for name in ('lint', 'lint-macos'):
+        for name in ('tools', 'tools-macos'):
             job = workflow.split('\n  ' + name + ':\n', 1)[1]
             job = re.split(r'\n  [a-z][\w-]*:\n', job, maxsplit=1)[0]
             commands = re.findall(r'^\s+run: (.+)$', job, re.MULTILINE)
-            self.assertIn(['python3', 'tools/ci_scope.py', 'run', '--', 'test-tools'],
-                          [shlex.split(command) for command in commands])
+            count = len(re.search(r'shard: \[([0-9, ]+)\]', job).group(1).split(','))
+            self.assertIn('python3 tools/ci_scope.py run -- test-tools '
+                          'TOOLS_SHARD=${{ matrix.shard }}/' + str(count), commands)
             self.assertIn("if: needs.scope.outputs.run_tools == 'true'", job)
+
+    def test_groups_together_run_every_stage_once(self):
+        seen = []
+        for index in (1, 2):
+            environment = self.environment.copy()
+            self.events.write_text('')
+            result = subprocess.run(['make', '-s', 'test-tools', f'TOOLS_SHARD={index}/2'],
+                                    cwd=self.root, env=environment, text=True,
+                                    capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            events = self.events.read_text().splitlines()
+            if index > 1:
+                self.assertNotIn('tools', events)
+                self.assertNotIn('assets', events)
+                self.assertNotIn('check', events)
+            seen += events
+        self.assertEqual(sorted(seen), ['assets', 'check', 'nested', 'tools'])
 
 
 

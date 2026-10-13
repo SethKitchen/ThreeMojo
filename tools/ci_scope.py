@@ -40,8 +40,8 @@ LISTS = ('formatted', 'cpu_entries', 'cpu_docs', 'cpu_tests', 'compile_fail',
          'covered', 'coverage_tests')
 FLAGS = ('tools', 'native', 'cpu', 'coverage', 'gpu', 'docs', 'coverage_tools',
          'portability', 'export')
-JOBS = {'lint': 'lint', 'cpu': 'cpu', 'cpu-macos': 'cpu',
-        'lint-macos': 'lint', 'coverage-capture': 'coverage',
+JOBS = {'lint': 'lint', 'tools': 'tools', 'cpu': 'cpu', 'cpu-macos': 'cpu',
+        'lint-macos': 'lint', 'tools-macos': 'tools', 'coverage-capture': 'coverage',
         'coverage': 'coverage', 'gpu-host': 'gpu'}
 
 

@@ -1652,11 +1652,14 @@ clean-images:
 # Parser and cache regressions run without the Mojo compiler.
 # The #333 oracle modules each copy whole roots and replay proofs; one after
 # another they exceed a CI job's time limit, so they run a module per process.
+# TOOLS_SHARD=I/N splits the oracle tests over N runners; the first runner
+# also runs the two quick discoveries and the read-only spiral check.
+TOOLS_SHARD ?=
 test-tools:
-	@python3 -m unittest discover -s tools -p 'test_*.py'
-	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
-	@python3 tools/parallel_unittest.py --jobs $(JOBS) tools/carla_lane_oracle
-	@python3 tools/carla_lane_oracle/spiral_moments.py --check
+	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s tools -p 'test_*.py')
+	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s assets/carla/tools -p 'test_*.py')
+	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
+	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.
