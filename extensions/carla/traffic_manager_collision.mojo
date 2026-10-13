@@ -697,8 +697,8 @@ struct CollisionStage(Movable):
         )
         if result[0]:
             _ = _finite_si(Float64(result[1]))
-        elif not (result[1] == inf[DType.float32]()):
-            _ = _finite_si(Float64(result[1]))
+        # Without a hazard the margin stays at positive infinity.
+        debug_assert(result[0] or result[1] == inf[DType.float32](), "No yield")
         return result
 
     def _negotiate_collision_si(

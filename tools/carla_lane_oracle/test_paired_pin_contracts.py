@@ -115,6 +115,30 @@ def nonregular(root, name):
         target.write_bytes(raw)
 
 
+
+class _WithoutTypedProjection(ast.NodeTransformer):
+    """Undo #333's historical projection of reads before an original-AST pin.
+
+    `_typed_source.historical_text/bytes(root, path, value, ...)` returns
+    `value` unless the path is a current typed endpoint; the original premise
+    read `value` directly. Removing the wrapper (and the self-assignment it
+    leaves) recovers the reviewed pre-#333 statement shape exactly.
+    """
+
+    def visit_Call(self, node):
+        if (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == '_typed_source'
+                and node.func.attr in ('historical_text', 'historical_bytes')):
+            return self.visit(node.args[2])
+        return self.generic_visit(node)
+
+    def visit_Assign(self, node):
+        node = self.generic_visit(node)
+        if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Name) and node.value.id == node.targets[0].id):
+            return None
+        return node
+
 class PairedPinFakeControls(unittest.TestCase):
     """Synthetic qualification and owner wiring only, never real gate evidence."""
 
@@ -473,6 +497,7 @@ class SelectorOutputFakeControls(unittest.TestCase):
                          'if _return_current_admission:\n    return (record, lane_predecessor is not None)')
         self.assertIs(function.body[-2], output)
         function.body = [node for node in function.body if node not in extras]
+        function = _WithoutTypedProjection().visit(function)
         self.assertEqual(sha(ast.dump(function, include_attributes=False).encode()), SELECTOR_V13_AST_SHA256)
         self.assertEqual(tuple(inspect.signature(selector.verify).parameters), ('root',))
         self.assertEqual(tuple(inspect.signature(accepted.verify_current).parameters), ('root',))

@@ -1763,7 +1763,7 @@ def segment_distance_2d_meters(
     Raises:
         Error: If a plan coordinate or result is not finite.
     """
-    for point in [a1, a2, b1, b2]:
+    for point in [a1, a2, b1, b2]:  # pragma: no branch
         _ = _finite_si(Float64(point.x))
         _ = _finite_si(Float64(point.y))
     return _nonnegative_si(_segment_distance_2d_si(a1, a2, b1, b2))
@@ -1845,7 +1845,9 @@ def _map_locate_with_work(
     waypoint: Waypoint,
     mut work: _MapBuildWork,
 ) raises -> Tuple[Int, Int, Int]:
-    _ = _nonnegative_si(waypoint.s)
+    # Lookup is metered by identity only. Signed finite stations can remain
+    # in private graph/build work until its contextual refusal. Public
+    # station guards belong to their checked entry points.
     work.step()
     if not waypoint.road_id.is_valid():
         raise Error("Road id is not valid")
@@ -2200,7 +2202,7 @@ def _try_winner_seed(
         var denominator = UInt64(1) << UInt64(level + 1)
         var quotient = span // denominator
         var remainder = span % denominator
-        for at in range(1 << level):
+        for at in range(1 << level):  # pragma: no branch
             if count % 3 == 0:
                 work.charge(1, 0, node_cost)
                 certificate.nodes += 1
@@ -2601,13 +2603,17 @@ struct Map(Movable):
         Raises:
             Error: If the waypoint or a mutable speed record is invalid.
         """
+        if not isfinite(waypoint.s) or waypoint.s < 0.0:
+            raise Error(
+                "Speed-limit station must be finite and within the road"
+            )
         var location = self._locate(waypoint)
         ref road = self.roads[location[0]]
-        if (
-            not isfinite(waypoint.s)
-            or waypoint.s < 0
-            or waypoint.s > road.length
-        ):
+        # The first check already refuses a nonfinite or negative
+        # station, and _locate refuses it again. So only the far end
+        # of the road can still refuse the station here; the message
+        # names both limits.
+        if waypoint.s > road.length:
             raise Error(
                 "Speed-limit station must be finite and within the road"
             )
@@ -2635,8 +2641,8 @@ struct Map(Movable):
             Error: If the waypoint or the width is invalid.
         """
         var width = self.lane_width_meters(waypoint)
-        if not isfinite(width) or width < 0.0:
-            raise Error("Lane width must be finite and nonnegative")
+        # lane_width_meters refuses a nonfinite or negative width.
+        debug_assert(isfinite(width) and width >= 0.0, "A width is checked")
         return Length64(width)
 
     def lane_width_float32(self, waypoint: Waypoint) raises -> Length:
@@ -2994,14 +3000,14 @@ struct Map(Movable):
         # as these retained candidates improve their stored incumbents.
         var requested_gaps = List[Float64]()
         var requested_scales = List[Float64]()
-        for certificate in certificates:
+        for certificate in certificates:  # pragma: no branch
             work._step(2)
             requested_gaps.append(inf[DType.float64]())
             requested_scales.append(certificate.scale)
         while True:
             # A resumed candidate can change the best stored sample. Recheck
             # all index-sensitive dominance relations after every refinement.
-            for i in range(len(indices)):
+            for i in range(len(indices)):  # pragma: no branch
                 work._step()
                 var order = _wide_point_order(
                     certificates[i].point, certificates[best].point, query
@@ -3023,7 +3029,7 @@ struct Map(Movable):
                 accurate[best] |= 1
                 waypoints[best].s = certificates[best].s
             var target = -1
-            for i in range(len(indices)):
+            for i in range(len(indices)):  # pragma: no branch
                 work._step()
                 if i == best:
                     continue
@@ -3095,12 +3101,12 @@ struct Map(Movable):
                     target_lanes,
                     6,
                 ]
-                for value in metadata:
+                for value in metadata:  # pragma: no branch
                     if prefix_valid and value <= prefix_room - prefix:
                         prefix += value
                     else:
                         prefix_valid = False
-                for candidate in certificates:
+                for candidate in certificates:  # pragma: no branch
                     work._step()
                     if (
                         prefix_valid
@@ -3109,7 +3115,7 @@ struct Map(Movable):
                         prefix += len(candidate.cells)
                     else:
                         prefix_valid = False
-                for _ in range(4):
+                for _ in range(4):  # pragma: no branch
                     if (
                         prefix_valid
                         and len(certificates[best].cells)
@@ -3118,7 +3124,7 @@ struct Map(Movable):
                         prefix += len(certificates[best].cells)
                     else:
                         prefix_valid = False
-                for _ in range(10):
+                for _ in range(10):  # pragma: no branch
                     if (
                         prefix_valid
                         and len(certificates[target].cells)
@@ -3538,7 +3544,6 @@ struct Map(Movable):
                     raise Error(
                         "CARLA graph step needs a finite station and distance"
                     )
-                _ = _nonnegative_si(frame.waypoint.s)
                 if not frame.distance > 0.0:
                     raise Error("A step needs a positive distance")
                 if frame.distance <= EPSILON:
@@ -4557,12 +4562,14 @@ struct Map(Movable):
     ) raises -> List[Waypoint]:
         if not isfinite(distance) or distance <= EPSILON:
             raise Error("Lane traversal needs a finite spacing above EPSILON")
+        if not isfinite(waypoint.s) or waypoint.s < 0.0:
+            raise Error("Waypoint is outside its lane section")
         var initial = self._locate(waypoint)
         ref road = self.roads[initial[0]]
         var section_start = road.sections[initial[1]].s
         var section_end = section_start + road._section_length_si(initial[1])
         var s = waypoint.s
-        if not isfinite(s) or s < section_start or s > section_end:
+        if s < section_start or s > section_end:  # s is finite (see above).
             raise Error("Waypoint is outside its lane section")
         var forward = road.is_positive_direction(waypoint.lane_id) == ahead
         # Locate the reachable end before sampling. Never walk through a

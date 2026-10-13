@@ -42,8 +42,27 @@ def test_complete_cover_excludes_far_competitor_and_keeps_neighbors() raises:
     for index in [567, 568, 569]:
         ref segment = map._segments[index]
         assert_true(segment.cover_index >= 0)
-        # The original full box is too loose to exclude all three.
-        assert_true(_lane_box_can_improve(segment.bounds, query, witness))
+        # Conditioned cubics can now tighten the original full box enough
+        # to exclude the far segment as well. Both neighboring competitors
+        # must still be retained by the full box and the optional cover.
+        if index != 567:
+            assert_true(_lane_box_can_improve(segment.bounds, query, witness))
+        var located = map._locate(segment.first)
+        var low = min(segment.first.s, segment.second.s)
+        var high = max(segment.first.s, segment.second.s)
+        for sample in range(9):
+            var station = low + (high - low) * Float64(sample) / 8.0
+            var actual = _checked_center(
+                map.roads[located[0]],
+                located[1],
+                located[2],
+                station,
+                terms,
+                2000000,
+            )
+            assert_true(segment.bounds[0].contains(actual[0]))
+            assert_true(segment.bounds[1].contains(actual[1]))
+            assert_true(segment.bounds[2].contains(actual[2]))
         assert_equal(
             _lane_cover_can_improve(
                 map._sampled_covers[segment.cover_index], query, witness

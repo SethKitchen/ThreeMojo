@@ -186,10 +186,10 @@ class CacheKeyContracts(unittest.TestCase):
             modified = helper.replace(old, new, 1)
             node = sampled.unique_function(sampled.syntax_tree(modified), '_same_cache_key')
             original_body = optional.body
-            def mocked(root, module, name):
+            def mocked(root, module, name, *, _operation=None):
                 if (module, name) == ('lane_refinement', '_same_cache_key'):
                     return node
-                return original_body(root, module, name)
+                return original_body(root, module, name, _operation=_operation)
             with patch.object(optional, 'body', side_effect=mocked):
                 with self.assertRaisesRegex(ValueError, 'exact UInt64 pair helper comparison'):
                     optional.verify_semantics(ROOT)
@@ -200,12 +200,8 @@ class CacheKeyContracts(unittest.TestCase):
         before = self.record['before']
         original = guard.declaration(before, '_run_lane_search')
         def node(text):
-            # Use the same move-token adapter as production semantics.
-            class File:
-                def read_text(self): return text
-            class Root:
-                def __truediv__(self, unused): return File()
-            return optional.body(Root(), 'lane_refinement', '_run_lane_search')
+            # The same parser production semantics use after source admission.
+            return optional.body_from_source(text, '_run_lane_search')
         fast = optional.FAST_MEMO.replace('_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)', 'cached_fast.value()[0] == station_word and cached_fast.value()[1] == scale_word')
         expansion = optional.EXPANSION_MEMO.replace('_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)', 'cached_expansion.value()[0] == station_word and cached_expansion.value()[1] == scale_word')
         with patch.object(optional, 'FAST_MEMO', fast), patch.object(optional, 'EXPANSION_MEMO', expansion):

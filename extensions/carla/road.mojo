@@ -1392,7 +1392,8 @@ struct Road(Copyable, Movable):
                 is not finite, a needed record is missing, a visited width
                 is not finite, or the distance exceeds the Float64 range.
         """
-        _ = _finite_si(Float64(s))
+        # The kernel validates finite s before any query/record arithmetic,
+        # retaining its specific refusal context and lane-mask ordering.
         return self._nearest_lane_si(s, location, lane_type)
 
     def _nearest_lane_si(
@@ -2125,7 +2126,7 @@ struct Road(Copyable, Movable):
         _ = _finite_si(Float64(s))
         _ = _finite_si(Float64(extra_width))
         var result = self._lane_corners_si(section, lane, s, extra_width)
-        for point in [result[0], result[1]]:
+        for point in [result[0], result[1]]:  # pragma: no branch
             _ = _finite_si(Float64(point.x))
             _ = _finite_si(Float64(point.y))
             _ = _finite_si(Float64(point.z))

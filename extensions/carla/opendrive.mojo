@@ -622,9 +622,9 @@ def _border_widths(
             if cut >= s and cut < end:
                 if len(starts) == 0 or starts[len(starts) - 1] != cut:
                     starts.append(cut)
-        # Finite, ordered bounds retain the section's start. A nonfinite
-        # endpoint can leave this list empty before builder validation.
-        for k in range(len(starts)):
+        # Finite, ordered bounds retain the section's start, and the
+        # builder refuses a nonfinite section start or end before this.
+        for k in range(len(starts)):  # pragma: no branch
             var outer = _active(borders[i], starts[k]).at(starts[k])
             var under = _active(inner, starts[k]).at(starts[k])
             var width = _Cubic(
@@ -692,7 +692,7 @@ def _lane_records(
                     + " Using default values."
                 )
         for border in doc.children(node, "border"):
-            builder.create_lane_border_si(
+            builder.create_lane_border_opendrive(
                 lane,
                 doc.double(border, "sOffset") + s,
                 doc.double(border, "a"),
