@@ -51,6 +51,13 @@ class CoverageInputTests(unittest.TestCase):
             if name != 'Makefile' and not destination.exists():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / name, destination)
+        # The receipt producer imports its operation owner from this package,
+        # and that owner binds the executing checker's sibling tools.
+        shutil.copytree(ROOT / 'tools/carla_lane_oracle', self.root / 'tools/carla_lane_oracle',
+                        ignore=shutil.ignore_patterns('__pycache__'))
+        for tool in (ROOT / 'tools').glob('*.py'):
+            if not (self.root / 'tools' / tool.name).exists():
+                shutil.copyfile(tool, self.root / 'tools' / tool.name)
         (self.root / 'compiler.py').write_text(
             inspect.getsource(model_generation) + '\n' +
             'import os, sys\n'

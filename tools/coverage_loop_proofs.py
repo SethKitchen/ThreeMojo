@@ -977,6 +977,8 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
         cleanup._operation_include_context(_operation, root, include_roots)
     actual = {}
     for name, expected in bindings.items():
+        if not (root / name).is_file():
+            return None  # An absent dependency only withholds this proof.
         path = relative_source(root, name, **operation_args)
         raw = path.read_bytes()
         if _operation is not None:

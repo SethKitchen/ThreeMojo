@@ -179,7 +179,7 @@ class ProofBindingTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='loop proof binding ')
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.build = self.root / 'build'
         self.build.mkdir()
         self.hits = self.build / 'hits'
@@ -264,7 +264,8 @@ class ProofBindingTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'unreviewed package or alternate source')
             self.assertNotIn(Path(relative), set(cache_key.input_paths(self.build)))
-            with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+            # The generated receipt's owner can refuse first, at its exit census.
+            with self.assertRaisesRegex(ValueError, 'Stale or modified|generated resolver surface changed'):
                 self.verify()
             path.unlink()
             self.assertEqual(self.verify()['sha256'], envelope['sha256'])
