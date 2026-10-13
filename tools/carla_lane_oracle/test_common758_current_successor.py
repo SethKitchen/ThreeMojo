@@ -36,6 +36,12 @@ REPAIRED = {
     'tests/test_carla_road_fixed_s.mojo',
     'tests/test_carla_support_dispatch_successor.mojo',
 }
+METAL_SOURCES = {
+    'materials/nodes.mojo',
+    'math/matrix_inverse.mojo',
+    'math/scaled_products.mojo',
+    'render/texture.mojo',
+}
 PAYLOAD_NAMES = (
     'SOURCE_PATHS', 'EDGES', 'EDGE_SHA256', 'NEW_INPUTS', 'TESTS',
     'BINDING_INPUTS', 'PRODUCTION_CLOSURE', 'NATIVE_CLOSURE',
@@ -84,7 +90,8 @@ class Common758CurrentSuccessor(unittest.TestCase):
 
     def test_current_tables_are_only_the_closed_reviewed_overrides(self):
         expected = {'EDGES': REPAIRED, 'EDGE_SHA256': REPAIRED,
-                    'CURRENT_DEPENDENCIES': REPAIRED,
+                    # #746 also rebinds four unedged Metal sources.
+                    'CURRENT_DEPENDENCIES': REPAIRED | METAL_SOURCES,
                     'TESTS': {p for p in REPAIRED if p.startswith('tests/')},
                     'INVENTORY': {'extensions/carla/map.mojo', 'extensions/carla/map_builder.mojo'}}
         for name, paths in expected.items():

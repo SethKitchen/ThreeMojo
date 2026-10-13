@@ -48,6 +48,7 @@ try:
         from . import runtime_view_contracts as runtime_view
         from . import shared_helper_contracts as shared_helpers
         from . import witness_format_contracts as witness_format
+        from . import scaled_float32_contracts as scaled_float32
         from . import typed_boundary_contracts as typed_boundary
         from . import conditioned_cubic_contracts as conditioned_cubic
     else:
@@ -59,6 +60,7 @@ try:
         import runtime_view_contracts as runtime_view
         import shared_helper_contracts as shared_helpers
         import witness_format_contracts as witness_format
+        import scaled_float32_contracts as scaled_float32
         import typed_boundary_contracts as typed_boundary
         import conditioned_cubic_contracts as conditioned_cubic
 except ImportError as error:
@@ -141,7 +143,8 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': '235efc3ba160e8f0b31960454fc97eeb529ade186d7c738e680462bc97fd3fb1',
+ 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/conditioned_cubic_contracts.py': 'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',
  'tools/carla_lane_oracle/consumer_successor_ledger.py': 'ce9a639084dfcc1442c6ac7535060cf5a123c2eb96683d2f35816ec26b0599ed',
@@ -151,7 +154,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'a4b3d91ab83c3798ba98a4f0d5faf3f5ac1ac95bb73bb55b941ea78529c0018f',
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': '700dae0a9f50961c686701f4d77703e18fd290db89275f3788d010d40316db05',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
@@ -223,7 +226,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/map_deviation_contracts.py',
                  'tools/carla_lane_oracle/witness_format_contracts.py',
                  'tools/carla_lane_oracle/typed_boundary_contracts.py',
-                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
+                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py',
+                 'tools/carla_lane_oracle/scaled_float32_contracts.py')
 
 
 def _center_require(ok, message):
@@ -694,7 +698,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -732,7 +736,8 @@ def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
-               vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic))
+               vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic),
+               vars(scaled_float32))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -879,7 +884,8 @@ def _native_dependency_inventory(root, *, witnesses, _known=None, _snapshots=Non
     return found
 
 
-def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None):
+def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
+                        math_entries=None):
     """Refuse alternate qualified-module and namespace lookup surfaces.
 
     Every reviewed import begins at a protected top-level namespace. Guard
@@ -903,6 +909,10 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None)
     if render_entries is not None and (type(render_entries) is not frozenset
             or '.' not in render_entries or any(type(path) is not str or not path
             or Path(path).is_absolute() or '..' in Path(path).parts for path in render_entries)):
+        return False
+    if math_entries is not None and (type(math_entries) is not frozenset
+            or '.' not in math_entries or any(type(path) is not str or not path
+            or Path(path).is_absolute() or '..' in Path(path).parts for path in math_entries)):
         return False
     if typed_entries is not None and (type(typed_entries) is not frozenset
             or '.' not in typed_entries or any(type(path) is not str or not path
@@ -957,6 +967,8 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None)
                             or stem in prefixes or (scoped_name in top
                                 and (scoped_name != 'render' or render_entries is None
                                      or relative_dir.casefold() in render_entries)
+                                and (scoped_name != 'math' or math_entries is None
+                                     or relative_dir.casefold() in math_entries)
                                 and (scoped_name not in typed_families or typed_entries is None
                                      or relative_dir.casefold() in typed_entries))
                             or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
@@ -1891,7 +1903,7 @@ class _InvariantInputs(_CacheInputs):
                     if self._checker_receipt:
                         require(executing_checker_bindings(root) == dict(self._executing),
                                 'consumed receipt checker changed during owned verification')
-                elif self._resolver_paths:
+                elif self._resolver_paths or self._scaled_resolver_paths:
                     # Historical owners need no current-root admission. Retain
                     # only their supplemental helper observations until exit.
                     leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
@@ -2660,6 +2672,7 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
                           | set(record['native_dependency_inventory']) | helper_closure
                           | {path for path in helper_bindings if path.endswith('.mojo')}
+                          | {path for path in scaled_bindings if path.endswith('.mojo')}
                           | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else set())
                           | (set(_capture._resolver_paths) if _capture is not None else set()))
         # Coverage origin files cannot enter Mojo module lookup. Admit only
@@ -3031,6 +3044,8 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         # Receipts name the actual admitted Map and its bound native inputs.
         # The immutable record remains a historical premise, never a live hash.
         result.update(_station_bindings(root, _operation=_operation))
+        result.update(scaled_float32_proof_bindings(root, include_roots=include_roots,
+                                                   _operation=_operation))
         result.update(_typed_boundary_bindings(root, _operation=_operation))
         result.update(_witness_format_bindings(root, _operation=_operation))
         result.update(_runtime_view_bindings(root, _operation=_operation))

@@ -28994,7 +28994,7 @@ HISTORICAL_CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a
  'materials/glsl.mojo': 'ead199e191838fee9a4197c7edaf5d7acf412c0f16b5bca876fd745eacea8b13',
  'materials/material.mojo': '6d099e9a21637f8627d6650f84db75cdbceddc2933acf86cbe32f17907b58ecc',
  'materials/mesh_sss_node_material.mojo': 'f95d2531e6584de763c1c065b9b38fafcc3b4c00d6570c2cc5a13b98193d5329',
- 'materials/nodes.mojo': '6f0e83a402cdb921eb76da0d7670d48c1d32fcc39c6138dc140c4259d388ded4',
+ 'materials/nodes.mojo': '1e0622989f501800cd294f036564976c7a5bcb65505ee48780dfaa2e2b5ed11a',
  'materials/volume_node_material.mojo': '4d0a7753bae1642679286957903fb436ac06f71ad683a618ec1fdf69af609a30',
  'math/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
  'math/arc_tangent.mojo': 'fde08cd180cb0e2bd94fca6196f86c4b318ef6f1a4ed8e588aaad848076ea8e5',
@@ -29010,7 +29010,7 @@ HISTORICAL_CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a
  'math/matrix3.mojo': '39cce8a87f30062b530b3573a669005d17f09fbec2939dba1857bed19c604b19',
  'math/matrix4.mojo': '2e1cfe2cbe4394a2242e162bbe4c7ef20ab746386ff6224358a6d3de611ad28e',
  'math/matrix_determinant.mojo': 'c5b25179893fd2903dbda5de68914a50e662e3428107ef2c3424ef42cafcde19',
- 'math/matrix_inverse.mojo': '1bf500ddd641fa30c3f01ee1e17ccc33063b30a5198a01da20f3d340b04b30da',
+ 'math/matrix_inverse.mojo': '34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee',
  'math/noise.mojo': 'b31752c2b331e1c520ec09d81efe62d926d0b3246ca331aa7a85f01cd8e9a14e',
  'math/norm.mojo': '5275636f99048885fcc308bfa92fde3d52c5a8eefb48f616f59f8f31a0b5cbb1',
  'math/obb.mojo': '26f080fed40b67cd68c59dbd2b064f71408b50a90c132b55e047c8004bf23219',
@@ -29023,7 +29023,7 @@ HISTORICAL_CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a
  'math/ray_query.mojo': '48136d70da9f19e28fc30e1660416ba1c25bf8a545bafbbe16a904f8e26ff3eb',
  'math/remainder.mojo': 'b7575b2fde7a212433498422a121c66b12a85e7109614093bb783ad1cc043e58',
  'math/rounded_product.mojo': '7ff229d7b3e2bb7c79743457dbb3afd630b2222f4c2cb544d92e654563fe8677',
- 'math/scaled_products.mojo': '632438eb32acc53e5d4b10e8aa0ca9049a0fc2c5cd7e3d815039626ff3409c86',
+ 'math/scaled_products.mojo': 'b504f18cff7df27bff4fbf92fbed7aa4868518f1b1507ea1331540d7e6f0afbb',
  'math/segment.mojo': 'f8f42b8b4a0be8ac7aca2e9070b114d7f207ece2ea228ace1e5bef101b6bc1db',
  'math/sine.mojo': '1dde3dc4b4145e2c3935f1166a6347a59dea887671b3a350ad11e747d0040074',
  'math/smoothstep.mojo': '816816e8897adc10c742ea22e2193b9273635040bc0c6ffbc7c1c9d8594be20b',
@@ -29109,7 +29109,7 @@ HISTORICAL_CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a
  'render/srgb.mojo': '39cd4b57282375b6c22ee050f493c282a7a88e9754f6eb9cdddaa4413e9a8b20',
  'render/target.mojo': '396e656e555474fd4be624e38cff4a4e2244203637c26f6b255153ae602e862c',
  'render/tasks.mojo': 'efa65ccd751c3430f1fa875382748f6040733f802be4719b92ff239b510804d4',
- 'render/texture.mojo': '5dd48cbc9a05835f0d7c63d45ec30f5079c683bfbbf5e5c1606fd29159ec38cf',
+ 'render/texture.mojo': '24125cac2ca999d43b3521028b8978f1862958941b9586056a48b1cac70f479b',
  'render/texture_buffer.mojo': 'a1977c2d14e15917b149280e4ae75a1c20e37a0b5939514d8daac50c3da7c7db',
  'render/texture_store.mojo': 'b536d308f1bb625e4121e5702fc7c9e50d5ab17c95b90e4aa3c649843ebed032',
  'render/tga.mojo': 'e766002fe54e22e3c902ca6befd720ef3721fc93861b505c4793bfe8c70f4789',
@@ -39732,7 +39732,7 @@ TESTS = {**HISTORICAL_TESTS, **{'tests/test_carla_junction_bounds.mojo': 'bc5871
  'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
-COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'a9604922edb02d37abc4d71c081a2b2ad753870d89bf70b42bfa864438699510'}}
+COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': '44c4f1bf591ab1331cda42ea4a972e75005c3f2e1b5606d29bdc7e2e29f621b4'}}
 CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/geometry.mojo': '374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e',
  'extensions/carla/map.mojo': 'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df',
  'extensions/carla/map_builder.mojo': 'f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c',
@@ -39744,6 +39744,10 @@ CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/
  'extensions/carla/road.mojo': 'a53c48d28b33fb4f5f26316be902e57607a56012edb5f0b025241df1c0092b04',
  'extensions/carla/traffic_manager_collision.mojo': 'b9ee47331258a1c06f47ff60fe56fcb848d7e3c5a7c7cca3ef53de636eddd1ee',
  'extensions/carla/traffic_manager_map.mojo': '620d3f33e995acbd5c37fcf3141022f3451b0e4413893739e4b7411d48a1acf8',
+ 'materials/nodes.mojo': '6f0e83a402cdb921eb76da0d7670d48c1d32fcc39c6138dc140c4259d388ded4',
+ 'math/matrix_inverse.mojo': '1bf500ddd641fa30c3f01ee1e17ccc33063b30a5198a01da20f3d340b04b30da',
+ 'math/scaled_products.mojo': '632438eb32acc53e5d4b10e8aa0ca9049a0fc2c5cd7e3d815039626ff3409c86',
+ 'render/texture.mojo': '5dd48cbc9a05835f0d7c63d45ec30f5079c683bfbbf5e5c1606fd29159ec38cf',
  'tests/test_carla_junction_bounds.mojo': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
  'tests/test_carla_lane_borders.mojo': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
  'tests/test_carla_lane_search_positive_controls.mojo': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
@@ -40337,7 +40341,7 @@ def verify_authority():
         'EDGES_SHA256': EDGES_SHA256,
     }
     require(sha(json.dumps(current_payload, sort_keys=True, separators=(',', ':'))) ==
-            '2c904391178d159981497ede78ae776f64bcc8325a0a0ebd24c501516e15777d', 'executing current repair authority globals changed')
+            '099005f3682de673a9bc3882f00cae17442fb17579afe5ee0e13966334178143', 'executing current repair authority globals changed')
     require(BINDING_INPUTS == {
         **COMMON_BINDING_INPUTS,
         EXPECTATION_SUCCESSOR['path']: EXPECTATION_SUCCESSOR['after_sha256'],
@@ -40346,4 +40350,4 @@ def verify_authority():
     extension = {'BINDING_INPUTS': BINDING_INPUTS,
                  'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
     require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
-            'f72275d5d512bf32efb6afe25e815169ba370d072ec3f26cf8f3b7edd38aa555', 'expectation successor authority changed')
+            '914daadaf546884ec4ccc15d9559157a916cb9a633fb04d8833f9fca838b1b3a', 'expectation successor authority changed')

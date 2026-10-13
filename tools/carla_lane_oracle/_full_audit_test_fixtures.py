@@ -71,6 +71,7 @@ def copy_current_root(case, source, *, destination=None):
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
     # Supplemental witness-format proof inputs are physically copied too.
     paths.update(cleanup.witness_format.BOUND_INPUTS)
+    paths.update(cleanup.scaled_float32_proof_bindings(source))
     paths.update(cleanup.typed_boundary.NEW_INPUTS)
     paths.update(cleanup.typed_boundary.TESTS)
     paths.update(cleanup.typed_boundary.BINDING_INPUTS)
