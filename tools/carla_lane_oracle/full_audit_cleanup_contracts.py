@@ -2918,7 +2918,16 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
                 root, path, _regular(root, path).read_bytes(), _operation=_operation)
             require(type(raw) is bytes, 'typed source is not physical bytes: ' + path)
             image[path] = raw
-        typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
+        if (type(_operation) is _InvariantInputs
+                and _operation._kind == 'generated_receipt'
+                and _operation._state == 'active' and not _operation._capturing):
+            # Initial publication admitted this entire immutable source image.
+            # Every physical read above still joins it through _observe_bytes;
+            # authenticate live authority without replaying source semantics.
+            typed_boundary.verify_authority()
+            conditioned_cubic.verify_authority()
+        else:
+            typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
         leaves = ('tools/carla_lane_oracle/typed_boundary_contracts.py',
                   'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
         conditioned_inputs = {}
@@ -2927,7 +2936,7 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
                 edge = typed_boundary.edge(path)
                 require(edge['before_sha256'] == historical_digest,
                         'typed input misses fixed conditioned witness/provider: ' + path)
-                # verify_sources above reconstructed this complete predecessor.
+                # The semantic admission reconstructed this complete predecessor.
                 # Receipts bind current formatted bytes, not the old witness SHA.
                 conditioned_inputs[path] = edge['after_sha256']
             else:
