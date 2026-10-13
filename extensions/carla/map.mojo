@@ -1845,7 +1845,9 @@ def _map_locate_with_work(
     waypoint: Waypoint,
     mut work: _MapBuildWork,
 ) raises -> Tuple[Int, Int, Int]:
-    _ = _nonnegative_si(waypoint.s)
+    # Lookup is metered by identity only. Signed finite stations can remain
+    # in private graph/build work until its contextual refusal. Public
+    # station guards belong to their checked entry points.
     work.step()
     if not waypoint.road_id.is_valid():
         raise Error("Road id is not valid")
@@ -2601,6 +2603,10 @@ struct Map(Movable):
         Raises:
             Error: If the waypoint or a mutable speed record is invalid.
         """
+        if not isfinite(waypoint.s) or waypoint.s < 0.0:
+            raise Error(
+                "Speed-limit station must be finite and within the road"
+            )
         var location = self._locate(waypoint)
         ref road = self.roads[location[0]]
         if (
@@ -3538,7 +3544,6 @@ struct Map(Movable):
                     raise Error(
                         "CARLA graph step needs a finite station and distance"
                     )
-                _ = _nonnegative_si(frame.waypoint.s)
                 if not frame.distance > 0.0:
                     raise Error("A step needs a positive distance")
                 if frame.distance <= EPSILON:
@@ -4557,6 +4562,8 @@ struct Map(Movable):
     ) raises -> List[Waypoint]:
         if not isfinite(distance) or distance <= EPSILON:
             raise Error("Lane traversal needs a finite spacing above EPSILON")
+        if not isfinite(waypoint.s) or waypoint.s < 0.0:
+            raise Error("Waypoint is outside its lane section")
         var initial = self._locate(waypoint)
         ref road = self.roads[initial[0]]
         var section_start = road.sections[initial[1]].s

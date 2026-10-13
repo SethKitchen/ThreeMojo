@@ -15,7 +15,7 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 REFERENCE = ROOT / 'tests/_spiral_sum2_reference.mojo'
 PRODUCTION = ROOT / 'extensions/carla/curve_sum2.mojo'
-spec = importlib.util.spec_from_file_location('sum2_reference_source_reader',
+spec = importlib.util.spec_from_file_location('carla_lane_oracle.sum2_reference_source_reader',
     ROOT / 'tools/carla_lane_oracle/check_sampled_values.py')
 reader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reader)

@@ -75,9 +75,12 @@ def test_finite_axis_owner_survives_overflow_of_the_optional_inverse_seed() rais
     var high = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     var road = _road()
     road.length = high
-    road.info.geometries[0] = RoadInfoGeometry._from_si(
-        start, RoadGeometry.from_meters(LINE, start, -reach, 0.0, 0.0, reach)
-    )
+    var geometry = RoadGeometry.from_meters(LINE, 0.0, -reach, 0.0, 0.0, reach)
+    # Deliberately corrupt the complete record's end station while retaining
+    # the finite queried bracket. This optional internal proof control does
+    # not claim that public geometry construction admits an infinite end.
+    geometry.s = start
+    road.info.geometries[0] = RoadInfoGeometry._from_si(start, geometry^)
     # RN(high-start)=reach, so the finite high endpoint is x=0.
     # RN(RN(-1+reach)+start) overflows at the upper rounding tie.
     # The inverse is optional: the exact stored bracket still has a minimum.

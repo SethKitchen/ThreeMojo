@@ -124,8 +124,8 @@
   "tests/compile_fail/a_body_region_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 12,
         "column": 24,
+        "line": 12,
         "message": "invalid call to 'region_label': value passed to 'region' cannot be converted from 'IntLiteral[0]' to 'BodyRegion'"
       }
     ],
@@ -266,8 +266,8 @@
   "tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 12,
         "column": 24,
+        "line": 12,
         "message": "invalid call to 'tissue_label': value passed to 'tissue' cannot be converted from 'IntLiteral[1]' to 'CanonicalTissue'"
       }
     ],
@@ -677,8 +677,8 @@
   "tests/compile_fail/a_dentition_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 12,
         "column": 27,
+        "line": 12,
         "message": "invalid call to 'dentition_label': value passed to 'dentition' cannot be converted from 'IntLiteral[0]' to 'Dentition'"
       }
     ],
@@ -1980,8 +1980,8 @@
   "tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 12,
         "column": 25,
+        "line": 12,
         "message": "invalid call to 'mapping_label': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'MappingKind'"
       }
     ],

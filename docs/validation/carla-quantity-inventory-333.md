@@ -18,8 +18,8 @@ numerical-certificate pass. Those checks must qualify the final source.
 ## Review coverage
 
 The review reads declarations in all 125 Mojo modules under
-`extensions/carla/`. The current inventory has 2,219 rows from 80 modules:
-1,146 parameters, 671 fields, and 402 returns. It includes:
+`extensions/carla/`. The current inventory has 2,224 rows from 80 modules:
+1,151 parameters, 671 fields, and 402 returns. It includes:
 
 - Every public `Float32` and `Float64` field, parameter, and return.
 - Floating scalars inside public lists, dictionaries, tuples, and SIMD types.
@@ -44,12 +44,12 @@ outside `extensions/carla/`.
 | Classification | Rows | Disposition |
 |---|---:|---|
 | Typed boundary | 1,047 | The signature fixes dimension and precision. |
-| Explicit raw adapter | 366 | A named unit or source-format boundary. |
+| Explicit raw adapter | 370 | A named unit or source-format boundary. |
 | Source compatibility field | 143 | Raw layout with an identified typed entry or view. |
 | Wire field | 85 | Retain the encoded width, unit, scale, and sentinel. |
 | Internal state | 64 | A named simulation, controller, or rendering cache. |
 | Packed geometry stream | 2 | The `cuboid` position and texture-coordinate buffers. |
-| Dimensionless control | 370 | A ratio, normalized coordinate, gain, or reference-scale value. |
+| Dimensionless control | 371 | A ratio, normalized coordinate, gain, or reference-scale value. |
 | Generic numeric utility | 77 | Its dimension depends on its caller or model convention. |
 | Source code or logarithmic value | 63 | A tagged source value, ETSI code, or radio log representation. |
 | Unimplemented source setting | 2 | CARLA sleep controls are stored but not simulated. |
@@ -93,6 +93,11 @@ precision. The TSV names each exact entry and adapter. The main patterns are:
 - MapBuilder's typed methods use `_si` source adapters. Road and lane speed
   records use explicitly named `_opendrive` adapters when the input carries
   a source speed unit or keyword.
+- `MapBuilder.create_lane_border_opendrive` retains finite signed border
+  origins from source records, including negative `sOffset`. The parser clips
+  derived width pieces to their lane section. Typed and `_si` border creation
+  still require a nonnegative station. All source coefficients must be finite
+  before the adapter appends a record.
 - Record constructors take quantities. `from_si`, `from_meters`, and
   `from_coefficients` name their raw source alternatives. The old raw
   constructor bodies require the private `_RawSI` capability.

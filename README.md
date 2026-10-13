@@ -158,7 +158,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Full-audit CARLA coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#platform-specific-witnesses): witness tests and reviewed loop proofs bring the five failing CARLA modules to 100 percent [#721](https://github.com/SethKitchen/ThreeMojo/issues/721)
 
-- [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): supported custom operands keep native conversions and lifetimes. Custom same-type selection, mixed custom operators and other unproven forms remain explicit compilation refusals; [retry them](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#retry-the-refused-forms-on-a-new-mojo) when the compiler can preserve their semantics [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
+- [x] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): the original supported same-type forms remain enabled, with identity-preserving atomic negation. [Identity-sensitive selection remains a known limitation](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#known-identity-sensitive-selection-limitation); arbitrary custom truth support is not yet complete [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
 
 </details>
 
