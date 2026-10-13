@@ -622,9 +622,9 @@ def _border_widths(
             if cut >= s and cut < end:
                 if len(starts) == 0 or starts[len(starts) - 1] != cut:
                     starts.append(cut)
-        # Finite, ordered bounds retain the section's start, and the
-        # builder refuses a nonfinite section start or end before this.
-        for k in range(len(starts)):  # pragma: no branch
+        # Finite, ordered bounds retain the section's start. A nonfinite
+        # endpoint can leave starts empty before builder validation.
+        for k in range(len(starts)):
             var outer = _active(borders[i], starts[k]).at(starts[k])
             var under = _active(inner, starts[k]).at(starts[k])
             var width = _Cubic(
