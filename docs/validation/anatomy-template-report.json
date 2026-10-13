@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "960545bfe1f740a0025cabc77145d120ff4ffbe61f3a6ba8e20bebd1f4ae435d",
+    "source_sha256": "431b06039e3762299793ee1a0eb0ae19de4a7a7392c8a6030f0507900d448a8b",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "e3645cea20ad5d1bd778cfd29290a73d8f0da4e56800e8b7e87f3fffc679bab6"
+    "binary_sha256": "e4dc14d25b673bc0589b17a255b93dcff0356ef4b849f6af28dbce8368a388f5"
   },
   "source_file_sha256": {
     "extensions/anatomy/soft_tissue.mojo": "4c181f75d7214437f7e5944e5e80c9fe8569e9cf898672cae1a5cd012f7d9463",
@@ -34,7 +34,7 @@
     "extensions/humanoid/skeleton/foot/nerves/dimensions.mojo": "b8a9086fd7264d97049807ca477b0924535d8ce4851c49af63992b9c6bbc306e",
     "extensions/humanoid/skeleton/foot/skin/dimensions.mojo": "8de3fb845614fb75c2b4d21c6b5c66b11219d1aa453f634be61ecd7ec409c20f",
     "extensions/humanoid/skeleton/foot/vessels/dimensions.mojo": "dd9a71ef40840502a6e45bd8a44908f7f2d38c92d469810ff0b782baf166938d",
-    "extensions/humanoid/skeleton/head/bones/dimensions.mojo": "969d7bf058a47ca65f49fd819b42e68a5a0459835198fa995cbcbb87dc28954d",
+    "extensions/humanoid/skeleton/head/bones/dimensions.mojo": "f4501dadf2e502b3c4afa683061a723cd277c96371e806ed475e5abe3cbe583c",
     "extensions/humanoid/skeleton/head/frame.mojo": "11660ba46ddd5c464a77284e5330dc8569981226a00ef597a2ebd913a7945f97",
     "extensions/humanoid/skeleton/head/ligaments/dimensions.mojo": "91f3ff00cd323a949fdaec570edc7d8203f363973e7454691fa2bf0462a48957",
     "extensions/humanoid/skeleton/leg/assembly.mojo": "634f34f4aeb12ba601c67d0757309055e2e4f42f0d266a6e28b0d574170a66ea",

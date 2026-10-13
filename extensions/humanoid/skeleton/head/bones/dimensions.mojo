@@ -492,8 +492,9 @@ def _skull(
 
 
 def _mandible(mut sweeps: List[Sweep], h: HeadDimensions):
-    """Append the mandible: its U-shaped body, and on each side a ramus
-    with its condyle and its coronoid process."""
+    """Append the mandible: its U-shaped body, the alveolar arch that
+    holds the lower teeth, and on each side a ramus with its condyle and
+    its coronoid process."""
     sweeps.append(
         _plate(
             h,
@@ -523,6 +524,35 @@ def _mandible(mut sweeps: List[Sweep], h: HeadDimensions):
         )
     )
     sweeps.append(_knob(h, h.at(0, 61.1, 7.9), 0.6))
+    # The alveolar arch that holds the lower teeth, on the body's crest.
+    sweeps.append(
+        _plate(
+            h,
+            Vector3(0, 1, 0),
+            _arc(
+                h,
+                floats(
+                    2.5,
+                    63.4,
+                    2.2,
+                    2.3,
+                    63.4,
+                    4.0,
+                    1.8,
+                    63.4,
+                    5.4,
+                    1.0,
+                    63.4,
+                    6.3,
+                    0.0,
+                    63.4,
+                    6.6,
+                ),
+            ),
+            0.9,
+            0.6,
+        )
+    )
     for s in range(2):  # pragma: no branch
         var x = Float32(1) - Float32(2 * s)
         var ramus = Sweep(Vector3(0, 0, 1))

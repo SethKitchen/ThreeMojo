@@ -39732,7 +39732,7 @@ TESTS = {**HISTORICAL_TESTS, **{'tests/test_carla_junction_bounds.mojo': 'bc5871
  'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
-BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'a9604922edb02d37abc4d71c081a2b2ad753870d89bf70b42bfa864438699510'}}
+COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'a9604922edb02d37abc4d71c081a2b2ad753870d89bf70b42bfa864438699510'}}
 CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/geometry.mojo': '374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e',
  'extensions/carla/map.mojo': 'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df',
  'extensions/carla/map_builder.mojo': 'f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c',
@@ -39753,6 +39753,161 @@ CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/
 INVENTORY = {**HISTORICAL_INVENTORY, **{'extensions/carla/map.mojo': {'tokens_sha256': '0263ba183b30437b826ada3ceedb3d2c5a3664dc95245743a17209f568607b79'},
  'extensions/carla/map_builder.mojo': {'tokens_sha256': '4d153beee1e83966264af944bf260597fbf727785eb193d3710a3b5a0c33a977'}}}
 EDGES_SHA256 = '00edb161fffd69cb1569e2d311f8ea6d51b8c1a3316f34c41107587c9f332168'
+
+# One exact branch-specific four-record diagnostic extension.
+EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
+ 'before_sha256': '85020fb32ec96121aba108288eaabf41c4483e2f94e91b6beee4528af2206653',
+ 'after_sha256': '5315c49b101f8f653d589fab763fdd7dce4c8cd04123e6e4d403aaf90c4d0016',
+ 'before_count': 689,
+ 'after_count': 693,
+ 'added_records': {'tests/compile_fail/a_body_region_is_not_a_bare_int.mojo': {'errors': [{'column': 24,
+                                                                                           'line': 12,
+                                                                                           'message': 'invalid '
+                                                                                                      'call '
+                                                                                                      'to '
+                                                                                                      "'region_label': "
+                                                                                                      'value '
+                                                                                                      'passed '
+                                                                                                      'to '
+                                                                                                      "'region' "
+                                                                                                      'cannot '
+                                                                                                      'be '
+                                                                                                      'converted '
+                                                                                                      'from '
+                                                                                                      "'IntLiteral[0]' "
+                                                                                                      'to '
+                                                                                                      "'BodyRegion'"}],
+                                                                               'notes': ['function '
+                                                                                         'declared '
+                                                                                         'here']},
+                   'tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo': {'errors': [{'column': 24,
+                                                                                                'line': 12,
+                                                                                                'message': 'invalid '
+                                                                                                           'call '
+                                                                                                           'to '
+                                                                                                           "'tissue_label': "
+                                                                                                           'value '
+                                                                                                           'passed '
+                                                                                                           'to '
+                                                                                                           "'tissue' "
+                                                                                                           'cannot '
+                                                                                                           'be '
+                                                                                                           'converted '
+                                                                                                           'from '
+                                                                                                           "'IntLiteral[1]' "
+                                                                                                           'to '
+                                                                                                           "'CanonicalTissue'"}],
+                                                                                    'notes': ['function '
+                                                                                              'declared '
+                                                                                              'here']},
+                   'tests/compile_fail/a_dentition_is_not_a_bare_int.mojo': {'errors': [{'column': 27,
+                                                                                         'line': 12,
+                                                                                         'message': 'invalid '
+                                                                                                    'call '
+                                                                                                    'to '
+                                                                                                    "'dentition_label': "
+                                                                                                    'value '
+                                                                                                    'passed '
+                                                                                                    'to '
+                                                                                                    "'dentition' "
+                                                                                                    'cannot '
+                                                                                                    'be '
+                                                                                                    'converted '
+                                                                                                    'from '
+                                                                                                    "'IntLiteral[0]' "
+                                                                                                    'to '
+                                                                                                    "'Dentition'"}],
+                                                                             'notes': ['function '
+                                                                                       'declared '
+                                                                                       'here']},
+                   'tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo': {'errors': [{'column': 25,
+                                                                                            'line': 12,
+                                                                                            'message': 'invalid '
+                                                                                                       'call '
+                                                                                                       'to '
+                                                                                                       "'mapping_label': "
+                                                                                                       'value '
+                                                                                                       'passed '
+                                                                                                       'to '
+                                                                                                       "'kind' "
+                                                                                                       'cannot '
+                                                                                                       'be '
+                                                                                                       'converted '
+                                                                                                       'from '
+                                                                                                       "'IntLiteral[0]' "
+                                                                                                       'to '
+                                                                                                       "'MappingKind'"}],
+                                                                                'notes': ['function '
+                                                                                          'declared '
+                                                                                          'here']}},
+ 'edits': ((117,
+            129,
+            (),
+            ('      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n',
+             '  "tests/compile_fail/a_body_region_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "column": 24,\n',
+             '        "line": 12,\n',
+             '        "message": "invalid call to \'region_label\': value passed to \'region\' '
+             'cannot be converted from \'IntLiteral[0]\' to \'BodyRegion\'"\n')),
+           (259,
+            271,
+            (),
+            ('      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n',
+             '  "tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "column": 24,\n',
+             '        "line": 12,\n',
+             '        "message": "invalid call to \'tissue_label\': value passed to \'tissue\' '
+             'cannot be converted from \'IntLiteral[1]\' to \'CanonicalTissue\'"\n')),
+           (670,
+            682,
+            (),
+            ('      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n',
+             '  "tests/compile_fail/a_dentition_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "column": 27,\n',
+             '        "line": 12,\n',
+             '        "message": "invalid call to \'dentition_label\': value passed to '
+             '\'dentition\' cannot be converted from \'IntLiteral[0]\' to \'Dentition\'"\n')),
+           (1973,
+            1985,
+            (),
+            ('      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n',
+             '  "tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "column": 25,\n',
+             '        "line": 12,\n',
+             '        "message": "invalid call to \'mapping_label\': value passed to \'kind\' '
+             'cannot be converted from \'IntLiteral[0]\' to \'MappingKind\'"\n'))),
+ 'regression_path': 'tools/carla_lane_oracle/test_expectation_binding_successor.py',
+ 'regression_sha256': '5742e10ece5177de5615c006be311beb3b37e3346f9f9a4b5202f36a3393d979'}
+BINDING_INPUTS = {**COMMON_BINDING_INPUTS, **{'tools/compile_fail_expectations.json': '5315c49b101f8f653d589fab763fdd7dce4c8cd04123e6e4d403aaf90c4d0016',
+ 'tools/carla_lane_oracle/test_expectation_binding_successor.py': '5742e10ece5177de5615c006be311beb3b37e3346f9f9a4b5202f36a3393d979'}}
 # END REVIEWED TYPED BOUNDARY DATA
 
 
@@ -39909,6 +40064,71 @@ def edge(path):
     return {'path': path, **result}
 
 
+def expectation_predecessor(raw):
+    """Recover the exact old expectation bytes from one reviewed extension.
+
+    Args:
+        raw: The physical current expectation-file bytes.
+
+    Returns:
+        The exact historical bytes for provenance only.
+
+    Raises:
+        ValueError: The endpoint, additions, inverse or authority changed.
+    """
+    verify_authority()
+    record = EXPECTATION_SUCCESSOR
+    require(type(raw) is bytes and sha(raw) == record['after_sha256'],
+            'expectation successor endpoint changed')
+    require(record['before_sha256'] == HISTORICAL_BINDING_INPUTS[record['path']]
+            and record['after_sha256'] == BINDING_INPUTS[record['path']],
+            'expectation successor misses its fixed binding endpoints')
+    lines = raw.decode('utf-8').splitlines(keepends=True)
+    previous = len(lines) + 1
+    for start, stop, before, after in reversed(record['edits']):
+        require(type(start) is int and type(stop) is int
+                and 0 <= start <= stop < previous
+                and all(type(line) is str for line in (*before, *after)),
+                'malformed expectation predecessor inverse')
+        require(tuple(lines[start:stop]) == after,
+                'expectation predecessor span changed')
+        lines[start:stop] = before
+        previous = start
+    prior = ''.join(lines).encode('utf-8')
+    require(sha(prior) == record['before_sha256'],
+            'expectation predecessor bytes changed')
+    old, current = json.loads(prior), json.loads(raw)
+    additions = record['added_records']
+    require(type(old) is dict and type(current) is dict and type(additions) is dict
+            and len(old) == record['before_count'] == 689
+            and len(current) == record['after_count'] == 693
+            and len(additions) == 4 and not set(old).intersection(additions)
+            and set(current) == set(old).union(additions),
+            'expectation successor key inventory changed')
+    require({path: current[path] for path in old} == old
+            and {path: current[path] for path in additions} == additions,
+            'expectation successor changed an old or added diagnostic')
+    return prior
+
+
+def verify_binding_successor(path, raw):
+    """Validate a named extension without replacing observed physical bytes.
+
+    Args:
+        path: The canonical binding path checked by the input owner.
+        raw: The physical bytes already checked against the current digest.
+
+    Returns:
+        None. The owner keeps the same raw observation and receipt value.
+
+    Raises:
+        ValueError: The named expectation extension or authority changed.
+    """
+    if path == 'tools/compile_fail_expectations.json':
+        expectation_predecessor(raw)
+
+
+
 def verify_authority():
     """Refuse changed authoritative globals, including late namespace edits."""
     payload = {
@@ -39929,7 +40149,7 @@ def verify_authority():
         'EDGE_SHA256': EDGE_SHA256,
         'NEW_INPUTS': NEW_INPUTS,
         'TESTS': TESTS,
-        'BINDING_INPUTS': BINDING_INPUTS,
+        'BINDING_INPUTS': COMMON_BINDING_INPUTS,
         'PRODUCTION_CLOSURE': PRODUCTION_CLOSURE,
         'NATIVE_CLOSURE': NATIVE_CLOSURE,
         'TYPED_NATIVE_CLOSURE': TYPED_NATIVE_CLOSURE,
@@ -39940,3 +40160,12 @@ def verify_authority():
     }
     require(sha(json.dumps(current_payload, sort_keys=True, separators=(',', ':'))) ==
             '2c904391178d159981497ede78ae776f64bcc8325a0a0ebd24c501516e15777d', 'executing current repair authority globals changed')
+    require(BINDING_INPUTS == {
+        **COMMON_BINDING_INPUTS,
+        EXPECTATION_SUCCESSOR['path']: EXPECTATION_SUCCESSOR['after_sha256'],
+        EXPECTATION_SUCCESSOR['regression_path']: EXPECTATION_SUCCESSOR['regression_sha256'],
+    }, 'current binding map differs from its exact reviewed extension')
+    extension = {'BINDING_INPUTS': BINDING_INPUTS,
+                 'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
+    require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
+            '6fc6eead59862fcc3598faa3d6b2321204455100e7f3553ebb03389c51303c6c', 'expectation successor authority changed')

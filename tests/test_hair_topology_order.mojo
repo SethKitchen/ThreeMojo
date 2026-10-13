@@ -6,6 +6,7 @@
 """Validation-order controls for retained hair topology comparisons."""
 
 from core.assets import Assets
+from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from extensions.humanoid.skeleton.head.hair.shading import HairLight, HairLook
@@ -74,6 +75,26 @@ def test_strands_refuse_topology_before_reading_geometry() raises:
             )
         assert_equal(assets.geometries.count(), 0)
         assert_equal(hair._buffer.value(0), 0)
+
+
+def test_upload_of_an_empty_retained_groom_writes_nothing() raises:
+    # The constructor refuses an empty groom, and `shade` refuses a changed
+    # topology. Only a direct upload can see zero strands: it must keep the
+    # installed geometry and the retained buffer as they are.
+    var assets = Assets()
+    var geometry = assets.geometries.add(BufferGeometry())
+    var hair = HairStrands(_groom(), geometry, HairLook(Vector3(0.3, 0.2, 0.1)))
+    hair._upload(assets)
+    assert_true(hair._installed)
+    assert_equal(hair._buffer.value(7), 1)
+    var before = List[Float32]()
+    for at in range(hair._buffer.length()):
+        before.append(hair._buffer.value(at))
+    hair.groom = HairGroom()
+    hair._upload(assets)
+    assert_equal(assets.geometries.count(), 1)
+    for at in range(hair._buffer.length()):
+        assert_equal(hair._buffer.value(at), before[at])
 
 
 def main() raises:
