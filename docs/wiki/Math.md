@@ -141,7 +141,7 @@ overflow, underflow or cancel. The ordinary-range screen bounds all determinant
 products, including cancellation inside cofactors. Nonfinite inputs retain
 the previous propagation behavior.
 
-A kernel for an Apple GPU cannot use the fallback, because Apple GPUs have no Float64. It uses `_inverse_scaled_float32` instead. That function picks a power of two for each column and each row from the entries' exponents, before it changes any entry. It divides each entry by its two powers once, in steps that stay in the normal range. The division is exact unless the scaled entry is subnormal.
+A kernel for an Apple GPU cannot use the fallback, because Apple GPUs have no Float64. It uses `_inverse_scaled_float32` instead. That function picks a power of two for each column and each row from the entries' exponents, before it changes any entry. It divides each entry by its two powers once, in steps using normal power-of-two factors. The division is exact unless the scaled entry is subnormal.
 
 It inverts the result by Gauss-Jordan elimination with partial pivoting, then multiplies the powers back. That is exact unless an inverse entry leaves the normal range.
 
