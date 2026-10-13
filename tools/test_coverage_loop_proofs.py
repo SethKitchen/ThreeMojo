@@ -788,9 +788,9 @@ class GuardedLoopTests(unittest.TestCase):
                 # A before-source infrastructure checkout has no feature
                 # parser yet. Reconstruct only the immutable reviewed after
                 # fixture through the separate, source-bound parser contract.
-                directory = str(self.repo / 'tools/carla_lane_oracle')
-                with patch.object(sys, 'path', [directory, *sys.path]):
-                    import border_parser_contracts as border
+                # Execute the checkout's canonical checker; the historical
+                # fixture is source data, never an alternate import root.
+                from carla_lane_oracle import border_parser_contracts as border
                 content = border.successor_source(self.repo).encode()
             elif relative == loops.DENSITY_SOURCE:
                 content = loops.reviewed_density_source(self.repo).encode('utf-8')
@@ -1797,6 +1797,25 @@ class DensityBoundaryLoopTests(unittest.TestCase):
         self.assertNotIn('Int(1) << 63', self.after)
 
 
+def _consumer_validation_timeout(consumer, *, internal_error=False, unknown=False):
+    """Bound the measured full winner audit; preserve short refusal controls."""
+    return (180 if consumer == 'winner_sign_contracts'
+            and not internal_error and not unknown else 45)
+
+
+class ConsumerValidationBudgetTests(unittest.TestCase):
+    def test_only_complete_winner_validation_gets_extended_outer_budget(self):
+        self.assertEqual(_consumer_validation_timeout('winner_sign_contracts'), 180)
+        for consumer in ('winner_sign_contracts', 'border_parser_contracts', 'unknown'):
+            for internal_error, unknown in ((True, False), (False, True), (True, True)):
+                with self.subTest(consumer=consumer, internal_error=internal_error, unknown=unknown):
+                    self.assertEqual(_consumer_validation_timeout(
+                        consumer, internal_error=internal_error, unknown=unknown), 45)
+        for consumer in ('border_parser_contracts', 'unknown'):
+            with self.subTest(consumer=consumer):
+                self.assertEqual(_consumer_validation_timeout(consumer), 45)
+
+
 class MapSuccessorLoopTests(unittest.TestCase):
     """Exercise physical historical seed-count states and their protocol edges.
 
@@ -2082,7 +2101,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
 
     def test_eligible_constructor_failure_stays_failed_after_physical_restore(self):
         from functools import wraps
-        root = audit_fixtures.copy_current_root(self, self.repo)
+        root = audit_fixtures.copy_historical_boundary_root(
+            self, Path(__file__).resolve().parents[1])
         predecessors = audit_fixtures.verified_predecessors(self.repo)
         current = {name: (root/name).read_bytes() for name in full_audit.SOURCE_PATHS}
         road = root/'extensions/carla/road.mojo'
@@ -2273,8 +2293,12 @@ print('consumer verified',consumer,mode,','.join(sorted(loaded)))
         if sys.flags.optimize:command.append('-O')
         command.extend([str(script),str(root),consumer,mode,str(shadow),
                         str(internal_error),str(unknown)])
-        # Owner-approved validation allowance; native test budgets stay unchanged.
-        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=45)
+        # A complete winner audit measured 64.2s, exceeding 45s. Only that valid
+        # proof workload gets 180s; parser/refusal controls retain 45s and
+        # every native test budget remains unchanged.
+        timeout = _consumer_validation_timeout(
+            consumer, internal_error=internal_error, unknown=unknown)
+        result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=timeout)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         return result.stdout
 
@@ -2762,7 +2786,8 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
         self.repo = historical_boundary_root(self)
 
     def historical_cleanup_root(self):
-        return audit_fixtures.copy_current_root(self, self.repo)
+        return audit_fixtures.copy_historical_boundary_root(
+            self, Path(__file__).resolve().parents[1])
 
     def test_complete_current_rows_keep_true_and_all_source_bindings(self):
         expected = {

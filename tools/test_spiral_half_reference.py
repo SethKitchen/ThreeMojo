@@ -14,7 +14,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / 'tools/carla_lane_oracle/check_sampled_values.py'
-spec = importlib.util.spec_from_file_location('half_reference_source_reader', SCRIPT)
+spec = importlib.util.spec_from_file_location('carla_lane_oracle.half_reference_source_reader', SCRIPT)
 reader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reader)
 REFERENCE = ROOT / 'tests/_spiral_half_error_reference.mojo'

@@ -17,7 +17,7 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT/'tools/carla_lane_oracle/check_sampled_values.py'
-spec = importlib.util.spec_from_file_location('carla_sampled_value_checker', SCRIPT)
+spec = importlib.util.spec_from_file_location('carla_lane_oracle.carla_sampled_value_checker', SCRIPT)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 

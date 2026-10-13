@@ -237,7 +237,7 @@ SOURCE_PATHS = ('examples/carla.mojo',
  'tests/test_spiral_selection_finite_contract.mojo',
  'tools/carla_lane_oracle/test_witness_format_contracts.py',
  'units/si.mojo')
-EDGES = {'examples/carla.mojo': {'after_sha256': '5f4dccf7ffa6f728913e365815152122655d6595b8e54975b112e51832641fd8',
+HISTORICAL_EDGES = {'examples/carla.mojo': {'after_sha256': '5f4dccf7ffa6f728913e365815152122655d6595b8e54975b112e51832641fd8',
                          'after_token_sha256': 'a4dc38944b00ea0860018aa176907bbe5f18526ee310d7c69bf699ffa885c718',
                          'before_sha256': '4239e11eaae360aa3d85890d5176b72c53f732ff8589034a29d6b728b8941d68',
                          'before_token_sha256': '2f25104722cd6f08a5fbf1579baf0984a30ec360bd6cb08c6ad0d417280502a7',
@@ -26693,7 +26693,7 @@ EDGES = {'examples/carla.mojo': {'after_sha256': '5f4dccf7ffa6f728913e3658151521
                               [],
                               ['comptime InverseLength64 = Quantity[-1, 0, 0, 0, 0, DType.float64]\n',
                                'comptime InverseArea64 = Quantity[-2, 0, 0, 0, 0, DType.float64]\n']]]}}
-EDGE_SHA256 = {'examples/carla.mojo': '7d8c5da8452e62b35ff48ca51218eb9a2fc6d5443c7927708dc227a895f239cf',
+HISTORICAL_EDGE_SHA256 = {'examples/carla.mojo': '7d8c5da8452e62b35ff48ca51218eb9a2fc6d5443c7927708dc227a895f239cf',
  'examples/carla_town.mojo': 'be5a9f4b6b6151d7816d2b439eca39d734aca8ef9e35f8a81afd22944a002ec6',
  'examples/carla_towns.mojo': '5fae6c4e95235c3432bedf4adf922396968da60a9edad30f448e26502ea25697',
  'extensions/carla/agents.mojo': '068e1ac3da718dfd235a2727e927cb1643e70e29b10c91cb8492ab5915d68594',
@@ -27140,7 +27140,7 @@ NEW_INPUTS = {'extensions/carla/quantity_boundary.mojo': 'eeadbfe81aa478a4e83154
  'tests/test_carla_map_quantity.mojo': '057089749004558f06c493f1e7e86d05a0408bd1e2b92db11c7a74f362674032',
  'tests/test_carla_remaining_quantities.mojo': 'cc98df1d144960927de3170e2412804a5017a6dbd2ca5d5b67fb4b44da742dd8',
  'tests/test_carla_traffic_actor_boundaries.mojo': 'a3ee665b5f9f6008cc45463c76d01aad8b218cd72b50ffe24e761d176f389bb2'}
-TESTS = {'tests/_lazy_taylor_controls.mojo': 'd8ed0cfd0340e35f471a15ca2ce039962b71994dea577206b3be9e7b2f4aeda8',
+HISTORICAL_TESTS = {'tests/_lazy_taylor_controls.mojo': 'd8ed0cfd0340e35f471a15ca2ce039962b71994dea577206b3be9e7b2f4aeda8',
  'tests/_published_lane_refinement.mojo': 'ef0065a4af691e86f8040b733d84ab5d006d7b59c8f5732dc3dab1cc5a1d8822',
  'tests/_reference_spiral_domain_validation.mojo': 'fa5bcdce901f22ba6abefca6973af233f691b0e1b01bd60ccf9d4870fa21b3f9',
  'tests/_sample_dispatch_controls.mojo': '641e16767420127ced138a93e8c28178c2e904c4b23279e1a6e72b7e784b3443',
@@ -27524,7 +27524,7 @@ TESTS = {'tests/_lazy_taylor_controls.mojo': 'd8ed0cfd0340e35f471a15ca2ce039962b
  'tests/test_spiral_moment_table_quadrant_fallback.mojo': '942f5699ce2a34da7a6b04279c01728b2b160612d95c90ecdd6bab6838cbf49f',
  'tests/test_spiral_proof_strict_boundary.mojo': '3b6fe71bb99b919619b6112b5667e702b9f5936a02309944f5dedb8610bafa5b',
  'tests/test_spiral_selection_finite_contract.mojo': '3ab6a0c79ef21bf96ad39a52180036f52a671f0a19a0e191692b64a7ac2fd6b2'}
-BINDING_INPUTS = {'docs/validation/carla-namespace-lookup-333.json': '56e4f180488b04d96ac481f9524670406c62cba7b3b83c343c7beebe9e677e11',
+HISTORICAL_BINDING_INPUTS = {'docs/validation/carla-namespace-lookup-333.json': '56e4f180488b04d96ac481f9524670406c62cba7b3b83c343c7beebe9e677e11',
  'docs/validation/typed-boundary-successor-333.md': 'ace0362083baf3a24f13c654c5c6ccb1357411643ebd9320097d631655a7ba16',
  'tools/carla_lane_oracle/envelope_budget_contracts.py': '8f7025ec3d9b6578a93cf5aceafe9c8b6c0cabeb00720b4856e58cf00c35e166',
  'tools/carla_lane_oracle/oracle.py': '9bf603f02bca35c0a79a440600eeb9e6389af9da26e62d68f72c723b9c319952',
@@ -28788,7 +28788,7 @@ TYPED_PRODUCTION_CLOSURE = ('animation/__init__.mojo',
  'units/quantity.mojo',
  'units/si.mojo',
  'units/temperature.mojo')
-CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+HISTORICAL_CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
  'animation/animation_clip.mojo': 'd18e54c511fb0f83c9c031e24a4d5a304dba1f3817c52428c72d69defa2c8b7d',
  'animation/keyframe_track.mojo': 'a55ab22701e76f746f0de7d6c9835e41ac91f59d7a71a54e5507a31678e9a8ec',
  'cameras/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
@@ -29533,7 +29533,7 @@ CURRENT_DEPENDENCIES = {'animation/__init__.mojo': '5f3ace6c2d6162c4a542666c21a9
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02',
  'units/temperature.mojo': '66d781167abf82162c38a12e77871082c59862e5a54da4f26142ff65f51f4719'}
-INVENTORY = {'extensions/carla/curve_bounds.mojo': {'tokens_sha256': 'a309237731d82d301fea58baf66c9e7f7220e9e2dbcf95df0e4652af6447112f'},
+HISTORICAL_INVENTORY = {'extensions/carla/curve_bounds.mojo': {'tokens_sha256': 'a309237731d82d301fea58baf66c9e7f7220e9e2dbcf95df0e4652af6447112f'},
  'extensions/carla/curve_frozen_arc.mojo': {'tokens_sha256': 'ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2'},
  'extensions/carla/curve_interval.mojo': {'tokens_sha256': 'e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'},
  'extensions/carla/curve_minimizer_support.mojo': {'tokens_sha256': 'cc258cda45b4a7a3f01114c78c36f1d2032b1a2d129383a5cce34e18e96521d8'},
@@ -29549,7 +29549,6778 @@ INVENTORY = {'extensions/carla/curve_bounds.mojo': {'tokens_sha256': 'a309237731
  'extensions/carla/map.mojo': {'tokens_sha256': 'cb56db7605c213509262d0428a6b9488e3f0841bc6571d15bb5a4c236d9034f0'},
  'extensions/carla/map_builder.mojo': {'tokens_sha256': '27d7e1ded64b5d0b57cad57d43cc675a8f15e5b8269a5770217fc88b5cb35578'},
  'extensions/carla/spiral_grouped_lane.mojo': {'tokens_sha256': '9421f1b93a4af6cc870b79d9d6ea7b5598886d3c8a74706d4b30c86ab8fbd220'}}
-EDGES_SHA256 = 'df6f624e80c263102b9d717cb8f83bec06bae26e11e4c36276a135935106e45d'
+HISTORICAL_EDGES_SHA256 = 'df6f624e80c263102b9d717cb8f83bec06bae26e11e4c36276a135935106e45d'
+
+# Reviewed common-758 repair endpoints. Original records remain above.
+EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/map.mojo': {'after_sha256': '8159b0fbdaaa44ee428242c874bf592a6d500233611c85ab2803d462f9eada7b',
+                               'after_token_sha256': '4c62ad65d81762209b60f3564b8dcc1689bc9e931a35fcf2e245ed2411614925',
+                               'before_sha256': '0e2d282fcd6c70217e7413b7febe40619af070f7adbeaefa3fd56d95562c404b',
+                               'before_token_sha256': '8e900de7c4c82cba9ced3e09fa2360e39d1474f0a715d2bebf1ebc1603bd9977',
+                               'edits': [(175,
+                                          178,
+                                          ['    info_at,\n',
+                                           '    info_index,\n',
+                                           '    infos_in_range,\n'],
+                                          ['    _info_at_si as info_at,\n',
+                                           '    _info_index_si as info_index,\n',
+                                           '    _infos_in_range_si as infos_in_range,\n']),
+                                         (192,
+                                          201,
+                                          ['from units.si import DEGREE, Angle, Length, METER, '
+                                           'Velocity64\n'],
+                                          ['from extensions.carla.quantity_boundary import (\n',
+                                           '    _RAW_SI,\n',
+                                           '    _RawSI,\n',
+                                           '    _finite_si,\n',
+                                           '    _nonnegative_si,\n',
+                                           '    _positive_si,\n',
+                                           ')\n',
+                                           'from units.si import DEGREE, Angle, Length, Length64, '
+                                           'METER, Velocity64\n',
+                                           'from units.si import Angle64\n']),
+                                         (211, 211, ['@fieldwise_init\n'], []),
+                                         (219,
+                                          285,
+                                          [],
+                                          ['\n',
+                                           '    def __init__(\n',
+                                           '        out self,\n',
+                                           '        road_id: RoadId,\n',
+                                           '        section_id: SectionId,\n',
+                                           '        lane_id: LaneId,\n',
+                                           '        s: Length64,\n',
+                                           '    ) raises:\n',
+                                           '        """Create a checked typed record without '
+                                           'changing scalar storage.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            road_id: Its source record value.\n',
+                                           '            section_id: Its source record value.\n',
+                                           '            lane_id: Its source record value.\n',
+                                           '            s: Its typed source quantity.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            A record with unchanged source precision '
+                                           'and layout.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If a quantity is not finite or '
+                                           'another field is invalid.\n',
+                                           '        """\n',
+                                           '        self = Waypoint.from_si(road_id, section_id, '
+                                           'lane_id, s.value)\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def from_si(\n',
+                                           '        road_id: RoadId, section_id: SectionId, '
+                                           'lane_id: LaneId, s: Float64\n',
+                                           '    ) raises -> Waypoint:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           'Create the explicit compatibility record.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            road_id: The road identifier.\n',
+                                           '            section_id: The lane-section identifier.\n',
+                                           '            lane_id: The signed lane identifier.\n',
+                                           '            s: The nonnegative station in meters.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The new Waypoint record with the supplied '
+                                           'source fields.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the station is nonfinite or '
+                                           'negative.\n',
+                                           '        """\n',
+                                           '        _ = _nonnegative_si(s)\n',
+                                           '        return Waypoint(_RAW_SI, road_id, section_id, '
+                                           'lane_id, s)\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def _from_si(\n',
+                                           '        road_id: RoadId, section_id: SectionId, '
+                                           'lane_id: LaneId, s: Float64\n',
+                                           '    ) -> Waypoint:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           'Create the explicit compatibility record.\n',
+                                           '        """\n',
+                                           '        return Waypoint(_RAW_SI, road_id, section_id, '
+                                           'lane_id, s)\n',
+                                           '\n',
+                                           '    def __init__(\n',
+                                           '        out self,\n',
+                                           '        raw: _RawSI,\n',
+                                           '        road_id: RoadId,\n',
+                                           '        section_id: SectionId,\n',
+                                           '        lane_id: LaneId,\n',
+                                           '        s: Float64,\n',
+                                           '    ):\n',
+                                           '        """Create the explicit compatibility '
+                                           'record."""\n',
+                                           '        self.road_id = road_id\n',
+                                           '        self.section_id = section_id\n',
+                                           '        self.lane_id = lane_id\n',
+                                           '        self.s = s\n']),
+                                         (334,
+                                          345,
+                                          [],
+                                          ['\n',
+                                           '    def s_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw s '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_nonnegative_si(self.s))\n']),
+                                         (549,
+                                          785,
+                                          [],
+                                          ['        s: Length64,\n',
+                                           '        t: Length64,\n',
+                                           '        name: String,\n',
+                                           '        dynamic: String,\n',
+                                           '        orientation: String,\n',
+                                           '        z_offset: Length64,\n',
+                                           '        country: String,\n',
+                                           '        type: String,\n',
+                                           '        subtype: String,\n',
+                                           '        value: Float64,\n',
+                                           '        unit: String,\n',
+                                           '        height: Length64,\n',
+                                           '        width: Length64,\n',
+                                           '        text: String,\n',
+                                           '        h_offset: Angle64,\n',
+                                           '        pitch: Angle64,\n',
+                                           '        roll: Angle64,\n',
+                                           '        value_present: Bool = True,\n',
+                                           '    ) raises:\n',
+                                           '        """Create a checked typed record without '
+                                           'changing scalar storage.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            road_id: Its source record value.\n',
+                                           '            signal_id: Its source record value.\n',
+                                           '            s: Its typed source quantity.\n',
+                                           '            t: Its typed source quantity.\n',
+                                           '            name: Its source record value.\n',
+                                           '            dynamic: Its source record value.\n',
+                                           '            orientation: Its source record value.\n',
+                                           '            z_offset: Its typed source quantity.\n',
+                                           '            country: Its source record value.\n',
+                                           '            type: Its source record value.\n',
+                                           '            subtype: Its source record value.\n',
+                                           '            value: Its source record value.\n',
+                                           '            unit: Its source record value.\n',
+                                           '            height: Its typed source quantity.\n',
+                                           '            width: Its typed source quantity.\n',
+                                           '            text: Its source record value.\n',
+                                           '            h_offset: Its typed source quantity.\n',
+                                           '            pitch: Its typed source quantity.\n',
+                                           '            roll: Its typed source quantity.\n',
+                                           '            value_present: Its source record value.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            A record with unchanged source precision '
+                                           'and layout.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If a quantity is not finite or '
+                                           'another field is invalid.\n',
+                                           '        """\n',
+                                           '        self = Signal.from_si(\n',
+                                           '            road_id,\n',
+                                           '            signal_id,\n',
+                                           '            s.value,\n',
+                                           '            t.value,\n',
+                                           '            name,\n',
+                                           '            dynamic,\n',
+                                           '            orientation,\n',
+                                           '            z_offset.value,\n',
+                                           '            country,\n',
+                                           '            type,\n',
+                                           '            subtype,\n',
+                                           '            value,\n',
+                                           '            unit,\n',
+                                           '            height.value,\n',
+                                           '            width.value,\n',
+                                           '            text,\n',
+                                           '            h_offset.value,\n',
+                                           '            pitch.value,\n',
+                                           '            roll.value,\n',
+                                           '            value_present,\n',
+                                           '        )\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def from_si(\n',
+                                           '        road_id: RoadId,\n',
+                                           '        signal_id: SignalId,\n',
+                                           '        s: Float64,\n',
+                                           '        t: Float64,\n',
+                                           '        name: String,\n',
+                                           '        dynamic: String,\n',
+                                           '        orientation: String,\n',
+                                           '        z_offset: Float64,\n',
+                                           '        country: String,\n',
+                                           '        type: String,\n',
+                                           '        subtype: String,\n',
+                                           '        value: Float64,\n',
+                                           '        unit: String,\n',
+                                           '        height: Float64,\n',
+                                           '        width: Float64,\n',
+                                           '        text: String,\n',
+                                           '        h_offset: Float64,\n',
+                                           '        pitch: Float64,\n',
+                                           '        roll: Float64,\n',
+                                           '        value_present: Bool = True,\n',
+                                           '    ) raises -> Signal:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           "Create a signal from a file's `signal`.\n",
+                                           '\n',
+                                           '        Args:\n',
+                                           '            road_id: The road it stands on.\n',
+                                           '            signal_id: Its id.\n',
+                                           '            s: Meters along the road.\n',
+                                           '            t: Meters to the left of the reference '
+                                           'line.\n',
+                                           '            name: Its name.\n',
+                                           '            dynamic: "yes" for a signal that changes, '
+                                           'such as a light.\n',
+                                           '            orientation: "+", "-" or anything else for '
+                                           'both.\n',
+                                           '            z_offset: Meters up from the road.\n',
+                                           '            country: The code of the country whose '
+                                           'catalog it is from.\n',
+                                           '            type: Its type in that catalog, such as '
+                                           '"206".\n',
+                                           '            subtype: Its subtype.\n',
+                                           '            value: Its value, such as a speed.\n',
+                                           '            unit: The unit of the value.\n',
+                                           '            height: Its height, in meters.\n',
+                                           '            width: Its width, in meters.\n',
+                                           '            text: Its text.\n',
+                                           "            h_offset: The turn from the road's "
+                                           'heading, in radians.\n',
+                                           '            pitch: Its pitch, in radians.\n',
+                                           '            roll: Its roll, in radians.\n',
+                                           '            value_present: Whether the file supplied a '
+                                           'numeric value.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The new Signal record with the supplied '
+                                           'source fields.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If an id is not valid.\n',
+                                           '        """\n',
+                                           '        _ = _nonnegative_si(s)\n',
+                                           '        _ = _finite_si(t)\n',
+                                           '        _ = _finite_si(z_offset)\n',
+                                           '        _ = _nonnegative_si(height)\n',
+                                           '        _ = _nonnegative_si(width)\n',
+                                           '        _ = _finite_si(h_offset)\n',
+                                           '        _ = _finite_si(pitch)\n',
+                                           '        _ = _finite_si(roll)\n',
+                                           '        return Signal(\n',
+                                           '            _RAW_SI,\n',
+                                           '            road_id,\n',
+                                           '            signal_id,\n',
+                                           '            s,\n',
+                                           '            t,\n',
+                                           '            name,\n',
+                                           '            dynamic,\n',
+                                           '            orientation,\n',
+                                           '            z_offset,\n',
+                                           '            country,\n',
+                                           '            type,\n',
+                                           '            subtype,\n',
+                                           '            value,\n',
+                                           '            unit,\n',
+                                           '            height,\n',
+                                           '            width,\n',
+                                           '            text,\n',
+                                           '            h_offset,\n',
+                                           '            pitch,\n',
+                                           '            roll,\n',
+                                           '            value_present,\n',
+                                           '        )\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def _from_si(\n',
+                                           '        road_id: RoadId,\n',
+                                           '        signal_id: SignalId,\n',
+                                           '        s: Float64,\n',
+                                           '        t: Float64,\n',
+                                           '        name: String,\n',
+                                           '        dynamic: String,\n',
+                                           '        orientation: String,\n',
+                                           '        z_offset: Float64,\n',
+                                           '        country: String,\n',
+                                           '        type: String,\n',
+                                           '        subtype: String,\n',
+                                           '        value: Float64,\n',
+                                           '        unit: String,\n',
+                                           '        height: Float64,\n',
+                                           '        width: Float64,\n',
+                                           '        text: String,\n',
+                                           '        h_offset: Float64,\n',
+                                           '        pitch: Float64,\n',
+                                           '        roll: Float64,\n',
+                                           '        value_present: Bool = True,\n',
+                                           '    ) raises -> Signal:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           "Create a signal from a file's `signal`.\n",
+                                           '\n',
+                                           '        Args:\n',
+                                           '            road_id: The road it stands on.\n',
+                                           '            signal_id: Its id.\n',
+                                           '            s: Meters along the road.\n',
+                                           '            t: Meters to the left of the reference '
+                                           'line.\n',
+                                           '            name: Its name.\n',
+                                           '            dynamic: "yes" for a signal that changes, '
+                                           'such as a light.\n',
+                                           '            orientation: "+", "-" or anything else for '
+                                           'both.\n',
+                                           '            z_offset: Meters up from the road.\n',
+                                           '            country: The code of the country whose '
+                                           'catalog it is from.\n',
+                                           '            type: Its type in that catalog, such as '
+                                           '"206".\n',
+                                           '            subtype: Its subtype.\n',
+                                           '            value: Its value, such as a speed.\n',
+                                           '            unit: The unit of the value.\n',
+                                           '            height: Its height, in meters.\n',
+                                           '            width: Its width, in meters.\n',
+                                           '            text: Its text.\n',
+                                           "            h_offset: The turn from the road's "
+                                           'heading, in radians.\n',
+                                           '            pitch: Its pitch, in radians.\n',
+                                           '            roll: Its roll, in radians.\n',
+                                           '            value_present: Whether the file supplied a '
+                                           'numeric value.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If an id is not valid.\n',
+                                           '        """\n',
+                                           '        return Signal(\n',
+                                           '            _RAW_SI,\n',
+                                           '            road_id,\n',
+                                           '            signal_id,\n',
+                                           '            s,\n',
+                                           '            t,\n',
+                                           '            name,\n',
+                                           '            dynamic,\n',
+                                           '            orientation,\n',
+                                           '            z_offset,\n',
+                                           '            country,\n',
+                                           '            type,\n',
+                                           '            subtype,\n',
+                                           '            value,\n',
+                                           '            unit,\n',
+                                           '            height,\n',
+                                           '            width,\n',
+                                           '            text,\n',
+                                           '            h_offset,\n',
+                                           '            pitch,\n',
+                                           '            roll,\n',
+                                           '            value_present,\n',
+                                           '        )\n',
+                                           '\n',
+                                           '    def __init__(\n',
+                                           '        out self,\n',
+                                           '        raw: _RawSI,\n',
+                                           '        road_id: RoadId,\n',
+                                           '        signal_id: SignalId,\n']),
+                                         (807,
+                                          808,
+                                          [],
+                                          ['            raw: The private raw-storage construction '
+                                           'capability.\n']),
+                                         (894,
+                                          982,
+                                          [],
+                                          ['    def s_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw s '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_nonnegative_si(self.s))\n',
+                                           '\n',
+                                           '    def t_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw t '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_finite_si(self.t))\n',
+                                           '\n',
+                                           '    def z_offset_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'z_offset compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_finite_si(self.z_offset))\n',
+                                           '\n',
+                                           '    def height_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'height compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'Length64(_nonnegative_si(self.height))\n',
+                                           '\n',
+                                           '    def width_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'width compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_nonnegative_si(self.width))\n',
+                                           '\n',
+                                           '    def h_offset_quantity(self) raises -> Angle64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'h_offset compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Angle64(_finite_si(self.h_offset))\n',
+                                           '\n',
+                                           '    def pitch_quantity(self) raises -> Angle64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'pitch compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Angle64(_finite_si(self.pitch))\n',
+                                           '\n',
+                                           '    def roll_quantity(self) raises -> Angle64:\n',
+                                           '        """Read the checked typed view of the raw roll '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Angle64(_finite_si(self.roll))\n',
+                                           '\n']),
+                                         (1052,
+                                          1151,
+                                          [],
+                                          ['\n',
+                                           '    def s_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw s '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_nonnegative_si(self.s))\n',
+                                           '\n',
+                                           '    def t_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw t '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_finite_si(self.t))\n',
+                                           '\n',
+                                           '    def z_offset_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'z_offset compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_finite_si(self.z_offset))\n',
+                                           '\n',
+                                           '    def valid_length_quantity(self) raises -> '
+                                           'Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'valid_length compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'Length64(_nonnegative_si(self.valid_length))\n',
+                                           '\n',
+                                           '    def length_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'length compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'Length64(_nonnegative_si(self.length))\n',
+                                           '\n',
+                                           '    def width_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'width compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Length64(_nonnegative_si(self.width))\n',
+                                           '\n',
+                                           '    def heading_quantity(self) raises -> Angle64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'heading compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Angle64(_finite_si(self.heading))\n',
+                                           '\n',
+                                           '    def pitch_quantity(self) raises -> Angle64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'pitch compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Angle64(_finite_si(self.pitch))\n',
+                                           '\n',
+                                           '    def roll_quantity(self) raises -> Angle64:\n',
+                                           '        """Read the checked typed view of the raw roll '
+                                           'compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return Angle64(_finite_si(self.roll))\n']),
+                                         (1307,
+                                          1328,
+                                          [],
+                                          ['        accumulated_s: Length64,\n',
+                                           '    ) raises:\n',
+                                           '        """Create a checked typed record without '
+                                           'changing scalar storage.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            signal: Its source record value.\n',
+                                           '            waypoint: Its source record value.\n',
+                                           '            accumulated_s: Its typed source '
+                                           'quantity.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            A record with unchanged source precision '
+                                           'and layout.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If a quantity is not finite or '
+                                           'another field is invalid.\n',
+                                           '        """\n',
+                                           '        self = SignalSearchData.from_si(signal, '
+                                           'waypoint, accumulated_s.value)\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def from_si(\n',
+                                           '        signal: RoadInfoSignal,\n',
+                                           '        waypoint: Waypoint,\n']),
+                                         (1329,
+                                          1353,
+                                          ['    ):\n', '        """Create a result.\n'],
+                                          ['    ) raises -> SignalSearchData:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           'Create a result.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            signal: The signal reference found.\n',
+                                           '            waypoint: Where it applies.\n',
+                                           '            accumulated_s: How far from the start, in '
+                                           'meters.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The new SignalSearchData record with the '
+                                           'supplied source fields.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the accumulated distance is '
+                                           'nonfinite or negative.\n',
+                                           '        """\n',
+                                           '        _ = _nonnegative_si(accumulated_s)\n',
+                                           '        return SignalSearchData(_RAW_SI, signal, '
+                                           'waypoint, accumulated_s)\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def _from_si(\n',
+                                           '        signal: RoadInfoSignal,\n',
+                                           '        waypoint: Waypoint,\n',
+                                           '        accumulated_s: Float64,\n',
+                                           '    ) -> SignalSearchData:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           'Create a result.\n']),
+                                         (1359,
+                                          1375,
+                                          [],
+                                          ['        return SignalSearchData(_RAW_SI, signal, '
+                                           'waypoint, accumulated_s)\n',
+                                           '\n',
+                                           '    def __init__(\n',
+                                           '        out self,\n',
+                                           '        raw: _RawSI,\n',
+                                           '        signal: RoadInfoSignal,\n',
+                                           '        waypoint: Waypoint,\n',
+                                           '        accumulated_s: Float64,\n',
+                                           '    ):\n',
+                                           '        """Create a result.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            raw: The private raw-storage construction '
+                                           'capability.\n',
+                                           '            signal: The signal reference found.\n',
+                                           '            waypoint: Where it applies.\n',
+                                           '            accumulated_s: How far from the start, in '
+                                           'meters."""\n']),
+                                         (1378,
+                                          1389,
+                                          [],
+                                          ['\n',
+                                           '    def accumulated_s_quantity(self) raises -> '
+                                           'Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'accumulated_s compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'Length64(_nonnegative_si(self.accumulated_s))\n']),
+                                         (1407,
+                                          1428,
+                                          [],
+                                          ['        distance: Length64,\n',
+                                           '    ) raises:\n',
+                                           '        """Create a checked typed record without '
+                                           'changing scalar storage.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: Its source record value.\n',
+                                           '            reference: Its source record value.\n',
+                                           '            distance: Its typed source quantity.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            A record with unchanged source precision '
+                                           'and layout.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If a quantity is not finite or '
+                                           'another field is invalid.\n',
+                                           '        """\n',
+                                           '        self = Landmark.from_si(waypoint, reference, '
+                                           'distance.value)\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def from_si(\n',
+                                           '        waypoint: Optional[Waypoint],\n',
+                                           '        reference: RoadInfoSignal,\n']),
+                                         (1429,
+                                          1453,
+                                          ['    ):\n', '        """Create a landmark.\n'],
+                                          ['    ) raises -> Landmark:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           'Create a landmark.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: Where it applies, or None.\n',
+                                           '            reference: The signal reference.\n',
+                                           "            distance: Meters from the search's "
+                                           'start.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The new Landmark record with the supplied '
+                                           'source fields.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance is nonfinite or '
+                                           'negative.\n',
+                                           '        """\n',
+                                           '        _ = _nonnegative_si(distance)\n',
+                                           '        return Landmark(_RAW_SI, waypoint, reference, '
+                                           'distance)\n',
+                                           '\n',
+                                           '    @staticmethod\n',
+                                           '    def _from_si(\n',
+                                           '        waypoint: Optional[Waypoint],\n',
+                                           '        reference: RoadInfoSignal,\n',
+                                           '        distance: Float64,\n',
+                                           '    ) -> Landmark:\n',
+                                           '        """Explicit source-unit compatibility adapter. '
+                                           'Create a landmark.\n']),
+                                         (1459,
+                                          1475,
+                                          [],
+                                          ['        return Landmark(_RAW_SI, waypoint, reference, '
+                                           'distance)\n',
+                                           '\n',
+                                           '    def __init__(\n',
+                                           '        out self,\n',
+                                           '        raw: _RawSI,\n',
+                                           '        waypoint: Optional[Waypoint],\n',
+                                           '        reference: RoadInfoSignal,\n',
+                                           '        distance: Float64,\n',
+                                           '    ):\n',
+                                           '        """Create a landmark.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            raw: The private raw-storage construction '
+                                           'capability.\n',
+                                           '            waypoint: Where it applies, or None.\n',
+                                           '            reference: The signal reference.\n',
+                                           "            distance: Meters from the search's "
+                                           'start."""\n']),
+                                         (1478,
+                                          1489,
+                                          [],
+                                          ['\n',
+                                           '    def distance_quantity(self) raises -> Length64:\n',
+                                           '        """Read the checked typed view of the raw '
+                                           'distance compatibility field.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The same finite Float64 value with its '
+                                           'unit.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the mutable raw value is not '
+                                           'finite.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'Length64(_nonnegative_si(self.distance))\n']),
+                                         (1730,
+                                          1773,
+                                          [],
+                                          [') raises -> Length64:\n',
+                                           '    """Return the checked physical plan distance '
+                                           'between two segments.\n',
+                                           '\n',
+                                           '    Args:\n',
+                                           '        a1: The first segment start in meters.\n',
+                                           '        a2: The first segment end in meters.\n',
+                                           '        b1: The second segment start in meters.\n',
+                                           '        b2: The second segment end in meters.\n',
+                                           '\n',
+                                           '    Returns:\n',
+                                           '        Their minimum plan distance; z is ignored.\n',
+                                           '\n',
+                                           '    Raises:\n',
+                                           '        Error: If a plan coordinate or the result is '
+                                           'not finite.\n',
+                                           '    """\n',
+                                           '    return Length64(segment_distance_2d_meters(a1, a2, '
+                                           'b1, b2))\n',
+                                           '\n',
+                                           '\n',
+                                           'def segment_distance_2d_meters(\n',
+                                           '    a1: Vector3, a2: Vector3, b1: Vector3, b2: '
+                                           'Vector3\n',
+                                           ') raises -> Float64:\n',
+                                           '    """Explicit checked meter adapter for the '
+                                           'unchanged segment kernel.\n',
+                                           '\n',
+                                           '    Args:\n',
+                                           '        a1: The first segment start.\n',
+                                           '        a2: The first segment end.\n',
+                                           '        b1: The second segment start.\n',
+                                           '        b2: The second segment end.\n',
+                                           '\n',
+                                           '    Returns:\n',
+                                           '        The raw distance in meters.\n',
+                                           '\n',
+                                           '    Raises:\n',
+                                           '        Error: If a plan coordinate or result is not '
+                                           'finite.\n',
+                                           '    """\n',
+                                           '    for point in [a1, a2, b1, b2]:\n',
+                                           '        _ = _finite_si(Float64(point.x))\n',
+                                           '        _ = _finite_si(Float64(point.y))\n',
+                                           '    return _nonnegative_si(_segment_distance_2d_si(a1, '
+                                           'a2, b1, b2))\n',
+                                           '\n',
+                                           '\n',
+                                           'def _segment_distance_2d_si(\n',
+                                           '    a1: Vector3, a2: Vector3, b1: Vector3, b2: '
+                                           'Vector3\n']),
+                                         (1847,
+                                          1850,
+                                          [],
+                                          ['    # Lookup is metered by identity only. Signed '
+                                           'finite stations can remain\n',
+                                           '    # in private graph/build work until its contextual '
+                                           'refusal. Public\n',
+                                           '    # station guards belong to their checked entry '
+                                           'points.\n']),
+                                         (2402,
+                                          2403,
+                                          [],
+                                          ['        _ = _nonnegative_si(waypoint.s)\n']),
+                                         (2439,
+                                          2440,
+                                          ['            Waypoint(key.road_id, key.section_id, '
+                                           'key.lane_id, 0.0)\n'],
+                                          ['            Waypoint._from_si(key.road_id, '
+                                           'key.section_id, key.lane_id, 0.0)\n']),
+                                         (2543,
+                                          2544,
+                                          ['        var inset = min(10.0 * EPSILON, '
+                                           'r.section_length(section) / 4.0)\n'],
+                                          ['        var inset = min(10.0 * EPSILON, '
+                                           'r._section_length_si(section) / 4.0)\n']),
+                                         (2546,
+                                          2547,
+                                          ['        return s + r.section_length(section) - '
+                                           'inset\n'],
+                                          ['        return s + r._section_length_si(section) - '
+                                           'inset\n']),
+                                         (2552,
+                                          2553,
+                                          ['        var inset = min(10.0 * EPSILON, '
+                                           'r.section_length(section) / 4.0)\n'],
+                                          ['        var inset = min(10.0 * EPSILON, '
+                                           'r._section_length_si(section) / 4.0)\n']),
+                                         (2555,
+                                          2556,
+                                          ['        return s + r.section_length(section) - '
+                                           'inset\n'],
+                                          ['        return s + r._section_length_si(section) - '
+                                           'inset\n']),
+                                         (2574,
+                                          2575,
+                                          ['        return self.roads[at[0]].lane_transform(at[1], '
+                                           'at[2], waypoint.s)\n'],
+                                          ['        return '
+                                           'self.roads[at[0]]._lane_transform_si(at[1], at[2], '
+                                           'waypoint.s)\n']),
+                                         (2605,
+                                          2609,
+                                          [],
+                                          ['        if not isfinite(waypoint.s) or waypoint.s < '
+                                           '0.0:\n',
+                                           '            raise Error(\n',
+                                           '                "Speed-limit station must be finite '
+                                           'and within the road"\n',
+                                           '            )\n']),
+                                         (2630,
+                                          2648,
+                                          ['    def lane_width(self, waypoint: Waypoint) raises -> '
+                                           'Length:\n'],
+                                          ['    def lane_width(self, waypoint: Waypoint) raises -> '
+                                           'Length64:\n',
+                                           '        """Return a lane width without narrowing its '
+                                           'Float64 evaluation.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The lane and station.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The finite lane width in meters.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the waypoint or the width is '
+                                           'invalid.\n',
+                                           '        """\n',
+                                           '        var width = self.lane_width_meters(waypoint)\n',
+                                           '        if not isfinite(width) or width < 0.0:\n',
+                                           '            raise Error("Lane width must be finite and '
+                                           'nonnegative")\n',
+                                           '        return Length64(width)\n',
+                                           '\n',
+                                           '    def lane_width_float32(self, waypoint: Waypoint) '
+                                           'raises -> Length:\n']),
+                                         (2660,
+                                          2663,
+                                          ['        var at = self._locate(waypoint)\n',
+                                           '        ref road = self.roads[at[0]]\n',
+                                           '        if waypoint.s > road.length:\n',
+                                           '            raise Error("s is past the end of the '
+                                           'road")\n',
+                                           '        var width = info_at(\n',
+                                           '            '
+                                           'road.sections[at[1]].lanes[at[2]].info.widths, '
+                                           'waypoint.s\n',
+                                           '        )\n',
+                                           '        if not Bool(width):\n',
+                                           '            raise Error("The lane has no width record '
+                                           'at s")\n',
+                                           '        return Length(\n',
+                                           '            '
+                                           'Float32(width.value().polynomial.evaluate(waypoint.s)), '
+                                           'METER\n',
+                                           '        )\n'],
+                                          ['        var value = '
+                                           'Float32(self.lane_width_meters(waypoint))\n',
+                                           '        _ = _nonnegative_si(Float64(value))\n',
+                                           '        return Length(value, METER)\n']),
+                                         (2685,
+                                          2688,
+                                          ['        return '
+                                           'width.value().polynomial.evaluate(waypoint.s)\n'],
+                                          ['        return _nonnegative_si(\n',
+                                           '            '
+                                           'width.value().polynomial._evaluate_si(waypoint.s)\n',
+                                           '        )\n']),
+                                         (2816,
+                                          2817,
+                                          ['        return self.next(start, delta)[0]\n'],
+                                          ['        return self.next_meters(start, delta)[0]\n']),
+                                         (3429,
+                                          3430,
+                                          ['        var length = road.section_length(at[1])\n'],
+                                          ['        var length = '
+                                           'road._section_length_si(at[1])\n']),
+                                         (3486,
+                                          3490,
+                                          ['                Waypoint(key.road_id, key.section_id, '
+                                           'key.lane_id, 0.0), work\n'],
+                                          ['                Waypoint._from_si(\n',
+                                           '                    key.road_id, key.section_id, '
+                                           'key.lane_id, 0.0\n',
+                                           '                ),\n',
+                                           '                work,\n']),
+                                         (3499,
+                                          3502,
+                                          ['                Waypoint(key.road_id, key.section_id, '
+                                           'key.lane_id, station)\n'],
+                                          ['                Waypoint._from_si(\n',
+                                           '                    key.road_id, key.section_id, '
+                                           'key.lane_id, station\n',
+                                           '                )\n']),
+                                         (3558,
+                                          3559,
+                                          ['                var length = '
+                                           'road.section_length(at[1])\n'],
+                                          ['                var length = '
+                                           'road._section_length_si(at[1])\n']),
+                                         (3636,
+                                          3637,
+                                          ['        _ = self.roads[at[0]].lane_transform(at[1], '
+                                           'at[2], waypoint.s)\n'],
+                                          ['        _ = '
+                                           'self.roads[at[0]]._lane_transform_si(at[1], at[2], '
+                                           'waypoint.s)\n']),
+                                         (3639,
+                                          3640,
+                                          ['        self, road_id: RoadId, lane_id: LaneId, s: '
+                                           'Length\n'],
+                                          ['        self, road_id: RoadId, lane_id: LaneId, s: '
+                                           'Length64\n']),
+                                         (3643,
+                                          3645,
+                                          ['        CARLA takes s as a `float`, as `Length` holds '
+                                           'it.\n'],
+                                          ['        The station stays in Float64; use the explicit '
+                                           'Float32 adapter\n',
+                                           '        only for a legacy CARLA float input.\n']),
+                                         (3663,
+                                          3664,
+                                          ['        var at = Float64(s.value)\n'],
+                                          ['        var at = _finite_si(s.value)\n']),
+                                         (3666,
+                                          3667,
+                                          ['        for index in road.sections_at(at):\n'],
+                                          ['        for index in road._sections_at_si(at):\n']),
+                                         (3668,
+                                          3671,
+                                          ['                return Waypoint(road_id, '
+                                           'road.sections[index].id, lane_id, at)\n'],
+                                          ['                return Waypoint._from_si(\n',
+                                           '                    road_id, road.sections[index].id, '
+                                           'lane_id, at\n',
+                                           '                )\n']),
+                                         (3672,
+                                          3690,
+                                          [],
+                                          ['\n',
+                                           '    def waypoint_xodr_float32(\n',
+                                           '        self, road_id: RoadId, lane_id: LaneId, s: '
+                                           'Length\n',
+                                           '    ) raises -> Optional[Waypoint]:\n',
+                                           '        """Look up a legacy Float32 station through an '
+                                           'explicit adapter.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            road_id: The road.\n',
+                                           '            lane_id: The lane.\n',
+                                           '            s: The legacy Float32 station.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The matching waypoint, if present.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If an id or the station is not '
+                                           'valid.\n',
+                                           '        """\n',
+                                           '        return self.waypoint_xodr(road_id, lane_id, '
+                                           'Length64(Float64(s.value)))\n']),
+                                         (3713,
+                                          3714,
+                                          ['                Waypoint(\n'],
+                                          ['                Waypoint._from_si(\n']),
+                                         (3742,
+                                          3743,
+                                          ['                Waypoint(\n'],
+                                          ['                Waypoint._from_si(\n']),
+                                         (3752,
+                                          3769,
+                                          [],
+                                          ['        self, waypoint: Waypoint, distance: Length64\n',
+                                           '    ) raises -> List[Waypoint]:\n',
+                                           '        """Return the next result with a Float64 '
+                                           'length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return self.next_meters(waypoint, '
+                                           'distance.value)\n',
+                                           '\n',
+                                           '    def next_meters(\n']),
+                                         (3771,
+                                          3772,
+                                          ['        """Return the waypoints a distance ahead, '
+                                           '`Map::GetNext`.\n'],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           'Return the waypoints a distance ahead, '
+                                           '`Map::GetNext`.\n']),
+                                         (3792,
+                                          3809,
+                                          [],
+                                          ['        self, waypoint: Waypoint, distance: Length64\n',
+                                           '    ) raises -> List[Waypoint]:\n',
+                                           '        """Return the previous result with a Float64 '
+                                           'length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return self.previous_meters(waypoint, '
+                                           'distance.value)\n',
+                                           '\n',
+                                           '    def previous_meters(\n']),
+                                         (3811,
+                                          3812,
+                                          ['        """Return the waypoints a distance behind, '
+                                           '`Map::GetPrevious`.\n'],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           'Return the waypoints a distance behind, '
+                                           '`Map::GetPrevious`.\n']),
+                                         (3829,
+                                          3830,
+                                          ['        if not (distance > 0.0):\n'],
+                                          ['        if not isfinite(distance) or not (distance > '
+                                           '0.0):\n']),
+                                         (3831,
+                                          3832,
+                                          [],
+                                          ['        _ = _nonnegative_si(waypoint.s)\n']),
+                                         (3839,
+                                          3840,
+                                          ['        var length = road.section_length(at[1])\n'],
+                                          ['        var length = '
+                                           'road._section_length_si(at[1])\n']),
+                                         (3925,
+                                          3943,
+                                          ['    def generate_waypoints(self, distance: Float64) '
+                                           'raises -> List[Waypoint]:\n',
+                                           '        """Return waypoints every `distance` on every '
+                                           'driving lane.\n'],
+                                          ['    def generate_waypoints(self, distance: Length64) '
+                                           'raises -> List[Waypoint]:\n',
+                                           '        """Return the generate waypoints result with a '
+                                           'Float64 length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'self.generate_waypoints_meters(distance.value)\n',
+                                           '\n',
+                                           '    def generate_waypoints_meters(\n',
+                                           '        self, distance: Float64\n',
+                                           '    ) raises -> List[Waypoint]:\n',
+                                           '        """Explicit meter compatibility adapter. '
+                                           'Return waypoints every `distance` on every driving '
+                                           'lane.\n']),
+                                         (3956,
+                                          3957,
+                                          ['        if not (distance > 0.0):\n'],
+                                          ['        if not isfinite(distance) or not (distance > '
+                                           '0.0):\n']),
+                                         (3962,
+                                          3963,
+                                          ['                for index in road.sections_at(s):\n'],
+                                          ['                for index in '
+                                           'road._sections_at_si(s):\n']),
+                                         (3968,
+                                          3969,
+                                          ['                                Waypoint(\n'],
+                                          ['                                Waypoint._from_si(\n']),
+                                         (3972,
+                                          3978,
+                                          ['                s += distance\n'],
+                                          ['                var following = s + distance\n',
+                                           '                if not isfinite(following) or '
+                                           'following <= s:\n',
+                                           '                    raise Error(\n',
+                                           '                        "Waypoint spacing cannot '
+                                           'advance at this station"\n',
+                                           '                    )\n',
+                                           '                s = following\n']),
+                                         (3983,
+                                          3984,
+                                          ['        for index in road.sections_at(0.0):\n'],
+                                          ['        for index in road._sections_at_si(0.0):\n']),
+                                         (3989,
+                                          3992,
+                                          ['                        Waypoint(road.id, '
+                                           'road.sections[index].id, lane.id, 0.0)\n'],
+                                          ['                        Waypoint._from_si(\n',
+                                           '                            road.id, '
+                                           'road.sections[index].id, lane.id, 0.0\n',
+                                           '                        )\n']),
+                                         (3993,
+                                          3994,
+                                          ['        for index in road.sections_at(road.length):\n'],
+                                          ['        for index in '
+                                           'road._sections_at_si(road.length):\n']),
+                                         (3999,
+                                          4000,
+                                          ['                        Waypoint(\n'],
+                                          ['                        Waypoint._from_si(\n']),
+                                         (4080,
+                                          4081,
+                                          ['                    var w = Waypoint(\n'],
+                                          ['                    var w = Waypoint._from_si(\n']),
+                                         (4088,
+                                          4089,
+                                          ['                        var last = Waypoint(\n'],
+                                          ['                        var last = '
+                                           'Waypoint._from_si(\n']),
+                                         (4130,
+                                          4131,
+                                          ['                    var start = Waypoint(\n'],
+                                          ['                    var start = Waypoint._from_si(\n']),
+                                         (4164,
+                                          4165,
+                                          ['                    var start = Waypoint(\n'],
+                                          ['                    var start = Waypoint._from_si(\n']),
+                                         (4235,
+                                          4238,
+                                          ['                    segment_distance_2d(one.start, '
+                                           'one.end, two.start, two.end)\n'],
+                                          ['                    _segment_distance_2d_si(\n',
+                                           '                        one.start, one.end, two.start, '
+                                           'two.end\n',
+                                           '                    )\n']),
+                                         (4254,
+                                          4277,
+                                          [],
+                                          ['        distance: Length64,\n',
+                                           '        stop_at_junction: Bool = False,\n',
+                                           '    ) raises -> List[SignalSearchData]:\n',
+                                           '        """Return the signals in distance result with '
+                                           'a Float64 length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '            stop_at_junction: Whether to stop at a '
+                                           'junction.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return self.signals_in_distance_meters(\n',
+                                           '            waypoint, distance.value, '
+                                           'stop_at_junction\n',
+                                           '        )\n',
+                                           '\n',
+                                           '    def signals_in_distance_meters(\n',
+                                           '        self,\n',
+                                           '        waypoint: Waypoint,\n']),
+                                         (4280,
+                                          4281,
+                                          ['        """Return the signals within a distance ahead, '
+                                           '`GetSignalsInDistance`.\n'],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           'Return the signals within a distance ahead, '
+                                           '`GetSignalsInDistance`.\n']),
+                                         (4298,
+                                          4300,
+                                          [],
+                                          ['        if not isfinite(distance) or distance < 0.0:\n',
+                                           '            raise Error("Signal distance must be '
+                                           'finite and nonnegative")\n']),
+                                         (4305,
+                                          4306,
+                                          ['            road.section_length(at[1]) - relative if '
+                                           'forward else relative\n'],
+                                          ['            road._section_length_si(at[1]) - relative '
+                                           'if forward else relative\n']),
+                                         (4324,
+                                          4327,
+                                          ['                out.append(SignalSearchData(signal, '
+                                           'waypoint, to_signal))\n'],
+                                          ['                out.append(\n',
+                                           '                    SignalSearchData._from_si(signal, '
+                                           'waypoint, to_signal)\n',
+                                           '                )\n']),
+                                         (4329,
+                                          4333,
+                                          ['                    SignalSearchData(\n',
+                                           '                        signal, self.next(waypoint, '
+                                           'to_signal)[0], to_signal\n'],
+                                          ['                    SignalSearchData._from_si(\n',
+                                           '                        signal,\n',
+                                           '                        self.next_meters(waypoint, '
+                                           'to_signal)[0],\n',
+                                           '                        to_signal,\n']),
+                                         (4347,
+                                          4349,
+                                          ['                start.s = s + '
+                                           'next_road.section_length(c[1])\n',
+                                           '            var found = self.signals_in_distance(\n'],
+                                          ['                start.s = s + '
+                                           'next_road._section_length_si(c[1])\n',
+                                           '            var found = '
+                                           'self.signals_in_distance_meters(\n']),
+                                         (4420,
+                                          4421,
+                                          ['            out.append(LaneMarking(mark.value()))\n'],
+                                          ['            '
+                                           'out.append(LaneMarking._from_si(mark.value()))\n']),
+                                         (4450,
+                                          4451,
+                                          ['                for index in '
+                                           'road.sections_at(crosswalk.s):\n'],
+                                          ['                for index in '
+                                           'road._sections_at_si(crosswalk.s):\n']),
+                                         (4453,
+                                          4454,
+                                          ['                        base = '
+                                           'road.lane_transform(index, lane, crosswalk.s)\n'],
+                                          ['                        base = '
+                                           'road._lane_transform_si(index, lane, crosswalk.s)\n']),
+                                         (4478,
+                                          4495,
+                                          [],
+                                          ['        self, waypoint: Waypoint, distance: Length64\n',
+                                           '    ) raises -> List[Waypoint]:\n',
+                                           '        """Return the next until lane end result with '
+                                           'a Float64 length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'self.next_until_lane_end_meters(waypoint, '
+                                           'distance.value)\n',
+                                           '\n',
+                                           '    def next_until_lane_end_meters(\n']),
+                                         (4497,
+                                          4498,
+                                          ['        """Return waypoints every `distance` to the '
+                                           "lane's end.\n"],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           "Return waypoints every `distance` to the lane's "
+                                           'end.\n']),
+                                         (4519,
+                                          4536,
+                                          [],
+                                          ['        self, waypoint: Waypoint, distance: Length64\n',
+                                           '    ) raises -> List[Waypoint]:\n',
+                                           '        """Return the previous until lane start result '
+                                           'with a Float64 length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'self.previous_until_lane_start_meters(waypoint, '
+                                           'distance.value)\n',
+                                           '\n',
+                                           '    def previous_until_lane_start_meters(\n']),
+                                         (4538,
+                                          4539,
+                                          ['        """Return waypoints every `distance` back to '
+                                           "the lane's start.\n"],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           "Return waypoints every `distance` back to the lane's "
+                                           'start.\n']),
+                                         (4564,
+                                          4566,
+                                          [],
+                                          ['        if not isfinite(waypoint.s) or waypoint.s < '
+                                           '0.0:\n',
+                                           '            raise Error("Waypoint is outside its lane '
+                                           'section")\n']),
+                                         (4569,
+                                          4570,
+                                          ['        var section_end = section_start + '
+                                           'road.section_length(initial[1])\n'],
+                                          ['        var section_end = section_start + '
+                                           'road._section_length_si(initial[1])\n']),
+                                         (4642,
+                                          4643,
+                                          ['            return LaneMarking(mark.value())\n'],
+                                          ['            return '
+                                           'LaneMarking._from_si(mark.value())\n']),
+                                         (4667,
+                                          4668,
+                                          ['            return LaneMarking(mark.value())\n'],
+                                          ['            return '
+                                           'LaneMarking._from_si(mark.value())\n']),
+                                         (4712,
+                                          4735,
+                                          [],
+                                          ['        distance: Length64,\n',
+                                           '        stop_at_junction: Bool = False,\n',
+                                           '    ) raises -> List[Landmark]:\n',
+                                           '        """Return the landmarks in distance result '
+                                           'with a Float64 length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '            stop_at_junction: Whether to stop at a '
+                                           'junction.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return self.landmarks_in_distance_meters(\n',
+                                           '            waypoint, distance.value, '
+                                           'stop_at_junction\n',
+                                           '        )\n',
+                                           '\n',
+                                           '    def landmarks_in_distance_meters(\n',
+                                           '        self,\n',
+                                           '        waypoint: Waypoint,\n']),
+                                         (4738,
+                                          4739,
+                                          ['        """Return the landmarks ahead, '
+                                           '`GetAllLandmarksInDistance`.\n'],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           'Return the landmarks ahead, '
+                                           '`GetAllLandmarksInDistance`.\n']),
+                                         (4754,
+                                          4755,
+                                          ['        for data in self.signals_in_distance(\n'],
+                                          ['        for data in '
+                                           'self.signals_in_distance_meters(\n']),
+                                         (4763,
+                                          4768,
+                                          ['            out.append(Landmark(data.waypoint, '
+                                           'data.signal, data.accumulated_s))\n'],
+                                          ['            out.append(\n',
+                                           '                Landmark._from_si(\n',
+                                           '                    data.waypoint, data.signal, '
+                                           'data.accumulated_s\n',
+                                           '                )\n',
+                                           '            )\n']),
+                                         (4771,
+                                          4796,
+                                          [],
+                                          ['        self,\n',
+                                           '        waypoint: Waypoint,\n',
+                                           '        distance: Length64,\n',
+                                           '        type: String,\n',
+                                           '        stop_at_junction: Bool = False,\n',
+                                           '    ) raises -> List[Landmark]:\n',
+                                           '        """Return the landmarks of type in distance '
+                                           'result with a Float64 length.\n',
+                                           '\n',
+                                           '        Args:\n',
+                                           '            waypoint: The start waypoint.\n',
+                                           '            distance: The distance or spacing, with '
+                                           'its meter unit.\n',
+                                           '            type: The signal type to keep.\n',
+                                           '            stop_at_junction: Whether to stop at a '
+                                           'junction.\n',
+                                           '\n',
+                                           '        Returns:\n',
+                                           '            The requested records with unchanged '
+                                           'Float64 endpoint arithmetic.\n',
+                                           '\n',
+                                           '        Raises:\n',
+                                           '            Error: If the distance or the selected map '
+                                           'records are invalid.\n',
+                                           '        """\n',
+                                           '        return '
+                                           'self.landmarks_of_type_in_distance_meters(\n',
+                                           '            waypoint, distance.value, type, '
+                                           'stop_at_junction\n',
+                                           '        )\n',
+                                           '\n',
+                                           '    def landmarks_of_type_in_distance_meters(\n']),
+                                         (4802,
+                                          4803,
+                                          ['        """Return the landmarks of one type ahead.\n'],
+                                          ['        """Explicit meter compatibility adapter. '
+                                           'Return the landmarks of one type ahead.\n']),
+                                         (4820,
+                                          4821,
+                                          ['        for data in self.signals_in_distance(\n'],
+                                          ['        for data in '
+                                           'self.signals_in_distance_meters(\n']),
+                                         (4825,
+                                          4828,
+                                          ['                    Landmark(data.waypoint, '
+                                           'data.signal, data.accumulated_s)\n'],
+                                          ['                    Landmark._from_si(\n',
+                                           '                        data.waypoint, data.signal, '
+                                           'data.accumulated_s\n',
+                                           '                    )\n']),
+                                         (4839,
+                                          4840,
+                                          ['            out.append(Landmark(None, reference, '
+                                           '0.0))\n'],
+                                          ['            out.append(Landmark._from_si(None, '
+                                           'reference, 0.0))\n']),
+                                         (4859,
+                                          4860,
+                                          ['                out.append(Landmark(None, reference, '
+                                           '0.0))\n'],
+                                          ['                out.append(Landmark._from_si(None, '
+                                           'reference, 0.0))\n']),
+                                         (4879,
+                                          4880,
+                                          ['                out.append(Landmark(None, reference, '
+                                           '0.0))\n'],
+                                          ['                out.append(Landmark._from_si(None, '
+                                           'reference, 0.0))\n']),
+                                         (4947,
+                                          4948,
+                                          ['        var length = '
+                                           'self.roads[at[0]].section_length(at[1])\n'],
+                                          ['        var length = '
+                                           'self.roads[at[0]]._section_length_si(at[1])\n']),
+                                         (4974,
+                                          4975,
+                                          ['        return self.roads[at[0]].lane_transform(at[1], '
+                                           'at[2], waypoint.s)\n'],
+                                          ['        return '
+                                           'self.roads[at[0]]._lane_transform_si(at[1], at[2], '
+                                           'waypoint.s)\n']),
+                                         (5218,
+                                          5219,
+                                          ['                        Waypoint(\n'],
+                                          ['                        Waypoint._from_si(\n']),
+                                         (5232,
+                                          5235,
+                                          ['            var lane_end = lane_start + '
+                                           'self.roads[at[0]].section_length(at[1])\n'],
+                                          ['            var lane_end = lane_start + '
+                                           'self.roads[at[0]]._section_length_si(\n',
+                                           '                at[1]\n',
+                                           '            )\n'])]},
+ 'extensions/carla/map_builder.mojo': {'after_sha256': '4646b215316dc28b0163a133abe5a187e2cdcdf55e4cf740770aee0dcd8de34f',
+                                       'after_token_sha256': 'e1d96c8c2aa97ed94f36d026e50d4bffa52588cfb7fd032314b37053bd0f96f4',
+                                       'before_sha256': '4092bfc42e1ab091b272da89d1079675ce8fabddd77de573a91df6911aeede61',
+                                       'before_token_sha256': '627ce91ee8d9626d9a326dd950dc85da6ca273e1fdc045128d3f119186207765',
+                                       'edits': [(55,
+                                                  60,
+                                                  ['    with_arc,\n',
+                                                   '    with_param_poly3,\n',
+                                                   '    with_poly3,\n',
+                                                   '    with_spiral,\n'],
+                                                  ['    with_arc_si as with_arc,\n',
+                                                   '    with_param_poly3_from_coefficients as '
+                                                   'with_param_poly3,\n',
+                                                   '    NormalizedCubic,\n',
+                                                   '    with_poly3_si as with_poly3,\n',
+                                                   '    with_spiral_si as with_spiral,\n']),
+                                                 (115,
+                                                  131,
+                                                  ['from units.si import DEGREE, Angle, Length, '
+                                                   'METER\n'],
+                                                  ['from units.si import (\n',
+                                                   '    DEGREE,\n',
+                                                   '    Angle,\n',
+                                                   '    Length,\n',
+                                                   '    METER,\n',
+                                                   '    Length64,\n',
+                                                   '    Angle64,\n',
+                                                   '    InverseLength64,\n',
+                                                   '    InverseArea64,\n',
+                                                   '    Velocity64,\n',
+                                                   ')\n',
+                                                   'from extensions.carla.quantity_boundary import '
+                                                   '(\n',
+                                                   '    _finite_si,\n',
+                                                   '    _nonnegative_si,\n',
+                                                   '    _positive_si,\n',
+                                                   ')\n']),
+                                                 (212,
+                                                  213,
+                                                  ['        length: Float64,\n'],
+                                                  ['        length: Length64,\n']),
+                                                 (218,
+                                                  219,
+                                                  ['        """Add a road, `AddRoad`. A second '
+                                                   'road with the same id resets the\n'],
+                                                  ['        """Checked typed boundary. Add a road, '
+                                                   '`AddRoad`. A second road with the same id '
+                                                   'resets the\n']),
+                                                 (236,
+                                                  271,
+                                                  ['        var road = Road(\n'],
+                                                  ['        return self.add_road_si(\n',
+                                                   '            id, name, length.value, '
+                                                   'junction_id, predecessor, successor, is_rht\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_road_si(\n',
+                                                   '        mut self,\n',
+                                                   '        id: RoadId,\n',
+                                                   '        name: String,\n',
+                                                   '        length: Float64,\n',
+                                                   '        junction_id: JuncId,\n',
+                                                   '        predecessor: RoadId,\n',
+                                                   '        successor: RoadId,\n',
+                                                   '        is_rht: Bool,\n',
+                                                   '    ) raises -> Int:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a road, `AddRoad`. A second road '
+                                                   'with the same id resets the\n',
+                                                   "        first's fields, as CARLA's `emplace` "
+                                                   'and assignments do.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            id: The road's id.\n",
+                                                   '            name: Its name.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   '            junction_id: Its junction, or '
+                                                   '`NO_JUNCTION`.\n',
+                                                   '            predecessor: The road or junction '
+                                                   'before it, 0 for none.\n',
+                                                   '            successor: The road or junction '
+                                                   'after it, 0 for none.\n',
+                                                   '            is_rht: True if traffic keeps to '
+                                                   'the right.\n',
+                                                   '\n',
+                                                   '        Returns:\n',
+                                                   "            The road's index in `roads`.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If an id is not valid.\n',
+                                                   '        """\n',
+                                                   '        _ = _positive_si(length)\n',
+                                                   '\n',
+                                                   '        var road = Road._from_si(\n']),
+                                                 (305,
+                                                  306,
+                                                  ['        mut self, road: Int, id: SectionId, s: '
+                                                   'Float64\n'],
+                                                  ['        mut self, road: Int, id: SectionId, s: '
+                                                   'Length64\n']),
+                                                 (307,
+                                                  308,
+                                                  ['        """Add a lane section, '
+                                                   '`AddRoadSection`.\n'],
+                                                  ['        """Checked typed boundary. Add a lane '
+                                                   'section, `AddRoadSection`.\n']),
+                                                 (320,
+                                                  341,
+                                                  ['        return '
+                                                   'self.roads[road].add_section(id, s)\n'],
+                                                  ['        return self.add_road_section_si(road, '
+                                                   'id, s.value)\n',
+                                                   '\n',
+                                                   '    def add_road_section_si(\n',
+                                                   '        mut self, road: Int, id: SectionId, s: '
+                                                   'Float64\n',
+                                                   '    ) raises -> Int:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a lane section, '
+                                                   '`AddRoadSection`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   "            id: The section's id.\n",
+                                                   '            s: Where it starts, in meters.\n',
+                                                   '\n',
+                                                   '        Returns:\n',
+                                                   "            The section's index in the road.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the id is not valid.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '\n',
+                                                   '        return '
+                                                   'self.roads[road]._add_section_si(id, s)\n']),
+                                                 (386,
+                                                  387,
+                                                  ['        self, road_id: RoadId, lane_id: '
+                                                   'LaneId, s: Float64\n'],
+                                                  ['        self, road_id: RoadId, lane_id: '
+                                                   'LaneId, s: Length64\n']),
+                                                 (388,
+                                                  389,
+                                                  ['        """Return the lane with an id at s, '
+                                                   '`MapBuilder::GetLane`.\n'],
+                                                  ['        """Checked typed boundary. Return the '
+                                                   'lane with an id at s, '
+                                                   '`MapBuilder::GetLane`.\n']),
+                                                 (401,
+                                                  421,
+                                                  [],
+                                                  ['        return self.lane_si(road_id, lane_id, '
+                                                   's.value)\n',
+                                                   '\n',
+                                                   '    def lane_si(\n',
+                                                   '        self, road_id: RoadId, lane_id: '
+                                                   'LaneId, s: Float64\n',
+                                                   '    ) raises -> Tuple[Int, Int, Int]:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Return the lane with an id at s, '
+                                                   '`MapBuilder::GetLane`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            road_id: The road.\n',
+                                                   '            lane_id: The lane.\n',
+                                                   '            s: A distance along the road, in '
+                                                   'meters.\n',
+                                                   '\n',
+                                                   '        Returns:\n',
+                                                   "            The road's index, the section's "
+                                                   "index and the lane's index.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If there is no such road or '
+                                                   'lane.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '\n']),
+                                                 (422,
+                                                  423,
+                                                  ['        var found = '
+                                                   'self.roads[r].lane_by_distance(s, lane_id)\n'],
+                                                  ['        var found = '
+                                                   'self.roads[r]._lane_by_distance_si(s, '
+                                                   'lane_id)\n']),
+                                                 (430,
+                                                  432,
+                                                  ['        s: Float64,\n',
+                                                   '        a: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        a: Length64,\n']),
+                                                 (433,
+                                                  437,
+                                                  ['        c: Float64,\n',
+                                                   '        d: Float64,\n',
+                                                   '    ):\n',
+                                                   '        """Add a width record, '
+                                                   '`CreateLaneWidth`.\n'],
+                                                  ['        c: InverseLength64,\n',
+                                                   '        d: InverseArea64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a width '
+                                                   'record, `CreateLaneWidth`.\n']),
+                                                 (445,
+                                                  449,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n']),
+                                                 (450,
+                                                  451,
+                                                  ['        self._lane(lane).info.widths.append(\n',
+                                                   '            RoadInfoLaneWidth(s, '
+                                                   'CubicPolynomial(a, b, c, d, s))\n',
+                                                   '        )\n'],
+                                                  ['        self.create_lane_width_si(lane, '
+                                                   's.value, a.value, b, c.value, d.value)\n']),
+                                                 (452,
+                                                  453,
+                                                  ['    def create_lane_border(\n'],
+                                                  ['    def create_lane_width_si(\n']),
+                                                 (460,
+                                                  496,
+                                                  ['    ):\n',
+                                                   '        """Add a border record, '
+                                                   '`CreateLaneBorder`.\n'],
+                                                  ['    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a width record, '
+                                                   '`CreateLaneWidth`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane, from `lane`.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   '            a: The width at s, in meters.\n',
+                                                   '            b: Its rate of change.\n',
+                                                   '            c: The quadratic term, per '
+                                                   'meter.\n',
+                                                   '            d: The cubic term, per square '
+                                                   'meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(a)\n',
+                                                   '        _ = _finite_si(c)\n',
+                                                   '        _ = _finite_si(d)\n',
+                                                   '\n',
+                                                   '        self._lane(lane).info.widths.append(\n',
+                                                   '            RoadInfoLaneWidth._from_si(\n',
+                                                   '                s, '
+                                                   'CubicPolynomial.from_coefficients(a, b, c, d, '
+                                                   's)\n',
+                                                   '            )\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_lane_border(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Length64,\n',
+                                                   '        a: Length64,\n',
+                                                   '        b: Float64,\n',
+                                                   '        c: InverseLength64,\n',
+                                                   '        d: InverseArea64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a '
+                                                   'border record, `CreateLaneBorder`.\n']),
+                                                 (504,
+                                                  508,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n']),
+                                                 (509,
+                                                  539,
+                                                  [],
+                                                  ['        self.create_lane_border_si(lane, '
+                                                   's.value, a.value, b, c.value, d.value)\n',
+                                                   '\n',
+                                                   '    def create_lane_border_si(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Float64,\n',
+                                                   '        a: Float64,\n',
+                                                   '        b: Float64,\n',
+                                                   '        c: Float64,\n',
+                                                   '        d: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a border record, '
+                                                   '`CreateLaneBorder`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   "            a: The border's offset at s, in "
+                                                   'meters.\n',
+                                                   '            b: Its rate of change.\n',
+                                                   '            c: The quadratic term, per '
+                                                   'meter.\n',
+                                                   '            d: The cubic term, per square '
+                                                   'meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(a)\n',
+                                                   '        _ = _finite_si(c)\n',
+                                                   '        _ = _finite_si(d)\n',
+                                                   '\n']),
+                                                 (540,
+                                                  575,
+                                                  ['            RoadInfoLaneBorder(s, '
+                                                   'CubicPolynomial(a, b, c, d, s))\n'],
+                                                  ['            RoadInfoLaneBorder._from_si(\n',
+                                                   '                s, '
+                                                   'CubicPolynomial.from_coefficients(a, b, c, d, '
+                                                   's)\n',
+                                                   '            )\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_lane_border_opendrive(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Float64,\n',
+                                                   '        a: Float64,\n',
+                                                   '        b: Float64,\n',
+                                                   '        c: Float64,\n',
+                                                   '        d: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Retain a finite border polynomial '
+                                                   'from explicit OpenDRIVE units.\n',
+                                                   '\n',
+                                                   '        A source record can begin before its '
+                                                   'lane section. Its signed origin\n',
+                                                   '        is retained; the parser clips derived '
+                                                   'width pieces to the section.\n',
+                                                   '        The typed construction route keeps its '
+                                                   'nonnegative station contract.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The destination lane.\n',
+                                                   '            s: The signed source polynomial '
+                                                   'origin, in meters along the road.\n',
+                                                   '            a: The signed border offset at the '
+                                                   'origin, in meters.\n',
+                                                   '            b: The dimensionless linear '
+                                                   'coefficient.\n',
+                                                   '            c: The quadratic coefficient, per '
+                                                   'meter.\n',
+                                                   '            d: The cubic coefficient, per '
+                                                   'square meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the origin or any '
+                                                   'coefficient is nonfinite.\n',
+                                                   '        """\n',
+                                                   '        _ = _finite_si(s)\n',
+                                                   '        var polynomial = '
+                                                   'CubicPolynomial.from_coefficients(a, b, c, d, '
+                                                   's)\n',
+                                                   '        '
+                                                   'self._lane(lane).info.borders.append(\n',
+                                                   '            RoadInfoLaneBorder._from_si(s, '
+                                                   'polynomial)\n']),
+                                                 (580,
+                                                  585,
+                                                  ['        s: Float64,\n',
+                                                   '        inner: Float64,\n',
+                                                   '        outer: Float64,\n',
+                                                   '    ):\n',
+                                                   '        """Add a height record, '
+                                                   '`CreateLaneHeight`.\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        inner: Length64,\n',
+                                                   '        outer: Length64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a '
+                                                   'height record, `CreateLaneHeight`.\n']),
+                                                 (591,
+                                                  595,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or either height\n',
+                                                   '                is nonfinite.\n']),
+                                                 (596,
+                                                  621,
+                                                  [],
+                                                  ['        self.create_lane_height_si(lane, '
+                                                   's.value, inner.value, outer.value)\n',
+                                                   '\n',
+                                                   '    def create_lane_height_si(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Float64,\n',
+                                                   '        inner: Float64,\n',
+                                                   '        outer: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a height record, '
+                                                   '`CreateLaneHeight`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   '            inner: The lift at the inner edge, '
+                                                   'in meters.\n',
+                                                   '            outer: The lift at the outer edge, '
+                                                   'in meters.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or either height\n',
+                                                   '                is nonfinite.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(inner)\n',
+                                                   '        _ = _finite_si(outer)\n',
+                                                   '\n']),
+                                                 (622,
+                                                  623,
+                                                  ['            RoadInfoLaneHeight(s, inner, '
+                                                   'outer)\n'],
+                                                  ['            RoadInfoLaneHeight._from_si(s, '
+                                                   'inner, outer)\n']),
+                                                 (628,
+                                                  629,
+                                                  ['        s: Float64,\n'],
+                                                  ['        s: Length64,\n']),
+                                                 (632,
+                                                  634,
+                                                  ['    ):\n',
+                                                   '        """Add a material record, '
+                                                   '`CreateLaneMaterial`.\n'],
+                                                  ['    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a '
+                                                   'material record, `CreateLaneMaterial`.\n']),
+                                                 (641,
+                                                  644,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative.\n']),
+                                                 (645,
+                                                  671,
+                                                  [],
+                                                  ['        self.create_lane_material_si(\n',
+                                                   '            lane, s.value, surface, friction, '
+                                                   'roughness\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_lane_material_si(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Float64,\n',
+                                                   '        surface: String,\n',
+                                                   '        friction: Float64,\n',
+                                                   '        roughness: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a material record, '
+                                                   '`CreateLaneMaterial`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   "            surface: The surface's name.\n",
+                                                   '            friction: Its friction '
+                                                   'coefficient.\n',
+                                                   '            roughness: Its roughness.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '\n']),
+                                                 (672,
+                                                  673,
+                                                  ['            RoadInfoLaneMaterial(s, surface, '
+                                                   'friction, roughness)\n'],
+                                                  ['            RoadInfoLaneMaterial._from_si(s, '
+                                                   'surface, friction, roughness)\n']),
+                                                 (676,
+                                                  679,
+                                                  ['        mut self, lane: Tuple[Int, Int, Int], '
+                                                   's: Float64, value: String\n',
+                                                   '    ):\n',
+                                                   '        """Add a rule record, '
+                                                   '`CreateLaneRule`.\n'],
+                                                  ['        mut self, lane: Tuple[Int, Int, Int], '
+                                                   's: Length64, value: String\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a rule '
+                                                   'record, `CreateLaneRule`.\n']),
+                                                 (684,
+                                                  687,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative.\n']),
+                                                 (688,
+                                                  706,
+                                                  ['        '
+                                                   'self._lane(lane).info.rules.append(RoadInfoLaneRule(s, '
+                                                   'value))\n'],
+                                                  ['        self.create_lane_rule_si(lane, '
+                                                   's.value, value)\n',
+                                                   '\n',
+                                                   '    def create_lane_rule_si(\n',
+                                                   '        mut self, lane: Tuple[Int, Int, Int], '
+                                                   's: Float64, value: String\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a rule record, '
+                                                   '`CreateLaneRule`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   "            value: The rule's text.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '\n',
+                                                   '        '
+                                                   'self._lane(lane).info.rules.append(RoadInfoLaneRule._from_si(s, '
+                                                   'value))\n']),
+                                                 (710,
+                                                  717,
+                                                  ['        s: Float64,\n',
+                                                   '        forward: Float64,\n',
+                                                   '        back: Float64,\n',
+                                                   '        left: Float64,\n',
+                                                   '        right: Float64,\n',
+                                                   '    ):\n',
+                                                   '        """Add a visibility record, '
+                                                   '`CreateLaneVisibility`.\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        forward: Length64,\n',
+                                                   '        back: Length64,\n',
+                                                   '        left: Length64,\n',
+                                                   '        right: Length64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a '
+                                                   'visibility record, `CreateLaneVisibility`.\n']),
+                                                 (725,
+                                                  729,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station or any sight '
+                                                   'distance is nonfinite or\n',
+                                                   '                negative.\n']),
+                                                 (730,
+                                                  763,
+                                                  [],
+                                                  ['        self.create_lane_visibility_si(\n',
+                                                   '            lane, s.value, forward.value, '
+                                                   'back.value, left.value, right.value\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_lane_visibility_si(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Float64,\n',
+                                                   '        forward: Float64,\n',
+                                                   '        back: Float64,\n',
+                                                   '        left: Float64,\n',
+                                                   '        right: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a visibility record, '
+                                                   '`CreateLaneVisibility`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   '            forward: Meters of sight '
+                                                   'forward.\n',
+                                                   '            back: Meters of sight back.\n',
+                                                   '            left: Meters of sight left.\n',
+                                                   '            right: Meters of sight right.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station or any sight '
+                                                   'distance is nonfinite or\n',
+                                                   '                negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _nonnegative_si(forward)\n',
+                                                   '        _ = _nonnegative_si(back)\n',
+                                                   '        _ = _nonnegative_si(left)\n',
+                                                   '        _ = _nonnegative_si(right)\n',
+                                                   '\n']),
+                                                 (764,
+                                                  765,
+                                                  ['            RoadInfoLaneVisibility(s, forward, '
+                                                   'back, left, right)\n'],
+                                                  ['            RoadInfoLaneVisibility._from_si(s, '
+                                                   'forward, back, left, right)\n']),
+                                                 (768,
+                                                  771,
+                                                  ['        mut self, lane: Tuple[Int, Int, Int], '
+                                                   's: Float64, restriction: String\n',
+                                                   '    ):\n',
+                                                   '        """Add an access record, '
+                                                   '`CreateLaneAccess`.\n'],
+                                                  ['        mut self, lane: Tuple[Int, Int, Int], '
+                                                   's: Length64, restriction: String\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add an '
+                                                   'access record, `CreateLaneAccess`.\n']),
+                                                 (776,
+                                                  779,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative.\n']),
+                                                 (780,
+                                                  797,
+                                                  [],
+                                                  ['        self.create_lane_access_si(lane, '
+                                                   's.value, restriction)\n',
+                                                   '\n',
+                                                   '    def create_lane_access_si(\n',
+                                                   '        mut self, lane: Tuple[Int, Int, Int], '
+                                                   's: Float64, restriction: String\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add an access record, '
+                                                   '`CreateLaneAccess`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   '            restriction: Who may use the '
+                                                   'lane.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '\n']),
+                                                 (798,
+                                                  799,
+                                                  ['            RoadInfoLaneAccess(s, '
+                                                   'restriction)\n'],
+                                                  ['            RoadInfoLaneAccess._from_si(s, '
+                                                   'restriction)\n']),
+                                                 (802,
+                                                  820,
+                                                  [],
+                                                  ['        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        s: Length64,\n',
+                                                   '        max: Velocity64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Add a checked lane speed from a '
+                                                   'quantity.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   '            s: Where the record starts, in '
+                                                   'meters along the road.\n',
+                                                   '            max: The finite nonnegative speed '
+                                                   'quantity.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station or speed is '
+                                                   'nonfinite or negative.\n',
+                                                   '        """\n',
+                                                   '        self.create_lane_speed_opendrive(lane, '
+                                                   's.value, max.value, "m/s")\n',
+                                                   '\n',
+                                                   '    def create_lane_speed_opendrive(\n']),
+                                                 (826,
+                                                  827,
+                                                  ['        """Add a numeric lane speed without '
+                                                   'dropping its source unit.\n'],
+                                                  ['        """Explicit source-unit compatibility '
+                                                   'adapter. Add a numeric lane speed without '
+                                                   'dropping its source unit.\n']),
+                                                 (837,
+                                                  840,
+                                                  ['        var record = RoadInfoSpeed(s, max, '
+                                                   '"Town", unit)\n'],
+                                                  ['        _ = _nonnegative_si(s)\n',
+                                                   '\n',
+                                                   '        var record = RoadInfoSpeed._from_si(s, '
+                                                   'max, "Town", unit)\n']),
+                                                 (842,
+                                                  843,
+                                                  ['    def create_lane_speed(\n'],
+                                                  ['    def create_lane_speed_opendrive(\n']),
+                                                 (849,
+                                                  850,
+                                                  ['        """Add a numeric lane speed directly '
+                                                   'from OpenDRIVE text.\n'],
+                                                  ['        """Explicit source-unit compatibility '
+                                                   'adapter. Add a numeric lane speed directly '
+                                                   'from OpenDRIVE text.\n']),
+                                                 (860,
+                                                  862,
+                                                  [],
+                                                  ['        _ = _nonnegative_si(s)\n', '\n']),
+                                                 (869,
+                                                  870,
+                                                  ['        s: Float64,\n'],
+                                                  ['        s: Length64,\n']),
+                                                 (874,
+                                                  875,
+                                                  ['        width: Float64,\n'],
+                                                  ['        width: Length64,\n']),
+                                                 (876,
+                                                  877,
+                                                  ['        height: Float64,\n'],
+                                                  ['        height: Length64,\n']),
+                                                 (878,
+                                                  879,
+                                                  ['        type_width: Float64,\n'],
+                                                  ['        type_width: Length64,\n']),
+                                                 (880,
+                                                  882,
+                                                  ['    ):\n',
+                                                   '        """Add a road mark, '
+                                                   '`CreateRoadMark`.\n'],
+                                                  ['    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a road '
+                                                   'mark, `CreateRoadMark`.\n']),
+                                                 (898,
+                                                  902,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station, width, '
+                                                   'height, or type width is nonfinite\n',
+                                                   '                or negative.\n']),
+                                                 (903,
+                                                  962,
+                                                  [],
+                                                  ['        self.create_road_mark_si(\n',
+                                                   '            lane,\n',
+                                                   '            road_mark_id,\n',
+                                                   '            s.value,\n',
+                                                   '            type,\n',
+                                                   '            weight,\n',
+                                                   '            color,\n',
+                                                   '            material,\n',
+                                                   '            width.value,\n',
+                                                   '            lane_change,\n',
+                                                   '            height.value,\n',
+                                                   '            type_name,\n',
+                                                   '            type_width.value,\n',
+                                                   '            is_rht,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_road_mark_si(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        road_mark_id: Int,\n',
+                                                   '        s: Float64,\n',
+                                                   '        type: String,\n',
+                                                   '        weight: String,\n',
+                                                   '        color: String,\n',
+                                                   '        material: String,\n',
+                                                   '        width: Float64,\n',
+                                                   '        lane_change: String,\n',
+                                                   '        height: Float64,\n',
+                                                   '        type_name: String,\n',
+                                                   '        type_width: Float64,\n',
+                                                   '        is_rht: Bool,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a road mark, `CreateRoadMark`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   "            road_mark_id: The mark's index "
+                                                   'within the lane.\n',
+                                                   '            s: Where the mark starts, in '
+                                                   'meters along the road.\n',
+                                                   "            type: The mark's type, such as "
+                                                   '"broken".\n',
+                                                   '            weight: Its weight.\n',
+                                                   '            color: Its color.\n',
+                                                   '            material: Its material.\n',
+                                                   "            width: The paint's width, in "
+                                                   'meters.\n',
+                                                   '            lane_change: "increase", '
+                                                   '"decrease", "none", or anything else\n',
+                                                   '                for both.\n',
+                                                   "            height: The paint's height, in "
+                                                   'meters.\n',
+                                                   "            type_name: The name of the mark's "
+                                                   '`type` child.\n',
+                                                   '            type_width: The width of the '
+                                                   "mark's `type` child.\n",
+                                                   '            is_rht: The traffic rule of the '
+                                                   "lane's road.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station, width, '
+                                                   'height, or type width is nonfinite\n',
+                                                   '                or negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _nonnegative_si(width)\n',
+                                                   '        _ = _nonnegative_si(height)\n',
+                                                   '        _ = _nonnegative_si(type_width)\n',
+                                                   '\n']),
+                                                 (963,
+                                                  964,
+                                                  ['            RoadInfoMarkRecord(\n'],
+                                                  ['            RoadInfoMarkRecord._from_si(\n']),
+                                                 (983,
+                                                  987,
+                                                  ['        length: Float64,\n',
+                                                   '        space: Float64,\n',
+                                                   '        t_offset: Float64,\n',
+                                                   '        s: Float64,\n'],
+                                                  ['        length: Length64,\n',
+                                                   '        space: Length64,\n',
+                                                   '        t_offset: Length64,\n',
+                                                   '        s: Length64,\n']),
+                                                 (988,
+                                                  991,
+                                                  ['        width: Float64,\n',
+                                                   '    ):\n',
+                                                   '        """Add a line to a road mark\'s type, '
+                                                   '`CreateRoadMarkTypeLine`.\n'],
+                                                  ['        width: Length64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a line '
+                                                   "to a road mark's type, "
+                                                   '`CreateRoadMarkTypeLine`.\n']),
+                                                 (1004,
+                                                  1008,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If a dimensional value is '
+                                                   'nonfinite, or the station,\n',
+                                                   '                painted length, gap, or width '
+                                                   'is negative.\n']),
+                                                 (1009,
+                                                  1056,
+                                                  [],
+                                                  ['        self.create_road_mark_type_line_si(\n',
+                                                   '            lane,\n',
+                                                   '            road_mark_id,\n',
+                                                   '            length.value,\n',
+                                                   '            space.value,\n',
+                                                   '            t_offset.value,\n',
+                                                   '            s.value,\n',
+                                                   '            rule,\n',
+                                                   '            width.value,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_road_mark_type_line_si(\n',
+                                                   '        mut self,\n',
+                                                   '        lane: Tuple[Int, Int, Int],\n',
+                                                   '        road_mark_id: Int,\n',
+                                                   '        length: Float64,\n',
+                                                   '        space: Float64,\n',
+                                                   '        t_offset: Float64,\n',
+                                                   '        s: Float64,\n',
+                                                   '        rule: String,\n',
+                                                   '        width: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   "adapter. Add a line to a road mark's type, "
+                                                   '`CreateRoadMarkTypeLine`.\n',
+                                                   '\n',
+                                                   '        The line joins the first mark of the '
+                                                   'lane with the same id. With\n',
+                                                   '        no such mark it is dropped, as in '
+                                                   'CARLA.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            lane: The lane.\n',
+                                                   "            road_mark_id: The mark's index "
+                                                   'within the lane.\n',
+                                                   '            length: Meters of paint.\n',
+                                                   '            space: Meters of gap.\n',
+                                                   '            t_offset: The sideways offset, in '
+                                                   'meters.\n',
+                                                   '            s: Where the line starts, in '
+                                                   'meters along the road.\n',
+                                                   "            rule: The line's rule.\n",
+                                                   "            width: The line's width, in "
+                                                   'meters.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If a dimensional value is '
+                                                   'nonfinite, or the station,\n',
+                                                   '                painted length, gap, or width '
+                                                   'is negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(length)\n',
+                                                   '        _ = _nonnegative_si(space)\n',
+                                                   '        _ = _finite_si(t_offset)\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _nonnegative_si(width)\n',
+                                                   '\n']),
+                                                 (1060,
+                                                  1061,
+                                                  ['                    RoadInfoMarkTypeLine(\n'],
+                                                  ['                    '
+                                                   'RoadInfoMarkTypeLine._from_si(\n']),
+                                                 (1076,
+                                                  1078,
+                                                  ['        s: Float64,\n',
+                                                   '        a: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        a: Length64,\n']),
+                                                 (1079,
+                                                  1083,
+                                                  ['        c: Float64,\n',
+                                                   '        d: Float64,\n',
+                                                   '    ):\n',
+                                                   '        """Add an elevation record, '
+                                                   '`AddRoadElevationProfile`.\n'],
+                                                  ['        c: InverseLength64,\n',
+                                                   '        d: InverseArea64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add an '
+                                                   'elevation record, '
+                                                   '`AddRoadElevationProfile`.\n']),
+                                                 (1091,
+                                                  1095,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n']),
+                                                 (1096,
+                                                  1098,
+                                                  ['        '
+                                                   'self.roads[road].info.elevations.append(\n',
+                                                   '            RoadInfoElevation(s, '
+                                                   'CubicPolynomial(a, b, c, d, s))\n'],
+                                                  ['        self.add_road_elevation_profile_si(\n',
+                                                   '            road, s.value, a.value, b, '
+                                                   'c.value, d.value\n']),
+                                                 (1100,
+                                                  1101,
+                                                  ['    def create_section_offset(\n'],
+                                                  ['    def add_road_elevation_profile_si(\n']),
+                                                 (1108,
+                                                  1144,
+                                                  ['    ):\n',
+                                                   '        """Add a lane offset record, '
+                                                   '`CreateSectionOffset`.\n'],
+                                                  ['    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add an elevation record, '
+                                                   '`AddRoadElevationProfile`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where the record starts, in '
+                                                   'meters.\n',
+                                                   '            a: The height at s, in meters.\n',
+                                                   '            b: The slope.\n',
+                                                   '            c: The quadratic term, per '
+                                                   'meter.\n',
+                                                   '            d: The cubic term, per square '
+                                                   'meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(a)\n',
+                                                   '        _ = _finite_si(c)\n',
+                                                   '        _ = _finite_si(d)\n',
+                                                   '\n',
+                                                   '        '
+                                                   'self.roads[road].info.elevations.append(\n',
+                                                   '            RoadInfoElevation._from_si(\n',
+                                                   '                s, '
+                                                   'CubicPolynomial.from_coefficients(a, b, c, d, '
+                                                   's)\n',
+                                                   '            )\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_section_offset(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Length64,\n',
+                                                   '        a: Length64,\n',
+                                                   '        b: Float64,\n',
+                                                   '        c: InverseLength64,\n',
+                                                   '        d: InverseArea64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a lane '
+                                                   'offset record, `CreateSectionOffset`.\n']),
+                                                 (1152,
+                                                  1156,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n']),
+                                                 (1157,
+                                                  1189,
+                                                  [],
+                                                  ['        self.create_section_offset_si(\n',
+                                                   '            road, s.value, a.value, b, '
+                                                   'c.value, d.value\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def create_section_offset_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Float64,\n',
+                                                   '        a: Float64,\n',
+                                                   '        b: Float64,\n',
+                                                   '        c: Float64,\n',
+                                                   '        d: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a lane offset record, '
+                                                   '`CreateSectionOffset`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where the record starts, in '
+                                                   'meters.\n',
+                                                   '            a: The offset at s, in meters. '
+                                                   'Plus is to the left.\n',
+                                                   '            b: Its rate of change.\n',
+                                                   '            c: The quadratic term, per '
+                                                   'meter.\n',
+                                                   '            d: The cubic term, per square '
+                                                   'meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station is nonfinite '
+                                                   'or negative, or any polynomial\n',
+                                                   '                coefficient is nonfinite.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(a)\n',
+                                                   '        _ = _finite_si(c)\n',
+                                                   '        _ = _finite_si(d)\n',
+                                                   '\n']),
+                                                 (1190,
+                                                  1193,
+                                                  ['            RoadInfoLaneOffset(s, '
+                                                   'CubicPolynomial(a, b, c, d, s))\n'],
+                                                  ['            RoadInfoLaneOffset._from_si(\n',
+                                                   '                s, '
+                                                   'CubicPolynomial.from_coefficients(a, b, c, d, '
+                                                   's)\n',
+                                                   '            )\n']),
+                                                 (1196,
+                                                  1216,
+                                                  [],
+                                                  ['        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Length64,\n',
+                                                   '        type: String,\n',
+                                                   '        max: Velocity64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Add a checked road speed from a '
+                                                   'quantity.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where the record starts, in '
+                                                   'meters.\n',
+                                                   '            type: The road type; the '
+                                                   'compatibility record type stays Town.\n',
+                                                   '            max: The finite nonnegative speed '
+                                                   'quantity.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the station or speed is '
+                                                   'nonfinite or negative.\n',
+                                                   '        """\n',
+                                                   '        self.create_road_speed_opendrive(road, '
+                                                   's.value, type, max.value, "m/s")\n',
+                                                   '\n',
+                                                   '    def create_road_speed_opendrive(\n']),
+                                                 (1223,
+                                                  1224,
+                                                  ['        """Add a numeric road speed without '
+                                                   'dropping its unit.\n'],
+                                                  ['        """Explicit source-unit compatibility '
+                                                   'adapter. Add a numeric road speed without '
+                                                   'dropping its unit.\n']),
+                                                 (1235,
+                                                  1237,
+                                                  [],
+                                                  ['        _ = _nonnegative_si(s)\n', '\n']),
+                                                 (1238,
+                                                  1239,
+                                                  ['        var record = RoadInfoSpeed(s, max, '
+                                                   '"Town", unit)\n'],
+                                                  ['        var record = RoadInfoSpeed._from_si(s, '
+                                                   'max, "Town", unit)\n']),
+                                                 (1241,
+                                                  1242,
+                                                  ['    def create_road_speed(\n'],
+                                                  ['    def create_road_speed_opendrive(\n']),
+                                                 (1249,
+                                                  1250,
+                                                  ['        """Add a numeric, unrestricted, '
+                                                   'undefined or absent road speed.\n'],
+                                                  ['        """Explicit source-unit compatibility '
+                                                   'adapter. Add a numeric, unrestricted, '
+                                                   'undefined or absent road speed.\n']),
+                                                 (1261,
+                                                  1263,
+                                                  [],
+                                                  ['        _ = _nonnegative_si(s)\n', '\n']),
+                                                 (1271,
+                                                  1277,
+                                                  ['        s: Float64,\n',
+                                                   '        t: Float64,\n',
+                                                   '        z_offset: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        t: Length64,\n',
+                                                   '        z_offset: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        pitch: Angle64,\n',
+                                                   '        roll: Angle64,\n']),
+                                                 (1278,
+                                                  1280,
+                                                  ['        width: Float64,\n',
+                                                   '        length: Float64,\n'],
+                                                  ['        width: Length64,\n',
+                                                   '        length: Length64,\n']),
+                                                 (1281,
+                                                  1283,
+                                                  ['    ):\n',
+                                                   '        """Add a crosswalk, '
+                                                   '`AddRoadObjectCrosswalk`.\n'],
+                                                  ['    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a '
+                                                   'crosswalk, `AddRoadObjectCrosswalk`.\n']),
+                                                 (1297,
+                                                  1301,
+                                                  [],
+                                                  ['\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If a dimensional value or '
+                                                   'corner coordinate is nonfinite,\n',
+                                                   '                or the station, width, or '
+                                                   'length is negative.\n']),
+                                                 (1302,
+                                                  1365,
+                                                  [],
+                                                  ['        self.add_road_object_crosswalk_si(\n',
+                                                   '            road,\n',
+                                                   '            name,\n',
+                                                   '            s.value,\n',
+                                                   '            t.value,\n',
+                                                   '            z_offset.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            pitch.value,\n',
+                                                   '            roll.value,\n',
+                                                   '            orientation,\n',
+                                                   '            width.value,\n',
+                                                   '            length.value,\n',
+                                                   '            points,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_road_object_crosswalk_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        name: String,\n',
+                                                   '        s: Float64,\n',
+                                                   '        t: Float64,\n',
+                                                   '        z_offset: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n',
+                                                   '        orientation: String,\n',
+                                                   '        width: Float64,\n',
+                                                   '        length: Float64,\n',
+                                                   '        points: List[CrosswalkPoint],\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a crosswalk, '
+                                                   '`AddRoadObjectCrosswalk`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   "            name: The object's name.\n",
+                                                   '            s: Where it sits, in meters along '
+                                                   'the road.\n',
+                                                   '            t: Meters to the left of the '
+                                                   'reference line.\n',
+                                                   '            z_offset: Meters up.\n',
+                                                   '            heading: Its heading, in '
+                                                   'radians.\n',
+                                                   '            pitch: Its pitch, in radians.\n',
+                                                   '            roll: Its roll, in radians.\n',
+                                                   '            orientation: Its orientation '
+                                                   'text.\n',
+                                                   '            width: Its width, in meters.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   "            points: Its outline's corners.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If a dimensional value or '
+                                                   'corner coordinate is nonfinite,\n',
+                                                   '                or the station, width, or '
+                                                   'length is negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(t)\n',
+                                                   '        _ = _finite_si(z_offset)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _finite_si(pitch)\n',
+                                                   '        _ = _finite_si(roll)\n',
+                                                   '        _ = _nonnegative_si(width)\n',
+                                                   '        _ = _nonnegative_si(length)\n',
+                                                   '\n',
+                                                   '        for point in points:\n',
+                                                   '            _ = _finite_si(point.u)\n',
+                                                   '            _ = _finite_si(point.v)\n',
+                                                   '            _ = _finite_si(point.z)\n']),
+                                                 (1366,
+                                                  1367,
+                                                  ['            RoadInfoCrosswalk(\n'],
+                                                  ['            RoadInfoCrosswalk._from_si(\n']),
+                                                 (1383,
+                                                  1386,
+                                                  ['        '
+                                                   'self.roads[road].info.geometries.append(RoadInfoGeometry(s, '
+                                                   'geometry^))\n'],
+                                                  ['        '
+                                                   'self.roads[road].info.geometries.append(\n',
+                                                   '            RoadInfoGeometry._from_si(s, '
+                                                   'geometry^)\n',
+                                                   '        )\n']),
+                                                 (1396,
+                                                  1397,
+                                                  ['        return RoadGeometry(\n'],
+                                                  ['        return RoadGeometry.from_meters(\n']),
+                                                 (1408,
+                                                  1413,
+                                                  ['        s: Float64,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        length: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        length: Length64,\n']),
+                                                 (1414,
+                                                  1415,
+                                                  ['        """Add a straight geometry, '
+                                                   '`AddRoadGeometryLine`.\n'],
+                                                  ['        """Checked typed boundary. Add a '
+                                                   'straight geometry, `AddRoadGeometryLine`.\n']),
+                                                 (1427,
+                                                  1430,
+                                                  ['        self._geometry(road, self._base(s, x, '
+                                                   'y, heading, length))\n'],
+                                                  ['        self.add_road_geometry_line_si(\n',
+                                                   '            road, s.value, x.value, y.value, '
+                                                   'heading.value, length.value\n',
+                                                   '        )\n']),
+                                                 (1431,
+                                                  1432,
+                                                  ['    def add_road_geometry_arc(\n'],
+                                                  ['    def add_road_geometry_line_si(\n']),
+                                                 (1439,
+                                                  1439,
+                                                  ['        curvature: Float64,\n'],
+                                                  []),
+                                                 (1440,
+                                                  1472,
+                                                  ['        """Add an arc, '
+                                                   '`AddRoadGeometryArc`.\n'],
+                                                  ['        """Explicit source-unit compatibility '
+                                                   'adapter. Add a straight geometry, '
+                                                   '`AddRoadGeometryLine`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where it starts, in meters.\n',
+                                                   '            x: Start east, in meters.\n',
+                                                   '            y: Start north, in meters.\n',
+                                                   '            heading: Its heading, in '
+                                                   'radians.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If s is negative or the '
+                                                   'length is not positive.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(x)\n',
+                                                   '        _ = _finite_si(y)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _positive_si(length)\n',
+                                                   '\n',
+                                                   '        self._geometry(road, self._base(s, x, '
+                                                   'y, heading, length))\n',
+                                                   '\n',
+                                                   '    def add_road_geometry_arc(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Length64,\n',
+                                                   '        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        length: Length64,\n',
+                                                   '        curvature: InverseLength64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add an arc, '
+                                                   '`AddRoadGeometryArc`.\n']),
+                                                 (1486,
+                                                  1528,
+                                                  [],
+                                                  ['        self.add_road_geometry_arc_si(\n',
+                                                   '            road,\n',
+                                                   '            s.value,\n',
+                                                   '            x.value,\n',
+                                                   '            y.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            length.value,\n',
+                                                   '            curvature.value,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_road_geometry_arc_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Float64,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        length: Float64,\n',
+                                                   '        curvature: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add an arc, `AddRoadGeometryArc`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where it starts, in meters.\n',
+                                                   '            x: Start east, in meters.\n',
+                                                   '            y: Start north, in meters.\n',
+                                                   '            heading: Its start heading, in '
+                                                   'radians.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   '            curvature: One over the radius, '
+                                                   'per meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If s is negative, the '
+                                                   'length is not positive, or the\n',
+                                                   '                curvature is zero.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(x)\n',
+                                                   '        _ = _finite_si(y)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _positive_si(length)\n',
+                                                   '        _ = _finite_si(curvature)\n',
+                                                   '\n']),
+                                                 (1535,
+                                                  1542,
+                                                  ['        s: Float64,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        length: Float64,\n',
+                                                   '        curvature_start: Float64,\n',
+                                                   '        curvature_end: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        length: Length64,\n',
+                                                   '        curvature_start: InverseLength64,\n',
+                                                   '        curvature_end: InverseLength64,\n']),
+                                                 (1543,
+                                                  1544,
+                                                  ['        """Add a clothoid, '
+                                                   '`AddRoadGeometrySpiral`.\n'],
+                                                  ['        """Checked typed boundary. Add a '
+                                                   'clothoid, `AddRoadGeometrySpiral`.\n']),
+                                                 (1558,
+                                                  1603,
+                                                  [],
+                                                  ['        self.add_road_geometry_spiral_si(\n',
+                                                   '            road,\n',
+                                                   '            s.value,\n',
+                                                   '            x.value,\n',
+                                                   '            y.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            length.value,\n',
+                                                   '            curvature_start.value,\n',
+                                                   '            curvature_end.value,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_road_geometry_spiral_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Float64,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        length: Float64,\n',
+                                                   '        curvature_start: Float64,\n',
+                                                   '        curvature_end: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a clothoid, '
+                                                   '`AddRoadGeometrySpiral`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where it starts, in meters.\n',
+                                                   '            x: Start east, in meters.\n',
+                                                   '            y: Start north, in meters.\n',
+                                                   '            heading: Its start heading, in '
+                                                   'radians.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   '            curvature_start: The curvature at '
+                                                   'the start, per meter.\n',
+                                                   '            curvature_end: The curvature at '
+                                                   'the end, per meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If s is negative or the '
+                                                   'length is not positive.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(x)\n',
+                                                   '        _ = _finite_si(y)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _positive_si(length)\n',
+                                                   '        _ = _finite_si(curvature_start)\n',
+                                                   '        _ = _finite_si(curvature_end)\n',
+                                                   '\n']),
+                                                 (1615,
+                                                  1621,
+                                                  ['        s: Float64,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        length: Float64,\n',
+                                                   '        a: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        length: Length64,\n',
+                                                   '        a: Length64,\n']),
+                                                 (1622,
+                                                  1624,
+                                                  ['        c: Float64,\n',
+                                                   '        d: Float64,\n'],
+                                                  ['        c: InverseLength64,\n',
+                                                   '        d: InverseArea64,\n']),
+                                                 (1625,
+                                                  1626,
+                                                  ['        """Add a cubic v(u), '
+                                                   '`AddRoadGeometryPoly3`.\n'],
+                                                  ['        """Checked typed boundary. Add a cubic '
+                                                   'v(u), `AddRoadGeometryPoly3`.\n']),
+                                                 (1642,
+                                                  1694,
+                                                  [],
+                                                  ['        self.add_road_geometry_poly3_si(\n',
+                                                   '            road,\n',
+                                                   '            s.value,\n',
+                                                   '            x.value,\n',
+                                                   '            y.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            length.value,\n',
+                                                   '            a.value,\n',
+                                                   '            b,\n',
+                                                   '            c.value,\n',
+                                                   '            d.value,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_road_geometry_poly3_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Float64,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        length: Float64,\n',
+                                                   '        a: Float64,\n',
+                                                   '        b: Float64,\n',
+                                                   '        c: Float64,\n',
+                                                   '        d: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a cubic v(u), '
+                                                   '`AddRoadGeometryPoly3`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where it starts, in meters.\n',
+                                                   '            x: Start east, in meters.\n',
+                                                   '            y: Start north, in meters.\n',
+                                                   '            heading: The direction of plus u, '
+                                                   'in radians.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   '            a: The constant term of v, in '
+                                                   'meters.\n',
+                                                   '            b: The linear term.\n',
+                                                   '            c: The quadratic term, per '
+                                                   'meter.\n',
+                                                   '            d: The cubic term, per square '
+                                                   'meter.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If s is negative or the '
+                                                   'length is not positive.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(x)\n',
+                                                   '        _ = _finite_si(y)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _positive_si(length)\n',
+                                                   '        _ = _finite_si(a)\n',
+                                                   '        _ = _finite_si(c)\n',
+                                                   '        _ = _finite_si(d)\n',
+                                                   '\n']),
+                                                 (1699,
+                                                  1776,
+                                                  [],
+                                                  ['        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Length64,\n',
+                                                   '        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        length: Length64,\n',
+                                                   '        u: CubicPolynomial,\n',
+                                                   '        v: CubicPolynomial,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Checked typed boundary. Add a '
+                                                   'parametric cubic, '
+                                                   '`AddRoadGeometryParamPoly3`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            s: Where it starts, in meters.\n',
+                                                   '            x: Start east, in meters.\n',
+                                                   '            y: Start north, in meters.\n',
+                                                   '            heading: The direction of plus u, '
+                                                   'in radians.\n',
+                                                   '            length: Its length, in meters.\n',
+                                                   '            u: The cubic u(p).\n',
+                                                   '            v: The cubic v(p).\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If s is negative, the '
+                                                   'length is not positive, or the\n',
+                                                   '                curve does not move.\n',
+                                                   '        """\n',
+                                                   '        '
+                                                   'self.add_road_geometry_param_poly3_si(\n',
+                                                   '            road,\n',
+                                                   '            s.value,\n',
+                                                   '            x.value,\n',
+                                                   '            y.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            length.value,\n',
+                                                   '            u,\n',
+                                                   '            v,\n',
+                                                   '            "arcLength",\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def '
+                                                   'add_road_geometry_param_poly3_normalized(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        s: Length64,\n',
+                                                   '        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        length: Length64,\n',
+                                                   '        u: NormalizedCubic,\n',
+                                                   '        v: NormalizedCubic,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Add a normalized cubic with '
+                                                   'all-length coefficients.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            road: The road index.\n',
+                                                   '            s: The start station.\n',
+                                                   '            x: The start east coordinate.\n',
+                                                   '            y: The start north coordinate.\n',
+                                                   '            heading: The heading.\n',
+                                                   '            length: The positive curve '
+                                                   'length.\n',
+                                                   '            u: The u polynomial of '
+                                                   'dimensionless p.\n',
+                                                   '            v: The v polynomial of '
+                                                   'dimensionless p.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If a value is invalid or '
+                                                   'the curve does not move.\n',
+                                                   '        """\n',
+                                                   '        '
+                                                   'self.add_road_geometry_param_poly3_si(\n',
+                                                   '            road,\n',
+                                                   '            s.value,\n',
+                                                   '            x.value,\n',
+                                                   '            y.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            length.value,\n',
+                                                   '            u._coefficients(),\n',
+                                                   '            v._coefficients(),\n',
+                                                   '            "normalized",\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_road_geometry_param_poly3_si(\n']),
+                                                 (1787,
+                                                  1788,
+                                                  ['        """Add a parametric cubic, '
+                                                   '`AddRoadGeometryParamPoly3`.\n'],
+                                                  ['        """Explicit source-unit compatibility '
+                                                   'adapter. Add a parametric cubic, '
+                                                   '`AddRoadGeometryParamPoly3`.\n']),
+                                                 (1798,
+                                                  1799,
+                                                  ['            p_range: "arcLength", or anything '
+                                                   'else for a normalized p.\n'],
+                                                  ['            p_range: "arcLength", '
+                                                   '"normalized", or the omitted-source default '
+                                                   '"".\n']),
+                                                 (1804,
+                                                  1812,
+                                                  [],
+                                                  ['        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(x)\n',
+                                                   '        _ = _finite_si(y)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _positive_si(length)\n',
+                                                   '\n',
+                                                   '        if p_range != "arcLength" and p_range '
+                                                   '!= "normalized" and p_range != "":\n',
+                                                   '            raise Error("paramPoly3 range must '
+                                                   'be arcLength or normalized")\n']),
+                                                 (1824,
+                                                  1826,
+                                                  ['        s: Float64,\n',
+                                                   '        t: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        t: Length64,\n']),
+                                                 (1829,
+                                                  1830,
+                                                  ['        z_offset: Float64,\n'],
+                                                  ['        z_offset: Length64,\n']),
+                                                 (1835,
+                                                  1837,
+                                                  ['        height: Float64,\n',
+                                                   '        width: Float64,\n'],
+                                                  ['        height: Length64,\n',
+                                                   '        width: Length64,\n']),
+                                                 (1838,
+                                                  1841,
+                                                  ['        h_offset: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n'],
+                                                  ['        h_offset: Angle64,\n',
+                                                   '        pitch: Angle64,\n',
+                                                   '        roll: Angle64,\n']),
+                                                 (1843,
+                                                  1844,
+                                                  ['        """Add a signal and a reference to it '
+                                                   'on its road, `AddSignal`.\n'],
+                                                  ['        """Checked typed boundary. Add a '
+                                                   'signal and a reference to it on its road, '
+                                                   '`AddSignal`.\n']),
+                                                 (1874,
+                                                  1961,
+                                                  ['        var signal = Signal(\n'],
+                                                  ['        return self.add_signal_si(\n',
+                                                   '            road,\n',
+                                                   '            signal_id,\n',
+                                                   '            s.value,\n',
+                                                   '            t.value,\n',
+                                                   '            name,\n',
+                                                   '            dynamic,\n',
+                                                   '            orientation,\n',
+                                                   '            z_offset.value,\n',
+                                                   '            country,\n',
+                                                   '            type,\n',
+                                                   '            subtype,\n',
+                                                   '            value,\n',
+                                                   '            unit,\n',
+                                                   '            height.value,\n',
+                                                   '            width.value,\n',
+                                                   '            text,\n',
+                                                   '            h_offset.value,\n',
+                                                   '            pitch.value,\n',
+                                                   '            roll.value,\n',
+                                                   '            value_present,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_signal_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        signal_id: SignalId,\n',
+                                                   '        s: Float64,\n',
+                                                   '        t: Float64,\n',
+                                                   '        name: String,\n',
+                                                   '        dynamic: String,\n',
+                                                   '        orientation: String,\n',
+                                                   '        z_offset: Float64,\n',
+                                                   '        country: String,\n',
+                                                   '        type: String,\n',
+                                                   '        subtype: String,\n',
+                                                   '        value: Float64,\n',
+                                                   '        unit: String,\n',
+                                                   '        height: Float64,\n',
+                                                   '        width: Float64,\n',
+                                                   '        text: String,\n',
+                                                   '        h_offset: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n',
+                                                   '        value_present: Bool = True,\n',
+                                                   '    ) raises -> SignalReferenceHandle:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a signal and a reference to it on '
+                                                   'its road, `AddSignal`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            signal_id: Its id. A later signal '
+                                                   'with the same id replaces\n',
+                                                   '                this one.\n',
+                                                   '            s: Meters along the road.\n',
+                                                   '            t: Meters to the left of the '
+                                                   'reference line.\n',
+                                                   '            name: Its name.\n',
+                                                   '            dynamic: "yes" for a signal that '
+                                                   'changes.\n',
+                                                   '            orientation: "+", "-" or anything '
+                                                   'else for both.\n',
+                                                   '            z_offset: Meters up from the '
+                                                   'road.\n',
+                                                   "            country: Its catalog's country.\n",
+                                                   '            type: Its type.\n',
+                                                   '            subtype: Its subtype.\n',
+                                                   '            value: Its value.\n',
+                                                   "            unit: The value's unit.\n",
+                                                   '            height: Its height, in meters.\n',
+                                                   '            width: Its width, in meters.\n',
+                                                   '            text: Its text.\n',
+                                                   "            h_offset: The turn from the road's "
+                                                   'heading, in radians.\n',
+                                                   '            pitch: Its pitch, in radians.\n',
+                                                   '            roll: Its roll, in radians.\n',
+                                                   '            value_present: Whether the source '
+                                                   'supplied a numeric value.\n',
+                                                   '\n',
+                                                   '        Returns:\n',
+                                                   "            The reference's handle.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If the id is not valid or s '
+                                                   'is negative.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(t)\n',
+                                                   '        _ = _finite_si(z_offset)\n',
+                                                   '        _ = _nonnegative_si(height)\n',
+                                                   '        _ = _nonnegative_si(width)\n',
+                                                   '        _ = _finite_si(h_offset)\n',
+                                                   '        _ = _finite_si(pitch)\n',
+                                                   '        _ = _finite_si(roll)\n',
+                                                   '\n',
+                                                   '        var signal = Signal._from_si(\n']),
+                                                 (1989,
+                                                  1990,
+                                                  ['        return self.add_signal_reference(road, '
+                                                   'signal_id, s, t, orientation)\n'],
+                                                  ['        return '
+                                                   'self.add_signal_reference_si(road, signal_id, '
+                                                   's, t, orientation)\n']),
+                                                 (2000,
+                                                  2006,
+                                                  ['        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        z: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n'],
+                                                  ['        x: Length64,\n',
+                                                   '        y: Length64,\n',
+                                                   '        z: Length64,\n',
+                                                   '        heading: Angle64,\n',
+                                                   '        pitch: Angle64,\n',
+                                                   '        roll: Angle64,\n']),
+                                                 (2007,
+                                                  2008,
+                                                  ['        """Place a signal at a point, '
+                                                   '`AddSignalPositionInertial`.\n'],
+                                                  ['        """Checked typed boundary. Place a '
+                                                   'signal at a point, '
+                                                   '`AddSignalPositionInertial`.\n']),
+                                                 (2021,
+                                                  2062,
+                                                  [],
+                                                  ['        '
+                                                   'self.add_signal_position_inertial_si(\n',
+                                                   '            signal_id,\n',
+                                                   '            x.value,\n',
+                                                   '            y.value,\n',
+                                                   '            z.value,\n',
+                                                   '            heading.value,\n',
+                                                   '            pitch.value,\n',
+                                                   '            roll.value,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_signal_position_inertial_si(\n',
+                                                   '        mut self,\n',
+                                                   '        signal_id: SignalId,\n',
+                                                   '        x: Float64,\n',
+                                                   '        y: Float64,\n',
+                                                   '        z: Float64,\n',
+                                                   '        heading: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Place a signal at a point, '
+                                                   '`AddSignalPositionInertial`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            signal_id: The signal.\n',
+                                                   '            x: East, in meters.\n',
+                                                   '            y: North, in meters.\n',
+                                                   '            z: Up, in meters.\n',
+                                                   '            heading: Its heading, in '
+                                                   'radians.\n',
+                                                   '            pitch: Its pitch, in radians.\n',
+                                                   '            roll: Its roll, in radians.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If no signal has the id.\n',
+                                                   '        """\n',
+                                                   '        _ = _finite_si(x)\n',
+                                                   '        _ = _finite_si(y)\n',
+                                                   '        _ = _finite_si(z)\n',
+                                                   '        _ = _finite_si(heading)\n',
+                                                   '        _ = _finite_si(pitch)\n',
+                                                   '        _ = _finite_si(roll)\n',
+                                                   '\n']),
+                                                 (2063,
+                                                  2064,
+                                                  ['        signal.using_inertial_position = '
+                                                   'True\n',
+                                                   '        signal.transform = CarlaTransform(\n'],
+                                                  ['        var transform = CarlaTransform(\n']),
+                                                 (2073,
+                                                  2081,
+                                                  [],
+                                                  ['        _ = '
+                                                   '_finite_si(Float64(transform.location.x))\n',
+                                                   '        _ = '
+                                                   '_finite_si(Float64(transform.location.y))\n',
+                                                   '        _ = '
+                                                   '_finite_si(Float64(transform.location.z))\n',
+                                                   '        _ = '
+                                                   '_finite_si(Float64(transform.rotation.pitch))\n',
+                                                   '        _ = '
+                                                   '_finite_si(Float64(transform.rotation.yaw))\n',
+                                                   '        _ = '
+                                                   '_finite_si(Float64(transform.rotation.roll))\n',
+                                                   '        signal.transform = transform\n',
+                                                   '        signal.using_inertial_position = '
+                                                   'True\n']),
+                                                 (2086,
+                                                  2092,
+                                                  ['        s: Float64,\n',
+                                                   '        t: Float64,\n',
+                                                   '        z_offset: Float64,\n',
+                                                   '        h_offset: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        t: Length64,\n',
+                                                   '        z_offset: Length64,\n',
+                                                   '        h_offset: Angle64,\n',
+                                                   '        pitch: Angle64,\n',
+                                                   '        roll: Angle64,\n']),
+                                                 (2093,
+                                                  2094,
+                                                  ['        """Move a signal to another place on a '
+                                                   'road, `AddSignalPositionRoad`.\n'],
+                                                  ['        """Checked typed boundary. Move a '
+                                                   'signal to another place on a road, '
+                                                   '`AddSignalPositionRoad`.\n']),
+                                                 (2108,
+                                                  2152,
+                                                  [],
+                                                  ['        self.add_signal_position_road_si(\n',
+                                                   '            signal_id,\n',
+                                                   '            road_id,\n',
+                                                   '            s.value,\n',
+                                                   '            t.value,\n',
+                                                   '            z_offset.value,\n',
+                                                   '            h_offset.value,\n',
+                                                   '            pitch.value,\n',
+                                                   '            roll.value,\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_signal_position_road_si(\n',
+                                                   '        mut self,\n',
+                                                   '        signal_id: SignalId,\n',
+                                                   '        road_id: RoadId,\n',
+                                                   '        s: Float64,\n',
+                                                   '        t: Float64,\n',
+                                                   '        z_offset: Float64,\n',
+                                                   '        h_offset: Float64,\n',
+                                                   '        pitch: Float64,\n',
+                                                   '        roll: Float64,\n',
+                                                   '    ) raises:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Move a signal to another place on a '
+                                                   'road, `AddSignalPositionRoad`.\n',
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   '            signal_id: The signal.\n',
+                                                   '            road_id: The road.\n',
+                                                   '            s: Meters along it.\n',
+                                                   '            t: Meters to the left of its '
+                                                   'reference line.\n',
+                                                   '            z_offset: Meters up.\n',
+                                                   "            h_offset: The turn from the road's "
+                                                   'heading, in radians.\n',
+                                                   '            pitch: Its pitch, in radians.\n',
+                                                   '            roll: Its roll, in radians.\n',
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If no signal has the id, or '
+                                                   'the road id is not valid.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(t)\n',
+                                                   '        _ = _finite_si(z_offset)\n',
+                                                   '        _ = _finite_si(h_offset)\n',
+                                                   '        _ = _finite_si(pitch)\n',
+                                                   '        _ = _finite_si(roll)\n',
+                                                   '\n']),
+                                                 (2167,
+                                                  2169,
+                                                  ['        s: Float64,\n',
+                                                   '        t: Float64,\n'],
+                                                  ['        s: Length64,\n',
+                                                   '        t: Length64,\n']),
+                                                 (2171,
+                                                  2172,
+                                                  ['        """Add a reference to a signal, '
+                                                   '`AddSignalReference`.\n'],
+                                                  ['        """Checked typed boundary. Add a '
+                                                   'reference to a signal, '
+                                                   '`AddSignalReference`.\n']),
+                                                 (2188,
+                                                  2220,
+                                                  [],
+                                                  ['        return self.add_signal_reference_si(\n',
+                                                   '            road, signal_id, s.value, t.value, '
+                                                   'orientation\n',
+                                                   '        )\n',
+                                                   '\n',
+                                                   '    def add_signal_reference_si(\n',
+                                                   '        mut self,\n',
+                                                   '        road: Int,\n',
+                                                   '        signal_id: SignalId,\n',
+                                                   '        s: Float64,\n',
+                                                   '        t: Float64,\n',
+                                                   '        orientation: String,\n',
+                                                   '    ) raises -> SignalReferenceHandle:\n',
+                                                   '        """Explicit source-unit compatibility '
+                                                   'adapter. Add a reference to a signal, '
+                                                   '`AddSignalReference`.\n',
+                                                   '\n',
+                                                   '        CARLA clamps s to 10 micrometers short '
+                                                   "of the road's end.\n",
+                                                   '\n',
+                                                   '        Args:\n',
+                                                   "            road: The road's index.\n",
+                                                   '            signal_id: The signal.\n',
+                                                   '            s: Meters along the road. It must '
+                                                   'not be negative.\n',
+                                                   '            t: Meters to the left of the '
+                                                   'reference line.\n',
+                                                   '            orientation: "+", "-" or anything '
+                                                   'else for both.\n',
+                                                   '\n',
+                                                   '        Returns:\n',
+                                                   "            The reference's handle.\n",
+                                                   '\n',
+                                                   '        Raises:\n',
+                                                   '            Error: If s is negative or the id '
+                                                   'is not valid.\n',
+                                                   '        """\n',
+                                                   '        _ = _nonnegative_si(s)\n',
+                                                   '        _ = _finite_si(t)\n',
+                                                   '\n']),
+                                                 (2227,
+                                                  2228,
+                                                  ['            RoadInfoSignal(\n'],
+                                                  ['            RoadInfoSignal._from_si(\n']),
+                                                 (2455,
+                                                  2456,
+                                                  ['                for pair in '
+                                                   'road.lanes_at(0.0):\n'],
+                                                  ['                for pair in '
+                                                   'road._lanes_at_si(0.0):\n']),
+                                                 (2462,
+                                                  2463,
+                                                  ['                for pair in '
+                                                   'road.lanes_at(road.length):\n'],
+                                                  ['                for pair in '
+                                                   'road._lanes_at_si(road.length):\n']),
+                                                 (2497,
+                                                  2498,
+                                                  ['                var found = r.next_lane(s, '
+                                                   'next) if positive else r.prev_lane(\n'],
+                                                  ['                var found = '
+                                                   'r._next_lane_si(\n']),
+                                                 (2499,
+                                                  2500,
+                                                  ['                )\n'],
+                                                  ['                ) if positive else '
+                                                   'r._prev_lane_si(s, next)\n']),
+                                                 (2603,
+                                                  2604,
+                                                  ['        var point = '
+                                                   'self.roads[found.value()].directed_point_no_lane_offset(\n'],
+                                                  ['        var point = '
+                                                   'self.roads[found.value()]._directed_point_no_lane_offset_si(\n']),
+                                                 (2655,
+                                                  2656,
+                                                  ['                for pair in '
+                                                   'self.roads[r].lanes_by_distance(s):\n'],
+                                                  ['                for pair in '
+                                                   'self.roads[r]._lanes_by_distance_si(s):\n']),
+                                                 (2922,
+                                                  2923,
+                                                  ['    return '
+                                                   'map.roads[at[0]].lane_transform(at[1], at[2], '
+                                                   'waypoint.s)\n'],
+                                                  ['    return '
+                                                   'map.roads[at[0]]._lane_transform_si(at[1], '
+                                                   'at[2], waypoint.s)\n']),
+                                                 (2930,
+                                                  2931,
+                                                  ['    return map.roads[at[0]].lane_width(at[1], '
+                                                   'at[2], waypoint.s)\n'],
+                                                  ['    return '
+                                                   'map.roads[at[0]]._lane_width_si(at[1], at[2], '
+                                                   'waypoint.s)\n'])]},
+ 'extensions/carla/opendrive.mojo': {'after_sha256': '32290a0f2c5804e13504554fa89ecbeaefb67809ccc1903f04d2b51c3815a6c1',
+                                     'after_token_sha256': 'f055b85ae58b2add489cb1fbc8d1d8952b74209838e7bab5b4c5dd4202c7965f',
+                                     'before_sha256': '9ff9b750af2c1c1a92fe3f3dfe1e49566e9d6f8c39a3576e0d4cf542bc8cdc28',
+                                     'before_token_sha256': '1d29eeea907706d3b63c0898f00490ffea8470cd061c7e3383ed907b26f809ce',
+                                     'edits': [(248,
+                                                249,
+                                                ['        var road = builder.add_road(\n'],
+                                                ['        var road = builder.add_road_si(\n']),
+                                               (270,
+                                                271,
+                                                ['            builder.create_road_speed(\n'],
+                                                ['            '
+                                                 'builder.create_road_speed_opendrive(\n']),
+                                               (276,
+                                                277,
+                                                ['            builder.create_section_offset(\n'],
+                                                ['            '
+                                                 'builder.create_section_offset_si(\n']),
+                                               (285,
+                                                286,
+                                                ['            builder.create_section_offset(road, '
+                                                 '0.0, 0.0, 0.0, 0.0, 0.0)\n'],
+                                                ['            '
+                                                 'builder.create_section_offset_si(road, 0.0, 0.0, '
+                                                 '0.0, 0.0, 0.0)\n']),
+                                               (288,
+                                                289,
+                                                ['            var section = '
+                                                 'builder.add_road_section(\n'],
+                                                ['            var section = '
+                                                 'builder.add_road_section_si(\n']),
+                                               (360,
+                                                361,
+                                                ['                '
+                                                 'builder.add_road_geometry_line(road, s, x, y, '
+                                                 'hdg, length)\n'],
+                                                ['                '
+                                                 'builder.add_road_geometry_line_si(road, s, x, y, '
+                                                 'hdg, length)\n']),
+                                               (362,
+                                                363,
+                                                ['                '
+                                                 'builder.add_road_geometry_arc(\n'],
+                                                ['                '
+                                                 'builder.add_road_geometry_arc_si(\n']),
+                                               (366,
+                                                367,
+                                                ['                '
+                                                 'builder.add_road_geometry_spiral(\n'],
+                                                ['                '
+                                                 'builder.add_road_geometry_spiral_si(\n']),
+                                               (377,
+                                                378,
+                                                ['                '
+                                                 'builder.add_road_geometry_poly3(\n'],
+                                                ['                '
+                                                 'builder.add_road_geometry_poly3_si(\n']),
+                                               (390,
+                                                391,
+                                                ['                '
+                                                 'builder.add_road_geometry_param_poly3(\n'],
+                                                ['                '
+                                                 'builder.add_road_geometry_param_poly3_si(\n']),
+                                               (397,
+                                                398,
+                                                ['                    CubicPolynomial(\n'],
+                                                ['                    '
+                                                 'CubicPolynomial.from_coefficients(\n']),
+                                               (404,
+                                                405,
+                                                ['                    CubicPolynomial(\n'],
+                                                ['                    '
+                                                 'CubicPolynomial.from_coefficients(\n']),
+                                               (664,
+                                                665,
+                                                ['        var lane = builder.lane(road_id, '
+                                                 'lane_id, s)\n'],
+                                                ['        var lane = builder.lane_si(road_id, '
+                                                 'lane_id, s)\n']),
+                                               (667,
+                                                668,
+                                                ['            builder.create_lane_width(\n'],
+                                                ['            builder.create_lane_width_si(\n']),
+                                               (678,
+                                                679,
+                                                ['                builder.create_lane_width(\n'],
+                                                ['                '
+                                                 'builder.create_lane_width_si(\n']),
+                                               (683,
+                                                684,
+                                                ['            builder.create_lane_width(lane, s, '
+                                                 '0.0, 0.0, 0.0, 0.0)\n'],
+                                                ['            builder.create_lane_width_si(lane, '
+                                                 's, 0.0, 0.0, 0.0, 0.0)\n']),
+                                               (694,
+                                                695,
+                                                ['            builder.create_lane_border(\n'],
+                                                ['            '
+                                                 'builder.create_lane_border_opendrive(\n']),
+                                               (706,
+                                                707,
+                                                ['            builder.create_road_mark(\n'],
+                                                ['            builder.create_road_mark_si(\n']),
+                                               (722,
+                                                723,
+                                                ['                '
+                                                 'builder.create_road_mark_type_line(\n'],
+                                                ['                '
+                                                 'builder.create_road_mark_type_line_si(\n']),
+                                               (734,
+                                                735,
+                                                ['            builder.create_lane_material(\n'],
+                                                ['            builder.create_lane_material_si(\n']),
+                                               (742,
+                                                743,
+                                                ['            builder.create_lane_visibility(\n'],
+                                                ['            '
+                                                 'builder.create_lane_visibility_si(\n']),
+                                               (754,
+                                                755,
+                                                ['            builder.create_lane_speed(\n'],
+                                                ['            '
+                                                 'builder.create_lane_speed_opendrive(\n']),
+                                               (761,
+                                                762,
+                                                ['            builder.create_lane_access(\n'],
+                                                ['            builder.create_lane_access_si(\n']),
+                                               (767,
+                                                768,
+                                                ['            builder.create_lane_height(\n'],
+                                                ['            builder.create_lane_height_si(\n']),
+                                               (774,
+                                                775,
+                                                ['            builder.create_lane_rule(\n'],
+                                                ['            builder.create_lane_rule_si(\n']),
+                                               (813,
+                                                814,
+                                                ['            '
+                                                 'builder.add_road_elevation_profile(\n'],
+                                                ['            '
+                                                 'builder.add_road_elevation_profile_si(\n']),
+                                               (822,
+                                                823,
+                                                ['            '
+                                                 'builder.add_road_elevation_profile(road, 0.0, '
+                                                 '0.0, 0.0, 0.0, 0.0)\n'],
+                                                ['            '
+                                                 'builder.add_road_elevation_profile_si(road, 0.0, '
+                                                 '0.0, 0.0, 0.0, 0.0)\n']),
+                                               (850,
+                                                851,
+                                                ['            var reference = '
+                                                 'builder.add_signal(\n'],
+                                                ['            var reference = '
+                                                 'builder.add_signal_si(\n']),
+                                               (878,
+                                                879,
+                                                ['                '
+                                                 'builder.add_signal_position_inertial(\n'],
+                                                ['                '
+                                                 'builder.add_signal_position_inertial_si(\n']),
+                                               (888,
+                                                889,
+                                                ['            var reference = '
+                                                 'builder.add_signal_reference(\n'],
+                                                ['            var reference = '
+                                                 'builder.add_signal_reference_si(\n']),
+                                               (913,
+                                                914,
+                                                ['                            CrosswalkPoint(\n'],
+                                                ['                            '
+                                                 'CrosswalkPoint.from_si(\n']),
+                                               (919,
+                                                920,
+                                                ['                '
+                                                 'builder.add_road_object_crosswalk(\n'],
+                                                ['                '
+                                                 'builder.add_road_object_crosswalk_si(\n']),
+                                               (938,
+                                                939,
+                                                ['                _ = builder.add_signal(\n'],
+                                                ['                _ = builder.add_signal_si(\n']),
+                                               (960,
+                                                961,
+                                                ['                _ = builder.add_signal(\n'],
+                                                ['                _ = builder.add_signal_si(\n'])]},
+ 'extensions/carla/replayer_helper.mojo': {'after_sha256': 'f9f625ec0f0500a80a2bb839cabe01311bb08c7e403d70198dae245f8477b1fa',
+                                           'after_token_sha256': 'ffbbc9afc13034d34500893b83443f363b7fa14a2e49bb0fb66b6af489cbb510',
+                                           'before_sha256': '259c31478efee2202f58f73b8813336f573e0022e62a2b1241a255841ba2904f',
+                                           'before_token_sha256': 'db0cb631c48a90cb3deab42eb40f4255a50d1243a6b7d5a90b278548dd47c382',
+                                           'edits': [(44,
+                                                      50,
+                                                      [],
+                                                      ['\n',
+                                                       'from std.math import isfinite\n',
+                                                       '\n',
+                                                       'from extensions.carla.quantity_boundary '
+                                                       'import _finite_si\n',
+                                                       'from units.si import Angle64\n',
+                                                       'from std.ffi import external_call\n']),
+                                                     (307,
+                                                      357,
+                                                      ['def lerp_angle(a: Float64, b: Float64, '
+                                                       'fraction: Float64) -> Float64:\n'],
+                                                      ['def lerp_angle(a: Angle64, b: Angle64, '
+                                                       'fraction: Float64) raises -> Angle64:\n',
+                                                       '    """Interpolate finite angles along the '
+                                                       'shorter turn.\n',
+                                                       '\n',
+                                                       '    Args:\n',
+                                                       '        a: The first angle.\n',
+                                                       '        b: The second angle.\n',
+                                                       '        fraction: The interpolation '
+                                                       'fraction from zero through one.\n',
+                                                       '\n',
+                                                       '    Returns:\n',
+                                                       '        The interpolated angle, without '
+                                                       'wrapping its final value.\n',
+                                                       '\n',
+                                                       '    Raises:\n',
+                                                       '        Error: If a value or converted '
+                                                       'result is invalid.\n',
+                                                       '    """\n',
+                                                       '    var value = lerp_angle_degrees(\n',
+                                                       '        a.value * 57.29577951308232, '
+                                                       'b.value * 57.29577951308232, fraction\n',
+                                                       '    )\n',
+                                                       '    return Angle64(_finite_si(value * '
+                                                       '0.017453292519943295))\n',
+                                                       '\n',
+                                                       '\n',
+                                                       'def lerp_angle_degrees(\n',
+                                                       '    a: Float64, b: Float64, fraction: '
+                                                       'Float64\n',
+                                                       ') raises -> Float64:\n',
+                                                       '    """Explicit checked degree adapter for '
+                                                       'recorded Euler angles.\n',
+                                                       '\n',
+                                                       '    Args:\n',
+                                                       '        a: The first angle in degrees.\n',
+                                                       '        b: The second angle in degrees.\n',
+                                                       '        fraction: The fraction from zero '
+                                                       'through one.\n',
+                                                       '\n',
+                                                       '    Returns:\n',
+                                                       '        The interpolated angle in '
+                                                       'degrees.\n',
+                                                       '\n',
+                                                       '    Raises:\n',
+                                                       '        Error: If a value is nonfinite, '
+                                                       'the difference overflows, or the fraction '
+                                                       'is outside its range.\n',
+                                                       '    """\n',
+                                                       '    _ = _finite_si(a)\n',
+                                                       '    _ = _finite_si(b)\n',
+                                                       '    _ = _finite_si(fraction)\n',
+                                                       '    if fraction < 0 or fraction > 1:\n',
+                                                       '        raise Error("An interpolation '
+                                                       'fraction must be from zero through one")\n',
+                                                       '    var turn = external_call["fmod", '
+                                                       'Float64](_finite_si(b - a), 360.0)\n',
+                                                       '    if turn > 180:\n',
+                                                       '        turn -= 360\n',
+                                                       '    elif turn <= -180:\n',
+                                                       '        turn += 360\n',
+                                                       '    return _finite_si(a + turn * '
+                                                       'fraction)\n',
+                                                       '\n',
+                                                       '\n',
+                                                       'def _lerp_angle_degrees(a: Float64, b: '
+                                                       'Float64, fraction: Float64) -> '
+                                                       'Float64:\n']),
+                                                     (404,
+                                                      407,
+                                                      ['        lerp_angle(r1.x, r2.x, per),\n',
+                                                       '        lerp_angle(r1.y, r2.y, per),\n',
+                                                       '        lerp_angle(r1.z, r2.z, per),\n'],
+                                                      ['        _lerp_angle_degrees(r1.x, r2.x, '
+                                                       'per),\n',
+                                                       '        _lerp_angle_degrees(r1.y, r2.y, '
+                                                       'per),\n',
+                                                       '        _lerp_angle_degrees(r1.z, r2.z, '
+                                                       'per),\n']),
+                                                     (534,
+                                                      535,
+                                                      ['def weather_of(record: RecordedWeather) -> '
+                                                       'WeatherParameters:\n'],
+                                                      ['def weather_of(record: RecordedWeather) '
+                                                       'raises -> WeatherParameters:\n']),
+                                                     (542,
+                                                      545,
+                                                      [],
+                                                      ['\n',
+                                                       '    Raises:\n',
+                                                       '        Error: If a recorded weather field '
+                                                       'is nonfinite.\n']),
+                                                     (546,
+                                                      547,
+                                                      ['    return WeatherParameters(\n'],
+                                                      ['    return '
+                                                       'WeatherParameters.from_carla(\n']),
+                                                     (564,
+                                                      565,
+                                                      ['def process_weather(mut world: World, '
+                                                       'record: RecordedWeather):\n'],
+                                                      ['def process_weather(mut world: World, '
+                                                       'record: RecordedWeather) raises:\n']),
+                                                     (570,
+                                                      573,
+                                                      [],
+                                                      ['\n',
+                                                       '    Raises:\n',
+                                                       '        Error: If a recorded weather field '
+                                                       'is nonfinite.\n']),
+                                                     (577,
+                                                      600,
+                                                      ['def set_walker_speed(mut world: World, id: '
+                                                       'ActorId, speed: Float32) raises:\n'],
+                                                      ['def set_walker_speed(mut world: World, id: '
+                                                       'ActorId, speed: Velocity) raises:\n',
+                                                       '    """Set a walker\'s finite nonnegative '
+                                                       'speed.\n',
+                                                       '\n',
+                                                       '    Args:\n',
+                                                       '        world: The world.\n',
+                                                       '        id: The walker.\n',
+                                                       '        speed: The physical speed.\n',
+                                                       '\n',
+                                                       '    Raises:\n',
+                                                       '        Error: If the speed is invalid or '
+                                                       'the control cannot be applied.\n',
+                                                       '    """\n',
+                                                       '    if not isfinite(speed.value) or '
+                                                       'speed.value < 0:\n',
+                                                       '        raise Error("Walker speed must be '
+                                                       'finite and nonnegative")\n',
+                                                       '    if not _is(world, id, WALKER_ACTOR):\n',
+                                                       '        return\n',
+                                                       '    var control = WalkerControl()\n',
+                                                       '    control.speed = speed\n',
+                                                       '    world.apply_walker_control(id, '
+                                                       'control)\n',
+                                                       '\n',
+                                                       '\n',
+                                                       'def '
+                                                       'set_walker_speed_centimeters_per_second(\n',
+                                                       '    mut world: World, id: ActorId, speed: '
+                                                       'Float32\n',
+                                                       ') raises:\n']),
+                                                     (609,
+                                                      610,
+                                                      ['        Error: Never; the check comes '
+                                                       'first.\n'],
+                                                      ['        Error: If speed is nonfinite or '
+                                                       'negative, or control application '
+                                                       'fails.\n']),
+                                                     (611,
+                                                      613,
+                                                      [],
+                                                      ['    if not isfinite(speed) or speed < 0:\n',
+                                                       '        raise Error("Walker speed must be '
+                                                       'finite and nonnegative")\n']),
+                                                     (698,
+                                                      699,
+                                                      ['            set_walker_speed(world, id, '
+                                                       '0)\n'],
+                                                      ['            set_walker_speed(world, id, '
+                                                       'Velocity(0))\n'])]},
+ 'extensions/carla/road.mojo': {'after_sha256': '92c5f66b1ee93d80e36fe1c59c3f8c716f942d782adcaa2bb5b40bc5b8454aa5',
+                                'after_token_sha256': '567ff145049fd6a23b0390e52b4e17de032666c27c121bf9badb494afe28d40a',
+                                'before_sha256': '4e5857371a9de89c6e41f74e3cdc421760be45603446dd2b2a471f22b53dfd0c',
+                                'before_token_sha256': '7893ed53d2fafca05a7b3d3467dd80735711d3bde32f0885373996a5aa7578a7',
+                                'edits': [(52,
+                                           58,
+                                           ['from extensions.carla.geometry import ARC, '
+                                            'DirectedPoint, LINE\n'],
+                                           ['from extensions.carla.geometry import (\n',
+                                            '    _check_geometry_record,\n',
+                                            '    ARC,\n',
+                                            '    DirectedPoint,\n',
+                                            '    LINE,\n',
+                                            ')\n']),
+                                          (82,
+                                           84,
+                                           ['    info_at,\n', '    info_index,\n'],
+                                           ['    _info_at_si as info_at,\n',
+                                            '    _info_index_si as info_index,\n']),
+                                          (88,
+                                           96,
+                                           ['from units.si import DEGREE, Angle, Length, METER, '
+                                            'RADIAN\n'],
+                                           ['from units.si import DEGREE, Angle, Length, Length64, '
+                                            'METER, RADIAN\n',
+                                            'from extensions.carla.quantity_boundary import (\n',
+                                            '    _RAW_SI,\n',
+                                            '    _RawSI,\n',
+                                            '    _finite_si,\n',
+                                            '    _nonnegative_si,\n',
+                                            '    _positive_si,\n',
+                                            ')\n']),
+                                          (148,
+                                           188,
+                                           ['        out self, id: LaneId, section_id: SectionId, '
+                                            'distance: Float64\n',
+                                            '    ):\n',
+                                            '        """Create a lane with no type, no links and '
+                                            'no records.\n'],
+                                           ['        out self, id: LaneId, section_id: SectionId, '
+                                            'distance: Length64\n',
+                                            '    ) raises:\n',
+                                            '        """Create a checked typed record without '
+                                            'changing scalar storage.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            id: Its source record value.\n',
+                                            '            section_id: Its source record value.\n',
+                                            '            distance: Its typed source quantity.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            A record with unchanged source precision '
+                                            'and layout.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If a quantity is not finite or '
+                                            'another field is invalid.\n',
+                                            '        """\n',
+                                            '        self = Lane.from_si(id, section_id, '
+                                            'distance.value)\n',
+                                            '\n',
+                                            '    @staticmethod\n',
+                                            '    def from_si(\n',
+                                            '        id: LaneId, section_id: SectionId, distance: '
+                                            'Float64\n',
+                                            '    ) raises -> Lane:\n',
+                                            '        """Explicit source-unit compatibility '
+                                            'adapter. Create a lane with no type, no links and no '
+                                            'records.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The lane's id.\n",
+                                            '            section_id: The id of the section that '
+                                            'holds it.\n',
+                                            '            distance: Where that section starts, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The new Lane record with the supplied '
+                                            'source fields.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the start distance is nonfinite '
+                                            'or negative.\n',
+                                            '        """\n',
+                                            '        _ = _nonnegative_si(distance)\n',
+                                            '        return Lane(_RAW_SI, id, section_id, '
+                                            'distance)\n',
+                                            '\n',
+                                            '    @staticmethod\n',
+                                            '    def _from_si(id: LaneId, section_id: SectionId, '
+                                            'distance: Float64) -> Lane:\n',
+                                            '        """Explicit source-unit compatibility '
+                                            'adapter. Create a lane with no type, no links and no '
+                                            'records.\n']),
+                                          (194,
+                                           210,
+                                           [],
+                                           ['        return Lane(_RAW_SI, id, section_id, '
+                                            'distance)\n',
+                                            '\n',
+                                            '    def __init__(\n',
+                                            '        out self,\n',
+                                            '        raw: _RawSI,\n',
+                                            '        id: LaneId,\n',
+                                            '        section_id: SectionId,\n',
+                                            '        distance: Float64,\n',
+                                            '    ):\n',
+                                            '        """Create a lane with no type, no links and '
+                                            'no records.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            raw: The private raw-storage construction '
+                                            'capability.\n',
+                                            "            id: The lane's id.\n",
+                                            '            section_id: The id of the section that '
+                                            'holds it.\n',
+                                            '            distance: Where that section starts, in '
+                                            'meters."""\n']),
+                                          (221,
+                                           232,
+                                           [],
+                                           ['    def distance_quantity(self) raises -> Length64:\n',
+                                            '        """Read the checked typed view of the raw '
+                                            'distance compatibility field.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The same finite Float64 value with its '
+                                            'unit.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the mutable raw value is not '
+                                            'finite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'Length64(_nonnegative_si(self.distance))\n',
+                                            '\n']),
+                                          (242,
+                                           288,
+                                           ['    def __init__(out self, id: SectionId, s: Float64) '
+                                            'raises:\n'],
+                                           ['    def __init__(out self, id: SectionId, s: '
+                                            'Length64) raises:\n',
+                                            '        """Create a checked typed record without '
+                                            'changing scalar storage.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            id: Its source record value.\n',
+                                            '            s: Its typed source quantity.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            A record with unchanged source precision '
+                                            'and layout.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If a quantity is not finite or '
+                                            'another field is invalid.\n',
+                                            '        """\n',
+                                            '        self = LaneSection.from_si(id, s.value)\n',
+                                            '\n',
+                                            '    @staticmethod\n',
+                                            '    def from_si(id: SectionId, s: Float64) raises -> '
+                                            'LaneSection:\n',
+                                            '        """Explicit source-unit compatibility '
+                                            'adapter. Create an empty section.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The section's id within its road.\n",
+                                            '            s: Where it starts, in meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The new LaneSection record with the '
+                                            'supplied source fields.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the id is not valid.\n',
+                                            '        """\n',
+                                            '        _ = _nonnegative_si(s)\n',
+                                            '        return LaneSection(_RAW_SI, id, s)\n',
+                                            '\n',
+                                            '    @staticmethod\n',
+                                            '    def _from_si(id: SectionId, s: Float64) raises -> '
+                                            'LaneSection:\n',
+                                            '        """Explicit source-unit compatibility '
+                                            'adapter. Create an empty section.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The section's id within its road.\n",
+                                            '            s: Where it starts, in meters.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the id is not valid.\n',
+                                            '        """\n',
+                                            '        return LaneSection(_RAW_SI, id, s)\n',
+                                            '\n',
+                                            '    def __init__(out self, raw: _RawSI, id: '
+                                            'SectionId, s: Float64) raises:\n']),
+                                          (291,
+                                           292,
+                                           [],
+                                           ['            raw: The private raw-storage construction '
+                                            'capability.\n']),
+                                          (348,
+                                           349,
+                                           ['        self.lanes.insert(at, Lane(id, self.id, '
+                                            'self.s))\n'],
+                                           ['        self.lanes.insert(at, Lane._from_si(id, '
+                                            'self.id, self.s))\n']),
+                                          (370,
+                                           381,
+                                           [],
+                                           ['\n',
+                                            '    def s_quantity(self) raises -> Length64:\n',
+                                            '        """Read the checked typed view of the raw s '
+                                            'compatibility field.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The same finite Float64 value with its '
+                                            'unit.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the mutable raw value is not '
+                                            'finite.\n',
+                                            '        """\n',
+                                            '        return Length64(_nonnegative_si(self.s))\n']),
+                                          (409,
+                                           515,
+                                           [],
+                                           ['        length: Length64,\n',
+                                            '        junction_id: JuncId,\n',
+                                            '        predecessor: RoadId,\n',
+                                            '        successor: RoadId,\n',
+                                            '        is_rht: Bool,\n',
+                                            '    ) raises:\n',
+                                            '        """Create a checked typed record without '
+                                            'changing scalar storage.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            id: Its source record value.\n',
+                                            '            name: Its source record value.\n',
+                                            '            length: Its typed source quantity.\n',
+                                            '            junction_id: Its source record value.\n',
+                                            '            predecessor: Its source record value.\n',
+                                            '            successor: Its source record value.\n',
+                                            '            is_rht: Its source record value.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            A record with unchanged source precision '
+                                            'and layout.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If a quantity is not finite or '
+                                            'another field is invalid.\n',
+                                            '        """\n',
+                                            '        self = Road.from_si(\n',
+                                            '            id, name, length.value, junction_id, '
+                                            'predecessor, successor, is_rht\n',
+                                            '        )\n',
+                                            '\n',
+                                            '    @staticmethod\n',
+                                            '    def from_si(\n',
+                                            '        id: RoadId,\n',
+                                            '        name: String,\n',
+                                            '        length: Float64,\n',
+                                            '        junction_id: JuncId,\n',
+                                            '        predecessor: RoadId,\n',
+                                            '        successor: RoadId,\n',
+                                            '        is_rht: Bool,\n',
+                                            '    ) raises -> Road:\n',
+                                            '        """Explicit source-unit compatibility '
+                                            'adapter. Create a road with no sections and no '
+                                            'records, `AddRoad`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The road's id.\n",
+                                            '            name: Its name.\n',
+                                            '            length: Its length, in meters.\n',
+                                            '            junction_id: The junction it belongs to, '
+                                            'or `NO_JUNCTION`.\n',
+                                            '            predecessor: The road or junction before '
+                                            'it, 0 for none.\n',
+                                            '            successor: The road or junction after it, '
+                                            '0 for none.\n',
+                                            '            is_rht: True if traffic keeps to the '
+                                            'right.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The new Road record with the supplied '
+                                            'source fields.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If an id is not valid.\n',
+                                            '        """\n',
+                                            '        _ = _positive_si(length)\n',
+                                            '        return Road(\n',
+                                            '            _RAW_SI,\n',
+                                            '            id,\n',
+                                            '            name,\n',
+                                            '            length,\n',
+                                            '            junction_id,\n',
+                                            '            predecessor,\n',
+                                            '            successor,\n',
+                                            '            is_rht,\n',
+                                            '        )\n',
+                                            '\n',
+                                            '    @staticmethod\n',
+                                            '    def _from_si(\n',
+                                            '        id: RoadId,\n',
+                                            '        name: String,\n',
+                                            '        length: Float64,\n',
+                                            '        junction_id: JuncId,\n',
+                                            '        predecessor: RoadId,\n',
+                                            '        successor: RoadId,\n',
+                                            '        is_rht: Bool,\n',
+                                            '    ) raises -> Road:\n',
+                                            '        """Explicit source-unit compatibility '
+                                            'adapter. Create a road with no sections and no '
+                                            'records, `AddRoad`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The road's id.\n",
+                                            '            name: Its name.\n',
+                                            '            length: Its length, in meters.\n',
+                                            '            junction_id: The junction it belongs to, '
+                                            'or `NO_JUNCTION`.\n',
+                                            '            predecessor: The road or junction before '
+                                            'it, 0 for none.\n',
+                                            '            successor: The road or junction after it, '
+                                            '0 for none.\n',
+                                            '            is_rht: True if traffic keeps to the '
+                                            'right.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If an id is not valid.\n',
+                                            '        """\n',
+                                            '        return Road(\n',
+                                            '            _RAW_SI,\n',
+                                            '            id,\n',
+                                            '            name,\n',
+                                            '            length,\n',
+                                            '            junction_id,\n',
+                                            '            predecessor,\n',
+                                            '            successor,\n',
+                                            '            is_rht,\n',
+                                            '        )\n',
+                                            '\n',
+                                            '    def __init__(\n',
+                                            '        out self,\n',
+                                            '        raw: _RawSI,\n',
+                                            '        id: RoadId,\n',
+                                            '        name: String,\n']),
+                                          (524,
+                                           525,
+                                           [],
+                                           ['            raw: The private raw-storage construction '
+                                            'capability.\n']),
+                                          (558,
+                                           590,
+                                           ['    def add_section(mut self, id: SectionId, s: '
+                                            'Float64) raises -> Int:\n'],
+                                           ['    def add_section(mut self, id: SectionId, s: '
+                                            'Length64) raises -> Int:\n',
+                                            '        """Typed quantity boundary. Add a lane '
+                                            'section, `MapBuilder::AddRoadSection`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The section's id.\n",
+                                            '            s: Where it starts, in meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The section's index in `sections`.\n",
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the id is not valid.\n',
+                                            '        """\n',
+                                            '        return self.add_section_meters(id, s.value)\n',
+                                            '\n',
+                                            '    def add_section_meters(mut self, id: SectionId, '
+                                            's: Float64) raises -> Int:\n',
+                                            '        """Explicit meter compatibility adapter. Add '
+                                            'a lane section, `MapBuilder::AddRoadSection`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            id: The section's id.\n",
+                                            '            s: Where it starts, in meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The section's index in `sections`.\n",
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the id is not valid.\n',
+                                            '        """\n',
+                                            '        _ = _nonnegative_si(s)\n',
+                                            '        return self._add_section_si(id, s)\n',
+                                            '\n',
+                                            '    def _add_section_si(mut self, id: SectionId, s: '
+                                            'Float64) raises -> Int:\n']),
+                                          (602,
+                                           603,
+                                           ['        var section = LaneSection(id, s)\n'],
+                                           ['        var section = LaneSection._from_si(id, s)\n']),
+                                          (626,
+                                           657,
+                                           ['    def section_length(self, index: Int) -> '
+                                            'Float64:\n'],
+                                           ['    def section_length(self, index: Int) raises -> '
+                                            'Length64:\n',
+                                            '        """Typed quantity boundary. Return a '
+                                            "section's length, `LaneSection::GetLength`.\n",
+                                            '\n',
+                                            '        Args:\n',
+                                            "            index: The section's index in "
+                                            '`sections`.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            From its start to the next section's "
+                                            'start, or to the end of\n',
+                                            '            the road, in meters.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the computed length is '
+                                            'nonfinite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'Length64(self.section_length_meters(index))\n',
+                                            '\n',
+                                            '    def section_length_meters(self, index: Int) '
+                                            'raises -> Float64:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            "Return a section's length, "
+                                            '`LaneSection::GetLength`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            index: The section's index in "
+                                            '`sections`.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            From its start to the next section's "
+                                            'start, or to the end of\n',
+                                            '            the road, in meters.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the computed length is '
+                                            'nonfinite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            '_finite_si(self._section_length_si(index))\n',
+                                            '\n',
+                                            '    def _section_length_si(self, index: Int) -> '
+                                            'Float64:\n']),
+                                          (667,
+                                           668,
+                                           ['        return self.upper_bound(s) - s\n'],
+                                           ['        return self._upper_bound_si(s) - s\n']),
+                                          (669,
+                                           699,
+                                           ['    def upper_bound(self, s: Float64) -> Float64:\n'],
+                                           ['    def upper_bound(self, s: Length64) raises -> '
+                                            'Length64:\n',
+                                            '        """Typed quantity boundary. Return where the '
+                                            'section at s ends, `Road::UpperBound`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The start of the first section after s, '
+                                            "or the road's length.\n",
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station or computed bound '
+                                            'is nonfinite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'Length64(self.upper_bound_meters(s.value))\n',
+                                            '\n',
+                                            '    def upper_bound_meters(self, s: Float64) raises '
+                                            '-> Float64:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return where the section at s ends, '
+                                            '`Road::UpperBound`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The start of the first section after s, '
+                                            "or the road's length.\n",
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station or computed bound '
+                                            'is nonfinite.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return _finite_si(self._upper_bound_si(s))\n',
+                                            '\n',
+                                            '    def _upper_bound_si(self, s: Float64) -> '
+                                            'Float64:\n']),
+                                          (712,
+                                           748,
+                                           ['    def sections_at(self, s: Float64) -> '
+                                            'List[Int]:\n'],
+                                           ['    def sections_at(self, s: Length64) raises -> '
+                                            'List[Int]:\n',
+                                            '        """Typed quantity boundary. Return the '
+                                            'sections that hold at s, `GetLaneSectionsAt`.\n',
+                                            '\n',
+                                            '        These are the sections that start at the '
+                                            'greatest start at or\n',
+                                            '        before s. There is more than one only when '
+                                            'two start together.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            Their indices, in order. None before the '
+                                            'first section.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        return self.sections_at_meters(s.value)\n',
+                                            '\n',
+                                            '    def sections_at_meters(self, s: Float64) raises '
+                                            '-> List[Int]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the sections that hold at s, '
+                                            '`GetLaneSectionsAt`.\n',
+                                            '\n',
+                                            '        These are the sections that start at the '
+                                            'greatest start at or\n',
+                                            '        before s. There is more than one only when '
+                                            'two start together.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            Their indices, in order. None before the '
+                                            'first section.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._sections_at_si(s)\n',
+                                            '\n',
+                                            '    def _sections_at_si(self, s: Float64) -> '
+                                            'List[Int]:\n']),
+                                          (775,
+                                           810,
+                                           [],
+                                           ['        self, s: Length64, lane_id: LaneId\n',
+                                            '    ) raises -> Tuple[Int, Int]:\n',
+                                            '        """Typed quantity boundary. Return the lane '
+                                            'with an id at s, `GetLaneByDistance`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            "            lane_id: The lane's id.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The section's index and the lane's index "
+                                            'in it.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no section at s has the lane.\n',
+                                            '        """\n',
+                                            '        return self.lane_by_distance_meters(s.value, '
+                                            'lane_id)\n',
+                                            '\n',
+                                            '    def lane_by_distance_meters(\n',
+                                            '        self, s: Float64, lane_id: LaneId\n',
+                                            '    ) raises -> Tuple[Int, Int]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the lane with an id at s, '
+                                            '`GetLaneByDistance`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            "            lane_id: The lane's id.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The section's index and the lane's index "
+                                            'in it.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no section at s has the lane.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._lane_by_distance_si(s, '
+                                            'lane_id)\n',
+                                            '\n',
+                                            '    def _lane_by_distance_si(\n']),
+                                          (824,
+                                           825,
+                                           ['        for index in self.sections_at(s):\n'],
+                                           ['        for index in self._sections_at_si(s):\n']),
+                                          (830,
+                                           862,
+                                           ['    def lanes_by_distance(self, s: Float64) -> '
+                                            'List[Tuple[Int, Int]]:\n'],
+                                           ['    def lanes_by_distance(self, s: Length64) raises '
+                                            '-> List[Tuple[Int, Int]]:\n',
+                                            '        """Typed quantity boundary. Return every lane '
+                                            'at s, `GetLanesByDistance`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            Each lane's section index and lane index, "
+                                            'section by section.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'self.lanes_by_distance_meters(s.value)\n',
+                                            '\n',
+                                            '    def lanes_by_distance_meters(\n',
+                                            '        self, s: Float64\n',
+                                            '    ) raises -> List[Tuple[Int, Int]]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return every lane at s, `GetLanesByDistance`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            Each lane's section index and lane index, "
+                                            'section by section.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._lanes_by_distance_si(s)\n',
+                                            '\n',
+                                            '    def _lanes_by_distance_si(self, s: Float64) -> '
+                                            'List[Tuple[Int, Int]]:\n']),
+                                          (871,
+                                           872,
+                                           ['        for index in self.sections_at(s):\n'],
+                                           ['        for index in self._sections_at_si(s):\n']),
+                                          (876,
+                                           912,
+                                           ['    def lanes_at(self, s: Float64) -> List[Tuple[Int, '
+                                            'Int]]:\n'],
+                                           ['    def lanes_at(self, s: Length64) raises -> '
+                                            'List[Tuple[Int, Int]]:\n',
+                                            '        """Typed quantity boundary. Return the lanes '
+                                            'at s by id, `Road::GetLanesAt`.\n',
+                                            '\n',
+                                            '        Where two sections at s both have an id, the '
+                                            'later one wins, as a\n',
+                                            '        `std::map` assignment does.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            Each lane's section index and lane index, "
+                                            'in order of id.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        return self.lanes_at_meters(s.value)\n',
+                                            '\n',
+                                            '    def lanes_at_meters(self, s: Float64) raises -> '
+                                            'List[Tuple[Int, Int]]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the lanes at s by id, `Road::GetLanesAt`.\n',
+                                            '\n',
+                                            '        Where two sections at s both have an id, the '
+                                            'later one wins, as a\n',
+                                            '        `std::map` assignment does.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            Each lane's section index and lane index, "
+                                            'in order of id.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._lanes_at_si(s)\n',
+                                            '\n',
+                                            '    def _lanes_at_si(self, s: Float64) -> '
+                                            'List[Tuple[Int, Int]]:\n']),
+                                          (924,
+                                           925,
+                                           ['        for index in self.sections_at(s):\n'],
+                                           ['        for index in self._sections_at_si(s):\n']),
+                                          (940,
+                                           977,
+                                           [],
+                                           ['        self, s: Length64, lane_id: LaneId\n',
+                                            '    ) raises -> Optional[Tuple[Int, Int]]:\n',
+                                            '        """Typed quantity boundary. Return the lane '
+                                            'in a section after s, `Road::GetNextLane`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            s: A section's start, in meters.\n",
+                                            "            lane_id: The lane's id.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The first section after s with the lane, '
+                                            "and the lane's index,\n",
+                                            '            or None.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        return self.next_lane_meters(s.value, '
+                                            'lane_id)\n',
+                                            '\n',
+                                            '    def next_lane_meters(\n',
+                                            '        self, s: Float64, lane_id: LaneId\n',
+                                            '    ) raises -> Optional[Tuple[Int, Int]]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the lane in a section after s, '
+                                            '`Road::GetNextLane`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            s: A section's start, in meters.\n",
+                                            "            lane_id: The lane's id.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The first section after s with the lane, '
+                                            "and the lane's index,\n",
+                                            '            or None.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._next_lane_si(s, lane_id)\n',
+                                            '\n',
+                                            '    def _next_lane_si(\n']),
+                                          (997,
+                                           1034,
+                                           [],
+                                           ['        self, s: Length64, lane_id: LaneId\n',
+                                            '    ) raises -> Optional[Tuple[Int, Int]]:\n',
+                                            '        """Typed quantity boundary. Return the lane '
+                                            'in a section before s, `Road::GetPrevLane`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            s: A section's start, in meters.\n",
+                                            "            lane_id: The lane's id.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The last section before s with the lane, '
+                                            "and the lane's index,\n",
+                                            '            or None.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        return self.prev_lane_meters(s.value, '
+                                            'lane_id)\n',
+                                            '\n',
+                                            '    def prev_lane_meters(\n',
+                                            '        self, s: Float64, lane_id: LaneId\n',
+                                            '    ) raises -> Optional[Tuple[Int, Int]]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the lane in a section before s, '
+                                            '`Road::GetPrevLane`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            s: A section's start, in meters.\n",
+                                            "            lane_id: The lane's id.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The last section before s with the lane, '
+                                            "and the lane's index,\n",
+                                            '            or None.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the station is nonfinite.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._prev_lane_si(s, lane_id)\n',
+                                            '\n',
+                                            '    def _prev_lane_si(\n']),
+                                          (1083,
+                                           1113,
+                                           ['    def elevation_on(self, s: Float64) raises -> '
+                                            'CubicPolynomial:\n'],
+                                           ['    def elevation_on(self, s: Length64) raises -> '
+                                            'CubicPolynomial:\n',
+                                            '        """Typed quantity boundary. Return the '
+                                            'elevation cubic at s, `Road::GetElevationOn`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The cubic of the elevation record that '
+                                            'holds at s.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no elevation record starts at '
+                                            'or before s.\n',
+                                            '        """\n',
+                                            '        return self.elevation_on_meters(s.value)\n',
+                                            '\n',
+                                            '    def elevation_on_meters(self, s: Float64) raises '
+                                            '-> CubicPolynomial:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the elevation cubic at s, '
+                                            '`Road::GetElevationOn`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The cubic of the elevation record that '
+                                            'holds at s.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no elevation record starts at '
+                                            'or before s.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._elevation_on_si(s)\n',
+                                            '\n',
+                                            '    def _elevation_on_si(self, s: Float64) raises -> '
+                                            'CubicPolynomial:\n']),
+                                          (1129,
+                                           1173,
+                                           ['    def directed_point(self, s: Float64) raises -> '
+                                            'DirectedPoint:\n'],
+                                           ['    def directed_point(self, s: Length64) raises -> '
+                                            'DirectedPoint:\n',
+                                            '        """Typed quantity boundary. Return lane 0 at '
+                                            's, `Road::GetDirectedPointIn`.\n',
+                                            '\n',
+                                            '        The lane offset moves the point sideways. The '
+                                            'elevation sets z and\n',
+                                            '        the pitch. CARLA reads the elevation at s as '
+                                            'given, and the plan\n',
+                                            '        view and the lane offset at s clamped to the '
+                                            'road.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The point, its heading and its pitch, in '
+                                            "OpenDRIVE's frame.\n",
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no geometry or no elevation '
+                                            'record holds at s.\n',
+                                            '        """\n',
+                                            '        return self.directed_point_meters(s.value)\n',
+                                            '\n',
+                                            '    def directed_point_meters(self, s: Float64) '
+                                            'raises -> DirectedPoint:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return lane 0 at s, `Road::GetDirectedPointIn`.\n',
+                                            '\n',
+                                            '        The lane offset moves the point sideways. The '
+                                            'elevation sets z and\n',
+                                            '        the pitch. CARLA reads the elevation at s as '
+                                            'given, and the plan\n',
+                                            '        view and the lane offset at s clamped to the '
+                                            'road.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The point, its heading and its pitch, in '
+                                            "OpenDRIVE's frame.\n",
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no geometry or no elevation '
+                                            'record holds at s.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        var result = self._directed_point_si(s)\n',
+                                            '        _ = _finite_si(result.x)\n',
+                                            '        _ = _finite_si(result.y)\n',
+                                            '        _ = _finite_si(result.z)\n',
+                                            '        _ = _finite_si(result.tangent)\n',
+                                            '        _ = _finite_si(result.pitch)\n',
+                                            '        return result\n',
+                                            '\n',
+                                            '    def _directed_point_si(self, s: Float64) raises '
+                                            '-> DirectedPoint:\n']),
+                                          (1192,
+                                           1195,
+                                           ['            offset = '
+                                            'Float32(lane_offset.value().polynomial.evaluate(clamped))\n'],
+                                           ['            offset = Float32(\n',
+                                            '                '
+                                            'lane_offset.value().polynomial._evaluate_si(clamped)\n',
+                                            '            )\n']),
+                                          (1199,
+                                           1241,
+                                           ['    def directed_point_no_lane_offset(self, s: '
+                                            'Float64) raises -> DirectedPoint:\n'],
+                                           ['    def directed_point_no_lane_offset(\n',
+                                            '        self, s: Length64\n',
+                                            '    ) raises -> DirectedPoint:\n',
+                                            '        """Typed quantity boundary. Return the '
+                                            'reference line at s, '
+                                            '`GetDirectedPointInNoLaneOffset`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The point, its heading and its pitch, '
+                                            'with no lane offset.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no geometry or no elevation '
+                                            'record holds at s.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'self.directed_point_no_lane_offset_meters(s.value)\n',
+                                            '\n',
+                                            '    def directed_point_no_lane_offset_meters(\n',
+                                            '        self, s: Float64\n',
+                                            '    ) raises -> DirectedPoint:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the reference line at s, '
+                                            '`GetDirectedPointInNoLaneOffset`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The point, its heading and its pitch, '
+                                            'with no lane offset.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If no geometry or no elevation '
+                                            'record holds at s.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        var result = '
+                                            'self._directed_point_no_lane_offset_si(s)\n',
+                                            '        _ = _finite_si(result.x)\n',
+                                            '        _ = _finite_si(result.y)\n',
+                                            '        _ = _finite_si(result.z)\n',
+                                            '        _ = _finite_si(result.tangent)\n',
+                                            '        _ = _finite_si(result.pitch)\n',
+                                            '        return result\n',
+                                            '\n',
+                                            '    def _directed_point_no_lane_offset_si(\n',
+                                            '        self, s: Float64\n',
+                                            '    ) raises -> DirectedPoint:\n']),
+                                          (1260,
+                                           1261,
+                                           ['        return record.geometry.pos_at(s - '
+                                            'record.s)\n'],
+                                           ['        return record.geometry.pos_at_meters(s - '
+                                            'record.s)\n']),
+                                          (1265,
+                                           1268,
+                                           ['        var elevation = self.elevation_on(s)\n',
+                                            '        point.z = '
+                                            'Float64(Float32(elevation.evaluate(s)))\n',
+                                            '        point.pitch = elevation.tangent(s)\n'],
+                                           ['        var elevation = self._elevation_on_si(s)\n',
+                                            '        point.z = '
+                                            'Float64(Float32(elevation._evaluate_si(s)))\n',
+                                            '        point.pitch = elevation._tangent_si(s)\n']),
+                                          (1270,
+                                           1313,
+                                           ['    def nearest_point(self, location: Vector3) -> '
+                                            'Tuple[Float64, Float64]:\n'],
+                                           ['    def nearest_point(\n',
+                                            '        self, location: Vector3\n',
+                                            '    ) raises -> Tuple[Length64, Length64]:\n',
+                                            '        """Return the typed station and plan distance '
+                                            'of the nearest reference point.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            location: The query point in CARLA's "
+                                            'Float32 coordinate layout.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The Float64 station and distance, with '
+                                            'meter units.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the point or either result is '
+                                            'not finite.\n',
+                                            '        """\n',
+                                            '        var result = '
+                                            'self.nearest_point_meters(location)\n',
+                                            '        return (Length64(result[0]), '
+                                            'Length64(result[1]))\n',
+                                            '\n',
+                                            '    def nearest_point_meters(\n',
+                                            '        self, location: Vector3\n',
+                                            '    ) raises -> Tuple[Float64, Float64]:\n',
+                                            '        """Read nearest reference distances through '
+                                            'the explicit meter adapter.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            location: The query point in CARLA's "
+                                            'Float32 coordinate layout.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The finite station and plan distance in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the point or either result is '
+                                            'not finite.\n',
+                                            '        """\n',
+                                            '        _finite_point(\n',
+                                            '            [Float64(location.x), '
+                                            'Float64(location.y), Float64(location.z)]\n',
+                                            '        )\n',
+                                            '        for record in self.info.geometries:\n',
+                                            '            _ = _nonnegative_si(record.s)\n',
+                                            '            _check_geometry_record(record.geometry)\n',
+                                            '        var result = '
+                                            'self._nearest_point_si(location)\n',
+                                            '        _ = _finite_si(result[0])\n',
+                                            '        _ = _finite_si(result[1])\n',
+                                            '        return result\n',
+                                            '\n',
+                                            '    def _nearest_point_si(self, location: Vector3) -> '
+                                            'Tuple[Float64, Float64]:\n']),
+                                          (1330,
+                                           1331,
+                                           ['            var d = '
+                                            'self.info.geometries[i].geometry.distance_to(location)\n'],
+                                           ['            var d = '
+                                            'self.info.geometries[i].geometry._distance_to_si(location)\n']),
+                                          (1340,
+                                           1399,
+                                           [],
+                                           ['        self, s: Length64, location: Vector3, '
+                                            'lane_type: LaneType = LANE_ANY\n',
+                                            '    ) raises -> Tuple[Optional[LaneKey], Length64]:\n',
+                                            '        """Typed quantity boundary. Return the lane '
+                                            'nearest a point at s, `Road::GetNearestLane`.\n',
+                                            '\n',
+                                            '        Visit all lane centers from inner to outer on '
+                                            'the right, then\n',
+                                            "        on the left, in OpenDRIVE's frame. Unlike "
+                                            'CARLA, a farther center\n',
+                                            "        does not end that side's search: rounded "
+                                            'centers need not have\n',
+                                            '        monotonic distances. Centers and widths stay '
+                                            'in Float64. Exact\n',
+                                            '        stored-point order decides ties; the later '
+                                            'eligible lane wins.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '            location: The point, in meters.\n',
+                                            '            lane_type: The lane types that may be the '
+                                            'answer.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The selected lane and its Float64 '
+                                            'distance in meters. The\n',
+                                            '            distance is a scale-safe approximation, '
+                                            'not an exact norm.\n',
+                                            '            If no lane matches, None and the largest '
+                                            'finite Float64.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the mask or s is not valid, a '
+                                            'query or visited center\n',
+                                            '                is not finite, a needed record is '
+                                            'missing, a visited width\n',
+                                            '                is not finite, or the distance '
+                                            'exceeds the Float64 range.\n',
+                                            '        """\n',
+                                            '        var result = '
+                                            'self.nearest_lane_meters(s.value, location, '
+                                            'lane_type)\n',
+                                            '        return (result[0], Length64(result[1]))\n',
+                                            '\n',
+                                            '    def nearest_lane_meters(\n',
+                                            '        self, s: Float64, location: Vector3, '
+                                            'lane_type: LaneType = LANE_ANY\n',
+                                            '    ) raises -> Tuple[Optional[LaneKey], Float64]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            'Return the lane nearest a point at s, '
+                                            '`Road::GetNearestLane`.\n',
+                                            '\n',
+                                            '        Visit all lane centers from inner to outer on '
+                                            'the right, then\n',
+                                            "        on the left, in OpenDRIVE's frame. Unlike "
+                                            'CARLA, a farther center\n',
+                                            "        does not end that side's search: rounded "
+                                            'centers need not have\n',
+                                            '        monotonic distances. Centers and widths stay '
+                                            'in Float64. Exact\n',
+                                            '        stored-point order decides ties; the later '
+                                            'eligible lane wins.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '            location: The point, in meters.\n',
+                                            '            lane_type: The lane types that may be the '
+                                            'answer.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The selected lane and its Float64 '
+                                            'distance in meters. The\n',
+                                            '            distance is a scale-safe approximation, '
+                                            'not an exact norm.\n',
+                                            '            If no lane matches, None and the largest '
+                                            'finite Float64.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the mask or s is not valid, a '
+                                            'query or visited center\n',
+                                            '                is not finite, a needed record is '
+                                            'missing, a visited width\n',
+                                            '                is not finite, or the distance '
+                                            'exceeds the Float64 range.\n',
+                                            '        """\n',
+                                            '        # The kernel validates finite s before any '
+                                            'query/record arithmetic,\n',
+                                            '        # retaining its specific refusal context and '
+                                            'lane-mask ordering.\n',
+                                            '        return self._nearest_lane_si(s, location, '
+                                            'lane_type)\n',
+                                            '\n',
+                                            '    def _nearest_lane_si(\n']),
+                                          (1434,
+                                           1435,
+                                           ['        var lanes = self.lanes_at(s)\n'],
+                                           ['        var lanes = self._lanes_at_si(s)\n']),
+                                          (1442,
+                                           1443,
+                                           ['            offset = '
+                                            'lane_offset.value().polynomial.evaluate(clamped)\n'],
+                                           ['            offset = '
+                                            'lane_offset.value().polynomial._evaluate_si(clamped)\n']),
+                                          (1447,
+                                           1448,
+                                           ['        zero.z = self.elevation_on(s).evaluate(s)\n'],
+                                           ['        zero.z = '
+                                            'self._elevation_on_si(s)._evaluate_si(s)\n']),
+                                          (1466,
+                                           1467,
+                                           ['                var w = '
+                                            'width.value().polynomial.evaluate(s)\n'],
+                                           ['                var w = '
+                                            'width.value().polynomial._evaluate_si(s)\n']),
+                                          (1513,
+                                           1542,
+                                           ['    def lane_length(self, section: Int) -> '
+                                            'Float64:\n'],
+                                           ['    def lane_length(self, section: Int) raises -> '
+                                            'Length64:\n',
+                                            '        """Typed quantity boundary. Return a lane\'s '
+                                            "length, `Lane::GetLength`: its section's.\n",
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The length, in meters.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the computed length is '
+                                            'nonfinite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'Length64(self.lane_length_meters(section))\n',
+                                            '\n',
+                                            '    def lane_length_meters(self, section: Int) raises '
+                                            '-> Float64:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            "Return a lane's length, `Lane::GetLength`: its "
+                                            "section's.\n",
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The length, in meters.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the computed length is '
+                                            'nonfinite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            '_finite_si(self._lane_length_si(section))\n',
+                                            '\n',
+                                            '    def _lane_length_si(self, section: Int) -> '
+                                            'Float64:\n']),
+                                          (1550,
+                                           1551,
+                                           ['        return self.section_length(section)\n'],
+                                           ['        return self._section_length_si(section)\n']),
+                                          (1552,
+                                           1594,
+                                           ['    def lane_width(self, section: Int, lane: Int, s: '
+                                            'Float64) raises -> Float64:\n'],
+                                           ['    def lane_width(\n',
+                                            '        self, section: Int, lane: Int, s: Length64\n',
+                                            '    ) raises -> Length64:\n',
+                                            '        """Typed quantity boundary. Return a lane\'s '
+                                            'width at s, `Lane::GetWidth`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The width record's value at s, in meters, "
+                                            'or 0 if no width\n',
+                                            '            record holds at s.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If s is past the end of the '
+                                            'road.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'Length64(self.lane_width_meters(section, lane, '
+                                            's.value))\n',
+                                            '\n',
+                                            '    def lane_width_meters(\n',
+                                            '        self, section: Int, lane: Int, s: Float64\n',
+                                            '    ) raises -> Float64:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            "Return a lane's width at s, `Lane::GetWidth`.\n",
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The width record's value at s, in meters, "
+                                            'or 0 if no width\n',
+                                            '            record holds at s.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If s is past the end of the '
+                                            'road.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return '
+                                            '_nonnegative_si(self._lane_width_si(section, lane, '
+                                            's))\n',
+                                            '\n',
+                                            '    def _lane_width_si(\n',
+                                            '        self, section: Int, lane: Int, s: Float64\n',
+                                            '    ) raises -> Float64:\n']),
+                                          (1612,
+                                           1613,
+                                           ['            return '
+                                            'width.value().polynomial.evaluate(s)\n'],
+                                           ['            return '
+                                            'width.value().polynomial._evaluate_si(s)\n']),
+                                          (1641,
+                                           1642,
+                                           ['            start + self.section_length(section)\n'],
+                                           ['            start + '
+                                            'self._section_length_si(section)\n']),
+                                          (1683,
+                                           1685,
+                                           ['            var w = '
+                                            'width.value().polynomial.evaluate(s)\n',
+                                            '            var t = '
+                                            'width.value().polynomial.tangent(s)\n'],
+                                           ['            var w = '
+                                            'width.value().polynomial._evaluate_si(s)\n',
+                                            '            var t = '
+                                            'width.value().polynomial._tangent_si(s)\n']),
+                                          (1743,
+                                           1744,
+                                           ['        offset -= '
+                                            'lane_offset.value().polynomial.evaluate(s)\n'],
+                                           ['        offset -= '
+                                            'lane_offset.value().polynomial._evaluate_si(s)\n']),
+                                          (1761,
+                                           1764,
+                                           ['        var elevation = self.elevation_on(s)\n',
+                                            '        point.z = elevation.evaluate(s)\n',
+                                            '        point.pitch = elevation.tangent(s)\n'],
+                                           ['        var elevation = self._elevation_on_si(s)\n',
+                                            '        point.z = elevation._evaluate_si(s)\n',
+                                            '        point.pitch = elevation._tangent_si(s)\n']),
+                                          (1813,
+                                           1814,
+                                           ['        var q1 = -offset.tangent(low)\n'],
+                                           ['        var q1 = -offset._tangent_si(low)\n']),
+                                          (1839,
+                                           1840,
+                                           ['                q1 += factor * width.tangent(low)\n'],
+                                           ['                q1 += factor * '
+                                            'width._tangent_si(low)\n']),
+                                          (1850,
+                                           1851,
+                                           ['        var elevation = self.elevation_on(low)\n'],
+                                           ['        var elevation = '
+                                            'self._elevation_on_si(low)\n']),
+                                          (1864,
+                                           1868,
+                                           ['            elevation.tangent(low) * span,\n',
+                                            '            (elevation.c + 3.0 * (low - elevation.s) '
+                                            '* elevation.d) * span * span,\n'],
+                                           ['            elevation._tangent_si(low) * span,\n',
+                                            '            (elevation.c + 3.0 * (low - elevation.s) '
+                                            '* elevation.d)\n',
+                                            '            * span\n',
+                                            '            * span,\n']),
+                                          (1897,
+                                           1952,
+                                           [],
+                                           ['        self, section: Int, lane: Int, s: Length64\n',
+                                            '    ) raises -> CarlaTransform:\n',
+                                            '        """Typed quantity boundary. Return a lane\'s '
+                                            "center at s in CARLA's frame, facing along it.\n",
+                                            '\n',
+                                            '        The heading and pitch follow the actual '
+                                            'center derivative. This\n',
+                                            "        corrects CARLA's use of the lateral "
+                                            'derivative as an angle.\n',
+                                            '        A lane against s turns its yaw by 180 degrees '
+                                            'and reverses pitch.\n',
+                                            '        A zero horizontal derivative keeps the '
+                                            'reference heading. A\n',
+                                            '        stationary center has zero pitch; a vertical '
+                                            'tangent has 90 degrees.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The transform a vehicle in that lane '
+                                            'would have.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the indices name no lane, s is '
+                                            'nonfinite or off the\n',
+                                            '                road, a required record is missing, '
+                                            'the offset frame is\n',
+                                            '                undefined, the center or derivative '
+                                            'is not representable,\n',
+                                            '                or a SPIRAL uses an unsupported '
+                                            'floating-point mode.\n',
+                                            '        """\n',
+                                            '        return self.lane_transform_meters(section, '
+                                            'lane, s.value)\n',
+                                            '\n',
+                                            '    def lane_transform_meters(\n',
+                                            '        self, section: Int, lane: Int, s: Float64\n',
+                                            '    ) raises -> CarlaTransform:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            "Return a lane's center at s in CARLA's frame, facing "
+                                            'along it.\n',
+                                            '\n',
+                                            '        The heading and pitch follow the actual '
+                                            'center derivative. This\n',
+                                            "        corrects CARLA's use of the lateral "
+                                            'derivative as an angle.\n',
+                                            '        A lane against s turns its yaw by 180 degrees '
+                                            'and reverses pitch.\n',
+                                            '        A zero horizontal derivative keeps the '
+                                            'reference heading. A\n',
+                                            '        stationary center has zero pitch; a vertical '
+                                            'tangent has 90 degrees.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in '
+                                            'meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The transform a vehicle in that lane '
+                                            'would have.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the indices name no lane, s is '
+                                            'nonfinite or off the\n',
+                                            '                road, a required record is missing, '
+                                            'the offset frame is\n',
+                                            '                undefined, the center or derivative '
+                                            'is not representable,\n',
+                                            '                or a SPIRAL uses an unsupported '
+                                            'floating-point mode.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        return self._lane_transform_si(section, lane, '
+                                            's)\n',
+                                            '\n',
+                                            '    def _lane_transform_si(\n']),
+                                          (1989,
+                                           1991,
+                                           ['        offset -= '
+                                            'lane_offset.value().polynomial.evaluate(s)\n',
+                                            '        slope -= '
+                                            'lane_offset.value().polynomial.tangent(s)\n'],
+                                           ['        offset -= '
+                                            'lane_offset.value().polynomial._evaluate_si(s)\n',
+                                            '        slope -= '
+                                            'lane_offset.value().polynomial._tangent_si(s)\n']),
+                                          (2071,
+                                           2138,
+                                           [],
+                                           ['        s: Length64,\n',
+                                            '        extra_width: Length = Length(0.0),\n',
+                                            '    ) raises -> Tuple[Vector3, Vector3]:\n',
+                                            '        """Typed quantity boundary. Return a lane\'s '
+                                            'two edges at s, `Lane::GetCornerPositions`.\n',
+                                            '\n',
+                                            '        A driving lane of a junction road widens by '
+                                            '`extra_width` on each\n',
+                                            "        side. A sidewalk's edges rise by "
+                                            '`SIDEWALK_HEIGHT`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in meters. '
+                                            'It is clamped.\n',
+                                            '            extra_width: How far to widen a '
+                                            "junction's driving lane, in\n",
+                                            '                meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The edge at the lane's offset plus half "
+                                            'its width, then the\n',
+                                            "            edge at minus half, in CARLA's frame. For "
+                                            'a right lane of a\n',
+                                            '            right-hand road the first is the outer '
+                                            'edge.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the indices name no lane, or a '
+                                            'record is missing.\n',
+                                            '        """\n',
+                                            '        return self.lane_corners_meters(\n',
+                                            '            section, lane, s.value, '
+                                            'extra_width.value\n',
+                                            '        )\n',
+                                            '\n',
+                                            '    def lane_corners_meters(\n',
+                                            '        self,\n',
+                                            '        section: Int,\n',
+                                            '        lane: Int,\n',
+                                            '        s: Float64,\n',
+                                            '        extra_width: Float32 = 0.0,\n',
+                                            '    ) raises -> Tuple[Vector3, Vector3]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            "Return a lane's two edges at s, "
+                                            '`Lane::GetCornerPositions`.\n',
+                                            '\n',
+                                            '        A driving lane of a junction road widens by '
+                                            '`extra_width` on each\n',
+                                            "        side. A sidewalk's edges rise by "
+                                            '`SIDEWALK_HEIGHT`.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in meters. '
+                                            'It is clamped.\n',
+                                            '            extra_width: How far to widen a '
+                                            "junction's driving lane, in\n",
+                                            '                meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            "            The edge at the lane's offset plus half "
+                                            'its width, then the\n',
+                                            "            edge at minus half, in CARLA's frame. For "
+                                            'a right lane of a\n',
+                                            '            right-hand road the first is the outer '
+                                            'edge.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the indices name no lane, or a '
+                                            'record is missing.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        _ = _finite_si(Float64(extra_width))\n',
+                                            '        var result = self._lane_corners_si(section, '
+                                            'lane, s, extra_width)\n',
+                                            '        for point in [result[0], result[1]]:\n',
+                                            '            _ = _finite_si(Float64(point.x))\n',
+                                            '            _ = _finite_si(Float64(point.y))\n',
+                                            '            _ = _finite_si(Float64(point.z))\n',
+                                            '        return result\n',
+                                            '\n',
+                                            '    def _lane_corners_si(\n',
+                                            '        self,\n',
+                                            '        section: Int,\n',
+                                            '        lane: Int,\n']),
+                                          (2161,
+                                           2162,
+                                           ['        var offsets = self.lane_edge_offsets(section, '
+                                            'lane, s, extra_width)\n'],
+                                           ['        var offsets = '
+                                            'self._lane_edge_offsets_si(section, lane, s, '
+                                            'extra_width)\n']),
+                                          (2163,
+                                           2164,
+                                           ['        var right = self.directed_point(at)\n'],
+                                           ['        var right = self._directed_point_si(at)\n']),
+                                          (2178,
+                                           2242,
+                                           [],
+                                           ['        self,\n',
+                                            '        section: Int,\n',
+                                            '        lane: Int,\n',
+                                            '        s: Length64,\n',
+                                            '        extra_width: Length = Length(0.0),\n',
+                                            '    ) raises -> Tuple[Length, Length]:\n',
+                                            '        """Typed quantity boundary. Return how far a '
+                                            "lane's two edges sit from lane 0 at s.\n",
+                                            '\n',
+                                            '        These are the offsets `lane_corners` moves '
+                                            "lane 0 by: the lane's\n",
+                                            '        center offset plus and minus half its width, '
+                                            'widened as there.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in meters. '
+                                            'It is clamped.\n',
+                                            '            extra_width: How far to widen a '
+                                            "junction's driving lane, in\n",
+                                            '                meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The offsets of the first and the second '
+                                            'edge, in meters. Plus\n',
+                                            "            is to the right of the road's "
+                                            'direction.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the indices name no lane, or a '
+                                            'record is missing.\n',
+                                            '        """\n',
+                                            '        var result = self.lane_edge_offsets_meters(\n',
+                                            '            section, lane, s.value, '
+                                            'extra_width.value\n',
+                                            '        )\n',
+                                            '        return (Length(result[0]), '
+                                            'Length(result[1]))\n',
+                                            '\n',
+                                            '    def lane_edge_offsets_meters(\n',
+                                            '        self,\n',
+                                            '        section: Int,\n',
+                                            '        lane: Int,\n',
+                                            '        s: Float64,\n',
+                                            '        extra_width: Float32 = 0.0,\n',
+                                            '    ) raises -> Tuple[Float32, Float32]:\n',
+                                            '        """Explicit meter compatibility adapter. '
+                                            "Return how far a lane's two edges sit from lane 0 at "
+                                            's.\n',
+                                            '\n',
+                                            '        These are the offsets `lane_corners` moves '
+                                            "lane 0 by: the lane's\n",
+                                            '        center offset plus and minus half its width, '
+                                            'widened as there.\n',
+                                            '\n',
+                                            '        Args:\n',
+                                            "            section: The section's index.\n",
+                                            "            lane: The lane's index in the section.\n",
+                                            '            s: A distance along the road, in meters. '
+                                            'It is clamped.\n',
+                                            '            extra_width: How far to widen a '
+                                            "junction's driving lane, in\n",
+                                            '                meters.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The offsets of the first and the second '
+                                            'edge, in meters. Plus\n',
+                                            "            is to the right of the road's "
+                                            'direction.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the indices name no lane, or a '
+                                            'record is missing.\n',
+                                            '        """\n',
+                                            '        _ = _finite_si(Float64(s))\n',
+                                            '        _ = _finite_si(Float64(extra_width))\n',
+                                            '        var result = '
+                                            'self._lane_edge_offsets_si(section, lane, s, '
+                                            'extra_width)\n',
+                                            '        _ = _finite_si(Float64(result[0]))\n',
+                                            '        _ = _finite_si(Float64(result[1]))\n',
+                                            '        return result\n',
+                                            '\n',
+                                            '    def _lane_edge_offsets_si(\n']),
+                                          (2273,
+                                           2274,
+                                           ['        var half = Float32(self.lane_width(section, '
+                                            'lane, at)) / 2.0\n'],
+                                           ['        var half = '
+                                            'Float32(self._lane_width_si(section, lane, at)) / '
+                                            '2.0\n']),
+                                          (2282,
+                                           2293,
+                                           [],
+                                           ['    def length_quantity(self) raises -> Length64:\n',
+                                            '        """Read the checked typed view of the raw '
+                                            'length compatibility field.\n',
+                                            '\n',
+                                            '        Returns:\n',
+                                            '            The same finite Float64 value with its '
+                                            'unit.\n',
+                                            '\n',
+                                            '        Raises:\n',
+                                            '            Error: If the mutable raw value is not '
+                                            'finite.\n',
+                                            '        """\n',
+                                            '        return '
+                                            'Length64(_nonnegative_si(self.length))\n',
+                                            '\n'])]},
+ 'tests/test_carla_junction_bounds.mojo': {'after_sha256': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
+                                           'after_token_sha256': 'c2ca46f3dbc2e7a8cf2e265126a17f98ae05e2734b3b619d8e47cec26eeb4926',
+                                           'before_sha256': 'f8493d6ae43fff6446476fa536127373094d1d10c4f0d63af000d3741db6c053',
+                                           'before_token_sha256': 'f338aebc61d5b63326561f9a3b91f3cad8babd938bb00b5224ae81a47aac6337',
+                                           'edits': [(43,
+                                                      44,
+                                                      ['    var r = b.add_road(\n'],
+                                                      ['    var r = b.add_road_si(\n']),
+                                                     (46,
+                                                      47,
+                                                      ['    var sec = b.add_road_section(r, '
+                                                       'SectionId(0), 0.0)\n'],
+                                                      ['    var sec = b.add_road_section_si(r, '
+                                                       'SectionId(0), 0.0)\n']),
+                                                     (50,
+                                                      52,
+                                                      ['    b.create_lane_width(\n',
+                                                       '        b.lane(RoadId(id), LaneId(sign), '
+                                                       '0.0), 0.0, 3.5, 0, 0, 0\n'],
+                                                      ['    b.create_lane_width_si(\n',
+                                                       '        b.lane_si(RoadId(id), '
+                                                       'LaneId(sign), 0.0), 0.0, 3.5, 0, 0, 0\n']),
+                                                     (53,
+                                                      55,
+                                                      ['    b.create_section_offset(r, 0.0, 0, 0, '
+                                                       '0, 0)\n',
+                                                       '    b.add_road_elevation_profile(r, 0.0, '
+                                                       '0, 0, 0, 0)\n'],
+                                                      ['    b.create_section_offset_si(r, 0.0, 0, '
+                                                       '0, 0, 0)\n',
+                                                       '    b.add_road_elevation_profile_si(r, '
+                                                       '0.0, 0, 0, 0, 0)\n']),
+                                                     (74,
+                                                      75,
+                                                      ['        var length = '
+                                                       'road.section_length(sec)\n'],
+                                                      ['        var length = '
+                                                       'road.section_length_meters(sec)\n']),
+                                                     (93,
+                                                      94,
+                                                      ['            b.add_road_geometry_arc(r, 0, '
+                                                       '0, 0, 0, 100, PI / 100.0)\n'],
+                                                      ['            b.add_road_geometry_arc_si(r, '
+                                                       '0, 0, 0, 0, 100, PI / 100.0)\n']),
+                                                     (125,
+                                                      126,
+                                                      ['    var sec = b.add_road_section(r, '
+                                                       'SectionId(4), 39.125)\n'],
+                                                      ['    var sec = b.add_road_section_si(r, '
+                                                       'SectionId(4), 39.125)\n']),
+                                                     (129,
+                                                      131,
+                                                      ['    b.create_lane_width(\n',
+                                                       '        b.lane(RoadId(1), LaneId(-2), '
+                                                       '39.125), 39.125, 8, 0, 0, 0\n'],
+                                                      ['    b.create_lane_width_si(\n',
+                                                       '        b.lane_si(RoadId(1), LaneId(-2), '
+                                                       '39.125), 39.125, 8, 0, 0, 0\n']),
+                                                     (132,
+                                                      133,
+                                                      ['    b.add_road_geometry_arc(r, 0, 0, 0, 0, '
+                                                       '100, PI / 100.0)\n'],
+                                                      ['    b.add_road_geometry_arc_si(r, 0, 0, 0, '
+                                                       '0, 100, PI / 100.0)\n']),
+                                                     (134,
+                                                      135,
+                                                      ['    b.add_road_geometry_line(other, 0, '
+                                                       '120, 17, 0, 13)\n'],
+                                                      ['    b.add_road_geometry_line_si(other, 0, '
+                                                       '120, 17, 0, 13)\n']),
+                                                     (156,
+                                                      157,
+                                                      ['        var sec = b.add_road_section(r, '
+                                                       'SectionId(1), start)\n'],
+                                                      ['        var sec = b.add_road_section_si(r, '
+                                                       'SectionId(1), start)\n']),
+                                                     (160,
+                                                      162,
+                                                      ['        b.create_lane_width(\n',
+                                                       '            b.lane(RoadId(1), '
+                                                       'LaneId(sign), start), start, 3.5, 0, 0, '
+                                                       '0\n'],
+                                                      ['        b.create_lane_width_si(\n',
+                                                       '            b.lane_si(RoadId(1), '
+                                                       'LaneId(sign), start), start, 3.5, 0, 0, '
+                                                       '0\n']),
+                                                     (163,
+                                                      164,
+                                                      ['        b.add_road_geometry_line(r, 0, 0, '
+                                                       '0, 0, length)\n'],
+                                                      ['        b.add_road_geometry_line_si(r, 0, '
+                                                       '0, 0, 0, length)\n']),
+                                                     (186,
+                                                      187,
+                                                      ['    b.create_lane_width(b.lane(RoadId(1), '
+                                                       'LaneId(2), 0), 0, 2, 0, 0, 0)\n'],
+                                                      ['    '
+                                                       'b.create_lane_width_si(b.lane_si(RoadId(1), '
+                                                       'LaneId(2), 0), 0, 2, 0, 0, 0)\n']),
+                                                     (189,
+                                                      191,
+                                                      ['    b.create_lane_width(\n',
+                                                       '        b.lane(RoadId(1), LaneId(1), 0), '
+                                                       '4.03125, 3.5, 160, -640, 0\n'],
+                                                      ['    b.create_lane_width_si(\n',
+                                                       '        b.lane_si(RoadId(1), LaneId(1), '
+                                                       '0), 4.03125, 3.5, 160, -640, 0\n']),
+                                                     (192,
+                                                      200,
+                                                      ['    b.create_lane_width(b.lane(RoadId(1), '
+                                                       'LaneId(1), 0), 4.28125, 3.5, 0, 0, 0)\n',
+                                                       '    b.create_section_offset(r, 4.03125, 0, '
+                                                       '80, -320, 0)\n',
+                                                       '    b.create_section_offset(r, 4.28125, 0, '
+                                                       '0, 0, 0)\n',
+                                                       '    b.add_road_elevation_profile(r, '
+                                                       '4.03125, 0, 48, -192, 0)\n',
+                                                       '    b.add_road_elevation_profile(r, '
+                                                       '4.28125, 0, 0, 0, 0)\n',
+                                                       '    b.add_road_geometry_line(r, 0, 0, 0, '
+                                                       '0, 10)\n'],
+                                                      ['    b.create_lane_width_si(\n',
+                                                       '        b.lane_si(RoadId(1), LaneId(1), '
+                                                       '0), 4.28125, 3.5, 0, 0, 0\n',
+                                                       '    )\n',
+                                                       '    b.create_section_offset_si(r, 4.03125, '
+                                                       '0, 80, -320, 0)\n',
+                                                       '    b.create_section_offset_si(r, 4.28125, '
+                                                       '0, 0, 0, 0)\n',
+                                                       '    b.add_road_elevation_profile_si(r, '
+                                                       '4.03125, 0, 48, -192, 0)\n',
+                                                       '    b.add_road_elevation_profile_si(r, '
+                                                       '4.28125, 0, 0, 0, 0)\n',
+                                                       '    b.add_road_geometry_line_si(r, 0, 0, '
+                                                       '0, 0, 10)\n']),
+                                                     (208,
+                                                      211,
+                                                      ['    var bounds = '
+                                                       '_polynomial_bounds(CubicPolynomial(0, 4, '
+                                                       '-4, 0, 0), 0, 1)\n'],
+                                                      ['    var bounds = _polynomial_bounds(\n',
+                                                       '        '
+                                                       'CubicPolynomial._from_coefficients(0, 4, '
+                                                       '-4, 0, 0), 0, 1\n',
+                                                       '    )\n']),
+                                                     (219,
+                                                      224,
+                                                      ['    b.add_road_geometry_line(r, 0, 0, 0, '
+                                                       '0, 5)\n',
+                                                       '    b.add_road_geometry_line(r, 7.03125, '
+                                                       '100, 40, 0, 12.96875)\n',
+                                                       '    b.create_section_offset(r, 3.125, 20, '
+                                                       '0, 0, 0)\n',
+                                                       '    b.create_section_offset(r, 7.03125, '
+                                                       '-30, 0, 0, 0)\n',
+                                                       '    b.add_road_elevation_profile(r, '
+                                                       '7.03125, -12, 0, 0, 0)\n'],
+                                                      ['    b.add_road_geometry_line_si(r, 0, 0, '
+                                                       '0, 0, 5)\n',
+                                                       '    b.add_road_geometry_line_si(r, '
+                                                       '7.03125, 100, 40, 0, 12.96875)\n',
+                                                       '    b.create_section_offset_si(r, 3.125, '
+                                                       '20, 0, 0, 0)\n',
+                                                       '    b.create_section_offset_si(r, 7.03125, '
+                                                       '-30, 0, 0, 0)\n',
+                                                       '    b.add_road_elevation_profile_si(r, '
+                                                       '7.03125, -12, 0, 0, 0)\n']),
+                                                     (237,
+                                                      238,
+                                                      ['            b.add_road_geometry_spiral(r, '
+                                                       '0, 0, 0, 0, 30, 0.02, 0.08)\n'],
+                                                      ['            '
+                                                       'b.add_road_geometry_spiral_si(r, 0, 0, 0, '
+                                                       '0, 30, 0.02, 0.08)\n']),
+                                                     (239,
+                                                      240,
+                                                      ['            b.add_road_geometry_poly3(\n'],
+                                                      ['            '
+                                                       'b.add_road_geometry_poly3_si(\n']),
+                                                     (243,
+                                                      244,
+                                                      ['            '
+                                                       'b.add_road_geometry_param_poly3(\n'],
+                                                      ['            '
+                                                       'b.add_road_geometry_param_poly3_si(\n']),
+                                                     (250,
+                                                      252,
+                                                      ['                CubicPolynomial(0, 30, 0, '
+                                                       '0, 0),\n',
+                                                       '                CubicPolynomial(0, 12, '
+                                                       '-18, 9, 0),\n'],
+                                                      ['                '
+                                                       'CubicPolynomial._from_coefficients(0, 30, '
+                                                       '0, 0, 0),\n',
+                                                       '                '
+                                                       'CubicPolynomial._from_coefficients(0, 12, '
+                                                       '-18, 9, 0),\n']),
+                                                     (283,
+                                                      284,
+                                                      ['    b.add_road_geometry_param_poly3(\n'],
+                                                      ['    '
+                                                       'b.add_road_geometry_param_poly3_si(\n']),
+                                                     (290,
+                                                      292,
+                                                      ['        CubicPolynomial(0, 2, 0, 0, 0),\n',
+                                                       '        CubicPolynomial(0, 0, 0, 0, 0),\n'],
+                                                      ['        '
+                                                       'CubicPolynomial._from_coefficients(0, 2, '
+                                                       '0, 0, 0),\n',
+                                                       '        '
+                                                       'CubicPolynomial._from_coefficients(0, 0, '
+                                                       '0, 0, 0),\n']),
+                                                     (315,
+                                                      316,
+                                                      ['        b.add_road_geometry_arc(\n'],
+                                                      ['        b.add_road_geometry_arc_si(\n']),
+                                                     (355,
+                                                      358,
+                                                      ['        b.add_road_geometry_line(r, 0, '
+                                                       '1000000, -1000000, 0, max(length, '
+                                                       '1e-12))\n'],
+                                                      ['        b.add_road_geometry_line_si(\n',
+                                                       '            r, 0, 1000000, -1000000, 0, '
+                                                       'max(length, 1e-12)\n',
+                                                       '        )\n']),
+                                                     (369,
+                                                      371,
+                                                      ['    b.create_lane_width(b.lane(RoadId(1), '
+                                                       'LaneId(1), 0), 0, 64, 0, 0, 0)\n',
+                                                       '    b.add_road_geometry_arc(r, 0, 0, 0, 0, '
+                                                       '32.0 * PI, 1.0 / 32.0)\n'],
+                                                      ['    '
+                                                       'b.create_lane_width_si(b.lane_si(RoadId(1), '
+                                                       'LaneId(1), 0), 0, 64, 0, 0, 0)\n',
+                                                       '    b.add_road_geometry_arc_si(r, 0, 0, 0, '
+                                                       '0, 32.0 * PI, 1.0 / 32.0)\n']),
+                                                     (378,
+                                                      380,
+                                                      ['    shifted.add_road_geometry_line(sr, 0, '
+                                                       '0, 0, 0, 100001)\n',
+                                                       '    shifted.add_road_elevation_profile(sr, '
+                                                       '100000, 0, 0, 0, 1)\n'],
+                                                      ['    shifted.add_road_geometry_line_si(sr, '
+                                                       '0, 0, 0, 0, 100001)\n',
+                                                       '    '
+                                                       'shifted.add_road_elevation_profile_si(sr, '
+                                                       '100000, 0, 0, 0, 1)\n']),
+                                                     (381,
+                                                      393,
+                                                      ['    for i in range(1001):\n',
+                                                       '        var s = 100000.0 + Float64(i) / '
+                                                       '1000.0\n',
+                                                       '        assert_true(\n',
+                                                       '            bounds.contains_point(\n',
+                                                       '                '
+                                                       'shifted.roads[sr].lane_transform(0, 0, '
+                                                       's).location\n',
+                                                       '            )\n',
+                                                       '        )\n',
+                                                       '    # This polynomial is intentionally '
+                                                       'ill-conditioned in global s.\n',
+                                                       '    # The wider numerical envelope must '
+                                                       'not be mislabeled 1 cm tight.\n',
+                                                       '    assert_true(bounds.min.z < -0.25)\n',
+                                                       '    assert_true(bounds.max.z > 1.25)\n'],
+                                                      ['    for i in range(1025):\n',
+                                                       '        var delta = Float64(i) / 1024.0\n',
+                                                       '        var s = 100000.0 + delta\n',
+                                                       '        var point = '
+                                                       'shifted.roads[sr].lane_transform_meters(0, '
+                                                       '0, s).location\n',
+                                                       '        # Dyadic stations and local cube '
+                                                       'products are exact in Float64;\n',
+                                                       '        # only the existing final Float32 '
+                                                       'location storage rounds them.\n',
+                                                       '        assert_equal(point.z, '
+                                                       'Float32(delta * delta * delta))\n',
+                                                       '        '
+                                                       'assert_true(bounds.contains_point(point))\n',
+                                                       '    # Local coefficients avoid the old '
+                                                       'global-origin cancellation envelope.\n',
+                                                       '    # Retain both enclosure and an '
+                                                       'independent one-centimeter quality '
+                                                       'bound.\n',
+                                                       '    assert_true(bounds.min.z <= 0.0 and '
+                                                       'bounds.max.z >= 1.0)\n',
+                                                       '    assert_true(bounds.min.z >= -0.01 and '
+                                                       'bounds.max.z <= 1.01)\n']),
+                                                     (398,
+                                                      400,
+                                                      ['    b.add_road_geometry_line(r, 0, 0, 0, '
+                                                       '0, 1)\n',
+                                                       '    b.create_section_offset(r, 0, 0, 4e12, '
+                                                       '-4e12, 0)\n'],
+                                                      ['    b.add_road_geometry_line_si(r, 0, 0, '
+                                                       '0, 0, 1)\n',
+                                                       '    b.create_section_offset_si(r, 0, 0, '
+                                                       '4e12, -4e12, 0)\n']),
+                                                     (404,
+                                                      407,
+                                                      ['            '
+                                                       'box.contains_point(b.roads[r].lane_transform(0, '
+                                                       '0, s).location)\n'],
+                                                      ['            box.contains_point(\n',
+                                                       '                '
+                                                       'b.roads[r].lane_transform_meters(0, 0, '
+                                                       's).location\n',
+                                                       '            )\n']),
+                                                     (413,
+                                                      414,
+                                                      ['    b.add_road_geometry_arc(r, 0, 0, 0, '
+                                                       '1e18, 1024, 1.0)\n'],
+                                                      ['    b.add_road_geometry_arc_si(r, 0, 0, 0, '
+                                                       '1e18, 1024, 1.0)\n']),
+                                                     (418,
+                                                      421,
+                                                      ['                '
+                                                       'b.roads[r].lane_transform(0, 0, 2.0 * '
+                                                       'Float64(i)).location\n'],
+                                                      ['                b.roads[r]\n',
+                                                       '                .lane_transform_meters(0, '
+                                                       '0, 2.0 * Float64(i))\n',
+                                                       '                .location\n'])]},
+ 'tests/test_carla_lane_borders.mojo': {'after_sha256': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
+                                        'after_token_sha256': 'a010bd574bd910d9b0d05d0fd7159eed79d34b3a491129045f54faa57d92e400',
+                                        'before_sha256': 'e5472d28d97636123b2cfda567129de6256c110e8981fb9473ffd6e019c5d3cd',
+                                        'before_token_sha256': '4ad5181212a7340408fe68bab63ad0c46e1f3e0ba9f23977130a6fa7a146da6d',
+                                        'edits': [(13,
+                                                   14,
+                                                   [],
+                                                   ['from extensions.carla.map_builder import '
+                                                    'MapBuilder\n']),
+                                                  (25,
+                                                   26,
+                                                   ['from units.si import Length, METER\n'],
+                                                   ['from units.si import Length, METER, Length64, '
+                                                    'InverseLength64, InverseArea64\n']),
+                                                  (105,
+                                                   108,
+                                                   ['    return map.waypoint_xodr(RoadId(1), '
+                                                    'LaneId(lane), Length(s, METER)).value()\n'],
+                                                   ['    return map.waypoint_xodr_float32(\n',
+                                                    '        RoadId(1), LaneId(lane), Length(s, '
+                                                    'METER)\n',
+                                                    '    ).value()\n']),
+                                                  (340,
+                                                   341,
+                                                   ['    # no width interval before the public '
+                                                    'builder rejects the road length.\n'],
+                                                   ['    # no width interval before the checked '
+                                                    'public builder rejects the length.\n']),
+                                                  (342,
+                                                   343,
+                                                   ['    with assert_raises(\n',
+                                                    '        contains="Spatial map road has an '
+                                                    'invalid finite domain"\n',
+                                                    '    ):\n'],
+                                                   ['    with assert_raises(contains="finite and '
+                                                    'positive"):\n']),
+                                                  (344,
+                                                   412,
+                                                   [],
+                                                   ['\n',
+                                                    '\n',
+                                                    'def '
+                                                    'test_signed_border_source_origin_is_retained_and_width_is_clipped() '
+                                                    'raises:\n',
+                                                    '    var map = load_opendrive(\n',
+                                                    '        _road(_section(0, "", _lane(-1, '
+                                                    '_border(-1, -2.0, -1.0))))\n',
+                                                    '    )\n',
+                                                    '    var lane = '
+                                                    'map.roads[0].sections[0].lane_index(LaneId(-1))\n',
+                                                    '    ref info = '
+                                                    'map.roads[0].sections[0].lanes[lane].info\n',
+                                                    '    # Signed source origin and local '
+                                                    'coefficients survive ingestion unchanged.\n',
+                                                    '    assert_equal(info.borders[0].s, -1.0)\n',
+                                                    '    '
+                                                    'assert_equal(info.borders[0].polynomial.s, '
+                                                    '-1.0)\n',
+                                                    '    '
+                                                    'assert_equal(info.borders[0].polynomial.a, '
+                                                    '-2.0)\n',
+                                                    '    '
+                                                    'assert_equal(info.borders[0].polynomial.b, '
+                                                    '-1.0)\n',
+                                                    '    # The physical width piece begins at the '
+                                                    'valid section start instead.\n',
+                                                    '    assert_equal(info.widths[0].s, 0.0)\n',
+                                                    '    assert_equal(info.widths[0].polynomial.s, '
+                                                    '0.0)\n',
+                                                    '    for s in [Float64(0.0), 0.5, 5.0, 9.5]:\n',
+                                                    '        assert_equal(_width_at(map, -1, '
+                                                    'Float32(s)), 3.0 + s)\n',
+                                                    '    # Waypoint lookup excludes the road end; '
+                                                    'the stored width has that limit.\n',
+                                                    '    '
+                                                    'assert_equal(info.widths[0].polynomial.evaluate_meters(10.0), '
+                                                    '13.0)\n',
+                                                    '\n',
+                                                    '\n',
+                                                    'def '
+                                                    'test_signed_border_adapter_refuses_nonfinite_input_before_append() '
+                                                    'raises:\n',
+                                                    '    var map = '
+                                                    'load_opendrive(_road(_section(0, "", '
+                                                    '_lane(-1, _border(0, -3)))))\n',
+                                                    '    var lane = '
+                                                    'map.roads[0].sections[0].lane_index(LaneId(-1))\n',
+                                                    '    var builder = MapBuilder()\n',
+                                                    '    '
+                                                    'builder.roads.append(map.roads[0].copy())\n',
+                                                    '    var target = (0, 0, lane)\n',
+                                                    '    var before = '
+                                                    'len(builder.roads[0].sections[0].lanes[lane].info.borders)\n',
+                                                    '    for bad in [\n',
+                                                    '        nan[DType.float64](),\n',
+                                                    '        inf[DType.float64](),\n',
+                                                    '        -inf[DType.float64](),\n',
+                                                    '    ]:\n',
+                                                    '        for field in range(5):\n',
+                                                    '            var values: List[Float64] = '
+                                                    '[-1.0, -2.0, -1.0, 0.0, 0.0]\n',
+                                                    '            values[field] = bad\n',
+                                                    '            with '
+                                                    'assert_raises(contains="finite"):\n',
+                                                    '                '
+                                                    'builder.create_lane_border_opendrive(\n',
+                                                    '                    target,\n',
+                                                    '                    values[0],\n',
+                                                    '                    values[1],\n',
+                                                    '                    values[2],\n',
+                                                    '                    values[3],\n',
+                                                    '                    values[4],\n',
+                                                    '                )\n',
+                                                    '            assert_equal(\n',
+                                                    '                '
+                                                    'len(builder.roads[0].sections[0].lanes[lane].info.borders),\n',
+                                                    '                before,\n',
+                                                    '            )\n',
+                                                    '    # The source-only exception does not '
+                                                    'relax either public typed/SI route.\n',
+                                                    '    with '
+                                                    'assert_raises(contains="nonnegative"):\n',
+                                                    '        builder.create_lane_border_si(target, '
+                                                    '-1.0, -2.0, -1.0, 0.0, 0.0)\n',
+                                                    '    assert_equal(\n',
+                                                    '        '
+                                                    'len(builder.roads[0].sections[0].lanes[lane].info.borders), '
+                                                    'before\n',
+                                                    '    )\n',
+                                                    '    with '
+                                                    'assert_raises(contains="nonnegative"):\n',
+                                                    '        builder.create_lane_border(\n',
+                                                    '            target,\n',
+                                                    '            Length64(-1.0),\n',
+                                                    '            Length64(-2.0),\n',
+                                                    '            -1.0,\n',
+                                                    '            InverseLength64(0.0),\n',
+                                                    '            InverseArea64(0.0),\n',
+                                                    '        )\n',
+                                                    '    assert_equal(\n',
+                                                    '        '
+                                                    'len(builder.roads[0].sections[0].lanes[lane].info.borders), '
+                                                    'before\n',
+                                                    '    )\n'])]},
+ 'tests/test_carla_lane_search_positive_controls.mojo': {'after_sha256': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
+                                                         'after_token_sha256': '711c1b29d569a6093cff376211499957a9de91602b82b18168502185b32a481c',
+                                                         'before_sha256': 'e9bb6530f0097a3c193f2a6f8e01b27f6a661b806f5da53772a629b54d6ce84c',
+                                                         'before_token_sha256': '076db8fce0935d0596fe755747f7e4621efef18598dd2e092cc73259d66758f5',
+                                                         'edits': [(77,
+                                                                    83,
+                                                                    ['    road.info.geometries[0] '
+                                                                     '= RoadInfoGeometry(\n',
+                                                                     '        start, '
+                                                                     'RoadGeometry(LINE, start, '
+                                                                     '-reach, 0.0, 0.0, reach)\n',
+                                                                     '    )\n'],
+                                                                    ['    var geometry = '
+                                                                     'RoadGeometry.from_meters(LINE, '
+                                                                     '0.0, -reach, 0.0, 0.0, '
+                                                                     'reach)\n',
+                                                                     '    # Deliberately corrupt '
+                                                                     "the complete record's end "
+                                                                     'station while retaining\n',
+                                                                     '    # the finite queried '
+                                                                     'bracket. This optional '
+                                                                     'internal proof control '
+                                                                     'does\n',
+                                                                     '    # not claim that public '
+                                                                     'geometry construction admits '
+                                                                     'an infinite end.\n',
+                                                                     '    geometry.s = start\n',
+                                                                     '    road.info.geometries[0] '
+                                                                     '= '
+                                                                     'RoadInfoGeometry._from_si(start, '
+                                                                     'geometry^)\n']),
+                                                                   (97,
+                                                                    99,
+                                                                    ['    road.info.geometries[0] '
+                                                                     '= RoadInfoGeometry(\n',
+                                                                     '        base, '
+                                                                     'RoadGeometry(LINE, base, '
+                                                                     '0.0, 0.0, 0.0, 81920.0)\n'],
+                                                                    ['    road.info.geometries[0] '
+                                                                     '= '
+                                                                     'RoadInfoGeometry._from_si(\n',
+                                                                     '        base, '
+                                                                     'RoadGeometry.from_meters(LINE, '
+                                                                     'base, 0.0, 0.0, 0.0, '
+                                                                     '81920.0)\n']),
+                                                                   (193,
+                                                                    196,
+                                                                    ['        '
+                                                                     'RoadInfoGeometry(0.5, '
+                                                                     'RoadGeometry(LINE, 0.5, '
+                                                                     '10.0, 0.0, 0.0, 3.5))\n'],
+                                                                    ['        '
+                                                                     'RoadInfoGeometry._from_si(\n',
+                                                                     '            0.5, '
+                                                                     'RoadGeometry.from_meters(LINE, '
+                                                                     '0.5, 10.0, 0.0, 0.0, 3.5)\n',
+                                                                     '        )\n']),
+                                                                   (206,
+                                                                    209,
+                                                                    ['        '
+                                                                     'RoadInfoGeometry(high, '
+                                                                     'RoadGeometry(LINE, high, '
+                                                                     '10.0, 0.0, 0.0, 3.5))\n'],
+                                                                    ['        '
+                                                                     'RoadInfoGeometry._from_si(\n',
+                                                                     '            high, '
+                                                                     'RoadGeometry.from_meters(LINE, '
+                                                                     'high, 10.0, 0.0, 0.0, 3.5)\n',
+                                                                     '        )\n'])]},
+ 'tests/test_carla_map_budget.mojo': {'after_sha256': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
+                                      'after_token_sha256': 'c367990c2b6e6fa96966d9de0cc3ca1f49c69d5e56ee3a8ca1cfe1e212006325',
+                                      'before_sha256': '70994f86df6db4becdf52786619ffc2ffba9138d1e05033ddf0a74c6f81edc83',
+                                      'before_token_sha256': '0abcb6514f8076fd9ce095947df07548de5fb2b8166ff572bec78455400b4a09',
+                                      'edits': [(7,
+                                                 13,
+                                                 ['from extensions.carla.geometry import ARC, '
+                                                  'LINE, RoadGeometry, with_arc\n'],
+                                                 ['from extensions.carla.geometry import (\n',
+                                                  '    ARC,\n',
+                                                  '    LINE,\n',
+                                                  '    RoadGeometry,\n',
+                                                  '    with_arc_si as with_arc,\n',
+                                                  ')\n']),
+                                                (313,
+                                                 316,
+                                                 ['            RoadInfoLaneWidth(Float64(i) * '
+                                                  '0.05, CubicPolynomial.constant(2.0))\n'],
+                                                 ['            RoadInfoLaneWidth._from_si(\n',
+                                                  '                Float64(i) * 0.05, '
+                                                  'CubicPolynomial._constant_si(2.0)\n',
+                                                  '            )\n']),
+                                                (341,
+                                                 344,
+                                                 ['    '
+                                                  'road.sections[0].lanes[0].info.widths[0].polynomial '
+                                                  '= CubicPolynomial(\n',
+                                                  '        2, 0, 1, 0, 0\n',
+                                                  '    )\n'],
+                                                 ['    road.sections[0].lanes[0].info.widths[\n',
+                                                  '        0\n',
+                                                  '    ].polynomial = '
+                                                  'CubicPolynomial._from_coefficients(2, 0, 1, 0, '
+                                                  '0)\n']),
+                                                (356,
+                                                 357,
+                                                 ['        RoadGeometry(ARC, 0, 0, 0, 0, 4), '
+                                                  '100.0\n'],
+                                                 ['        RoadGeometry.from_meters(ARC, 0, 0, 0, '
+                                                  '0, 4), 100.0\n']),
+                                                (382,
+                                                 383,
+                                                 ['    builder.add_road_geometry_line(r, 0, 0, 0, '
+                                                  '0, 4)\n'],
+                                                 ['    builder.add_road_geometry_line_si(r, 0, 0, '
+                                                  '0, 0, 4)\n']),
+                                                (442,
+                                                 443,
+                                                 ['        Signal(\n'],
+                                                 ['        Signal._from_si(\n']),
+                                                (528,
+                                                 529,
+                                                 ['def '
+                                                  'test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() '
+                                                  'raises:\n'],
+                                                 ['def '
+                                                  'test_centered_junction_elevation_keeps_local_coefficients_and_roundoff() '
+                                                  'raises:\n']),
+                                                (530,
+                                                 533,
+                                                 ['    road.info.elevations[0].polynomial = '
+                                                  'CubicPolynomial(0, 0, 0, 1, 100000)\n'],
+                                                 ['    road.info.elevations[0].polynomial = '
+                                                  'CubicPolynomial._from_coefficients(\n',
+                                                  '        1, -3, 3, -1, 100000\n',
+                                                  '    )\n']),
+                                                (546,
+                                                 547,
+                                                 ['                '
+                                                  'road.info.elevations[0].polynomial.evaluate(station)\n'],
+                                                 ['                '
+                                                  'road.info.elevations[0].polynomial.evaluate_meters(station)\n']),
+                                                (550,
+                                                 552,
+                                                 ['        assert_true(bounded.contains(delta * '
+                                                  'delta * delta))\n'],
+                                                 ['        var complement = 1.0 - delta\n',
+                                                  '        assert_true(bounded.contains(complement '
+                                                  '* complement * complement))\n']),
+                                                (553,
+                                                 559,
+                                                 ['        road, 100000.0, 100001.0, original, '
+                                                  'point[2].error + 32.0, work\n'],
+                                                 ['        road,\n',
+                                                  '        100000.0,\n',
+                                                  '        100001.0,\n',
+                                                  '        original + _Interval(-32.0, 32.0),\n',
+                                                  '        point[2].error + 32.0,\n',
+                                                  '        work,\n'])]},
+ 'tests/test_carla_road_fixed_s.mojo': {'after_sha256': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
+                                        'after_token_sha256': '6cb2433e954186340ce29c655e7a4dbf20667e968cb8a4f86355addc2b14dfee',
+                                        'before_sha256': '1a8cdb306c88b81647b90aea69d517562acb6decd5ad74b281eda2734e4f12a4',
+                                        'before_token_sha256': 'd1efc7319905809d0a65ecba854f16254ee81f26218547ba8d9c5817d42e32eb',
+                                        'edits': [(42,
+                                                   43,
+                                                   ['        RoadInfoLaneWidth(0.0, '
+                                                    'CubicPolynomial.constant(width))\n'],
+                                                   ['        RoadInfoLaneWidth._from_si(0.0, '
+                                                    'CubicPolynomial._constant_si(width))\n']),
+                                                  (52,
+                                                   53,
+                                                   ['    var road = Road(\n'],
+                                                   ['    var road = Road._from_si(\n']),
+                                                  (55,
+                                                   56,
+                                                   ['    _ = road.add_section(SectionId(0), '
+                                                    '0.0)\n'],
+                                                   ['    _ = road.add_section_meters(SectionId(0), '
+                                                    '0.0)\n']),
+                                                  (59,
+                                                   66,
+                                                   ['    road.info.geometries.append(\n',
+                                                    '        RoadInfoGeometry(0.0, '
+                                                    'RoadGeometry(LINE, 0.0, x, y, 0.0, 10.0))\n',
+                                                    '    )\n'],
+                                                   ['    var geometry = '
+                                                    'RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, '
+                                                    '0.0, 10.0)\n',
+                                                    '    # This private fixture deliberately '
+                                                    'permits corrupt stored coordinates.\n',
+                                                    '    # Public construction still rejects them; '
+                                                    'the query controls below must\n',
+                                                    "    # reach the consumer's own validation of "
+                                                    'mutable records.\n',
+                                                    '    geometry.x = x\n',
+                                                    '    geometry.y = y\n',
+                                                    '    '
+                                                    'road.info.geometries.append(RoadInfoGeometry._from_si(0.0, '
+                                                    'geometry^))\n']),
+                                                  (67,
+                                                   68,
+                                                   ['        RoadInfoElevation(0.0, '
+                                                    'CubicPolynomial.constant(z))\n'],
+                                                   ['        RoadInfoElevation._from_si(0.0, '
+                                                    'CubicPolynomial._constant_si(z))\n']),
+                                                  (73,
+                                                   74,
+                                                   ['    var result = road.nearest_lane(s, '
+                                                    'query)\n'],
+                                                   ['    var result = road.nearest_lane_meters(s, '
+                                                    'query)\n']),
+                                                  (107,
+                                                   108,
+                                                   ['        RoadInfoLaneOffset(0.0, '
+                                                    'CubicPolynomial.constant(1e-200))\n'],
+                                                   ['        RoadInfoLaneOffset._from_si(0.0, '
+                                                    'CubicPolynomial._constant_si(1e-200))\n']),
+                                                  (119,
+                                                   122,
+                                                   ['        RoadInfoLaneOffset(0.0, '
+                                                    'CubicPolynomial.constant(16777217.0))\n'],
+                                                   ['        RoadInfoLaneOffset._from_si(\n',
+                                                    '            0.0, '
+                                                    'CubicPolynomial._constant_si(16777217.0)\n',
+                                                    '        )\n']),
+                                                  (137,
+                                                   138,
+                                                   ['    var result = road.nearest_lane(5, '
+                                                    'Vector3(5, 0, 0), LANE_DRIVING)\n'],
+                                                   ['    var result = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, 0, 0), LANE_DRIVING)\n']),
+                                                  (144,
+                                                   145,
+                                                   ['    var result = road.nearest_lane(5, '
+                                                    'Vector3(5, 1, 0), LANE_DRIVING)\n'],
+                                                   ['    var result = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, 1, 0), LANE_DRIVING)\n']),
+                                                  (147,
+                                                   148,
+                                                   ['    result = road.nearest_lane(5, Vector3(5, '
+                                                    '1, 0), LANE_TRAM)\n'],
+                                                   ['    result = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, 1, 0), LANE_TRAM)\n']),
+                                                  (153,
+                                                   154,
+                                                   ['    result = road.nearest_lane(5, Vector3(5, '
+                                                    '0, 0))\n'],
+                                                   ['    result = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, 0, 0))\n']),
+                                                  (160,
+                                                   161,
+                                                   ['    _ = road.add_section(SectionId(7), 0)\n'],
+                                                   ['    _ = road.add_section_meters(SectionId(7), '
+                                                    '0)\n']),
+                                                  (163,
+                                                   164,
+                                                   ['    var result = road.nearest_lane(5, '
+                                                    'Vector3(5, -2, 0))\n'],
+                                                   ['    var result = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, -2, 0))\n']),
+                                                  (168,
+                                                   169,
+                                                   ['    _ = road.add_section(SectionId(8), 5)\n'],
+                                                   ['    _ = road.add_section_meters(SectionId(8), '
+                                                    '5)\n']),
+                                                  (170,
+                                                   171,
+                                                   ['    result = road.nearest_lane(5, Vector3(5, '
+                                                    '-3, 0))\n'],
+                                                   ['    result = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, -3, 0))\n']),
+                                                  (179,
+                                                   182,
+                                                   ['        RoadInfoLaneOffset(0.0, '
+                                                    'CubicPolynomial(0, 1, 0, 0, 0))\n'],
+                                                   ['        RoadInfoLaneOffset._from_si(\n',
+                                                    '            0.0, '
+                                                    'CubicPolynomial._from_coefficients(0, 1, 0, '
+                                                    '0, 0)\n',
+                                                    '        )\n']),
+                                                  (183,
+                                                   185,
+                                                   ['    road.info.elevations[0] = '
+                                                    'RoadInfoElevation(\n',
+                                                    '        0.0, CubicPolynomial(0, 1, 0, 0, '
+                                                    '0)\n'],
+                                                   ['    road.info.elevations[0] = '
+                                                    'RoadInfoElevation._from_si(\n',
+                                                    '        0.0, '
+                                                    'CubicPolynomial._from_coefficients(0, 1, 0, '
+                                                    '0, 0)\n']),
+                                                  (186,
+                                                   188,
+                                                   ['    road.sections[0].lanes[0].info.widths[0] '
+                                                    '= RoadInfoLaneWidth(\n',
+                                                    '        0.0, CubicPolynomial(0, 2, 0, 0, '
+                                                    '0)\n'],
+                                                   ['    road.sections[0].lanes[0].info.widths[0] '
+                                                    '= RoadInfoLaneWidth._from_si(\n',
+                                                    '        0.0, '
+                                                    'CubicPolynomial._from_coefficients(0, 2, 0, '
+                                                    '0, 0)\n']),
+                                                  (205,
+                                                   206,
+                                                   ['        _ = road.nearest_lane(5, Vector3(5, '
+                                                    '-1, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, -1, 0))\n']),
+                                                  (220,
+                                                   221,
+                                                   ['    road.info.geometries[0] = '
+                                                    'RoadInfoGeometry(\n'],
+                                                   ['    road.info.geometries[0] = '
+                                                    'RoadInfoGeometry._from_si(\n']),
+                                                  (222,
+                                                   223,
+                                                   ['        RoadGeometry(\n'],
+                                                   ['        RoadGeometry.from_meters(\n']),
+                                                  (247,
+                                                   249,
+                                                   ['    road.sections[0].lanes[1].info.widths[0] '
+                                                    '= RoadInfoLaneWidth(\n',
+                                                    '        0.0, '
+                                                    'CubicPolynomial.constant(1.7976931348623157e308)\n'],
+                                                   ['    road.sections[0].lanes[1].info.widths[0] '
+                                                    '= RoadInfoLaneWidth._from_si(\n',
+                                                    '        0.0, '
+                                                    'CubicPolynomial._constant_si(1.7976931348623157e308)\n']),
+                                                  (264,
+                                                   265,
+                                                   ['            _ = road.nearest_lane(0, '
+                                                    'query)\n'],
+                                                   ['            _ = road.nearest_lane_meters(0, '
+                                                    'query)\n']),
+                                                  (271,
+                                                   272,
+                                                   ['            _ = road.nearest_lane(s, '
+                                                    'Vector3(0, 0, 0))\n'],
+                                                   ['            _ = road.nearest_lane_meters(s, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (273,
+                                                   274,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0), LaneType(0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0), LaneType(0))\n']),
+                                                  (279,
+                                                   280,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (282,
+                                                   283,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (285,
+                                                   288,
+                                                   ['        RoadInfoLaneOffset(0.0, '
+                                                    'CubicPolynomial.constant(inf[DType.float64]()))\n'],
+                                                   ['        RoadInfoLaneOffset._from_si(\n',
+                                                    '            0.0, '
+                                                    'CubicPolynomial._constant_si(inf[DType.float64]())\n',
+                                                    '        )\n']),
+                                                  (290,
+                                                   291,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (293,
+                                                   294,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (295,
+                                                   299,
+                                                   ['    with assert_raises(contains="finite '
+                                                    'coordinates"):\n',
+                                                    '        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['    # The checked plan-geometry consumer '
+                                                    'rejects its corrupt stored origin\n',
+                                                    '    # before fixed-s lane-center arithmetic '
+                                                    'can produce a coordinate.\n',
+                                                    '    with assert_raises(contains="A '
+                                                    'dimensional value must be finite"):\n',
+                                                    '        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (301,
+                                                   302,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (305,
+                                                   306,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (334,
+                                                   335,
+                                                   ['        _ = road.nearest_lane(0, Vector3(0, '
+                                                    '0, 0))\n'],
+                                                   ['        _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (348,
+                                                   349,
+                                                   ['            _ = road.nearest_lane(0, '
+                                                    'Vector3(0, 0, 0))\n'],
+                                                   ['            _ = road.nearest_lane_meters(0, '
+                                                    'Vector3(0, 0, 0))\n']),
+                                                  (369,
+                                                   372,
+                                                   ['        var result = road.nearest_lane(5, '
+                                                    'Vector3(5, -4, 0), LANE_DRIVING)\n'],
+                                                   ['        var result = '
+                                                    'road.nearest_lane_meters(\n',
+                                                    '            5, Vector3(5, -4, 0), '
+                                                    'LANE_DRIVING\n',
+                                                    '        )\n']),
+                                                  (375,
+                                                   376,
+                                                   ['    var empty = road.nearest_lane(1, '
+                                                    'Vector3(1, 0, 0), LANE_DRIVING)\n'],
+                                                   ['    var empty = road.nearest_lane_meters(1, '
+                                                    'Vector3(1, 0, 0), LANE_DRIVING)\n']),
+                                                  (384,
+                                                   385,
+                                                   ['        _ = road.nearest_lane(5, Vector3(5, '
+                                                    '-1, 0), LANE_TRAM)\n'],
+                                                   ['        _ = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, -1, 0), LANE_TRAM)\n']),
+                                                  (388,
+                                                   389,
+                                                   ['        _ = road.nearest_lane(5, Vector3(5, '
+                                                    '-1, 0), LANE_TRAM)\n'],
+                                                   ['        _ = road.nearest_lane_meters(5, '
+                                                    'Vector3(5, -1, 0), LANE_TRAM)\n'])]},
+ 'tests/test_carla_support_dispatch_successor.mojo': {'after_sha256': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3',
+                                                      'after_token_sha256': '6c521d9074be8d3ecdfae8d43cbf179c0b8ca15a74ff0fb88bef3fec33be769e',
+                                                      'before_sha256': '47fdf8a78836725bba9201214e9cb893b2f1043c874a50872ec18464ac2293a6',
+                                                      'before_token_sha256': 'd42b3f3886c8569b18d32128a277fc6918ee6efcdcb158ffd0f162e682fdb84a',
+                                                      'edits': [(120,
+                                                                 125,
+                                                                 ['from extensions.carla.road_info '
+                                                                  'import info_index\n'],
+                                                                 ['\n',
+                                                                  '# This frozen nonthrowing '
+                                                                  'predecessor already rejects '
+                                                                  'nonfinite bounds\n',
+                                                                  '# before lookup. Retain the '
+                                                                  'historical binary-search '
+                                                                  'kernel, not a public\n',
+                                                                  '# checked wrapper whose raises '
+                                                                  'annotation changes this '
+                                                                  'reference signature.\n',
+                                                                  'from extensions.carla.road_info '
+                                                                  'import _info_index_si as '
+                                                                  'info_index\n']),
+                                                                (381,
+                                                                 415,
+                                                                 [],
+                                                                 ['def '
+                                                                  'test_reference_sample_dispatch_invalid_bounds_preserve_refusal_and_debits() '
+                                                                  'raises:\n',
+                                                                  '    var road = '
+                                                                  '_dispatch_road(0.0)\n',
+                                                                  '    var nan = '
+                                                                  'bitcast[DType.float64](UInt64(0x7FF8000000000000))\n',
+                                                                  '    var infinity = '
+                                                                  'bitcast[DType.float64](UInt64(0x7FF0000000000000))\n',
+                                                                  '    var ranges: '
+                                                                  'List[Tuple[Float64, Float64]] = '
+                                                                  '[\n',
+                                                                  '        (nan, 1.0),\n',
+                                                                  '        (1.0, nan),\n',
+                                                                  '        (infinity, 1.0),\n',
+                                                                  '        (1.0, infinity),\n',
+                                                                  '        (-infinity, 1.0),\n',
+                                                                  '        (1.0, -infinity),\n',
+                                                                  '        (-1.0, 1.0),\n',
+                                                                  '        (1.0, -1.0),\n',
+                                                                  '        (2.0, 1.0),\n',
+                                                                  '    ]\n',
+                                                                  '    for bounds in ranges:\n',
+                                                                  '        var old_nodes = 17\n',
+                                                                  '        var new_nodes = 17\n',
+                                                                  '        var old_terms = 23\n',
+                                                                  '        var new_terms = 23\n',
+                                                                  '        var old = '
+                                                                  '_reference_sample_dispatch_cuts(\n',
+                                                                  '            road, bounds[0], '
+                                                                  'bounds[1], old_nodes, '
+                                                                  'old_terms, 100, 10000\n',
+                                                                  '        )\n',
+                                                                  '        var new = '
+                                                                  '_try_sample_dispatch_cuts(\n',
+                                                                  '            road, bounds[0], '
+                                                                  'bounds[1], new_nodes, '
+                                                                  'new_terms, 100, 10000\n',
+                                                                  '        )\n',
+                                                                  '        assert_equal(Bool(old), '
+                                                                  'False)\n',
+                                                                  '        assert_equal(Bool(new), '
+                                                                  'False)\n',
+                                                                  '        assert_equal(old_nodes, '
+                                                                  '17)\n',
+                                                                  '        assert_equal(new_nodes, '
+                                                                  '17)\n',
+                                                                  '        assert_equal(old_terms, '
+                                                                  '23)\n',
+                                                                  '        assert_equal(new_terms, '
+                                                                  '23)\n',
+                                                                  '\n',
+                                                                  '\n'])]}}}
+EDGE_SHA256 = {**HISTORICAL_EDGE_SHA256, **{'extensions/carla/map.mojo': 'bb69a38845f9823ce5fe707b68be8c45e561bd11fc9c37c43b253689238faa3f',
+ 'extensions/carla/map_builder.mojo': '6ad7c907ee260b8d98f1f764eab9a9f89c66eaf029a268e5a62be0ae9aa0c1d9',
+ 'extensions/carla/opendrive.mojo': '05f31f369679a08564857f2a9653da082f72ad4b627e064727f3e18b8355b986',
+ 'extensions/carla/replayer_helper.mojo': 'badce20743015c933af22e7278105eba34195311bd89538d7f4a330418d89041',
+ 'extensions/carla/road.mojo': '1110de3999d37e681b355c72a2f2f71f79e799da6ee5f08d4e917f2c40d6da38',
+ 'tests/test_carla_junction_bounds.mojo': '4029dc27f807ce6a5b37cb1436153e167b5fd31b41b848bc9c1d14b9a8759f1a',
+ 'tests/test_carla_lane_borders.mojo': '9476014425ab1ed004137cb37799895b4a98be95cbd7631196e34d1a848d4118',
+ 'tests/test_carla_lane_search_positive_controls.mojo': '757f71f80395fd98a841a7485e9d9856f6100cbc23f8fcbd54f41f392665c52a',
+ 'tests/test_carla_map_budget.mojo': 'cab3d390752ff6c90e5d30fa0d0a8991b791f7b609d9bf347e22d68bfcf57561',
+ 'tests/test_carla_road_fixed_s.mojo': 'fae4516105e242229a63b5acae717fbc3c477d11c7a5c9b9e7e9fa00422b9adb',
+ 'tests/test_carla_support_dispatch_successor.mojo': '48ce2eccf2d16bc1baf69b1e147b942849d6637b7366ef415d4a4352270833c4'}}
+TESTS = {**HISTORICAL_TESTS, **{'tests/test_carla_junction_bounds.mojo': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
+ 'tests/test_carla_lane_borders.mojo': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
+ 'tests/test_carla_lane_search_positive_controls.mojo': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
+ 'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
+ 'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
+ 'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
+BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'fc3d5ebc581a4ed27327a222f2e1fd6f18f29a218d9fdfa7e83e52361c610434'}}
+CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/map.mojo': '8159b0fbdaaa44ee428242c874bf592a6d500233611c85ab2803d462f9eada7b',
+ 'extensions/carla/map_builder.mojo': '4646b215316dc28b0163a133abe5a187e2cdcdf55e4cf740770aee0dcd8de34f',
+ 'extensions/carla/opendrive.mojo': '32290a0f2c5804e13504554fa89ecbeaefb67809ccc1903f04d2b51c3815a6c1',
+ 'extensions/carla/replayer_helper.mojo': 'f9f625ec0f0500a80a2bb839cabe01311bb08c7e403d70198dae245f8477b1fa',
+ 'extensions/carla/road.mojo': '92c5f66b1ee93d80e36fe1c59c3f8c716f942d782adcaa2bb5b40bc5b8454aa5',
+ 'tests/test_carla_junction_bounds.mojo': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
+ 'tests/test_carla_lane_borders.mojo': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
+ 'tests/test_carla_lane_search_positive_controls.mojo': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
+ 'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
+ 'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
+ 'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
+INVENTORY = {**HISTORICAL_INVENTORY, **{'extensions/carla/map.mojo': {'tokens_sha256': '4c62ad65d81762209b60f3564b8dcc1689bc9e931a35fcf2e245ed2411614925'},
+ 'extensions/carla/map_builder.mojo': {'tokens_sha256': 'e1d96c8c2aa97ed94f36d026e50d4bffa52588cfb7fd032314b37053bd0f96f4'}}}
+EDGES_SHA256 = '2e87b0b62c06eb5ad10ad4654c549daea8413c28706da36702405dd9ff9d2803'
 # END REVIEWED TYPED BOUNDARY DATA
 
 
@@ -29709,13 +36480,31 @@ def edge(path):
 def verify_authority():
     """Refuse changed authoritative globals, including late namespace edits."""
     payload = {
-        'SOURCE_PATHS': SOURCE_PATHS, 'EDGES': EDGES, 'EDGE_SHA256': EDGE_SHA256,
-        'NEW_INPUTS': NEW_INPUTS, 'TESTS': TESTS, 'BINDING_INPUTS': BINDING_INPUTS,
+        'SOURCE_PATHS': SOURCE_PATHS, 'EDGES': HISTORICAL_EDGES, 'EDGE_SHA256': HISTORICAL_EDGE_SHA256,
+        'NEW_INPUTS': NEW_INPUTS, 'TESTS': HISTORICAL_TESTS, 'BINDING_INPUTS': HISTORICAL_BINDING_INPUTS,
         'PRODUCTION_CLOSURE': PRODUCTION_CLOSURE, 'NATIVE_CLOSURE': NATIVE_CLOSURE,
         'TYPED_NATIVE_CLOSURE': TYPED_NATIVE_CLOSURE,
         'TYPED_PRODUCTION_CLOSURE': TYPED_PRODUCTION_CLOSURE,
-        'CURRENT_DEPENDENCIES': CURRENT_DEPENDENCIES, 'INVENTORY': INVENTORY,
-        'EDGES_SHA256': EDGES_SHA256,
+        'CURRENT_DEPENDENCIES': HISTORICAL_CURRENT_DEPENDENCIES, 'INVENTORY': HISTORICAL_INVENTORY,
+        'EDGES_SHA256': HISTORICAL_EDGES_SHA256,
     }
     require(sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) ==
             'add0cfe82b1103ee64eae23fca9340ec5500d8014309e838415d38123731931b', 'executing authority globals changed')
+
+    current_payload = {
+        'SOURCE_PATHS': SOURCE_PATHS,
+        'EDGES': EDGES,
+        'EDGE_SHA256': EDGE_SHA256,
+        'NEW_INPUTS': NEW_INPUTS,
+        'TESTS': TESTS,
+        'BINDING_INPUTS': BINDING_INPUTS,
+        'PRODUCTION_CLOSURE': PRODUCTION_CLOSURE,
+        'NATIVE_CLOSURE': NATIVE_CLOSURE,
+        'TYPED_NATIVE_CLOSURE': TYPED_NATIVE_CLOSURE,
+        'TYPED_PRODUCTION_CLOSURE': TYPED_PRODUCTION_CLOSURE,
+        'CURRENT_DEPENDENCIES': CURRENT_DEPENDENCIES,
+        'INVENTORY': INVENTORY,
+        'EDGES_SHA256': EDGES_SHA256,
+    }
+    require(sha(json.dumps(current_payload, sort_keys=True, separators=(',', ':'))) ==
+            'b174a8879eab43e672ea02314ec7edf56dc6bd953a86fa634bdd2c808e7d9e4f', 'executing current repair authority globals changed')

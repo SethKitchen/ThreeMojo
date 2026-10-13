@@ -11,6 +11,7 @@ border cubics by hand, not from the code under test.
 """
 
 from extensions.carla.map import Map, Waypoint
+from extensions.carla.map_builder import MapBuilder
 from extensions.carla.opendrive import _Cubic, _lowest, load_opendrive
 from extensions.carla.road_info import LaneId, RoadId, SectionId
 from math.vector3 import Vector3
@@ -22,7 +23,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length, METER
+from units.si import Length, METER, Length64, InverseLength64, InverseArea64
 
 comptime _ZERO_OFFSET = '<laneOffset s="0" a="0" b="0" c="0" d="0"/>'
 
@@ -337,12 +338,78 @@ def test_nonfinite_road_length_refuses_border_map() raises:
     var ordinary = load_opendrive(source)
     assert_almost_equal(_width_at(ordinary, -1, 5), 3.0)
     # Keep the finite section and plan-view geometry. The parser can form
-    # no width interval before the public builder rejects the road length.
+    # no width interval before the checked public builder rejects the length.
     source = source.replace('length="10" junction', 'length="nan" junction')
-    with assert_raises(
-        contains="Spatial map road has an invalid finite domain"
-    ):
+    with assert_raises(contains="finite and positive"):
         _ = load_opendrive(source)
+
+
+def test_signed_border_source_origin_is_retained_and_width_is_clipped() raises:
+    var map = load_opendrive(
+        _road(_section(0, "", _lane(-1, _border(-1, -2.0, -1.0))))
+    )
+    var lane = map.roads[0].sections[0].lane_index(LaneId(-1))
+    ref info = map.roads[0].sections[0].lanes[lane].info
+    # Signed source origin and local coefficients survive ingestion unchanged.
+    assert_equal(info.borders[0].s, -1.0)
+    assert_equal(info.borders[0].polynomial.s, -1.0)
+    assert_equal(info.borders[0].polynomial.a, -2.0)
+    assert_equal(info.borders[0].polynomial.b, -1.0)
+    # The physical width piece begins at the valid section start instead.
+    assert_equal(info.widths[0].s, 0.0)
+    assert_equal(info.widths[0].polynomial.s, 0.0)
+    for s in [Float64(0.0), 0.5, 5.0, 9.5]:
+        assert_equal(_width_at(map, -1, Float32(s)), 3.0 + s)
+    # Waypoint lookup excludes the road end; the stored width has that limit.
+    assert_equal(info.widths[0].polynomial.evaluate_meters(10.0), 13.0)
+
+
+def test_signed_border_adapter_refuses_nonfinite_input_before_append() raises:
+    var map = load_opendrive(_road(_section(0, "", _lane(-1, _border(0, -3)))))
+    var lane = map.roads[0].sections[0].lane_index(LaneId(-1))
+    var builder = MapBuilder()
+    builder.roads.append(map.roads[0].copy())
+    var target = (0, 0, lane)
+    var before = len(builder.roads[0].sections[0].lanes[lane].info.borders)
+    for bad in [
+        nan[DType.float64](),
+        inf[DType.float64](),
+        -inf[DType.float64](),
+    ]:
+        for field in range(5):
+            var values: List[Float64] = [-1.0, -2.0, -1.0, 0.0, 0.0]
+            values[field] = bad
+            with assert_raises(contains="finite"):
+                builder.create_lane_border_opendrive(
+                    target,
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3],
+                    values[4],
+                )
+            assert_equal(
+                len(builder.roads[0].sections[0].lanes[lane].info.borders),
+                before,
+            )
+    # The source-only exception does not relax either public typed/SI route.
+    with assert_raises(contains="nonnegative"):
+        builder.create_lane_border_si(target, -1.0, -2.0, -1.0, 0.0, 0.0)
+    assert_equal(
+        len(builder.roads[0].sections[0].lanes[lane].info.borders), before
+    )
+    with assert_raises(contains="nonnegative"):
+        builder.create_lane_border(
+            target,
+            Length64(-1.0),
+            Length64(-2.0),
+            -1.0,
+            InverseLength64(0.0),
+            InverseArea64(0.0),
+        )
+    assert_equal(
+        len(builder.roads[0].sections[0].lanes[lane].info.borders), before
+    )
 
 
 def main() raises:
