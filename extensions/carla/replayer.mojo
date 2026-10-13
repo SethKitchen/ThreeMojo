@@ -120,7 +120,7 @@ from extensions.carla.replayer_helper import (
     process_walker_bones,
     process_weather,
     set_camera_position,
-    set_walker_speed,
+    set_walker_speed_centimeters_per_second as set_walker_speed,
 )
 from extensions.carla.transform import CarlaTransform
 from extensions.carla.walker_gait import WalkerGait
@@ -727,7 +727,7 @@ struct Replayer(Movable):
                 self.mapped(e.database_id_parent),
             )
 
-    def _weather(mut self, mut world: World):
+    def _weather(mut self, mut world: World) raises:
         """`ProcessWeather`: read each weather; set it when asked."""
         var total = self.reader.u16()
         for _ in range(total):

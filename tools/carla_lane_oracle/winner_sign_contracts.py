@@ -5,7 +5,13 @@
 Complete pins and these explicit source obligations complement the separate
 arithmetic, work-accounting and native reviews. They are not a native proof.
 """
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import tokenize
 
@@ -63,15 +69,15 @@ def verify(root):
     _operation, _owns_operation = full_audit._operation_enter(root, 'winner')
     operation_args = {} if _operation is None else {'_operation': _operation}
     try:
-        payload = (root/MIGRATION).read_bytes()
+        payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes(), _operation=_operation)
         require(hashlib.sha256(payload).hexdigest() == guard.WINNER_SIGN_MIGRATION_SHA256,
                 'unreviewed migration record')
         record = json.loads(payload, object_pairs_hook=source.unique_keys)
         require(record['schema'] == 1, 'unsupported migration schema')
         previous = root/'tools/carla_lane_oracle/default-query-restoration-migration.json'
-        require(hashlib.sha256(previous.read_bytes()).hexdigest() ==
+        require(hashlib.sha256(_typed_source.historical_bytes(root, previous, previous.read_bytes(), _operation=_operation)).hexdigest() ==
                 record['prior_default_restoration_sha256'], 'historical restoration changed')
-        text = full_audit._observe_bytes(root, 'extensions/carla/map.mojo', (root/'extensions/carla/map.mojo').read_bytes(), _operation=_operation).decode('utf-8')
+        text = _typed_source.historical_bytes(root, 'extensions/carla/map.mojo', full_audit._observe_bytes(root, 'extensions/carla/map.mojo', (root/'extensions/carla/map.mojo').read_bytes(), _operation=_operation), _operation=_operation).decode('utf-8')
         live_map = text
         live_map_sha256 = hashlib.sha256(text.encode()).hexdigest()
         historical_map_sha256 = record['raw_successors']['extensions/carla/map.mojo'][-1]['after']
@@ -175,7 +181,7 @@ def verify(root):
             require(path not in successors, 'duplicate render actor reuse edge')
             successors[path] = edge
 
-        if any(hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest() == full_audit.AFTER_SHA256[path]
+        if any(hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest() == full_audit.AFTER_SHA256[path]
                for path in full_audit.SOURCE_PATHS):
             for path, edge in full_audit.verified_edges(root, **operation_args).items():
                 if path in successors:
@@ -207,7 +213,7 @@ def verify(root):
                 require(expected == successors[path]['before_sha256'],
                         'cleanup predecessor differs from historical canonical record: '+path)
                 expected = successors[path]['after_sha256']
-            require(hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest() == expected,
+            require(hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest() == expected,
                     'unreviewed canonical dependency: '+path)
         for name, expected in record['unchanged_public_methods'].items():
             require(source.token_sha256(guard.declaration(text, name, ('Map',))) == expected,
@@ -244,6 +250,9 @@ def verify(root):
         selector = guard.declaration(live_map, '_closest_lane_certificate_with_work', ('Map',))
         require('Exact lane witnesses have inconsistent dominance' not in selector,
                 'reviewed redundant exact guard reappeared')
+        current_edges = full_audit.typed_successor_edges(root, _operation=_operation)
+        physical_map_sha256 = (current_edges['extensions/carla/map.mojo']['after_sha256']
+            if current_edges else live_map_sha256)
         # source_bound_helpers counts the four immutable historical seed helpers.
         # Report the separately bound numerical extraction without rewriting that count.
         if _owns_operation:
@@ -254,7 +263,9 @@ def verify(root):
                 'fresh_environment_entries': 2, 'changed_map_dependency_groups': 3,
                 'canonical_dependencies_unchanged': len(record['canonical_source_unchanged']) - len(successors),
                 'reviewed_cleanup_successors': len(successors),
-                'map_count_successor': map_count_edge, 'map_source_sha256': live_map_sha256,
+                'map_count_successor': map_count_edge, 'map_source_sha256': physical_map_sha256,
+                'historical_map_source_sha256': live_map_sha256,
+                'typed_boundary_successors': current_edges,
                 'native_qualification_claimed': False}
     finally:
         if _owns_operation:

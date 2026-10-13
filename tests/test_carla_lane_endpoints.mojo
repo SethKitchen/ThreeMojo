@@ -98,7 +98,7 @@ def _map(
 
 
 def _w(road: Int, section: Int, lane: Int, s: Float64) -> Waypoint:
-    return Waypoint(RoadId(road), SectionId(section), LaneId(lane), s)
+    return Waypoint._from_si(RoadId(road), SectionId(section), LaneId(lane), s)
 
 
 def test_topology_retains_dead_ends_and_section_identity() raises:
@@ -149,13 +149,17 @@ def test_tiny_positive_sections_keep_endpoints_inside() raises:
                     assert_true(waypoint.s >= 0.0)
                     assert_true(waypoint.s <= length)
                     _ = map.compute_transform(waypoint)
-                var forward = map.next_until_lane_end(pair[0], 1.0)
+                var forward = map.next_until_lane_end_meters(pair[0], 1.0)
                 assert_equal(len(forward), 1)
                 assert_equal(forward[0], pair[1])
-                var backward = map.previous_until_lane_start(pair[1], 1.0)
+                var backward = map.previous_until_lane_start_meters(
+                    pair[1], 1.0
+                )
                 assert_equal(len(backward), 1)
                 assert_equal(backward[0], pair[0])
-                assert_equal(len(map.next_until_lane_end(pair[1], 1.0)), 0)
+                assert_equal(
+                    len(map.next_until_lane_end_meters(pair[1], 1.0)), 0
+                )
 
     # A residual inside the endpoint inset emits the exact endpoint even
     # when the requested spacing is smaller than that residual.
@@ -164,10 +168,12 @@ def test_tiny_positive_sections_keep_endpoints_inside() raises:
         for pair in map.generate_topology():
             var middle = pair[0]
             middle.s = (pair[0].s + pair[1].s) / 2.0
-            var forward = map.next_until_lane_end(middle, 2.0 * EPSILON)
+            var forward = map.next_until_lane_end_meters(middle, 2.0 * EPSILON)
             assert_equal(len(forward), 1)
             assert_equal(forward[0], pair[1])
-            var backward = map.previous_until_lane_start(middle, 2.0 * EPSILON)
+            var backward = map.previous_until_lane_start_meters(
+                middle, 2.0 * EPSILON
+            )
             assert_equal(len(backward), 1)
             assert_equal(backward[0], pair[0])
 
@@ -204,9 +210,9 @@ def test_connected_topology_keeps_lane_order() raises:
 def _check_walk(
     map: Map, start: Waypoint, distance: Float64, ahead: Bool, target: Float64
 ) raises:
-    var points = map.next_until_lane_end(
+    var points = map.next_until_lane_end_meters(
         start, distance
-    ) if ahead else map.previous_until_lane_start(start, distance)
+    ) if ahead else map.previous_until_lane_start_meters(start, distance)
     assert_true(len(points) > 0)
     var forward = map.is_positive_direction(start) == ahead
     var previous = start.s
@@ -243,9 +249,9 @@ def test_traversal_directions_connections_and_intervals() raises:
                         boundary.section_id = SectionId(
                             1 if sections and forward else 0
                         )
-                        var empty = map.next_until_lane_end(
+                        var empty = map.next_until_lane_end_meters(
                             boundary, 10.0
-                        ) if ahead else map.previous_until_lane_start(
+                        ) if ahead else map.previous_until_lane_start_meters(
                             boundary, 10.0
                         )
                         assert_equal(len(empty), 0)
@@ -357,16 +363,20 @@ def test_invalid_spacing_and_nonadvancing_steps() raises:
             for s in [25.0, 100.0 if ahead else 0.0]:
                 with assert_raises():
                     if ahead:
-                        _ = map.next_until_lane_end(_w(1, 0, -1, s), distance)
+                        _ = map.next_until_lane_end_meters(
+                            _w(1, 0, -1, s), distance
+                        )
                     else:
-                        _ = map.previous_until_lane_start(
+                        _ = map.previous_until_lane_start_meters(
                             _w(1, 0, -1, s), distance
                         )
         with assert_raises():
             if ahead:
-                _ = map.next_until_lane_end(_w(1, 0, -1, 75), 2.0 * EPSILON)
+                _ = map.next_until_lane_end_meters(
+                    _w(1, 0, -1, 75), 2.0 * EPSILON
+                )
             else:
-                _ = map.previous_until_lane_start(
+                _ = map.previous_until_lane_start_meters(
                     _w(1, 0, -1, 75), 2.0 * EPSILON
                 )
 
@@ -387,11 +397,11 @@ def test_until_lane_rejects_invalid_s_before_endpoint_discovery() raises:
                     ]:
                         with assert_raises(contains="outside its lane section"):
                             if ahead:
-                                _ = map.next_until_lane_end(
+                                _ = map.next_until_lane_end_meters(
                                     _w(1, section, lane, s), 10
                                 )
                             else:
-                                _ = map.previous_until_lane_start(
+                                _ = map.previous_until_lane_start_meters(
                                     _w(1, section, lane, s), 10
                                 )
                     # A shared endpoint belongs to either adjacent section.
@@ -418,7 +428,7 @@ def test_branch_and_cycle_boundaries() raises:
     # The existing step guard rejects a two-section cycle. The helper
     # propagates that failure instead of indexing an empty step.
     with assert_raises(contains="unique path"):
-        _ = map.next_until_lane_end(_w(1, 0, -1, 25), 60)
+        _ = map.next_until_lane_end_meters(_w(1, 0, -1, 25), 60)
 
 
 def main() raises:

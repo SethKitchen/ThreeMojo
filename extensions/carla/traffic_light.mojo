@@ -691,7 +691,7 @@ def affected_lane_waypoints(
             for lane in lanes:  # pragma: no branch
                 if lane == 0:
                     continue
-                var w = map.waypoint_xodr(
+                var w = map.waypoint_xodr_float32(
                     r.road_id, LaneId(lane), Length(Float32(r.s), METER)
                 )
                 if Bool(w):

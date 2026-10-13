@@ -1,7 +1,13 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Explicit reviewed raw-cut, finite-moment, budget, and ordered-lane lineage."""
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
     from . import source_contracts as source
@@ -56,21 +62,22 @@ def _observe_text(root, path, text, *, _operation=None):
     return full_audit._observe_text(root, path, text, _operation=_operation)
 
 
+
 def require(condition, message):
     if not condition:
         raise ValueError('coverage followup successor: ' + message)
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256, 'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
     require(type(record['schema']) is int and record['schema'] == 1
             and set(record['sources']) == set(SOURCE_PATHS), 'wrong exact successor set')
     prior = root/'tools/carla_lane_oracle/coverage-invariant-migration.json'
-    require(hashlib.sha256(prior.read_bytes()).hexdigest() ==
+    require(hashlib.sha256(_typed_source.historical_bytes(root, prior, prior.read_bytes())).hexdigest() ==
             record['prior_invariant_migration_sha256'], 'historical invariant record changed')
     for name, digest in record['components'].items():
-        require(hashlib.sha256((root/'tools/carla_lane_oracle'/name).read_bytes()).hexdigest()
+        require(hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())).hexdigest()
                 == digest, 'component migration record changed: ' + name)
     return record
 
@@ -95,6 +102,19 @@ def predecessor_pins(root, filename):
             'historical pin reconstruction failed')
     return payload
 
+def _source_view(root, path, physical_text, *, _operation=None):
+    """Keep supplied physical views only for the helper's named authority domain."""
+    if __package__:
+        from . import full_audit_cleanup_contracts as cleanup
+    else:
+        import full_audit_cleanup_contracts as cleanup
+    if path == cache_key.MODULE or path in cleanup.SOURCE_PATHS:
+        return cache_key.reviewed_text(root, path, physical_text, _operation=_operation)
+    historical = _typed_source.historical_text(root, path, physical_text, _operation=_operation)
+    # For unrelated modules cache_key's historical API is an identity function.
+    return cache_key.reviewed_text(root, path, historical, _operation=_operation)
+
+
 def verify(root, *, _operation=None):
     if _operation is not None:
         _check_operation(root, _operation)
@@ -105,7 +125,7 @@ def verify(root, *, _operation=None):
     else:
         _predecessor_pin_pair(root, _operation=_operation)
     for path,item in record['sources'].items():
-        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],
+        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _source_view(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],
                 'complete successor changed: ' + path)
     if __package__:
         from . import raw_cut_inverse_contracts as raw

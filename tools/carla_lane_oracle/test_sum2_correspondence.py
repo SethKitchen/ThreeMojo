@@ -21,6 +21,20 @@ from test_sum2_oracle import two_sum, sum2, from_word, to_word
 
 ROOT = Path(__file__).resolve().parents[2]
 
+
+# This module's fixed byte/line/body assertions describe the historical main
+# graph. The #333 current graph has separate physical admission/mutation tests.
+_CURRENT_SOURCE_ROOT = ROOT
+
+
+def setUpModule():
+    global ROOT
+    import _full_audit_test_fixtures as historical_fixtures
+    owner = type('HistoricalModuleFixture', (), {
+        'addCleanup': staticmethod(unittest.addModuleCleanup)})()
+    ROOT = historical_fixtures.copy_historical_boundary_root(owner, _CURRENT_SOURCE_ROOT)
+    unittest.addModuleCleanup(globals().__setitem__, 'ROOT', _CURRENT_SOURCE_ROOT)
+
 # name, module, before, after. Each target must actually occur in the passing
 # source. Pins remain byte-identical throughout every test.
 CASES = [

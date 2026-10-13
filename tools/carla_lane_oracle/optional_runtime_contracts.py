@@ -8,6 +8,16 @@ from complete token bindings. Neither is a mathematical proof or a native
 execution/coverage claim. The migration record retains the external proof
 lineage and the exact selected production bytes. Nothing refreshes pins here.
 """
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import ast
 from functools import lru_cache
 import tokenize
@@ -75,8 +85,8 @@ def require(condition, message):
         raise ValueError('optional runtime contract: ' + message)
 
 
-def body(root, module, name):
-    text = (root / ('extensions/carla/' + module + '.mojo')).read_text()
+def body(root, module, name, *, _operation=None):
+    text = _typed_source.historical_text(root, root / ('extensions/carla/' + module + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + module + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + module + '.mojo')).read_text(), _operation=_operation), _operation=_operation)
     return body_from_source(text, name)
 
 
@@ -182,14 +192,14 @@ def executable_names(text):
                      if token.type == tokenize.NAME)
 
 
-def verify_no_containing_model_consumers(root):
+def verify_no_containing_model_consumers(root, *, _operation=None):
     helper = 'extensions/carla/curve_objective_model.mojo'
     for path in sorted(root.rglob('*.mojo')):
         relative = path.relative_to(root)
         if relative.parts[0] in guard.NONPRODUCTION or any(
                 part.startswith('.') for part in relative.parts):
             continue
-        text = path.read_text()
+        text = _typed_source.historical_text(root, path, source._observe_text(root, (path).relative_to(root).as_posix(), path.read_text(), _operation=_operation), _operation=_operation)
         if not any(name in text for name in MODEL_NAMES | REMOVED_SEARCH_NAMES):
             continue
         names = executable_names(text)
@@ -257,24 +267,24 @@ def verify_search_semantics(run):
                'split predecessor preserves every stored owner station')
 
 
-def verify_semantics(root):
-    helper = body(root, 'lane_refinement', '_same_cache_key')
+def verify_semantics(root, *, _operation=None):
+    helper = body(root, 'lane_refinement', '_same_cache_key', _operation=_operation)
     require(sampled.dump(helper.body) == sampled.dump(sampled.syntax_tree(
         'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)').body),
         'exact UInt64 pair helper comparison')
-    model = body(root, 'curve_objective_model', '_try_objective_model')
-    restrict = body(root, 'curve_objective_model', '_restrict_objective_model')
-    cut = body(root, 'curve_sample_dispatch', '_sample_dispatch_cut')
-    cuts = body(root, 'curve_sample_dispatch', '_try_sample_dispatch_cuts')
-    lane = body(root, 'spiral_grouped_lane', '_try_grouped_lane_jet')
-    raw = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope')
-    metered = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope_metered')
+    model = body(root, 'curve_objective_model', '_try_objective_model', _operation=_operation)
+    restrict = body(root, 'curve_objective_model', '_restrict_objective_model', _operation=_operation)
+    cut = body(root, 'curve_sample_dispatch', '_sample_dispatch_cut', _operation=_operation)
+    cuts = body(root, 'curve_sample_dispatch', '_try_sample_dispatch_cuts', _operation=_operation)
+    lane = body(root, 'spiral_grouped_lane', '_try_grouped_lane_jet', _operation=_operation)
+    raw = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope', _operation=_operation)
+    metered = body(root, 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope_metered', _operation=_operation)
     for node in (model, restrict, cut, cuts, lane, raw, metered):
         fresh_guard(node)
 
     # Exact guarded raw -> private origin -> checked Sum2 leaf edge. The
     # global inventory also rejects any new direct or alias route to it.
-    origin = body(root, 'spiral_grouped_roundoff_proof', '_grouped_origin_error')
+    origin = body(root, 'spiral_grouped_roundoff_proof', '_grouped_origin_error', _operation=_operation)
     contains(origin, 'var error = _sum2_error_checked(magnitude.high, inherited.high, count)',
              'grouped origin must use the canonical checked error arguments')
     contains(raw, 'var x_error = _grouped_origin_error(x_ideal, x_magnitude, x_inherited, 5 * pieces, geometry.x)',
@@ -285,7 +295,7 @@ def verify_semantics(root):
              'retain original ideal distance and uniform scalar error')
     contains(raw, 'var copies = (high - low) * multiplicity', 'actual group multiplicity')
     contains(raw, 'var multiplicity = 1 if weight == 2 else 2', 'stored symmetric weight multiplicity')
-    work = body(root, 'spiral_grouped_roundoff_proof', '_spiral_grouped_roundoff_work')
+    work = body(root, 'spiral_grouped_roundoff_proof', '_spiral_grouped_roundoff_work', _operation=_operation)
     contains(work, 'return 3 * min(4, pieces)', 'whole count work bound')
     contains(lane, 'if nodes < 0 or nodes >= max_nodes or terms < 0 or terms > max_terms or max_terms - terms < 24:\n    return None',
              'whole optional union admission')
@@ -323,7 +333,7 @@ def verify_semantics(root):
     contains(restrict, 'var value = model.center.value + model.center.first * delta + _Interval.point(0.5) * model.domain.second * delta.square()',
              'same-ideal Taylor value restriction')
 
-    support = body(root, 'curve_minimizer_support', '_minimizer_support')
+    support = body(root, 'curve_minimizer_support', '_minimizer_support', _operation=_operation)
     for text, label in (('best < low', 'actual witness lower containment'),
                         ('best > high', 'actual witness upper containment'),
                         ('not isfinite(best)', 'actual witness finite station')):
@@ -336,7 +346,7 @@ def verify_semantics(root):
                     and part.value.id == 'center' and part.attr == 'error' for part in ast.walk(support)),
             'translated center error cannot replace world error')
 
-    predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate')
+    predicate = body(root, 'curve_sample_dispatch', '_sample_dispatch_predicate', _operation=_operation)
     require(sampled.dump(predicate.body) == sampled.dump(ast.parse(
         'return min(max(station - origin, 0.0), length) > local').body),
         'exact stored subtraction/clamp dispatch predicate')
@@ -360,18 +370,18 @@ def verify_semantics(root):
         require(wanted in names and names.index(wanted) < loop,
                 'dispatch debit must precede optional attempts')
 
-    verify_no_containing_model_consumers(root)
+    verify_no_containing_model_consumers(root, _operation=_operation)
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
-    room = body(root, 'curve_objective_model', '_objective_followup_room')
+    room = body(root, 'curve_objective_model', '_objective_followup_room', _operation=_operation)
     expected_room = sampled.unique_function(sampled.syntax_tree(FOLLOWUP_ROOM), '_objective_followup_room')
     require(sampled.dump(room) == sampled.dump(expected_room),
             'complete overflow-safe integer followup admission')
-    recheck = body(root, 'curve_objective_model', '_objective_recheck_room')
+    recheck = body(root, 'curve_objective_model', '_objective_recheck_room', _operation=_operation)
     require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(
         sampled.syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
         'complete integer cached-closure recheck admission')
-    fee = body(root, 'map', '_query_node_step_cost')
+    fee = body(root, 'map', '_query_node_step_cost', _operation=_operation)
     contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')
     contains(fee, 'fixed += 16', 'stored dispatch logical fee')
     contains(fee, 'if witness:\n    fixed += 14', 'retained containing-model logical fee')
@@ -383,14 +393,14 @@ def verify_semantics(root):
         import raw_cut_inverse_contracts as raw_inverse
     except ModuleNotFoundError:
         from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw_inverse
-    raw_inverse.verify_premises(root)
+    raw_inverse.verify_premises(root, _operation=_operation)
     # Keep all live non-lane, absence, room, fee and raw-inverse premises.
     # Only the complete live gate and exact center inverse admit a predecessor;
     # current lane failures may differ diagnostically from historical fixtures.
-    previous = full_audit.reviewed_lane_before_center_text(root)
+    previous = full_audit.reviewed_lane_before_center_text(root, _operation=_operation)
     verify_search_semantics(body_from_source(previous, '_run_lane_search'))
     # Retain the sampled-reference gate after raw-inverse diagnostics.
-    sampled.reviewed_reference_tree((root / 'extensions/carla/curve_bounds.mojo').read_text(), root)
+    sampled.reviewed_reference_tree(_typed_source.historical_text(root, root / 'extensions/carla/curve_bounds.mojo', source._observe_text(root, (root / 'extensions/carla/curve_bounds.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), root, _operation=_operation)
     return {'status': 'PASS', 'new_modules': list(NEW_MODULES),
             'checked_error_edge': 'guarded raw -> grouped origin -> checked Sum2 leaf',
             'containing_model_consumers': 'absent from production; standalone helper retained',
@@ -399,7 +409,7 @@ def verify_semantics(root):
             'native_execution_qualified': False}
 
 
-def verify(root):
-    semantics = verify_semantics(root)
-    semantics['dependencies'] = source_contracts.verify_group(root, 'optional_runtime')
+def verify(root, *, _operation=None):
+    semantics = verify_semantics(root, _operation=_operation)
+    semantics['dependencies'] = source_contracts.verify_group(root, 'optional_runtime', _operation=_operation)
     return semantics

@@ -1,6 +1,17 @@
 """Bind the grouped proof to its reviewed immutable-table producer contract."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
 from pathlib import Path
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import math
 import struct
 

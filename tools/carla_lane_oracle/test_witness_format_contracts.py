@@ -17,11 +17,18 @@ LEAF = 'tools/carla_lane_oracle/witness_format_contracts.py'
 
 
 class WitnessFormatLeafControls(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import _full_audit_test_fixtures as historical_fixtures
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.historical_root = historical_fixtures.copy_historical_boundary_root(owner, ROOT)
+
     def test_all_four_exact_inverses_and_forward_replay(self):
         self.assertEqual(len(witness.SOURCE_PATHS), 4)
-        record = cleanup.read_record(ROOT)
+        record = cleanup.read_record(self.historical_root)
         for path in witness.SOURCE_PATHS:
-            current = (ROOT/path).read_bytes().decode('utf-8')
+            current = (self.historical_root/path).read_bytes().decode('utf-8')
             before = witness.predecessor_source(path, current)
             self.assertEqual(witness.observations(before), witness.observations(current))
             for group in ('native_witnesses', 'native_dependency_inputs'):
@@ -37,7 +44,7 @@ class WitnessFormatLeafControls(unittest.TestCase):
 
     def test_unknown_semantic_and_raw_endpoints_refuse(self):
         for path in witness.SOURCE_PATHS:
-            current = (ROOT/path).read_text()
+            current = (self.historical_root/path).read_text()
             old = witness.predecessor_source(path, current)
             for changed in (old, current+'\n# unreviewed\n', current.replace('\n', '\r\n'),
                             current.replace('assert_', 'unreviewed_assert_', 1)):
@@ -48,7 +55,7 @@ class WitnessFormatLeafControls(unittest.TestCase):
 
     def test_missing_duplicated_reordered_and_corrupt_inverse_refuse(self):
         for path in witness.SOURCE_PATHS:
-            current = (ROOT/path).read_text()
+            current = (self.historical_root/path).read_text()
             original = witness.EDITS[path]
             variants = [original[:-1], original+(original[-1],)]
             if len(original) > 1: variants.append(tuple(reversed(original)))
@@ -74,7 +81,7 @@ class WitnessFormatLeafControls(unittest.TestCase):
 
     def test_executed_leaf_functions_defaults_and_module_witness_are_bound(self):
         self.assertEqual(cleanup.executing_checker_bindings()[LEAF],
-                         hashlib.sha256((ROOT/LEAF).read_bytes()).hexdigest())
+                         hashlib.sha256((self.historical_root/LEAF).read_bytes()).hexdigest())
         with patch.object(witness, 'predecessor_source', lambda path, text: text):
             with self.assertRaisesRegex(ValueError, 'executing function changed'):
                 cleanup.executing_checker_bindings()
@@ -97,12 +104,20 @@ class WitnessFormatPhysicalControls(unittest.TestCase):
         for path in witness.SOURCE_PATHS:
             for group in ('native_witnesses', 'native_dependency_inputs'):
                 self.assertEqual(record[group][path], witness.BEFORE_SHA256[path])
-            self.assertEqual(bindings[path], witness.AFTER_SHA256[path])
+            if path in cleanup.typed_boundary.EDGES:
+                edge = cleanup.typed_boundary.edge(path)
+                self.assertEqual(edge['before_sha256'], witness.AFTER_SHA256[path])
+                self.assertEqual(bindings[path], edge['after_sha256'])
+            else:
+                self.assertEqual(bindings[path], witness.AFTER_SHA256[path])
         for path in self.paths:
             self.assertEqual(bindings[path], cleanup.sha((self.root/path).read_bytes()))
         self.assertEqual((self.root/cleanup.MIGRATION).read_bytes(), (ROOT/cleanup.MIGRATION).read_bytes())
 
     def test_historical_and_individually_formatted_witnesses_remain_exact(self):
+        # Formatting-only endpoints belong to the named historical graph.
+        # All other physical controls in this class retain the current root.
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         raw = {p: (self.root/p).read_bytes() for p in witness.SOURCE_PATHS}
         old = {p: witness.predecessor_source(p, value.decode()).encode() for p, value in raw.items()}
         for path, value in old.items(): (self.root/path).write_bytes(value)

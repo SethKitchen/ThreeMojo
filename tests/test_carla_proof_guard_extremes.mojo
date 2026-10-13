@@ -28,7 +28,9 @@ def test_inner_and_outer_width_sum_must_remain_guarded() raises:
         var road = _proof_road(arc)
         var outer = road.sections[0].add_lane(LaneId(-2))
         road.sections[0].lanes[outer].info.widths.append(
-            RoadInfoLaneWidth(0.0, CubicPolynomial.constant(largest))
+            RoadInfoLaneWidth._from_si(
+                0.0, CubicPolynomial._constant_si(largest)
+            )
         )
         var inner = road.sections[0].lane_index(LaneId(-1))
         road.sections[0].lanes[inner].info.widths[0].polynomial.a = largest

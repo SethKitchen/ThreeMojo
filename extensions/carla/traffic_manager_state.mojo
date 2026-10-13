@@ -49,7 +49,7 @@ from extensions.carla.traffic_manager_map import (
     InMemoryMap,
     SimpleWaypointIndex,
     WaypointId,
-    distance_squared,
+    _distance_squared_si as distance_squared,
 )
 from extensions.carla.transform import CarlaRotation
 from math.matrix_determinant import _sum_products
@@ -60,6 +60,12 @@ from units.si import Length, METER, Velocity
 
 # `std::numeric_limits<float>::max()`.
 comptime FLOAT_MAX = Float32(3.4028234663852886e38)
+
+
+def _check_actor_id(actor_id: ActorId) raises -> Int:
+    if not actor_id.is_valid():
+        raise Error("Actor id is not valid")
+    return actor_id.value
 
 
 def _sorted(var ids: List[Int]) -> List[Int]:
@@ -255,7 +261,9 @@ struct TrackTraffic(Movable):
                 self._grid_to_actors[grid] = [a]
         self._actor_to_grids[a] = grids^
 
-    def get_overlapping_vehicles(self, actor_id: ActorId) -> List[ActorId]:
+    def get_overlapping_vehicles(
+        self, actor_id: ActorId
+    ) raises -> List[ActorId]:
         """Return the actors whose paths share a grid with an actor's,
         `GetOverlappingVehicles`. The actor itself is among them.
 
@@ -264,7 +272,11 @@ struct TrackTraffic(Movable):
 
         Returns:
             The actors, by id.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor_id)
         var out = List[Int]()
         var grids = self._actor_to_grids.get(actor_id.value)
         if Bool(grids):
@@ -452,7 +464,7 @@ struct SimulationState(Movable):
         self._attributes[a] = attributes
         self._lights[a] = tl_state
 
-    def contains_actor(self, actor_id: ActorId) -> Bool:
+    def contains_actor(self, actor_id: ActorId) raises -> Bool:
         """Return True if an actor is tracked, `ContainsActor`.
 
         Args:
@@ -460,7 +472,11 @@ struct SimulationState(Movable):
 
         Returns:
             Whether it is.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor_id)
         return actor_id.value in self._actors
 
     def remove_actor(mut self, actor_id: ActorId) raises:
@@ -470,8 +486,9 @@ struct SimulationState(Movable):
             actor_id: The actor. An untracked one is ignored.
 
         Raises:
-            Error: Never; the records of an actor are kept together.
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor_id)
         var a = actor_id.value
         if a not in self._actors:
             return
@@ -488,6 +505,7 @@ struct SimulationState(Movable):
         self._lights = Dict[Int, TrafficLightInfo]()
 
     def _get(self, actor_id: ActorId) raises -> Int:
+        _ = _check_actor_id(actor_id)
         if actor_id.value not in self._actors:
             raise Error("The traffic manager does not track the actor")
         return actor_id.value
@@ -502,7 +520,7 @@ struct SimulationState(Movable):
             state: Its new motion.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         self._kinematic[self._get(actor_id)] = state
 
@@ -517,7 +535,7 @@ struct SimulationState(Movable):
             location: The point, in meters.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         self._kinematic[self._get(actor_id)].hybrid_end_location = location
 
@@ -536,7 +554,7 @@ struct SimulationState(Movable):
             state: Its new light.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         var a = self._get(actor_id)
         var previous = self._lights[a]
@@ -554,7 +572,7 @@ struct SimulationState(Movable):
             The record.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)]
 
@@ -568,7 +586,7 @@ struct SimulationState(Movable):
             The point, in meters.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].location
 
@@ -583,7 +601,7 @@ struct SimulationState(Movable):
             The point, in meters.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].hybrid_end_location
 
@@ -597,7 +615,7 @@ struct SimulationState(Movable):
             The rotation.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].rotation
 
@@ -611,7 +629,7 @@ struct SimulationState(Movable):
             The rotation's forward vector.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self.get_rotation(actor_id).forward_vector()
 
@@ -625,7 +643,7 @@ struct SimulationState(Movable):
             The velocity, in m/s.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].velocity
 
@@ -639,7 +657,7 @@ struct SimulationState(Movable):
             The limit.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].speed_limit
 
@@ -653,7 +671,7 @@ struct SimulationState(Movable):
             The flag.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].physics_enabled
 
@@ -667,7 +685,7 @@ struct SimulationState(Movable):
             The flag.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._kinematic[self._get(actor_id)].is_dormant
 
@@ -681,7 +699,7 @@ struct SimulationState(Movable):
             The record.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._lights[self._get(actor_id)]
 
@@ -695,7 +713,7 @@ struct SimulationState(Movable):
             Its type.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         return self._attributes[self._get(actor_id)].actor_type
 
@@ -709,7 +727,7 @@ struct SimulationState(Movable):
             The half length, width and height, in meters.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If the id is not valid or the actor is not tracked.
         """
         ref a = self._attributes[self._get(actor_id)]
         return Vector3(
@@ -778,8 +796,9 @@ def push_waypoint(
         waypoint: The node.
 
     Raises:
-        Error: If the node is not on the map or the id is not valid.
+        Error: If the actor id is not valid or the node is not on the map.
     """
+    _ = _check_actor_id(actor_id)
     var id = map.at(waypoint).id
     buffer.append(waypoint)
     track_traffic.update_passing_vehicle(id, actor_id)
@@ -803,8 +822,9 @@ def pop_waypoint(
         front: True for the nearest node, False for the farthest.
 
     Raises:
-        Error: If the path is empty.
+        Error: If an actor id is not valid, or the path is empty.
     """
+    _ = _check_actor_id(actor_id)
     if len(buffer) == 0:
         raise Error("A waypoint buffer is empty")
     var removed = buffer.pop(0) if front else buffer.pop()

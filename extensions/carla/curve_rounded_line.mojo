@@ -19,7 +19,7 @@ from extensions.carla.curve_rounded_arc import (
 from extensions.carla.curve_trig import _curve_cos, _curve_sin
 from extensions.carla.geometry import LINE
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 
 
 @fieldwise_init

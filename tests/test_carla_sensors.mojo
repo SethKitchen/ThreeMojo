@@ -124,15 +124,15 @@ from extensions.carla.sensor_data import (
     ByteWriter,
     IMU_SENSOR,
     SensorType,
-    dvs_data,
+    dvs_data_degrees as dvs_data,
     gnss_data,
-    image_data,
+    image_data_carla as image_data,
     imu_data,
     lidar_data,
-    optical_flow_data,
+    optical_flow_data_degrees as optical_flow_data,
     radar_data,
     semantic_lidar_data,
-    sensor_header,
+    sensor_header_seconds as sensor_header,
     static_actor_id,
     v2x_cam_data,
     v2x_custom_data,
@@ -195,7 +195,7 @@ from extensions.carla.v2x import (
     WINNER,
     custom_message,
     round_half_away,
-    speed_value,
+    speed_value_meters_per_second,
     station_type_of,
     vehicle_role_of,
 )
@@ -843,10 +843,14 @@ def test_camera_models() raises:
     assert_almost_equal(
         compute_angle(KANNALA_BRANDT, 0.7, none).value, 0.7, atol=1e-6
     )
-    assert_equal(kannala_brandt_derivative(0.3, none), 1)
+    assert_equal(kannala_brandt_derivative(Angle(0.3, RADIAN), none), 1)
     var two: List[Float32] = [0.1, 0.2]
-    assert_almost_equal(kannala_brandt_polynomial(0.5, two), 0.51875, atol=1e-6)
-    assert_almost_equal(kannala_brandt_derivative(0.5, two), 1.1375, atol=1e-6)
+    assert_almost_equal(
+        kannala_brandt_polynomial(Angle(0.5, RADIAN), two), 0.51875, atol=1e-6
+    )
+    assert_almost_equal(
+        kannala_brandt_derivative(Angle(0.5, RADIAN), two), 1.1375, atol=1e-6
+    )
 
 
 def test_wide_angle_lens_rays() raises:
@@ -1372,30 +1376,36 @@ def test_path_loss_formulas() raises:
     assert_almost_equal(model.wavelength, 0.0508122801956209, atol=1e-12)
     assert_almost_equal(model.fspl_d0, 47.86482238769531, atol=1e-4)
     assert_almost_equal(
-        model.winner(NLOS_BUILDING, 100), 111.41909790039062, atol=1e-4
+        model.winner_meters(NLOS_BUILDING, 100), 111.41909790039062, atol=1e-4
     )
-    assert_almost_equal(model.winner(LOS, 100), 86.19950866699219, atol=1e-4)
+    assert_almost_equal(
+        model.winner_meters(LOS, 100), 86.19950866699219, atol=1e-4
+    )
     model.params.scenario = RURAL
     assert_almost_equal(
-        model.winner(NLOS_VEHICLE, 100), 86.19950866699219, atol=1e-4
+        model.winner_meters(NLOS_VEHICLE, 100), 86.19950866699219, atol=1e-4
     )
     model.params.scenario = HIGHWAY
-    assert_almost_equal(model.winner(LOS, 100), 87.8170394897461, atol=1e-4)
+    assert_almost_equal(
+        model.winner_meters(LOS, 100), 87.8170394897461, atol=1e-4
+    )
     with assert_raises(contains="LOS, NLOSb or NLOSv"):
-        _ = model.winner(PathState(5), 100)
+        _ = model.winner_meters(PathState(5), 100)
     assert_almost_equal(
-        model.two_ray(20, 1.5, 1.5), 72.78307333462539, atol=1e-9
-    )
-    assert_almost_equal(model.two_ray(20, 2, 1), 75.13185685336987, atol=1e-9)
-    assert_almost_equal(
-        model.two_ray_simple(1000, 2, 1), 113.97940063476562, atol=1e-4
+        model.two_ray_meters(20, 1.5, 1.5), 72.78307333462539, atol=1e-9
     )
     assert_almost_equal(
-        model.vehicle_loss(10, 10, 1), 21.848760113014812, atol=1e-9
+        model.two_ray_meters(20, 2, 1), 75.13185685336987, atol=1e-9
     )
-    assert_equal(model.vehicle_loss(10, 10, -1), 0)
     assert_almost_equal(
-        model.vehicle_loss(10, 10, -0.01), 5.790726349100767, atol=1e-9
+        model.two_ray_simple_meters(1000, 2, 1), 113.97940063476562, atol=1e-4
+    )
+    assert_almost_equal(
+        model.vehicle_loss_meters(10, 10, 1), 21.848760113014812, atol=1e-9
+    )
+    assert_equal(model.vehicle_loss_meters(10, 10, -1), 0)
+    assert_almost_equal(
+        model.vehicle_loss_meters(10, 10, -0.01), 5.790726349100767, atol=1e-9
     )
     var obstacles: List[Vector3] = [Vector3(5, 0, 0.5), Vector3(10, 0, 1.0)]
     assert_almost_equal(
@@ -1454,29 +1464,29 @@ def test_link_loss_and_power() raises:
     # Urban geometric: the two-ray loss, then the log-distance loss, each
     # with a draw of the ETSI fading.
     assert_almost_equal(
-        model.loss(LOS, a, b, 20, 1.5, 1.5, obstacles, rng),
+        model.loss_meters(LOS, a, b, 20, 1.5, 1.5, obstacles, rng),
         72.78307342529297 - 1.87104273,
         atol=1e-4,
     )
     assert_almost_equal(
-        model.loss(NLOS_BUILDING, a, b, 20, 1.5, 1.5, obstacles, rng),
+        model.loss_meters(NLOS_BUILDING, a, b, 20, 1.5, 1.5, obstacles, rng),
         82.99263000488281 + 6.88598442,
         atol=1e-4,
     )
     model.params.use_etsi_fading = False
     assert_almost_equal(
-        model.loss(NLOS_VEHICLE, a, b, 20, 1.5, 1.5, obstacles, rng),
+        model.loss_meters(NLOS_VEHICLE, a, b, 20, 1.5, 1.5, obstacles, rng),
         95.73418426513672,
         atol=1e-4,
     )
     model.params.model = WINNER
     assert_almost_equal(
-        model.loss(NLOS_VEHICLE, a, b, 20, 1.5, 1.5, obstacles, rng),
+        model.loss_meters(NLOS_VEHICLE, a, b, 20, 1.5, 1.5, obstacles, rng),
         96.37547302246094,
         atol=1e-4,
     )
     assert_almost_equal(
-        model.loss(LOS, a, b, 100, 1.5, 1.5, obstacles, rng),
+        model.loss_meters(LOS, a, b, 100, 1.5, 1.5, obstacles, rng),
         86.19950866699219,
         atol=1e-4,
     )
@@ -1485,11 +1495,11 @@ def test_link_loss_and_power() raises:
 
 
 def test_cam_helpers() raises:
-    assert_equal(speed_value(200), 16382)
-    assert_equal(speed_value(163.82), 16382)
-    assert_equal(speed_value(12.5), 1250)
-    assert_equal(speed_value(0), 0)
-    assert_equal(speed_value(-1), 16383)
+    assert_equal(speed_value_meters_per_second(200), 16382)
+    assert_equal(speed_value_meters_per_second(163.82), 16382)
+    assert_equal(speed_value_meters_per_second(12.5), 1250)
+    assert_equal(speed_value_meters_per_second(0), 0)
+    assert_equal(speed_value_meters_per_second(-1), 16383)
     assert_equal(round_half_away(2.5), 3)
     assert_equal(round_half_away(-2.5), -3)
     assert_equal(round_half_away(-2.4), -2)
@@ -1605,7 +1615,7 @@ def test_point_cloud_bytes() raises:
         _hex(
             radar_data(
                 [
-                    RadarDetection(
+                    RadarDetection.from_si(
                         -1.5,
                         Angle(0.25, RADIAN),
                         Angle(-0.125, RADIAN),
@@ -1632,7 +1642,7 @@ def test_message_pack_bytes() raises:
         "9393ca3f800000ca40000000ca4040000093ca3f000000ca3e800000ca3e000000ca3fc00000",
     )
     assert_equal(
-        _hex(gnss_data(GeoLocation(49.0, 8.0, 12.5))),
+        _hex(gnss_data(GeoLocation.from_degrees_meters(49.0, 8.0, 12.5))),
         "93cb4048800000000000cb4020000000000000cb4029000000000000",
     )
     var w = ByteWriter()

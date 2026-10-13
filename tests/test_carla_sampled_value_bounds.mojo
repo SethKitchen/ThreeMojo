@@ -130,7 +130,9 @@ def test_sampled_value_keeps_scale_signed_zero_and_branch_bounds() raises:
                 _equal_value(full[2], value[2])
     for horizontal in [-1.0, 0.0, 1.0]:
         for vertical in [-2.0, -0.0, 0.0, 2.0]:
-            var geometry = RoadGeometry(PARAM_POLY3, 0, 1e6, -1e6, 0.3, 1)
+            var geometry = RoadGeometry.from_meters(
+                PARAM_POLY3, 0, 1e6, -1e6, 0.3, 1
+            )
             geometry.samples.append(_Sample(0, 0, 0, horizontal, vertical))
             geometry.samples.append(_Sample(1, 1, 1, -horizontal, -vertical))
             for i in range(4):

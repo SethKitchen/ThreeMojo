@@ -26,7 +26,7 @@ from extensions.carla.traffic_manager_collision import (
     CollisionStage,
     GeometryComparison,
     collision_yields,
-    polygon_distance,
+    polygon_distance_meters as polygon_distance,
 )
 from extensions.carla.traffic_manager_localization import (
     LocalizationStage,
@@ -141,7 +141,7 @@ def _localize(
         stage.update(i, shared)
 
 
-def _indices(shared: TrafficManagerShared, id: Int) -> List[Int]:
+def _indices(shared: TrafficManagerShared, id: Int) raises -> List[Int]:
     var out = List[Int]()
     for w in shared.buffer(ActorId(id)):
         out.append(w.value)
@@ -469,7 +469,7 @@ def test_a_loop_stops_the_path() raises:
 
 
 def Waypoint_at(road: Int, lane: Int, s: Float64) -> Waypoint:
-    return Waypoint(RoadId(road), SectionId(0), LaneId(lane), s)
+    return Waypoint._from_si(RoadId(road), SectionId(0), LaneId(lane), s)
 
 
 def test_junction_entrance_and_safe_point() raises:
@@ -754,7 +754,7 @@ def test_collision_yields_to_the_vehicle_ahead() raises:
     var lock = stage.collision_locks[1]
     assert_almost_equal(lock.distance_to_lead_vehicle, 5.2, atol=1e-4)
     # With the lock: the boundary reaches 5.2 + 4 m.
-    _near(stage.get_bounding_box_extension(ActorId(1), shared), 9.2)
+    _near(stage.get_bounding_box_extension_meters(ActorId(1), shared), 9.2)
     # The same pair again this step reads the cache, swapped: from the
     # other's body (inside the ego's boundary) to the ego's boundary, 0.
     var g = stage.get_geometry_between_actors(ActorId(2), ActorId(1), shared)
@@ -958,7 +958,10 @@ def test_collision_lock_changes_lead() raises:
     stage.clear_cycle_cache()
     # A lock 10 m past its start no longer stretches the boundary.
     stage.collision_locks[1] = CollisionLock(20.0, 1.0, ActorId(2))
-    _near(stage.get_bounding_box_extension(ActorId(1), shared), 2.5 + 1.8 * 1.8)
+    _near(
+        stage.get_bounding_box_extension_meters(ActorId(1), shared),
+        2.5 + 1.8 * 1.8,
+    )
     # The same lead, 15.2 m ahead. The lock stretches the ego's boundary
     # to 15 + 4 m, over the lead's body, so the lock takes the gap between
     # the boxes.
@@ -1294,7 +1297,7 @@ def test_collision_edge_cases() raises:
     _put(bare, 1, 50, 1.75, 0, 5)
     _put(bare, 2, 58, 1.75, 0, 0)
     with assert_raises(contains="no path"):
-        _ = stage2.negotiate_collision(ActorId(1), ActorId(2), 0, bare)
+        _ = stage2.negotiate_collision_meters(ActorId(1), ActorId(2), 0, bare)
     # Polygons with no corners on one side are infinitely far apart.
     var square: List[Vector3] = [
         Vector3(0, 0, 0),
@@ -1315,7 +1318,9 @@ def test_collision_lock_on_a_clear_path() raises:
     var stage = CollisionStage()
     stage.collision_locks[1] = CollisionLock(9.0, 9.0, ActorId(2))
     stage.geometry_cache[(1 << 32) | 2] = GeometryComparison(3.0, 2.0, 0.0, 1.0)
-    var result = stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)
+    var result = stage.negotiate_collision_meters(
+        ActorId(1), ActorId(2), 0, shared
+    )
     assert_true(result[0])
     _near(result[1], 1.0)
     assert_equal(stage.collision_locks[1].distance_to_lead_vehicle, 3.0)
@@ -1360,7 +1365,7 @@ def test_collision_entrance_light_metadata_and_cross_range() raises:
             TrafficLightInfo(GREEN if associated else RED, associated),
         )
         var stage = CollisionStage()
-        var result = stage.negotiate_collision(
+        var result = stage.negotiate_collision_meters(
             ActorId(1), ActorId(2), 1, shared
         )
         assert_true(result[0])
@@ -1372,7 +1377,7 @@ def test_collision_entrance_light_metadata_and_cross_range() raises:
     var stage = CollisionStage()
     stage.collision_locks[1] = CollisionLock(1.0, 1.0, ActorId(2))
     assert_false(
-        stage.negotiate_collision(ActorId(1), ActorId(2), 0, distant)[0]
+        stage.negotiate_collision_meters(ActorId(1), ActorId(2), 0, distant)[0]
     )
     assert_false(1 in stage.collision_locks)
 
@@ -1427,7 +1432,7 @@ def test_collision_ignores_far_target_outside_a_junction() raises:
     var shared = _setup_follow(map, 50, 200, 5)
     var stage = CollisionStage()
     assert_false(
-        stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)[0]
+        stage.negotiate_collision_meters(ActorId(1), ActorId(2), 0, shared)[0]
     )
 
 
@@ -1447,7 +1452,7 @@ def test_parallel_lane_negotiation_releases_stale_collision_lock() raises:
     )
     assert_true(geometry.inter_geodesic_distance > 0.1)
     assert_false(
-        stage.negotiate_collision(ActorId(1), ActorId(2), 0, shared)[0]
+        stage.negotiate_collision_meters(ActorId(1), ActorId(2), 0, shared)[0]
     )
     assert_false(1 in stage.collision_locks)
 

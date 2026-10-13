@@ -64,10 +64,10 @@ def test_minimizer_cap_bypasses_unresolved_spiral_work_without_budget_reset() ra
 
 def test_minimizer_cap_still_checks_the_returned_sample() raises:
     var road = _road()
-    road.sections[0].lanes[0].info.widths[0].polynomial = CubicPolynomial(
-        1.0, 2.0, 0.0, 0.0, 0.0
-    )
-    road.info.lane_offsets[0].polynomial = CubicPolynomial(
+    road.sections[0].lanes[0].info.widths[
+        0
+    ].polynomial = CubicPolynomial._from_coefficients(1.0, 2.0, 0.0, 0.0, 0.0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._from_coefficients(
         0.5, 1.0, 0.0, 0.0, 0.0
     )
     # Center=(s,0,0). Returned s=0 is outside its width1; the exact
@@ -87,7 +87,7 @@ def test_minimizer_cap_still_checks_the_returned_sample() raises:
 def test_nonfinite_width_enclosure_cannot_use_minimizer_cap() raises:
     var road = _road()
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(2.0, CubicPolynomial.constant(4.0))
+        RoadInfoLaneWidth._from_si(2.0, CubicPolynomial._constant_si(4.0))
     )
     var certificate = _bounded([0.5, 0.0, 0.0], 0.0, 0.01, low=0.0, high=4.0)
     with assert_raises(contains="finite width enclosure"):

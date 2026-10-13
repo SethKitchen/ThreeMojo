@@ -31,7 +31,7 @@ def _node(mut graph: GlobalRoutePlanner, x: Float64, y: Float64 = 0) -> Int:
 
 
 def _link(mut graph: GlobalRoutePlanner, a: Int, b: Int, cost: Int) raises:
-    var w = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 0.0)
+    var w = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 0.0)
     var edge = graph._add_edge(a, b, w, w)
     graph._edges[edge].length = cost
 

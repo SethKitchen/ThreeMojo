@@ -5,7 +5,7 @@
 
 """A sensor header's type must be a `SensorType`, not a bare integer."""
 
-from extensions.carla.sensor_data import sensor_header
+from extensions.carla.sensor_data import sensor_header_seconds as sensor_header
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from units.si import DEGREE, METER, Angle, Length
 

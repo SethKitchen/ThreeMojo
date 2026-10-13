@@ -808,7 +808,7 @@ struct Parameters(Movable):
         """
         return self._synchronous_time_out
 
-    def has_desired_speed(self, actor: ActorId) -> Bool:
+    def has_desired_speed(self, actor: ActorId) raises -> Bool:
         """Return True if a vehicle has an exact desired speed.
 
         Args:
@@ -816,8 +816,11 @@ struct Parameters(Movable):
 
         Returns:
             Whether `set_desired_speed` set one.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
-        return actor.value in self._exact_desired_speed
+        return _check(actor) in self._exact_desired_speed
 
     def get_vehicle_target_velocity(
         self, actor: ActorId, speed_limit: Velocity
@@ -833,9 +836,9 @@ struct Parameters(Movable):
             speed difference (or the global one) over 100.
 
         Raises:
-            Error: Never; the lookups are checked.
+            Error: If an actor id is not valid.
         """
-        var a = actor.value
+        var a = _check(actor)
         var difference = self._global_percentage_difference
         if a in self._percentage_difference:
             difference = self._percentage_difference[a]
@@ -845,7 +848,7 @@ struct Parameters(Movable):
             speed_limit.value * (Float32(1.0) - difference / Float32(100.0))
         )
 
-    def get_lane_offset(self, actor: ActorId) -> Length:
+    def get_lane_offset(self, actor: ActorId) raises -> Length:
         """Return a vehicle's lane offset, `GetLaneOffset`.
 
         Args:
@@ -853,10 +856,13 @@ struct Parameters(Movable):
 
         Returns:
             Its offset, or the global one.
-        """
-        return self._lane_offset.get(actor.value, self._global_lane_offset)
 
-    def get_large_vehicle_wide_turn(self, actor: ActorId) -> Bool:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._lane_offset.get(_check(actor), self._global_lane_offset)
+
+    def get_large_vehicle_wide_turn(self, actor: ActorId) raises -> Bool:
         """Return whether a large vehicle turns wide,
         `GetLargeVehicleWideTurn`.
 
@@ -865,14 +871,17 @@ struct Parameters(Movable):
 
         Returns:
             Its flag, or the global one.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
         return self._large_vehicle_wide_turn.get(
-            actor.value, self._global_large_vehicle_wide_turn
+            _check(actor), self._global_large_vehicle_wide_turn
         )
 
     def get_collision_detection(
         self, reference_actor: ActorId, other_actor: ActorId
-    ) -> Bool:
+    ) raises -> Bool:
         """Return whether a vehicle avoids another,
         `GetCollisionDetection`.
 
@@ -882,13 +891,20 @@ struct Parameters(Movable):
 
         Returns:
             False if the vehicle ignores it.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
-        var found = self._ignore_collision.get(reference_actor.value)
-        if Bool(found) and other_actor.value in found.value():
+        var r = _check(reference_actor)
+        var o = _check(other_actor)
+        var found = self._ignore_collision.get(r)
+        if Bool(found) and o in found.value():
             return False
         return True
 
-    def get_force_lane_change(mut self, actor: ActorId) -> ChangeLaneInfo:
+    def get_force_lane_change(
+        mut self, actor: ActorId
+    ) raises -> ChangeLaneInfo:
         """Return and clear a vehicle's forced lane change,
         `GetForceLaneChange`.
 
@@ -897,12 +913,15 @@ struct Parameters(Movable):
 
         Returns:
             The order, or none.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
         return self._force_lane_change.pop(
-            actor.value, ChangeLaneInfo(False, False)
+            _check(actor), ChangeLaneInfo(False, False)
         )
 
-    def get_keep_slow_lane_percentage(self, actor: ActorId) -> Float32:
+    def get_keep_slow_lane_percentage(self, actor: ActorId) raises -> Float32:
         """Return the chance a vehicle keeps to the slow lane,
         `GetKeepSlowLanePercentage`.
 
@@ -911,10 +930,15 @@ struct Parameters(Movable):
 
         Returns:
             The chance, or -1 when unset.
-        """
-        return self._perc_keep_slow_lane.get(actor.value, Float32(-1.0))
 
-    def get_random_left_lane_change_percentage(self, actor: ActorId) -> Float32:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._perc_keep_slow_lane.get(_check(actor), Float32(-1.0))
+
+    def get_random_left_lane_change_percentage(
+        self, actor: ActorId
+    ) raises -> Float32:
         """Return the chance of a random left lane change,
         `GetRandomLeftLaneChangePercentage`.
 
@@ -923,12 +947,15 @@ struct Parameters(Movable):
 
         Returns:
             The chance, or -1 when unset.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
-        return self._perc_random_left.get(actor.value, Float32(-1.0))
+        return self._perc_random_left.get(_check(actor), Float32(-1.0))
 
     def get_random_right_lane_change_percentage(
         self, actor: ActorId
-    ) -> Float32:
+    ) raises -> Float32:
         """Return the chance of a random right lane change,
         `GetRandomRightLaneChangePercentage`.
 
@@ -937,10 +964,13 @@ struct Parameters(Movable):
 
         Returns:
             The chance, or -1 when unset.
-        """
-        return self._perc_random_right.get(actor.value, Float32(-1.0))
 
-    def get_auto_lane_change(self, actor: ActorId) -> Bool:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._perc_random_right.get(_check(actor), Float32(-1.0))
+
+    def get_auto_lane_change(self, actor: ActorId) raises -> Bool:
         """Return whether a vehicle changes lanes on its own,
         `GetAutoLaneChange`.
 
@@ -949,10 +979,13 @@ struct Parameters(Movable):
 
         Returns:
             Its flag; True when unset.
-        """
-        return self._auto_lane_change.get(actor.value, True)
 
-    def get_distance_to_leading_vehicle(self, actor: ActorId) -> Length:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._auto_lane_change.get(_check(actor), True)
+
+    def get_distance_to_leading_vehicle(self, actor: ActorId) raises -> Length:
         """Return the gap a vehicle keeps, `GetDistanceToLeadingVehicle`.
 
         Args:
@@ -960,12 +993,15 @@ struct Parameters(Movable):
 
         Returns:
             Its gap, or the global one.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
         return self._distance_to_leading_vehicle.get(
-            actor.value, self._distance_margin
+            _check(actor), self._distance_margin
         )
 
-    def get_percentage_running_sign(self, actor: ActorId) -> Float32:
+    def get_percentage_running_sign(self, actor: ActorId) raises -> Float32:
         """Return the chance a vehicle runs a sign,
         `GetPercentageRunningSign`.
 
@@ -974,10 +1010,13 @@ struct Parameters(Movable):
 
         Returns:
             The chance; 0 when unset.
-        """
-        return self._perc_run_traffic_sign.get(actor.value, Float32(0.0))
 
-    def get_percentage_running_light(self, actor: ActorId) -> Float32:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._perc_run_traffic_sign.get(_check(actor), Float32(0.0))
+
+    def get_percentage_running_light(self, actor: ActorId) raises -> Float32:
         """Return the chance a vehicle runs a light,
         `GetPercentageRunningLight`.
 
@@ -986,10 +1025,13 @@ struct Parameters(Movable):
 
         Returns:
             The chance; 0 when unset.
-        """
-        return self._perc_run_traffic_light.get(actor.value, Float32(0.0))
 
-    def get_percentage_ignore_vehicles(self, actor: ActorId) -> Float32:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._perc_run_traffic_light.get(_check(actor), Float32(0.0))
+
+    def get_percentage_ignore_vehicles(self, actor: ActorId) raises -> Float32:
         """Return the chance a vehicle ignores a vehicle,
         `GetPercentageIgnoreVehicles`.
 
@@ -998,10 +1040,13 @@ struct Parameters(Movable):
 
         Returns:
             The chance; 0 when unset.
-        """
-        return self._perc_ignore_vehicles.get(actor.value, Float32(0.0))
 
-    def get_percentage_ignore_walkers(self, actor: ActorId) -> Float32:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._perc_ignore_vehicles.get(_check(actor), Float32(0.0))
+
+    def get_percentage_ignore_walkers(self, actor: ActorId) raises -> Float32:
         """Return the chance a vehicle ignores a walker,
         `GetPercentageIgnoreWalkers`.
 
@@ -1010,10 +1055,13 @@ struct Parameters(Movable):
 
         Returns:
             The chance; 0 when unset.
-        """
-        return self._perc_ignore_walkers.get(actor.value, Float32(0.0))
 
-    def get_update_vehicle_lights(self, actor: ActorId) -> Bool:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._perc_ignore_walkers.get(_check(actor), Float32(0.0))
+
+    def get_update_vehicle_lights(self, actor: ActorId) raises -> Bool:
         """Return whether the traffic manager switches a vehicle's lights,
         `GetUpdateVehicleLights`.
 
@@ -1022,8 +1070,11 @@ struct Parameters(Movable):
 
         Returns:
             Its flag; False when unset.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
-        return self._auto_update_vehicle_lights.get(actor.value, False)
+        return self._auto_update_vehicle_lights.get(_check(actor), False)
 
     def get_hybrid_physics_mode(self) -> Bool:
         """Return whether hybrid physics is on, `GetHybridPhysicsMode`.
@@ -1068,7 +1119,7 @@ struct Parameters(Movable):
         """
         return self._osm_mode
 
-    def get_upload_path(self, actor: ActorId) -> Bool:
+    def get_upload_path(self, actor: ActorId) raises -> Bool:
         """Return whether a vehicle's path drops its buffer,
         `GetUploadPath`.
 
@@ -1077,10 +1128,13 @@ struct Parameters(Movable):
 
         Returns:
             The flag; False when unset.
-        """
-        return self._upload_path.get(actor.value, False)
 
-    def get_custom_path(self, actor: ActorId) -> List[Vector3]:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._upload_path.get(_check(actor), False)
+
+    def get_custom_path(self, actor: ActorId) raises -> List[Vector3]:
         """Return a vehicle's points, `GetCustomPath`.
 
         Args:
@@ -1088,10 +1142,13 @@ struct Parameters(Movable):
 
         Returns:
             The points; none when unset.
-        """
-        return self._custom_path.get(actor.value, List[Vector3]())
 
-    def get_upload_route(self, actor: ActorId) -> Bool:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._custom_path.get(_check(actor), List[Vector3]())
+
+    def get_upload_route(self, actor: ActorId) raises -> Bool:
         """Return whether a vehicle's route drops its buffer,
         `GetUploadRoute`.
 
@@ -1100,10 +1157,13 @@ struct Parameters(Movable):
 
         Returns:
             The flag; False when unset.
-        """
-        return self._upload_route.get(actor.value, False)
 
-    def get_imported_route(self, actor: ActorId) -> List[RoadOption]:
+        Raises:
+            Error: If an actor id is not valid.
+        """
+        return self._upload_route.get(_check(actor), False)
+
+    def get_imported_route(self, actor: ActorId) raises -> List[RoadOption]:
         """Return a vehicle's route, `GetImportedRoute`.
 
         Args:
@@ -1111,5 +1171,8 @@ struct Parameters(Movable):
 
         Returns:
             The road options; none when unset.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
-        return self._custom_route.get(actor.value, List[RoadOption]())
+        return self._custom_route.get(_check(actor), List[RoadOption]())

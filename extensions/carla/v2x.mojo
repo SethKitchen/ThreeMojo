@@ -64,6 +64,11 @@ from extensions.carla.actor import (
 )
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.geo import GeoProjection
+from extensions.carla.quantity_boundary import (
+    _finite_si,
+    _positive_si,
+    _nonnegative_si,
+)
 from extensions.carla.imu import (
     Accelerometer,
     compass,
@@ -118,6 +123,13 @@ from std.math import (
 from units.si import (
     RADIAN,
     Acceleration,
+    Angle,
+    AngularVelocity,
+    Frequency,
+    Frequency64,
+    Length64,
+    Velocity,
+    DEGREE,
     Duration,
     Length,
     METER,
@@ -233,6 +245,36 @@ struct PropagationParams(ImplicitlyCopyable):
         self.custom_fading_stddev = 0
         self.scenario = URBAN
         self.model = GEOMETRIC
+
+    def carrier_frequency(self) raises -> Frequency:
+        """Return the checked radio frequency.
+
+        Returns:
+            The frequency in Float32 hertz.
+
+        Raises:
+            Error: If the raw or converted value is nonfinite or not positive.
+        """
+        validate_sensor_positive(self.frequency_ghz, "frequency_ghz")
+        var hertz = self.frequency_ghz * Float32(1e9)
+        validate_sensor_positive(hertz, "frequency hertz")
+        return Frequency(hertz)
+
+    def set_carrier_frequency(mut self, frequency: Frequency) raises:
+        """Set the frequency after checking the hertz-to-GHz conversion.
+
+        The raw GHz field is updated after validation.
+
+        Args:
+            frequency: The positive Float32 carrier frequency.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        validate_sensor_positive(frequency.value, "frequency hertz")
+        var ghz = frequency.value / Float32(1e9)
+        validate_sensor_positive(ghz, "frequency_ghz")
+        self.frequency_ghz = ghz
 
     def validate(self) raises:
         """Reject nonfinite physical settings and invalid domains.
@@ -362,7 +404,276 @@ struct PathLossModel(ImplicitlyCopyable):
             + 20.0 * log10(4.0 * pi / SPEED_OF_LIGHT)
         )
 
-    def winner(self, state: PathState, distance: Float64) raises -> Float32:
+    def winner(self, state: PathState, distance: Length64) raises -> Float32:
+        """Compute the winner loss from quantities.
+
+        Args:
+            state: The path state.
+            distance: The positive distance.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return self.winner_meters(state, distance.value)
+
+    def winner_meters(
+        self, state: PathState, distance: Float64
+    ) raises -> Float32:
+        """Compute the winner loss in explicit meter units.
+
+        Args:
+            state: The path state.
+            distance: The positive distance.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        _ = _positive_si(distance)
+        _ = self.wavelength_length()
+        var result = self._winner_meters(state, distance)
+        _ = _finite_si(Float64(result))
+        return result
+
+    def two_ray(
+        self, distance: Length64, tx: Length64, rx: Length64
+    ) raises -> Float64:
+        """Compute the two ray loss from quantities.
+
+        Args:
+            distance: The line-of-sight distance.
+            tx: The nonnegative sender height.
+            rx: The nonnegative receiver height.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return self.two_ray_meters(distance.value, tx.value, rx.value)
+
+    def two_ray_meters(
+        self, distance: Float64, tx: Float64, rx: Float64
+    ) raises -> Float64:
+        """Compute the two ray loss in explicit meter units.
+
+        Args:
+            distance: The line-of-sight distance.
+            tx: The nonnegative sender height.
+            rx: The nonnegative receiver height.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        _ = _positive_si(distance)
+        _ = _nonnegative_si(tx)
+        _ = _nonnegative_si(rx)
+        if distance <= abs(tx - rx):
+            raise Error("The link must have a positive ground distance")
+        _ = self.wavelength_length()
+        var result = self._two_ray_meters(distance, tx, rx)
+        _ = _finite_si(Float64(result))
+        return result
+
+    def two_ray_simple(
+        self, distance: Length64, tx: Length64, rx: Length64
+    ) raises -> Float32:
+        """Compute the two ray simple loss from quantities.
+
+        Args:
+            distance: The positive distance.
+            tx: The positive sender height.
+            rx: The positive receiver height.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return self.two_ray_simple_meters(distance.value, tx.value, rx.value)
+
+    def two_ray_simple_meters(
+        self, distance: Float64, tx: Float64, rx: Float64
+    ) raises -> Float32:
+        """Compute the two ray simple loss in explicit meter units.
+
+        Args:
+            distance: The positive distance.
+            tx: The positive sender height.
+            rx: The positive receiver height.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        _ = _positive_si(distance)
+        _ = _positive_si(tx)
+        _ = _positive_si(rx)
+        _ = self.wavelength_length()
+        var result = self._two_ray_simple_meters(distance, tx, rx)
+        _ = _finite_si(Float64(result))
+        return result
+
+    def vehicle_loss(
+        self, d1: Length64, d2: Length64, h: Length64
+    ) raises -> Float64:
+        """Compute the vehicle loss loss from quantities.
+
+        Args:
+            d1: The positive sender-to-edge distance.
+            d2: The positive edge-to-receiver distance.
+            h: The signed edge height.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return self.vehicle_loss_meters(d1.value, d2.value, h.value)
+
+    def vehicle_loss_meters(
+        self, d1: Float64, d2: Float64, h: Float64
+    ) raises -> Float64:
+        """Compute the vehicle loss loss in explicit meter units.
+
+        Args:
+            d1: The positive sender-to-edge distance.
+            d2: The positive edge-to-receiver distance.
+            h: The signed edge height.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        _ = _positive_si(d1)
+        _ = _positive_si(d2)
+        _ = _finite_si(h)
+        _ = self.wavelength_length()
+        var result = self._vehicle_loss_meters(d1, d2, h)
+        _ = _finite_si(Float64(result))
+        return result
+
+    def loss(
+        self,
+        state: PathState,
+        source: Vector3,
+        destination: Vector3,
+        distance: Length64,
+        tx: Length64,
+        rx: Length64,
+        obstacles: List[Vector3],
+        mut rng: SensorRandom,
+    ) raises -> Float32:
+        """Compute one link loss with checked dimensional input.
+
+        Args:
+            state: The path state.
+            source: The receiver in CARLA meters.
+            destination: The sender in CARLA meters.
+            distance: The positive link distance.
+            tx: The nonnegative receiver height.
+            rx: The nonnegative sender height.
+            obstacles: The raw CARLA meter-coordinate knife edges.
+            rng: The fading random engine.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return self.loss_meters(
+            state,
+            source,
+            destination,
+            distance.value,
+            tx.value,
+            rx.value,
+            obstacles,
+            rng,
+        )
+
+    def loss_meters(
+        self,
+        state: PathState,
+        source: Vector3,
+        destination: Vector3,
+        distance: Float64,
+        tx: Float64,
+        rx: Float64,
+        obstacles: List[Vector3],
+        mut rng: SensorRandom,
+    ) raises -> Float32:
+        """Compute one link loss with checked dimensional input.
+
+        Args:
+            state: The path state.
+            source: The receiver in CARLA meters.
+            destination: The sender in CARLA meters.
+            distance: The positive link distance.
+            tx: The nonnegative receiver height.
+            rx: The nonnegative sender height.
+            obstacles: The raw CARLA meter-coordinate knife edges.
+            rng: The fading random engine.
+
+        Returns:
+            The loss in dB.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        _ = _positive_si(distance)
+        _ = _nonnegative_si(tx)
+        _ = _nonnegative_si(rx)
+        _ = self.wavelength_length()
+        var trial_rng = rng.copy()
+        var result = self._loss_meters(
+            state, source, destination, distance, tx, rx, obstacles, trial_rng
+        )
+        _ = _finite_si(Float64(result))
+        rng = trial_rng^
+        return result
+
+    def wavelength_length(self) raises -> Length64:
+        """Return the checked stored radio wavelength.
+
+        Returns:
+            The positive wavelength with Float64 storage.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return Length64(_positive_si(self.wavelength))
+
+    def carrier_frequency(self) raises -> Frequency64:
+        """Return the checked stored carrier frequency.
+
+        Returns:
+            The positive hertz frequency with Float64 storage.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        return Frequency64(_positive_si(self.frequency))
+
+    def _winner_meters(
+        self, state: PathState, distance: Float64
+    ) raises -> Float32:
         """Return the WINNER+ loss, `CalculatePathLoss_WINNER`.
 
         Args:
@@ -394,7 +705,9 @@ struct PathLossModel(ImplicitlyCopyable):
             + Float64(Float32(18.2)) * log10(f)
         )
 
-    def two_ray(self, distance: Float64, tx: Float64, rx: Float64) -> Float64:
+    def _two_ray_meters(
+        self, distance: Float64, tx: Float64, rx: Float64
+    ) -> Float64:
         """Return the full two-ray ground reflection loss,
         `CalculateTwoRayPathLoss`.
 
@@ -425,7 +738,7 @@ struct PathLossModel(ImplicitlyCopyable):
             )
         )
 
-    def two_ray_simple(
+    def _two_ray_simple_meters(
         self, distance: Float64, tx: Float64, rx: Float64
     ) -> Float32:
         """Return the far-field two-ray loss, `CalculateTwoRayPathLossSimple`.
@@ -440,7 +753,9 @@ struct PathLossModel(ImplicitlyCopyable):
         """
         return Float32(40 * log10(distance) - 10 * log10(tx * tx * rx * rx))
 
-    def vehicle_loss(self, d1: Float64, d2: Float64, h: Float64) -> Float64:
+    def _vehicle_loss_meters(
+        self, d1: Float64, d2: Float64, h: Float64
+    ) -> Float64:
         """Return one knife edge's loss, `CalcVehicleLoss`.
 
         Args:
@@ -481,7 +796,7 @@ struct PathLossModel(ImplicitlyCopyable):
                 Float64(destination.x - o.x) ** 2
                 + Float64(destination.y - o.y) ** 2
             )
-            var loss = self.vehicle_loss(d1, d2, Float64(o.z))
+            var loss = self._vehicle_loss_meters(d1, d2, Float64(o.z))
             if loss >= best:
                 best = loss
         return best
@@ -514,7 +829,7 @@ struct PathLossModel(ImplicitlyCopyable):
             Float32(4.55) if s == RURAL else Float32(5.3)
         )
 
-    def loss(
+    def _loss_meters(
         self,
         state: PathState,
         source: Vector3,
@@ -545,14 +860,14 @@ struct PathLossModel(ImplicitlyCopyable):
         """
         var path: Float32
         if self.params.model == WINNER:
-            path = self.winner(state, distance)
+            path = self._winner_meters(state, distance)
             if state == NLOS_VEHICLE:
                 path = Float32(
                     Float64(path)
                     + self.nlos_vehicle_loss(source, destination, obstacles)
                 )
         elif state == LOS:
-            path = Float32(self.two_ray(distance, tx, rx))
+            path = Float32(self._two_ray_meters(distance, tx, rx))
         elif state == NLOS_BUILDING:
             path = Float32(
                 Float64(self.fspl_d0)
@@ -606,6 +921,26 @@ def _parent_body(world: World, sensor: ActorId) raises -> BodyId:
 
 
 def path_state(
+    world: World, receiver: ActorId, sender: ActorId, reference_z: Length
+) raises -> Tuple[PathState, List[Vector3]]:
+    """Classify a radio path from a typed reference height.
+
+    Args:
+        world: The world.
+        receiver: The receiving sensor.
+        sender: The sending sensor.
+        reference_z: The lower antenna height.
+
+    Returns:
+        The path state and CARLA meter-coordinate obstacles.
+
+    Raises:
+        Error: If the reference height is nonfinite or a sensor is not alive.
+    """
+    return path_state_meters(world, receiver, sender, reference_z.value)
+
+
+def path_state_meters(
     world: World,
     receiver: ActorId,
     sender: ActorId,
@@ -624,8 +959,9 @@ def path_state(
         The state, and each vehicle's knife edge up to the first building.
 
     Raises:
-        Error: If a sensor is not alive.
+        Error: If the reference height is nonfinite or a sensor is not alive.
     """
+    validate_sensor_float(reference_z, "reference_z")
     var a = world.get_location(receiver)
     var b = world.get_location(sender)
     var skip = [_parent_body(world, receiver), _parent_body(world, sender)]
@@ -711,8 +1047,8 @@ def simulate_channel(
         if not (distance < Float64(model.params.filter_distance.value)):
             continue
         distance = max(distance, Float64(model.params.reference_distance.value))
-        var found = path_state(world, receiver, senders[k], reference)
-        var loss = model.loss(
+        var found = path_state_meters(world, receiver, senders[k], reference)
+        var loss = model._loss_meters(
             found[0], here, there, distance, tx, rx, found[1], rng
         )
         var power = model.received_power(powers[k], loss)
@@ -951,7 +1287,22 @@ struct CAM(Equatable, ImplicitlyCopyable, Writable):
     var low_frequency: LowFrequencyContainer
 
 
-def speed_value(speed: Float32) -> Int:
+def speed_value(speed: Velocity) raises -> Int:
+    """Encode a signed velocity in ETSI speed units.
+
+    Args:
+        speed: The Float32 velocity; a negative value means unavailable.
+
+    Returns:
+        The centimeter-per-second code, clamped to the ETSI range.
+
+    Raises:
+        Error: If the velocity is nonfinite.
+    """
+    return speed_value_meters_per_second(speed.value)
+
+
+def speed_value_meters_per_second(speed: Float32) raises -> Int:
     """Return a speed in ETSI units, `BuildSpeedValue`.
 
     Args:
@@ -960,7 +1311,11 @@ def speed_value(speed: Float32) -> Int:
     Returns:
         16382 at 163.82 m/s or more, the speed in cm/s rounded from zero
         up, and 16383, unavailable, below zero.
+
+    Raises:
+        Error: If the speed is nonfinite.
     """
+    validate_sensor_float(speed, "speed")
     if speed >= 163.82:
         return 16382
     if speed >= 0:
@@ -1078,6 +1433,295 @@ struct CamNoise(ImplicitlyCopyable):
         self.yaw_rate_bias = 0
         self.acceleration_stddev = Vector3(0, 0, 0)
 
+    def latitude_stddev_angle(self) raises -> Angle:
+        """Return the checked latitude stddev.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.latitude_stddev, "latitude_stddev")
+        return Angle(self.latitude_stddev, DEGREE)
+
+    def latitude_bias_angle(self) raises -> Angle:
+        """Return the checked latitude bias.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite.
+        """
+        validate_sensor_float(self.latitude_bias, "latitude_bias")
+        return Angle(self.latitude_bias, DEGREE)
+
+    def set_latitude_noise(mut self, stddev: Angle, bias: Angle) raises:
+        """Set both latitude noise fields after validation.
+
+        Both raw fields update together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(DEGREE)
+        var offset = bias.to(DEGREE)
+        validate_sensor_nonnegative(deviation, "latitude_stddev")
+        validate_sensor_float(offset, "latitude_bias")
+        self.latitude_stddev = deviation
+        self.latitude_bias = offset
+
+    def longitude_stddev_angle(self) raises -> Angle:
+        """Return the checked longitude stddev.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.longitude_stddev, "longitude_stddev")
+        return Angle(self.longitude_stddev, DEGREE)
+
+    def longitude_bias_angle(self) raises -> Angle:
+        """Return the checked longitude bias.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite.
+        """
+        validate_sensor_float(self.longitude_bias, "longitude_bias")
+        return Angle(self.longitude_bias, DEGREE)
+
+    def set_longitude_noise(mut self, stddev: Angle, bias: Angle) raises:
+        """Set both longitude noise fields after validation.
+
+        Both raw fields update together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(DEGREE)
+        var offset = bias.to(DEGREE)
+        validate_sensor_nonnegative(deviation, "longitude_stddev")
+        validate_sensor_float(offset, "longitude_bias")
+        self.longitude_stddev = deviation
+        self.longitude_bias = offset
+
+    def altitude_stddev_length(self) raises -> Length:
+        """Return the checked altitude stddev.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.altitude_stddev, "altitude_stddev")
+        return Length(self.altitude_stddev, METER)
+
+    def altitude_bias_length(self) raises -> Length:
+        """Return the checked altitude bias.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite.
+        """
+        validate_sensor_float(self.altitude_bias, "altitude_bias")
+        return Length(self.altitude_bias, METER)
+
+    def set_altitude_noise(mut self, stddev: Length, bias: Length) raises:
+        """Set both altitude noise fields after validation.
+
+        Both raw fields update together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(METER)
+        var offset = bias.to(METER)
+        validate_sensor_nonnegative(deviation, "altitude_stddev")
+        validate_sensor_float(offset, "altitude_bias")
+        self.altitude_stddev = deviation
+        self.altitude_bias = offset
+
+    def heading_stddev_angle(self) raises -> Angle:
+        """Return the checked heading stddev.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.heading_stddev, "heading_stddev")
+        return Angle(self.heading_stddev, DEGREE)
+
+    def heading_bias_angle(self) raises -> Angle:
+        """Return the checked heading bias.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite.
+        """
+        validate_sensor_float(self.heading_bias, "heading_bias")
+        return Angle(self.heading_bias, DEGREE)
+
+    def set_heading_noise(mut self, stddev: Angle, bias: Angle) raises:
+        """Set both heading noise fields after validation.
+
+        Both raw fields update together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.to(DEGREE)
+        var offset = bias.to(DEGREE)
+        validate_sensor_nonnegative(deviation, "heading_stddev")
+        validate_sensor_float(offset, "heading_bias")
+        self.heading_stddev = deviation
+        self.heading_bias = offset
+
+    def yaw_rate_stddev_angular_velocity(self) raises -> AngularVelocity:
+        """Return the checked yaw rate stddev.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite or negative.
+        """
+        validate_sensor_nonnegative(self.yaw_rate_stddev, "yaw_rate_stddev")
+        return AngularVelocity(self.yaw_rate_stddev)
+
+    def yaw_rate_bias_angular_velocity(self) raises -> AngularVelocity:
+        """Return the checked yaw rate bias.
+
+        Returns:
+            The quantity with Float32 storage.
+
+        Raises:
+            Error: If the raw value is nonfinite.
+        """
+        validate_sensor_float(self.yaw_rate_bias, "yaw_rate_bias")
+        return AngularVelocity(self.yaw_rate_bias)
+
+    def set_yaw_rate_noise(
+        mut self, stddev: AngularVelocity, bias: AngularVelocity
+    ) raises:
+        """Set both yaw rate noise fields after validation.
+
+        Both raw fields update together.
+
+        Args:
+            stddev: The nonnegative standard deviation.
+            bias: The signed bias.
+
+        Raises:
+            Error: If a converted value is nonfinite or the deviation is negative.
+        """
+        var deviation = stddev.value
+        var offset = bias.value
+        validate_sensor_nonnegative(deviation, "yaw_rate_stddev")
+        validate_sensor_float(offset, "yaw_rate_bias")
+        self.yaw_rate_stddev = deviation
+        self.yaw_rate_bias = offset
+
+    def velocity_stddev_velocity(self) raises -> Velocity:
+        """Return the checked velocity noise deviation.
+
+        Returns:
+            The deviation with Float32 meter-per-second storage.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        validate_sensor_nonnegative(self.velocity_stddev, "velocity_stddev")
+        return Velocity(self.velocity_stddev)
+
+    def set_velocity_noise(mut self, stddev: Velocity) raises:
+        """Set the velocity noise deviation.
+
+        The raw field updates after validation.
+
+        Args:
+            stddev: The nonnegative deviation.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        validate_sensor_nonnegative(stddev.value, "velocity_stddev")
+        self.velocity_stddev = stddev.value
+
+    def acceleration_deviations(
+        self,
+    ) raises -> Tuple[Acceleration, Acceleration, Acceleration]:
+        """Return the three checked acceleration deviations.
+
+        Returns:
+            The x, y, and z deviations with Float32 storage.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        validate_sensor_nonnegative(
+            self.acceleration_stddev.x, "acceleration x"
+        )
+        validate_sensor_nonnegative(
+            self.acceleration_stddev.y, "acceleration y"
+        )
+        validate_sensor_nonnegative(
+            self.acceleration_stddev.z, "acceleration z"
+        )
+        return (
+            Acceleration(self.acceleration_stddev.x),
+            Acceleration(self.acceleration_stddev.y),
+            Acceleration(self.acceleration_stddev.z),
+        )
+
+    def set_acceleration_noise(
+        mut self, x: Acceleration, y: Acceleration, z: Acceleration
+    ) raises:
+        """Set the three acceleration deviations together.
+
+        The raw vector updates after all checks.
+
+        Args:
+            x: The nonnegative x deviation.
+            y: The nonnegative y deviation.
+            z: The nonnegative z deviation.
+
+        Raises:
+            Error: If an input or the computed loss is invalid.
+        """
+        validate_sensor_nonnegative(x.value, "acceleration x")
+        validate_sensor_nonnegative(y.value, "acceleration y")
+        validate_sensor_nonnegative(z.value, "acceleration z")
+        self.acceleration_stddev = Vector3(x.value, y.value, z.value)
+
     def validate(self) raises:
         """Reject nonfinite physical settings and invalid domains.
 
@@ -1162,6 +1806,8 @@ struct CaService(Copyable, Movable):
     var gen_cam: Float32
     var fixed_rate: Bool
     var noise: CamNoise
+    # Exact signed milliseconds since 2004-01-01 UTC; CAM encoding uses
+    # this source epoch modulo 65536, without a floating-point conversion.
     var generation_delta0: Int
     var last_cam_timestamp: Float32
     var last_low_cam_timestamp: Float32
@@ -1179,26 +1825,29 @@ struct CaService(Copyable, Movable):
         out self,
         world: World,
         owner: ActorId,
-        gen_cam_min: Float32,
-        gen_cam_max: Float32,
+        min_interval: Duration,
+        max_interval: Duration,
         fixed_rate: Bool,
         noise: CamNoise,
-        generation_delta0: Int,
     ) raises:
-        """Set the parameters and the owner, `SetParams` and `SetActor`.
+        """Set the typed intervals and owner with CAM epoch offset zero.
 
         Args:
             world: The world.
             owner: The sensor's parent, or the sensor itself without one.
-            gen_cam_min: The shortest gap between CAMs, in seconds.
-            gen_cam_max: The longest, in seconds.
+            min_interval: The shortest gap between CAMs.
+            max_interval: The longest gap between CAMs.
             fixed_rate: Whether to send each tick after `gen_cam_min`.
             noise: The noise of the data sent.
-            generation_delta0: Milliseconds from 2004 to the start.
+
+        Returns:
+            The initialized CaService record.
 
         Raises:
             Error: If the owner, CAM intervals, or noise settings are invalid.
         """
+        var gen_cam_min = min_interval.value
+        var gen_cam_max = max_interval.value
         validate_sensor_positive(gen_cam_min, "gen_cam_min")
         validate_sensor_positive(gen_cam_max, "gen_cam_max")
         if gen_cam_min > gen_cam_max:
@@ -1213,7 +1862,7 @@ struct CaService(Copyable, Movable):
         self.gen_cam = gen_cam_max
         self.fixed_rate = fixed_rate
         self.noise = noise
-        self.generation_delta0 = generation_delta0
+        self.generation_delta0 = 0
         self.elapsed = world.elapsed_seconds
         self.low_dynamics_counter = 0
         self.vehicle_speed = 0
@@ -1240,6 +1889,40 @@ struct CaService(Copyable, Movable):
             self.last_cam_timestamp = -Float32(_RSU_INTERVAL)
             self.last_low_cam_timestamp = 0
             self.station_type = STATION_ROAD_SIDE_UNIT
+
+    @staticmethod
+    def from_cam_epoch_milliseconds(
+        world: World,
+        owner: ActorId,
+        min_interval: Duration,
+        max_interval: Duration,
+        fixed_rate: Bool,
+        noise: CamNoise,
+        generation_delta0: Int,
+    ) raises -> CaService:
+        """Create a CAM service with an explicit exact source epoch offset.
+
+        Args:
+            world: The world.
+            owner: The sensor's parent, or the sensor itself without one.
+            min_interval: The shortest typed duration between messages.
+            max_interval: The longest typed duration between messages.
+            fixed_rate: Whether to send at the fixed rate.
+            noise: The checked source noise settings.
+            generation_delta0: Signed milliseconds since 2004-01-01 UTC.
+                Every representable Int is retained, including pre-epoch values.
+
+        Returns:
+            The service with unchanged integer epoch storage and CAM modulo rules.
+
+        Raises:
+            Error: If the owner, intervals, or noise settings are invalid.
+        """
+        var service = CaService(
+            world, owner, min_interval, max_interval, fixed_rate, noise
+        )
+        service.generation_delta0 = generation_delta0
+        return service^
 
     def _forward_speed(self, world: World) raises -> Float32:
         var t = world.get_transform(self.owner)
@@ -1425,7 +2108,7 @@ struct CaService(Copyable, Movable):
             CONTAINER_VEHICLE,
             Int(round_half_away(Float64(heading) * 10.0)),
             HEADING_CONFIDENCE_ONE_DEGREE,
-            speed_value(speed),
+            speed_value(Velocity(speed)),
             SPEED_CONFIDENCE,
             DRIVE_FORWARD if forward >= 0 else DRIVE_BACKWARD,
             Int(round_half_away(Float64(box.extent.x) * 200.0 * 10.0)),

@@ -1,5 +1,16 @@
 """Qualify the reviewed lane-control successor without changing historical pins."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 from pathlib import Path
 
@@ -33,6 +44,7 @@ def _observe_text(root, path, text, *, _operation=None, supplied=False):
         root, path, text, _operation=_operation, supplied=supplied)
 
 
+
 def require(ok, message):
     if not ok:
         raise RuntimeError(message)
@@ -44,7 +56,7 @@ def verify(root, *, _operation=None):
     root = Path(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
     path = root / 'tools/carla_lane_oracle/lane-control-migration.json'
-    raw = path.read_bytes()
+    raw = _typed_source.historical_bytes(root, path, path.read_bytes(), _operation=_operation)
     require(hashlib.sha256(raw).hexdigest() == RECORD_SHA256,
             'lane-control migration record changed')
     record = json.loads(raw)
@@ -53,7 +65,7 @@ def verify(root, *, _operation=None):
             'lane-control predecessor changed')
     require(hashlib.sha256(record['after_source'].encode()).hexdigest()
             == record['after_sha256'], 'lane-control successor record changed')
-    current = _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation)
+    current = _typed_source.historical_text(root, record['module'], _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation), _operation=_operation)
     if token_sha256(current) != token_sha256(record['after_source']):
         if __package__:
             from . import lane_order_contracts as order
@@ -69,19 +81,19 @@ def verify(root, *, _operation=None):
                 == token_sha256(item['before']), 'lane-control before declaration drift')
         require(token_sha256(declaration(current, name, ()))
                 == token_sha256(item['after']), 'lane-control after declaration drift')
-        test = _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
+        test = _typed_source.historical_text(root, 'tests/test_carla_lane_control_successor.mojo', _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
                              (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
-                             _operation=_operation)
+                             _operation=_operation), _operation=_operation)
         frozen = declaration(test, '_reference' + name, ())
         expected = item['before'].replace('def ' + name + '(', 'def _reference' + name + '(', 1)
         require(token_sha256(frozen) == token_sha256(expected),
                 'lane-control frozen predecessor changed')
     for item in record['premises']:
-        actual = declaration(_observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), item['name'], ())
+        actual = declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
         require(token_sha256(actual) == token_sha256(item['source']),
                 'lane-control guarded premise changed: ' + item['name'])
     for rel, expected in record['producer_modules'].items():
-        require(token_sha256(_observe_text(root, rel, (root / rel).read_text(), _operation=_operation)) == token_sha256(expected),
+        require(token_sha256(_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation)) == token_sha256(expected),
                 'lane-control IEEE producer module changed: ' + rel)
     return record
 

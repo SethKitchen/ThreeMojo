@@ -17,15 +17,15 @@ from extensions.carla.geometry import (
     RoadGeometry,
     RoadGeometryKind,
     _Sample,
-    with_arc,
-    with_spiral,
+    with_arc_si as with_arc,
+    with_spiral_si as with_spiral,
 )
 from std.math import cos, inf, nan, sin, sqrt
 from std.testing import TestSuite, assert_almost_equal, assert_raises
 
 
 def _line() raises -> RoadGeometry:
-    return RoadGeometry(LINE, 0.0, 2.0, -3.0, 0.3, 2.0)
+    return RoadGeometry.from_meters(LINE, 0.0, 2.0, -3.0, 0.3, 2.0)
 
 
 def _check(
@@ -45,7 +45,9 @@ def _straight_samples(
 ) raises -> RoadGeometry:
     # v=2u, with chord-length station spacing and its exact stored tangent.
     var span = Float64(0.3) * sqrt(Float64(5))
-    var g = RoadGeometry(kind, 0.0, 0.0, 0.0, 0.0, span * Float64(count - 1))
+    var g = RoadGeometry.from_meters(
+        kind, 0.0, 0.0, 0.0, 0.0, span * Float64(count - 1)
+    )
     for i in range(count):
         var u = Float64(i) * 0.3
         g.samples.append(_Sample(u, 2.0 * u, Float64(i) * span, 1.0, 2.0))
@@ -150,7 +152,7 @@ def test_reference_poly3_frame_turn_is_separate_from_chord_direction() raises:
     # v=u^2 at u=0 and u=.3: the chord slope is .3, while the stored
     # tangent interpolates from 0 to 0.6. d(atan(t))/ds=t'/(1+t^2).
     var span = sqrt(Float64(0.3) ** 2 + Float64(0.09) ** 2)
-    var g = RoadGeometry(POLY3, 0.0, 0.0, 0.0, 0.0, span)
+    var g = RoadGeometry.from_meters(POLY3, 0.0, 0.0, 0.0, 0.0, span)
     g.samples.append(_Sample(0, 0, 0, 1, 0))
     g.samples.append(_Sample(0.3, 0.09, span, 1, 0.6))
     _check(
@@ -165,7 +167,7 @@ def test_reference_parametric_frame_turn_uses_both_tangent_components() raises:
     # u(p)=2p, v(p)=p^2 at p=0 and p=.3. The derivative of atan2(v',u')
     # along the stored interval is (u'v''-v'u'')/(u'^2+v'^2).
     var span = sqrt(Float64(0.6) ** 2 + Float64(0.09) ** 2)
-    var g = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, span)
+    var g = RoadGeometry.from_meters(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, span)
     g.samples.append(_Sample(0, 0, 0, 2, 0))
     g.samples.append(_Sample(0.6, 0.09, span, 2, 0.6))
     _check(

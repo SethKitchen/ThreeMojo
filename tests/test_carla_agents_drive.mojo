@@ -41,7 +41,7 @@ from extensions.carla.agents_misc import (
     OPTION_RIGHT,
     OPTION_STRAIGHT,
     RoadOption,
-    from_kmh,
+    from_kmh_float32 as from_kmh,
     kmh,
     speed_of,
 )
@@ -537,7 +537,7 @@ def test_lane_change_paths() raises:
     var world = _world(_two_lane())
     var car = _car(world, 5.3, 1.75)
     var agent = BasicAgent(world, car)
-    var w = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 5.3)
+    var w = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 5.3)
     var right = agent.generate_lane_change_path(
         world.map, w, OPTION_CHANGE_LANE_RIGHT
     )
@@ -558,7 +558,7 @@ def test_lane_change_paths() raises:
         False,
     )
     assert_equal(len(unchecked), 0)
-    var w2 = Waypoint(RoadId(1), SectionId(0), LaneId(-2), 30.3)
+    var w2 = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-2), 30.3)
     var back = agent.generate_lane_change_path(
         world.map,
         w2,
@@ -586,7 +586,7 @@ def test_lane_change_paths() raises:
     with assert_raises(contains="Road option is not valid"):
         _ = agent.generate_lane_change_path(world.map, w2, RoadOption(0))
     # Near the end of the road, the first stretch runs out.
-    var w3 = Waypoint(RoadId(2), SectionId(0), LaneId(-1), 40.3)
+    var w3 = Waypoint._from_si(RoadId(2), SectionId(0), LaneId(-1), 40.3)
     assert_equal(
         len(
             agent.generate_lane_change_path(
@@ -596,7 +596,7 @@ def test_lane_change_paths() raises:
         0,
     )
     # The change itself runs out, and the last stretch runs out.
-    var w4 = Waypoint(RoadId(2), SectionId(0), LaneId(-1), 30.3)
+    var w4 = Waypoint._from_si(RoadId(2), SectionId(0), LaneId(-1), 30.3)
     assert_equal(
         len(
             agent.generate_lane_change_path(
@@ -681,8 +681,8 @@ def test_destinations_and_settings() raises:
     assert_almost_equal(agent.local_planner.queue[0].waypoint.s, 6, atol=1e-6)
     var plan = agent.trace_route(
         world.map,
-        Waypoint(RoadId(1), SectionId(0), LaneId(-1), 20.3),
-        Waypoint(RoadId(1), SectionId(1), LaneId(-1), 40.3),
+        Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 20.3),
+        Waypoint._from_si(RoadId(1), SectionId(1), LaneId(-1), 40.3),
     )
     assert_equal(len(plan), 10)
     agent.set_global_plan(plan)
@@ -1188,7 +1188,7 @@ def test_two_sided_marking_allows_lane_change() raises:
     var world = _world(_two_lane("both", "both"))
     var car = _car(world, 5.3, 1.75)
     var agent = BasicAgent(world, car)
-    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 5.3)
+    var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 5.3)
     var path = agent.generate_lane_change_path(
         world.map, start, OPTION_CHANGE_LANE_RIGHT
     )

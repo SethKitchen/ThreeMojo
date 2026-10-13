@@ -50,7 +50,12 @@ from extensions.carla.curve_distance import (
     _wide_distance,
     _wide_point_order,
 )
-from extensions.carla.geometry import ARC, DirectedPoint, LINE
+from extensions.carla.geometry import (
+    _check_geometry_record,
+    ARC,
+    DirectedPoint,
+    LINE,
+)
 from extensions.carla.curve_trig import (
     _curve_cos as _lane_cos,
     _curve_sin as _lane_sin,
@@ -75,13 +80,20 @@ from extensions.carla.road_info import (
     NO_JUNCTION,
     RoadId,
     SectionId,
-    info_at,
-    info_index,
+    _info_at_si as info_at,
+    _info_index_si as info_index,
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
 from std.math import atan2, cos, isfinite, sin, sqrt
-from units.si import DEGREE, Angle, Length, METER, RADIAN
+from units.si import DEGREE, Angle, Length, Length64, METER, RADIAN
+from extensions.carla.quantity_boundary import (
+    _RAW_SI,
+    _RawSI,
+    _finite_si,
+    _nonnegative_si,
+    _positive_si,
+)
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
 comptime SIDEWALK_HEIGHT = Float32(0.1524)
@@ -134,15 +146,68 @@ struct Lane(Copyable, Movable):
     var distance: Float64
 
     def __init__(
-        out self, id: LaneId, section_id: SectionId, distance: Float64
-    ):
-        """Create a lane with no type, no links and no records.
+        out self, id: LaneId, section_id: SectionId, distance: Length64
+    ) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            id: Its source record value.
+            section_id: Its source record value.
+            distance: Its typed source quantity.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = Lane.from_si(id, section_id, distance.value)
+
+    @staticmethod
+    def from_si(
+        id: LaneId, section_id: SectionId, distance: Float64
+    ) raises -> Lane:
+        """Explicit source-unit compatibility adapter. Create a lane with no type, no links and no records.
+
+        Args:
+            id: The lane's id.
+            section_id: The id of the section that holds it.
+            distance: Where that section starts, in meters.
+
+        Returns:
+            The new Lane record with the supplied source fields.
+
+        Raises:
+            Error: If the start distance is nonfinite or negative.
+        """
+        _ = _nonnegative_si(distance)
+        return Lane(_RAW_SI, id, section_id, distance)
+
+    @staticmethod
+    def _from_si(id: LaneId, section_id: SectionId, distance: Float64) -> Lane:
+        """Explicit source-unit compatibility adapter. Create a lane with no type, no links and no records.
 
         Args:
             id: The lane's id.
             section_id: The id of the section that holds it.
             distance: Where that section starts, in meters.
         """
+        return Lane(_RAW_SI, id, section_id, distance)
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        id: LaneId,
+        section_id: SectionId,
+        distance: Float64,
+    ):
+        """Create a lane with no type, no links and no records.
+
+        Args:
+            raw: The private raw-storage construction capability.
+            id: The lane's id.
+            section_id: The id of the section that holds it.
+            distance: Where that section starts, in meters."""
         self.id = id
         self.type = LANE_NONE
         self.level = False
@@ -154,6 +219,17 @@ struct Lane(Copyable, Movable):
         self.section_id = section_id
         self.distance = distance
 
+    def distance_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw distance compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.distance))
+
 
 struct LaneSection(Copyable, Movable):
     """A run of a road with one set of lanes, `road/LaneSection`."""
@@ -164,10 +240,56 @@ struct LaneSection(Copyable, Movable):
     # The lanes, in order of id.
     var lanes: List[Lane]
 
-    def __init__(out self, id: SectionId, s: Float64) raises:
+    def __init__(out self, id: SectionId, s: Length64) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            id: Its source record value.
+            s: Its typed source quantity.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = LaneSection.from_si(id, s.value)
+
+    @staticmethod
+    def from_si(id: SectionId, s: Float64) raises -> LaneSection:
+        """Explicit source-unit compatibility adapter. Create an empty section.
+
+        Args:
+            id: The section's id within its road.
+            s: Where it starts, in meters.
+
+        Returns:
+            The new LaneSection record with the supplied source fields.
+
+        Raises:
+            Error: If the id is not valid.
+        """
+        _ = _nonnegative_si(s)
+        return LaneSection(_RAW_SI, id, s)
+
+    @staticmethod
+    def _from_si(id: SectionId, s: Float64) raises -> LaneSection:
+        """Explicit source-unit compatibility adapter. Create an empty section.
+
+        Args:
+            id: The section's id within its road.
+            s: Where it starts, in meters.
+
+        Raises:
+            Error: If the id is not valid.
+        """
+        return LaneSection(_RAW_SI, id, s)
+
+    def __init__(out self, raw: _RawSI, id: SectionId, s: Float64) raises:
         """Create an empty section.
 
         Args:
+            raw: The private raw-storage construction capability.
             id: The section's id within its road.
             s: Where it starts, in meters.
 
@@ -224,7 +346,7 @@ struct LaneSection(Copyable, Movable):
             at += 1
         if at < len(self.lanes) and self.lanes[at].id == id:
             return at
-        self.lanes.insert(at, Lane(id, self.id, self.s))
+        self.lanes.insert(at, Lane._from_si(id, self.id, self.s))
         return at
 
     def lanes_of_type(self, lane_type: LaneType) raises -> List[LaneId]:
@@ -246,6 +368,17 @@ struct LaneSection(Copyable, Movable):
             if lane.type.matches(lane_type):
                 out.append(lane.id)
         return out^
+
+    def s_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw s compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.s))
 
 
 struct Road(Copyable, Movable):
@@ -274,6 +407,112 @@ struct Road(Copyable, Movable):
         out self,
         id: RoadId,
         name: String,
+        length: Length64,
+        junction_id: JuncId,
+        predecessor: RoadId,
+        successor: RoadId,
+        is_rht: Bool,
+    ) raises:
+        """Create a checked typed record without changing scalar storage.
+
+        Args:
+            id: Its source record value.
+            name: Its source record value.
+            length: Its typed source quantity.
+            junction_id: Its source record value.
+            predecessor: Its source record value.
+            successor: Its source record value.
+            is_rht: Its source record value.
+
+        Returns:
+            A record with unchanged source precision and layout.
+
+        Raises:
+            Error: If a quantity is not finite or another field is invalid.
+        """
+        self = Road.from_si(
+            id, name, length.value, junction_id, predecessor, successor, is_rht
+        )
+
+    @staticmethod
+    def from_si(
+        id: RoadId,
+        name: String,
+        length: Float64,
+        junction_id: JuncId,
+        predecessor: RoadId,
+        successor: RoadId,
+        is_rht: Bool,
+    ) raises -> Road:
+        """Explicit source-unit compatibility adapter. Create a road with no sections and no records, `AddRoad`.
+
+        Args:
+            id: The road's id.
+            name: Its name.
+            length: Its length, in meters.
+            junction_id: The junction it belongs to, or `NO_JUNCTION`.
+            predecessor: The road or junction before it, 0 for none.
+            successor: The road or junction after it, 0 for none.
+            is_rht: True if traffic keeps to the right.
+
+        Returns:
+            The new Road record with the supplied source fields.
+
+        Raises:
+            Error: If an id is not valid.
+        """
+        _ = _positive_si(length)
+        return Road(
+            _RAW_SI,
+            id,
+            name,
+            length,
+            junction_id,
+            predecessor,
+            successor,
+            is_rht,
+        )
+
+    @staticmethod
+    def _from_si(
+        id: RoadId,
+        name: String,
+        length: Float64,
+        junction_id: JuncId,
+        predecessor: RoadId,
+        successor: RoadId,
+        is_rht: Bool,
+    ) raises -> Road:
+        """Explicit source-unit compatibility adapter. Create a road with no sections and no records, `AddRoad`.
+
+        Args:
+            id: The road's id.
+            name: Its name.
+            length: Its length, in meters.
+            junction_id: The junction it belongs to, or `NO_JUNCTION`.
+            predecessor: The road or junction before it, 0 for none.
+            successor: The road or junction after it, 0 for none.
+            is_rht: True if traffic keeps to the right.
+
+        Raises:
+            Error: If an id is not valid.
+        """
+        return Road(
+            _RAW_SI,
+            id,
+            name,
+            length,
+            junction_id,
+            predecessor,
+            successor,
+            is_rht,
+        )
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        id: RoadId,
+        name: String,
         length: Float64,
         junction_id: JuncId,
         predecessor: RoadId,
@@ -283,6 +522,7 @@ struct Road(Copyable, Movable):
         """Create a road with no sections and no records, `AddRoad`.
 
         Args:
+            raw: The private raw-storage construction capability.
             id: The road's id.
             name: Its name.
             length: Its length, in meters.
@@ -316,7 +556,38 @@ struct Road(Copyable, Movable):
 
     # --- sections -------------------------------------------------------------
 
-    def add_section(mut self, id: SectionId, s: Float64) raises -> Int:
+    def add_section(mut self, id: SectionId, s: Length64) raises -> Int:
+        """Typed quantity boundary. Add a lane section, `MapBuilder::AddRoadSection`.
+
+        Args:
+            id: The section's id.
+            s: Where it starts, in meters.
+
+        Returns:
+            The section's index in `sections`.
+
+        Raises:
+            Error: If the id is not valid.
+        """
+        return self.add_section_meters(id, s.value)
+
+    def add_section_meters(mut self, id: SectionId, s: Float64) raises -> Int:
+        """Explicit meter compatibility adapter. Add a lane section, `MapBuilder::AddRoadSection`.
+
+        Args:
+            id: The section's id.
+            s: Where it starts, in meters.
+
+        Returns:
+            The section's index in `sections`.
+
+        Raises:
+            Error: If the id is not valid.
+        """
+        _ = _nonnegative_si(s)
+        return self._add_section_si(id, s)
+
+    def _add_section_si(mut self, id: SectionId, s: Float64) raises -> Int:
         """Add a lane section, `MapBuilder::AddRoadSection`.
 
         Args:
@@ -329,7 +600,7 @@ struct Road(Copyable, Movable):
         Raises:
             Error: If the id is not valid.
         """
-        var section = LaneSection(id, s)
+        var section = LaneSection._from_si(id, s)
         var at = 0
         while at < len(self.sections) and self.sections[at].s <= s:
             at += 1
@@ -353,7 +624,37 @@ struct Road(Copyable, Movable):
                 return i
         raise Error("The road has no section with that id")
 
-    def section_length(self, index: Int) -> Float64:
+    def section_length(self, index: Int) raises -> Length64:
+        """Typed quantity boundary. Return a section's length, `LaneSection::GetLength`.
+
+        Args:
+            index: The section's index in `sections`.
+
+        Returns:
+            From its start to the next section's start, or to the end of
+            the road, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
+        """
+        return Length64(self.section_length_meters(index))
+
+    def section_length_meters(self, index: Int) raises -> Float64:
+        """Explicit meter compatibility adapter. Return a section's length, `LaneSection::GetLength`.
+
+        Args:
+            index: The section's index in `sections`.
+
+        Returns:
+            From its start to the next section's start, or to the end of
+            the road, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
+        """
+        return _finite_si(self._section_length_si(index))
+
+    def _section_length_si(self, index: Int) -> Float64:
         """Return a section's length, `LaneSection::GetLength`.
 
         Args:
@@ -364,9 +665,38 @@ struct Road(Copyable, Movable):
             the road, in meters.
         """
         var s = self.sections[index].s
-        return self.upper_bound(s) - s
+        return self._upper_bound_si(s) - s
 
-    def upper_bound(self, s: Float64) -> Float64:
+    def upper_bound(self, s: Length64) raises -> Length64:
+        """Typed quantity boundary. Return where the section at s ends, `Road::UpperBound`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The start of the first section after s, or the road's length.
+
+        Raises:
+            Error: If the station or computed bound is nonfinite.
+        """
+        return Length64(self.upper_bound_meters(s.value))
+
+    def upper_bound_meters(self, s: Float64) raises -> Float64:
+        """Explicit meter compatibility adapter. Return where the section at s ends, `Road::UpperBound`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The start of the first section after s, or the road's length.
+
+        Raises:
+            Error: If the station or computed bound is nonfinite.
+        """
+        _ = _finite_si(Float64(s))
+        return _finite_si(self._upper_bound_si(s))
+
+    def _upper_bound_si(self, s: Float64) -> Float64:
         """Return where the section at s ends, `Road::UpperBound`.
 
         Args:
@@ -380,7 +710,42 @@ struct Road(Copyable, Movable):
                 return section.s
         return self.length
 
-    def sections_at(self, s: Float64) -> List[Int]:
+    def sections_at(self, s: Length64) raises -> List[Int]:
+        """Typed quantity boundary. Return the sections that hold at s, `GetLaneSectionsAt`.
+
+        These are the sections that start at the greatest start at or
+        before s. There is more than one only when two start together.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            Their indices, in order. None before the first section.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        return self.sections_at_meters(s.value)
+
+    def sections_at_meters(self, s: Float64) raises -> List[Int]:
+        """Explicit meter compatibility adapter. Return the sections that hold at s, `GetLaneSectionsAt`.
+
+        These are the sections that start at the greatest start at or
+        before s. There is more than one only when two start together.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            Their indices, in order. None before the first section.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        _ = _finite_si(Float64(s))
+        return self._sections_at_si(s)
+
+    def _sections_at_si(self, s: Float64) -> List[Int]:
         """Return the sections that hold at s, `GetLaneSectionsAt`.
 
         These are the sections that start at the greatest start at or
@@ -408,6 +773,41 @@ struct Road(Copyable, Movable):
         return out^
 
     def lane_by_distance(
+        self, s: Length64, lane_id: LaneId
+    ) raises -> Tuple[Int, Int]:
+        """Typed quantity boundary. Return the lane with an id at s, `GetLaneByDistance`.
+
+        Args:
+            s: A distance along the road, in meters.
+            lane_id: The lane's id.
+
+        Returns:
+            The section's index and the lane's index in it.
+
+        Raises:
+            Error: If no section at s has the lane.
+        """
+        return self.lane_by_distance_meters(s.value, lane_id)
+
+    def lane_by_distance_meters(
+        self, s: Float64, lane_id: LaneId
+    ) raises -> Tuple[Int, Int]:
+        """Explicit meter compatibility adapter. Return the lane with an id at s, `GetLaneByDistance`.
+
+        Args:
+            s: A distance along the road, in meters.
+            lane_id: The lane's id.
+
+        Returns:
+            The section's index and the lane's index in it.
+
+        Raises:
+            Error: If no section at s has the lane.
+        """
+        _ = _finite_si(Float64(s))
+        return self._lane_by_distance_si(s, lane_id)
+
+    def _lane_by_distance_si(
         self, s: Float64, lane_id: LaneId
     ) raises -> Tuple[Int, Int]:
         """Return the lane with an id at s, `GetLaneByDistance`.
@@ -422,13 +822,44 @@ struct Road(Copyable, Movable):
         Raises:
             Error: If no section at s has the lane.
         """
-        for index in self.sections_at(s):
+        for index in self._sections_at_si(s):
             var lane = self.sections[index].lane_index(lane_id)
             if lane >= 0:
                 return (index, lane)
         raise Error("lane not found")
 
-    def lanes_by_distance(self, s: Float64) -> List[Tuple[Int, Int]]:
+    def lanes_by_distance(self, s: Length64) raises -> List[Tuple[Int, Int]]:
+        """Typed quantity boundary. Return every lane at s, `GetLanesByDistance`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            Each lane's section index and lane index, section by section.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        return self.lanes_by_distance_meters(s.value)
+
+    def lanes_by_distance_meters(
+        self, s: Float64
+    ) raises -> List[Tuple[Int, Int]]:
+        """Explicit meter compatibility adapter. Return every lane at s, `GetLanesByDistance`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            Each lane's section index and lane index, section by section.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        _ = _finite_si(Float64(s))
+        return self._lanes_by_distance_si(s)
+
+    def _lanes_by_distance_si(self, s: Float64) -> List[Tuple[Int, Int]]:
         """Return every lane at s, `GetLanesByDistance`.
 
         Args:
@@ -438,12 +869,47 @@ struct Road(Copyable, Movable):
             Each lane's section index and lane index, section by section.
         """
         var out = List[Tuple[Int, Int]]()
-        for index in self.sections_at(s):
+        for index in self._sections_at_si(s):
             for lane in range(len(self.sections[index].lanes)):
                 out.append((index, lane))
         return out^
 
-    def lanes_at(self, s: Float64) -> List[Tuple[Int, Int]]:
+    def lanes_at(self, s: Length64) raises -> List[Tuple[Int, Int]]:
+        """Typed quantity boundary. Return the lanes at s by id, `Road::GetLanesAt`.
+
+        Where two sections at s both have an id, the later one wins, as a
+        `std::map` assignment does.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            Each lane's section index and lane index, in order of id.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        return self.lanes_at_meters(s.value)
+
+    def lanes_at_meters(self, s: Float64) raises -> List[Tuple[Int, Int]]:
+        """Explicit meter compatibility adapter. Return the lanes at s by id, `Road::GetLanesAt`.
+
+        Where two sections at s both have an id, the later one wins, as a
+        `std::map` assignment does.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            Each lane's section index and lane index, in order of id.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        _ = _finite_si(Float64(s))
+        return self._lanes_at_si(s)
+
+    def _lanes_at_si(self, s: Float64) -> List[Tuple[Int, Int]]:
         """Return the lanes at s by id, `Road::GetLanesAt`.
 
         Where two sections at s both have an id, the later one wins, as a
@@ -456,7 +922,7 @@ struct Road(Copyable, Movable):
             Each lane's section index and lane index, in order of id.
         """
         var out = List[Tuple[Int, Int]]()
-        for index in self.sections_at(s):
+        for index in self._sections_at_si(s):
             for lane in range(len(self.sections[index].lanes)):
                 var id = self.sections[index].lanes[lane].id.value
                 var at = 0
@@ -472,6 +938,43 @@ struct Road(Copyable, Movable):
         return self.sections[lane[0]].lanes[lane[1]].id.value
 
     def next_lane(
+        self, s: Length64, lane_id: LaneId
+    ) raises -> Optional[Tuple[Int, Int]]:
+        """Typed quantity boundary. Return the lane in a section after s, `Road::GetNextLane`.
+
+        Args:
+            s: A section's start, in meters.
+            lane_id: The lane's id.
+
+        Returns:
+            The first section after s with the lane, and the lane's index,
+            or None.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        return self.next_lane_meters(s.value, lane_id)
+
+    def next_lane_meters(
+        self, s: Float64, lane_id: LaneId
+    ) raises -> Optional[Tuple[Int, Int]]:
+        """Explicit meter compatibility adapter. Return the lane in a section after s, `Road::GetNextLane`.
+
+        Args:
+            s: A section's start, in meters.
+            lane_id: The lane's id.
+
+        Returns:
+            The first section after s with the lane, and the lane's index,
+            or None.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        _ = _finite_si(Float64(s))
+        return self._next_lane_si(s, lane_id)
+
+    def _next_lane_si(
         self, s: Float64, lane_id: LaneId
     ) -> Optional[Tuple[Int, Int]]:
         """Return the lane in a section after s, `Road::GetNextLane`.
@@ -492,6 +995,43 @@ struct Road(Copyable, Movable):
         return None
 
     def prev_lane(
+        self, s: Length64, lane_id: LaneId
+    ) raises -> Optional[Tuple[Int, Int]]:
+        """Typed quantity boundary. Return the lane in a section before s, `Road::GetPrevLane`.
+
+        Args:
+            s: A section's start, in meters.
+            lane_id: The lane's id.
+
+        Returns:
+            The last section before s with the lane, and the lane's index,
+            or None.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        return self.prev_lane_meters(s.value, lane_id)
+
+    def prev_lane_meters(
+        self, s: Float64, lane_id: LaneId
+    ) raises -> Optional[Tuple[Int, Int]]:
+        """Explicit meter compatibility adapter. Return the lane in a section before s, `Road::GetPrevLane`.
+
+        Args:
+            s: A section's start, in meters.
+            lane_id: The lane's id.
+
+        Returns:
+            The last section before s with the lane, and the lane's index,
+            or None.
+
+        Raises:
+            Error: If the station is nonfinite.
+        """
+        _ = _finite_si(Float64(s))
+        return self._prev_lane_si(s, lane_id)
+
+    def _prev_lane_si(
         self, s: Float64, lane_id: LaneId
     ) -> Optional[Tuple[Int, Int]]:
         """Return the lane in a section before s, `Road::GetPrevLane`.
@@ -541,7 +1081,36 @@ struct Road(Copyable, Movable):
 
     # --- the reference line ---------------------------------------------------
 
-    def elevation_on(self, s: Float64) raises -> CubicPolynomial:
+    def elevation_on(self, s: Length64) raises -> CubicPolynomial:
+        """Typed quantity boundary. Return the elevation cubic at s, `Road::GetElevationOn`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The cubic of the elevation record that holds at s.
+
+        Raises:
+            Error: If no elevation record starts at or before s.
+        """
+        return self.elevation_on_meters(s.value)
+
+    def elevation_on_meters(self, s: Float64) raises -> CubicPolynomial:
+        """Explicit meter compatibility adapter. Return the elevation cubic at s, `Road::GetElevationOn`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The cubic of the elevation record that holds at s.
+
+        Raises:
+            Error: If no elevation record starts at or before s.
+        """
+        _ = _finite_si(Float64(s))
+        return self._elevation_on_si(s)
+
+    def _elevation_on_si(self, s: Float64) raises -> CubicPolynomial:
         """Return the elevation cubic at s, `Road::GetElevationOn`.
 
         Args:
@@ -558,7 +1127,50 @@ struct Road(Copyable, Movable):
             raise Error("failed to find road elevation.")
         return found.value().polynomial
 
-    def directed_point(self, s: Float64) raises -> DirectedPoint:
+    def directed_point(self, s: Length64) raises -> DirectedPoint:
+        """Typed quantity boundary. Return lane 0 at s, `Road::GetDirectedPointIn`.
+
+        The lane offset moves the point sideways. The elevation sets z and
+        the pitch. CARLA reads the elevation at s as given, and the plan
+        view and the lane offset at s clamped to the road.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The point, its heading and its pitch, in OpenDRIVE's frame.
+
+        Raises:
+            Error: If no geometry or no elevation record holds at s.
+        """
+        return self.directed_point_meters(s.value)
+
+    def directed_point_meters(self, s: Float64) raises -> DirectedPoint:
+        """Explicit meter compatibility adapter. Return lane 0 at s, `Road::GetDirectedPointIn`.
+
+        The lane offset moves the point sideways. The elevation sets z and
+        the pitch. CARLA reads the elevation at s as given, and the plan
+        view and the lane offset at s clamped to the road.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The point, its heading and its pitch, in OpenDRIVE's frame.
+
+        Raises:
+            Error: If no geometry or no elevation record holds at s.
+        """
+        _ = _finite_si(Float64(s))
+        var result = self._directed_point_si(s)
+        _ = _finite_si(result.x)
+        _ = _finite_si(result.y)
+        _ = _finite_si(result.z)
+        _ = _finite_si(result.tangent)
+        _ = _finite_si(result.pitch)
+        return result
+
+    def _directed_point_si(self, s: Float64) raises -> DirectedPoint:
         """Return lane 0 at s, `Road::GetDirectedPointIn`.
 
         The lane offset moves the point sideways. The elevation sets z and
@@ -578,12 +1190,55 @@ struct Road(Copyable, Movable):
         var offset = Float32(0)
         var lane_offset = info_at(self.info.lane_offsets, clamped)
         if Bool(lane_offset):
-            offset = Float32(lane_offset.value().polynomial.evaluate(clamped))
+            offset = Float32(
+                lane_offset.value().polynomial._evaluate_si(clamped)
+            )
         var point = self._plan_point(clamped)
         point.apply_lateral_offset(Length(-offset, METER))
         return self._elevate(point, s)
 
-    def directed_point_no_lane_offset(self, s: Float64) raises -> DirectedPoint:
+    def directed_point_no_lane_offset(
+        self, s: Length64
+    ) raises -> DirectedPoint:
+        """Typed quantity boundary. Return the reference line at s, `GetDirectedPointInNoLaneOffset`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The point, its heading and its pitch, with no lane offset.
+
+        Raises:
+            Error: If no geometry or no elevation record holds at s.
+        """
+        return self.directed_point_no_lane_offset_meters(s.value)
+
+    def directed_point_no_lane_offset_meters(
+        self, s: Float64
+    ) raises -> DirectedPoint:
+        """Explicit meter compatibility adapter. Return the reference line at s, `GetDirectedPointInNoLaneOffset`.
+
+        Args:
+            s: A distance along the road, in meters.
+
+        Returns:
+            The point, its heading and its pitch, with no lane offset.
+
+        Raises:
+            Error: If no geometry or no elevation record holds at s.
+        """
+        _ = _finite_si(Float64(s))
+        var result = self._directed_point_no_lane_offset_si(s)
+        _ = _finite_si(result.x)
+        _ = _finite_si(result.y)
+        _ = _finite_si(result.z)
+        _ = _finite_si(result.tangent)
+        _ = _finite_si(result.pitch)
+        return result
+
+    def _directed_point_no_lane_offset_si(
+        self, s: Float64
+    ) raises -> DirectedPoint:
         """Return the reference line at s, `GetDirectedPointInNoLaneOffset`.
 
         Args:
@@ -603,17 +1258,59 @@ struct Road(Copyable, Movable):
         if at < 0:
             raise Error("The road has no geometry at that s")
         ref record = self.info.geometries[at]
-        return record.geometry.pos_at(s - record.s)
+        return record.geometry.pos_at_meters(s - record.s)
 
     def _elevate(
         self, var point: DirectedPoint, s: Float64
     ) raises -> DirectedPoint:
-        var elevation = self.elevation_on(s)
-        point.z = Float64(Float32(elevation.evaluate(s)))
-        point.pitch = elevation.tangent(s)
+        var elevation = self._elevation_on_si(s)
+        point.z = Float64(Float32(elevation._evaluate_si(s)))
+        point.pitch = elevation._tangent_si(s)
         return point
 
-    def nearest_point(self, location: Vector3) -> Tuple[Float64, Float64]:
+    def nearest_point(
+        self, location: Vector3
+    ) raises -> Tuple[Length64, Length64]:
+        """Return the typed station and plan distance of the nearest reference point.
+
+        Args:
+            location: The query point in CARLA's Float32 coordinate layout.
+
+        Returns:
+            The Float64 station and distance, with meter units.
+
+        Raises:
+            Error: If the point or either result is not finite.
+        """
+        var result = self.nearest_point_meters(location)
+        return (Length64(result[0]), Length64(result[1]))
+
+    def nearest_point_meters(
+        self, location: Vector3
+    ) raises -> Tuple[Float64, Float64]:
+        """Read nearest reference distances through the explicit meter adapter.
+
+        Args:
+            location: The query point in CARLA's Float32 coordinate layout.
+
+        Returns:
+            The finite station and plan distance in meters.
+
+        Raises:
+            Error: If the point or either result is not finite.
+        """
+        _finite_point(
+            [Float64(location.x), Float64(location.y), Float64(location.z)]
+        )
+        for record in self.info.geometries:
+            _ = _nonnegative_si(record.s)
+            _check_geometry_record(record.geometry)
+        var result = self._nearest_point_si(location)
+        _ = _finite_si(result[0])
+        _ = _finite_si(result[1])
+        return result
+
+    def _nearest_point_si(self, location: Vector3) -> Tuple[Float64, Float64]:
         """Return CARLA's `Road::GetNearestPoint`.
 
         CARLA asks every geometry for its `DistanceTo`, keeps the nearest,
@@ -631,7 +1328,7 @@ struct Road(Copyable, Movable):
         var best_d = _DOUBLE_MAX
         var nearest = len(self.info.geometries)
         for i in range(len(self.info.geometries)):
-            var d = self.info.geometries[i].geometry.distance_to(location)
+            var d = self.info.geometries[i].geometry._distance_to_si(location)
             if Float64(d[1]) < best_d:
                 best_s = Float64(d[0])
                 best_d = Float64(d[1])
@@ -641,6 +1338,64 @@ struct Road(Copyable, Movable):
         return (best_s, best_d)
 
     def nearest_lane(
+        self, s: Length64, location: Vector3, lane_type: LaneType = LANE_ANY
+    ) raises -> Tuple[Optional[LaneKey], Length64]:
+        """Typed quantity boundary. Return the lane nearest a point at s, `Road::GetNearestLane`.
+
+        Visit all lane centers from inner to outer on the right, then
+        on the left, in OpenDRIVE's frame. Unlike CARLA, a farther center
+        does not end that side's search: rounded centers need not have
+        monotonic distances. Centers and widths stay in Float64. Exact
+        stored-point order decides ties; the later eligible lane wins.
+
+        Args:
+            s: A distance along the road, in meters.
+            location: The point, in meters.
+            lane_type: The lane types that may be the answer.
+
+        Returns:
+            The selected lane and its Float64 distance in meters. The
+            distance is a scale-safe approximation, not an exact norm.
+            If no lane matches, None and the largest finite Float64.
+
+        Raises:
+            Error: If the mask or s is not valid, a query or visited center
+                is not finite, a needed record is missing, a visited width
+                is not finite, or the distance exceeds the Float64 range.
+        """
+        var result = self.nearest_lane_meters(s.value, location, lane_type)
+        return (result[0], Length64(result[1]))
+
+    def nearest_lane_meters(
+        self, s: Float64, location: Vector3, lane_type: LaneType = LANE_ANY
+    ) raises -> Tuple[Optional[LaneKey], Float64]:
+        """Explicit meter compatibility adapter. Return the lane nearest a point at s, `Road::GetNearestLane`.
+
+        Visit all lane centers from inner to outer on the right, then
+        on the left, in OpenDRIVE's frame. Unlike CARLA, a farther center
+        does not end that side's search: rounded centers need not have
+        monotonic distances. Centers and widths stay in Float64. Exact
+        stored-point order decides ties; the later eligible lane wins.
+
+        Args:
+            s: A distance along the road, in meters.
+            location: The point, in meters.
+            lane_type: The lane types that may be the answer.
+
+        Returns:
+            The selected lane and its Float64 distance in meters. The
+            distance is a scale-safe approximation, not an exact norm.
+            If no lane matches, None and the largest finite Float64.
+
+        Raises:
+            Error: If the mask or s is not valid, a query or visited center
+                is not finite, a needed record is missing, a visited width
+                is not finite, or the distance exceeds the Float64 range.
+        """
+        _ = _finite_si(Float64(s))
+        return self._nearest_lane_si(s, location, lane_type)
+
+    def _nearest_lane_si(
         self, s: Float64, location: Vector3, lane_type: LaneType = LANE_ANY
     ) raises -> Tuple[Optional[LaneKey], Float64]:
         """Return the lane nearest a point at s, `Road::GetNearestLane`.
@@ -676,7 +1431,7 @@ struct Road(Copyable, Movable):
             Float64(location.z),
         ]
         _finite_point(query)
-        var lanes = self.lanes_at(s)
+        var lanes = self._lanes_at_si(s)
         # Keep the existing clamp and record rules without directed_point's
         # Float32 lane-offset and elevation conversions.
         var clamped = min(max(s, 0.0), self.length)
@@ -684,12 +1439,12 @@ struct Road(Copyable, Movable):
         var offset = 0.0
         var lane_offset = info_at(self.info.lane_offsets, clamped)
         if Bool(lane_offset):
-            offset = lane_offset.value().polynomial.evaluate(clamped)
+            offset = lane_offset.value().polynomial._evaluate_si(clamped)
         var sn = sin(zero.tangent)
         var cs = cos(zero.tangent)
         zero.x -= offset * sn
         zero.y += offset * cs
-        zero.z = self.elevation_on(s).evaluate(s)
+        zero.z = self._elevation_on_si(s)._evaluate_si(s)
         _finite_point([zero.x, zero.y, zero.z])
         var best: Optional[LaneKey] = None
         var best_center = Array[Float64, 3](fill=0.0)
@@ -708,7 +1463,7 @@ struct Road(Copyable, Movable):
                 var width = info_at(lane.info.widths, s)
                 if not Bool(width):
                     raise Error("A lane has no width record at s")
-                var w = width.value().polynomial.evaluate(s)
+                var w = width.value().polynomial._evaluate_si(s)
                 if not isfinite(w):
                     raise Error("Fixed-s nearest lane needs a finite width")
                 var half = w * 0.5
@@ -755,7 +1510,35 @@ struct Road(Copyable, Movable):
             return lane_id.value <= 0
         return lane_id.value >= 0
 
-    def lane_length(self, section: Int) -> Float64:
+    def lane_length(self, section: Int) raises -> Length64:
+        """Typed quantity boundary. Return a lane's length, `Lane::GetLength`: its section's.
+
+        Args:
+            section: The section's index.
+
+        Returns:
+            The length, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
+        """
+        return Length64(self.lane_length_meters(section))
+
+    def lane_length_meters(self, section: Int) raises -> Float64:
+        """Explicit meter compatibility adapter. Return a lane's length, `Lane::GetLength`: its section's.
+
+        Args:
+            section: The section's index.
+
+        Returns:
+            The length, in meters.
+
+        Raises:
+            Error: If the computed length is nonfinite.
+        """
+        return _finite_si(self._lane_length_si(section))
+
+    def _lane_length_si(self, section: Int) -> Float64:
         """Return a lane's length, `Lane::GetLength`: its section's.
 
         Args:
@@ -764,9 +1547,50 @@ struct Road(Copyable, Movable):
         Returns:
             The length, in meters.
         """
-        return self.section_length(section)
+        return self._section_length_si(section)
 
-    def lane_width(self, section: Int, lane: Int, s: Float64) raises -> Float64:
+    def lane_width(
+        self, section: Int, lane: Int, s: Length64
+    ) raises -> Length64:
+        """Typed quantity boundary. Return a lane's width at s, `Lane::GetWidth`.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters.
+
+        Returns:
+            The width record's value at s, in meters, or 0 if no width
+            record holds at s.
+
+        Raises:
+            Error: If s is past the end of the road.
+        """
+        return Length64(self.lane_width_meters(section, lane, s.value))
+
+    def lane_width_meters(
+        self, section: Int, lane: Int, s: Float64
+    ) raises -> Float64:
+        """Explicit meter compatibility adapter. Return a lane's width at s, `Lane::GetWidth`.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters.
+
+        Returns:
+            The width record's value at s, in meters, or 0 if no width
+            record holds at s.
+
+        Raises:
+            Error: If s is past the end of the road.
+        """
+        _ = _finite_si(Float64(s))
+        return _nonnegative_si(self._lane_width_si(section, lane, s))
+
+    def _lane_width_si(
+        self, section: Int, lane: Int, s: Float64
+    ) raises -> Float64:
         """Return a lane's width at s, `Lane::GetWidth`.
 
         Args:
@@ -785,7 +1609,7 @@ struct Road(Copyable, Movable):
             raise Error("s is past the end of the road")
         var width = info_at(self.sections[section].lanes[lane].info.widths, s)
         if Bool(width):
-            return width.value().polynomial.evaluate(s)
+            return width.value().polynomial._evaluate_si(s)
         return 0.0
 
     def lane_is_straight(self, section: Int) raises -> Bool:
@@ -814,7 +1638,7 @@ struct Road(Copyable, Movable):
         # CARLA also tests that the section starts after the record; the
         # record found is the last to start at or before it, so it does.
         if (
-            start + self.section_length(section)
+            start + self._section_length_si(section)
             > record.s + record.geometry.length
         ):
             return False
@@ -856,8 +1680,8 @@ struct Road(Copyable, Movable):
             var width = info_at(lanes[i].info.widths, s)
             if not Bool(width):
                 raise Error("A lane has no width record at s")
-            var w = width.value().polynomial.evaluate(s)
-            var t = width.value().polynomial.tangent(s)
+            var w = width.value().polynomial._evaluate_si(s)
+            var t = width.value().polynomial._tangent_si(s)
             if lanes[i].id != lane_id:
                 dist += sign * w
                 tangent += sign * t
@@ -916,7 +1740,7 @@ struct Road(Copyable, Movable):
         var lane_offset = info_at(self.info.lane_offsets, s)
         if not Bool(lane_offset):
             raise Error("The road has no lane offset record at s")
-        offset -= lane_offset.value().polynomial.evaluate(s)
+        offset -= lane_offset.value().polynomial._evaluate_si(s)
         return self._offset_lane_point(s, offset)
 
     @no_inline
@@ -934,9 +1758,9 @@ struct Road(Copyable, Movable):
         else:
             point.x += offset * _lane_sin(point.tangent)
             point.y -= offset * _lane_cos(point.tangent)
-        var elevation = self.elevation_on(s)
-        point.z = elevation.evaluate(s)
-        point.pitch = elevation.tangent(s)
+        var elevation = self._elevation_on_si(s)
+        point.z = elevation._evaluate_si(s)
+        point.pitch = elevation._tangent_si(s)
         return point
 
     def _lane_center(
@@ -986,8 +1810,8 @@ struct Road(Copyable, Movable):
         ):
             return List[Float64]()
         var offset = info_at(self.info.lane_offsets, low).value().polynomial
-        var q1 = -offset.tangent(low)
-        var q2 = -(offset.c + 3.0 * low * offset.d)
+        var q1 = -offset._tangent_si(low)
+        var q2 = -(offset.c + 3.0 * (low - offset.s) * offset.d)
         var q3 = -offset.d
         ref lanes = self.sections[section].lanes
         var id = lanes[lane].id
@@ -1012,8 +1836,8 @@ struct Road(Copyable, Movable):
                     return List[Float64]()
                 var width = widths[width_at].polynomial
                 var factor = sign * (0.5 if lanes[i].id == id else 1.0)
-                q1 += factor * width.tangent(low)
-                q2 += factor * (width.c + 3.0 * low * width.d)
+                q1 += factor * width._tangent_si(low)
+                q2 += factor * (width.c + 3.0 * (low - width.s) * width.d)
                 q3 += factor * width.d
                 done = lanes[i].id == id
         var point = self._lane_point(section, lane, low)
@@ -1023,7 +1847,7 @@ struct Road(Copyable, Movable):
         var c = _lane_cos(heading)
         var sn = _lane_sin(heading)
         var span = high - low
-        var elevation = self.elevation_on(low)
+        var elevation = self._elevation_on_si(low)
         # Use world-coordinate coefficients of the actual scalar evaluator.
         # A polynomial sine/cosine pair need not satisfy C*C+S*S == 1.
         # Translate before scaling and do not terminate by relative road s.
@@ -1037,8 +1861,10 @@ struct Road(Copyable, Movable):
             -q2 * span * span * c,
             -q3 * span * span * span * c,
             point.z - Float64(location.z),
-            elevation.tangent(low) * span,
-            (elevation.c + 3.0 * low * elevation.d) * span * span,
+            elevation._tangent_si(low) * span,
+            (elevation.c + 3.0 * (low - elevation.s) * elevation.d)
+            * span
+            * span,
             elevation.d * span * span * span,
         ]
         var scale = span
@@ -1068,6 +1894,61 @@ struct Road(Copyable, Movable):
         return polynomial^
 
     def lane_transform(
+        self, section: Int, lane: Int, s: Length64
+    ) raises -> CarlaTransform:
+        """Typed quantity boundary. Return a lane's center at s in CARLA's frame, facing along it.
+
+        The heading and pitch follow the actual center derivative. This
+        corrects CARLA's use of the lateral derivative as an angle.
+        A lane against s turns its yaw by 180 degrees and reverses pitch.
+        A zero horizontal derivative keeps the reference heading. A
+        stationary center has zero pitch; a vertical tangent has 90 degrees.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters.
+
+        Returns:
+            The transform a vehicle in that lane would have.
+
+        Raises:
+            Error: If the indices name no lane, s is nonfinite or off the
+                road, a required record is missing, the offset frame is
+                undefined, the center or derivative is not representable,
+                or a SPIRAL uses an unsupported floating-point mode.
+        """
+        return self.lane_transform_meters(section, lane, s.value)
+
+    def lane_transform_meters(
+        self, section: Int, lane: Int, s: Float64
+    ) raises -> CarlaTransform:
+        """Explicit meter compatibility adapter. Return a lane's center at s in CARLA's frame, facing along it.
+
+        The heading and pitch follow the actual center derivative. This
+        corrects CARLA's use of the lateral derivative as an angle.
+        A lane against s turns its yaw by 180 degrees and reverses pitch.
+        A zero horizontal derivative keeps the reference heading. A
+        stationary center has zero pitch; a vertical tangent has 90 degrees.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters.
+
+        Returns:
+            The transform a vehicle in that lane would have.
+
+        Raises:
+            Error: If the indices name no lane, s is nonfinite or off the
+                road, a required record is missing, the offset frame is
+                undefined, the center or derivative is not representable,
+                or a SPIRAL uses an unsupported floating-point mode.
+        """
+        _ = _finite_si(Float64(s))
+        return self._lane_transform_si(section, lane, s)
+
+    def _lane_transform_si(
         self, section: Int, lane: Int, s: Float64
     ) raises -> CarlaTransform:
         """Return a lane's center at s in CARLA's frame, facing along it.
@@ -1105,8 +1986,8 @@ struct Road(Copyable, Movable):
         var lane_offset = info_at(self.info.lane_offsets, s)
         if not Bool(lane_offset):
             raise Error("The road has no lane offset record at s")
-        offset -= lane_offset.value().polynomial.evaluate(s)
-        slope -= lane_offset.value().polynomial.tangent(s)
+        offset -= lane_offset.value().polynomial._evaluate_si(s)
+        slope -= lane_offset.value().polynomial._tangent_si(s)
         if not isfinite(offset) or not isfinite(slope):
             raise Error("Lane offset or derivative is not representable")
         var geometry_at = info_index(self.info.geometries, s)
@@ -1187,6 +2068,73 @@ struct Road(Copyable, Movable):
         self,
         section: Int,
         lane: Int,
+        s: Length64,
+        extra_width: Length = Length(0.0),
+    ) raises -> Tuple[Vector3, Vector3]:
+        """Typed quantity boundary. Return a lane's two edges at s, `Lane::GetCornerPositions`.
+
+        A driving lane of a junction road widens by `extra_width` on each
+        side. A sidewalk's edges rise by `SIDEWALK_HEIGHT`.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters. It is clamped.
+            extra_width: How far to widen a junction's driving lane, in
+                meters.
+
+        Returns:
+            The edge at the lane's offset plus half its width, then the
+            edge at minus half, in CARLA's frame. For a right lane of a
+            right-hand road the first is the outer edge.
+
+        Raises:
+            Error: If the indices name no lane, or a record is missing.
+        """
+        return self.lane_corners_meters(
+            section, lane, s.value, extra_width.value
+        )
+
+    def lane_corners_meters(
+        self,
+        section: Int,
+        lane: Int,
+        s: Float64,
+        extra_width: Float32 = 0.0,
+    ) raises -> Tuple[Vector3, Vector3]:
+        """Explicit meter compatibility adapter. Return a lane's two edges at s, `Lane::GetCornerPositions`.
+
+        A driving lane of a junction road widens by `extra_width` on each
+        side. A sidewalk's edges rise by `SIDEWALK_HEIGHT`.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters. It is clamped.
+            extra_width: How far to widen a junction's driving lane, in
+                meters.
+
+        Returns:
+            The edge at the lane's offset plus half its width, then the
+            edge at minus half, in CARLA's frame. For a right lane of a
+            right-hand road the first is the outer edge.
+
+        Raises:
+            Error: If the indices name no lane, or a record is missing.
+        """
+        _ = _finite_si(Float64(s))
+        _ = _finite_si(Float64(extra_width))
+        var result = self._lane_corners_si(section, lane, s, extra_width)
+        for point in [result[0], result[1]]:
+            _ = _finite_si(Float64(point.x))
+            _ = _finite_si(Float64(point.y))
+            _ = _finite_si(Float64(point.z))
+        return result
+
+    def _lane_corners_si(
+        self,
+        section: Int,
+        lane: Int,
         s: Float64,
         extra_width: Float32 = 0.0,
     ) raises -> Tuple[Vector3, Vector3]:
@@ -1210,9 +2158,9 @@ struct Road(Copyable, Movable):
         Raises:
             Error: If the indices name no lane, or a record is missing.
         """
-        var offsets = self.lane_edge_offsets(section, lane, s, extra_width)
+        var offsets = self._lane_edge_offsets_si(section, lane, s, extra_width)
         var at = min(max(s, 0.0), self.length)
-        var right = self.directed_point(at)
+        var right = self._directed_point_si(at)
         var left = right
         right.apply_lateral_offset(Length(offsets[0], METER))
         left.apply_lateral_offset(Length(offsets[1], METER))
@@ -1227,6 +2175,70 @@ struct Road(Copyable, Movable):
         )
 
     def lane_edge_offsets(
+        self,
+        section: Int,
+        lane: Int,
+        s: Length64,
+        extra_width: Length = Length(0.0),
+    ) raises -> Tuple[Length, Length]:
+        """Typed quantity boundary. Return how far a lane's two edges sit from lane 0 at s.
+
+        These are the offsets `lane_corners` moves lane 0 by: the lane's
+        center offset plus and minus half its width, widened as there.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters. It is clamped.
+            extra_width: How far to widen a junction's driving lane, in
+                meters.
+
+        Returns:
+            The offsets of the first and the second edge, in meters. Plus
+            is to the right of the road's direction.
+
+        Raises:
+            Error: If the indices name no lane, or a record is missing.
+        """
+        var result = self.lane_edge_offsets_meters(
+            section, lane, s.value, extra_width.value
+        )
+        return (Length(result[0]), Length(result[1]))
+
+    def lane_edge_offsets_meters(
+        self,
+        section: Int,
+        lane: Int,
+        s: Float64,
+        extra_width: Float32 = 0.0,
+    ) raises -> Tuple[Float32, Float32]:
+        """Explicit meter compatibility adapter. Return how far a lane's two edges sit from lane 0 at s.
+
+        These are the offsets `lane_corners` moves lane 0 by: the lane's
+        center offset plus and minus half its width, widened as there.
+
+        Args:
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: A distance along the road, in meters. It is clamped.
+            extra_width: How far to widen a junction's driving lane, in
+                meters.
+
+        Returns:
+            The offsets of the first and the second edge, in meters. Plus
+            is to the right of the road's direction.
+
+        Raises:
+            Error: If the indices name no lane, or a record is missing.
+        """
+        _ = _finite_si(Float64(s))
+        _ = _finite_si(Float64(extra_width))
+        var result = self._lane_edge_offsets_si(section, lane, s, extra_width)
+        _ = _finite_si(Float64(result[0]))
+        _ = _finite_si(Float64(result[1]))
+        return result
+
+    def _lane_edge_offsets_si(
         self,
         section: Int,
         lane: Int,
@@ -1258,7 +2270,7 @@ struct Road(Copyable, Movable):
         var t_offset = Float32(0)
         if the_lane.id.value != 0:
             t_offset = Float32(self._total_width(section, at, the_lane.id)[0])
-        var half = Float32(self.lane_width(section, lane, at)) / 2.0
+        var half = Float32(self._lane_width_si(section, lane, at)) / 2.0
         if (
             extra_width != 0.0
             and self.is_junction
@@ -1266,6 +2278,17 @@ struct Road(Copyable, Movable):
         ):
             half += extra_width
         return (t_offset + half, t_offset - half)
+
+    def length_quantity(self) raises -> Length64:
+        """Read the checked typed view of the raw length compatibility field.
+
+        Returns:
+            The same finite Float64 value with its unit.
+
+        Raises:
+            Error: If the mutable raw value is not finite.
+        """
+        return Length64(_nonnegative_si(self.length))
 
 
 # `Math::ToDegrees<float>`: 180 over pi, both floats.

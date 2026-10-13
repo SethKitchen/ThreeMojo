@@ -1,7 +1,13 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Explicit current-graph checks before reversible historical projection."""
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
     from . import source_contracts as source
@@ -47,23 +53,24 @@ def _observe_text(root, path, text, *, _operation=None):
     return full_audit._observe_text(root, path, text, _operation=_operation)
 
 
+
 def require(condition, message):
     if not condition:
         raise ValueError('accepted source successor: ' + message)
 
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
     require(type(record['schema']) is int and record['schema'] == 1
             and set(record['sources']) == set(SOURCE_PATHS), 'wrong exact successor set')
-    require(hashlib.sha256((root/'tools/carla_lane_oracle/coverage-followup-migration.json').read_bytes()).hexdigest()
+    require(hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/coverage-followup-migration.json', (root/'tools/carla_lane_oracle/coverage-followup-migration.json').read_bytes())).hexdigest()
             == record['prior_followup_migration_sha256'], 'historical followup record changed')
     require(set(record['components']) == set(COMPONENTS), 'wrong component set')
     for name, expected in record['components'].items():
-        require(hashlib.sha256((root/'tools/carla_lane_oracle'/name).read_bytes()).hexdigest()
+        require(hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())).hexdigest()
                 == expected, 'component record changed: ' + name)
     return record
 
@@ -78,7 +85,7 @@ def _verify_current(root, *, _operation=None):
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
     for path, item in record['sources'].items():
-        require(source.token_sha256(_observe_text(root, path, (root/path).read_text(), _operation=_operation)) == item['after_token_sha256'],
+        require(source.token_sha256(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == item['after_token_sha256'],
                 'unreviewed complete successor: ' + path)
         require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
                 == item['before_sha256'], 'historical module changed: ' + path)
@@ -123,7 +130,7 @@ def predecessor_pins(root, filename, *, _operation=None):
             from . import full_audit_cleanup_contracts as full_audit
         else:
             import full_audit_cleanup_contracts as full_audit
-        payload = full_audit._observe_bytes(root, 'tools/carla_lane_oracle/'+filename, payload, _operation=_operation)
+        payload = _typed_source.historical_bytes(root, 'tools/carla_lane_oracle/'+filename, full_audit._observe_bytes(root, 'tools/carla_lane_oracle/'+filename, payload, _operation=_operation), _operation=_operation)
     require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],
             'unreviewed runtime pin successor: ' + filename)
     pins = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -158,11 +165,15 @@ def _verify_current_for_pin_pair(root, *, _operation=None):
         _check_operation(root, _operation)
     record = read_record(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
-    for path, item in record['sources'].items():
-        require(source.token_sha256(_observe_text(root, path, (root/path).read_text(), _operation=_operation)) == item['after_token_sha256'],
-                'unreviewed complete successor: ' + path)
-        require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
-                == item['before_sha256'], 'historical module changed: ' + path)
+    try:
+        for path, item in record['sources'].items():
+            require(source.token_sha256(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == item['after_token_sha256'],
+                    'unreviewed complete successor: ' + path)
+            require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
+                    == item['before_sha256'], 'historical module changed: ' + path)
+    except ValueError as error:
+        raise ValueError(
+            'unreviewed complete successor: ' + str(error)) from error
     if __package__:
         from . import rounded_line_selector_contracts as line
         from . import distance_validation_contracts as distance
@@ -215,7 +226,7 @@ def _read_current_pair_pin(root, filename, *, _operation=None):
         raise ValueError(
             'accepted source successor: unreadable current paired pin: ' + filename) from error
     if _operation is not None:
-        full_audit._observe_bytes(root, relative, payload, _operation=_operation)
+        _typed_source.historical_bytes(root, relative, full_audit._observe_bytes(root, relative, payload, _operation=_operation), _operation=_operation)
     require(type(payload) is bytes,
             'current paired pin is not builtin bytes: ' + filename)
     return payload
@@ -243,14 +254,14 @@ def predecessor_pin_pair(root):
             import full_audit_cleanup_contracts as full_audit
         runtime_raw = _read_current_pair_pin(root, runtime_name)
     else:
-        runtime_raw = (root/'tools/carla_lane_oracle'/runtime_name).read_bytes()
+        runtime_raw = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/runtime_name, (root/'tools/carla_lane_oracle'/runtime_name).read_bytes())
     runtime_payload = _pin_predecessor(
         runtime_raw, record['pin_files'][runtime_name], runtime_name)
     if observed_current_admission:
         executing = full_audit.executing_checker_bindings()
         guard_raw = _read_current_pair_pin(root, guard_name)
     else:
-        guard_raw = (root/'tools/carla_lane_oracle'/guard_name).read_bytes()
+        guard_raw = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/guard_name, (root/'tools/carla_lane_oracle'/guard_name).read_bytes())
     guard_payload = _pin_predecessor(
         guard_raw, record['pin_files'][guard_name], guard_name)
     if observed_current_admission:
@@ -289,14 +300,14 @@ def _predecessor_pin_pair(root, *, _operation=None):
             import full_audit_cleanup_contracts as full_audit
         runtime_raw = _read_current_pair_pin(root, runtime_name, _operation=_operation)
     else:
-        runtime_raw = (root/'tools/carla_lane_oracle'/runtime_name).read_bytes()
+        runtime_raw = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/runtime_name, (root/'tools/carla_lane_oracle'/runtime_name).read_bytes(), _operation=_operation)
     runtime_payload = _pin_predecessor(
         runtime_raw, record['pin_files'][runtime_name], runtime_name)
     if observed_current_admission:
         executing = full_audit.executing_checker_bindings()
         guard_raw = _read_current_pair_pin(root, guard_name, _operation=_operation)
     else:
-        guard_raw = (root/'tools/carla_lane_oracle'/guard_name).read_bytes()
+        guard_raw = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/guard_name, (root/'tools/carla_lane_oracle'/guard_name).read_bytes(), _operation=_operation)
     guard_payload = _pin_predecessor(
         guard_raw, record['pin_files'][guard_name], guard_name)
     if observed_current_admission:

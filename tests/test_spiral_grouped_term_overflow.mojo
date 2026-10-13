@@ -4,7 +4,11 @@
 """The standalone grouped proof must decline finite-input accumulation overflow."""
 from extensions.carla.curve_bounds import _geometry_distance, _spiral_counts
 from extensions.carla.curve_interval import _Jet
-from extensions.carla.geometry import RoadGeometry, SPIRAL, with_spiral
+from extensions.carla.geometry import (
+    RoadGeometry,
+    SPIRAL,
+    with_spiral_si as with_spiral,
+)
 from extensions.carla.spiral_grouped_roundoff_proof import (
     _try_spiral_grouped_roundoff_envelope,
 )
@@ -20,7 +24,9 @@ def test_grouped_accumulation_overflow_is_a_conservative_direct_refusal() raises
         ) if unsupported else 2.125
         var length = maximum if unsupported else 20.0
         var geometry = with_spiral(
-            RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, length), 0.0, 0.0
+            RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, length),
+            0.0,
+            0.0,
         )
         var d = _geometry_distance(geometry, _Jet.variable(station, station))
         assert_true(d.rounded_value().is_finite())

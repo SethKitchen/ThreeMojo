@@ -48,6 +48,10 @@ again 0.5 s after a failed check.
   the existing 40 m/s fallback. This correction can change trigger extents.
 """
 
+from units.si import Duration
+
+from extensions.carla.quantity_boundary import _nonnegative_si
+
 from extensions.carla.actor import ActorId, GREEN, RED, TrafficLightState
 from extensions.carla.map import (
     Map,
@@ -64,7 +68,7 @@ from extensions.carla.road_info import (
     RoadId,
     RoadInfoSignal,
     SignalId,
-    info_at,
+    _info_at_si as info_at,
 )
 from extensions.carla.transform import CarlaTransform
 from math.matrix3 import Matrix3
@@ -178,7 +182,7 @@ def _lane_bounds(map: Map, w: Waypoint) raises -> Tuple[Float64, Float64]:
     """The start and the length of a waypoint's lane section."""
     ref road = map.road(w.road_id)
     var section = road.section_index(w.section_id)
-    return (road.sections[section].s, road.section_length(section))
+    return (road.sections[section].s, road._section_length_si(section))
 
 
 def _shifted(map: Map, w: Waypoint, distance: Float64) raises -> Waypoint:
@@ -237,7 +241,7 @@ def traffic_light_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
             ):
                 if lane == 0:
                     continue
-                var found = map.waypoint_xodr(
+                var found = map.waypoint_xodr_float32(
                     reference.road_id,
                     LaneId(lane),
                     Length(Float32(reference.s), METER),
@@ -281,13 +285,13 @@ def _check_boxes(
             out.append(_cube(map, w, size))
             var next = w
             while True:
-                var ahead = map.next(next, step)
+                var ahead = map.next_meters(next, step)
                 if len(ahead) != 1 or ahead[0].road_id != w.road_id:
                     break
                 next = ahead[0]
                 out.append(_cube(map, next, size))
             var queue = List[Tuple[Float32, Waypoint]]()
-            for before in map.previous(w, step):
+            for before in map.previous_meters(w, step):
                 queue.append((_ANTICIPATION_TIME, before))
             var head = 0
             while head < len(queue):
@@ -304,7 +308,7 @@ def _check_boxes(
                 if speed > 0:
                     remaining = item[0] - size / speed
                 if remaining > 0:
-                    for before in map.previous(item[1], step):
+                    for before in map.previous_meters(item[1], step):
                         queue.append((remaining, before))
 
 
@@ -350,7 +354,7 @@ def give_way_boxes(map: Map, id: SignalId) raises -> SignBoxes:
             ):
                 if lane == 0:
                     continue
-                var found = map.waypoint_xodr(
+                var found = map.waypoint_xodr_float32(
                     reference.road_id,
                     LaneId(lane),
                     Length(Float32(reference.s), METER),
@@ -395,7 +399,7 @@ def speed_limit_boxes(map: Map, id: SignalId) raises -> List[TriggerBox]:
             ):
                 if lane == 0:
                     continue
-                var found = map.waypoint_xodr(
+                var found = map.waypoint_xodr_float32(
                     reference.road_id,
                     LaneId(lane),
                     Length(Float32(reference.s), METER),
@@ -619,7 +623,36 @@ struct TrafficSign(Copyable, Movable):
                 _ = self.check_counts.pop(i)
         self._delay(0.5)
 
-    def tick_timers(mut self, dt: Float32) -> List[SignalUpdate]:
+    def tick_timers(mut self, dt: Duration) raises -> List[SignalUpdate]:
+        """Advance sign timers by a checked duration.
+
+        Args:
+            dt: A finite nonnegative duration.
+
+        Returns:
+            The resulting signal updates.
+
+        Raises:
+            Error: If the duration is not finite or is negative.
+        """
+        return self.tick_timers_seconds(dt.value)
+
+    def tick_timers_seconds(mut self, dt: Float32) raises -> List[SignalUpdate]:
+        """Advance sign timers through the explicit second adapter.
+
+        Args:
+            dt: Finite nonnegative seconds.
+
+        Returns:
+            The resulting signal updates.
+
+        Raises:
+            Error: If the duration is not finite or is negative.
+        """
+        _ = _nonnegative_si(Float64(dt))
+        return self._tick_timers_si(dt)
+
+    def _tick_timers_si(mut self, dt: Float32) -> List[SignalUpdate]:
         """Run the timers down by one tick and fire those that are due.
 
         Args:

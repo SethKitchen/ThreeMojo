@@ -191,5 +191,39 @@ def test_old_malformed_successes_still_fall_back_conservatively() raises:
         )
 
 
+def test_predecessor_invalid_bounds_preserve_refusal_debits() raises:
+    var road = _road(_geometry())
+    var captured = _capture(road, 2.125, 2.25)
+    var nan = bitcast[DType.float64](UInt64(0x7FF8000000000001))
+    var infinite = inf[DType.float64]()
+    for bounds in [
+        (nan, Float64(2.25)),
+        (Float64(2.125), nan),
+        (infinite, Float64(2.25)),
+        (Float64(2.125), infinite),
+        (-infinite, Float64(2.25)),
+        (Float64(2.125), -infinite),
+        (Float64(-1.0), Float64(2.25)),
+        (Float64(2.125), Float64(-1.0)),
+        (Float64(2.25), Float64(2.125)),
+    ]:
+        var old_terms = 17
+        var old_units = 9
+        var terms = 17
+        var units = 9
+        var old = _old_pack(
+            road, bounds[0], bounds[1], 0, captured, 0, old_terms, old_units
+        )
+        var current = _try_pack_spiral_proof(
+            road, bounds[0], bounds[1], 0, captured, 0, terms, units
+        )
+        assert_false(Bool(old))
+        assert_false(Bool(current))
+        assert_equal(old_terms, 161)
+        assert_equal(old_units, 153)
+        assert_equal(terms, old_terms)
+        assert_equal(units, old_units)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

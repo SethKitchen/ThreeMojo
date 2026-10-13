@@ -13,7 +13,7 @@ from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 
 def _geometry(vertical: Float64 = 0.0) raises -> RoadGeometry:
-    var geometry = RoadGeometry(PARAM_POLY3, 0, 0, 0, 0, 1)
+    var geometry = RoadGeometry.from_meters(PARAM_POLY3, 0, 0, 0, 0, 1)
     geometry.samples.append(_Sample(0, 0, 0, -1, vertical))
     geometry.samples.append(_Sample(1, 0, 1, 1, vertical))
     return geometry^

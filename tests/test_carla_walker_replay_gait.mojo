@@ -37,7 +37,7 @@ def _log(
     first_speed: Float32 = 150, remove: Bool = False, bad_frame: Int = -1
 ) raises -> List[UInt8]:
     var recorder = Recorder()
-    _ = recorder.begin("", "Town", False, 0)
+    _ = recorder.begin_unix_seconds("", "Town", False, 0)
     recorder.events_add.append(
         _add(
             50,
@@ -62,7 +62,7 @@ def _log(
             _pos(50, LogVector(2000 + Float64(k) * 25, -450, 106), _zero())
         )
         recorder.walkers.append(RecordedAnimWalker(ActorId(50), speed))
-        recorder.write_frame(0.25, Float64(k) * 0.25, 0)
+        recorder.write_frame_seconds(0.25, Float64(k) * 0.25, 0)
     return recorder.bytes()
 
 

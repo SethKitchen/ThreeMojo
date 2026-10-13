@@ -23,20 +23,26 @@ spec.loader.exec_module(m)
 
 
 class SampledValueCorrespondenceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.historical_root = cleanup_fixtures.copy_historical_boundary_root(owner, ROOT)
+        cls.cleanup_sources = cleanup_fixtures.verified_predecessors(cls.historical_root)
+
     def setUp(self):
-        self.cleanup_sources = cleanup_fixtures.verified_predecessors(ROOT)
         self.directory = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         pin = self.root/'tools/carla_lane_oracle/runtime-source-pins.json'
         pin.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT/'tools/carla_lane_oracle/runtime-source-pins.json', pin)
+        shutil.copyfile(self.historical_root/'tools/carla_lane_oracle/runtime-source-pins.json', pin)
         moment_pin = self.root/'tools/carla_lane_oracle/spiral-moment-pins.json'
-        shutil.copyfile(ROOT/'tools/carla_lane_oracle/spiral-moment-pins.json', moment_pin)
+        shutil.copyfile(self.historical_root/'tools/carla_lane_oracle/spiral-moment-pins.json', moment_pin)
         guard_pin = self.root/'tools/carla_lane_oracle/sum2-guard-pins.json'
-        shutil.copyfile(ROOT/'tools/carla_lane_oracle/sum2-guard-pins.json', guard_pin)
+        shutil.copyfile(self.historical_root/'tools/carla_lane_oracle/sum2-guard-pins.json', guard_pin)
         migration = 'tools/carla_lane_oracle/winner-sign-query-migration.json'
-        shutil.copyfile(ROOT/migration, self.root/migration)
+        shutil.copyfile(self.historical_root/migration, self.root/migration)
         from tools.carla_lane_oracle.source_contracts import GROUP_PATHS
         from tools.carla_lane_oracle import seed_count_contracts as seed_count
         from tools.carla_lane_oracle.reviewed_cleanup_contracts import PROTECTED_INPUTS
@@ -51,9 +57,9 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
             if name == seed_count.MODULE:
                 # Isolated graph mutations use the verified historical fixture;
                 # the live successor binds these dependencies byte-for-byte.
-                target.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
+                target.write_bytes(seed_count.historical_source(self.historical_root).encode('utf-8'))
             else:
-                shutil.copyfile(ROOT/name, target)
+                shutil.copyfile(self.historical_root/name, target)
 
         cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
 
@@ -78,19 +84,21 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         self.assertEqual(result['dispatch_functions'], 6)
 
     def live_successor_fixture(self):
+        # The fixed pre-#333 Map successor remains a historical claim.
+        # Current typed source is exercised by the complete-root test below.
         from tools.carla_lane_oracle import seed_count_contracts as seed_count
-        record = seed_count.read_record(ROOT)
+        record = seed_count.read_record(self.historical_root)
         paths = {seed_count.MODULE, seed_count.MIGRATION}
         for group in ('unchanged_inputs', 'historical_records',
                       'unchanged_correctness_tests', 'after_correctness_tests'):
             paths.update(record[group])
-        physical = (ROOT/seed_count.MODULE).read_bytes().decode('utf-8')
+        physical = (self.historical_root/seed_count.MODULE).read_bytes().decode('utf-8')
         score_tests = ()
         if seed_count.sha(physical) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}:
             # Only the fully verified physical score endpoint can add its
             # separate numerical fixture. Historical mutation setup stays fixed.
-            seed_count.verify_score(ROOT)
-            self.assertEqual((ROOT/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
+            seed_count.verify_score(self.historical_root)
+            self.assertEqual((self.historical_root/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
             score_tests = tuple(seed_count.SCORE_TESTS)
             paths.update(score_tests)
             if seed_count.sha(physical) in {seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}:
@@ -100,11 +108,11 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         for name in paths:
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT/name, target)
+            shutil.copyfile(self.historical_root/name, target)
         # This Map-successor control keeps its exact historical dependencies.
         # Complete current-cleanup admission has a separate test below.
         cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
-        cleanup_fixtures.copy_shared_helper_inputs(self.root, ROOT)
+        cleanup_fixtures.copy_shared_helper_inputs(self.root, self.historical_root)
         for name, raw in self.cleanup_sources.items():
             self.assertEqual((self.root/name).read_bytes(), raw)
         self.assertEqual((self.root/seed_count.MODULE).read_bytes().decode('utf-8'), physical)

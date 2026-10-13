@@ -207,10 +207,12 @@ def test_strict_three_dimensional_bound_discards_a_nonminimizing_cell() raises:
 
 def test_width_touching_zero_requires_refinement_of_the_minimizing_set() raises:
     var road = _road()
-    road.sections[0].lanes[0].info.widths[0].polynomial = CubicPolynomial(
-        0, 2, 0, 0, 0
+    road.sections[0].lanes[0].info.widths[
+        0
+    ].polynomial = CubicPolynomial._from_coefficients(0, 2, 0, 0, 0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._from_coefficients(
+        0, 1, 0, 0, 0
     )
-    road.info.lane_offsets[0].polynomial = CubicPolynomial(0, 1, 0, 0, 0)
     var certificate = _bounded([0.5, 0.0, 0.0], 0.0, 0.0, low=0.0, high=1.0)
     assert_true(
         _lane_certificate_contains(
@@ -269,7 +271,9 @@ def test_rounded_arc_proof_refuses_changed_witness_and_unknown_boxes() raises:
 def test_adjacent_record_join_encloses_both_stored_endpoints_with_atomic_budget() raises:
     var road = _road()
     road.info.geometries.append(
-        RoadInfoGeometry(0.5, RoadGeometry(LINE, 0.5, 10.0, 0.0, 0.0, 3.5))
+        RoadInfoGeometry._from_si(
+            0.5, RoadGeometry.from_meters(LINE, 0.5, 10.0, 0.0, 0.0, 3.5)
+        )
     )
     var low = _next_down(Float64(0.5))
     for budget in [0, 1, 2]:
@@ -293,10 +297,10 @@ def test_adjacent_join_refuses_either_unresolved_endpoint_count() raises:
     assert_false(result[0][0].is_finite())
     assert_equal(result[1], 0)
     road = _road()
-    var geometry = RoadGeometry(SPIRAL, 0.5, 10.0, 0.0, 0.0, 3.5)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0.5, 10.0, 0.0, 0.0, 3.5)
     geometry.curvature_start = inf[DType.float64]()
     geometry.curvature_end = inf[DType.float64]()
-    road.info.geometries.append(RoadInfoGeometry(0.5, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.5, geometry^))
     result = _subdivided_lane_box(road, 0, 0, low, 0.5, 100, max_nodes=1)
     assert_false(result[0][0].is_finite())
     assert_equal(result[1], 0)

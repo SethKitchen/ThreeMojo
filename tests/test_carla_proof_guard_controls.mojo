@@ -39,7 +39,7 @@ def _proof_road(arc: Bool = True) raises -> Road:
     road.info.geometries[0].geometry.curvature_start = 0.125
     road.info.geometries[0].geometry.x = 16.0
     road.info.geometries[0].geometry.y = 8.0
-    road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(0.0)
     return road^
 
 
@@ -72,7 +72,7 @@ def test_rounded_box_unknown_operands_propagate_on_both_sides() raises:
             _RoundedBox.bounds(1.0, 2.0), one, _RoundedBox.point(-1.5)
         ).known
     )
-    var cubic = CubicPolynomial.constant(1.0)
+    var cubic = CubicPolynomial._constant_si(1.0)
     cubic.d = 0.125
     assert_false(_rounded_constant(cubic).known)
 
@@ -116,12 +116,12 @@ def test_contexts_require_active_profiles_and_width_records() raises:
     # remains within one active constant record of each profile kind.
     var road = _proof_road(False)
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(1.5, CubicPolynomial.constant(0.0))
+        RoadInfoLaneOffset._from_si(1.5, CubicPolynomial._constant_si(0.0))
     )
     _assert_refused(road, False)
     road = _proof_road(False)
     road.info.elevations.append(
-        RoadInfoElevation(1.5, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(1.5, CubicPolynomial._constant_si(0.0))
     )
     _assert_refused(road, False)
 
@@ -139,7 +139,9 @@ def test_center_lane_and_positive_outer_lane_use_complete_constant_offsets() rai
         for id in [1, 2]:
             var at = road.sections[0].lane_index(LaneId(id))
             road.sections[0].lanes[at].info.widths.append(
-                RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+                RoadInfoLaneWidth._from_si(
+                    0.0, CubicPolynomial._constant_si(2.0)
+                )
             )
         var outer = road.sections[0].lane_index(LaneId(2))
         if arc:
@@ -230,7 +232,9 @@ def test_dispatch_rejects_bad_domains_record_joins_and_invalid_geometry() raises
     _assert_dispatch_uncharged(road)
     road = _dispatch_road()
     road.info.geometries.append(
-        RoadInfoGeometry(1.5, RoadGeometry(LINE, 1.5, 0.0, 0.0, 0.0, 1.5))
+        RoadInfoGeometry._from_si(
+            1.5, RoadGeometry.from_meters(LINE, 1.5, 0.0, 0.0, 0.0, 1.5)
+        )
     )
     _assert_dispatch_uncharged(road)
     for field in range(4):

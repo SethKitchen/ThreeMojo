@@ -43,7 +43,7 @@ def _check_scale_identity(spiral: Bool) raises:
     # The dyadic coefficients represent K*(s-first_root)*(s-center).
     # Large cancellation makes the whole-cell interval conservative even
     # though the exact stored value at center is zero in either graph.
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         magnitude * first_root * center,
         -magnitude * (first_root + center),
         magnitude,

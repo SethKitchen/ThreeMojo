@@ -45,8 +45,12 @@ lead after runtime removal.
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/CollisionStage.cpp`.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
+from std.math import isfinite
+from std.collections import Optional
+
 from extensions.carla.actor import ActorId, GREEN, NO_ACTOR, OFF
-from extensions.carla.map import segment_distance_2d
+from extensions.carla.map import _segment_distance_2d_si as segment_distance_2d
 from extensions.carla.math import make_unit_vector
 from extensions.carla.traffic_manager_constants import (
     BOUNDARY_EXTENSION_MINIMUM,
@@ -65,12 +69,15 @@ from extensions.carla.traffic_manager_constants import (
     VERTICAL_OVERLAP_THRESHOLD,
     WALKER_TIME_EXTENSION,
 )
-from extensions.carla.traffic_manager_map import distance_squared
+from extensions.carla.traffic_manager_map import (
+    _distance_squared_si as distance_squared,
+)
 from extensions.carla.traffic_manager_shared import (
     CollisionHazardData,
     TrafficManagerShared,
 )
 from extensions.carla.traffic_manager_state import (
+    _check_actor_id,
     TRAFFIC_PEDESTRIAN,
     TRAFFIC_VEHICLE,
     get_target_waypoint,
@@ -78,7 +85,7 @@ from extensions.carla.traffic_manager_state import (
 from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import inf
-from units.si import Length
+from units.si import Length, Length64
 
 
 @fieldwise_init
@@ -125,7 +132,55 @@ def _winding(point: Vector3, polygon: List[Vector3]) -> Bool:
     return count != 0
 
 
-def polygon_distance(a: List[Vector3], b: List[Vector3]) -> Float64:
+def polygon_distance(
+    a: List[Vector3], b: List[Vector3]
+) raises -> Optional[Length64]:
+    """Return a polygon separation, absent when either polygon is empty.
+
+    Args:
+        a: The first polygon's meter coordinates.
+        b: The second polygon's meter coordinates.
+
+    Returns:
+        A finite nonnegative distance, or None for an empty polygon.
+
+    Raises:
+        Error: If a plan coordinate or a nonempty result is not finite.
+    """
+    var value = polygon_distance_meters(a, b)
+    if len(a) == 0 or len(b) == 0:
+        return None
+    return Length64(value)
+
+
+def polygon_distance_meters(
+    a: List[Vector3], b: List[Vector3]
+) raises -> Float64:
+    """Explicit checked meter adapter; empty polygons retain positive infinity.
+
+    Args:
+        a: The first polygon's meter coordinates.
+        b: The second polygon's meter coordinates.
+
+    Returns:
+        The raw separation, or positive infinity for an empty polygon.
+
+    Raises:
+        Error: If a plan coordinate or a nonempty result is not finite.
+    """
+    for point in a:
+        _ = _finite_si(Float64(point.x))
+        _ = _finite_si(Float64(point.y))
+    for point in b:
+        _ = _finite_si(Float64(point.x))
+        _ = _finite_si(Float64(point.y))
+    var value = _polygon_distance_si(a, b)
+    if len(a) > 0 and len(b) > 0:
+        _ = _nonnegative_si(value)
+    return value
+
+
+def _polygon_distance_si(a: List[Vector3], b: List[Vector3]) -> Float64:
     """Return the plan distance between two closed polygons, as
     Boost.Geometry's `distance`.
 
@@ -217,7 +272,8 @@ struct CollisionStage(Movable):
             shared: The traffic manager's state.
 
         Raises:
-            Error: If the index is out of range, or a tracked vehicle has
+            Error: If an actor id is not valid, or the index is out of range,
+                or a tracked vehicle has
                 no path.
         """
         if index < 0 or index >= len(shared.vehicle_id_list):
@@ -279,7 +335,7 @@ struct CollisionStage(Movable):
                 # location was read above, which raises for an untracked
                 # actor.
                 if shared.parameters.get_collision_detection(ego, other):
-                    var result = self.negotiate_collision(
+                    var result = self._negotiate_collision_si(
                         ego, other, look_ahead, shared
                     )
                     if result[0] and (
@@ -320,8 +376,9 @@ struct CollisionStage(Movable):
             actor: The actor leaving this runtime state.
 
         Raises:
-            Error: Never; the keys are collected before removal.
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor)
         var removed = List[Int]()
         for entry in self.collision_locks.items():
             if entry.key == actor.value or entry.value.lead_vehicle_id == actor:
@@ -342,6 +399,42 @@ struct CollisionStage(Movable):
 
     def get_bounding_box_extension(
         self, actor: ActorId, shared: TrafficManagerShared
+    ) raises -> Length:
+        """Read the checked physical stage result.
+
+        Args:
+            actor: The source actor.
+            shared: The source shared.
+
+        Returns:
+            The physical result; an absent collision margin means no yield.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        return Length(self.get_bounding_box_extension_meters(actor, shared))
+
+    def get_bounding_box_extension_meters(
+        self, actor: ActorId, shared: TrafficManagerShared
+    ) raises -> Float32:
+        """Explicit checked meters stage compatibility adapter.
+
+        Args:
+            actor: The source actor.
+            shared: The source shared.
+
+        Returns:
+            The scalar CARLA result in meters; collision no-yield retains positive infinity.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        var result = self._get_bounding_box_extension_si(actor, shared)
+        _ = _finite_si(Float64(result))
+        return result
+
+    def _get_bounding_box_extension_si(
+        self, actor: ActorId, shared: TrafficManagerShared
     ) raises -> Float32:
         """Return how far a vehicle's boundary reaches ahead,
         `GetBoundingBoxExtention`.
@@ -356,7 +449,7 @@ struct CollisionStage(Movable):
             lock's start, in meters.
 
         Raises:
-            Error: If the vehicle is not tracked.
+            Error: If an actor id is not valid, or the vehicle is not tracked.
         """
         var velocity = shared.simulation_state.get_velocity(actor).dot(
             shared.simulation_state.get_heading(actor)
@@ -393,7 +486,7 @@ struct CollisionStage(Movable):
             The four corners, clockwise seen from above in CARLA's frame.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If an actor id is not valid, or the actor is not tracked.
         """
         ref state = shared.simulation_state
         var heading = state.get_heading(actor)
@@ -432,8 +525,9 @@ struct CollisionStage(Movable):
             path.
 
         Raises:
-            Error: If the actor is not tracked.
+            Error: If an actor id is not valid, or the actor is not tracked.
         """
+        _ = _check_actor_id(actor)
         var cached = self.geodesic_boundary_map.get(actor.value)
         if Bool(cached):
             return cached.value().copy()
@@ -445,7 +539,7 @@ struct CollisionStage(Movable):
             var buffer = found.value().copy()
             var extension = max(
                 shared.parameters.get_distance_to_leading_vehicle(actor).value,
-                self.get_bounding_box_extension(actor, shared),
+                self._get_bounding_box_extension_si(actor, shared),
             )
             var extension_square = extension * extension
             var dimensions = shared.simulation_state.get_dimensions(actor)
@@ -514,8 +608,10 @@ struct CollisionStage(Movable):
             The distances, in meters.
 
         Raises:
-            Error: If an actor is not tracked.
+            Error: If an actor id is not valid, or an actor is not tracked.
         """
+        _ = _check_actor_id(reference)
+        _ = _check_actor_id(other)
         var low = min(reference.value, other.value)
         var high = max(reference.value, other.value)
         var key = (low << 32) | high
@@ -533,10 +629,10 @@ struct CollisionStage(Movable):
                 ActorId(high), shared
             )
             result = GeometryComparison(
-                polygon_distance(reference_box, other_geodesic),
-                polygon_distance(other_box, reference_geodesic),
-                polygon_distance(reference_geodesic, other_geodesic),
-                polygon_distance(reference_box, other_box),
+                _polygon_distance_si(reference_box, other_geodesic),
+                _polygon_distance_si(other_box, reference_geodesic),
+                _polygon_distance_si(reference_geodesic, other_geodesic),
+                _polygon_distance_si(reference_box, other_box),
             )
             self.geometry_cache[key] = result
         if reference.value > other.value:
@@ -548,6 +644,64 @@ struct CollisionStage(Movable):
         return result
 
     def negotiate_collision(
+        mut self,
+        reference: ActorId,
+        other: ActorId,
+        look_ahead_index: Int,
+        shared: TrafficManagerShared,
+    ) raises -> Tuple[Bool, Optional[Length]]:
+        """Read the checked physical stage result.
+
+        Args:
+            reference: The source reference.
+            other: The source other.
+            look_ahead_index: The source look ahead index.
+            shared: The source shared.
+
+        Returns:
+            The physical result; an absent collision margin means no yield.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        var result = self.negotiate_collision_meters(
+            reference, other, look_ahead_index, shared
+        )
+        if not result[0]:
+            return (False, Optional[Length]())
+        return (True, Optional[Length](Length(result[1])))
+
+    def negotiate_collision_meters(
+        mut self,
+        reference: ActorId,
+        other: ActorId,
+        look_ahead_index: Int,
+        shared: TrafficManagerShared,
+    ) raises -> Tuple[Bool, Float32]:
+        """Explicit checked meters stage compatibility adapter.
+
+        Args:
+            reference: The source reference.
+            other: The source other.
+            look_ahead_index: The source look ahead index.
+            shared: The source shared.
+
+        Returns:
+            The scalar CARLA result in meters; collision no-yield retains positive infinity.
+
+        Raises:
+            Error: If a quantity, actor id or tracked state is invalid.
+        """
+        var result = self._negotiate_collision_si(
+            reference, other, look_ahead_index, shared
+        )
+        if result[0]:
+            _ = _finite_si(Float64(result[1]))
+        elif not (result[1] == inf[DType.float32]()):
+            _ = _finite_si(Float64(result[1]))
+        return result
+
+    def _negotiate_collision_si(
         mut self,
         reference: ActorId,
         other: ActorId,
@@ -573,8 +727,11 @@ struct CollisionStage(Movable):
             when it does not yield).
 
         Raises:
-            Error: If an actor is not tracked, or the vehicle has no path.
+            Error: If an actor id is not valid, an actor is not tracked, or
+                the vehicle has no path.
         """
+        _ = _check_actor_id(reference)
+        _ = _check_actor_id(other)
         var hazard = False
         var margin = inf[DType.float32]()
         ref state = shared.simulation_state
@@ -595,8 +752,10 @@ struct CollisionStage(Movable):
         var inter_vehicle_distance = distance_squared(
             reference_location, other_location
         )
-        var ego_extension = self.get_bounding_box_extension(reference, shared)
-        var other_extension = self.get_bounding_box_extension(other, shared)
+        var ego_extension = self._get_bounding_box_extension_si(
+            reference, shared
+        )
+        var other_extension = self._get_bounding_box_extension_si(other, shared)
         var inter_vehicle_length = reference_length + other_length
         var ego_range = ego_extension + inter_vehicle_length
         var cross_range = ego_extension + inter_vehicle_length + other_extension

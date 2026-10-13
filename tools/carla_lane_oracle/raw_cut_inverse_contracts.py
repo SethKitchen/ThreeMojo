@@ -1,7 +1,13 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Exact guarded raw-inverse successor; no unproved branch exclusion."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
     from . import source_contracts as source
@@ -23,7 +29,7 @@ def require(condition, message):
 
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -52,37 +58,36 @@ def verify_premises(root, *, _operation=None):
     text = (root/SOURCE_PATH).read_text()
     if _operation is not None:
         text = full_audit._observe_text(root, SOURCE_PATH, text, _operation=_operation)
+    text = _typed_source.historical_text(root, SOURCE_PATH, text, _operation=_operation)
     require(guard.significant(text) ==
             guard.significant(record['after_source']), 'raw inverse operation graph changed')
     environment = (root/'extensions/carla/curve_sum2.mojo').read_text()
     if _operation is not None:
-        environment = full_audit._observe_text(
-            root, 'extensions/carla/curve_sum2.mojo', environment, _operation=_operation)
+        environment = full_audit._observe_text(root, 'extensions/carla/curve_sum2.mojo', environment, _operation=_operation)
+    environment = _typed_source.historical_text(root, 'extensions/carla/curve_sum2.mojo', environment, _operation=_operation)
     require(guard.significant(environment) ==
             guard.significant(record['environment_source']), 'environment guard premise changed')
-    predecessor_payload = (root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json').read_bytes()
+    predecessor_payload = _typed_source.historical_bytes(root, root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json', (root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json').read_bytes(), _operation=_operation)
     require(hashlib.sha256(predecessor_payload).hexdigest() ==
             record['predecessor_migration_sha256'], 'historical predecessor record changed')
     predecessor_text = (root/'tools/carla_lane_oracle/curve-support-dispatch-migration.json').read_text()
     if _operation is not None:
-        predecessor_text = full_audit._observe_text(
-            root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json',
-            predecessor_text, _operation=_operation, _checked_raw=predecessor_payload)
+        predecessor_text = full_audit._observe_text(root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json', predecessor_text, _operation=_operation, _checked_raw=predecessor_payload)
+    predecessor_text = _typed_source.historical_text(root, 'tools/carla_lane_oracle/curve-support-dispatch-migration.json', predecessor_text, _operation=_operation)
     predecessor = json.loads(predecessor_text,
                              object_pairs_hook=source.unique_keys)
     require(predecessor['sources'][SOURCE_PATH]['after_token_sha256'] ==
             record['before_token_sha256'], 'successor is not bound to accepted predecessor')
     fixture = (root/'tests/test_carla_raw_cut_successor.mojo').read_text()
     if _operation is not None:
-        fixture = full_audit._observe_text(
-            root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
+        fixture = full_audit._observe_text(root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
+    fixture = _typed_source.historical_text(root, 'tests/test_carla_raw_cut_successor.mojo', fixture, _operation=_operation)
     require(source.token_sha256(fixture) ==
             record['native_fixture_token_sha256'], 'independent exact-word native fixture changed')
     reference = (root/'tests/test_carla_support_dispatch_successor.mojo').read_text()
     if _operation is not None:
-        reference = full_audit._observe_text(
-            root, 'tests/test_carla_support_dispatch_successor.mojo', reference,
-            _operation=_operation)
+        reference = full_audit._observe_text(root, 'tests/test_carla_support_dispatch_successor.mojo', reference, _operation=_operation)
+    reference = _typed_source.historical_text(root, 'tests/test_carla_support_dispatch_successor.mojo', reference, _operation=_operation)
     ref = guard.declaration(reference,
                             '_reference_sample_dispatch_cut', ())
     require(guard.significant(ref) == guard.significant(record['native_reference_source']),
@@ -100,6 +105,7 @@ def verify(root, *, _operation=None):
     text = (root/SOURCE_PATH).read_text()
     if _operation is not None:
         text = full_audit._observe_text(root, SOURCE_PATH, text, _operation=_operation)
+    text = _typed_source.historical_text(root, SOURCE_PATH, text, _operation=_operation)
     require(source.token_sha256(text) == record['after_token_sha256'],
             'complete raw inverse successor changed')
     verify_premises(root, _operation=_operation)

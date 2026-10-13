@@ -57,7 +57,7 @@ def _map() raises -> Map:
 
 
 def _waypoint(s: Float64 = 1.0) -> Waypoint:
-    return Waypoint(RoadId(1), SectionId(0), LaneId(-1), s)
+    return Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), s)
 
 
 def test_map_metered_lookup_rejects_bad_road_and_missing_lane() raises:
@@ -105,7 +105,7 @@ def test_map_speed_station_checks_each_domain_failure() raises:
 
 def test_map_rejects_mutated_nonnumeric_lane_speed() raises:
     var map = _map()
-    var speed = RoadInfoSpeed(0.0, 10.0, "Town")
+    var speed = RoadInfoSpeed._from_si(0.0, 10.0, "Town")
     speed.kind = NO_SPEED_LIMIT
     map.roads[0].sections[0].lanes[0].info.speeds.append(speed^)
     with assert_raises(contains="lane speed must be numeric"):
@@ -184,8 +184,10 @@ def test_metadata_preflight_counts_nested_conflict_records() raises:
 def test_builder_numeric_speed_overloads_retain_source_units() raises:
     var builder = MapBuilder()
     builder.roads.append(_road())
-    builder.create_lane_speed((0, 0, 0), 0.0, Float64(36.0), "km/h")
-    builder.create_road_speed(0, 0.0, "motorway", Float64(10.0), "m/s")
+    builder.create_lane_speed_opendrive((0, 0, 0), 0.0, Float64(36.0), "km/h")
+    builder.create_road_speed_opendrive(
+        0, 0.0, "motorway", Float64(10.0), "m/s"
+    )
     var map = builder.build()
     assert_equal(map.speed_limit_at(_waypoint()).value().value, Float64(10.0))
     assert_equal(map.roads[0].info.speeds[0].unit, "m/s")
@@ -243,7 +245,7 @@ def test_arc_center_cancellation_still_obeys_heading_subdivision() raises:
     road.info.geometries[0].geometry.kind.value = 1
     road.info.geometries[0].geometry.curvature_start = 1.0
     road.info.geometries[0].geometry.curvature_end = 1.0
-    road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(2.0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(2.0)
     var roads = List[Road]()
     roads.append(road^)
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())

@@ -79,7 +79,7 @@ def test_world_and_cached_planning_are_equivalent_across_units() raises:
         assert_true(local.load(map, cache.copy()))
         assert_true(local.save() == loaded_cache)
         var shared = TrafficManagerShared(local^, 42)
-        var speed = stage.get_landmark_target_velocity(
+        var speed = stage.get_landmark_target_velocity_meters_per_second(
             SimpleWaypointIndex(88),
             Vector3(140, 1.75, 0),
             ActorId(1),
@@ -103,7 +103,7 @@ def test_desired_speed_stays_in_meters_per_second() raises:
     var shared = TrafficManagerShared(local^, 42)
     var stage = MotionPlanStage()
     shared.parameters.set_desired_speed(ActorId(1), Velocity(5))
-    var desired = stage.get_landmark_target_velocity(
+    var desired = stage.get_landmark_target_velocity_meters_per_second(
         SimpleWaypointIndex(88),
         Vector3(140, 1.75, 0),
         ActorId(1),
@@ -114,7 +114,7 @@ def test_desired_speed_stays_in_meters_per_second() raises:
     # 5 m/s + (25 - 5) m/s * (10 / 87.5). The old km/h comparison gives 18.8.
     assert_almost_equal(desired, Float32(7.285714285714286), atol=1e-4)
     shared.parameters.set_percentage_speed_difference(ActorId(1), 50)
-    var scaled = stage.get_landmark_target_velocity(
+    var scaled = stage.get_landmark_target_velocity_meters_per_second(
         SimpleWaypointIndex(88),
         Vector3(140, 1.75, 0),
         ActorId(1),
@@ -131,7 +131,9 @@ def test_replay_uses_the_same_physical_sign_limit_for_equivalent_map_units() rai
         recorded_world.blueprints.at("vehicle.lincoln.mkz"), _pose_at_sign()
     )
     var recorder = Recorder()
-    _ = recorder.start(recorded_world, "", "equivalent-units", False, 0)
+    _ = recorder.start_unix_seconds(
+        recorded_world, "", "equivalent-units", False, 0
+    )
     for _ in range(4):
         _ = recorder.tick(recorded_world)
     recorder.stop()

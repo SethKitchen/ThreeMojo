@@ -10,7 +10,7 @@ from extensions.carla.road_info import (
     SectionId,
     NO_JUNCTION,
     RoadInfoLaneWidth,
-    info_at,
+    info_at_meters as info_at,
 )
 from extensions.carla.polynomial import CubicPolynomial
 from std.memory import bitcast
@@ -43,8 +43,8 @@ def _legacy_total_width(
         var width = info_at(lanes[i].info.widths, s)
         if not Bool(width):
             raise Error("A lane has no width record at s")
-        var w = width.value().polynomial.evaluate(s)
-        var t = width.value().polynomial.tangent(s)
+        var w = width.value().polynomial.evaluate_meters(s)
+        var t = width.value().polynomial.tangent_meters(s)
         if lanes[i].id != lane_id:
             dist += sign * w
             tangent += sign * t
@@ -56,17 +56,17 @@ def _legacy_total_width(
 
 
 def _width_road() raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "width", 10.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     for id in [3, -1, 0, -3, 1, -2, 2]:
         _ = road.sections[0].add_lane(LaneId(id))
     for i in range(len(road.sections[0].lanes)):
         road.sections[0].lanes[i].info.widths.append(
-            RoadInfoLaneWidth(
+            RoadInfoLaneWidth._from_si(
                 0.0,
-                CubicPolynomial(
+                CubicPolynomial._from_coefficients(
                     Float64(i) * 0.1,
                     Float64(i) * -0.2,
                     0.00001,
@@ -100,7 +100,7 @@ def test_cancellation_and_signed_zero_match_legacy_words() raises:
         for i in range(len(road.sections[0].lanes)):
             road.sections[0].lanes[i].info.widths[
                 0
-            ].polynomial = CubicPolynomial.constant(
+            ].polynomial = CubicPolynomial._constant_si(
                 scale * (-1.0 if i % 2 else 1.0)
             )
         for id in [-3, -2, -1, 0, 1, 2, 3]:

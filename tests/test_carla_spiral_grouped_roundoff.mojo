@@ -33,7 +33,7 @@ from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 
 def _geometry(rate: Float64 = 0.0025) raises -> RoadGeometry:
-    var geometry = RoadGeometry(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
     geometry.curvature_start = 0.0
     geometry.curvature_end = rate * geometry.length
     return geometry^

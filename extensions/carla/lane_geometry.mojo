@@ -55,7 +55,7 @@ def _lane_geometry_pos_at(
     """
     var d = min(max(dist, 0.0), geometry.length)
     if geometry.kind == LINE:
-        return DirectedPoint(
+        return DirectedPoint._from_si(
             geometry.x + d * cos(geometry.heading),
             geometry.y + d * sin(geometry.heading),
             0.0,
@@ -81,7 +81,7 @@ def _lane_arc_offset(
         # This form still resolves every finite tiny-curvature increment.
         factor = (1.0 + offset * geometry.curvature_start) * d
     var chord = factor * _curve_sinc(half)
-    return DirectedPoint(
+    return DirectedPoint._from_si(
         geometry.x + offset * sin(geometry.heading) + chord * cos(phase),
         geometry.y - offset * cos(geometry.heading) + chord * sin(phase),
         0.0,
@@ -156,7 +156,7 @@ def _lane_spiral(geometry: RoadGeometry, d: Float64) raises -> DirectedPoint:
             x_correction = next_x[1]
             y = next_y[0]
             y_correction = next_y[1]
-    return DirectedPoint(
+    return DirectedPoint._from_si(
         geometry.x + (x + x_correction),
         geometry.y + (y + y_correction),
         0.0,
@@ -276,7 +276,7 @@ def _lane_sampled(geometry: RoadGeometry, d: Float64) -> DirectedPoint:
         tangent = atan2(tv, tu)
     var c = cos(geometry.heading)
     var s = sin(geometry.heading)
-    return DirectedPoint(
+    return DirectedPoint._from_si(
         geometry.x + u * c - v * s,
         geometry.y + v * c + u * s,
         0.0,

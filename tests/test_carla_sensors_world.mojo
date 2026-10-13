@@ -106,6 +106,7 @@ from extensions.carla.v2x import (
     STATION_ROAD_SIDE_UNIT,
     WINNER,
     path_state,
+    path_state_meters,
     simulate_channel,
 )
 from extensions.carla.vehicle import (
@@ -687,20 +688,27 @@ def test_path_states() raises:
     _wreck(world)
     var r = _sensor(world, "sensor.other.v2x", _pose(10, 1.75, 1))
     var s = _sensor(world, "sensor.other.v2x", _pose(30, 1.75, 1))
-    var clear = path_state(world, r, s, 1)
+    var clear = path_state(world, r, s, Length(1))
+    for bad in [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]:
+        with assert_raises():
+            _ = path_state(world, r, s, Length(bad))
     assert_equal(clear[0], LOS)
     assert_equal(len(clear[1]), 0)
     # A car between them at 1 m is in the way. Its edge is its roof, 1.5 m
     # up, plus 2 cm, over the lower antenna at 1 m.
     var car = _car(world, 20, 1.75)
-    var blocked = path_state(world, r, s, 1)
+    var blocked = path_state_meters(world, r, s, 1)
     assert_equal(blocked[0], NLOS_VEHICLE)
     assert_equal(len(blocked[1]), 1)
     _near(blocked[1][0], 20, 1.75, 0.52)
     # Above the car the line is clear again.
     var high_r = _sensor(world, "sensor.other.v2x", _pose(10, 1.75, 2))
     var high_s = _sensor(world, "sensor.other.v2x", _pose(30, 1.75, 2))
-    assert_equal(path_state(world, high_r, high_s, 2)[0], LOS)
+    assert_equal(path_state_meters(world, high_r, high_s, 2)[0], LOS)
     # A building between them ends the search.
     _ = world.physics.add_body(
         RigidBody(
@@ -711,7 +719,7 @@ def test_path_states() raises:
             Quaternion.identity(),
         )
     )
-    var walled = path_state(world, r, s, 1)
+    var walled = path_state_meters(world, r, s, 1)
     assert_equal(walled[0], NLOS_BUILDING)
     assert_equal(len(walled[1]), 1)
     # A walker in the way counts as a building, as CARLA's check for a
@@ -721,10 +729,10 @@ def test_path_states() raises:
     _ = world.spawn_actor(
         world.blueprints.at("walker.pedestrian.0020"), _pose(50, -20, 1)
     )
-    assert_equal(path_state(world, low_r, low_s, 1)[0], NLOS_BUILDING)
+    assert_equal(path_state_meters(world, low_r, low_s, 1)[0], NLOS_BUILDING)
     # Two sensors at one place see each other.
     var twin = _sensor(world, "sensor.other.v2x", _pose(10, 1.75, 1))
-    assert_equal(path_state(world, r, twin, 1)[0], LOS)
+    assert_equal(path_state_meters(world, r, twin, 1)[0], LOS)
     _ = car
 
 
@@ -736,7 +744,7 @@ def test_antennas_on_their_own_cars() raises:
     # the two parents.
     var r = _sensor(world, "sensor.other.v2x", _pose(0, 0, 1), a)
     var s = _sensor(world, "sensor.other.v2x", _pose(0, 0, 1), b)
-    assert_equal(path_state(world, r, s, 1)[0], LOS)
+    assert_equal(path_state_meters(world, r, s, 1)[0], LOS)
 
 
 def test_channel_hears_a_sender() raises:
@@ -790,7 +798,9 @@ def test_ca_service_of_a_vehicle() raises:
     var world = _world()
     var car = _car(world, 10, 1.75)
     world.set_light_state(car, LIGHT_LOW_BEAM | LIGHT_FOG)
-    var cam = CaService(world, car, 0.1, 1.0, False, CamNoise(), 1000)
+    var cam = CaService.from_cam_epoch_milliseconds(
+        world, car, Duration(0.1), Duration(1.0), False, CamNoise(), 1000
+    )
     assert_equal(cam.station_type, STATION_PASSENGER_CAR)
     var rng = SensorRandom(0)
     var projection = world.map.geo_projection.copy()
@@ -870,7 +880,9 @@ def test_ca_service_of_a_vehicle() raises:
 def test_ca_service_fixed_rate_and_roadside_units() raises:
     var world = _world()
     var car = _car(world, 10, 1.75)
-    var fixed = CaService(world, car, 0.1, 1.0, True, CamNoise(), 0)
+    var fixed = CaService.from_cam_epoch_milliseconds(
+        world, car, Duration(0.1), Duration(1.0), True, CamNoise(), 0
+    )
     var rng = SensorRandom(0)
     var projection = world.map.geo_projection.copy()
     var tick = Duration(0.05, SECOND)
@@ -880,7 +892,9 @@ def test_ca_service_fixed_rate_and_roadside_units() raises:
     # A sensor with no parent is a roadside unit: a CAM every 0.5 s.
     var rsu_sensor = _sensor(world, "sensor.other.v2x", _pose(0, 0, 0))
     world.elapsed_seconds = 0
-    var rsu = CaService(world, rsu_sensor, 0.1, 1.0, False, CamNoise(), 0)
+    var rsu = CaService.from_cam_epoch_milliseconds(
+        world, rsu_sensor, Duration(0.1), Duration(1.0), False, CamNoise(), 0
+    )
     assert_equal(rsu.station_type, STATION_ROAD_SIDE_UNIT)
     var cam = rsu.trigger(world, projection, tick, rng).value()
     assert_equal(cam.high_frequency.present, CONTAINER_RSU)
@@ -895,14 +909,18 @@ def test_ca_service_fixed_rate_and_roadside_units() raises:
     assert_true(Bool(rsu.trigger(world, projection, tick, rng)))
     # A vehicle tagged as a pedestrian sends no container.
     world.actors[car.value - 1].semantic_tags = [PEDESTRIAN]
-    var walker_like = CaService(world, car, 0.1, 1.0, True, CamNoise(), 0)
+    var walker_like = CaService.from_cam_epoch_milliseconds(
+        world, car, Duration(0.1), Duration(1.0), True, CamNoise(), 0
+    )
     assert_equal(walker_like.station_type, STATION_PEDESTRIAN)
     world.elapsed_seconds = 2
     var bare = walker_like.trigger(world, projection, tick, rng).value()
     assert_equal(bare.high_frequency.present, CONTAINER_NOTHING)
     # A vehicle with no tags at all is an unknown station.
     world.actors[car.value - 1].semantic_tags = List[SemanticTag]()
-    var unknown = CaService(world, car, 0.1, 1.0, True, CamNoise(), 0)
+    var unknown = CaService.from_cam_epoch_milliseconds(
+        world, car, Duration(0.1), Duration(1.0), True, CamNoise(), 0
+    )
     assert_equal(unknown.station_type.value, 0)
     world.elapsed_seconds = 3
     var unidentified = unknown.trigger(world, projection, tick, rng).value()

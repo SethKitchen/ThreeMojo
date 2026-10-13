@@ -1643,11 +1643,13 @@ def test_all_geometry_kinds_against_fraction_centers() raises:
         var origin = bitcast[DType.float64](row[1][0])
         var heading = bitcast[DType.float64](row[1][1])
         var road = _road(z=1.25)
-        road.info.geometries[0] = RoadInfoGeometry(
+        road.info.geometries[0] = RoadInfoGeometry._from_si(
             0.0, _fixed_geometry(row[0], origin, heading)
         )
         road.info.lane_offsets.append(
-            RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.375))
+            RoadInfoLaneOffset._from_si(
+                0.0, CubicPolynomial._constant_si(0.375)
+            )
         )
         _lane(road, 0, -2, 3.0)
         _lane(road, 0, 2, 4.0)
@@ -1656,7 +1658,7 @@ def test_all_geometry_kinds_against_fraction_centers() raises:
             Float32(bitcast[DType.float64](row[1][3])),
             Float32(bitcast[DType.float64](row[1][4])),
         )
-        var result = road.nearest_lane(3.25, query)
+        var result = road.nearest_lane_meters(3.25, query)
         assert_equal(result[0].value().lane_id.value, row[2])
         assert_true(result[1] >= bitcast[DType.float64](row[3] - UInt64(5)))
         assert_true(result[1] <= bitcast[DType.float64](row[3] + UInt64(4)))

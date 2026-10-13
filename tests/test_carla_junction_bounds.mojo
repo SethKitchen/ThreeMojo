@@ -41,18 +41,18 @@ comptime PI = 3.14159265358979323846
 def _road(
     mut b: MapBuilder, id: Int, length: Float64, sign: Int, rht: Bool = True
 ) raises -> Int:
-    var r = b.add_road(
+    var r = b.add_road_si(
         RoadId(id), "bounds", length, JuncId(7), RoadId(0), RoadId(0), rht
     )
-    var sec = b.add_road_section(r, SectionId(0), 0.0)
+    var sec = b.add_road_section_si(r, SectionId(0), 0.0)
     _ = b.add_road_section_lane(
         r, sec, LaneId(sign), LANE_DRIVING, False, LaneId(0), LaneId(0)
     )
-    b.create_lane_width(
-        b.lane(RoadId(id), LaneId(sign), 0.0), 0.0, 3.5, 0, 0, 0
+    b.create_lane_width_si(
+        b.lane_si(RoadId(id), LaneId(sign), 0.0), 0.0, 3.5, 0, 0, 0
     )
-    b.create_section_offset(r, 0.0, 0, 0, 0, 0)
-    b.add_road_elevation_profile(r, 0.0, 0, 0, 0, 0)
+    b.create_section_offset_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 0.0, 0, 0, 0, 0)
     return r
 
 
@@ -72,7 +72,7 @@ def _dense_points(map: Map) raises:
         ref road = map.road(pair[0].road_id)
         var sec = road.section_index(pair[0].section_id)
         var a = road.sections[sec].s
-        var length = road.section_length(sec)
+        var length = road.section_length_meters(sec)
         for i in range(258):
             var w = pair[0]
             # Prime denominator and noncentral offset do not reuse the
@@ -91,7 +91,7 @@ def test_semicircle_all_lane_signs_and_traffic_rules() raises:
         for sign in [-1, 1]:
             var b = MapBuilder()
             var r = _road(b, 1, 100.0, sign, rht)
-            b.add_road_geometry_arc(r, 0, 0, 0, 0, 100, PI / 100.0)
+            b.add_road_geometry_arc_si(r, 0, 0, 0, 0, 100, PI / 100.0)
             _connect(b, [1])
             var map = b.build()
             var pair = map.junction_waypoints(JuncId(7), LANE_ANY)[0]
@@ -123,16 +123,16 @@ def test_semicircle_all_lane_signs_and_traffic_rules() raises:
 def test_multiple_connections_unlinked_sections_and_duplicate_roads() raises:
     var b = MapBuilder()
     var r = _road(b, 1, 100.0, 1)
-    var sec = b.add_road_section(r, SectionId(4), 39.125)
+    var sec = b.add_road_section_si(r, SectionId(4), 39.125)
     _ = b.add_road_section_lane(
         r, sec, LaneId(-2), LANE_DRIVING, False, LaneId(0), LaneId(0)
     )
-    b.create_lane_width(
-        b.lane(RoadId(1), LaneId(-2), 39.125), 39.125, 8, 0, 0, 0
+    b.create_lane_width_si(
+        b.lane_si(RoadId(1), LaneId(-2), 39.125), 39.125, 8, 0, 0, 0
     )
-    b.add_road_geometry_arc(r, 0, 0, 0, 0, 100, PI / 100.0)
+    b.add_road_geometry_arc_si(r, 0, 0, 0, 0, 100, PI / 100.0)
     var other = _road(b, 2, 13, -1, False)
-    b.add_road_geometry_line(other, 0, 120, 17, 0, 13)
+    b.add_road_geometry_line_si(other, 0, 120, 17, 0, 13)
     _connect(b, [2, 1, 1])
     var map = b.build()
     assert_equal(len(map.junction_waypoints(JuncId(7), LANE_ANY)), 5)
@@ -154,14 +154,14 @@ def test_nonbinary_last_section_uses_the_stored_road_end() raises:
     for sign in [-1, 1]:
         var b = MapBuilder()
         var r = _road(b, 1, length, sign)
-        var sec = b.add_road_section(r, SectionId(1), start)
+        var sec = b.add_road_section_si(r, SectionId(1), start)
         _ = b.add_road_section_lane(
             r, sec, LaneId(sign), LANE_DRIVING, False, LaneId(0), LaneId(0)
         )
-        b.create_lane_width(
-            b.lane(RoadId(1), LaneId(sign), start), start, 3.5, 0, 0, 0
+        b.create_lane_width_si(
+            b.lane_si(RoadId(1), LaneId(sign), start), start, 3.5, 0, 0, 0
         )
-        b.add_road_geometry_line(r, 0, 0, 0, 0, length)
+        b.add_road_geometry_line_si(r, 0, 0, 0, 0, length)
         _connect(b, [1])
         var map = b.build()
         var box = map.junction(JuncId(7)).bounding_box
@@ -184,18 +184,20 @@ def test_cubic_profiles_and_inner_lane_records() raises:
     _ = b.add_road_section_lane(
         r, 0, LaneId(2), LANE_DRIVING, False, LaneId(0), LaneId(0)
     )
-    b.create_lane_width(b.lane(RoadId(1), LaneId(2), 0), 0, 2, 0, 0, 0)
+    b.create_lane_width_si(b.lane_si(RoadId(1), LaneId(2), 0), 0, 2, 0, 0, 0)
     # The outer center's offset is -(inner width + 1) - road offset.
     # A narrow record away from deciles has an interior maximum at ds=0.125.
-    b.create_lane_width(
-        b.lane(RoadId(1), LaneId(1), 0), 4.03125, 3.5, 160, -640, 0
+    b.create_lane_width_si(
+        b.lane_si(RoadId(1), LaneId(1), 0), 4.03125, 3.5, 160, -640, 0
     )
-    b.create_lane_width(b.lane(RoadId(1), LaneId(1), 0), 4.28125, 3.5, 0, 0, 0)
-    b.create_section_offset(r, 4.03125, 0, 80, -320, 0)
-    b.create_section_offset(r, 4.28125, 0, 0, 0, 0)
-    b.add_road_elevation_profile(r, 4.03125, 0, 48, -192, 0)
-    b.add_road_elevation_profile(r, 4.28125, 0, 0, 0, 0)
-    b.add_road_geometry_line(r, 0, 0, 0, 0, 10)
+    b.create_lane_width_si(
+        b.lane_si(RoadId(1), LaneId(1), 0), 4.28125, 3.5, 0, 0, 0
+    )
+    b.create_section_offset_si(r, 4.03125, 0, 80, -320, 0)
+    b.create_section_offset_si(r, 4.28125, 0, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 4.03125, 0, 48, -192, 0)
+    b.add_road_elevation_profile_si(r, 4.28125, 0, 0, 0, 0)
+    b.add_road_geometry_line_si(r, 0, 0, 0, 0, 10)
     _connect(b, [1])
     var map = b.build()
     var box = map.junction(JuncId(7)).bounding_box
@@ -204,7 +206,9 @@ def test_cubic_profiles_and_inner_lane_records() raises:
     assert_true(box.max.z <= 3.011)
     _dense_points(map)
     # Independent Bernstein control: 4s(1-s) reaches 1 at 1/2.
-    var bounds = _polynomial_bounds(CubicPolynomial(0, 4, -4, 0, 0), 0, 1)
+    var bounds = _polynomial_bounds(
+        CubicPolynomial._from_coefficients(0, 4, -4, 0, 0), 0, 1
+    )
     assert_true(bounds[0] >= 1)
     assert_almost_equal(bounds[1], 4.0, atol=1e-12)
     assert_almost_equal(bounds[2], 8.0, atol=1e-12)
@@ -213,11 +217,11 @@ def test_cubic_profiles_and_inner_lane_records() raises:
 def test_record_jumps_and_clamped_geometry_tail() raises:
     var b = MapBuilder()
     var r = _road(b, 1, 20, 1)
-    b.add_road_geometry_line(r, 0, 0, 0, 0, 5)
-    b.add_road_geometry_line(r, 7.03125, 100, 40, 0, 12.96875)
-    b.create_section_offset(r, 3.125, 20, 0, 0, 0)
-    b.create_section_offset(r, 7.03125, -30, 0, 0, 0)
-    b.add_road_elevation_profile(r, 7.03125, -12, 0, 0, 0)
+    b.add_road_geometry_line_si(r, 0, 0, 0, 0, 5)
+    b.add_road_geometry_line_si(r, 7.03125, 100, 40, 0, 12.96875)
+    b.create_section_offset_si(r, 3.125, 20, 0, 0, 0)
+    b.create_section_offset_si(r, 7.03125, -30, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 7.03125, -12, 0, 0, 0)
     _connect(b, [1])
     var map = b.build()
     var box = map.junction(JuncId(7)).bounding_box
@@ -231,21 +235,21 @@ def test_spiral_poly3_and_param_poly3_interiors() raises:
         var b = MapBuilder()
         var r = _road(b, 1, 30, 1)
         if kind == 0:
-            b.add_road_geometry_spiral(r, 0, 0, 0, 0, 30, 0.02, 0.08)
+            b.add_road_geometry_spiral_si(r, 0, 0, 0, 0, 30, 0.02, 0.08)
         elif kind == 1:
-            b.add_road_geometry_poly3(
+            b.add_road_geometry_poly3_si(
                 r, 0, 0, 0, 0.2, 30, 0, 0.1, 0.04, -0.0005
             )
         else:
-            b.add_road_geometry_param_poly3(
+            b.add_road_geometry_param_poly3_si(
                 r,
                 0,
                 0,
                 0,
                 0.2,
                 30,
-                CubicPolynomial(0, 30, 0, 0, 0),
-                CubicPolynomial(0, 12, -18, 9, 0),
+                CubicPolynomial._from_coefficients(0, 30, 0, 0, 0),
+                CubicPolynomial._from_coefficients(0, 12, -18, 9, 0),
                 "normalized",
             )
         _connect(b, [1])
@@ -277,15 +281,15 @@ def test_parametric_tail_and_singular_tangent_fallback() raises:
     var r = _road(b, 1, 20, 1)
     # The sampled path only travels 2 m, so pos_at extrapolates its last
     # segment through the rest of the declared 20 m record.
-    b.add_road_geometry_param_poly3(
+    b.add_road_geometry_param_poly3_si(
         r,
         0,
         0,
         0,
         0,
         20,
-        CubicPolynomial(0, 2, 0, 0, 0),
-        CubicPolynomial(0, 0, 0, 0, 0),
+        CubicPolynomial._from_coefficients(0, 2, 0, 0, 0),
+        CubicPolynomial._from_coefficients(0, 0, 0, 0, 0),
         "normalized",
     )
     _connect(b, [1])
@@ -309,7 +313,7 @@ def test_curved_conflicts_and_consumers() raises:
     var b = MapBuilder()
     for id in [1, 2]:
         var r = _road(b, id, 100, 1)
-        b.add_road_geometry_arc(
+        b.add_road_geometry_arc_si(
             r, 0, 0, -20.0 * Float64(id - 1), 0, 100, PI / 100.0
         )
     _connect(b, [1, 2])
@@ -349,7 +353,9 @@ def test_empty_tiny_zero_sections_and_large_coordinates() raises:
     for length in [0.0, 1e-12, 100.0]:
         var b = MapBuilder()
         var r = _road(b, 1, max(length, 1e-12), -1)
-        b.add_road_geometry_line(r, 0, 1000000, -1000000, 0, max(length, 1e-12))
+        b.add_road_geometry_line_si(
+            r, 0, 1000000, -1000000, 0, max(length, 1e-12)
+        )
         # Direct section test avoids asking the unrelated segment index to
         # represent a zero-length domain.
         b.roads[r].length = length
@@ -361,8 +367,8 @@ def test_empty_tiny_zero_sections_and_large_coordinates() raises:
 def test_arc_cancellation_and_large_s_polynomial_rounding() raises:
     var b = MapBuilder()
     var r = _road(b, 1, 32.0 * PI, 1)
-    b.create_lane_width(b.lane(RoadId(1), LaneId(1), 0), 0, 64, 0, 0, 0)
-    b.add_road_geometry_arc(r, 0, 0, 0, 0, 32.0 * PI, 1.0 / 32.0)
+    b.create_lane_width_si(b.lane_si(RoadId(1), LaneId(1), 0), 0, 64, 0, 0, 0)
+    b.add_road_geometry_arc_si(r, 0, 0, 0, 0, 32.0 * PI, 1.0 / 32.0)
     _connect(b, [1])
     var map = b.build()
     _dense_points(map)
@@ -370,14 +376,14 @@ def test_arc_cancellation_and_large_s_polynomial_rounding() raises:
     var shifted = MapBuilder()
     var sr = _road(shifted, 2, 100001, -1)
     shifted.roads[sr].sections[0].s = 100000
-    shifted.add_road_geometry_line(sr, 0, 0, 0, 0, 100001)
-    shifted.add_road_elevation_profile(sr, 100000, 0, 0, 0, 1)
+    shifted.add_road_geometry_line_si(sr, 0, 0, 0, 0, 100001)
+    shifted.add_road_elevation_profile_si(sr, 100000, 0, 0, 0, 1)
     var bounds = _lane_section_box(shifted.roads[sr], 0, 0)
     for i in range(1001):
         var s = 100000.0 + Float64(i) / 1000.0
         assert_true(
             bounds.contains_point(
-                shifted.roads[sr].lane_transform(0, 0, s).location
+                shifted.roads[sr].lane_transform_meters(0, 0, s).location
             )
         )
     # This polynomial is intentionally ill-conditioned in global s.
@@ -389,25 +395,29 @@ def test_arc_cancellation_and_large_s_polynomial_rounding() raises:
 def test_excessive_subdivision_uses_complete_envelope() raises:
     var b = MapBuilder()
     var r = _road(b, 1, 1, 1)
-    b.add_road_geometry_line(r, 0, 0, 0, 0, 1)
-    b.create_section_offset(r, 0, 0, 4e12, -4e12, 0)
+    b.add_road_geometry_line_si(r, 0, 0, 0, 0, 1)
+    b.create_section_offset_si(r, 0, 0, 4e12, -4e12, 0)
     var box = _lane_section_box(b.roads[r], 0, 0)
     for i in range(101):
         var s = Float64(i) / 100.0
         assert_true(
-            box.contains_point(b.roads[r].lane_transform(0, 0, s).location)
+            box.contains_point(
+                b.roads[r].lane_transform_meters(0, 0, s).location
+            )
         )
 
 
 def test_unresolved_arc_phase_and_invalid_records() raises:
     var b = MapBuilder()
     var r = _road(b, 1, 1024, 1)
-    b.add_road_geometry_arc(r, 0, 0, 0, 1e18, 1024, 1.0)
+    b.add_road_geometry_arc_si(r, 0, 0, 0, 1e18, 1024, 1.0)
     var box = _lane_section_box(b.roads[r], 0, 0)
     for i in range(513):
         assert_true(
             box.contains_point(
-                b.roads[r].lane_transform(0, 0, 2.0 * Float64(i)).location
+                b.roads[r]
+                .lane_transform_meters(0, 0, 2.0 * Float64(i))
+                .location
             )
         )
     b.roads[r].sections[0].s = -1

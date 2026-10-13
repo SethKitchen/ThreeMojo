@@ -5,7 +5,13 @@
 The exact historical pin files stay immutable in this standalone proposal.
 A composed integration must migrate runtime and guarded-caller pins separately.
 """
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 
 if __package__:
@@ -41,13 +47,14 @@ def _observe_text(root, path, text, *, _operation=None, supplied=False):
         root, path, text, _operation=_operation, supplied=supplied)
 
 
+
 def require(condition, message):
     if not condition:
         raise ValueError('curve support/dispatch contract: ' + message)
 
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -61,7 +68,7 @@ def reviewed_source(root, path, expected, *, _operation=None):
     """Compose the exact raw inverse theorem with this retained outer proof."""
     if _operation is not None:
         _check_operation(root, _operation)
-    text = _observe_text(root, path, (root/path).read_text(), _operation=_operation)
+    text = _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
     if source.token_sha256(text) == expected:
         return text
     require(path == 'extensions/carla/curve_sample_dispatch.mojo',
@@ -89,10 +96,11 @@ def verify_premises(root, *, _operation=None):
         require(guard.significant(reviewed_source(root,path,item['after_token_sha256'], **operation_args)) ==
                 guard.significant(item['after_source']), 'successor operations changed: ' + path)
     for path, item in record['premise_modules'].items():
-        require(guard.significant(_observe_text(root, path, (root/path).read_text(), _operation=_operation)) ==
+        require(guard.significant(_typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) ==
                 guard.significant(item['source']), 'interval/environment premise changed: ' + path)
     for item in record['premise_functions']:
-        text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
+        physical_text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
+        text = _typed_source.historical_text(root, item['path'], physical_text, _operation=_operation)
         actual = guard.declaration(text, item['name'], tuple(item['owner']))
         matched = guard.significant(actual) == guard.significant(item['source'])
         if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
@@ -102,7 +110,7 @@ def verify_premises(root, *, _operation=None):
                     from . import seed_count_contracts as seed_count
                 else:
                     import seed_count_contracts as seed_count
-                predecessor = seed_count.reviewed_text(root, item['path'], text, **operation_args)
+                predecessor = seed_count.reviewed_text(root, item['path'], physical_text, **operation_args)
                 actual = guard.declaration(predecessor, item['name'], ())
                 matched = guard.significant(actual) == guard.significant(item['source'])
             except (ValueError, OSError) as error:
@@ -119,7 +127,7 @@ def verify_premises(root, *, _operation=None):
                 require(False, 'reviewed lane caller premise changed: ' + str(error))
         require(matched, 'index or guarded caller premise changed: ' + item['name'])
     for item in record['reference_functions']:
-        actual = guard.declaration(_observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), item['name'], ())
+        actual = guard.declaration(_typed_source.historical_text(root, item['path'], _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), _operation=_operation), item['name'], ())
         require(source.token_sha256(actual) == item['token_sha256'],
                 'native predecessor reference changed: ' + item['name'])
     return record
@@ -142,5 +150,5 @@ def verify_historical_pin_inputs(root):
     # not called by verify: a later exact pin successor must remain possible.
     record = read_record(root)
     for path, expected in record['historical_pins'].items():
-        require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+        require(hashlib.sha256(_typed_source.historical_bytes(root, root/path, (root/path).read_bytes())).hexdigest() == expected,
                 'standalone historical pin input changed: ' + path)

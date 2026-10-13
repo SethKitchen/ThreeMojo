@@ -79,7 +79,7 @@ def build_world(
             continue
         try:
             _ = world.map.compute_transform(
-                Waypoint(candidate.id, SectionId(0), LaneId(-1), 1.0)
+                Waypoint.from_si(candidate.id, SectionId(0), LaneId(-1), 1.0)
             )
             road = r
             length = candidate.length
@@ -97,7 +97,9 @@ def build_world(
         var blueprint = library.at(models[k][0])
         blueprint.set_attribute("color", models[k][1])
         var pose = world.map.compute_transform(
-            Waypoint(id, SectionId(0), LaneId(-1), 6.0 + 11.0 * Float64(k))
+            Waypoint.from_si(
+                id, SectionId(0), LaneId(-1), 6.0 + 11.0 * Float64(k)
+            )
         )
         pose.location.z += 0.3
         cars.append(world.spawn_actor(blueprint, pose))

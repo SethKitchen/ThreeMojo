@@ -60,7 +60,7 @@ def _rotated(heading: Float64 = -1.5707963267948966) raises -> Road:
     road.info.geometries[0].geometry.x = 80.0
     road.info.geometries[0].geometry.y = -20.0
     road.info.geometries[0].geometry.heading = heading
-    road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(0.0)
     return road^
 
 
@@ -180,7 +180,7 @@ def test_active_constant_width_record_allows_exact_horizontal_witness() raises:
     road.info.geometries[0].geometry.x = 0.0
     road.info.geometries[0].geometry.y = 0.0
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(20.0, CubicPolynomial.constant(8.0))
+        RoadInfoLaneWidth._from_si(20.0, CubicPolynomial._constant_si(8.0))
     )
     var context = _rounded_line_axis_context(road, 0, 0, 10.0, 19.75)
     assert_true(Bool(context))

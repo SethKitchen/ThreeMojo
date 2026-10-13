@@ -52,7 +52,7 @@ from extensions.carla.traffic_manager_map import (
     _sort_keys,
     c_remainder,
     cook,
-    distance_squared,
+    distance_squared_square_meters as distance_squared,
     to_int16,
 )
 from extensions.carla.traffic_manager_parameters import Parameters
@@ -1047,7 +1047,10 @@ def test_straight_town_graph() raises:
     )
     assert_false(local.at(SimpleWaypointIndex(3)).check_intersection())
     assert_false(local.at(SimpleWaypointIndex(3)).check_junction())
-    _near(local.at(SimpleWaypointIndex(1)).distance(Vector3(8, 1.25, 0)), 5.0)
+    _near(
+        local.at(SimpleWaypointIndex(1)).distance_meters(Vector3(8, 1.25, 0)),
+        5.0,
+    )
     assert_true(
         local.at(SimpleWaypointIndex(1)).forward_vector() == Vector3(1, 0, 0)
     )
@@ -1176,11 +1179,11 @@ def test_road_options_by_hand() raises:
     # junction, with and without a sign near.
     var map = load_opendrive(straight_town())
     var local = InMemoryMap()
-    var w0 = Waypoint(RoadId(1), SectionId(0), LaneId(-2), 10.0)
-    var w1 = Waypoint(RoadId(1), SectionId(0), LaneId(-2), 15.0)
-    var w2 = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 15.0)
-    var w3 = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 140.0)
-    var w4 = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 145.0)
+    var w0 = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-2), 10.0)
+    var w1 = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-2), 15.0)
+    var w2 = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 15.0)
+    var w3 = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 140.0)
+    var w4 = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 145.0)
     var a = local.add_waypoint(map, w0)
     var b = local.add_waypoint(map, w1)
     var c = local.add_waypoint(map, w2)
@@ -1225,13 +1228,13 @@ def test_junction_sign_marks_the_approach() raises:
     var map = load_opendrive(junction_town())
     var local = InMemoryMap()
     var a = local.add_waypoint(
-        map, Waypoint(RoadId(2), SectionId(0), LaneId(1), 2.0)
+        map, Waypoint._from_si(RoadId(2), SectionId(0), LaneId(1), 2.0)
     )
     var b = local.add_waypoint(
-        map, Waypoint(RoadId(10), SectionId(0), LaneId(1), 15.0)
+        map, Waypoint._from_si(RoadId(10), SectionId(0), LaneId(1), 15.0)
     )
     var c = local.add_waypoint(
-        map, Waypoint(RoadId(10), SectionId(0), LaneId(1), 5.0)
+        map, Waypoint._from_si(RoadId(10), SectionId(0), LaneId(1), 5.0)
     )
     local.waypoints[b.value].is_junction = True
     local.waypoints[c.value].is_junction = True
@@ -1248,13 +1251,13 @@ def test_turn_directions_by_yaw() raises:
     var map = load_opendrive(junction_town())
     var local = InMemoryMap()
     var start = local.add_waypoint(
-        map, Waypoint(RoadId(1), SectionId(0), LaneId(-1), 90.0)
+        map, Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 90.0)
     )
     var enter = local.add_waypoint(
-        map, Waypoint(RoadId(11), SectionId(0), LaneId(-1), 1.0)
+        map, Waypoint._from_si(RoadId(11), SectionId(0), LaneId(-1), 1.0)
     )
     var leave = local.add_waypoint(
-        map, Waypoint(RoadId(11), SectionId(0), LaneId(-1), 15.0)
+        map, Waypoint._from_si(RoadId(11), SectionId(0), LaneId(-1), 15.0)
     )
     local.waypoints[enter.value].is_junction = True
     local.waypoints[leave.value].is_junction = True
@@ -1264,13 +1267,13 @@ def test_turn_directions_by_yaw() raises:
     assert_true(local.at(enter).road_option == ROAD_OPTION_RIGHT)
     var back = InMemoryMap()
     var s2 = back.add_waypoint(
-        map, Waypoint(RoadId(1), SectionId(0), LaneId(-1), 90.0)
+        map, Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 90.0)
     )
     var e2 = back.add_waypoint(
-        map, Waypoint(RoadId(11), SectionId(0), LaneId(-1), 15.0)
+        map, Waypoint._from_si(RoadId(11), SectionId(0), LaneId(-1), 15.0)
     )
     var l2 = back.add_waypoint(
-        map, Waypoint(RoadId(11), SectionId(0), LaneId(-1), 1.0)
+        map, Waypoint._from_si(RoadId(11), SectionId(0), LaneId(-1), 1.0)
     )
     back.waypoints[e2.value].is_junction = True
     back.waypoints[l2.value].is_junction = True
@@ -1502,10 +1505,10 @@ def test_order_segment_sorts_and_stops_at_a_dead_end() raises:
     var map = load_opendrive(straight_town())
     var local = InMemoryMap()
     var a = local.add_waypoint(
-        map, Waypoint(RoadId(1), SectionId(0), LaneId(-1), 299.99)
+        map, Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 299.99)
     )
     var b = local.add_waypoint(
-        map, Waypoint(RoadId(1), SectionId(0), LaneId(1), 290.0)
+        map, Waypoint._from_si(RoadId(1), SectionId(0), LaneId(1), 290.0)
     )
     var ordered = local._order_segment(map, [a, b])
     assert_equal(len(ordered), 2)
@@ -1546,13 +1549,13 @@ def test_light_and_stop_sign_mark_the_approach() raises:
         )
         var local = InMemoryMap()
         var a = local.add_waypoint(
-            map, Waypoint(RoadId(2), SectionId(0), LaneId(1), 2.0)
+            map, Waypoint._from_si(RoadId(2), SectionId(0), LaneId(1), 2.0)
         )
         var b = local.add_waypoint(
-            map, Waypoint(RoadId(10), SectionId(0), LaneId(1), 15.0)
+            map, Waypoint._from_si(RoadId(10), SectionId(0), LaneId(1), 15.0)
         )
         var c = local.add_waypoint(
-            map, Waypoint(RoadId(10), SectionId(0), LaneId(1), 5.0)
+            map, Waypoint._from_si(RoadId(10), SectionId(0), LaneId(1), 5.0)
         )
         local.waypoints[b.value].is_junction = True
         local.waypoints[c.value].is_junction = True

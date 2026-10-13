@@ -22,7 +22,7 @@ from tests.test_carla_lane_certificates import _road
 
 
 def test_natural_gap_closes_without_optional_golden_seed() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
     var query = Vector3(0.25, 0, 100000000)
     var result = _refine_lane_certificate(
         road, 0, 0, 0.0, 1.0, query, 0.25, 0.0, max_nodes=2, max_terms=5
@@ -46,7 +46,7 @@ def test_natural_gap_closes_without_optional_golden_seed() raises:
 
 
 def test_natural_gap_charges_domain_before_admission() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
     with assert_raises(contains="quadrature work limit"):
         _ = _refine_lane_certificate(
             road,
@@ -76,7 +76,7 @@ def test_natural_gap_charges_domain_before_admission() raises:
 
 
 def test_natural_gap_cover_reopens_for_tighter_resume() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
     var query = Vector3(0.25, 0, 100000000)
     var result = _refine_lane_certificate(
         road, 0, 0, 0.0, 1.0, query, 0.25, 0.0, max_nodes=2, max_terms=5
@@ -105,7 +105,7 @@ def test_natural_gap_cover_reopens_for_tighter_resume() raises:
 
 
 def test_supported_parameter_box_keeps_declined_optional_work() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
     var query = Vector3(0.25, 0, 100000000)
     # A positive, safe parameter box enters the optional context. Both plan
     # coordinates vary, so that proof declines and its charge must survive.
@@ -147,7 +147,7 @@ def test_supported_parameter_box_keeps_declined_optional_work() raises:
 
 
 def test_skipped_optional_parameter_box_keeps_lane_validation() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
     var query = Vector3(0.25, 0, 100000000)
     with assert_raises(contains="no section at that index"):
         _ = _refine_lane_certificate(

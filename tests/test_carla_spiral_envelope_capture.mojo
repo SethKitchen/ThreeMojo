@@ -77,8 +77,8 @@ def test_failed_quadrant_attempt_is_charged_and_original_fallback_is_exact() rai
         )
     )
     assert_equal(spent, 1024)
-    var first = road.lane_transform(0, 0, low).location
-    var last = road.lane_transform(0, 0, high).location
+    var first = road.lane_transform_meters(0, 0, low).location
+    var last = road.lane_transform_meters(0, 0, high).location
     var original = _chord_certificate_capture(
         road, 0, 0, low, high, first, last, one
     )
@@ -134,8 +134,8 @@ def test_fast_capture_translated_origins_keep_exact_stored_distance_lower_bounds
         var road = _eligible_road()
         road.info.geometries[0].geometry.x = origin
         road.info.geometries[0].geometry.y = -origin
-        var first = road.lane_transform(0, 0, low).location
-        var last = road.lane_transform(0, 0, high).location
+        var first = road.lane_transform_meters(0, 0, low).location
+        var last = road.lane_transform_meters(0, 0, high).location
         var capture = _SpiralRootCapture()
         var chord = _chord_certificate_capture_fast(
             road, 0, 0, low, high, first, last, capture
@@ -145,7 +145,7 @@ def test_fast_capture_translated_origins_keep_exact_stored_distance_lower_bounds
         var proof = _try_pack_spiral_proof(
             road, low, high, 0, capture, 0, terms, units
         ).value()
-        var query = road.lane_transform(0, 0, center).location + Vector3(
+        var query = road.lane_transform_meters(0, 0, center).location + Vector3(
             0.125, 0.25, -0.5
         )
         var domain = _scaled_point_distance_jet(

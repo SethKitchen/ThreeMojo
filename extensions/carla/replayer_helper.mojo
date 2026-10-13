@@ -43,6 +43,10 @@ The source is CARLA's simulator plugin, `Carla/Recorder/
 CarlaReplayerHelper.cpp`.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
+from units.si import Angle64
+from std.ffi import external_call
+
 from extensions.carla.actor import (
     ActorId,
     ActorKind,
@@ -299,7 +303,56 @@ def process_event_parent(
     return True
 
 
-def lerp_angle(a: Float64, b: Float64, fraction: Float64) -> Float64:
+def lerp_angle(a: Angle64, b: Angle64, fraction: Float64) raises -> Angle64:
+    """Interpolate finite angles along the shorter turn.
+
+    Args:
+        a: The first angle.
+        b: The second angle.
+        fraction: The interpolation fraction from zero through one.
+
+    Returns:
+        The interpolated angle, without wrapping its final value.
+
+    Raises:
+        Error: If a value or converted result is invalid.
+    """
+    var value = lerp_angle_degrees(
+        a.value * 57.29577951308232, b.value * 57.29577951308232, fraction
+    )
+    return Angle64(_finite_si(value * 0.017453292519943295))
+
+
+def lerp_angle_degrees(
+    a: Float64, b: Float64, fraction: Float64
+) raises -> Float64:
+    """Explicit checked degree adapter for recorded Euler angles.
+
+    Args:
+        a: The first angle in degrees.
+        b: The second angle in degrees.
+        fraction: The fraction from zero through one.
+
+    Returns:
+        The interpolated angle in degrees.
+
+    Raises:
+        Error: If a value is nonfinite, the difference overflows, or the fraction is outside its range.
+    """
+    _ = _finite_si(a)
+    _ = _finite_si(b)
+    _ = _finite_si(fraction)
+    if fraction < 0 or fraction > 1:
+        raise Error("An interpolation fraction must be from zero through one")
+    var turn = external_call["fmod", Float64](_finite_si(b - a), 360.0)
+    if turn > 180:
+        turn -= 360
+    elif turn <= -180:
+        turn += 360
+    return _finite_si(a + turn * fraction)
+
+
+def _lerp_angle_degrees(a: Float64, b: Float64, fraction: Float64) -> Float64:
     """Move from one angle to another the shorter way round.
 
     Args:
@@ -347,9 +400,9 @@ def interpolated_transform(
     var r1 = pos1.rotation
     var r2 = pos2.rotation
     var rotation = LogVector(
-        lerp_angle(r1.x, r2.x, per),
-        lerp_angle(r1.y, r2.y, per),
-        lerp_angle(r1.z, r2.z, per),
+        _lerp_angle_degrees(r1.x, r2.x, per),
+        _lerp_angle_degrees(r1.y, r2.y, per),
+        _lerp_angle_degrees(r1.z, r2.z, per),
     )
     return recorded_transform(location, rotation)
 
@@ -477,7 +530,7 @@ def process_light_vehicle(mut world: World, light: RecordedLightVehicle) raises:
         world.set_light_state(light.database_id, light.state)
 
 
-def weather_of(record: RecordedWeather) -> WeatherParameters:
+def weather_of(record: RecordedWeather) raises -> WeatherParameters:
     """Return a recorded weather as the world's weather.
 
     Args:
@@ -485,8 +538,11 @@ def weather_of(record: RecordedWeather) -> WeatherParameters:
 
     Returns:
         The weather.
+
+    Raises:
+        Error: If a recorded weather field is nonfinite.
     """
-    return WeatherParameters(
+    return WeatherParameters.from_carla(
         record.cloudiness,
         record.precipitation,
         record.precipitation_deposits,
@@ -504,17 +560,41 @@ def weather_of(record: RecordedWeather) -> WeatherParameters:
     )
 
 
-def process_weather(mut world: World, record: RecordedWeather):
+def process_weather(mut world: World, record: RecordedWeather) raises:
     """Set the weather, `ProcessReplayerWeather`.
 
     Args:
         world: The world.
         record: The record.
+
+    Raises:
+        Error: If a recorded weather field is nonfinite.
     """
     world.set_weather(weather_of(record))
 
 
-def set_walker_speed(mut world: World, id: ActorId, speed: Float32) raises:
+def set_walker_speed(mut world: World, id: ActorId, speed: Velocity) raises:
+    """Set a walker's finite nonnegative speed.
+
+    Args:
+        world: The world.
+        id: The walker.
+        speed: The physical speed.
+
+    Raises:
+        Error: If the speed is invalid or the control cannot be applied.
+    """
+    _ = _nonnegative_si(Float64(speed.value))
+    if not _is(world, id, WALKER_ACTOR):
+        return
+    var control = WalkerControl()
+    control.speed = speed
+    world.apply_walker_control(id, control)
+
+
+def set_walker_speed_centimeters_per_second(
+    mut world: World, id: ActorId, speed: Float32
+) raises:
     """Set a walker's speed, `SetWalkerSpeed`.
 
     Args:
@@ -526,6 +606,7 @@ def set_walker_speed(mut world: World, id: ActorId, speed: Float32) raises:
     Raises:
         Error: Never; the check comes first.
     """
+    _ = _nonnegative_si(Float64(speed))
     if not _is(world, id, WALKER_ACTOR):
         return
     var control = WalkerControl()
@@ -611,4 +692,4 @@ def process_finish(
             control.gear = Gear(1)
             world.apply_control(id, control)
         elif kind == WALKER_ACTOR:
-            set_walker_speed(world, id, 0)
+            set_walker_speed(world, id, Velocity(0))

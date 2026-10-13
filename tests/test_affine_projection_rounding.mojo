@@ -42,7 +42,7 @@ def test_affine_projection_preserves_reachable_center() raises:
     var lane = roads[0].sections[0].lane_index(LaneId(-1))
     roads[0].sections[0].lanes[lane].info.widths[
         0
-    ].polynomial = CubicPolynomial.constant(0.0002)
+    ].polynomial = CubicPolynomial._constant_si(0.0002)
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     assert_true(map.roads[0].lane_is_straight(0))
     assert_equal(map.segment_count(), 1)

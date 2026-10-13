@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Bitwise before/after comparisons of the private grouped Y caller change."""
 from extensions.carla.curve_interval import _Jet
-from extensions.carla.geometry import RoadGeometry, SPIRAL, with_spiral
+from extensions.carla.geometry import (
+    RoadGeometry,
+    SPIRAL,
+    with_spiral_si as with_spiral,
+)
 from extensions.carla.spiral_grouped_roundoff_proof import (
     _try_spiral_grouped_roundoff_envelope as _new,
     _try_spiral_grouped_roundoff_envelope_metered as _new_metered,
@@ -50,7 +54,7 @@ def _check_exponent(exponent: Int) raises:
     var scale = bitcast[DType.float64](UInt64(exponent + 1023) << UInt64(52))
     for phase_scale in [-0.7, -0.1, 0.0, 0.1, 0.7]:
         var geometry = with_spiral(
-            RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, scale * 2.0),
+            RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, scale * 2.0),
             0.0,
             phase_scale / scale,
         )
@@ -193,7 +197,9 @@ def test_later_world_origin_refusals_are_unchanged() raises:
     for origin in [-maximum, -10.0, 0.0, 10.0, maximum]:
         for curvature in [-0.001, 0.0, 0.001]:
             var geometry = with_spiral(
-                RoadGeometry(SPIRAL, 0.0, origin, origin, 0.0, 20.0),
+                RoadGeometry.from_meters(
+                    SPIRAL, 0.0, origin, origin, 0.0, 20.0
+                ),
                 0.0,
                 curvature,
             )
@@ -202,7 +208,7 @@ def test_later_world_origin_refusals_are_unchanged() raises:
 
 def test_count_and_budget_refusals_keep_original_debits() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 20.0), 0.0, 0.001
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 20.0), 0.0, 0.001
     )
     var d = _Jet.variable(2.125, 2.25)
     for pieces in [0, 1, 4, 64, 65]:

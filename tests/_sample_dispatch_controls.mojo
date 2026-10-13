@@ -17,12 +17,14 @@ from tests.test_carla_cross_candidate_certificates import _road
 
 def _dispatch_road(origin: Float64 = 0.0) raises -> Road:
     var road = _road()
-    var geometry = RoadGeometry(PARAM_POLY3, origin, 0.0, 0.0, 0.0, 3.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, origin, 0.0, 0.0, 0.0, 3.0
+    )
     for i in range(4):
         geometry.samples.append(_Sample(Float64(i), 0.0, Float64(i), 1.0, 0.0))
     road.length = origin + 3.0
-    road.info.geometries[0] = RoadInfoGeometry(origin, geometry^)
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.geometries[0] = RoadInfoGeometry._from_si(origin, geometry^)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         0.0, 1.0, 0.0, 0.0, 0.0
     )
     return road^

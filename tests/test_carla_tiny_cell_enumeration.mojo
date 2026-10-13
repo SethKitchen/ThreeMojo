@@ -54,28 +54,30 @@ def _advance(value: Float64, count: Int) -> Float64:
 
 
 def _road(plateau: Bool = False, sample_end: Float64 = 1.0) raises -> Road:
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 2.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 2.0
+    )
     var left = Float64(0.0) if plateau else Float64(-1.0)
     var right = Float64(0.0) if plateau else Float64(1.0)
     geometry.samples.append(_Sample(left, 2.0, 0.0, 1.0, 0.0))
     geometry.samples.append(_Sample(right, 2.0, sample_end, 1.0, 0.0))
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "tiny-cell", 2.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     # The lane offset cancels its half width. Center y is exactly -2;
     # query (0,0,0) is exactly on the width-4 strict boundary on a plateau.
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(4.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(4.0))
     )
-    road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
     return road^
 

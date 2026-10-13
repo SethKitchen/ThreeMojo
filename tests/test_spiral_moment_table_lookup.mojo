@@ -93,7 +93,7 @@ def test_missing_table_preserves_budget_and_generic_fallback() raises:
     if missing:
         raise Error("Disabled table returned a view")
     assert_equal(spent, 17)
-    var geometry = RoadGeometry(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
     geometry.curvature_end = 0.05
     _assert_generic_fallback(geometry, _Jet.variable(2.125, 2.125), False)
 
@@ -114,7 +114,7 @@ def test_table_invalid_accessor_never_indexes_storage() raises:
 
 
 def test_count64_hit_count65_miss_preserves_generic() raises:
-    var geometry = RoadGeometry(SPIRAL, 0.0, 0.0, 100.0, 0.0, 128.0)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 100.0, 0.0, 128.0)
     geometry.curvature_end = 0.0
     var d = _geometry_distance(geometry, _Jet.variable(62.5, 62.5))
     var counts = _spiral_counts(geometry, d)
@@ -141,7 +141,7 @@ def test_count64_hit_count65_miss_preserves_generic() raises:
 
 
 def test_count_clamp_quadrant_misses_preserve_generic() raises:
-    var geometry = RoadGeometry(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
     geometry.curvature_end = 0.0
     _assert_generic_fallback(geometry, _Jet.variable(0.99, 1.01), True)
     _assert_generic_fallback(geometry, _Jet.variable(0.0, 0.0), True)

@@ -1,0 +1,62 @@
+{
+  "schema": "carla-typed-namespace-lookup-333-summary-v2",
+  "report_kind": "Portable summary of a completed compiler witness; not a new execution or a standalone source-admission receipt.",
+  "probe_path": "tools/carla_lane_oracle/probe_typed_namespace_lookup.py",
+  "probe_sha256": "e5bd86039476501b33d6b6e8cc3c877604ff6a388a4f87bc69c302bc39eb7461",
+  "compiler_version": "Mojo 1.1.0 (8189361e)",
+  "namespace_families": [
+    "animation",
+    "cameras",
+    "core",
+    "exporters",
+    "geometries",
+    "lights",
+    "materials",
+    "objects",
+    "postprocessing",
+    "renderers"
+  ],
+  "cases": [
+    {
+      "case": "root",
+      "status": "PASS",
+      "compilation": "succeeded",
+      "checked_total": 170
+    },
+    {
+      "case": "missing_root",
+      "status": "PASS",
+      "compilation": "refused: module lookup"
+    },
+    {
+      "case": "entry_package",
+      "status": "PASS",
+      "compilation": "succeeded",
+      "checked_total": 230
+    },
+    {
+      "case": "entry_prefix_module",
+      "status": "PASS",
+      "compilation": "refused: module lookup"
+    },
+    {
+      "case": "new_asset_entry",
+      "status": "PASS",
+      "compilation": "succeeded",
+      "checked_total": 990
+    },
+    {
+      "case": "explicit_asset_import",
+      "status": "PASS",
+      "compilation": "succeeded",
+      "checked_total": 990
+    }
+  ],
+  "limits_seconds": {
+    "build": 40,
+    "program": 5,
+    "complete_protocol": 300
+  },
+  "scope": "Lookup premise under pinned Mojo 1.1.0 only. Complete current source and namespace topology remain freshly verified by each owned operation.",
+  "raw_evidence": "The complete original protocol and build logs are retained separately. This public summary omits machine-specific paths and process metadata."
+}

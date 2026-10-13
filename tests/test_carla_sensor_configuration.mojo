@@ -584,20 +584,40 @@ def test_v2x_domains_and_cam_construction() raises:
     )
     for value in _nonfinite():
         with assert_raises(contains="finite"):
-            _ = CaService(world, owner, value, 1, False, CamNoise(), 0)
+            _ = CaService.from_cam_epoch_milliseconds(
+                world, owner, Duration(value), Duration(1), False, CamNoise(), 0
+            )
         with assert_raises(contains="finite"):
-            _ = CaService(world, owner, 0.1, value, False, CamNoise(), 0)
+            _ = CaService.from_cam_epoch_milliseconds(
+                world,
+                owner,
+                Duration(0.1),
+                Duration(value),
+                False,
+                CamNoise(),
+                0,
+            )
     with assert_raises(contains="positive"):
-        _ = CaService(world, owner, 0, 1, False, CamNoise(), 0)
+        _ = CaService.from_cam_epoch_milliseconds(
+            world, owner, Duration(0), Duration(1), False, CamNoise(), 0
+        )
     with assert_raises(contains="positive"):
-        _ = CaService(world, owner, 0.1, -1, False, CamNoise(), 0)
+        _ = CaService.from_cam_epoch_milliseconds(
+            world, owner, Duration(0.1), Duration(-1), False, CamNoise(), 0
+        )
     with assert_raises(contains="must not exceed"):
-        _ = CaService(world, owner, 2, 1, False, CamNoise(), 0)
+        _ = CaService.from_cam_epoch_milliseconds(
+            world, owner, Duration(2), Duration(1), False, CamNoise(), 0
+        )
     var noise = CamNoise()
     noise.heading_bias = nan[DType.float32]()
     with assert_raises(contains="finite"):
-        _ = CaService(world, owner, 0.1, 1, False, noise, 0)
-    _ = CaService(world, owner, 1, 1, False, CamNoise(), 0)
+        _ = CaService.from_cam_epoch_milliseconds(
+            world, owner, Duration(0.1), Duration(1), False, noise, 0
+        )
+    _ = CaService.from_cam_epoch_milliseconds(
+        world, owner, Duration(1), Duration(1), False, CamNoise(), 0
+    )
 
 
 def test_obstacle_domains() raises:

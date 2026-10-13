@@ -36,6 +36,9 @@ are well-known screen-space techniques:
 The constants are this port's own choices.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
+from units.si import InverseLength
+
 from extensions.carla.render_post import ViewRays
 from extensions.carla.render_sky import cloud_shadow_density
 from extensions.carla.render_weather import CLOUD_SHADE, HeightFog
@@ -375,7 +378,45 @@ def apply_cloud_shadows(
             )
 
 
-def fog_density_at(fog: HeightFog, height: Length) -> Float32:
+def fog_density_at(fog: HeightFog, height: Length) raises -> InverseLength:
+    """Return checked extinction at a physical height.
+
+    Args:
+        fog: The fog and haze parameters.
+        height: The height above the fog base.
+
+    Returns:
+        The nonnegative extinction coefficient.
+
+    Raises:
+        Error: If a parameter or result is invalid.
+    """
+    return InverseLength(fog_density_at_per_meter(fog, height))
+
+
+def fog_density_at_per_meter(fog: HeightFog, height: Length) raises -> Float32:
+    """Explicit per-meter result adapter for the CARLA render kernel.
+
+    Args:
+        fog: The fog and haze parameters.
+        height: The height above the fog base.
+
+    Returns:
+        Extinction per meter, with the original Float32 arithmetic.
+
+    Raises:
+        Error: If a parameter or result is invalid.
+    """
+    _ = _finite_si(Float64(height.value))
+    _ = _nonnegative_si(Float64(fog.density.value))
+    _ = _nonnegative_si(Float64(fog.falloff.value))
+    _ = _nonnegative_si(Float64(fog.haze.value))
+    var value = _fog_density_at_si(fog, height)
+    _ = _nonnegative_si(Float64(value))
+    return value
+
+
+def _fog_density_at_si(fog: HeightFog, height: Length) -> Float32:
     """Return the fog's and the haze's extinction at a height.
 
     Args:
@@ -436,7 +477,7 @@ def shaft_share(
             rays.eye.y + direction.y * t,
             rays.eye.z + direction.z * t,
         )
-        var sigma = fog_density_at(fog, Length(point.y, METER))
+        var sigma = _fog_density_at_si(fog, Length(point.y, METER))
         var weight = sigma * exp(-travelled)
         travelled += sigma * step
         weighed += weight

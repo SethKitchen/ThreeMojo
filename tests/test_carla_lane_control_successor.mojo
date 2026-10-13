@@ -56,7 +56,7 @@ from extensions.carla.curve_frozen_arc import (
 from extensions.carla.curve_rounded_line import _rounded_line_axis_context
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import info_index_meters as info_index
 from math.vector3 import Vector3
 from std.math import inf, isfinite, sqrt
 from std.memory import bitcast
@@ -805,12 +805,14 @@ def _case[
     reference: Bool
 ](first_cell: Int, depth: Int) raises -> _LaneCertificate:
     var road = _road()
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 3.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 3.0
+    )
     for i in range(4):
         var x = Float64(-1.0 if i % 2 == 0 else 1.0)
         geometry.samples.append(_Sample(x, 0.0, Float64(i), 1.0, 0.0))
     road.length = 3.0
-    road.info.geometries[0] = RoadInfoGeometry(0.0, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry^)
     var location = Vector3(0, 1, 0)
     var pending = List[Tuple[Float64, Float64, Int]]()
     var seed = Float64(0.5)

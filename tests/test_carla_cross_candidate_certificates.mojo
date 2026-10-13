@@ -46,34 +46,40 @@ from std.testing import (
 
 
 def _road(id: Int = 1, y: Float64 = 0.0, width: Float64 = 2.0) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(id), "certificate", 4.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(width))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(width))
     )
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, y, 0.0, 4.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, y, 0.0, 4.0)
+        )
     )
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(width * 0.5))
+        RoadInfoLaneOffset._from_si(
+            0.0, CubicPolynomial._constant_si(width * 0.5)
+        )
     )
     return road^
 
 
 def _sampled_road(scale: Float64) raises -> Road:
     var road = _road(width=2.0 * scale)
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0
+    )
     geometry.samples.append(_Sample(-scale, 2.0 * scale, 0.0, 1.0, 0.0))
     geometry.samples.append(_Sample(scale, 2.0 * scale, 1.0, 1.0, 0.0))
     road.length = 1.0
-    road.info.geometries[0] = RoadInfoGeometry(0.0, geometry^)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(0.0, geometry^)
     return road^
 
 

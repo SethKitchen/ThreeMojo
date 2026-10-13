@@ -3,14 +3,14 @@
   "issue": "https://github.com/SethKitchen/ThreeMojo/issues/595",
   "result_label": "template geometry evidence; not clearance or biomechanical validation",
   "build_provenance": {
-    "source_sha256": "24fcffa1c3a7f42dfe56426a68f38a495aeb13fd85b530f47abb47be4c806b70",
+    "source_sha256": "431b06039e3762299793ee1a0eb0ae19de4a7a7392c8a6030f0507900d448a8b",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "ec5caf29ccc42e68df8f87118b148438c5796c41b32806d96a9a34d775847682"
+    "binary_sha256": "01c2e17100e20c44885e5228064f5fe8dd401f88d90b78c67a081d74201da7e3"
   },
   "tool_sha256": "85917cd0805b96821b486f93462b6b5a78b397a96129d5f0389c04568f60f3da",
   "spec": {
@@ -211,13 +211,13 @@
             0.01683952
           ],
           "refined_point_m": [
-            0.002122202,
-            -0.44710997,
-            0.01993327
+            0.0018995458,
+            -0.44716856,
+            0.019687176
           ],
-          "refined_field_witness_m": 0.0,
-          "refined_first_field_m": 0.0,
-          "refined_second_field_m": -0.0,
+          "refined_field_witness_m": 9.313226e-10,
+          "refined_first_field_m": 9.313226e-10,
+          "refined_second_field_m": -9.313226e-10,
           "refine_half_widths_m": [
             0.003,
             0.0001875
@@ -2931,7 +2931,7 @@
           "samples": 2793,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 3.3755117e-05,
+          "signed_field_witness_m": 3.3755146e-05,
           "witness_point_m": [
             0.004467034,
             0.045586105,
@@ -2971,9 +2971,9 @@
             0.036273606,
             0.028957672
           ],
-          "refined_field_witness_m": 1.3810677e-09,
-          "refined_first_field_m": -1.3810677e-09,
-          "refined_second_field_m": 1.3810677e-09,
+          "refined_field_witness_m": 1.371518e-09,
+          "refined_first_field_m": -1.371518e-09,
+          "refined_second_field_m": 1.371518e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125

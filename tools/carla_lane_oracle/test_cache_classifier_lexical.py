@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 import full_audit_cleanup_contracts as cleanup
+import test_owner_frame_lexical as owner_fixtures
 
 def _baseline_cache_verify_frame(frame, *, include_aliases=False):
     """Recognize supported owners; aliases may only block outer borrowing."""
@@ -47,7 +48,7 @@ def _baseline_owner_module(kind):
 REFERENCE_HASHES = {'_cache_verify_frame': '430c1279085af0c279ec1e0d3ca166bdb5de822af0f3c8595246a489d3a211e8', '_owner_module': 'a5f60b07d07556090def6d3490be5dfeef8197ef71d8e3ff13efce5c110d4860'}
 
 REFERENCE_CACHE = types.FunctionType(_baseline_cache_verify_frame.__code__, vars(cleanup))
-REFERENCE_OWNER = types.FunctionType(_baseline_owner_module.__code__, vars(cleanup))
+REFERENCE_OWNER = owner_fixtures.typed_reference(_baseline_owner_module, 'owner')
 PREFIX = (cleanup.__package__ + '.') if cleanup.__package__ else ''
 CACHE_NAME = PREFIX + 'cache_key_contracts'
 CACHE_FILE = str(Path(cleanup.__file__).with_name('cache_key_contracts.py'))
@@ -246,16 +247,17 @@ class CacheClassifierLexicalTests(unittest.TestCase):
 
     def test_owner_module_builtin_strings_keep_fresh_registry_lookup(self):
         registry = {PREFIX + name: types.ModuleType(name) for name in (
-            'coverage_invariant_contracts', 'winner_sign_contracts', 'border_parser_contracts')}
+            'coverage_invariant_contracts', 'winner_sign_contracts', 'border_parser_contracts',
+            'check_runtime_support', 'check_sampled_values')}
         with patch.dict(sys.modules, registry):
-            for kind in ('invariant', 'winner', 'border', 'map_loops', 'rtree_loops', '', 'other'):
+            for kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'map_loops', 'rtree_loops', '', 'other'):
                 self.assertIs(cleanup._owner_module(kind), REFERENCE_OWNER(kind))
             replacement = types.ModuleType('replacement')
             sys.modules[PREFIX + 'winner_sign_contracts'] = replacement
             self.assertIs(cleanup._owner_module('winner'), replacement)
 
     def test_owner_module_exotic_hash_equality_and_errors_match(self):
-        for spelling in ('winner', 'map_loops', 'other'):
+        for spelling in ('winner', 'runtime', 'sampled', 'map_loops', 'other'):
             outputs = []
             for classifier in (REFERENCE_OWNER, cleanup._owner_module):
                 events = []
