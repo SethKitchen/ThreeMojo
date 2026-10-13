@@ -24,6 +24,8 @@ import tokenize
 import cache_key
 import coverage_toolchain_identity
 
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
+
 ACTIVE_SOURCE_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 ACTIVE_TOOLCHAIN_SHA256 = hashlib.sha256(Path(coverage_toolchain_identity.__file__).read_bytes()).hexdigest()
 ACTIVE_INVENTORY_SHA256 = hashlib.sha256(Path(cache_key.__file__).read_bytes()).hexdigest()
@@ -918,8 +920,7 @@ def _cleanup_current_bindings(root, *, include_roots=(), _operation=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
     stream_args = {} if _operation is None else {'_operation': _operation, '_root': root}
     cleanup._operation_check(_operation, root)
-    if _operation is not None and include_roots != ():
-        cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
+    cleanup._operation_include_context(_operation, root, include_roots)
     for name in cleanup.SOURCE_PATHS:
         path = relative_source(root, name, **operation_args)
         if file_sha256(path, **stream_args) != cleanup.BEFORE_SHA256[name]:
@@ -973,8 +974,7 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
     if _operation is not None:
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
         cleanup._operation_check(_operation, root)
-        if _operation is not None and include_roots != ():
-            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
+        cleanup._operation_include_context(_operation, root, include_roots)
     actual = {}
     for name, expected in bindings.items():
         path = relative_source(root, name, **operation_args)
@@ -1119,8 +1119,7 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _oper
     if _operation is not None:
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
         cleanup._operation_check(_operation, root)
-        if _operation is not None and include_roots != ():
-            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
+        cleanup._operation_include_context(_operation, root, include_roots)
     rule = REVIEWED_LOOP_RULES.get(module)
     if rule is None:
         return {}
@@ -1188,8 +1187,7 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
     if _operation is not None:
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
         cleanup._operation_check(_operation, root)
-        if _operation is not None and include_roots != ():
-            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
+        cleanup._operation_include_context(_operation, root, include_roots)
     module, line, kind, maximum, expression, proof_id, extras, callers = rule
     bindings = {
         name: GUARDED_LOOP_SOURCE_SHA256[name]
@@ -1484,8 +1482,7 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
     if _operation is not None:
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
         cleanup._operation_check(_operation, root)
-        if _operation is not None and include_roots != ():
-            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
+        cleanup._operation_include_context(_operation, root, include_roots)
     try:
         from carla_lane_oracle import typed_boundary_contracts as typed
         name = 'extensions/carla/map.mojo'
@@ -1594,16 +1591,29 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
     }}
 
 
-def reviewed_nonempty_loops(root, module, *, include_roots=()):
+def _receipt_reviewed_nonempty_loops(root, module, *, include_roots, _operation):
+    """The direct generated receipt alone lends its immutable image to rows."""
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    cleanup._operation_include_context(_operation, root, include_roots)
+    cleanup.require(_operation._kind == 'generated_receipt'
+                    and sys._getframe(1) is _operation._owner_frame,
+                    'generated row wrapper lacks its direct owner')
+    return reviewed_nonempty_loops(root, module, include_roots=include_roots, _operation=_operation)
+
+
+def reviewed_nonempty_loops(root, module, *, include_roots=(), _operation=None):
     """Keep historical rules and independently admit each new exact theorem."""
-    _operation, owns_operation = None, False
+    owns_operation = False
     coherence_errors = ()
     bounded = include_roots == () and module in ('extensions/carla/map', 'extensions/carla/rtree')
-    if bounded:
+    if bounded or _operation is not None:
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
         coherence_errors = (cleanup._OperationCoherenceError,)
     try:
-        if bounded:
+        if _operation is not None:
+            cleanup._operation_include_context(_operation, root, include_roots)
+            cleanup.require(_operation._kind == 'generated_receipt', 'foreign generated row owner')
+        elif bounded:
             kind = 'map_loops' if module == 'extensions/carla/map' else 'rtree_loops'
             _operation, owns_operation = cleanup._operation_enter(
                 root, kind, module=module, include_roots=include_roots)
@@ -1842,35 +1852,48 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
     for module in modules:
         if module + '.mojo' not in generation['modules']:
             raise ValueError('Manifest module has no generation origin: ' + module)
-    proofs = []
-    for module in modules:
-        name = module + '.mojo'
-        original = relative_source(root, name)
-        if name not in inputs:
-            raise ValueError('Missing instrumented module: ' + module)
-        candidates = constant_loops(original.read_text(encoding='utf-8'))
-        reviewed = reviewed_nonempty_loops(root, module, include_roots=(build,))
-        if candidates.keys() & reviewed.keys():
-            raise ValueError('Conflicting reviewed loop proof: ' + module)
-        candidates.update(reviewed)
-        for line in sorted(candidates):
-            if (module, line) not in branches:
-                continue  # Existing exclusions cannot become new proofs.
-            if any(record[0] in {'C', 'M'} and record[1] == module
-                   and int(record[2]) == line for record in records):
-                raise ValueError('Loop proof conflicts with compound decision: ' + module)
-            proofs.append({'module': module, **candidates[line],
-                           'source_sha256': inputs[name]['source']})
-    counts = _counts(records)
-    counts['proven_impossible'] = len(proofs)
-    counts['required_total'] = counts['potential_total'] - len(proofs)
-    return {'schema': SCHEMA, 'python': sys.version,
-            'compiler': compiler, 'flags': flags,
-            'manifest_sha256': sha256(raw), 'tools': tools,
-            'root_inputs': root_inputs, 'inputs': inputs, 'generation': generation,
-            'execution': execution_contract(root, build, inputs, mojo=mojo,
-                                            capture_cache=capture_cache, suites=suites),
-            'proofs': proofs, 'denominator': counts}
+    _receipt_seed = {'schema': SCHEMA, 'python': sys.version,
+        'compiler': compiler, 'flags': flags, 'manifest_sha256': sha256(raw),
+        'tools': tools, 'root_inputs': root_inputs, 'inputs': inputs, 'generation': generation,
+        'execution': execution_contract(root, build, inputs, mojo=mojo,
+                                        capture_cache=capture_cache, suites=suites)}
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    _operation = cleanup._receipt_operation_enter(root, build, _receipt_seed)
+    try:
+        _operation._receipt_inputs_check()
+        proofs = []
+        for module in modules:
+            name = module + '.mojo'
+            original = relative_source(root, name)
+            if name not in inputs:
+                raise ValueError('Missing instrumented module: ' + module)
+            text = cleanup._observe_text(root, name, original.read_text(encoding='utf-8'),
+                                         _operation=_operation, mode='physical')
+            candidates = constant_loops(text)
+            reviewed = _receipt_reviewed_nonempty_loops(root, module, include_roots=(build,),
+                                                        _operation=_operation)
+            if candidates.keys() & reviewed.keys():
+                raise ValueError('Conflicting reviewed loop proof: ' + module)
+            candidates.update(reviewed)
+            for line in sorted(candidates):
+                if (module, line) not in branches:
+                    continue  # Existing exclusions cannot become new proofs.
+                if any(record[0] in {'C', 'M'} and record[1] == module
+                       and int(record[2]) == line for record in records):
+                    raise ValueError('Loop proof conflicts with compound decision: ' + module)
+                proofs.append({'module': module, **candidates[line],
+                               'source_sha256': inputs[name]['source']})
+        counts = _counts(records)
+        counts['proven_impossible'] = len(proofs)
+        counts['required_total'] = counts['potential_total'] - len(proofs)
+        result = {**json.loads(_operation._receipt_seed), 'proofs': proofs, 'denominator': counts}
+        _operation.finish(root)
+        return result
+    except BaseException as error:
+        _operation._invalidate(error)
+        raise
+    finally:
+        _operation.close()
 
 
 def _load_json(path):
