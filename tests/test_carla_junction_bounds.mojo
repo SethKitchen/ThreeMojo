@@ -386,10 +386,13 @@ def test_arc_cancellation_and_large_s_polynomial_rounding() raises:
                 shifted.roads[sr].lane_transform_meters(0, 0, s).location
             )
         )
-    # This polynomial is intentionally ill-conditioned in global s.
-    # The wider numerical envelope must not be mislabeled 1 cm tight.
-    assert_true(bounds.min.z < -0.25)
-    assert_true(bounds.max.z > 1.25)
+    # The cubic keeps its local coefficients and subtracts its start s
+    # before Horner evaluation (#333). At s = 100000 its bound is thus not
+    # widened by global-s cancellation; it stays within 1 cm of [0, 1].
+    assert_true(bounds.min.z <= 0.0)
+    assert_true(bounds.min.z > -0.01)
+    assert_true(bounds.max.z >= 1.0)
+    assert_true(bounds.max.z < 1.01)
 
 
 def test_excessive_subdivision_uses_complete_envelope() raises:

@@ -1421,10 +1421,9 @@ struct Road(Copyable, Movable):
                 is not finite, a needed record is missing, a visited width
                 is not finite, or the distance exceeds the Float64 range.
         """
+        # nearest_lane_meters has already refused a nonfinite s.
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
-        if not isfinite(s):
-            raise Error("Fixed-s nearest lane needs a finite s")
         var query: Array[Float64, 3] = [
             Float64(location.x),
             Float64(location.y),

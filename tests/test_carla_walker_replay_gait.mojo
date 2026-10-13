@@ -211,7 +211,8 @@ def test_invalid_playback_time_and_speed_do_not_publish_bad_gait() raises:
     # Failed setup can leave ordinary actors, but no persistent gait owner.
     var invalid = Replayer()
     var bad_world = _world()
-    with assert_raises(contains="speed"):
+    # The recorded walker speed adapter refuses a negative speed.
+    with assert_raises(contains="finite and nonnegative"):
         _ = invalid.replay_bytes(bad_world, _log(first_speed=-1), "invalid")
     var bad_id = invalid.mapped(ActorId(50))
     assert_equal(bad_world.get_walker_gait(bad_id).amplitude().value, 0)
@@ -256,7 +257,7 @@ def test_mid_record_failure_disables_replay_until_restart() raises:
     var walker = replay.mapped(ActorId(50))
     replay.tick(world, Duration(0.1, SECOND))
     var before = world.get_walker_gait(walker)
-    with assert_raises(contains="speed"):
+    with assert_raises(contains="finite and nonnegative"):
         replay.tick(world, Duration(0.3, SECOND))
     assert_false(replay.is_enabled())
     _same(before, world.get_walker_gait(walker))

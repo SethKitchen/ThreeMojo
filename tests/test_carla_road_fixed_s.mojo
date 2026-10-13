@@ -59,9 +59,13 @@ def _road(
     _lane(road, 0, -1, width)
     road.info.geometries.append(
         RoadInfoGeometry._from_si(
-            0.0, RoadGeometry.from_meters(LINE, 0.0, x, y, 0.0, 10.0)
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 10.0)
         )
     )
+    # A checked constructor refuses a nonfinite start. Write the mutable
+    # fields afterward to model a record changed after construction.
+    road.info.geometries[0].geometry.x = x
+    road.info.geometries[0].geometry.y = y
     road.info.elevations.append(
         RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(z))
     )
@@ -266,7 +270,7 @@ def test_nonfinite_queries_and_s_raise_before_an_empty_result() raises:
         -inf[DType.float64](),
         bitcast[DType.float64](UInt64(0x7FF8000000000000)),
     ]:
-        with assert_raises(contains="finite s"):
+        with assert_raises(contains="A dimensional value must be finite"):
             _ = road.nearest_lane_meters(s, Vector3(0, 0, 0))
     with assert_raises(contains="Lane type is not valid"):
         _ = road.nearest_lane_meters(0, Vector3(0, 0, 0), LaneType(0))
@@ -290,8 +294,9 @@ def test_nonfinite_visited_widths_and_centers_raise() raises:
     road = _road(z=inf[DType.float64]())
     with assert_raises(contains="finite coordinates"):
         _ = road.nearest_lane_meters(0, Vector3(0, 0, 0))
+    # The plan-view record's checked view refuses its mutated start.
     road = _road(y=inf[DType.float64]())
-    with assert_raises(contains="finite coordinates"):
+    with assert_raises(contains="A dimensional value must be finite"):
         _ = road.nearest_lane_meters(0, Vector3(0, 0, 0))
     road = _road(y=1.7e308, width=1.7e308)
     with assert_raises(contains="finite coordinates"):

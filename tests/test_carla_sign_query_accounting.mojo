@@ -389,8 +389,8 @@ def test_static_sign_loop_still_reserves_its_query() raises:
 
 
 def test_sign_query_refuses_malformed_station_and_step_domains() raises:
-    for kind in range(7):
-        var map = _one_lane_many_equal_sections(3)
+    for kind in range(8):
+        var map = _one_lane_many_equal_sections(3, 1 if kind == 7 else -1)
         var expected: String
         if kind == 0:
             map._carla_segments[0].first.s = bitcast[DType.float64](
@@ -418,9 +418,19 @@ def test_sign_query_refuses_malformed_station_and_step_domains() raises:
             map._carla_segments[0].first.s = 3.0
             map._carla_segments[0].second.s = 10.0
             expected = "has no successor"
-        else:
+        elif kind == 6:
+            # Waypoint lookup refuses a negative station first.
             map._carla_segments[0].first.s = -10.0
             map._carla_segments[0].second.s = -4.0
+            expected = "finite and nonnegative"
+        else:
+            # A backward step from s = 1 in a section that starts at
+            # s = -10 goes 2 m along the chord and leaves the road.
+            map.roads[0].sections[2].s = -10.0
+            map._carla_segments[0].first.s = 1.0
+            map._carla_segments[0].second.s = -10.0
+            map._carla_segments[0].start = Vector3(0.0, 0.0, 0.0)
+            map._carla_segments[0].end = Vector3(11.0, 0.0, 0.0)
             expected = "A step left the road"
         var work = _MapBuildWork(MapBuildBudget())
         with assert_raises(contains=expected):
@@ -605,7 +615,7 @@ def test_sign_graph_longer_cycles_exhaust_without_recursion() raises:
 
 
 def test_sign_graph_refuses_nonfinite_or_invalid_metadata_with_retained_work() raises:
-    for kind in range(8):
+    for kind in range(9):
         var map = _graph_map(2)
         _link(map, 1, 2)
         var start = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 3.0)
@@ -641,8 +651,17 @@ def test_sign_graph_refuses_nonfinite_or_invalid_metadata_with_retained_work() r
             map.roads[0].sections[0].s = -largest
             start.s = largest
             expected = "nonfinite remainder"
-        else:
+        elif kind == 7:
+            # Waypoint lookup refuses a negative station first.
             start.s = -3.0
+            expected = "finite and nonnegative"
+        else:
+            # A backward step from s = 1 in a section that starts at
+            # s = -10 leaves the road.
+            map.roads[0].sections[0].s = -10.0
+            map.roads[0].sections[0].lanes[0].id = LaneId(1)
+            start.lane_id = LaneId(1)
+            start.s = 1.0
             expected = "A step left the road"
         var work = _MapBuildWork(MapBuildBudget())
         with assert_raises(contains=expected):

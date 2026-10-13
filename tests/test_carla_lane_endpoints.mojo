@@ -11,6 +11,7 @@ from extensions.carla.opendrive import load_opendrive
 from extensions.carla.road import LaneKey
 from extensions.carla.road_info import LaneId, RoadId, SectionId
 from math.vector3 import Vector3
+from std.math import isfinite
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -387,6 +388,8 @@ def test_until_lane_rejects_invalid_s_before_endpoint_discovery() raises:
         for lane in [-1, 1]:
             for ahead in [True, False]:
                 for section in [0, 1]:
+                    # Waypoint lookup refuses a nonfinite or negative
+                    # station before endpoint discovery.
                     for s in [
                         Float64("nan"),
                         Float64("inf"),
@@ -395,7 +398,10 @@ def test_until_lane_rejects_invalid_s_before_endpoint_discovery() raises:
                         101.0,
                         75.0 if section == 0 else 25.0,
                     ]:
-                        with assert_raises(contains="outside its lane section"):
+                        var expected = String("outside its lane section")
+                        if not isfinite(s) or s < 0.0:
+                            expected = "A dimensional value must be finite"
+                        with assert_raises(contains=expected):
                             if ahead:
                                 _ = map.next_until_lane_end_meters(
                                     _w(1, section, lane, s), 10

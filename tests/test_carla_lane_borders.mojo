@@ -166,16 +166,26 @@ def test_border_records_and_sections_split_the_widths() raises:
 
 def test_early_and_past_the_end_border_records() raises:
     # A record before the section's start holds at its start, and a record
-    # past the road's end starts no width.
+    # past the road's end starts no width. A record station must not be
+    # negative, so the second section starts at s = 2 and its early record
+    # starts at s = 1.
+    var first = _lane(-1, _border(0, -3.0)) + _lane(-2, _border(0, -6.0))
     var right = _lane(-1, _border(-1, -2.0, -1.0) + _border(20, -9.0)) + _lane(
         -2, _border(0, -20.0)
     )
-    var map = load_opendrive(_road(_section(0, "", right)))
-    # Lane -1's border is -2 - (s + 1): 3 m wide at s = 0, 8 m at s = 5.
-    # Lane -2 then spans -8 to -20 at s = 5.
-    assert_almost_equal(_width_at(map, -1, 0), 3.0)
-    assert_almost_equal(_width_at(map, -1, 5), 8.0)
-    assert_almost_equal(_width_at(map, -2, 5), 12.0)
+    var map = load_opendrive(
+        _road(_section(0, "", first) + _section(2, "", right))
+    )
+    # Lane -1's border is -2 - (s - 1): 3 m wide at s = 2, 6 m at s = 5.
+    # Lane -2 then spans -6 to -20 at s = 5.
+    assert_almost_equal(_width_at(map, -1, 2), 3.0)
+    assert_almost_equal(_width_at(map, -1, 5), 6.0)
+    assert_almost_equal(_width_at(map, -2, 5), 14.0)
+    # A record that starts before s = 0 is refused.
+    with assert_raises(contains="finite and nonnegative"):
+        _ = load_opendrive(
+            _road(_section(0, "", _lane(-1, _border(-1, -2.0, -1.0))))
+        )
     # Lane -2's border at -7 crosses lane -1's after s = 4.
     with assert_raises(contains="of lane -2 crosses its inner border"):
         _ = load_opendrive(
@@ -339,9 +349,7 @@ def test_nonfinite_road_length_refuses_border_map() raises:
     # Keep the finite section and plan-view geometry. The parser can form
     # no width interval before the public builder rejects the road length.
     source = source.replace('length="10" junction', 'length="nan" junction')
-    with assert_raises(
-        contains="Spatial map road has an invalid finite domain"
-    ):
+    with assert_raises(contains="A dimensional value must be finite"):
         _ = load_opendrive(source)
 
 

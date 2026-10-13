@@ -532,7 +532,11 @@ def test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() ra
         0, 0, 0, 1, 100000
     )
     var point = _lane_jet(road, 0, 0, 100000.0, 100001.0)
-    var original = point[2].rounded_value()
+    # The jet subtracts the stored origin first (#333), so it is already
+    # tight at a large s. A loose original shows the centered narrowing.
+    var jet = point[2].rounded_value()
+    assert_true(jet.width() < 1.01)
+    var original = _Interval(-64.0, 64.0)
     var work = _MapBuildWork(MapBuildBudget())
     var bounded = _centered_elevation_enclosure(
         road, 100000.0, 100001.0, original, point[2].error, work
@@ -542,11 +546,9 @@ def test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() ra
     for i in range(65):
         var delta = Float64(i) / 64.0
         var station = 100000.0 + delta
-        assert_true(
-            bounded.contains(
-                road.info.elevations[0].polynomial.evaluate_meters(station)
-            )
-        )
+        var value = road.info.elevations[0].polynomial.evaluate_meters(station)
+        assert_true(jet.contains(value))
+        assert_true(bounded.contains(value))
         # All stored coefficients and these dyadic parameters are exact.
         assert_true(bounded.contains(delta * delta * delta))
     var enlarged = _centered_elevation_enclosure(

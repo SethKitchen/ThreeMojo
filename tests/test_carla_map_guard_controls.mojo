@@ -96,9 +96,13 @@ def test_map_query_price_preserves_each_mode_and_rejects_overflow() raises:
 
 def test_map_speed_station_checks_each_domain_failure() raises:
     var map = _map()
-    for s in [nan[DType.float64](), -0.5, 4.5]:
-        with assert_raises(contains="finite and within the road"):
-            _ = map.speed_limit_at(_waypoint(s))
+    # Waypoint lookup refuses a nonfinite or negative station first.
+    with assert_raises(contains="A dimensional value must be finite"):
+        _ = map.speed_limit_at(_waypoint(nan[DType.float64]()))
+    with assert_raises(contains="finite and nonnegative"):
+        _ = map.speed_limit_at(_waypoint(-0.5))
+    with assert_raises(contains="finite and within the road"):
+        _ = map.speed_limit_at(_waypoint(4.5))
     for s in [0.0, 1.0, 4.0]:
         assert_equal(Bool(map.speed_limit_at(_waypoint(s))), False)
 
@@ -121,8 +125,17 @@ def test_build_step_checks_distance_and_section_boundary() raises:
     with assert_raises(contains="remain in its section"):
         _ = map._build_next(_waypoint(3.0), 2.0)
     assert_true(map._build_next(_waypoint(1.0), 1.0).s > 1.0)
-    with assert_raises(contains="left the road"):
+    # Waypoint lookup refuses a negative station before the step.
+    with assert_raises(contains="finite and nonnegative"):
         _ = map._build_next(_waypoint(-1.0), 0.5)
+    # A backward step from a nonnegative station can still leave the road
+    # when its section starts before s = 0.
+    map.roads[0].sections[0].s = -2.0
+    map.roads[0].sections[0].lanes[0].id = LaneId(1)
+    var backward = _waypoint(0.5)
+    backward.lane_id = LaneId(1)
+    with assert_raises(contains="left the road"):
+        _ = map._build_next(backward, 1.0)
 
 
 def test_map_build_helpers_reject_unrepresentable_pose_work() raises:

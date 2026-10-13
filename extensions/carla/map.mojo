@@ -2601,13 +2601,10 @@ struct Map(Movable):
         Raises:
             Error: If the waypoint or a mutable speed record is invalid.
         """
+        # _locate has already refused a nonfinite or negative station.
         var location = self._locate(waypoint)
         ref road = self.roads[location[0]]
-        if (
-            not isfinite(waypoint.s)
-            or waypoint.s < 0
-            or waypoint.s > road.length
-        ):
+        if waypoint.s > road.length:
             raise Error(
                 "Speed-limit station must be finite and within the road"
             )
@@ -4561,8 +4558,9 @@ struct Map(Movable):
         ref road = self.roads[initial[0]]
         var section_start = road.sections[initial[1]].s
         var section_end = section_start + road._section_length_si(initial[1])
+        # _locate has already refused a nonfinite or negative station.
         var s = waypoint.s
-        if not isfinite(s) or s < section_start or s > section_end:
+        if s < section_start or s > section_end:
             raise Error("Waypoint is outside its lane section")
         var forward = road.is_positive_direction(waypoint.lane_id) == ahead
         # Locate the reachable end before sampling. Never walk through a

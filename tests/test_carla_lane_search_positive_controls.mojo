@@ -75,9 +75,13 @@ def test_finite_axis_owner_survives_overflow_of_the_optional_inverse_seed() rais
     var high = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     var road = _road()
     road.length = high
-    road.info.geometries[0] = RoadInfoGeometry._from_si(
-        start, RoadGeometry.from_meters(LINE, start, -reach, 0.0, 0.0, reach)
-    )
+    # The checked constructor refuses a record whose end s + length
+    # overflows. Write the mutable raw fields of a finite record instead.
+    var geometry = RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0)
+    geometry.s = start
+    geometry.x = -reach
+    geometry.length = reach
+    road.info.geometries[0] = RoadInfoGeometry._from_si(start, geometry^)
     # RN(high-start)=reach, so the finite high endpoint is x=0.
     # RN(RN(-1+reach)+start) overflows at the upper rounding tie.
     # The inverse is optional: the exact stored bracket still has a minimum.
