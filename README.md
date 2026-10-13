@@ -80,7 +80,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): turning capsules, offset shapes, translating boxes and hulls, moving pairs and kinematic spheres work; turning boxes and hulls remain refused [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
 
-- [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
+- [x] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): generated canonical SI parts and whole-body properties, versioned visual maps that refuse unsupported paths, and sealed bakes [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
 <summary>Implemented: 8</summary>
