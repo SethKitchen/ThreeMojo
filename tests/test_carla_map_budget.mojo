@@ -526,10 +526,10 @@ def test_resumption_uses_global_remainder_without_resetting_candidate_caps() rai
     assert_equal(work.terms, certificate.terms)
 
 
-def test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() raises:
+def test_centered_junction_elevation_keeps_local_coefficients_and_roundoff() raises:
     var road = _road()
     road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
-        0, 0, 0, 1, 100000
+        1, -3, 3, -1, 100000
     )
     var point = _lane_jet(road, 0, 0, 100000.0, 100001.0)
     var original = point[2].rounded_value()
@@ -548,9 +548,15 @@ def test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() ra
             )
         )
         # All stored coefficients and these dyadic parameters are exact.
-        assert_true(bounded.contains(delta * delta * delta))
+        var complement = 1.0 - delta
+        assert_true(bounded.contains(complement * complement * complement))
     var enlarged = _centered_elevation_enclosure(
-        road, 100000.0, 100001.0, original, point[2].error + 32.0, work
+        road,
+        100000.0,
+        100001.0,
+        original + _Interval(-32.0, 32.0),
+        point[2].error + 32.0,
+        work,
     )
     assert_true(enlarged.contains(-32.0))
     assert_true(enlarged.contains(33.0))
