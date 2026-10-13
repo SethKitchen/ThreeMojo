@@ -33,6 +33,7 @@ REPAIRED = {
     'tests/test_carla_lane_borders.mojo',
     'tests/test_carla_lane_search_positive_controls.mojo',
     'tests/test_carla_map_budget.mojo',
+    'tests/test_carla_opendrive.mojo',
     'tests/test_carla_road_fixed_s.mojo',
     'tests/test_carla_support_dispatch_successor.mojo',
 }
@@ -101,10 +102,12 @@ class Common758CurrentSuccessor(unittest.TestCase):
                 self.assertEqual({p for p in old if old[p] != current[p]}, paths)
         self.assertIn(SELF, typed.BINDING_INPUTS)
         self.assertEqual(typed.BINDING_INPUTS[SELF], _sha((ROOT/SELF).read_bytes()))
+        conditioned = 'tools/test_conditioned_coverage_loops.py'
+        self.assertEqual(typed.BINDING_INPUTS[conditioned], _sha((ROOT/conditioned).read_bytes()))
         self.assertEqual(typed.HISTORICAL_BINDING_INPUTS['tools/compile_fail_expectations.json'],
                          EXPECTATIONS)
-        # Common admission checks actual689 bytes. Each feature extension owns
-        # its exact693 endpoint and six controls; all current binding entries
+        # Merged admission checks the exact697 endpoint and eight additions.
+        # The six endpoint controls and all current binding entries
         # remain authenticated by the current authority and physical owner.
         typed.verify_authority()
 
