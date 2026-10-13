@@ -39757,9 +39757,9 @@ EDGES_SHA256 = '00edb161fffd69cb1569e2d311f8ea6d51b8c1a3316f34c41107587c9f332168
 # One exact branch-specific four-record diagnostic extension.
 EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
  'before_sha256': '85020fb32ec96121aba108288eaabf41c4483e2f94e91b6beee4528af2206653',
- 'after_sha256': '5315c49b101f8f653d589fab763fdd7dce4c8cd04123e6e4d403aaf90c4d0016',
+ 'after_sha256': '7c96ffe1750ffee867b5b161529ed834cfa0d732780c5a2a8b5ef2f876cdb03e',
  'before_count': 689,
- 'after_count': 693,
+ 'after_count': 697,
  'added_records': {'tests/compile_fail/a_body_region_is_not_a_bare_int.mojo': {'errors': [{'column': 24,
                                                                                            'line': 12,
                                                                                            'message': 'invalid '
@@ -39839,8 +39839,118 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
                                                                                                        "'MappingKind'"}],
                                                                                 'notes': ['function '
                                                                                           'declared '
-                                                                                          'here']}},
- 'edits': ((117,
+                                                                                          'here']},
+                   'tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 13,
+                                                                                            'column': 21,
+                                                                                            'message': 'no '
+                                                                                                       'matching '
+                                                                                                       'function '
+                                                                                                       'in '
+                                                                                                       'initialization'}],
+                                                                                'notes': ['candidate '
+                                                                                          'not '
+                                                                                          'viable: '
+                                                                                          'missing '
+                                                                                          'required '
+                                                                                          'argument: '
+                                                                                          "'copy'",
+                                                                                          'candidate '
+                                                                                          'not '
+                                                                                          'viable: '
+                                                                                          'missing '
+                                                                                          'required '
+                                                                                          'argument: '
+                                                                                          "'move'",
+                                                                                          'candidate '
+                                                                                          'not '
+                                                                                          'viable: '
+                                                                                          'value '
+                                                                                          'passed '
+                                                                                          'to '
+                                                                                          "'mode' "
+                                                                                          'cannot '
+                                                                                          'be '
+                                                                                          'converted '
+                                                                                          'from '
+                                                                                          "'IntLiteral[0]' "
+                                                                                          'to '
+                                                                                          "'ContactMode'"]},
+                   'tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo': {'errors': [{'line': 25,
+                                                                                            'column': 24,
+                                                                                            'message': 'invalid '
+                                                                                                       'call '
+                                                                                                       'to '
+                                                                                                       "'failure_motion': "
+                                                                                                       'value '
+                                                                                                       'passed '
+                                                                                                       'to '
+                                                                                                       "'mode' "
+                                                                                                       'cannot '
+                                                                                                       'be '
+                                                                                                       'converted '
+                                                                                                       'from '
+                                                                                                       "'IntLiteral[1]' "
+                                                                                                       'to '
+                                                                                                       "'FailureMode'"}],
+                                                                                'notes': ['function '
+                                                                                          'declared '
+                                                                                          'here']},
+                   'tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo': {'errors': [{'line': 12,
+                                                                                         'column': 24,
+                                                                                         'message': 'invalid '
+                                                                                                    'call '
+                                                                                                    'to '
+                                                                                                    "'of': "
+                                                                                                    'value '
+                                                                                                    'passed '
+                                                                                                    'to '
+                                                                                                    "'kind' "
+                                                                                                    'cannot '
+                                                                                                    'be '
+                                                                                                    'converted '
+                                                                                                    'from '
+                                                                                                    "'IntLiteral[4]' "
+                                                                                                    'to '
+                                                                                                    "'LoadKind'"}],
+                                                                             'notes': ['function '
+                                                                                       'declared '
+                                                                                       'here']},
+                   'tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo': {'errors': [{'line': 14,
+                                                                                        'column': 19,
+                                                                                        'message': 'no '
+                                                                                                   'matching '
+                                                                                                   'function '
+                                                                                                   'in '
+                                                                                                   'initialization'}],
+                                                                            'notes': ['candidate '
+                                                                                      'not '
+                                                                                      'viable: '
+                                                                                      'missing '
+                                                                                      'required '
+                                                                                      'argument: '
+                                                                                      "'copy'",
+                                                                                      'candidate '
+                                                                                      'not '
+                                                                                      'viable: '
+                                                                                      'missing '
+                                                                                      'required '
+                                                                                      'argument: '
+                                                                                      "'move'",
+                                                                                      'candidate '
+                                                                                      'not '
+                                                                                      'viable: '
+                                                                                      'value '
+                                                                                      'passed '
+                                                                                      'to '
+                                                                                      "'run' "
+                                                                                      'cannot '
+                                                                                      'be '
+                                                                                      'converted '
+                                                                                      'from '
+                                                                                      "'IntLiteral[1]' "
+                                                                                      'to '
+                                                                                      "'PipeRun'"]}},
+ 'edits': [(117,
             129,
             (),
             ('      }\n',
@@ -39872,8 +39982,26 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
              '        "line": 12,\n',
              '        "message": "invalid call to \'tissue_label\': value passed to \'tissue\' '
              'cannot be converted from \'IntLiteral[1]\' to \'CanonicalTissue\'"\n')),
-           (670,
-            682,
+           (518,
+            532,
+            (),
+            ('  "tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 13,\n',
+             '        "column": 21,\n',
+             '        "message": "no matching function in initialization"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "candidate not viable: missing required argument: \'copy\'",\n',
+             '      "candidate not viable: missing required argument: \'move\'",\n',
+             '      "candidate not viable: value passed to \'mode\' cannot be converted from '
+             '\'IntLiteral[0]\' to \'ContactMode\'"\n',
+             '    ]\n',
+             '  },\n')),
+           (684,
+            696,
             (),
             ('      }\n',
              '    ],\n',
@@ -39888,8 +40016,40 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
              '        "line": 12,\n',
              '        "message": "invalid call to \'dentition_label\': value passed to '
              '\'dentition\' cannot be converted from \'IntLiteral[0]\' to \'Dentition\'"\n')),
-           (1973,
-            1985,
+           (1115,
+            1127,
+            (),
+            ('      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n',
+             '  "tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 25,\n',
+             '        "column": 24,\n',
+             '        "message": "invalid call to \'failure_motion\': value passed to \'mode\' '
+             'cannot be converted from \'IntLiteral[1]\' to \'FailureMode\'"\n')),
+           (1955,
+            1967,
+            (),
+            ('  "tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 12,\n',
+             '        "column": 24,\n',
+             '        "message": "invalid call to \'of\': value passed to \'kind\' cannot be '
+             'converted from \'IntLiteral[4]\' to \'LoadKind\'"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "function declared here"\n',
+             '    ]\n',
+             '  },\n')),
+           (2011,
+            2023,
             (),
             ('      }\n',
              '    ],\n',
@@ -39903,11 +40063,29 @@ EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
              '        "column": 25,\n',
              '        "line": 12,\n',
              '        "message": "invalid call to \'mapping_label\': value passed to \'kind\' '
-             'cannot be converted from \'IntLiteral[0]\' to \'MappingKind\'"\n'))),
+             'cannot be converted from \'IntLiteral[0]\' to \'MappingKind\'"\n')),
+           (2592,
+            2606,
+            (),
+            ('    ]\n',
+             '  },\n',
+             '  "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {\n',
+             '    "errors": [\n',
+             '      {\n',
+             '        "line": 14,\n',
+             '        "column": 19,\n',
+             '        "message": "no matching function in initialization"\n',
+             '      }\n',
+             '    ],\n',
+             '    "notes": [\n',
+             '      "candidate not viable: missing required argument: \'copy\'",\n',
+             '      "candidate not viable: missing required argument: \'move\'",\n',
+             '      "candidate not viable: value passed to \'run\' cannot be converted from '
+             '\'IntLiteral[1]\' to \'PipeRun\'"\n'))],
  'regression_path': 'tools/carla_lane_oracle/test_expectation_binding_successor.py',
- 'regression_sha256': '5742e10ece5177de5615c006be311beb3b37e3346f9f9a4b5202f36a3393d979'}
-BINDING_INPUTS = {**COMMON_BINDING_INPUTS, **{'tools/compile_fail_expectations.json': '5315c49b101f8f653d589fab763fdd7dce4c8cd04123e6e4d403aaf90c4d0016',
- 'tools/carla_lane_oracle/test_expectation_binding_successor.py': '5742e10ece5177de5615c006be311beb3b37e3346f9f9a4b5202f36a3393d979'}}
+ 'regression_sha256': '59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e'}
+BINDING_INPUTS = {**COMMON_BINDING_INPUTS, **{'tools/compile_fail_expectations.json': '7c96ffe1750ffee867b5b161529ed834cfa0d732780c5a2a8b5ef2f876cdb03e',
+ 'tools/carla_lane_oracle/test_expectation_binding_successor.py': '59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e'}}
 # END REVIEWED TYPED BOUNDARY DATA
 
 
@@ -40101,8 +40279,8 @@ def expectation_predecessor(raw):
     additions = record['added_records']
     require(type(old) is dict and type(current) is dict and type(additions) is dict
             and len(old) == record['before_count'] == 689
-            and len(current) == record['after_count'] == 693
-            and len(additions) == 4 and not set(old).intersection(additions)
+            and len(current) == record['after_count'] == 697
+            and len(additions) == 8 and not set(old).intersection(additions)
             and set(current) == set(old).union(additions),
             'expectation successor key inventory changed')
     require({path: current[path] for path in old} == old
@@ -40168,4 +40346,4 @@ def verify_authority():
     extension = {'BINDING_INPUTS': BINDING_INPUTS,
                  'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
     require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
-            '6fc6eead59862fcc3598faa3d6b2321204455100e7f3553ebb03389c51303c6c', 'expectation successor authority changed')
+            'f72275d5d512bf32efb6afe25e815169ba370d072ec3f26cf8f3b7edd38aa555', 'expectation successor authority changed')

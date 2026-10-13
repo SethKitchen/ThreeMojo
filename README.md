@@ -568,6 +568,13 @@ Procedural buildings for engineering analysis and for games share one canonical 
 - [x] [Shell analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Shell-analysis): flat-shell slabs and walls [#649](https://github.com/SethKitchen/ThreeMojo/issues/649)
 - [x] [Building energy](https://github.com/SethKitchen/ThreeMojo/wiki/Building-energy): zones, transient conduction and a heat balance [#650](https://github.com/SethKitchen/ThreeMojo/issues/650)
 
+### Earth retaining
+
+Earth-retaining structures and the pictures that explain them. A checked box records implemented scope. It does not establish engineering validity for a project.
+
+- [x] [Retaining walls](https://github.com/SethKitchen/ThreeMojo/wiki/Retaining-walls): earth and water pressure, trial wedges, LRFD wall stability, concrete strips, Bishop slip circles and failure motions [#753](https://github.com/SethKitchen/ThreeMojo/issues/753)
+- [x] [Engineering views](https://github.com/SethKitchen/ThreeMojo/wiki/Engineering-views): a mesh builder for walls, pipes and ground, a text and label overlay, and civil-works textures [#754](https://github.com/SethKitchen/ThreeMojo/issues/754)
+
 ### Out of scope
 
 This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.

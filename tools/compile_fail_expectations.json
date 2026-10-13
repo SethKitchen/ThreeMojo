@@ -516,6 +516,20 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 21,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'mode' cannot be converted from 'IntLiteral[0]' to 'ContactMode'"
+    ]
+  },
   "tests/compile_fail/a_container_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1099,6 +1113,18 @@
         "column": 27,
         "line": 12,
         "message": "invalid call to 'expression_recipe': value passed to 'expression' cannot be converted from 'IntLiteral[1]' to 'FacialExpression'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 25,
+        "column": 24,
+        "message": "invalid call to 'failure_motion': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'FailureMode'"
       }
     ],
     "notes": [
@@ -1927,6 +1953,18 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'of': value passed to 'kind' cannot be converted from 'IntLiteral[4]' to 'LoadKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_lod_distance_is_not_a_bare_float.mojo": {
     "errors": [
       {
@@ -2552,6 +2590,20 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 19,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'run' cannot be converted from 'IntLiteral[1]' to 'PipeRun'"
     ]
   },
   "tests/compile_fail/a_ply_format_is_not_a_bare_int.mojo": {

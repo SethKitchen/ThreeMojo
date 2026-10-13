@@ -577,5 +577,23 @@ def test_font_outline_numbers_use_whole_string_coercion() raises:
             _ = parse_outline("m " + token + " 0 l 1 0")
 
 
+def test_empty_scaled_contours_leave_no_outline() raises:
+    # A single-point contour, like DejaVu Sans's extra contour in "u",
+    # must not create an empty ShapePath outline before or after a solid.
+    var solid = "m 0 0 l 0 10 l 10 10 l 10 0 l 0 0 "
+    var empty = "m 20 20 l 20 20 "
+    var glyphs = Dict[String, Glyph]()
+    glyphs["a"] = Glyph(12, parse_outline(empty + solid))
+    glyphs["b"] = Glyph(12, parse_outline(solid + empty))
+    glyphs["c"] = Glyph(12, parse_outline(empty))
+    var font = Font("Degenerate contour", 10, 0, 10, 0, glyphs^)
+    for letter in ["a", "b"]:
+        var shapes = font.generate_shapes(letter, Length(1, METER))
+        assert_equal(len(shapes), 1)
+        assert_equal(shapes[0].outline.curve_count(), 4)
+        assert_true(shapes[0].outline.is_closed())
+    assert_equal(len(font.generate_shapes("c", Length(1, METER))), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
