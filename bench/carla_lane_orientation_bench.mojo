@@ -5,8 +5,9 @@
 
 """Same-build known-waypoint transform benchmark for issue #485.
 
-The complete baseline method is copied from 0f58bc1. Geometry position
-helpers and center-coordinate arithmetic are shared and unchanged.
+The baseline keeps the orientation calculation from 0f58bc1. Both methods
+use the current canonical lane-center calculation. This isolates the
+orientation correction from later changes to center-coordinate precision.
 """
 
 from extensions.carla.geometry import (
@@ -33,9 +34,9 @@ def _base_lane_transform(
 ) raises -> CarlaTransform:
     """Return a lane's center at s in CARLA's frame, facing along it.
 
-    This follows `Lane::ComputeTransform`, except that the pitch is
-    the negative arctangent of the elevation grade. That matches the
-    corrected rotation convention and makes rising roads face uphill.
+    The orientation follows `Lane::ComputeTransform`, except that the pitch
+    is the negative arctangent of the elevation grade. The center comes
+    from the current canonical lane geometry, shared with the new method.
     A lane against s turns its yaw by 180 degrees and reverses pitch.
 
     Args:
@@ -55,18 +56,15 @@ def _base_lane_transform(
     if s > road.length or s < 0.0:
         raise Error("s is off the road")
     var lane_id = road.sections[section].lanes[lane].id
-    var t_offset = Float32(0)
     var lane_tangent = Float32(0)
     if lane_id.value != 0:
         var total = road._total_width(section, s, lane_id)
-        t_offset = Float32(total[0])
         lane_tangent = Float32(total[1])
     var lane_offset = info_at(road.info.lane_offsets, Length64(s))
     if not Bool(lane_offset):
         raise Error("The road has no lane offset record at s")
     lane_tangent -= Float32(lane_offset.value().polynomial.tangent(Length64(s)))
-    var point = road.directed_point(Length64(s))
-    point.apply_lateral_offset(Length(t_offset, METER))
+    var point = road._lane_point(section, lane, s)
     point.tangent -= Float64(lane_tangent)
     # Rotation's positive pitch points down. The elevation derivative is
     # a grade, not an angle; use its arctangent before reversing traffic.
