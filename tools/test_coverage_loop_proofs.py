@@ -2034,6 +2034,11 @@ def _consumer_validation_timeout(consumer, *, internal_error=False, unknown=Fals
             and not internal_error and not unknown else 45)
 
 
+def _clean_import_validation_timeout(mode, *, internal_error=False, rejected=False):
+    """Bound valid CLI Map/R-tree proofs without extending other probes."""
+    return 60 if mode == 'cli' and not internal_error and not rejected else 30
+
+
 class ConsumerValidationBudgetTests(unittest.TestCase):
     def test_only_complete_winner_validation_gets_extended_outer_budget(self):
         self.assertEqual(_consumer_validation_timeout('winner_sign_contracts'), 180)
@@ -2045,6 +2050,16 @@ class ConsumerValidationBudgetTests(unittest.TestCase):
         for consumer in ('border_parser_contracts', 'unknown'):
             with self.subTest(consumer=consumer):
                 self.assertEqual(_consumer_validation_timeout(consumer), 45)
+
+
+    def test_only_valid_cli_map_and_rtree_proofs_get_extended_outer_budget(self):
+        for mode in ('cli', 'package', 'direct', 'unknown'):
+            for internal_error, rejected in ((False, False), (True, False),
+                                             (False, True), (True, True)):
+                with self.subTest(mode=mode, internal_error=internal_error, rejected=rejected):
+                    expected = 60 if (mode, internal_error, rejected) == ('cli', False, False) else 30
+                    self.assertEqual(_clean_import_validation_timeout(
+                        mode, internal_error=internal_error, rejected=rejected), expected)
 
 
 class MapSuccessorLoopTests(unittest.TestCase):
@@ -2658,10 +2673,13 @@ check(sys.path == original_path, 'verification changed sys.path')
             command.append('-O')
         command.extend([str(script), str(root or self.repo), mode, str(shadow),
                         str(internal_error), str(rejected)])
-        # Reviewed import/source-verification allowance, aligned with the
-        # 30-second proof-consumer probes; native test budgets are separate.
+        # Hosted macOS timed out at 30s while rederiving valid Map/R-tree proofs.
+        # Only that CLI workload gets 60s; inverse/import/refusal probes retain
+        # 30s, and every native test budget remains unchanged.
+        timeout = _clean_import_validation_timeout(
+            mode, internal_error=internal_error, rejected=rejected)
         result = subprocess.run(command, cwd=cwd, check=False, capture_output=True,
-                                text=True, timeout=30)
+                                text=True, timeout=timeout)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout
 
