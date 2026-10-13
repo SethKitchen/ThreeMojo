@@ -151,7 +151,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': '02a632f5e9f3c69be6f32d996e153e6a4fec43c281367e8f1d3a710163f46f22',
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': '38366ae64f2461a24c220c5bbbbe5dbade6d0e3dc584bd76a7cad636f4511721',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},

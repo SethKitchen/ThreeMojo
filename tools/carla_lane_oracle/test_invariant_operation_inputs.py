@@ -3711,7 +3711,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          (
           " 'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',\n",
           " 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
-          " 'tools/carla_lane_oracle/typed_boundary_contracts.py': '02a632f5e9f3c69be6f32d996e153e6a4fec43c281367e8f1d3a710163f46f22',\n",
+          " 'tools/carla_lane_oracle/typed_boundary_contracts.py': '38366ae64f2461a24c220c5bbbbe5dbade6d0e3dc584bd76a7cad636f4511721',\n",
           " 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}\n",
          ),
         ),
