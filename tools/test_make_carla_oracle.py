@@ -52,7 +52,11 @@ class CarlaOracleWiringTests(unittest.TestCase):
         source = (ROOT / 'Makefile').read_text()
         start = source.index('test-tools:\n')
         end = source.index('\n# Native source-to-source regression:', start)
-        (self.root / 'Makefile').write_text('.PHONY: test-tools\n' + source[start:end] + '\n')
+        # The nested stage runs through the real parallel runner.
+        runner = 'tools/parallel_unittest.py'
+        (self.root / runner).write_bytes((ROOT / runner).read_bytes())
+        (self.root / 'Makefile').write_text('.PHONY: test-tools\nJOBS ?= 2\n'
+                                            + source[start:end] + '\n')
 
     def make(self, fail=None):
         self.events.write_text('')
