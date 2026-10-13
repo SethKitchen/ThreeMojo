@@ -305,8 +305,58 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     require(all(list(value.items()) == list(standalone.items()) for value in observed_maps),
             'Cached dependency keys or overwrite order differ from standalone admission')
     print('Generated owner: two fresh receipts, one full and one typed admission each', flush=True)
+    # A restored live-table mutation must still poison this real active owner.
+    # This uses no writable source fixture and runs in the maintained entrypoint.
+    conditioned_refusals = []
+    def conditioned_authority_mutation(frame, event, value, owners):
+        if (conditioned_refusals or event != 'return'
+                or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__):
+            return
+        require(len(owners) == 1 and frame.f_locals.get('self') is owners[0]
+                and owners[0]._kind == 'generated_receipt' and owners[0]._state == 'active'
+                and not owners[0]._capturing,
+                'Conditioned mutation missed the active generated owner')
+        owner = owners[0]
+        conditioned_refusals.append('active')
+        old_bindings = audit.conditioned_cubic.BINDING_INPUTS
+        try:
+            audit.conditioned_cubic.BINDING_INPUTS = {**old_bindings, 'unreviewed': '0'*64}
+            try:
+                audit._typed_boundary_bindings(root, _operation=owner)
+            except audit._OperationCoherenceError as error:
+                require(str(error) == 'conditioned cubic authority namespace changed',
+                        'Conditioned mutation missed the immediate authority refusal')
+                conditioned_refusals.append('refused')
+            else:
+                raise RuntimeError('Active generated owner accepted changed conditioned authority')
+        finally:
+            audit.conditioned_cubic.BINDING_INPUTS = old_bindings
+        require(audit.conditioned_cubic.BINDING_INPUTS is old_bindings,
+                'Conditioned mutation did not restore its original table')
+        try:
+            audit._operation_check(owner, root)
+        except audit._OperationCoherenceError as error:
+            require(str(error) == 'conditioned cubic authority namespace changed',
+                    'Restored conditioned mutation lost its exact sticky refusal')
+            conditioned_refusals.append('sticky')
+        else:
+            raise RuntimeError('Restored conditioned authority revived its failed owner')
+    with trace(conditioned_authority_mutation) as (_, owners, _):
+        try:
+            derive()
+        except audit._OperationCoherenceError as error:
+            require(str(error) == 'conditioned cubic authority namespace changed',
+                    'Conditioned mutation escaped with an unrelated refusal')
+        else:
+            raise RuntimeError('Conditioned authority mutation received a receipt')
+    require(conditioned_refusals == ['active', 'refused', 'sticky']
+            and len(owners) == 1 and owners[0]._failed and owners[0]._state == 'closed'
+            and owners[0]._owner_frame is None and owners[0]._receipt_seed is None,
+            'Conditioned mutation did not refuse, restore and close its real owner')
+    print('Generated owner: transient conditioned authority refused and restored', flush=True)
     if mutable_source is None:
-        return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1}
+        return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1,
+                'conditioned_authority_refusal': True}
 
     # These mutations require only the separately admitted writable source and
     # generated stage. The complete positive producer relation is rechecked
@@ -465,7 +515,7 @@ def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_sourc
     proofs.check_capture_inputs({'receipt': expected}, root, stage)
     print('Generated owner current refusals:', ', '.join(completed), flush=True)
     return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1,
-            'current_mutation_controls': completed}
+            'conditioned_authority_refusal': True, 'current_mutation_controls': completed}
 
 
 
@@ -473,7 +523,8 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
     """Exercise real maintained generation with the complete passthrough layout."""
     modules = ('extensions/carla/curve_rounded_arc',
                'extensions/carla/curve_rounded_line',
-               'extensions/carla/curve_sample_dispatch')
+               'extensions/carla/curve_sample_dispatch',
+               'extensions/carla/map')
     suite = 'tests/test_carla_lane_geometry_guard_controls.mojo'
     require(not stage.exists(), 'Generated include regression needs a fresh stage')
     run(['make', '--no-print-directory', 'coverage-instrument',
@@ -485,39 +536,61 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
         require((stage/name).read_bytes() == (ROOT/name).read_bytes(),
                 'Maintained nested-render passthrough is missing')
     envelope = proofs.read_receipt(stage/'loop-proofs.json')
-    # This is a closed current-main census, independent of the retired
-    # local34+4 candidate. These modules contain no ordinary constant proofs.
+    # Close the complete four-module census. Map exercises historical station
+    # borrowing during normal profiled derivation, not a profile callback.
     rows = {
         ('extensions/carla/curve_rounded_arc',235): (
-            'rounded-arc-validated-lane-list','range(len(lanes))',None,
+            'rounded-arc-validated-lane-list','range(len(lanes))','reviewed-nonempty-range',None,
             'f17bf9a6a744971ea6e792a24b27d6157691e70d50c438880abcf88db2a9123d'),
         ('extensions/carla/curve_rounded_line',93): (
-            'rounded-line-validated-lane-list','range(len(lanes))',None,
+            'rounded-line-validated-lane-list','range(len(lanes))','reviewed-nonempty-range',None,
             '22b70ec9febc6f3d21a8a4d9f1a74650d676e34782fab2812004a1a3aadeb698'),
         ('extensions/carla/curve_sample_dispatch',126): (
-            'sample-dispatch-count-1-or-2','range(count)',2,
+            'sample-dispatch-count-1-or-2','range(count)','reviewed-nonempty-range',2,
             '04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb'),
+        ('extensions/carla/map',5020): (
+            'construction-geometry-boundary-list','boundaries','reviewed-nonempty-iterator',None,
+            'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df'),
     }
-    expected = set(rows)
+    ordinary = {
+        ('extensions/carla/map',line): {
+            'module':'extensions/carla/map', 'line':line,
+            'kind':'literal-range', 'cardinality':count, 'required':'T', 'impossible':'F',
+            'expression':expression,
+            'source_sha256':'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df'}
+        for line,count,expression in ((2170,3,'range (3 )'),(2201,8,'range (8 )'))}
+    expected = set(rows) | set(ordinary)
     observed = {(row['module'],row['line']):row for row in envelope['receipt']['proofs']}
-    require(len(observed) == len(envelope['receipt']['proofs']) == 3
-            and set(observed) == expected, 'Closed three-row proof inventory differs')
-    require(all('proof_id' in row for row in observed.values()),
-            'Unexpected ordinary proof in the selected current modules')
-    for key,(proof_id,expression,maximum,digest) in rows.items():
+    require(len(observed) == len(envelope['receipt']['proofs']) == 6
+            and set(observed) == expected, 'Closed six-row proof inventory differs')
+    require({key for key,row in observed.items() if 'proof_id' in row} == set(rows),
+            'Reviewed and ordinary proof inventories differ')
+    for key,(proof_id,expression,kind,maximum,digest) in rows.items():
         raw = (ROOT/(key[0]+'.mojo')).read_bytes()
         require(proofs.sha256(raw) == digest, 'Current integration source endpoint changed')
         row = observed[key]
         require((row['proof_id'],row['expression'],row['kind'],row['cardinality'],
                  row['maximum_cardinality'],row['required'],row['impossible'],row['source_sha256'])
-                == (proof_id,expression,'reviewed-nonempty-range',1,maximum,'T','F',digest),
+                == (proof_id,expression,kind,1,maximum,'T','F',digest),
                 'Current proof contract or required True outcome differs')
-        require(proofs.constant_loops(raw.decode('utf-8')) == {},
-                'Ordinary proof census differs from the reviewed empty set')
+        constants = {line:{field:value for field,value in item.items()
+                           if field not in ('module','source_sha256')}
+                     for (module,line),item in ordinary.items() if module == key[0]}
+        require(proofs.constant_loops(raw.decode('utf-8')) == constants,
+                'Ordinary proof census differs from the reviewed exact set')
+    require(observed['extensions/carla/map',5020]['minimum_cardinality'] == 1,
+            'Constructor boundary minimum changed')
+    require(all(observed[key] == row for key,row in ordinary.items()),
+            'Ordinary literal-range proof contract differs')
     original = (stage/'manifest.txt').read_bytes()
     require({fields[1] for fields in (line.split() for line in original.decode().splitlines())
              if fields and fields[0] in ('L','B','C','M')} == set(modules),
             'Original selected-module denominator differs')
+    # Preserve the source's existing branch exclusions explicitly. None is
+    # evidence for a new proof or permission to discard another obligation.
+    map_exclusions = (1223,1766,2205,3003,3010,3032,3104,3109,3118,3127,4903,5328,5348)
+    require(all(f'B extensions/carla/map {line}'.encode() not in original.splitlines()
+                for line in map_exclusions), 'Existing Map branch exclusion changed')
     masked = proofs.masked_manifest(original,envelope)
     # Independently reconstruct every line, including unrelated obligations.
     # Only the single receipt header and authenticated B-to-R substitutions differ.
@@ -582,7 +655,10 @@ def check_current_generated_include_root(stage, mojo, compiler, flags):
     finally:
         shadow.unlink()
     require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
-    check_generated_receipt_owner(stage, mojo, compiler, flags)
+    owner_result = check_generated_receipt_owner(stage, mojo, compiler, flags)
+    require(owner_result == {'fresh_receipts': 2, 'full_per_receipt': 1,
+                             'typed_per_receipt': 1, 'conditioned_authority_refusal': True},
+            'Maintained generated owner controls did not complete')
     # Reuse this genuine stage for root-only borrowing and final-stage guards.
     # Test-module import support is local to this explicit maintained entrypoint.
     saved_path = list(sys.path)
