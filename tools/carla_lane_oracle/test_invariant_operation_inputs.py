@@ -8312,9 +8312,10 @@ class StandaloneSeedFrameControls(unittest.TestCase):
     def test_historical_before_endpoint_is_lazy_and_closed(self):
         seed = self.seed()
         source_root = Path(cleanup.__file__).resolve().parents[2]
-        record = cleanup.read_record(source_root)
-        historical_map = record['sources'][seed.MODULE]['before_source']
-        self.assertEqual(cleanup.sha(historical_map), cleanup.BEFORE_SHA256[seed.MODULE])
+        typed = cleanup.typed_boundary
+        historical_map = typed.predecessor_source(
+            seed.MODULE, (source_root/seed.MODULE).read_text(encoding='utf-8'))
+        self.assertEqual(cleanup.sha(historical_map), typed.EDGES[seed.MODULE]['before_sha256'])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
             (root/seed.MODULE).parent.mkdir(parents=True)
