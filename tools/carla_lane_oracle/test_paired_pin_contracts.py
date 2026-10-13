@@ -792,8 +792,13 @@ class PairedPinRealControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'unreviewed complete successor:') as caught:
                 accepted.predecessor_pin_pair(self.root)
             self.assertIsInstance(caught.exception.__cause__, cleanup.ContractError)
+        # The retained first gate rejects std.mojo through the active Float32
+        # native closure or the common resolver surface, whichever runs first.
         with authority_helpers.physical_change(self.root, 'std.mojo', b'# Resolver competitor.\n'):
-            with self.assertRaisesRegex(ValueError, 'unreviewed complete successor: .*resolver surface') as caught:
+            with self.assertRaisesRegex(ValueError,
+                    r'^unreviewed complete successor: full-audit cleanup successor: '
+                    r'(?:scaled native import closure changed|unreviewed alternate, '
+                    r'compiled, package, symlink or std resolver surface)$') as caught:
                 accepted.predecessor_pin_pair(self.root)
             self.assertIsInstance(caught.exception.__cause__, cleanup.ContractError)
 
