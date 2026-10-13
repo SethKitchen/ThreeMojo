@@ -464,7 +464,7 @@ struct NavPolygon(Copyable, Movable):
         _ = _finite_si(Float64(point.z))
         if len(self.vertices) < 3:
             raise Error("A polygon needs three corners")
-        for vertex in self.vertices:
+        for vertex in self.vertices:  # pragma: no branch
             _ = _finite_si(Float64(vertex.x))
             _ = _finite_si(Float64(vertex.y))
             _ = _finite_si(Float64(vertex.z))

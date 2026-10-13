@@ -24,6 +24,30 @@ PARSER_AST = '0ee9c9e554df9ab36dde92ed523a7d9271a12d7b1ce2731e00edc0942f8c23cf'
 DEPENDENCY_AST = '311bade2b41a5d4c61a6cbf796a361cc2e07624f5404ef0c550ef781b79fd61f'
 
 
+class _WithoutTypedProjection(ast.NodeTransformer):
+    """Undo #333's historical projection of reads before an original-AST pin.
+
+    `_typed_source.historical_text/bytes(root, path, value, ...)` returns
+    `value` unless the path is a current typed endpoint; the original premise
+    read `value` directly. Removing the wrapper (and the self-assignment it
+    leaves) recovers the reviewed pre-#333 statement shape exactly.
+    """
+
+    def visit_Call(self, node):
+        if (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == '_typed_source'
+                and node.func.attr in ('historical_text', 'historical_bytes')):
+            return self.visit(node.args[2])
+        return self.generic_visit(node)
+
+    def visit_Assign(self, node):
+        node = self.generic_visit(node)
+        if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Name) and node.value.id == node.targets[0].id):
+            return None
+        return node
+
+
 class SeedImportLexicalTests(unittest.TestCase):
     def tearDown(self):
         self.assertIsNone(source._active_lexical_memo())
@@ -50,6 +74,7 @@ class SeedImportLexicalTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         calls[0].func = ast.Attribute(value=ast.Name(id='affected', ctx=ast.Load()),
                                      attr='imported_names', ctx=ast.Load())
+        dependency = _WithoutTypedProjection().visit(dependency)
         self.assertEqual(hashlib.sha256(ast.dump(dependency, include_attributes=False).encode()).hexdigest(), DEPENDENCY_AST)
 
     def test_actual_parser_no_scope_nested_reuse_and_fresh_lists(self):

@@ -84,7 +84,11 @@ def copy_current_root(case, source, *, destination=None):
             path = relative/name
             if path.suffix == '.mojo' or (path.parts[0] == 'tools' and path.suffix in ('.py', '.json')):
                 paths.add(path.as_posix())
-    for name in sorted(paths):
+    # A historical boundary root has already removed the new #333 Mojo
+    # inputs; copying from it keeps that historical graph.
+    absent = {name for name in cleanup.typed_boundary.NEW_INPUTS
+              if name.endswith('.mojo') and not (source/name).exists()}
+    for name in sorted(paths - absent):
         original, target = source/name, destination/name
         if original.is_symlink():
             raise AssertionError('fixture source is a symlink: ' + name)

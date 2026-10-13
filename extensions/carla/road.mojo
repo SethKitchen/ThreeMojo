@@ -2126,7 +2126,7 @@ struct Road(Copyable, Movable):
         _ = _finite_si(Float64(s))
         _ = _finite_si(Float64(extra_width))
         var result = self._lane_corners_si(section, lane, s, extra_width)
-        for point in [result[0], result[1]]:
+        for point in [result[0], result[1]]:  # pragma: no branch
             _ = _finite_si(Float64(point.x))
             _ = _finite_si(Float64(point.y))
             _ = _finite_si(Float64(point.z))

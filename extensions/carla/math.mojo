@@ -118,7 +118,7 @@ def distance_squared_2d_si(a: Vector3, b: Vector3) raises -> Float32:
         Error: If an x or y coordinate or the squared-distance result is
             nonfinite.
     """
-    for point in [a, b]:
+    for point in [a, b]:  # pragma: no branch
         _ = _finite_si(Float64(point.x))
         _ = _finite_si(Float64(point.y))
     var value = _distance_squared_2d_si(a, b)
