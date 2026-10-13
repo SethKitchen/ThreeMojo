@@ -32,6 +32,10 @@ RUNTIME_SECONDS = 5
 # This new finite harness-only bound includes compilation and capture setup.
 # It does not replace the runtime alarm or change production capture budgets.
 INTEGRATION_SECONDS = 180
+# Full maintained generation copies and authenticates the complete include
+# layout, unlike the small180-second fixture compiler/capture calls below.
+# Keep its separately reviewed finite cap and the unchanged native alarm.
+CURRENT_INCLUDE_SECONDS = 1200
 PRODUCTION_DRIVER = '''from production import total
 from std.testing import assert_equal
 from std.ffi import external_call
@@ -204,6 +208,385 @@ def diagnostic_manifest(original, envelope, module, lines):
     return b'\n'.join(rows) + b'\n'
 
 
+def check_generated_receipt_owner(stage, mojo, compiler, flags, *, mutable_source=None):
+    """Real receipt counts and optional separately provisioned mutation fixture.
+
+    The optional source is a byte-copy admitted by the coordinated plan. This
+    helper never copies or changes the sealed checkout, nor changes any timeout.
+    """
+    from carla_lane_oracle import full_audit_cleanup_contracts as audit
+    from carla_lane_oracle import typed_boundary_contracts as typed
+    root = ROOT if mutable_source is None else Path(mutable_source).resolve()
+    stage = Path(stage).resolve()
+    expected = proofs.read_receipt(stage/'loop-proofs.json')['receipt']
+    require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+            'Owner fixture differs from the genuine producer source image')
+    if mutable_source is not None:
+        require(root != ROOT.resolve() and not root.is_relative_to(ROOT.resolve()),
+                'Writable fixture must be independent of the sealed source')
+    settings = {'mojo': [mojo], 'suites': expected['execution']['suites'],
+                'capture_cache': proofs._expand_path(expected['execution']['cache'], root, stage)}
+    def derive():
+        return proofs.build_receipt(root, stage, compiler, flags, **settings)
+    @contextlib.contextmanager
+    def trace(callback=None):
+        require(sys.getprofile() is None, 'Owner controls require an unprofiled test thread')
+        counts, owners, binding_maps = defaultdict(int), [], []
+        def profile(frame, event, value):
+            if event not in ('call', 'return'):
+                return
+            if event == 'call' and frame.f_code is audit.verify.__code__:
+                counts['full'] += 1
+            if event == 'call' and frame.f_code is typed.verify_sources.__code__:
+                counts['typed'] += 1
+            if event == 'return' and frame.f_code is audit._receipt_operation_enter.__code__:
+                owners.append(value)
+            if (event == 'return' and frame.f_code is audit._InvariantInputs._receipt_bindings.__code__
+                    and type(value) is dict):
+                binding_maps.append(dict(value))
+            if callback is not None:
+                callback(frame, event, value, owners)
+        sys.setprofile(profile)
+        try:
+            yield counts, owners, binding_maps
+        finally:
+            sys.setprofile(None)
+    positives, observed_maps = [], []
+    for attempt in range(2):
+        supplements = []
+        def pending_supplements(frame, event, value, owners):
+            if attempt != 0 or event != 'return':
+                return
+            if (not supplements and frame.f_code is
+                    audit._InvariantInputs._receipt_inputs_check.__code__):
+                require(len(owners) == 1 and owners[0]._state == 'pending',
+                        'Supplemental control missed the pending generated owner')
+                owner = owners[0]
+                supplements.append('scaled')
+                scaled = audit.scaled_float32_proof_bindings(root, include_roots=(stage,), _operation=owner)
+                require(scaled and owner._state == 'pending'
+                        and owner._scaled_resolver_paths == audit.scaled_float32.NATIVE_CLOSURE,
+                        'Pending scaled admission lost its independent resolver context')
+                observed = {path for location, path, raw, mode in owner._receipt_observations
+                            if location == owner._root}
+                require(scaled.keys() <= observed,
+                        'Pending scaled admission borrowed generated rather than source observations')
+            elif (supplements == ['scaled'] and frame.f_code is
+                    audit._InvariantInputs._receipt_bindings.__code__):
+                owner = owners[0]
+                require(owner._state == 'active', 'Render helper missed current admission')
+                supplements.append('render')
+                # Current render fixtures themselves require typed admission.
+                # Exercise their owned include path after the normal root gate.
+                helpers = audit.shared_helper_proof_bindings(root,
+                    paths=('extensions/carla/render_sky.mojo', 'extensions/carla/render_weather.mojo'),
+                    include_roots=(stage,), _operation=owner)
+                require(helpers and any(path.startswith('render/') for path in helpers)
+                        and {path for path in helpers if path.endswith('.mojo')} <= owner._raw.keys()
+                        and owner._scaled_resolver_paths == audit.scaled_float32.NATIVE_CLOSURE,
+                        'Supplemental helper admission replaced or mixed physical domains')
+        with trace(pending_supplements) as (counts, owners, binding_maps):
+            actual = derive()
+        require(supplements == (['scaled', 'render'] if attempt == 0 else []),
+                'Supplemental admission controls did not run exactly once')
+        require(proofs.canonical(actual) == proofs.canonical(expected),
+                'Invocation-local ownership changed a genuine receipt')
+        require(dict(counts) == {'full': 1, 'typed': 1},
+                'Generated rows replayed source semantics or skipped initial admission')
+        require(len(owners) == 1 and owners[0]._state == 'closed'
+                and not owners[0]._failed and owners[0]._owner_frame is None,
+                'Successful generated owner did not close')
+        require(binding_maps, 'Receipt did not exercise current binding-map reuse')
+        observed_maps.extend(binding_maps)
+        positives.append(owners[0])
+    require(positives[0] is not positives[1], 'Independent receipts reused an admission')
+    # A separately derived old path remains the exact dependency-map oracle.
+    standalone = audit.proof_bindings(root, include_roots=(stage,))
+    require(all(list(value.items()) == list(standalone.items()) for value in observed_maps),
+            'Cached dependency keys or overwrite order differ from standalone admission')
+    print('Generated owner: two fresh receipts, one full and one typed admission each', flush=True)
+    if mutable_source is None:
+        return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1}
+
+    # These mutations require only the separately admitted writable source and
+    # generated stage. The complete positive producer relation is rechecked
+    # before every case. No saved source receipt is modified or rebound.
+    source_name = 'extensions/carla/curve_rounded_arc.mojo'
+    include_name = 'extensions/animals/anatomy/render.mojo'
+    def replace_file(path, data, location):
+        require(path.is_file() and not path.is_symlink()
+                and path.resolve().is_relative_to(location) and path.stat().st_nlink == 1,
+                'Mutation target is not an ordinary owned fixture file')
+        original = ROOT/path.relative_to(location)
+        if original.exists():
+            require((path.stat().st_dev, path.stat().st_ino)
+                    != (original.stat().st_dev, original.stat().st_ino),
+                    'Fixture aliases a sealed source inode')
+        path.unlink()
+        with path.open('xb') as stream:
+            stream.write(data)
+    faults = ('source', 'source-transient-read', 'include', 'include-entry', 'authority',
+              'seed', 'include-root', 'source-root', 'public-borrow',
+              'lookup-shadow', 'compiled-shadow', 'symlink', 'origin', 'checker', 'nested-owner')
+    completed = []
+    for fault in faults:
+        require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+                'Source fixture was not restored before next control')
+        proofs.check_capture_inputs({'receipt': expected}, root, stage)
+        restored, fired, caught = [], [], []
+        def write(path, data, location):
+            raw = path.read_bytes()
+            replace_file(path, data, location)
+            restored.append(lambda: replace_file(path, raw, location))
+        def profile(frame, event, value, owners):
+            if fired or event != 'return' or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__:
+                return
+            fired.append(True)
+            require(len(owners) == 1 and owners[0]._state == 'active', 'Mutation missed real current admission')
+            owner = owners[0]
+            if fault.startswith('source') and fault != 'source-root':
+                target = root/source_name
+                raw = target.read_bytes()
+                write(target, raw+b'\n# changed after current admission\n', root)
+                if fault == 'source-transient-read':
+                    consumed = target.read_bytes()
+                    restored.pop()()
+                    try:
+                        audit._observe_bytes(root, source_name, consumed, _operation=owner)
+                    except ValueError as error:
+                        require('consumed operation bytes changed: '+source_name in str(error),
+                                'Transient read did not reach the consumed-byte comparison')
+                        caught.append(True)
+                    else:
+                        raise RuntimeError('Restored transient source observation was accepted')
+            elif fault in ('include', 'include-entry'):
+                target = stage/include_name
+                suffix = b'\ndef main():\n    pass\n' if fault == 'include-entry' else b'\n# unsealed bytes\n'
+                write(target, target.read_bytes()+suffix, stage)
+            elif fault == 'authority':
+                old = typed.BINDING_INPUTS
+                typed.BINDING_INPUTS = {**old, 'unreviewed': '0'*64}
+                restored.append(lambda: setattr(typed, 'BINDING_INPUTS', old))
+            elif fault == 'seed':
+                owner._owner_frame.f_locals['_receipt_seed']['flags'] += ' changed'
+            elif fault in ('include-root', 'source-root', 'public-borrow'):
+                try:
+                    if fault == 'include-root':
+                        owner._receipt_bindings(root, (stage/'foreign',))
+                    elif fault == 'source-root':
+                        owner._receipt_bindings(root/'foreign', (stage,))
+                    else:
+                        result = proofs.reviewed_nonempty_loops(root, 'extensions/carla/map',
+                            include_roots=(stage,), _operation=owner)
+                        require(result == {} and owner._failed, 'Direct public borrower was admitted')
+                        raise ValueError('Expected sticky public refusal')
+                except ValueError:
+                    caught.append(True)
+                else:
+                    raise RuntimeError('Foreign current owner context was accepted')
+            elif fault in ('lookup-shadow', 'compiled-shadow'):
+                target = stage/('tests/render.mojo' if fault == 'lookup-shadow'
+                                else 'extensions/carla/map.mojopkg')
+                require(not target.exists(), 'Shadow control collides with maintained input')
+                target.write_bytes(b'def main():\n    pass\n')
+                restored.append(target.unlink)
+            elif fault == 'symlink':
+                target = stage/include_name
+                raw = target.read_bytes()
+                target.unlink()
+                target.symlink_to(stage/expected['execution']['suites'][0])
+                def restore_link():
+                    target.unlink()
+                    with target.open('xb') as stream:
+                        stream.write(raw)
+                restored.append(restore_link)
+            elif fault == 'origin':
+                target = stage/(source_name+'.cov-origin')
+                write(target, target.read_bytes()+b'\nchanged', stage)
+            elif fault == 'checker':
+                name = 'tools/carla_lane_oracle/full_audit_cleanup_contracts.py'
+                require(owner._checker_receipt and name in owner._executing and name not in owner._raw,
+                        'Current owner did not retain its separate supplied-checker domain')
+                target = root/name
+                write(target, target.read_bytes()+b'\n# changed supplied checker after admission\n', root)
+            elif fault == 'nested-owner':
+                from unittest.mock import patch
+                original_read = Path.read_text
+                inner_seen = []
+                def nested_read(path, *args, **kwargs):
+                    if not inner_seen and path == root/source_name:
+                        current = sys._getframe(1)
+                        while current is not None and current.f_code is not proofs.build_receipt.__code__:
+                            current = current.f_back
+                        require(current is not None, 'Nested receipt frame is absent')
+                        inner = current.f_locals.get('_operation')
+                        require(inner is not owner and inner._kind == 'generated_receipt',
+                                'Nested receipt reused the outer owner')
+                        inner_seen.append(inner)
+                        try:
+                            audit._operation_check(owner, root)
+                        except ValueError as error:
+                            require('nearer independent operation blocks borrowing' in str(error),
+                                    'Nested-owner control missed its frame boundary')
+                            caught.append(True)
+                        else:
+                            raise RuntimeError('Nested receipt borrowed the outer admission')
+                    return original_read(path, *args, **kwargs)
+                with patch.object(Path, 'read_text', nested_read):
+                    inner_result = derive()
+                require(len(inner_seen) == 1 and inner_seen[0]._state == 'closed'
+                        and not inner_seen[0]._failed
+                        and proofs.canonical(inner_result) == proofs.canonical(expected),
+                        'Fresh nested receipt failed independently of refused outer reuse')
+            if caught:
+                try:
+                    audit._operation_check(owner, root)
+                except ValueError:
+                    pass
+                else:
+                    raise RuntimeError('Caught refusal did not poison the current owner')
+        try:
+            with trace(profile) as (_, owners, _):
+                try:
+                    derive()
+                except ValueError:
+                    pass
+                else:
+                    raise RuntimeError('Current generated mutation received a receipt: '+fault)
+            require(fired == [True] and len(owners) == 1 and owners[0]._failed
+                    and owners[0]._state == 'closed' and owners[0]._owner_frame is None,
+                    'Current mutation did not fail and close its actual owner: '+fault)
+        finally:
+            for restore in reversed(restored):
+                restore()
+        completed.append(fault)
+    require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+            'Current source mutation controls did not restore the fixture')
+    proofs.check_capture_inputs({'receipt': expected}, root, stage)
+    print('Generated owner current refusals:', ', '.join(completed), flush=True)
+    return {'fresh_receipts': 2, 'full_per_receipt': 1, 'typed_per_receipt': 1,
+            'current_mutation_controls': completed}
+
+
+
+def check_current_generated_include_root(stage, mojo, compiler, flags):
+    """Exercise real maintained generation with the complete passthrough layout."""
+    modules = ('extensions/carla/curve_rounded_arc',
+               'extensions/carla/curve_rounded_line',
+               'extensions/carla/curve_sample_dispatch')
+    suite = 'tests/test_carla_lane_geometry_guard_controls.mojo'
+    require(not stage.exists(), 'Generated include regression needs a fresh stage')
+    run(['make', '--no-print-directory', 'coverage-instrument',
+         'COV_DIR='+str(stage), 'MOJO='+mojo, 'TOOLCHAIN='+compiler,
+         'MOJOFLAGS='+flags, 'COVERED='+' '.join(name+'.mojo' for name in modules),
+         'COVERAGE_TESTS='+suite], cwd=ROOT, timeout=CURRENT_INCLUDE_SECONDS)
+    for name in ('extensions/animals/anatomy/render.mojo',
+                 'extensions/building/views/render.mojo'):
+        require((stage/name).read_bytes() == (ROOT/name).read_bytes(),
+                'Maintained nested-render passthrough is missing')
+    envelope = proofs.read_receipt(stage/'loop-proofs.json')
+    # This is a closed current-main census, independent of the retired
+    # local34+4 candidate. These modules contain no ordinary constant proofs.
+    rows = {
+        ('extensions/carla/curve_rounded_arc',235): (
+            'rounded-arc-validated-lane-list','range(len(lanes))',None,
+            'f17bf9a6a744971ea6e792a24b27d6157691e70d50c438880abcf88db2a9123d'),
+        ('extensions/carla/curve_rounded_line',93): (
+            'rounded-line-validated-lane-list','range(len(lanes))',None,
+            '22b70ec9febc6f3d21a8a4d9f1a74650d676e34782fab2812004a1a3aadeb698'),
+        ('extensions/carla/curve_sample_dispatch',126): (
+            'sample-dispatch-count-1-or-2','range(count)',2,
+            '04ff45c12cefcb4dbe3a7b136e77b6baaf02cff52325f6599d99250f820fdebb'),
+    }
+    expected = set(rows)
+    observed = {(row['module'],row['line']):row for row in envelope['receipt']['proofs']}
+    require(len(observed) == len(envelope['receipt']['proofs']) == 3
+            and set(observed) == expected, 'Closed three-row proof inventory differs')
+    require(all('proof_id' in row for row in observed.values()),
+            'Unexpected ordinary proof in the selected current modules')
+    for key,(proof_id,expression,maximum,digest) in rows.items():
+        raw = (ROOT/(key[0]+'.mojo')).read_bytes()
+        require(proofs.sha256(raw) == digest, 'Current integration source endpoint changed')
+        row = observed[key]
+        require((row['proof_id'],row['expression'],row['kind'],row['cardinality'],
+                 row['maximum_cardinality'],row['required'],row['impossible'],row['source_sha256'])
+                == (proof_id,expression,'reviewed-nonempty-range',1,maximum,'T','F',digest),
+                'Current proof contract or required True outcome differs')
+        require(proofs.constant_loops(raw.decode('utf-8')) == {},
+                'Ordinary proof census differs from the reviewed empty set')
+    original = (stage/'manifest.txt').read_bytes()
+    require({fields[1] for fields in (line.split() for line in original.decode().splitlines())
+             if fields and fields[0] in ('L','B','C','M')} == set(modules),
+            'Original selected-module denominator differs')
+    masked = proofs.masked_manifest(original,envelope)
+    # Independently reconstruct every line, including unrelated obligations.
+    # Only the single receipt header and authenticated B-to-R substitutions differ.
+    expected_rows = ['P '+proofs.SCHEMA+' '+envelope['sha256']]
+    used = set()
+    for original_row in original.decode('utf-8').splitlines():
+        fields = original_row.split()
+        key = (fields[1],int(fields[2])) if len(fields) >= 3 and fields[0] == 'B' else None
+        if key in observed:
+            row = observed[key]
+            expected_rows.append(' '.join(('R',key[0],str(key[1]),row['required'],
+                                            row['kind'],str(row['cardinality']))))
+            used.add(key)
+        else:
+            expected_rows.append(original_row)
+    require(used == set(observed), 'Proof does not identify an original branch')
+    require(masked == ('\n'.join(expected_rows)+'\n').encode(),
+            'An unrelated manifest row or its order changed')
+    for module,line in expected:
+        require((module,line) in observed, 'Current generated-layout theorem was refused')
+        require((observed[module,line]['required'],observed[module,line]['impossible']) == ('T','F'),
+                'Current theorem weakened its required true outcome')
+        require(f'B {module} {line}'.encode() in original.splitlines(), 'Missing original branch')
+        require(f'L {module} {line}'.encode() in masked.splitlines(), 'Original line was removed')
+    # Exercise unsealed same-path bytes, a novel entry context, and an unknown
+    # actual lookup-root provider through the real generation owner.
+    changed = stage/'extensions/animals/anatomy/render.mojo'
+    raw = changed.read_bytes()
+    def replace_generated_passthrough(data):
+        require(not changed.is_symlink() and changed.is_file()
+                and changed.resolve().is_relative_to(stage.resolve()),
+                'Mutation target is not a regular contained generated file')
+        source = ROOT/'extensions/animals/anatomy/render.mojo'
+        generated_stat, source_stat = changed.stat(), source.stat()
+        require((generated_stat.st_dev,generated_stat.st_ino)
+                != (source_stat.st_dev,source_stat.st_ino),
+                'Generated mutation target aliases the sealed source')
+        changed.unlink()
+        with changed.open('xb') as stream:
+            stream.write(data)
+    for suffix in (b'\n# unsealed same-path change\n', b'\ndef main():\n    pass\n'):
+        replace_generated_passthrough(raw+suffix)
+        try:
+            try:
+                proofs.build_receipt(ROOT,stage,compiler,flags,mojo=[mojo],suites=[suite])
+            except ValueError as error:
+                require('Staged input differs' in str(error), 'Unexpected same-path rejection')
+            else:
+                raise RuntimeError('Unsealed staged provider received proof admission')
+        finally:
+            replace_generated_passthrough(raw)
+    shadow = stage/'tests/render.mojo'
+    require(not shadow.exists(), 'Lookup-shadow fixture collides with maintained source')
+    shadow.write_text('def main():\n    pass\n')
+    try:
+        try:
+            proofs.build_receipt(ROOT,stage,compiler,flags,mojo=[mojo],suites=[suite])
+        except ValueError as error:
+            require('Unmaintained executable input' in str(error), 'Unexpected new-provider rejection')
+        else:
+            raise RuntimeError('Unknown lookup-root provider received proof admission')
+    finally:
+        shadow.unlink()
+    require((stage/'manifest.txt').read_bytes() == original, 'Original denominator changed')
+    check_generated_receipt_owner(stage, mojo, compiler, flags)
+    return len(expected)
+
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mojo', default=str(ROOT / '.venv/bin/mojo'))
@@ -230,6 +613,9 @@ def main():
         workspace = contextlib.nullcontext(str(retained))
     with workspace as directory:
         work = Path(directory)
+        current_rows = check_current_generated_include_root(
+            work/'current-generated', mojo, compiler, flags)
+        print('Current generated include-root theorems:', current_rows, flush=True)
         native, rewritten = work / 'native', work / 'rewritten'
         native.mkdir()
         rewritten.mkdir()

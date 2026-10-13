@@ -23,7 +23,7 @@ SOURCE_PATHS = ('math/scaled_products.mojo', 'math/matrix_inverse.mojo')
 BEFORE_SHA256 = {'math/scaled_products.mojo': 'b504f18cff7df27bff4fbf92fbed7aa4868518f1b1507ea1331540d7e6f0afbb',
  'math/matrix_inverse.mojo': '34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee'}
 AFTER_SHA256 = {'math/scaled_products.mojo': '632438eb32acc53e5d4b10e8aa0ca9049a0fc2c5cd7e3d815039626ff3409c86',
- 'math/matrix_inverse.mojo': '1bf500ddd641fa30c3f01ee1e17ccc33063b30a5198a01da20f3d340b04b30da'}
+ 'math/matrix_inverse.mojo': '2c348411da34ea22b6888f96a22b34d8d416e2209ecd95d36d59cf6c698466b0'}
 EDITS = {'math/matrix_inverse.mojo': (('1',
                                '\n'
                                'from std.math import isfinite\n'
@@ -75,13 +75,10 @@ EDITS = {'math/matrix_inverse.mojo': (('1',
                                '    """Return `value` times two to any power, in steps of normal '
                                'powers.\n'
                                '\n'
-                               '    Each step moves the same way, so an intermediate never crosses '
-                               'the\n'
-                               '    result: a product is exact whenever the result itself is a '
-                               'normal\n'
-                               '    Float32, and otherwise rounds once into the subnormal range or '
-                               'to\n'
-                               '    infinity.\n'
+                               '    Each factor is normal and each step moves in the same direction.\n'
+                               '    For a normal input and normal result, scaling is exact.\n'
+                               '    Subnormal products can round in more than one step or flush to zero;\n'
+                               '    overflow yields infinity.\n'
                                '    """\n'
                                '    var result = value\n'
                                '    var left = exponent\n'
@@ -305,7 +302,7 @@ EDITS = {'math/matrix_inverse.mojo': (('1',
                                 'Int32(shift)))\n'
                                 '        return _Scaled(parts[0], exponent + Int(parts[1]) - '
                                 'shift)\n'))}
-EDITS_SHA256 = 'e74919c42e527d1667379081606a7bc6a557682d85fa7f554d55ff2da320e081'
+EDITS_SHA256 = '3b2e5a1e539868da565ca2e7ca385e993410829e54d69002edfc5cbf6fed549d'
 FLOAT32_BRANCH = ('    comptime if dtype == DType.float32:\n'
  '        # A subnormal Float32 is split from its bits. Apple GPUs flush\n'
  '        # subnormal operands to zero, so scaling one up first reads zero\n'
@@ -350,10 +347,10 @@ APPLE_INVERSE_BLOCK = ('def _inverse_wide[\n'
  'def _times_power_of_two(value: Float32, exponent: Int) -> Float32:\n'
  '    """Return `value` times two to any power, in steps of normal powers.\n'
  '\n'
- '    Each step moves the same way, so an intermediate never crosses the\n'
- '    result: a product is exact whenever the result itself is a normal\n'
- '    Float32, and otherwise rounds once into the subnormal range or to\n'
- '    infinity.\n'
+ '    Each factor is normal and each step moves in the same direction.\n'
+ '    For a normal input and normal result, scaling is exact.\n'
+ '    Subnormal products can round in more than one step or flush to zero;\n'
+ '    overflow yields infinity.\n'
  '    """\n'
  '    var result = value\n'
  '    var left = exponent\n'
@@ -504,7 +501,7 @@ NATIVE_CLOSURE = frozenset({'math/__init__.mojo',
 TESTS = {'tests/test_scaled_products_subnormal.mojo': '9025041d39d6f2586d5baaa85ef043c17eaea0215f77ecf3ddc5be901bd423e8',
  'tests/test_matrix_inverse_float32.mojo': '69c220142e9650325fbf04732280f5e6b362cb7bdfa4574c61aa908c36b7ae3a',
  'tools/carla_lane_oracle/test_scaled_float32_contracts.py': 'd06b9558ab87dc6542760a1ae54418b2827ebbc11df3d09e0a621b38ea1c68d9',
- 'docs/validation/scaled-float32-746.md': '823b82d0eb42d6129bc240014c77ca68a5deda10de0dadae1eb6cc1c0072e057'}
+ 'docs/validation/scaled-float32-746.md': '97fbe81ea07c6e2f0ecff4a87c551ee7d72770342724d49b8b7e136c1b065e18'}
 
 def require(ok, message):
     if not ok:

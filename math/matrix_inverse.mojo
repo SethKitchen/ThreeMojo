@@ -131,10 +131,10 @@ def _power_of_two(exponent: Int) -> Float32:
 def _times_power_of_two(value: Float32, exponent: Int) -> Float32:
     """Return `value` times two to any power, in steps of normal powers.
 
-    Each step moves the same way, so an intermediate never crosses the
-    result: a product is exact whenever the result itself is a normal
-    Float32, and otherwise rounds once into the subnormal range or to
-    infinity.
+    Each factor is normal and each step moves in the same direction.
+    For a normal input and normal result, scaling is exact.
+    Subnormal products can round in more than one step or flush to zero;
+    overflow yields infinity.
     """
     var result = value
     var left = exponent

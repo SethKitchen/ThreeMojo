@@ -72,7 +72,9 @@ def executable_identity(path):
         raise ValueError('Unsupported Mojo launcher-directory import shadow')
     if list((site / 'mojo').glob('__init__*')):
         raise ValueError('Unsupported non-namespace Mojo package initialization')
-    probe = subprocess.run([str(interpreter), '-I', '-c',
+    # Isolated Python ignores PYTHONDONTWRITEBYTECODE. Keep this read-only
+    # identity probe from writing bytecode into the bound interpreter.
+    probe = subprocess.run([str(interpreter), '-I', '-B', '-c',
         'import importlib.util,json,sys,sysconfig,site; '
         'spec=importlib.util.find_spec("mojo"); entry=importlib.util.find_spec("mojo._entrypoints"); '
         'print(json.dumps({"version":sys.version,"implementation":sys.implementation.name,'
