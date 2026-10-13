@@ -8691,6 +8691,7 @@ def check_generated_root_only_borrowing(root, stage, mojo, compiler, flags):
                               'Root-only control refused before its actual borrow')
                 if label == labels[2]:
                     audit.require('consumed operation bytes changed: extensions/animals/anatomy/render.mojo' in str(error)
+                                  or 'consumed operation text changed: extensions/animals/anatomy/render.mojo' in str(error)
                                   or 'render entry source changed: extensions/animals/anatomy/render.mojo' in str(error),
                                   'Stage tamper did not reach a generated-input refusal')
             else:
