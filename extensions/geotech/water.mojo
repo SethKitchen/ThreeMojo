@@ -18,7 +18,7 @@ lower level. A level above the wall's top still pushes on the full height.
 """
 
 from std.math import isfinite
-from extensions.geotech.units import MomentPerLength64, UnitWeight64
+from extensions.geotech.quantities import MomentPerLength64, UnitWeight64
 from units.si import Length64, LineLoad64
 
 

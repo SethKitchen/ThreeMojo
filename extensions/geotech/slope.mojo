@@ -26,7 +26,7 @@ point: the corners of a footing, so that the circle passes under it.
 """
 
 from std.math import asin, cos, inf, isfinite, sin, sqrt, tan
-from extensions.geotech.units import UnitWeight64
+from extensions.geotech.quantities import UnitWeight64
 from extensions.geotech.wall import Soil
 from units.si import Length64, Pressure64
 

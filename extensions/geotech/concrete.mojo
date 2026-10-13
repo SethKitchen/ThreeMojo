@@ -21,7 +21,7 @@ functions take and return SI quantities.
 """
 
 from std.math import isfinite, sqrt
-from extensions.geotech.units import KSI, MomentPerLength64
+from extensions.geotech.quantities import KSI, MomentPerLength64
 from units.si import Length64, LineLoad64, Pressure64
 
 comptime _PHI_FLEXURE = 0.90

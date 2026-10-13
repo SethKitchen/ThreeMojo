@@ -42,7 +42,7 @@ from extensions.geotech.kinds import DC, EH, ES, EV, LS, LS_V, PW, WA
 from extensions.geotech.loads import LateralLoad, LoadFactors, VerticalLoad
 from extensions.geotech.pipes import BuriedPipe, pipe_weights
 from extensions.geotech.profile import GradeProfile
-from extensions.geotech.units import MomentPerLength64, UnitWeight64
+from extensions.geotech.quantities import MomentPerLength64, UnitWeight64
 from extensions.geotech.water import effective_unit_weight, net_hydrostatic
 from units.si import Angle64, Length64, LineLoad64, Pressure64
 

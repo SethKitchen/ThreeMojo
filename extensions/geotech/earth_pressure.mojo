@@ -32,7 +32,7 @@ from std.math import atan, cos, isfinite, pi, sin, sqrt, tan
 from extensions.geotech.kinds import ACROSS
 from extensions.geotech.pipes import BuriedPipe, circle_band_area
 from extensions.geotech.profile import GradePoint, GradeProfile
-from extensions.geotech.units import MomentPerLength64, UnitWeight64
+from extensions.geotech.quantities import MomentPerLength64, UnitWeight64
 from units.si import Angle64, Length64, LineLoad64
 
 comptime _SCAN = 720

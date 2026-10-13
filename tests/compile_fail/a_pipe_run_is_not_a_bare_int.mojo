@@ -6,7 +6,7 @@
 """A pipe run must be a `PipeRun`, not a bare integer."""
 
 from extensions.geotech.pipes import BuriedPipe
-from extensions.geotech.units import UnitWeight64
+from extensions.geotech.quantities import UnitWeight64
 from units.si import Length64
 
 

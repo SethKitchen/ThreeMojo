@@ -51,7 +51,7 @@ from extensions.geotech.kinds import (
 from extensions.geotech.pipes import BuriedPipe, circle_band_area, pipe_weights
 from extensions.geotech.profile import GradePoint, GradeProfile
 from extensions.geotech.surcharge import abutment_height, parallel_wall_height
-from extensions.geotech.units import (
+from extensions.geotech.quantities import (
     KCF,
     KIP,
     KLF,

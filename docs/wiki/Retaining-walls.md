@@ -6,7 +6,7 @@
 
 | Module | What it gives |
 |---|---|
-| `units` | `UnitWeight64`, `MomentPerLength64`, and the US units `PCF`, `KCF`, `KIP`, `KSF`, `PSF`, `KSI`, `KLF`, `PLF` |
+| `quantities` | `UnitWeight64`, `MomentPerLength64`, and the US units `PCF`, `KCF`, `KIP`, `KSF`, `PSF`, `KSI`, `KLF`, `PLF` |
 | `kinds` | `LoadKind` (`DC`, `EV`, `EH`, `ES`, `LS`, `LS_V`, `WA`, `PW`, `EQ`), `PipeRun`, `ContactMode` and `FailureMode` |
 | `profile` | `GradePoint` and `GradeProfile`, a broken-line ground that ends level |
 | `pipes` | `BuriedPipe`, `pipe_weights` and `circle_band_area` |

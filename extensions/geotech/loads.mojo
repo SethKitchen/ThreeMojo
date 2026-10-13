@@ -18,7 +18,7 @@ for bearing, Service I, and Extreme Event I.
 
 from std.math import isfinite
 from extensions.geotech.kinds import LoadKind
-from extensions.geotech.units import MomentPerLength64
+from extensions.geotech.quantities import MomentPerLength64
 from units.si import Length64, LineLoad64
 
 

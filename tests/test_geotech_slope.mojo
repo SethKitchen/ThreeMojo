@@ -29,7 +29,7 @@ from extensions.geotech.slope import (
     bishop_factor,
     critical_circle,
 )
-from extensions.geotech.units import UnitWeight64
+from extensions.geotech.quantities import UnitWeight64
 from extensions.geotech.wall import Soil
 from units.si import Angle64, DEGREE64, Length64, Pressure64
 

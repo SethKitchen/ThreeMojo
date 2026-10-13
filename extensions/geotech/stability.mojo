@@ -53,7 +53,7 @@ from extensions.geotech.wall import (
     Soil,
     WallLoads,
 )
-from extensions.geotech.units import UnitWeight64
+from extensions.geotech.quantities import UnitWeight64
 from units.si import Length64, LineLoad64, Pressure64
 
 

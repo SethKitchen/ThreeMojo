@@ -22,7 +22,7 @@ is added only above it. No bedding is counted.
 
 from std.math import asin, isfinite, sqrt
 from extensions.geotech.kinds import ACROSS, ALONG, PipeRun
-from extensions.geotech.units import UnitWeight64
+from extensions.geotech.quantities import UnitWeight64
 from units.si import Length64, LineLoad64
 
 

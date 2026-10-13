@@ -81,7 +81,7 @@ from extensions.geotech.stability import (
     bearing_factors,
     check_stability,
 )
-from extensions.geotech.units import KSI, MomentPerLength64, UnitWeight64
+from extensions.geotech.quantities import KSI, MomentPerLength64, UnitWeight64
 from extensions.geotech.wall import (
     CantileverWall,
     RetainedSide,
