@@ -11,6 +11,7 @@ syntax or bindings keep both outcomes. This module never executes source.
 import argparse
 import ast
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -975,10 +976,32 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
         cleanup._operation_check(_operation, root)
         cleanup._operation_include_context(_operation, root, include_roots)
+    # A partial producer may contain a local reviewed theorem without its
+    # unrelated sibling prerequisites. Absence is established by the frozen
+    # producer census before any read; consumed or current admission failures
+    # are never downgraded to a missing proof.
+    if (_operation is not None and _operation._kind == 'generated_receipt'
+            and _operation._state == 'pending'
+            and not bindings.keys() <= _operation._receipt_source_digests.keys()):
+        from carla_lane_oracle import typed_boundary_contracts as typed
+        try:
+            typed.verify_authority()
+        except (ValueError, TypeError, KeyError, AttributeError) as error:
+            cleanup._operation_fail(_operation, error)
+        captured = _operation._receipt_source_digests
+        # Exact current and intermediate successor endpoints keep their
+        # existing admission path. Only historical bytes (or the explicitly
+        # paired density repair) can make an absent sibling inapplicable.
+        current = any(name in typed.EDGES and captured.get(name) == typed.EDGES[name]['after_sha256']
+                      for name in bindings)
+        historical = all(captured[name] == expected or (
+            name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256
+            and captured[name] == DENSITY_AFTER_SHA256)
+            for name, expected in bindings.items() if name in captured)
+        if not current and historical:
+            return None
     actual = {}
     for name, expected in bindings.items():
-        if not (root / name).is_file():
-            return None  # An absent dependency only withholds this proof.
         path = relative_source(root, name, **operation_args)
         raw = path.read_bytes()
         if _operation is not None:
@@ -1859,21 +1882,52 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
         'tools': tools, 'root_inputs': root_inputs, 'inputs': inputs, 'generation': generation,
         'execution': execution_contract(root, build, inputs, mojo=mojo,
                                         capture_cache=capture_cache, suites=suites)}
-    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
-    _operation = cleanup._receipt_operation_enter(root, build, _receipt_seed)
+    cleanup = None
+    if importlib.util.find_spec('carla_lane_oracle') is None:
+        # Standalone plain receipts need no CARLA semantic authority. A known
+        # reviewed source may never silently become a plain-only receipt.
+        reviewed_modules = (set(REVIEWED_LOOP_RULES)
+                            | {row[0] for row in GUARDED_LOOP_RULES}
+                            | {'renderers/renderer', 'extensions/carla/map',
+                               DENSITY_SOURCE.removesuffix('.mojo')})
+        if reviewed_modules & {name.removesuffix('.mojo') for name in generation['modules']}:
+            raise ValueError('Reviewed loop authority is unavailable')
+    else:
+        # A present but broken authority installation is an error, not fallback.
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    _plain_seed = canonical(_receipt_seed) if cleanup is None else None
+    _operation = (None if cleanup is None else
+                  cleanup._receipt_operation_enter(root, build, _receipt_seed))
     try:
-        _operation._receipt_inputs_check()
+        if _operation is None:
+            check_capture_inputs({'receipt': json.loads(_plain_seed)}, root, build)
+            if not all(_density_stdlib_unshadowed(location) for location in (root, build)):
+                raise ValueError('Plain receipt resolver surface changed')
+        else:
+            _operation._receipt_inputs_check()
         proofs = []
         for module in modules:
             name = module + '.mojo'
             original = relative_source(root, name)
             if name not in inputs:
                 raise ValueError('Missing instrumented module: ' + module)
-            text = cleanup._observe_text(root, name, original.read_text(encoding='utf-8'),
-                                         _operation=_operation, mode='physical')
+            text = original.read_text(encoding='utf-8')
+            if _operation is None:
+                source_raw = original.read_bytes()
+                with io.TextIOWrapper(io.BytesIO(source_raw), encoding='utf-8', newline=None) as reader:
+                    observed_text = reader.read()
+                if (sha256(source_raw) != json.loads(_plain_seed)['root_inputs'][name]
+                        or text != observed_text):
+                    raise ValueError('Plain receipt consumed source differs from generation: ' + name)
+            else:
+                text = cleanup._observe_text(root, name, text,
+                                             _operation=_operation, mode='physical')
             candidates = constant_loops(text)
-            reviewed = _receipt_reviewed_nonempty_loops(root, module, include_roots=(build,),
-                                                        _operation=_operation)
+            reviewed = ({} if _operation is None else
+                        _receipt_reviewed_nonempty_loops(root, module, include_roots=(build,),
+                                                         _operation=_operation))
+            if _operation is not None:
+                cleanup._operation_check(_operation, root)
             if candidates.keys() & reviewed.keys():
                 raise ValueError('Conflicting reviewed loop proof: ' + module)
             candidates.update(reviewed)
@@ -1884,18 +1938,29 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
                        and int(record[2]) == line for record in records):
                     raise ValueError('Loop proof conflicts with compound decision: ' + module)
                 proofs.append({'module': module, **candidates[line],
-                               'source_sha256': inputs[name]['source']})
+                               'source_sha256': (json.loads(_plain_seed)['root_inputs'][name]
+                                   if _operation is None else inputs[name]['source'])})
         counts = _counts(records)
         counts['proven_impossible'] = len(proofs)
         counts['required_total'] = counts['potential_total'] - len(proofs)
-        result = {**json.loads(_operation._receipt_seed), 'proofs': proofs, 'denominator': counts}
-        _operation.finish(root)
+        if _operation is None:
+            if canonical(_receipt_seed) != _plain_seed:
+                raise ValueError('Plain receipt seed changed after consumption')
+            result = {**json.loads(_plain_seed), 'proofs': proofs, 'denominator': counts}
+            check_capture_inputs({'receipt': result}, root, build)
+            if not all(_density_stdlib_unshadowed(location) for location in (root, build)):
+                raise ValueError('Plain receipt resolver surface changed')
+        else:
+            result = {**json.loads(_operation._receipt_seed), 'proofs': proofs, 'denominator': counts}
+            _operation.finish(root)
         return result
     except BaseException as error:
-        _operation._invalidate(error)
+        if _operation is not None:
+            _operation._invalidate(error)
         raise
     finally:
-        _operation.close()
+        if _operation is not None:
+            _operation.close()
 
 
 def _load_json(path):
