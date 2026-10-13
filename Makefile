@@ -1650,10 +1650,12 @@ clean-images:
 	@echo "Removed $(OUT_DIR)."
 
 # Parser and cache regressions run without the Mojo compiler.
+# The #333 oracle modules each copy whole roots and replay proofs; one after
+# another they exceed a CI job's time limit, so they run a module per process.
 test-tools:
 	@python3 -m unittest discover -s tools -p 'test_*.py'
 	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
-	@python3 -m unittest discover -s tools/carla_lane_oracle -p 'test_*.py'
+	@python3 tools/parallel_unittest.py --jobs $(JOBS) tools/carla_lane_oracle
 	@python3 tools/carla_lane_oracle/spiral_moments.py --check
 
 # Native source-to-source regression: compile first, then enforce the normal

@@ -109,6 +109,8 @@ def copy_historical_boundary_root(case, source, *, destination=None):
     typed = cleanup.typed_boundary
     for name in typed.SOURCE_PATHS:
         path = root/name
+        if name in typed.NEW_INPUTS and not path.exists():
+            continue  # Copied from a root that is already historical.
         text = path.read_text(encoding='utf-8')
         if typed.is_current(name, text):
             path.write_text(typed.historical_source(name, text), encoding='utf-8')
