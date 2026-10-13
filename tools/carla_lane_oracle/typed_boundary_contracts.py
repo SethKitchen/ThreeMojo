@@ -27534,7 +27534,7 @@ BINDING_INPUTS = {'docs/validation/carla-namespace-lookup-333.json': '56e4f18048
  'tools/carla_lane_oracle/test_typed_boundary_contracts.py': 'fe07a441328450c7b75e32960eb099e31424aacb6a145dcb1eb68d7405dd53ac',
  'tools/carla_lane_oracle/test_typed_owned_operations.py': 'b71272abd022ff7453099ede5e5cd8ca8fc0dc6ba92057a94bdcd85170e39984',
  'tools/carla_lane_oracle/translated_parameter_resolution.py': '0523d91f8d3b508619d37b9e9a73106c2b961cebf5808f23e61758c2a6228be9',
- 'tools/compile_fail_expectations.json': '85020fb32ec96121aba108288eaabf41c4483e2f94e91b6beee4528af2206653',
+ 'tools/compile_fail_expectations.json': 'd581f0b41ad00e4367fbb63a63bbf5228d16e483a8d7b24d9ef8d3728fc768e5',
  'tools/test_conditioned_coverage_loops.py': '542de4cf84cca30600829dccfe1eee710256f411613b8de2ddeba624a9cfc600'}
 PRODUCTION_CLOSURE = ('extensions/__init__.mojo',
  'extensions/carla/__init__.mojo',
@@ -29718,4 +29718,4 @@ def verify_authority():
         'EDGES_SHA256': EDGES_SHA256,
     }
     require(sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) ==
-            'add0cfe82b1103ee64eae23fca9340ec5500d8014309e838415d38123731931b', 'executing authority globals changed')
+            'b735b81a1ca5f877d918ae837a2a92c692a6133d9e1b7a25de30d09cd699100a', 'executing authority globals changed')
