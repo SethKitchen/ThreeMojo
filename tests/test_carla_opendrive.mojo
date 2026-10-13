@@ -12,6 +12,8 @@ Python copy of CARLA's C++ in the scratchpad where they need arithmetic.
 from extensions.carla.geometry import ARC, LINE, PARAM_POLY3, POLY3, SPIRAL
 from extensions.carla.map import Map
 from extensions.carla.opendrive import (
+    _Doc,
+    _border_widths,
     load_opendrive,
     load_opendrive_file,
     xml_as_bool,
@@ -37,6 +39,8 @@ from extensions.carla.road_info import (
     SignalId,
     ControllerId,
 )
+from loaders.xml import parse_xml
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -424,6 +428,23 @@ def test_sparse_file() raises:
     # A number longer than twelve digits overflows, as in pugixml.
     assert_equal(xml_as_int("1234567890123"), 2147483647)
     assert_equal(xml_as_uint("00001234567890123"), 4294967295)
+
+
+def test_border_derivation_preserves_empty_unordered_endpoint_result() raises:
+    # Exercise the retained internal derivation contract directly. Public XML
+    # construction can reject a nonfinite road endpoint before this helper.
+    var doc = _Doc(
+        parse_xml(
+            "<OpenDRIVE><right><lane id='-1'><border sOffset='0'"
+            + " a='-3' b='0' c='0' d='0'/></lane></right></OpenDRIVE>"
+        )
+    )
+    var group = doc.child(doc.top(), "right")
+    var ordinary = _border_widths(doc, group, 0, 1, True)
+    assert_equal(len(ordinary), 1)
+    assert_equal(ordinary[0].a, Float64(3))
+    var unordered = _border_widths(doc, group, 0, nan[DType.float64](), True)
+    assert_equal(len(unordered), 0)
 
 
 def main() raises:
