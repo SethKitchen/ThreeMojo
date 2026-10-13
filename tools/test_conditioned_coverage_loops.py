@@ -279,5 +279,243 @@ class ConditionedCurrentLoopAdmission(unittest.TestCase):
             self.root,'extensions/carla/map')),self.expected('extensions/carla/map'))
 
 
+class GeneratedReceiptPendingControls(unittest.TestCase):
+    """Real tiny producer receipts; no current CARLA semantic admission is claimed."""
+    def setUp(self):
+        import test_coverage_loop_proofs as fixtures
+        from carla_lane_oracle import full_audit_cleanup_contracts as audit
+        self.audit = audit
+        self.fixture = fixtures.ProofBindingTests('test_escaped_source_identity_is_rejected')
+        self.addCleanup(self.fixture.doCleanups)
+        self.fixture.setUp()
+
+    def derive(self):
+        return loops.build_receipt(self.fixture.root, self.fixture.build, 'Mojo fixture', '-Werror')
+
+    def traced(self, callback=None):
+        import sys
+        from collections import Counter
+        counts, owners = Counter(), []
+        self.assertIsNone(sys.getprofile())
+        def observe(frame, event, value):
+            if event == 'call' and frame.f_code is self.audit.verify.__code__:
+                counts['full'] += 1
+            if event == 'call' and frame.f_code is typed.verify_sources.__code__:
+                counts['typed'] += 1
+            if event == 'return' and frame.f_code is self.audit._receipt_operation_enter.__code__:
+                owners.append(value)
+            if callback is not None:
+                callback(frame, event, value, owners)
+        from contextlib import contextmanager
+        @contextmanager
+        def scope():
+            sys.setprofile(observe)
+            try:
+                yield counts, owners
+            finally:
+                sys.setprofile(None)
+        return scope()
+
+    def first_constant(self, action):
+        fired = []
+        def callback(frame, event, value, owners):
+            if not fired and event == 'call' and frame.f_code is loops.constant_loops.__code__:
+                fired.append(True)
+                self.assertEqual(len(owners), 1)
+                action(owners[0])
+        return fired, callback
+
+    def assert_closed(self, owners, failed):
+        self.assertEqual(len(owners), 1)
+        owner = owners[0]
+        self.assertEqual(owner._state, 'closed')
+        self.assertEqual(owner._failed, failed)
+        self.assertIsNone(owner._receipt_seed)
+        self.assertIsNone(owner._owner_frame)
+        self.assertFalse(owner._proof_bindings)
+        with self.assertRaises(ValueError):
+            owner._receipt_bindings(self.fixture.root, (self.fixture.build,))
+
+    def test_constant_only_receipts_are_fresh_lazy_and_closed(self):
+        observed = []
+        for _ in range(2):
+            with self.traced() as (counts, owners):
+                result = self.derive()
+            self.assertEqual(result, self.fixture.envelope['receipt'])
+            self.assertEqual(dict(counts), {})
+            self.assert_closed(owners, False)
+            observed.append(owners[0])
+        self.assertIsNot(observed[0], observed[1])
+
+    def test_pending_stage_empty_and_compiled_std_shadows_refuse_at_exit(self):
+        for directory in (True, False):
+            target = self.fixture.build / ('std' if directory else 'std.mojopkg')
+            self.assertFalse(target.exists())
+            def mutate(owner):
+                self.assertEqual(owner._state, 'pending')
+                if directory:
+                    target.mkdir()
+                else:
+                    target.write_bytes(b'compiled lookup shadow')
+            fired, callback = self.first_constant(mutate)
+            try:
+                with self.subTest(directory=directory), self.traced(callback) as (counts, owners):
+                    with self.assertRaisesRegex(ValueError, 'pending generated resolver surface changed'):
+                        self.derive()
+                self.assertEqual(dict(counts), {})
+                self.assertEqual(fired, [True])
+                self.assert_closed(owners, True)
+            finally:
+                target.rmdir() if directory else target.unlink()
+
+    def test_nested_seed_mutation_is_refused_before_receipt_escape(self):
+        def mutate(owner):
+            owner._owner_frame.f_locals['_receipt_seed']['flags'] += ' unreviewed'
+        fired, callback = self.first_constant(mutate)
+        with self.traced(callback) as (_, owners):
+            with self.assertRaisesRegex(ValueError, 'seed changed'):
+                self.derive()
+        self.assertEqual(fired, [True])
+        self.assert_closed(owners, True)
+
+    def test_seed_object_replacement_fails_context_identity(self):
+        import types
+        audit = self.audit
+        # Isolated actual context predicate; this object cannot acquire admission.
+        owner = object.__new__(audit._InvariantInputs)
+        seed = {'nested': {'input': 'original'}}
+        owner._kind, owner._root = 'generated_receipt', str(self.fixture.root)
+        owner._include_roots, owner._cwd = (str(self.fixture.build),), str(Path.cwd())
+        owner._receipt_seed_token = seed
+        owner._owner_frame = types.SimpleNamespace(f_locals={
+            'root': self.fixture.root, 'build': self.fixture.build, '_receipt_seed': seed})
+        owner._check_context(self.fixture.root)
+        owner._owner_frame.f_locals['_receipt_seed'] = dict(seed)
+        with self.assertRaisesRegex(ValueError, 'context changed'):
+            owner._check_context(self.fixture.root)
+
+    def test_transient_physical_text_read_is_sticky_without_admission(self):
+        original = Path.read_text
+        target = self.fixture.source
+        raw, fired = target.read_bytes(), []
+        def changed(path, *args, **kwargs):
+            if path == target and not fired:
+                fired.append(True)
+                target.write_bytes(raw.replace(b'range(3)', b'range(4)'))
+                try:
+                    return original(path, *args, **kwargs)
+                finally:
+                    target.write_bytes(raw)
+            return original(path, *args, **kwargs)
+        with self.traced() as (_, owners), patch.object(Path, 'read_text', changed):
+            with self.assertRaisesRegex(ValueError, 'consumed text differs'):
+                self.derive()
+        self.assertEqual(fired, [True])
+        self.assertEqual(target.read_bytes(), raw)
+        self.assert_closed(owners, True)
+
+    def test_transient_source_and_stage_censuses_are_sticky(self):
+        for generated in (False, True):
+            for kind in ('known', 'production'):
+                location = self.fixture.build if generated else self.fixture.root
+                target = location/'extensions/unreviewed.mojo'
+                target.parent.mkdir(exist_ok=True)
+                def mutate(owner):
+                    target.write_text('def new_provider():\n    pass\n')
+                    try:
+                        if kind == 'known':
+                            actual = frozenset(path.as_posix() for path in loops.cache_key.input_paths(location)
+                                if path.suffix == '.mojo' and (generated or not
+                                    (location/path).absolute().is_relative_to(self.fixture.build)))
+                        else:
+                            actual = owner._receipt_production_paths(str(location))
+                        with self.assertRaisesRegex(ValueError, 'consumed census differs'):
+                            owner._discovery(location, actual, kind)
+                    finally:
+                        target.unlink()
+                fired, callback = self.first_constant(mutate)
+                with self.subTest(generated=generated, kind=kind), self.traced(callback) as (_, owners):
+                    with self.assertRaises(ValueError):
+                        self.derive()
+                self.assertEqual(fired, [True])
+                self.assert_closed(owners, True)
+
+    def test_foreign_root_thread_cwd_and_public_borrow_are_sticky(self):
+        import os
+        import threading
+        for fault in ('root', 'thread', 'cwd', 'public'):
+            def misuse(owner):
+                caught = []
+                def check(root):
+                    try:
+                        self.audit._operation_check(owner, root)
+                    except ValueError:
+                        caught.append(True)
+                if fault == 'root':
+                    check(self.fixture.root/'foreign')
+                elif fault == 'thread':
+                    thread = threading.Thread(target=check, args=(self.fixture.root,))
+                    thread.start(); thread.join(timeout=5)
+                    self.assertFalse(thread.is_alive())
+                elif fault == 'cwd':
+                    cwd = Path.cwd()
+                    try:
+                        os.chdir(self.fixture.root)
+                        check(self.fixture.root)
+                    finally:
+                        os.chdir(cwd)
+                else:
+                    self.assertEqual(loops.reviewed_nonempty_loops(self.fixture.root, 'module',
+                        include_roots=(self.fixture.build,), _operation=owner), {})
+                    caught.append(owner._failed)
+                self.assertEqual(caught, [True])
+                with self.assertRaises(ValueError):
+                    self.audit._operation_check(owner, self.fixture.root)
+            fired, callback = self.first_constant(misuse)
+            with self.subTest(fault=fault), self.traced(callback) as (_, owners):
+                with self.assertRaises(ValueError):
+                    self.derive()
+            self.assertEqual(fired, [True])
+            self.assert_closed(owners, True)
+
+    def test_late_generation_metadata_and_source_reads_refuse(self):
+        targets = (self.fixture.source, self.fixture.build/'module.mojo',
+                   self.fixture.build/'manifest.txt', self.fixture.build/'origins.ready',
+                   self.fixture.build/'generation-inputs.json', self.fixture.build/'module.mojo.cov-origin')
+        for target in targets:
+            raw = target.read_bytes()
+            fired, callback = self.first_constant(lambda owner: target.write_bytes(raw+b'\n# late change\n'))
+            try:
+                with self.subTest(path=target.name), self.traced(callback) as (_, owners):
+                    with self.assertRaises(ValueError):
+                        self.derive()
+            finally:
+                target.write_bytes(raw)
+            self.assertEqual(fired, [True])
+            self.assert_closed(owners, True)
+
+    def test_frame_code_identity_and_unregistered_alias_refuse(self):
+        import types
+        import sys
+        original = loops.build_receipt
+        frame = types.SimpleNamespace(f_globals=vars(loops), f_code=original.__code__)
+        self.assertEqual(self.audit._receipt_frame_kind(frame), 'generated_receipt')
+        namespace = dict(vars(loops))
+        namespace['build_receipt'] = types.FunctionType(original.__code__, namespace)
+        alias = types.SimpleNamespace(f_globals=namespace, f_code=original.__code__)
+        self.assertIsNone(self.audit._receipt_frame_kind(alias))
+        self.assertEqual(self.audit._receipt_frame_kind(alias, include_aliases=True), 'alias_generated_receipt')
+        copied = original.__code__.replace()
+        self.assertEqual(copied, original.__code__)
+        self.assertIsNot(copied, original.__code__)
+        namespace['build_receipt'] = types.FunctionType(copied, namespace)
+        module = types.ModuleType('coverage_loop_proofs')
+        module.__dict__.update(namespace)
+        module.build_receipt = types.FunctionType(copied, vars(module))
+        fake = types.SimpleNamespace(f_globals=vars(module), f_code=copied)
+        with patch.dict(sys.modules, {'coverage_loop_proofs': module}):
+            self.assertIsNone(self.audit._receipt_frame_kind(fake))
+
+
 if __name__ == '__main__':
     unittest.main()
