@@ -1566,7 +1566,10 @@ def _operation_include_context(operation, root, include_roots):
         _operation_check(operation, root)
         if operation is not None:
             expected = operation._include_roots
-            require(tuple(_absolute_root_text(path) for path in include_roots) == expected,
+            supplied = tuple(_absolute_root_text(path) for path in include_roots)
+            # A generated receipt also admits root-only historical inputs.
+            require(supplied == expected or (supplied == ()
+                                             and operation._kind == 'generated_receipt'),
                     'operation include root changed')
             require(not expected or operation._kind == 'generated_receipt',
                     'unowned coverage include roots')
