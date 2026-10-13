@@ -444,7 +444,7 @@ class ProofBindingTests(unittest.TestCase):
             sidecar.write_text(data)
             self.assertEqual(self.verify(), self.envelope)
             self.assertEqual(loops.masked_manifest(original, self.envelope), masked)
-            loops.verify_captures([capture], elf.envelope)
+            loops.verify_captures([capture], self.envelope)
             with patch.object(sys, 'argv', ['coverage_io.py', 'report', '--capture-dir',
                                           str(self.hits), '--', 'reporter']), \
                     patch.object(coverage_io, 'report', return_value=0) as reporter:
@@ -1738,7 +1738,7 @@ class DensityBoundaryLoopTests(unittest.TestCase):
                     with self.subTest(root=str(destination), name=str(shadow)):
                         self.assertEqual(loops.reviewed_nonempty_loops(self.root, self.density, include_roots=roots), {})
                         self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, self.strands, include_roots=roots)), {225, 231})
-                        # Old bindings are retained; this guardis specific to
+                        # Old bindings are retained; this guard is specific to
                         # the newly reviewed source, not a historical repin.
                         self.path.write_text(self.before)
                         for rule in self.hair_rules:
