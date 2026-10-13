@@ -15,7 +15,7 @@ from extensions.carla.road_info import LANE_ANY, LANE_DRIVING, LaneType, info_at
 from math.vector3 import Vector3
 from std.time import perf_counter_ns
 from tests.test_carla_road_fixed_s import _lane, _road
-from units.si import Length, METER
+from units.si import Length, Length64, METER
 
 comptime _DOUBLE_MAX = 1.7976931348623157e308
 
@@ -44,8 +44,8 @@ def _base_nearest_lane(
     """
     if not lane_type.is_valid():
         raise Error("Lane type is not valid")
-    var lanes = road.lanes_at(s)
-    var zero = road.directed_point(s)
+    var lanes = road.lanes_at(Length64(s))
+    var zero = road.directed_point(Length64(s))
     var best: Optional[LaneKey] = None
     var best_d = _DOUBLE_MAX
     # Two sides, always.
@@ -60,10 +60,13 @@ def _base_nearest_lane(
                 order.append(lanes[i])
         for pair in order:
             ref lane = road.sections[pair[0]].lanes[pair[1]]
-            var width = info_at(lane.info.widths, s)
+            var width = info_at(lane.info.widths, Length64(s))
             if not Bool(width):
                 raise Error("A lane has no width record at s")
-            var half = Float32(width.value().polynomial.evaluate(s)) * 0.5
+            var half = (
+                Float32(width.value().polynomial.evaluate(Length64(s)).value)
+                * 0.5
+            )
             if side == 1:
                 half = -half
             current.apply_lateral_offset(Length(half, METER))
@@ -92,7 +95,9 @@ def _measure[
     for i in range(repetitions):
         var query = Vector3(4.75, Float32(i % 101 - 50) * 0.25, 0.5)
         comptime if wide:
-            checksum += road.nearest_lane(5, query, LANE_DRIVING)[1]
+            checksum += road.nearest_lane(Length64(5), query, LANE_DRIVING)[
+                1
+            ].value
         else:
             checksum += _base_nearest_lane(road, 5, query, LANE_DRIVING)[1]
     return (Float64(perf_counter_ns() - start), checksum)
@@ -109,11 +114,11 @@ def _bench(lanes_per_side: Int, heading: Float64, repetitions: Int) raises:
     for i in range(101):
         var query = Vector3(4.75, Float32(i - 50) * 0.25, 0.5)
         var old = _base_nearest_lane(road, 5, query, LANE_DRIVING)
-        var new = road.nearest_lane(5, query, LANE_DRIVING)
+        var new = road.nearest_lane(Length64(5), query, LANE_DRIVING)
         if old[0].value() != new[0].value():
             raise Error("Ordinary lane identity changed")
-        max_difference = max(max_difference, abs(old[1] - new[1]))
-        if old[1] != new[1]:
+        max_difference = max(max_difference, abs(old[1] - new[1].value))
+        if old[1] != new[1].value:
             changed_distances += 1
     # Warm both paths before each group. Alternate which path runs first.
     var warm = _measure[False](road, 100)[1] + _measure[True](road, 100)[1]

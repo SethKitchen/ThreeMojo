@@ -23,7 +23,7 @@ from extensions.carla.transform import CarlaRotation, CarlaTransform
 from std.math import atan
 from std.time import perf_counter_ns
 from tests.test_carla_lane_orientation import _road
-from units.si import DEGREE, Angle, Length, METER
+from units.si import DEGREE, Angle, Length, Length64, METER
 
 comptime _TO_DEGREES = Float32(180.0) / Float32(3.14159265358979323846)
 
@@ -61,11 +61,11 @@ def _base_lane_transform(
         var total = road._total_width(section, s, lane_id)
         t_offset = Float32(total[0])
         lane_tangent = Float32(total[1])
-    var lane_offset = info_at(road.info.lane_offsets, s)
+    var lane_offset = info_at(road.info.lane_offsets, Length64(s))
     if not Bool(lane_offset):
         raise Error("The road has no lane offset record at s")
-    lane_tangent -= Float32(lane_offset.value().polynomial.tangent(s))
-    var point = road.directed_point(s)
+    lane_tangent -= Float32(lane_offset.value().polynomial.tangent(Length64(s)))
+    var point = road.directed_point(Length64(s))
     point.apply_lateral_offset(Length(t_offset, METER))
     point.tangent -= Float64(lane_tangent)
     # Rotation's positive pitch points down. The elevation derivative is
@@ -95,7 +95,7 @@ def _measure[
         var at = Float64(i % 101) * 0.19
         var lane = i % 5
         comptime if corrected:
-            var pose = road.lane_transform(0, lane, at)
+            var pose = road.lane_transform(0, lane, Length64(at))
             checksum += (
                 Float64(pose.location.x)
                 + Float64(pose.location.y)
@@ -123,7 +123,7 @@ def _bench(kind: RoadGeometryKind) raises:
         for i in range(101):
             var at = Float64(i) * 0.19
             var old = _base_lane_transform(road, 0, lane, at)
-            var new = road.lane_transform(0, lane, at)
+            var new = road.lane_transform(0, lane, Length64(at))
             if old.location != new.location:
                 raise Error("Existing center arithmetic changed")
     var warm = _measure[False](road, 100)[1] + _measure[True](road, 100)[1]
