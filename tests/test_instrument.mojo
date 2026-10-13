@@ -192,7 +192,7 @@ def test_each_operator_gets_a_native_type_check_in_mojo_grouping() raises:
         "_cov_eval_right[type_of(c or d)]().of("
         + 'd, _cov_eval_state0, "m:2.3", 3)'
     )
-    var leaf_e = String('_cov_eval_leaf(e, _cov_eval_state0, "m:2.4", 4)')
+    var leaf_e = String('_cov_eval_immediate(e, _cov_eval_state0, "m:2.4", 4)')
     var group = "(" + leaf_c + " or " + leaf_d + ")"
     var right = group + " and not " + leaf_e
     var whole = leaf_a + " and " + leaf_b + " or " + right
@@ -236,7 +236,7 @@ def test_a_right_operand_gets_its_operator_result_type() raises:
         '_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) or'
         " (_cov_eval_right[type_of(a or (b))]().of("
         'b, _cov_eval_state0, "m:2.1", 1)) or not'
-        ' _cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2)'
+        ' _cov_eval_immediate(c, _cov_eval_state0, "m:2.2", 2)'
         in result.text
     )
     assert_true(
@@ -307,6 +307,47 @@ def test_negated_group_measures_its_leaves() raises:
         " _cov_eval_right[type_of(a and b)]().of("
         'b, _cov_eval_state0, "m:2.1", 1))), _cov_eval_state0,'
         ' "m:2"):'
+        in result.text
+    )
+
+
+def test_immediate_truth_follows_only_atomic_negation() raises:
+    var result = instrument(
+        "def f():\n    if not ((a)) or not not b:\n        pass\n", "m"
+    )
+    assert_equal(result.conditions, [2])
+    assert_true(
+        'not ((_cov_eval_immediate(a, _cov_eval_state0, "m:2.0", 0)))'
+        in result.text
+    )
+    assert_true(
+        'not not _cov_eval_immediate(b, _cov_eval_state0, "m:2.1", 1)'
+        in result.text
+    )
+    assert_true("immediate as _cov_eval_immediate" in result.text)
+
+
+def test_negation_does_not_convert_inside_a_selection_early() raises:
+    var result = instrument(
+        "def f():\n    if not (a or b) and c:\n        pass\n", "m"
+    )
+    assert_equal(result.conditions, [3])
+    assert_true(
+        '_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0)' in result.text
+    )
+    assert_true("_cov_eval_right[type_of(a or b)]().of(b," in result.text)
+    assert_true("_cov_eval_immediate(a," not in result.text)
+    assert_true("_cov_eval_immediate(b," not in result.text)
+
+
+def test_negated_conditional_is_one_immediate_operand() raises:
+    var result = instrument(
+        "def f():\n    if not (a if choose else b) or flag:\n        pass\n",
+        "m",
+    )
+    assert_equal(result.conditions, [2])
+    assert_true(
+        '_cov_eval_immediate(a if choose else b, _cov_eval_state0, "m:2.0", 0)'
         in result.text
     )
 
@@ -842,7 +883,7 @@ def test_redundant_groups_and_negations_keep_leaf_order() raises:
         '(((_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) or'
         ' (_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1) and not'
         ' (_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2) or not'
-        ' _cov_eval_leaf(d, _cov_eval_state0, "m:2.3", 3))))))),'
+        ' _cov_eval_immediate(d, _cov_eval_state0, "m:2.3", 3))))))),'
         ' _cov_eval_state0, "m:2"):'
         in result.text
     )
@@ -885,7 +926,7 @@ def test_tabs_and_adjacent_groups_delimit_logical_keywords() raises:
         '((_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0)) and'
         " (_cov_eval_right[type_of((a) and (b))]().of("
         'b, _cov_eval_state0, "m:2.1", 1))) or not'
-        ' (_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2))'
+        ' (_cov_eval_immediate(c, _cov_eval_state0, "m:2.2", 2))'
         in result.text
     )
 

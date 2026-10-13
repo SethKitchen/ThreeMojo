@@ -57,11 +57,13 @@ def _road(
     # Insert left first to check that storage order remains lane-id order.
     _lane(road, 0, 1, width)
     _lane(road, 0, -1, width)
-    road.info.geometries.append(
-        RoadInfoGeometry._from_si(
-            0.0, RoadGeometry.from_meters(LINE, 0.0, x, y, 0.0, 10.0)
-        )
-    )
+    var geometry = RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 10.0)
+    # This private fixture deliberately permits corrupt stored coordinates.
+    # Public construction still rejects them; the query controls below must
+    # reach the consumer's own validation of mutable records.
+    geometry.x = x
+    geometry.y = y
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
         RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(z))
     )
@@ -291,7 +293,9 @@ def test_nonfinite_visited_widths_and_centers_raise() raises:
     with assert_raises(contains="finite coordinates"):
         _ = road.nearest_lane_meters(0, Vector3(0, 0, 0))
     road = _road(y=inf[DType.float64]())
-    with assert_raises(contains="finite coordinates"):
+    # The checked plan-geometry consumer rejects its corrupt stored origin
+    # before fixed-s lane-center arithmetic can produce a coordinate.
+    with assert_raises(contains="A dimensional value must be finite"):
         _ = road.nearest_lane_meters(0, Vector3(0, 0, 0))
     road = _road(y=1.7e308, width=1.7e308)
     with assert_raises(contains="finite coordinates"):

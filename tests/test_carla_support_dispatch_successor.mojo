@@ -118,7 +118,11 @@ from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.curve_bounds import _sample_index
 from extensions.carla.geometry import POLY3, PARAM_POLY3
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index_meters as info_index
+
+# This frozen nonthrowing predecessor already rejects nonfinite bounds
+# before lookup. Retain the historical binary-search kernel, not a public
+# checked wrapper whose raises annotation changes this reference signature.
+from extensions.carla.road_info import _info_index_si as info_index
 from std.math import isfinite
 from std.memory import bitcast
 
@@ -373,6 +377,40 @@ def test_real_sample_dispatch_preserves_result_and_debits() raises:
                         assert_equal(old.value()[1], new.value()[1])
                         assert_equal(old.value()[2], new.value()[2])
                         assert_true(new.value()[0] > origin + low_local)
+
+
+def test_reference_sample_dispatch_invalid_bounds_preserve_refusal_and_debits() raises:
+    var road = _dispatch_road(0.0)
+    var nan = bitcast[DType.float64](UInt64(0x7FF8000000000000))
+    var infinity = bitcast[DType.float64](UInt64(0x7FF0000000000000))
+    var ranges: List[Tuple[Float64, Float64]] = [
+        (nan, 1.0),
+        (1.0, nan),
+        (infinity, 1.0),
+        (1.0, infinity),
+        (-infinity, 1.0),
+        (1.0, -infinity),
+        (-1.0, 1.0),
+        (1.0, -1.0),
+        (2.0, 1.0),
+    ]
+    for bounds in ranges:
+        var old_nodes = 17
+        var new_nodes = 17
+        var old_terms = 23
+        var new_terms = 23
+        var old = _reference_sample_dispatch_cuts(
+            road, bounds[0], bounds[1], old_nodes, old_terms, 100, 10000
+        )
+        var new = _try_sample_dispatch_cuts(
+            road, bounds[0], bounds[1], new_nodes, new_terms, 100, 10000
+        )
+        assert_equal(Bool(old), False)
+        assert_equal(Bool(new), False)
+        assert_equal(old_nodes, 17)
+        assert_equal(new_nodes, 17)
+        assert_equal(old_terms, 23)
+        assert_equal(new_terms, 23)
 
 
 def main() raises:

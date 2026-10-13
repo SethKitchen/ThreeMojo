@@ -633,10 +633,15 @@ def stem_effects(
     var water_force = Float64(0)
     var water_moment = Float64(0)
     if retained.water_drop.value > 0:
+        # Soil saturation stops at the retained height, but hydrostatic
+        # head does not. Integrate actual levels over the whole stem.
+        var back = -t_ftg
+        if retained.water:
+            back = retained.water.value().value - t_ftg
         var net = net_hydrostatic(
-            Length64(yw_stem),
-            Length64(yw_stem - retained.water_drop.value),
-            Length64(yw_stem),
+            Length64(back),
+            Length64(back - retained.water_drop.value),
+            wall.stem_height(),
             gw,
         )
         water_force = net.force.value

@@ -151,7 +151,7 @@ DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
  'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': '7a13326070ae06e89d808e87e94b084cd80ac301837d127ff3831b9cad6b8c76',
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'c1e5ef131c0af6c202500332378c1c3ea92f4ab47bacf63125319a95465dfae7',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
@@ -2342,6 +2342,7 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
         for path, digest in expected.items():
             raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
             require(sha(raw) == digest, 'typed boundary bound input changed: ' + path)
+            typed_boundary.verify_binding_successor(path, raw)
             require(path not in image or image[path] == raw, 'typed input changed after source admission: ' + path)
             image[path] = raw
         for path, raw in image.items():

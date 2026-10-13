@@ -692,7 +692,7 @@ def _lane_records(
                     + " Using default values."
                 )
         for border in doc.children(node, "border"):
-            builder.create_lane_border_si(
+            builder.create_lane_border_opendrive(
                 lane,
                 doc.double(border, "sOffset") + s,
                 doc.double(border, "a"),

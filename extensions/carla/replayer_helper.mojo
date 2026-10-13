@@ -43,7 +43,9 @@ The source is CARLA's simulator plugin, `Carla/Recorder/
 CarlaReplayerHelper.cpp`.
 """
 
-from extensions.carla.quantity_boundary import _finite_si, _nonnegative_si
+from std.math import isfinite
+
+from extensions.carla.quantity_boundary import _finite_si
 from units.si import Angle64
 from std.ffi import external_call
 
@@ -584,7 +586,8 @@ def set_walker_speed(mut world: World, id: ActorId, speed: Velocity) raises:
     Raises:
         Error: If the speed is invalid or the control cannot be applied.
     """
-    _ = _nonnegative_si(Float64(speed.value))
+    if not isfinite(speed.value) or speed.value < 0:
+        raise Error("Walker speed must be finite and nonnegative")
     if not _is(world, id, WALKER_ACTOR):
         return
     var control = WalkerControl()
@@ -604,9 +607,10 @@ def set_walker_speed_centimeters_per_second(
             forward, CARLA's default control.
 
     Raises:
-        Error: Never; the check comes first.
+        Error: If speed is nonfinite or negative, or control application fails.
     """
-    _ = _nonnegative_si(Float64(speed))
+    if not isfinite(speed) or speed < 0:
+        raise Error("Walker speed must be finite and nonnegative")
     if not _is(world, id, WALKER_ACTOR):
         return
     var control = WalkerControl()

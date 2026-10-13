@@ -74,14 +74,15 @@ def rankine_active(
     _check_friction(phi)
     if not isfinite(beta):
         raise Error("A backslope must be finite")
+    # Check the angle itself: cos squared aliases slopes beyond 90 degrees.
+    if abs(beta) > phi:
+        raise Error(
+            "A Rankine backslope cannot be steeper than the friction angle"
+        )
     if abs(beta) < 1e-12:
         var t = tan(pi / 4 - phi / 2)
         return t * t
     var radicand = cos(beta) ** 2 - cos(phi) ** 2
-    if radicand < -1e-12:
-        raise Error(
-            "A Rankine backslope cannot be steeper than the friction angle"
-        )
     var root = sqrt(max(radicand, 0.0))
     return cos(beta) * (cos(beta) - root) / (cos(beta) + root)
 
@@ -391,7 +392,15 @@ struct _Ground(Movable):
         `force` calls it only for a wedge that reaches past the plane, so
         x_end is positive.
         """
-        if len(self.share) == 0:
+        # A cut above every pipe has no displaced soil or pipe weight.
+        # Keep the original shifted-center operation order: center + radius
+        # rounded before subtracting drop can hide a small pipe at large SI.
+        var reaches = False
+        for j in range(len(self.share)):
+            if (self.center[j] - self.drop) + self.outer[j] > 0:
+                reaches = True
+                break
+        if not reaches:
             return 0
         var dx = x_end / Float64(_PIPE_STRIPS)
         var gs = self.gamma
@@ -409,16 +418,30 @@ struct _Ground(Movable):
                 var ro = self.outer[j]
                 var ri = self.inner[j]
                 var yc = self.center[j] - self.drop
+                # These are the same empty bands circle_band_area rejects.
+                # Preserve strip-major summation and all sixteen midpoints.
+                if y_lo >= yc + ro:
+                    continue
+                if y_hi <= yc - ro:
+                    continue
                 var scale = self.share[j] * dx
                 var a_ext = circle_band_area(ro, yc, y_lo, y_hi)
-                var a_int = circle_band_area(ri, yc, y_lo, y_hi)
+                var a_int = Float64(0)
+                if ri > 0:
+                    a_int = circle_band_area(ri, yc, y_lo, y_hi)
                 var a_wall = max(a_ext - a_int, 0.0)
                 var a_ext_sub = Float64(0)
                 var a_int_sub = Float64(0)
                 if self.wet:
                     var top = min(y_hi, yw)
-                    a_ext_sub = circle_band_area(ro, yc, y_lo, top)
-                    a_int_sub = circle_band_area(ri, yc, y_lo, top)
+                    if top == y_hi:
+                        a_ext_sub = a_ext
+                        a_int_sub = a_int
+                    elif top > y_lo:
+                        if top > yc - ro:
+                            a_ext_sub = circle_band_area(ro, yc, y_lo, top)
+                            if ri > 0:
+                                a_int_sub = circle_band_area(ri, yc, y_lo, top)
                 var a_dry = max(a_ext - a_ext_sub, 0.0)
                 var a_wall_sub = max(a_ext_sub - a_int_sub, 0.0)
                 var a_wall_dry = max(a_wall - a_wall_sub, 0.0)

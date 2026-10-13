@@ -1436,10 +1436,17 @@ def _typed_construction_boundary_loops(root, current, *, include_roots=(), _oper
         return {}
     # Preserve the actual whole-maintained-source caller census. A pure
     # historical view cannot hide a new caller, alias, package, or std shadow.
-    for location in (root, *include_roots):
-        if (not _density_stdlib_unshadowed(location, **operation_args)
-                or not _construction_boundary_callers(location, **operation_args)):
-            return {}
+    try:
+        for location in (root, *include_roots):
+            if (not _density_stdlib_unshadowed(location, **operation_args)
+                    or not _construction_boundary_callers(location, **operation_args)):
+                raise ValueError('typed constructor caller or stdlib premise changed')
+    except (OSError, UnicodeError, ValueError) as error:
+        # An applicable typed theorem consumed this premise in the shared
+        # owned operation. Its rejection must also revoke sibling Map rows.
+        if _operation is not None:
+            cleanup._operation_fail(_operation, error)
+        return {}
     if (_operation is None and not _final_unowned_typed_loop_bindings(
             root, bindings, include_roots=include_roots)):
         return {}

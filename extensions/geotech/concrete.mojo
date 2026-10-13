@@ -166,7 +166,9 @@ def shear_resistance(
     var dv = max(d - a / 2, 0.9 * d, 0.72 * h)
     var to_kip = 1.0 / 4448.2216152605
     var vu = abs(shear.value) * 0.3048 * to_kip
-    var mu = abs(moment.value) * 0.3048 * to_kip * 12.0
+    # N m/m times a 0.3048 m strip, then meters to inches: the length
+    # factors give 0.3048 / 0.0254 = 12, not 0.3048 * 12.
+    var mu = abs(moment.value) * to_kip * 12.0
     var mu_eff = max(mu, vu * dv)
     var strain = Float64(0.006)
     if area > 0:

@@ -543,6 +543,38 @@ struct MapBuilder(Movable):
             )
         )
 
+    def create_lane_border_opendrive(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        a: Float64,
+        b: Float64,
+        c: Float64,
+        d: Float64,
+    ) raises:
+        """Retain a finite border polynomial from explicit OpenDRIVE units.
+
+        A source record can begin before its lane section. Its signed origin
+        is retained; the parser clips derived width pieces to the section.
+        The typed construction route keeps its nonnegative station contract.
+
+        Args:
+            lane: The destination lane.
+            s: The signed source polynomial origin, in meters along the road.
+            a: The signed border offset at the origin, in meters.
+            b: The dimensionless linear coefficient.
+            c: The quadratic coefficient, per meter.
+            d: The cubic coefficient, per square meter.
+
+        Raises:
+            Error: If the origin or any coefficient is nonfinite.
+        """
+        _ = _finite_si(s)
+        var polynomial = CubicPolynomial.from_coefficients(a, b, c, d, s)
+        self._lane(lane).info.borders.append(
+            RoadInfoLaneBorder._from_si(s, polynomial)
+        )
+
     def create_lane_height(
         mut self,
         lane: Tuple[Int, Int, Int],

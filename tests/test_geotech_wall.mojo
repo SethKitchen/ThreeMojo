@@ -619,7 +619,20 @@ def test_concrete_strip() raises:
     var vc = shear_resistance(
         strip, LineLoad64(5 * klf), MomentPerLength64(20 * kip_ft)
     )
-    assert_almost_equal(vc.value / klf, 29.654, atol=0.01)
+    # Independent calculation in customary units for a 12-in strip:
+    # Mu = 20 kip-ft = 240 kip-in, Vu = 5 kip, As = 0.44 in^2.
+    # dv = d - a/2 = 15.301470588235293 in; Mu/dv exceeds Vu.
+    # epsilon = (240/dv + 5)/(29000 * 0.44) = 0.0016210632397313204.
+    # sxe = dv and beta = 4.8/(1 + 750*epsilon) * 51/(39 + sxe).
+    # phi Vc = 0.9 * 0.0316 * beta * sqrt(4) * 12 * dv.
+    assert_almost_equal(vc.value / klf, 21.249258193210874, atol=1e-8)
+    # Below Mu = Vu*dv the minimum moment controls, independently of Mu.
+    var shear_controlled = shear_resistance(
+        strip, LineLoad64(5 * klf), MomentPerLength64(0)
+    )
+    assert_almost_equal(
+        shear_controlled.value / klf, 29.65412139979375, atol=1e-8
+    )
     var bare = strip
     bare.steel = _m(0)
     assert_true(
@@ -711,6 +724,150 @@ def test_utilization_color() raises:
     assert_almost_equal(neg[0], low[0], atol=1e-15)
     var bad = utilization_color(nan[DType.float64]())
     assert_almost_equal(bad[0], top[0], atol=1e-15)
+
+
+def test_stem_water_keeps_head_above_soil_and_wall() raises:
+    var wall = _wall()
+    wall.height = _m(5)
+    wall.footing = _m(1)
+    var retained = RetainedSide(_soil())
+    retained.water = _m(6)
+    retained.water_drop = _m(2)
+    var water_only = LoadFactors(0, 0, 0, 0, 0, 0, 1, 0, 0)
+    var result = stem_effects(wall, retained, _mats(), water_only)
+    # From the stem base the levels are 5 and 3 m, on a 4-m stem.
+    # p/gamma = 2 on [0,3], then 5-y on [3,4]. Direct integration:
+    # V/gamma = 2*3 + integral(5-y,3,4) = 15/2.
+    # M/gamma = 2*3^2/2 + integral(y*(5-y),3,4) = 85/6.
+    assert_almost_equal(result.shear.value, 7.5 * GW, atol=1e-8)
+    assert_almost_equal(result.moment.value, 85.0 / 6.0 * GW, atol=1e-8)
+    # Lowering only the soil leaves this isolated hydrostatic load intact.
+    wall.exposed = _m(1)
+    result = stem_effects(wall, retained, _mats(), water_only)
+    assert_almost_equal(result.shear.value, 7.5 * GW, atol=1e-8)
+    assert_almost_equal(result.moment.value, 85.0 / 6.0 * GW, atol=1e-8)
+    # A water-drop setting alone supplies no head when no water is present.
+    retained.water = None
+    result = stem_effects(wall, retained, _mats(), water_only)
+    assert_almost_equal(result.shear.value, 0.0, atol=0)
+    assert_almost_equal(result.moment.value, 0.0, atol=0)
+
+
+def test_stability_settings_reject_invalid_limits() raises:
+    var wall = _wall()
+    var retained = RetainedSide(_soil())
+    var loads = wall_loads(wall, retained, _mats())
+    for value in [-1.0, 0.0, nan[DType.float64](), inf[DType.float64]()]:
+        var settings = StabilitySettings(_m(0.5))
+        settings.eccentricity_fraction = value
+        with assert_raises(contains="finite and positive"):
+            _ = check_stability(
+                wall, retained, loads, _soil(), UnitWeight64(GW), settings
+            )
+        settings = StabilitySettings(_m(0.5))
+        settings.required_bearing = Pressure64(value)
+        with assert_raises(contains="finite and positive"):
+            settings.check()
+        settings = StabilitySettings(_m(0.5))
+        settings.allowed_service = Pressure64(value)
+        with assert_raises(contains="finite and positive"):
+            settings.check()
+    for value in [-1.0, nan[DType.float64](), inf[DType.float64]()]:
+        var settings = StabilitySettings(_m(value))
+        with assert_raises(contains="finite and nonnegative"):
+            settings.check()
+        settings = StabilitySettings(_m(0.5))
+        settings.sliding_factor = value
+        with assert_raises(contains="finite and nonnegative"):
+            settings.check()
+        settings = StabilitySettings(_m(0.5))
+        settings.passive_factor = value
+        with assert_raises(contains="finite and nonnegative"):
+            settings.check()
+        settings = StabilitySettings(_m(0.5))
+        settings.bearing_factor = value
+        with assert_raises(contains="finite and nonnegative"):
+            settings.check()
+        settings = StabilitySettings(_m(0.5))
+        settings.water_factor_q = value
+        with assert_raises(contains="finite and nonnegative"):
+            settings.check()
+        settings = StabilitySettings(_m(0.5))
+        settings.water_factor_gamma = value
+        with assert_raises(contains="finite and nonnegative"):
+            settings.check()
+    for value in [nan[DType.float64](), inf[DType.float64]()]:
+        with assert_raises(contains="finite values"):
+            _ = base_pressure(LineLoad64(value), _m(0), _m(3))
+        with assert_raises(contains="finite values"):
+            _ = base_pressure(LineLoad64(1000), _m(0), _m(value))
+
+
+def test_planar_wall_python_reference() raises:
+    # tools/reference_geotech_wall.py independently integrates pressure
+    # diagrams and assembles rectangular weights in four dry-wall cases.
+    # h, live height, Strength I V/H/e/sliding, Service I peak pressure.
+    var cases: List[
+        Tuple[Float64, Float64, Float64, Float64, Float64, Float64, Float64]
+    ] = [
+        # BEGIN PYTHON WALL REFERENCE
+        (
+            3.0,
+            0.0,
+            144000.0,
+            40500.0,
+            0.07374999999999998,
+            0.6089241120359334,
+            50800.0,
+        ),
+        (
+            3.0,
+            0.6,
+            144000.0,
+            59400.0,
+            0.2706249999999999,
+            0.8930886976527024,
+            59999.999999999985,
+        ),
+        (
+            4.0,
+            0.0,
+            188640.0,
+            72000.0,
+            0.28715012722646316,
+            0.8263601181149225,
+            81546.66666666667,
+        ),
+        (
+            4.0,
+            0.6,
+            188640.0,
+            97200.0,
+            0.5543256997455471,
+            1.1155861594551453,
+            100746.66666666667,
+        ),
+        # END PYTHON WALL REFERENCE
+    ]
+    for row in cases:
+        var wall = _wall()
+        wall.height = _m(row[0])
+        var retained = RetainedSide(_soil())
+        retained.live_height = _m(row[1])
+        var loads = wall_loads(wall, retained, _mats())
+        var result = check_stability(
+            wall,
+            retained,
+            loads,
+            _soil(),
+            UnitWeight64(GW),
+            StabilitySettings(_m(0.5)),
+        )
+        assert_almost_equal(result.minimum.vertical.value, row[2], atol=1e-6)
+        assert_almost_equal(result.minimum.horizontal.value, row[3], atol=1e-6)
+        assert_almost_equal(result.eccentricity.value, row[4], atol=1e-9)
+        assert_almost_equal(result.sliding_ratio, row[5], atol=1e-9)
+        assert_almost_equal(result.service_pressure.value, row[6], atol=1e-6)
 
 
 def main() raises:

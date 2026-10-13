@@ -116,13 +116,15 @@ def base_pressure(
         triangle; no contact if it is outside the base.
 
     Raises:
-        Error: If the load or the width is not positive.
+        Error: If a value is not finite, or the load or width is not positive.
     """
     var v = vertical.value
     var e = eccentricity.value
     var b = width.value
-    if not (v > 0 and b > 0 and isfinite(e)):
-        raise Error("A base pressure needs a positive load and width")
+    if not (isfinite(v) and isfinite(b) and isfinite(e) and v > 0 and b > 0):
+        raise Error(
+            "A base pressure needs finite values and a positive load and width"
+        )
     if abs(e) >= b / 2:
         return BasePressure(
             TOE_TRIANGLE if e > 0 else HEEL_TRIANGLE,
@@ -216,6 +218,46 @@ struct StabilitySettings(ImplicitlyCopyable, Writable):
         self.water_factor_gamma = 1.0
         self.required_bearing = None
         self.allowed_service = None
+
+    def check(self) raises:
+        """Refuse settings that cannot give meaningful check ratios.
+
+        Raises:
+            Error: If a setting is not finite, a factor or embedment is
+                negative, or an eccentricity or pressure limit is not positive.
+        """
+        if not (
+            isfinite(self.eccentricity_fraction)
+            and self.eccentricity_fraction > 0
+        ):
+            raise Error("The eccentricity fraction must be finite and positive")
+        var nonnegative: List[Float64] = [
+            self.sliding_factor,
+            self.passive_factor,
+            self.bearing_factor,
+            self.embedment.value,
+            self.water_factor_q,
+            self.water_factor_gamma,
+        ]
+        # Six factors are always present.
+        for value in nonnegative:  # pragma: no branch
+            if not (isfinite(value) and value >= 0):
+                raise Error(
+                    "Stability factors and embedment must be finite and"
+                    " nonnegative"
+                )
+        if self.required_bearing:
+            var value = self.required_bearing.value().value
+            if not (isfinite(value) and value > 0):
+                raise Error(
+                    "Required bearing pressure must be finite and positive"
+                )
+        if self.allowed_service:
+            var value = self.allowed_service.value().value
+            if not (isfinite(value) and value > 0):
+                raise Error(
+                    "Allowed service pressure must be finite and positive"
+                )
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the settings.
@@ -320,6 +362,7 @@ def check_stability(
     """
     wall.check()
     foundation.check()
+    settings.check()
     var b = wall.width.value
     var inf64 = inf[DType.float64]()
 

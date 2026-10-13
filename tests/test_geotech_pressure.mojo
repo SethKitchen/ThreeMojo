@@ -21,6 +21,8 @@ from std.testing import (
     assert_true,
 )
 from extensions.geotech.earth_pressure import (
+    _Ground,
+    WedgeLoads,
     at_rest,
     coulomb_active,
     mononobe_okabe_active,
@@ -831,6 +833,138 @@ def test_surcharge_tables() raises:
         _ = parallel_wall_height(_m(1), Length64(nan[DType.float64]()))
     with assert_raises(contains="abutment height"):
         _ = abutment_height(Length64(inf[DType.float64]()))
+
+
+def test_rankine_rejects_periodic_aliases_of_physical_slopes() raises:
+    for beta in [-360.0, -180.0, -90.0, 90.0, 180.0, 360.0]:
+        with assert_raises(contains="steeper than the friction angle"):
+            _ = rankine_active(_deg(30), _deg(beta))
+    # At the limiting physical slope the square-root term is zero.
+    assert_almost_equal(
+        rankine_active(_deg(30), _deg(30)), sqrt(3.0) / 2.0, atol=1e-12
+    )
+    assert_almost_equal(
+        rankine_active(_deg(30), _deg(-30)), sqrt(3.0) / 2.0, atol=1e-12
+    )
+
+
+def _reference_pipe_delta(
+    ground: _Ground, slope: Float64, x_end: Float64
+) -> Float64:
+    """Retain the original sixteen-strip sum as a shortcut oracle."""
+    if len(ground.share) == 0:
+        return 0
+    var dx = x_end / Float64(16)
+    var gs = ground.gamma
+    var gw = ground.gamma_w
+    var yw = ground.level - ground.drop
+    var total = Float64(0)
+    # 16 is a positive constant and there is a pipe, so both
+    # loops always run. Where the ground is not above the plane, every
+    # band area below is zero and the strip adds nothing.
+    for k in range(16):  # pragma: no branch
+        var x = (Float64(k) + 0.5) * dx
+        var y_lo = slope * x
+        var y_hi = ground.height(x)
+        for j in range(len(ground.share)):  # pragma: no branch
+            var ro = ground.outer[j]
+            var ri = ground.inner[j]
+            var yc = ground.center[j] - ground.drop
+            var scale = ground.share[j] * dx
+            var a_ext = circle_band_area(ro, yc, y_lo, y_hi)
+            var a_int = circle_band_area(ri, yc, y_lo, y_hi)
+            var a_wall = max(a_ext - a_int, 0.0)
+            var a_ext_sub = Float64(0)
+            var a_int_sub = Float64(0)
+            if ground.wet:
+                var top = min(y_hi, yw)
+                a_ext_sub = circle_band_area(ro, yc, y_lo, top)
+                a_int_sub = circle_band_area(ri, yc, y_lo, top)
+            var a_dry = max(a_ext - a_ext_sub, 0.0)
+            var a_wall_sub = max(a_ext_sub - a_int_sub, 0.0)
+            var a_wall_dry = max(a_wall - a_wall_sub, 0.0)
+            var gc = ground.wall[j]
+            total -= scale * (gs * a_dry + max(gs - gw, 0.0) * a_ext_sub)
+            total += scale * (gc * a_wall_dry + max(gc - gw, 0.0) * a_wall_sub)
+            if ground.full[j]:
+                total += scale * gw * max(a_int - a_int_sub, 0.0)
+    return total
+
+
+def test_pipe_wedge_shortcuts_preserve_original_strip_sum() raises:
+    var empty = _Ground(
+        _level(4),
+        None,
+        List[BuriedPipe](),
+        WedgeLoads(_deg(30).value, GAMMA, GW, 0),
+    )
+    assert_equal(empty.pipes_delta(0.5, 8), 0.0)
+    assert_equal(
+        empty.pipes_delta(0.5, 8), _reference_pipe_delta(empty, 0.5, 8)
+    )
+    # Solid, hollow/full and above-ground pipes exercise all shortcuts without
+    # changing the strip count, trial angles or the order of accumulation.
+    var pipes: List[BuriedPipe] = [
+        BuriedPipe(
+            2, _m(0.6), _m(0), _m(2), ACROSS, _m(1), False, UnitWeight64(80000)
+        ),
+        BuriedPipe(
+            1, _m(0.4), _m(0.3), _m(1), ACROSS, _m(2), True, UnitWeight64(24000)
+        ),
+        BuriedPipe(
+            1,
+            _m(0.2),
+            _m(0.1),
+            _m(5),
+            ACROSS,
+            _m(1),
+            False,
+            UnitWeight64(24000),
+        ),
+    ]
+    for water in [-1.0, 1.0, 1.7, 3.0, 6.0]:
+        var ground = _Ground(
+            _level(4),
+            _m(water),
+            pipes,
+            WedgeLoads(_deg(30).value, GAMMA, GW, 0),
+        )
+        for drop in [0.0, 1.4, 2.6 - 1e-12, 2.6, 2.6 + 1e-12, 5.2, 5.2 + 1e-12]:
+            ground.drop = drop
+            for slope in [0.25, 0.5, 2.0]:
+                assert_equal(
+                    ground.pipes_delta(slope, 8),
+                    _reference_pipe_delta(ground, slope, 8),
+                )
+        ground.wet = False
+        ground.drop = 0
+        assert_equal(
+            ground.pipes_delta(0.5, 8), _reference_pipe_delta(ground, 0.5, 8)
+        )
+    # Adding a small radius before the subtraction loses it at this scale.
+    # The shortcut must retain (center - drop) + radius, as the original does.
+    var large = _Ground(
+        _level(1e16 + 4),
+        None,
+        [
+            BuriedPipe(
+                1,
+                _m(1),
+                _m(0),
+                _m(1e16),
+                ACROSS,
+                _m(1),
+                False,
+                UnitWeight64(80000),
+            )
+        ],
+        WedgeLoads(_deg(30).value, GAMMA, GW, 0),
+    )
+    large.drop = 1e16
+    assert_true(_reference_pipe_delta(large, 0.5, 8) > 0)
+    assert_equal(
+        large.pipes_delta(0.5, 8), _reference_pipe_delta(large, 0.5, 8)
+    )
 
 
 def main() raises:

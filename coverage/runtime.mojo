@@ -36,8 +36,16 @@ comptime MAX_RECORD_BYTES = 512
 # character is `?`, which the parsers refuse instead of certifying MC-DC.
 comptime INCONSISTENT = 2
 
-# The bound of an owned operand.
+# The bound of an owned operand, and of an implicitly copyable one.
 comptime _Owned = Boolable & Movable & Deinitable
+comptime _Copied = _Owned & ImplicitlyCopyable
+
+# True if copies, moves and destruction of `T` run no source code.
+comptime _bitwise[T: AnyType] = (
+    downcast[T, _Copied].__copy_ctor_is_trivial
+    and downcast[T, _Copied].__move_ctor_is_trivial
+    and downcast[T, _Copied].__del__is_trivial
+) if conforms_to(T, _Copied) else False
 
 
 @inline(.never)
@@ -290,6 +298,65 @@ def leaf[
     return leaf(value.__bool__(), values, id, index)
 
 
+# An atomic operand of native `not` needs one truth conversion, not an
+# owning selection proxy. Keep this route separate from and/or selection.
+@inline(.never)
+def immediate[
+    T: _Owned,
+    origin: Origin[mut=True],
+    //,
+    *Ts: AnyType,
+](
+    var value: T,
+    ref[origin] values: List[Int],
+    id: StaticString,
+    index: Int,
+    *extra: *Ts,
+) -> Bool:
+    """Record a temporary's truth in place before native negation.
+
+    Args:
+        value: The original temporary, with no owning-proxy transfer.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+        extra: The overload-resolution fallback pack; callers leave it empty.
+
+    Returns:
+        The original object's truth, converted exactly once.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
+@inline(.never)
+def immediate[
+    T: Boolable,
+    value_origin: Origin[mut=False],
+    origin: Origin[mut=True],
+    //,
+    *Ts: AnyType,
+](
+    ref[value_origin] value: T,
+    ref[origin] values: List[Int],
+    id: StaticString,
+    index: Int,
+    *extra: *Ts,
+) -> Bool:
+    """Record retained truth on the original object before native negation.
+
+    Args:
+        value: The original retained operand, borrowed without a copy.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+        extra: The overload-resolution fallback pack; callers leave it empty.
+
+    Returns:
+        The original object's truth, converted exactly once.
+    """
+    return leaf(value.__bool__(), values, id, index)
+
+
 @inline(.never)
 def _observe(
     mut values: List[Int], id: StaticString, index: Int, outcome: Bool
@@ -306,6 +373,52 @@ def _observe(
         return
     values[index] = Int(outcome) if state < 0 else INCONSISTENT
     _emit_hit(id, StaticString(":T\n") if outcome else StaticString(":F\n"))
+
+
+struct _OwnedLeaf[T: Boolable & Movable & Deinitable, origin: Origin[mut=True]](
+    Boolable, Movable
+):
+    """An owned temporary operand that records each native truth conversion.
+
+    The type has no operand origin. Two temporaries of one native type give one
+    proxy type, so Mojo keeps its same-type or mixed-type operator semantics.
+    The proxy is not copyable, so a selected operand moves as it does natively.
+    """
+
+    var value: Self.T
+    var values: Pointer[List[Int], Self.origin]
+    var id: StaticString
+    var index: Int
+
+    def __init__(
+        out self,
+        var value: Self.T,
+        values: Pointer[List[Int], Self.origin],
+        id: StaticString,
+        index: Int,
+    ):
+        """Take ownership of the temporary operand without converting it.
+
+        Args:
+            value: The temporary operand.
+            values: The current invocation's operand buffer.
+            id: The condition's static hit identifier.
+            index: The condition's slot in the buffer.
+        """
+        self.value = value^
+        self.values = values
+        self.id = id
+        self.index = index
+
+    def __bool__(self) -> Bool:
+        """Convert the operand once for this native truth test and record it.
+
+        Returns:
+            The operand's own `__bool__` result.
+        """
+        var outcome = self.value.__bool__()
+        _observe(self.values[], self.id, self.index, outcome)
+        return outcome
 
 
 struct _BorrowedLeaf[
@@ -357,14 +470,25 @@ struct _BorrowedLeaf[
         return outcome
 
 
-# A temporary custom operand is converted in place. Even a bitwise move
-# into an owning proxy changes its address. Unary not converts once here;
-# node refuses operators that instead select and reconvert an owned value.
-# A retained custom operand must keep its original identity for its first
-# truth test. A bitwise copy still changes the address seen by __bool__.
+# The probe of a temporary custom operand: an owning proxy or its truth. A
+# proxy owns the operand, so the operand must move into it. Only a bitwise move
+# runs no source code. An operand with a user-defined move constructor is
+# converted once in place instead, and the probe is its `Bool`.
+comptime _Temporary[T: _Owned, origin: Origin[mut=True]] = (
+    _OwnedLeaf[T, origin] if T.__move_ctor_is_trivial else Bool
+)
+
+# The probe of a retained custom operand. A bitwise operand is copied into an
+# owning proxy. Its proxy type has no operand origin, so a one-type operator
+# stays one-type, also with a temporary of the same type. Another operand is
+# borrowed with its origin.
 comptime _Retained[
     T: Boolable, value_origin: Origin[mut=False], origin: Origin[mut=True]
-] = _BorrowedLeaf[T, value_origin, origin]
+] = (
+    _OwnedLeaf[downcast[T, _Owned], origin] if _bitwise[T] else _BorrowedLeaf[
+        T, value_origin, origin
+    ]
+)
 
 
 @inline(.never)
@@ -379,27 +503,42 @@ def leaf[
     id: StaticString,
     index: Int,
     *extra: *Ts,
-) -> Bool:
-    """Convert a temporary custom operand in its original storage.
+) -> _Temporary[T, origin]:
+    """Probe a temporary custom operand using the existing selection proxy.
 
-    A temporary argument binds to `value` without a move. Moving it into a
-    proxy would change the object observed by an address-sensitive __bool__,
-    even when the move runs no source code. Convert once in place, as unary
-    `not` does, and destroy at the same expression boundary. `node` refuses
-    a custom one-type operator: it must select an owned object and convert
-    that object again. A mixed custom operator remains refused too.
+    Mojo selects this overload for a temporary and the `ref` overload for a
+    retained value. The trailing pack makes both a fallback after the fixed
+    pure-type overloads. A temporary argument binds to `value` without a move.
+
+    A bitwise-movable operand moves into a proxy and is not converted here.
+    The native `and`, `or`, `not` and truth context convert the proxy as they
+    would the operand.
+
+    Another operand is converted here once, and then destroyed. `not` also
+    converts a temporary once, at once, and then destroys it. A native
+    one-type operator moves the selected operand into its result instead, so
+    `node` refuses it: the probes are `Bool`. `node` also refuses a two-type
+    operator of a custom operand.
 
     Args:
-        value: The original temporary, never copied or moved by the probe.
+        value: The temporary operand, never copied.
         values: The current invocation's operand buffer.
         id: The condition's static hit identifier.
         index: The condition's slot in the buffer.
         extra: The overload-resolution fallback pack; callers leave it empty.
 
     Returns:
-        The original object's truth, recorded exactly once.
+        A proxy that owns the operand and records its truth conversions, or
+        the operand's recorded truth if it has a user-defined move constructor.
     """
-    return leaf(value.__bool__(), values, id, index)
+    comptime if T.__move_ctor_is_trivial:
+        return rebind_var[_Temporary[T, origin]](
+            _OwnedLeaf[T, origin](value^, Pointer(to=values), id, index)
+        )
+    else:
+        return rebind_var[_Temporary[T, origin]](
+            leaf(value.__bool__(), values, id, index)
+        )
 
 
 @inline(.never)
@@ -426,25 +565,36 @@ def leaf[
     cannot copy or move the operand, so `node` refuses a same-type operator
     whose result is a borrowing proxy.
 
-    Even a bitwise copy changes the operand's address. A custom truth test
-    can observe that identity, so no retained operand is copied here. Native
-    selection happens only after its first truth test; `node` refuses a
-    same-type selection whose borrowing proxy cannot reproduce that step.
+    A bitwise operand is copied into an owning proxy instead. Its copy, move
+    and destruction run no source code. An address-sensitive truth test can
+    still observe this copy; selected-object identity remains unresolved.
 
     Args:
-        value: The original retained operand, borrowed without copying.
+        value: The retained operand. Only a bitwise operand is copied.
         values: The current invocation's operand buffer.
         id: The condition's static hit identifier.
         index: The condition's slot in the buffer.
         extra: The overload-resolution fallback pack; callers leave it empty.
 
     Returns:
-        A proxy that borrows the original operand and records its truth
-        conversions without changing its identity.
+        A proxy that owns a bitwise copy of the operand or borrows it, and
+        that records its truth conversions.
     """
-    return _BorrowedLeaf[T, value_origin, origin](
-        Pointer(to=value), Pointer(to=values), id, index
-    )
+    comptime if _bitwise[T]:
+        comptime O = downcast[T, _Owned]
+        # A bitwise copy: no copy constructor runs.
+        var copy = rebind[downcast[T, _Copied]](value)
+        return rebind_var[_Retained[T, value_origin, origin]](
+            _OwnedLeaf[O, origin](
+                rebind_var[O](copy^), Pointer(to=values), id, index
+            )
+        )
+    else:
+        return rebind_var[_Retained[T, value_origin, origin]](
+            _BorrowedLeaf[T, value_origin, origin](
+                Pointer(to=value), Pointer(to=values), id, index
+            )
+        )
 
 
 struct _Right[N: AnyType](TrivialRegisterPassable):
@@ -599,7 +749,9 @@ struct _Right[N: AnyType](TrivialRegisterPassable):
         ref[origin] values: List[Int],
         id: StaticString,
         index: Int,
-    ) -> Bool where conforms_to(Self.N, _Owned):
+    ) -> _Temporary[downcast[Self.N, _Owned], origin] where conforms_to(
+        Self.N, _Owned
+    ):
         """Own a right operand of the operator's result type.
 
         Mojo copies a retained operand into `value`, or moves it at its last
@@ -617,10 +769,19 @@ struct _Right[N: AnyType](TrivialRegisterPassable):
             index: The condition's slot in the buffer.
 
         Returns:
-            The original owned argument's truth, recorded without an extra
-            move. Custom one-type selection is refused by `node`.
+            A proxy that owns the operand and records its truth conversions,
+            or the operand's recorded truth if it has a user-defined move
+            constructor.
         """
-        return leaf(value.__bool__(), values, id, index)
+        comptime T = downcast[Self.N, _Owned]
+        comptime if T.__move_ctor_is_trivial:
+            return rebind_var[_Temporary[T, origin]](
+                _OwnedLeaf[T, origin](value^, Pointer(to=values), id, index)
+            )
+        else:
+            return rebind_var[_Temporary[T, origin]](
+                leaf(value.__bool__(), values, id, index)
+            )
 
     @inline(.never)
     def of[
@@ -635,7 +796,7 @@ struct _Right[N: AnyType](TrivialRegisterPassable):
         id: StaticString,
         index: Int,
         *extra: *Ts,
-    ) -> Bool:
+    ) -> _Temporary[T, origin]:
         """Probe a temporary right operand of another type.
 
         Parameters:
@@ -652,9 +813,16 @@ struct _Right[N: AnyType](TrivialRegisterPassable):
                 empty.
 
         Returns:
-            The temporary operand's truth, recorded in place without a move.
+            The probe that `leaf` makes for a temporary operand.
         """
-        return leaf(value.__bool__(), values, id, index)
+        comptime if T.__move_ctor_is_trivial:
+            return rebind_var[_Temporary[T, origin]](
+                _OwnedLeaf[T, origin](value^, Pointer(to=values), id, index)
+            )
+        else:
+            return rebind_var[_Temporary[T, origin]](
+                leaf(value.__bool__(), values, id, index)
+            )
 
     @inline(.never)
     def of[
@@ -850,9 +1018,8 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     alone cannot prove that the operator used mixed-type Boolean fallback.
     A same-type result must be an owning proxy: a borrowing proxy cannot copy
     or move the retained left operand that the native operator selects. A
-    temporary is converted in place to `Bool`: an owning proxy would add an
-    identity-changing move. Custom same-type operators are therefore refused
-    for temporaries as well, including those with bitwise moves.
+    temporary with a user-defined move constructor is already `Bool`, so a
+    same-type operator of such temporaries is refused too.
 
     Parameters:
         L: The native left operand type.
@@ -893,10 +1060,9 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
         # The pinned reflection API cannot inspect applicable overloads.
         # Refuse this ambiguity rather than silently change execution.
         return False
-    # A custom same-type operator must select an owned object after the left
-    # truth test, then convert that selected object. Retained proxies borrow;
-    # temporary probes convert in place to Bool. Neither supplies an owning
-    # proxy with native identity, so no custom same-type selection is admitted.
+    # Same-type: one native type, kept by one recording proxy type. The
+    # native operator selects an owned copy or move of a retained operand.
+    # A borrowing proxy selects only the borrow, so it cannot keep that.
     return (
         rewritten != "Bool"
         and not _borrowed(rewritten)
@@ -925,10 +1091,8 @@ def truth[T: Boolable, //, kept: Bool](value: T) -> Bool:
         "Coverage cannot yet preserve this compound condition: the probes"
         " would change how an and/or operator joins its operand types. The"
         " cause is an implicit conversion between operand types, a one-type"
-        " operator that selects a retained custom operand before its native"
-        " selection point (including identity-changing bitwise copies), a"
-        " one-type operator over custom temporaries with identity-changing"
-        " extra moves, a one-type operator over a type with a user-defined move"
+        " operator that selects a retained operand whose copy runs source"
+        " code, a one-type operator over a type with a user-defined move"
         " constructor, a custom mixed-type operator whose Bool result cannot"
         " distinguish a user-defined merge from Boolean fallback, or an"
         " Optional result with observable copy, move, or destructor effects."
