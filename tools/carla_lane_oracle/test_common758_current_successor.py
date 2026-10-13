@@ -18,11 +18,17 @@ SELF = 'tools/carla_lane_oracle/test_common758_current_successor.py'
 HISTORICAL_AUTHORITY = 'add0cfe82b1103ee64eae23fca9340ec5500d8014309e838415d38123731931b'
 EXPECTATIONS = '85020fb32ec96121aba108288eaabf41c4483e2f94e91b6beee4528af2206653'
 REPAIRED = {
+    'extensions/carla/geometry.mojo',
     'extensions/carla/map.mojo',
     'extensions/carla/map_builder.mojo',
+    'extensions/carla/math.mojo',
+    'extensions/carla/mesh_factory.mojo',
+    'extensions/carla/navigation_mesh.mojo',
     'extensions/carla/opendrive.mojo',
     'extensions/carla/replayer_helper.mojo',
     'extensions/carla/road.mojo',
+    'extensions/carla/traffic_manager_collision.mojo',
+    'extensions/carla/traffic_manager_map.mojo',
     'tests/test_carla_junction_bounds.mojo',
     'tests/test_carla_lane_borders.mojo',
     'tests/test_carla_lane_search_positive_controls.mojo',

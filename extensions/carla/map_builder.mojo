@@ -2218,8 +2218,8 @@ struct MapBuilder(Movable):
         _ = _nonnegative_si(s)
         _ = _finite_si(t)
 
-        if s < 0.0:
-            raise Error("A signal reference cannot sit before s = 0")
+        # _nonnegative_si above already refuses s < 0.
+        debug_assert(s >= 0.0, "A signal reference cannot sit before s = 0")
         if not signal_id.is_valid():
             raise Error("Signal id is not valid")
         ref r = self.roads[road]

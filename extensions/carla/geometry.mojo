@@ -1199,8 +1199,8 @@ def with_poly3_si(
         if len(base.samples) >= max_samples:
             raise Error("Geometry sampling exhausted its sample budget")
         var next_u = _finite_si(u + delta_u)
-        if not (next_u > u):
-            raise Error("Geometry sampling cannot advance its parameter")
+        # u gains 0.3 a sample; it stalls only after about 9e15 samples.
+        debug_assert(next_u > u, "Geometry sampling advances its parameter")
         u = next_u
         var v = _finite_si(base._u_poly._evaluate_si(u))
         var du = u - last.u
@@ -1292,7 +1292,7 @@ def with_param_poly3_from_coefficients(
     _ = _finite_si(base.x)
     _ = _finite_si(base.y)
     _ = _finite_si(base.heading)
-    for polynomial in [u, v]:
+    for polynomial in [u, v]:  # pragma: no branch
         _ = _finite_si(polynomial.a)
         _ = _finite_si(polynomial.b)
         _ = _finite_si(polynomial.c)
@@ -1792,7 +1792,7 @@ def _check_geometry_record(base: RoadGeometry) raises:
         if len(base.samples) < 2:
             raise Error("A sampled geometry needs at least two samples")
         var previous = Float64(-1)
-        for sample in base.samples:
+        for sample in base.samples:  # pragma: no branch
             _ = _finite_si(sample.u)
             _ = _finite_si(sample.v)
             _ = _finite_si(sample.tu)

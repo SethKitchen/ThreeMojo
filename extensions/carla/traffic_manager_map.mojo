@@ -195,7 +195,7 @@ def distance_squared_square_meters(a: Vector3, b: Vector3) raises -> Float32:
     Raises:
         Error: If a coordinate or result is not finite.
     """
-    for point in [a, b]:
+    for point in [a, b]:  # pragma: no branch
         _ = _finite_si(Float64(point.x))
         _ = _finite_si(Float64(point.y))
         _ = _finite_si(Float64(point.z))
@@ -336,7 +336,7 @@ struct SimpleWaypoint(Copyable, Movable):
         Raises:
             Error: If a coordinate or result is not finite.
         """
-        for point in [self.location(), location]:
+        for point in [self.location(), location]:  # pragma: no branch
             _ = _finite_si(Float64(point.x))
             _ = _finite_si(Float64(point.y))
             _ = _finite_si(Float64(point.z))
@@ -383,7 +383,7 @@ struct SimpleWaypoint(Copyable, Movable):
         Raises:
             Error: If a coordinate or result is not finite.
         """
-        for point in [self.location(), location]:
+        for point in [self.location(), location]:  # pragma: no branch
             _ = _finite_si(Float64(point.x))
             _ = _finite_si(Float64(point.y))
             _ = _finite_si(Float64(point.z))
