@@ -14,7 +14,7 @@ from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.curve_bounds import _sample_index
 from extensions.carla.geometry import POLY3, PARAM_POLY3
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from std.math import isfinite
 from std.memory import bitcast
 

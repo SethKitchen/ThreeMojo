@@ -216,7 +216,9 @@ def test_curvature_speed_translation_and_wide_intermediate() raises:
             shared.local_map.waypoints[2].transform.location = Vector3(
                 origin - radius, 0, 0
             )
-            var speed = stage.get_turn_target_velocity(path, 0.5, shared)
+            var speed = stage.get_turn_target_velocity_meters_per_second(
+                path, 0.5, shared
+            )
             assert_almost_equal(
                 Float64(speed) / expected, Float64(1), atol=2e-7, rtol=0
             )
@@ -228,7 +230,9 @@ def test_curvature_speed_translation_and_wide_intermediate() raises:
     var expected = sqrt(
         Float64(FLOAT_MAX) * Float64(FRICTION) * Float64(GRAVITY.value)
     )
-    var speed = stage.get_turn_target_velocity(path, 8, shared)
+    var speed = stage.get_turn_target_velocity_meters_per_second(
+        path, 8, shared
+    )
     assert_almost_equal(
         Float64(speed) / expected, Float64(1), atol=2e-7, rtol=0
     )

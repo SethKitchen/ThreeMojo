@@ -1,6 +1,12 @@
 """Bind the finite ordered queue successor without rewriting historical pins."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
 from functools import lru_cache
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 from pathlib import Path
 import tokenize
@@ -40,6 +46,7 @@ def _observe_text(root, path, text, *, _operation=None, supplied=False):
         root, path, text, _operation=_operation, supplied=supplied)
 
 
+
 def require(ok, message):
     if not ok:
         raise RuntimeError(message)
@@ -73,9 +80,11 @@ def inventory(root, *, verified_lane_predecessor=None, _operation=None):
                if _operation is not None else path.relative_to(root))
         if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
             continue
-        text = _observe_text(
+        supplied_text = _observe_text(
             root, rel.as_posix(), path.read_text(), _operation=_operation,
             supplied=rel.as_posix() == 'extensions/carla/map.mojo')
+        text = _typed_source.historical_text(root, rel.as_posix(), supplied_text,
+                                              _operation=_operation)
         if rel.as_posix() == cache_key.MODULE and verified_lane_predecessor is not None:
             text = verified_lane_predecessor
         if '_run_lane_search' not in text and 'lane_refinement' not in text:
@@ -87,22 +96,25 @@ def inventory(root, *, verified_lane_predecessor=None, _operation=None):
                 import seed_count_contracts as seed_count
             physical = path.read_bytes()
             if _operation is not None:
-                full_audit._observe_bytes(root, rel.as_posix(), physical, _operation=_operation)
-            physical_digest = hashlib.sha256(physical).hexdigest()
+                physical = full_audit._observe_bytes(root, rel.as_posix(), physical, _operation=_operation)
+            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,
+                                                        _operation=_operation)
+            physical_digest = hashlib.sha256(provenance).hexdigest()
             supplied_tokens = source.token_sha256(text)
             if (physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
                     or supplied_tokens in {seed_count.SCORE_AFTER_TOKEN_SHA256, seed_count.station.AFTER_TOKEN_SHA256, seed_count.deviation.AFTER_TOKEN_SHA256}):
                 require(physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                         'score-helper view needs the exact physical Map')
-                require(supplied_tokens == seed_count.score_family_token_sha256(physical_digest),
+                require(source.token_sha256(supplied_text) == source.token_sha256(physical.decode('utf-8'))
+                        and supplied_tokens == seed_count.score_family_token_sha256(physical_digest),
                         'unreviewed supplied score-helper source')
                 seed_count.verify_score(root, **operation_args)
                 final_raw = path.read_bytes()
                 if _operation is not None:
-                    full_audit._observe_bytes(root, rel.as_posix(), final_raw, _operation=_operation)
+                    _typed_source.historical_bytes(root, rel.as_posix(), full_audit._observe_bytes(root, rel.as_posix(), final_raw, _operation=_operation), _operation=_operation)
                 require(final_raw == physical,
                         'Map changed during score-helper routing check')
-                text = seed_count.score_family_predecessor_source(physical.decode('utf-8'))
+                text = seed_count.score_family_predecessor_source(provenance.decode('utf-8'))
         entry = inventory_entry(text)
         if entry is not None:
             result[rel.as_posix()] = entry
@@ -114,26 +126,26 @@ def verify(root, *, _operation=None):
         _check_operation(root, _operation)
     root = Path(root)
     operation_args = {} if _operation is None else {'_operation': _operation}
-    raw = (root / 'tools/carla_lane_oracle/lane-order-migration.json').read_bytes()
+    raw = _typed_source.historical_bytes(root, root / 'tools/carla_lane_oracle/lane-order-migration.json', (root / 'tools/carla_lane_oracle/lane-order-migration.json').read_bytes(), _operation=_operation)
     require(hashlib.sha256(raw).hexdigest() == RECORD_SHA256, 'lane-order record changed')
     record = json.loads(raw)
     require(hashlib.sha256(record['before'].encode()).hexdigest() == record['before_sha256'] == PREDECESSOR_SHA256, 'lane-order predecessor changed')
     require(hashlib.sha256(record['after'].encode()).hexdigest() == record['after_sha256'], 'lane-order successor record changed')
     for rel, expected in record['immutable_predecessor_records'].items():
-        require(hashlib.sha256((root / rel).read_bytes()).hexdigest() == expected, 'lane-order predecessor record changed: ' + rel)
+        require(hashlib.sha256(_typed_source.historical_bytes(root, root / rel, (root / rel).read_bytes(), _operation=_operation)).hexdigest() == expected, 'lane-order predecessor record changed: ' + rel)
     live = _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation)
     current = cache_key.reviewed_text(root, record['module'], live, **operation_args)
     require(source.token_sha256(current) == source.token_sha256(record['after']), 'lane-order successor module changed')
     for rel, expected in record['premise_modules'].items():
-        require(source.token_sha256(_observe_text(root, rel, (root / rel).read_text(), _operation=_operation)) == source.token_sha256(expected), 'lane-order producer premise changed: ' + rel)
+        require(source.token_sha256(_typed_source.historical_text(root, rel, _observe_text(root, rel, (root / rel).read_text(), _operation=_operation), _operation=_operation)) == source.token_sha256(expected), 'lane-order producer premise changed: ' + rel)
     require(inventory(root, verified_lane_predecessor=current, **operation_args) == record['inventory'], 'lane-order production routing changed')
     run = guard.declaration(current, '_run_lane_search', ())
     insertions = [{'line_in_function': i + 1, 'operation': line.strip()} for i, line in enumerate(run.splitlines()) if any(word in line for word in ['pending.append(', 'closed.add(', 'terminal.append(', 'closed.recheck('])]
     # Line positions are documentary. Token-bound complete function controls semantics.
     require([x['operation'] for x in insertions] == [x['operation'] for x in record['insertions']], 'lane-order insertion scan changed')
-    test = _observe_text(root, 'tests/test_carla_lane_order_successor.mojo',
+    test = _typed_source.historical_text(root, 'tests/test_carla_lane_order_successor.mojo', _observe_text(root, 'tests/test_carla_lane_order_successor.mojo',
                          (root / 'tests/test_carla_lane_order_successor.mojo').read_text(),
-                         _operation=_operation)
+                         _operation=_operation), _operation=_operation)
     for name, expected in record['references'].items():
         require(source.token_sha256(guard.declaration(test, name, ())) == source.token_sha256(expected), 'lane-order frozen reference changed: ' + name)
     return record

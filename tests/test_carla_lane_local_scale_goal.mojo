@@ -26,7 +26,7 @@ def test_local_scale_recovers_a_strict_external_goal() raises:
     # search on [0.1, 0.9]. A power-of-two slope keeps its stored zero exact.
     var root = bitcast[DType.float64](UInt64(0x3FD7AE147A450500))
     var slope = bitcast[DType.float64](UInt64(1623) << UInt64(52))
-    road.info.elevations[0].polynomial = CubicPolynomial(
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
         -slope * root, slope, 0.0, 0.0, 0.0
     )
     var location = Vector3(0, 1, 0)

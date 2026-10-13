@@ -28,6 +28,14 @@ past the range. A ray that meets something gives a detection:
 The detections keep the order of the rays.
 """
 
+from extensions.carla.quantity_boundary import (
+    _RawSI,
+    _RAW_SI,
+    _finite_si,
+    _nonnegative_si,
+)
+from units.si import Velocity
+
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.sensor_attributes import (
     attribute_float,
@@ -126,7 +134,6 @@ struct RadarDescription(ImplicitlyCopyable):
         return Int(Float32(self.points_per_second) * tick.to(SECOND))
 
 
-@fieldwise_init
 struct RadarDetection(Equatable, ImplicitlyCopyable, Writable):
     """One radar detection, CARLA's `RadarDetection`."""
 
@@ -135,6 +142,78 @@ struct RadarDetection(Equatable, ImplicitlyCopyable, Writable):
     var azimuth: Angle
     var altitude: Angle
     var depth: Length
+
+    def __init__(
+        out self,
+        velocity: Velocity,
+        azimuth: Angle,
+        altitude: Angle,
+        depth: Length,
+    ) raises:
+        """Create a checked detection without changing its wire layout.
+
+        Args:
+            velocity: The signed radial speed; approaching is negative.
+            azimuth: The horizontal angle.
+            altitude: The vertical angle.
+            depth: The nonnegative range.
+
+        Returns:
+            The initialized RadarDetection record.
+
+        Raises:
+            Error: If a field is nonfinite or the range is negative.
+        """
+        self = RadarDetection.from_si(velocity.value, azimuth, altitude, depth)
+
+    @staticmethod
+    def from_si(
+        velocity: Float32, azimuth: Angle, altitude: Angle, depth: Length
+    ) raises -> RadarDetection:
+        """Read an explicit raw meter-per-second sensor value.
+
+        Args:
+            velocity: The signed speed in meters per second.
+            azimuth: The horizontal angle.
+            altitude: The vertical angle.
+            depth: The nonnegative range.
+
+        Returns:
+            The checked detection, retaining each stored bit.
+
+        Raises:
+            Error: If a field is nonfinite or the range is negative.
+        """
+        _ = _finite_si(Float64(velocity))
+        _ = _finite_si(Float64(azimuth.value))
+        _ = _finite_si(Float64(altitude.value))
+        _ = _nonnegative_si(Float64(depth.value))
+        return RadarDetection(_RAW_SI, velocity, azimuth, altitude, depth)
+
+    def __init__(
+        out self,
+        raw: _RawSI,
+        velocity: Float32,
+        azimuth: Angle,
+        altitude: Angle,
+        depth: Length,
+    ):
+        self.velocity = velocity
+        self.azimuth = azimuth
+        self.altitude = altitude
+        self.depth = depth
+
+    def velocity_quantity(self) raises -> Velocity:
+        """Read the signed radial velocity through a checked typed view.
+
+        Returns:
+            The velocity without narrowing or changing its sign.
+
+        Raises:
+            Error: If the mutable source velocity is not finite.
+        """
+        _ = _finite_si(Float64(self.velocity))
+        return Velocity(self.velocity)
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if the four numbers are equal.
@@ -256,6 +335,7 @@ struct Radar(Copyable, Movable):
             var flat = sqrt(local.x * local.x + local.y * local.y)
             out.append(
                 RadarDetection(
+                    _RAW_SI,
                     velocity,
                     Angle(atan2(local.y, local.x), RADIAN),
                     Angle(atan2(local.z, flat), RADIAN),

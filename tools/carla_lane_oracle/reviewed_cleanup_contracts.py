@@ -6,7 +6,13 @@ The retained migration records describe their historical sources. This record
 binds exactly three successors and preserves every other dependency. Source
 integrity does not establish native behavior, coverage, or floating-point mode.
 """
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import tokenize
 
@@ -73,13 +79,14 @@ def _observe_text(root, path, text, *, _operation=None, mode='default'):
         root, path, text, _operation=_operation, mode=mode)
 
 
+
 def require(condition, message):
     if not condition:
         raise ValueError('reviewed cleanup source contract: ' + message)
 
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -89,7 +96,7 @@ def read_record(root):
     require(set(record['premise_dependencies']) == set(PREMISE_PATHS),
             'wrong premise dependency set')
     previous = root/'tools/carla_lane_oracle/winner-sign-query-migration.json'
-    require(hashlib.sha256(previous.read_bytes()).hexdigest() ==
+    require(hashlib.sha256(_typed_source.historical_bytes(root, previous, previous.read_bytes())).hexdigest() ==
             record['prior_winner_sign_migration_sha256'],
             'historical winner/sign record changed')
     return record
@@ -121,12 +128,12 @@ def verify_premises(root, *, _operation=None):
         from . import sum2_guard_contracts as guard
     else:
         import sum2_guard_contracts as guard
-    line = _observe_text(root, SOURCE_PATHS[0],
-                         (root/SOURCE_PATHS[0]).read_text(), _operation=_operation)
-    arc = _observe_text(root, SOURCE_PATHS[1],
-                         (root/SOURCE_PATHS[1]).read_text(), _operation=_operation)
-    junction = _observe_text(root, SOURCE_PATHS[2],
-                         (root/SOURCE_PATHS[2]).read_text(), _operation=_operation)
+    line = _typed_source.historical_text(root, SOURCE_PATHS[0], _observe_text(root, SOURCE_PATHS[0],
+                         (root/SOURCE_PATHS[0]).read_text(), _operation=_operation), _operation=_operation)
+    arc = _typed_source.historical_text(root, SOURCE_PATHS[1], _observe_text(root, SOURCE_PATHS[1],
+                         (root/SOURCE_PATHS[1]).read_text(), _operation=_operation), _operation=_operation)
+    junction = _typed_source.historical_text(root, SOURCE_PATHS[2], _observe_text(root, SOURCE_PATHS[2],
+                         (root/SOURCE_PATHS[2]).read_text(), _operation=_operation), _operation=_operation)
     line_context = guard.declaration(line, '_rounded_line_axis_context', ())
     ordered(line_context, (
         'road._check_lane(section, lane)',
@@ -276,7 +283,7 @@ def verify(root, *, _operation=None):
     require(hashlib.sha256(guard_payload).hexdigest() == record['guard_pins_after_sha256'],
             'unreviewed dependency pin successor: sum2-guard-pins.json')
     for path, transition in record['sources'].items():
-        text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _observe_text(root, path, (root/path).read_text(), _operation=_operation)
+        text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _typed_source.historical_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)
         if (path == 'extensions/carla/junction_bounds.mojo'
                 and source.token_sha256(text) != transition['after_token_sha256']):
             try:
@@ -290,8 +297,8 @@ def verify(root, *, _operation=None):
         require(source.token_sha256(text) == transition['after_token_sha256'],
                 'unreviewed complete successor: ' + path)
     for path, expected in record['premise_dependencies'].items():
-        verify_dependency(path, _observe_text(
-            root, path, (root/path).read_text(), _operation=_operation),
+        verify_dependency(path, _typed_source.historical_text(root, path, _observe_text(
+            root, path, (root/path).read_text(), _operation=_operation), _operation=_operation),
             expected['token_sha256'])
     verify_premises(root, **operation_args)
     frozen.verify(root, **operation_args)

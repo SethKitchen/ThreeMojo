@@ -199,7 +199,7 @@ def signal_prop(map: Map, signal: Signal) raises -> Optional[SignalProp]:
     if not Bool(kind):
         return None
     var at = signal.transform.location
-    var line = map.road(signal.road_id).directed_point(signal.s).to_carla()
+    var line = map.road(signal.road_id)._directed_point_si(signal.s).to_carla()
     var right = line.rotation.right_vector()
     var inward = Vector3(right.x, right.y, 0)
     inward.normalize()

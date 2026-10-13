@@ -37,6 +37,9 @@ CARLA passes bare floats: an arc length is a `Length`, a heading an
 number, which reads as the opposite.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _positive_si
+from units.si import Area
+
 from extensions.carla.transform import (
     CarlaRotation,
     CarlaTransform,
@@ -84,7 +87,46 @@ def dot_2d(a: Vector3, b: Vector3) -> Float32:
     return a.x * b.x + a.y * b.y
 
 
-def distance_squared_2d(a: Vector3, b: Vector3) -> Float32:
+def distance_squared_2d(a: Vector3, b: Vector3) raises -> Area:
+    """Checked typed boundary. Return the squared distance in the x-y plane, `DistanceSquared2D`.
+
+    Args:
+        a: The first point, in meters.
+        b: The second point, in meters.
+
+    Returns:
+        The squared distance, in square meters.
+
+    Raises:
+        Error: If an x or y coordinate or the squared-distance result is
+            nonfinite.
+    """
+    return Area(distance_squared_2d_si(a, b))
+
+
+def distance_squared_2d_si(a: Vector3, b: Vector3) raises -> Float32:
+    """Explicit source-unit compatibility adapter. Return the squared distance in the x-y plane, `DistanceSquared2D`.
+
+    Args:
+        a: The first point, in meters.
+        b: The second point, in meters.
+
+    Returns:
+        The squared distance, in square meters.
+
+    Raises:
+        Error: If an x or y coordinate or the squared-distance result is
+            nonfinite.
+    """
+    for point in [a, b]:
+        _ = _finite_si(Float64(point.x))
+        _ = _finite_si(Float64(point.y))
+    var value = _distance_squared_2d_si(a, b)
+    _ = _finite_si(Float64(value))
+    return value
+
+
+def _distance_squared_2d_si(a: Vector3, b: Vector3) -> Float32:
     """Return the squared distance in the x-y plane, `DistanceSquared2D`.
 
     Args:
@@ -109,7 +151,7 @@ def distance_2d(a: Vector3, b: Vector3) -> Length:
     Returns:
         The distance. The z parts do not count.
     """
-    return Length(sqrt(distance_squared_2d(a, b)), METER)
+    return Length(sqrt(_distance_squared_2d_si(a, b)), METER)
 
 
 def vector_angle(a: Vector3, b: Vector3) -> Angle:
@@ -148,7 +190,7 @@ def distance_segment_to_point(
         distance from `p` to the projection. The z parts do not count. A
         segment of no length gives zero and the distance from `v` to `p`.
     """
-    var l2 = distance_squared_2d(v, w)
+    var l2 = _distance_squared_2d_si(v, w)
     var l = sqrt(l2)
     if l2 == 0.0:
         return (Length(0, METER), distance_2d(v, p))

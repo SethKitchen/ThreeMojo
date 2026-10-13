@@ -51,7 +51,7 @@ def _arc() raises -> Road:
     road.info.geometries[0].geometry.length = road.length
     road.info.geometries[0].geometry.x = 60.0
     road.info.geometries[0].geometry.curvature_start = -0.05
-    road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(0.0)
     return road^
 
 
@@ -190,8 +190,8 @@ def test_constant_record_variations_and_every_contributing_width() raises:
     var road = _arc()
     road.info.geometries[0].geometry.x = -60.0
     road.info.geometries[0].geometry.y = 2.0
-    road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.25)
-    road.info.elevations[0].polynomial = CubicPolynomial.constant(3.0)
+    road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(0.25)
+    road.info.elevations[0].polynomial = CubicPolynomial._constant_si(3.0)
     road.sections[0].lanes[0].id = LaneId(1)
     var context = _rounded_arc_context(road, 0, 0, _low(), _high())
     assert_true(Bool(context))
@@ -206,7 +206,7 @@ def test_constant_record_variations_and_every_contributing_width() raises:
     var nested = _arc()
     var outer = nested.sections[0].add_lane(LaneId(-2))
     nested.sections[0].lanes[outer].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(2.0))
     )
     var inner = nested.sections[0].lane_index(LaneId(-1))
     assert_true(Bool(_rounded_arc_context(nested, 0, outer, _low(), _high())))
@@ -254,7 +254,9 @@ def test_general_search_resumption_keeps_its_incumbent_on_a_plateau() raises:
         assert_equal(certificate.point[axis], point[axis])
     var line_road = _road(width=3.5)
     line_road.info.geometries[0].geometry.x = 60.0
-    line_road.info.lane_offsets[0].polynomial = CubicPolynomial.constant(0.0)
+    line_road.info.lane_offsets[0].polynomial = CubicPolynomial._constant_si(
+        0.0
+    )
     var line = _refine_lane_certificate(
         line_road, 0, 0, _low(), _high(), location, _low(), 0.0
     )

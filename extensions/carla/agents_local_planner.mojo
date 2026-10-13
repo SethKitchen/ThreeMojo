@@ -50,7 +50,7 @@ from extensions.carla.agents_misc import (
     OPTION_RIGHT,
     OPTION_STRAIGHT,
     RoadOption,
-    from_kmh,
+    _from_kmh_si as from_kmh,
     speed_of,
 )
 from extensions.carla.map import Map, Waypoint
@@ -152,7 +152,7 @@ def retrieve_options(
     var out = List[RoadOption]()
     var now = map.compute_transform(current)
     for w in waypoints:
-        var ahead = map.next(w, 3.0)
+        var ahead = map.next_meters(w, 3.0)
         if len(ahead) == 0:
             raise Error("No waypoint lies 3 m past a candidate")
         out.append(compute_connection(now, map.compute_transform(ahead[0])))
@@ -313,7 +313,9 @@ struct LocalPlanner(Movable):
         var count = min(self.max_queue_length - len(self.queue), k)
         for _ in range(count):
             var last = self.queue[len(self.queue) - 1].waypoint
-            var nexts = map.next(last, Float64(self.sampling_radius.value))
+            var nexts = map.next_meters(
+                last, Float64(self.sampling_radius.value)
+            )
             if len(nexts) == 0:
                 break
             var chosen = nexts[0]

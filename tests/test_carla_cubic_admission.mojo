@@ -25,7 +25,7 @@ from std.testing import TestSuite, assert_equal, assert_true
 
 
 def _road(id: Int, center_y: Float64, curved: Bool) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(id),
         "cubic admission",
         1.0,
@@ -34,23 +34,27 @@ def _road(id: Int, center_y: Float64, curved: Bool) raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(0.000001))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(0.000001))
     )
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, -center_y, 0.0, 1.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, -center_y, 0.0, 1.0)
+        )
     )
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
-    var offset = CubicPolynomial.constant(0.0000005)
+    var offset = CubicPolynomial._constant_si(0.0000005)
     if curved:
         # Center y = 0.021*s*(s-0.5)*(s-1), with one smooth record.
-        offset = CubicPolynomial(0.0000005, -0.0105, 0.0315, -0.021, 0.0)
-    road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, offset))
+        offset = CubicPolynomial._from_coefficients(
+            0.0000005, -0.0105, 0.0315, -0.021, 0.0
+        )
+    road.info.lane_offsets.append(RoadInfoLaneOffset._from_si(0.0, offset))
     return road^
 
 

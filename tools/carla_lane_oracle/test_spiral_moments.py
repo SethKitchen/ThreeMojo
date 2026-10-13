@@ -124,13 +124,17 @@ class RoundingTests(unittest.TestCase):
 class TableTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.cleanup_sources = cleanup_fixtures.verified_predecessors(m.ROOT)
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.historical_root = cleanup_fixtures.copy_historical_boundary_root(owner, m.ROOT)
+        cls.cleanup_sources = cleanup_fixtures.verified_predecessors(cls.historical_root)
+        # The positive baseline still admits the actual current graph.
         cls.constants, cls.pins = m.verify_inputs(m.ROOT)
         cls.rows = m.derive_coefficients(cls.constants)
         cls.source = m.generate_source(cls.rows)
         cls.original = (m.ROOT/m.DATA).read_bytes()
         # Partial mutation fixtures use the verified historical Map bytes.
-        cls.historical_map = seed_count.historical_source(m.ROOT).encode('utf-8')
+        cls.historical_map = seed_count.historical_source(cls.historical_root).encode('utf-8')
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
@@ -152,7 +156,7 @@ class TableTests(unittest.TestCase):
             if path == Path(seed_count.MODULE):
                 destination.write_bytes(self.historical_map)
             else:
-                shutil.copyfile(m.ROOT/path, destination)
+                shutil.copyfile(self.historical_root/path, destination)
 
         cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
 

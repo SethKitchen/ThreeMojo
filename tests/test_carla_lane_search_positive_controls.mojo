@@ -75,8 +75,8 @@ def test_finite_axis_owner_survives_overflow_of_the_optional_inverse_seed() rais
     var high = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     var road = _road()
     road.length = high
-    road.info.geometries[0] = RoadInfoGeometry(
-        start, RoadGeometry(LINE, start, -reach, 0.0, 0.0, reach)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(
+        start, RoadGeometry.from_meters(LINE, start, -reach, 0.0, 0.0, reach)
     )
     # RN(high-start)=reach, so the finite high endpoint is x=0.
     # RN(RN(-1+reach)+start) overflows at the upper rounding tie.
@@ -92,8 +92,8 @@ def test_adjacent_translated_grid_uses_exact_full_distance_order() raises:
     var road = _road()
     var base = Float64(1e20)
     road.length = base + 81920.0
-    road.info.geometries[0] = RoadInfoGeometry(
-        base, RoadGeometry(LINE, base, 0.0, 0.0, 0.0, 81920.0)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(
+        base, RoadGeometry.from_meters(LINE, base, 0.0, 0.0, 0.0, 81920.0)
     )
     var nodes = 0
     var terms = 0
@@ -188,7 +188,9 @@ def test_strict_external_witness_does_not_reset_support_refinement_depth() raise
 def test_record_join_subdivision_keeps_its_prepaid_node_limit() raises:
     var road = _road()
     road.info.geometries.append(
-        RoadInfoGeometry(0.5, RoadGeometry(LINE, 0.5, 10.0, 0.0, 0.0, 3.5))
+        RoadInfoGeometry._from_si(
+            0.5, RoadGeometry.from_meters(LINE, 0.5, 10.0, 0.0, 0.0, 3.5)
+        )
     )
     var result = _subdivided_lane_box(road, 0, 0, 0.25, 0.75, 100, max_nodes=1)
     assert_false(result[0][0].is_finite())
@@ -199,7 +201,9 @@ def test_adjacent_zero_record_join_encloses_both_finite_outputs() raises:
     var road = _road()
     var high = bitcast[DType.float64](UInt64(1))
     road.info.geometries.append(
-        RoadInfoGeometry(high, RoadGeometry(LINE, high, 10.0, 0.0, 0.0, 3.5))
+        RoadInfoGeometry._from_si(
+            high, RoadGeometry.from_meters(LINE, high, 10.0, 0.0, 0.0, 3.5)
+        )
     )
     var result = _subdivided_lane_box(road, 0, 0, 0.0, high, 2, max_nodes=1)
     assert_true(result[0][0].contains(0.0))

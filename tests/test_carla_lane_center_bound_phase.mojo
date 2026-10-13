@@ -49,7 +49,7 @@ from extensions.carla.road_info import (
     RoadInfoLaneOffset,
     RoadInfoLaneWidth,
     SectionId,
-    info_index,
+    info_index_meters as info_index,
 )
 from math.vector3 import Vector3
 from std.math import isfinite
@@ -70,10 +70,10 @@ def _phase_road(middle: Float64) raises -> Road:
     var curvature = Float64(1e9 - 1)
     for _ in range(6):
         curvature = _next_down(curvature)
-    var spiral = RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 2.0)
+    var spiral = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 2.0)
     spiral.curvature_start = curvature
     spiral.curvature_end = curvature
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1),
         "bounded optional-phase inputs",
         2.0,
@@ -82,25 +82,27 @@ def _phase_road(middle: Float64) raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(-1.0, CubicPolynomial.constant(2.0))
+        RoadInfoLaneWidth._from_si(-1.0, CubicPolynomial._constant_si(2.0))
     )
-    road.info.geometries.append(RoadInfoGeometry(-1.0, spiral^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(-1.0, spiral^))
     road.info.geometries.append(
-        RoadInfoGeometry(1.0, RoadGeometry(LINE, 1.0, 4.0, 0.0, 0.0, 1.0))
+        RoadInfoGeometry._from_si(
+            1.0, RoadGeometry.from_meters(LINE, 1.0, 4.0, 0.0, 0.0, 1.0)
+        )
     )
     # Equal-valued records still have genuinely distinct profile owners.
     road.info.elevations.append(
-        RoadInfoElevation(-1.0, CubicPolynomial.constant(2.0))
+        RoadInfoElevation._from_si(-1.0, CubicPolynomial._constant_si(2.0))
     )
     road.info.elevations.append(
-        RoadInfoElevation(middle, CubicPolynomial.constant(2.0))
+        RoadInfoElevation._from_si(middle, CubicPolynomial._constant_si(2.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(-1.0, CubicPolynomial.constant(1.0))
+        RoadInfoLaneOffset._from_si(-1.0, CubicPolynomial._constant_si(1.0))
     )
     return road^
 

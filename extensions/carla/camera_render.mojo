@@ -133,6 +133,7 @@ from extensions.carla.sensor_attributes import (
     attribute_bool,
     attribute_float,
     validate_sensor_positive,
+    validate_sensor_nonnegative,
     attribute_int,
     attribute_string,
 )
@@ -199,9 +200,12 @@ from std.math import atan, log2, pow, tan
 from units.si import (
     DEGREE,
     METER,
+    KILOMETER,
+    PER_SECOND,
     PER_METER,
     RADIAN,
     Angle,
+    Frequency,
     InverseLength,
     Length,
 )
@@ -277,13 +281,14 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     var exposure_mode: ExposureMode
     # Stops added to the exposure.
     var exposure_compensation: Float32
-    # The shutter time is one over this, in seconds.
+    # Raw CARLA reciprocal seconds. Use the checked frequency methods.
     var shutter_speed: Float32
     var iso: Float32
     var fstop: Float32
     # EV100 limits of the histogram exposure.
     var exposure_min_bright: Float32
     var exposure_max_bright: Float32
+    # Raw CARLA exposure stops per second; a stop is dimensionless.
     var exposure_speed_up: Float32
     var exposure_speed_down: Float32
     var calibration_constant: Float32
@@ -304,6 +309,7 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
     var focal_distance: Length
     var min_fstop: Float32
     var blade_count: Int
+    # Raw CARLA depth-blur distance in kilometers.
     var blur_amount: Float32
     var blur_radius: Float32
     var lens: LensSettings
@@ -348,6 +354,122 @@ struct RgbCameraSettings(Copyable, Movable, Writable):
         self.blur_radius = 0
         self.lens = LensSettings(-1, 0, 0.08, 0.08, 5, 0)
         self.wide_angle = None
+
+    def shutter_frequency(self) raises -> Frequency:
+        """Return the reciprocal shutter time.
+
+        Returns:
+            The checked quantity with its Float32 precision.
+
+        Raises:
+            Error: If the field is nonfinite or outside its domain.
+        """
+        validate_sensor_positive(self.shutter_speed, "shutter_speed")
+        var value = Frequency(self.shutter_speed, PER_SECOND)
+        return value
+
+    def set_shutter_speed(mut self, value: Frequency) raises:
+        """Set the reciprocal shutter time.
+
+        The raw CARLA field is updated after validation.
+
+        Args:
+            value: The physical quantity in any compatible unit.
+
+        Raises:
+            Error: If the converted value is nonfinite or outside its domain.
+        """
+        var raw = value.to(PER_SECOND)
+        validate_sensor_positive(raw, "shutter_speed")
+        self.shutter_speed = raw
+
+    def exposure_up_rate(self) raises -> Frequency:
+        """Return the dark-to-bright adaptation rate in stops per second.
+
+        Returns:
+            The checked quantity with its Float32 precision.
+
+        Raises:
+            Error: If the field is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(self.exposure_speed_up, "exposure_speed_up")
+        var value = Frequency(self.exposure_speed_up, PER_SECOND)
+        return value
+
+    def set_exposure_speed_up(mut self, value: Frequency) raises:
+        """Set the dark-to-bright adaptation rate in stops per second.
+
+        The raw CARLA field is updated after validation.
+
+        Args:
+            value: The physical quantity in any compatible unit.
+
+        Raises:
+            Error: If the converted value is nonfinite or outside its domain.
+        """
+        var raw = value.to(PER_SECOND)
+        validate_sensor_nonnegative(raw, "exposure_speed_up")
+        self.exposure_speed_up = raw
+
+    def exposure_down_rate(self) raises -> Frequency:
+        """Return the bright-to-dark adaptation rate in stops per second.
+
+        Returns:
+            The checked quantity with its Float32 precision.
+
+        Raises:
+            Error: If the field is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(
+            self.exposure_speed_down, "exposure_speed_down"
+        )
+        var value = Frequency(self.exposure_speed_down, PER_SECOND)
+        return value
+
+    def set_exposure_speed_down(mut self, value: Frequency) raises:
+        """Set the bright-to-dark adaptation rate in stops per second.
+
+        The raw CARLA field is updated after validation.
+
+        Args:
+            value: The physical quantity in any compatible unit.
+
+        Raises:
+            Error: If the converted value is nonfinite or outside its domain.
+        """
+        var raw = value.to(PER_SECOND)
+        validate_sensor_nonnegative(raw, "exposure_speed_down")
+        self.exposure_speed_down = raw
+
+    def depth_blur_distance(self) raises -> Length:
+        """Return the distance at which depth blur reaches half its radius.
+
+        Returns:
+            The checked quantity with its Float32 precision.
+
+        Raises:
+            Error: If the field is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(self.blur_amount, "blur_amount")
+        var value = Length(self.blur_amount, KILOMETER)
+        validate_sensor_nonnegative(value.value, "depth_blur_distance")
+        return value
+
+    def set_depth_blur_distance(mut self, value: Length) raises:
+        """Set the distance at which depth blur reaches half its radius.
+
+        The raw CARLA field is updated after validation.
+
+        Args:
+            value: The physical quantity in any compatible unit.
+
+        Raises:
+            Error: If the converted value is nonfinite or outside its domain.
+        """
+        validate_sensor_nonnegative(value.value, "depth_blur_distance")
+        var raw = value.to(KILOMETER)
+        validate_sensor_nonnegative(raw, "blur_amount")
+        self.blur_amount = raw
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the image size and the field of view.
@@ -484,6 +606,9 @@ def rgb_camera_settings(
     )
     validate_sensor_positive(s.gamma, "gamma")
     validate_sensor_positive(s.shutter_speed, "shutter_speed")
+    validate_sensor_nonnegative(s.exposure_speed_up, "exposure_speed_up")
+    validate_sensor_nonnegative(s.exposure_speed_down, "exposure_speed_down")
+    validate_sensor_nonnegative(s.blur_amount, "blur_amount")
     validate_sensor_positive(s.iso, "iso")
     validate_sensor_positive(s.fstop, "fstop")
     validate_sensor_positive(s.calibration_constant, "calibration_constant")

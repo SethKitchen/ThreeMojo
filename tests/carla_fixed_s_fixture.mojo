@@ -9,10 +9,10 @@ from extensions.carla.geometry import (
     ARC_LENGTH,
     RoadGeometry,
     RoadGeometryKind,
-    with_arc,
-    with_param_poly3,
-    with_poly3,
-    with_spiral,
+    with_arc_si as with_arc,
+    with_param_poly3_from_coefficients as with_param_poly3,
+    with_poly3_si as with_poly3,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.polynomial import CubicPolynomial
 
@@ -20,7 +20,7 @@ from extensions.carla.polynomial import CubicPolynomial
 def _fixed_geometry(
     kind: Int, origin: Float64, heading: Float64
 ) raises -> RoadGeometry:
-    var base = RoadGeometry(
+    var base = RoadGeometry.from_meters(
         RoadGeometryKind(kind), 0.0, origin, 7.0 - origin, heading, 10.0
     )
     if kind == 1:
@@ -32,8 +32,8 @@ def _fixed_geometry(
     if kind == 4:
         return with_param_poly3(
             base^,
-            CubicPolynomial(0, 1, 0.01, 0, 0),
-            CubicPolynomial(0.25, -0.125, 0.01, 0.001, 0),
+            CubicPolynomial._from_coefficients(0, 1, 0.01, 0, 0),
+            CubicPolynomial._from_coefficients(0.25, -0.125, 0.01, 0.001, 0),
             ARC_LENGTH,
         )
     return base^

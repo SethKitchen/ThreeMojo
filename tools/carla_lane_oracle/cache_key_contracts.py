@@ -8,6 +8,11 @@ checks receive a predecessor only after the complete live successor and its
 production routing have passed. Unknown edits, callers and records fail closed.
 """
 from functools import lru_cache
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
 import json
 from pathlib import Path
@@ -108,14 +113,21 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                 from . import seed_count_contracts as seed_count
             else:
                 import seed_count_contracts as seed_count
-            require(hashlib.sha256(physical).hexdigest() in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
+            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,
+                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)
+            require(hashlib.sha256(provenance).hexdigest() in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                     'score-helper view needs the exact physical Map')
             require(source.token_sha256(text) == source.token_sha256(
                         _inputs.text_default(_input_owner, root, rel.as_posix()))
-                    == seed_count.score_family_token_sha256(hashlib.sha256(physical).hexdigest()),
+                    and source.token_sha256(_typed_source.historical_text(root, rel.as_posix(), text,
+                        _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))
+                    == seed_count.score_family_token_sha256(hashlib.sha256(provenance).hexdigest()),
                     'unreviewed supplied score-helper source')
         else:
             text = _inputs.text_default(_input_owner, root, rel.as_posix())
+        supplied_text = text
+        text = _typed_source.historical_text(root, rel.as_posix(), text, _operation=_operation,
+                                              _inputs=_inputs, _input_owner=_input_owner)
         if rel.as_posix() == MODULE and verified_lane_source is not None:
             # This explicit source is supplied only after fresh root admission.
             text = verified_lane_source
@@ -130,13 +142,16 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                 physical = path.read_bytes()
                 if _operation is not None:
                     physical = full_audit._observe_bytes(root, rel.as_posix(), physical, _operation=_operation)
-            physical_digest = hashlib.sha256(physical).hexdigest()
+            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,
+                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)
+            physical_digest = hashlib.sha256(provenance).hexdigest()
             supplied_tokens = source.token_sha256(text)
             if (physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256}
                     or supplied_tokens in {seed_count.SCORE_AFTER_TOKEN_SHA256, seed_count.station.AFTER_TOKEN_SHA256, seed_count.deviation.AFTER_TOKEN_SHA256}):
                 require(physical_digest in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},
                         'score-helper view needs the exact physical Map')
-                require(supplied_tokens == seed_count.score_family_token_sha256(physical_digest),
+                require(source.token_sha256(supplied_text) == source.token_sha256(physical.decode('utf-8'))
+                        and supplied_tokens == seed_count.score_family_token_sha256(physical_digest),
                         'unreviewed supplied score-helper source')
                 # Qualify the actual helper/caller and dependencies before
                 # mapping identifier ordinals to the exact preceding graph.
@@ -150,7 +165,7 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                     after = _inputs.observe_bytes(_input_owner, root, rel.as_posix())
                 require(after == physical,
                         'Map changed during score-helper inventory check')
-                text = seed_count.score_family_predecessor_source(physical.decode('utf-8'))
+                text = seed_count.score_family_predecessor_source(provenance.decode('utf-8'))
         entry = inventory_entry(text)
         if entry is not None:
             result[rel.as_posix()] = entry
@@ -263,6 +278,10 @@ def reviewed_text(root, path, text, *, _operation=None):
     observed = (Path(root)/MODULE).read_text()
     if _operation is not None:
         observed = full_audit._observe_text(root, MODULE, observed, _operation=_operation, supplied=True)
+    require(source.token_sha256(text) == source.token_sha256(observed),
+            'unreviewed supplied lane source')
+    text = _typed_source.historical_text(root, MODULE, text, _operation=_operation)
+    observed = _typed_source.historical_text(root, MODULE, observed, _operation=_operation)
     require(source.token_sha256(text) == source.token_sha256(observed),
             'unreviewed supplied lane source')
     # predecessor_source performs fresh complete live admission before either

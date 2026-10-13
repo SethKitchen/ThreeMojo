@@ -15,7 +15,11 @@ target. The returned bounds must fit in finite Float32 coordinates.
 """
 
 from extensions.carla.geometry import ARC, LINE, POLY3, SPIRAL, RoadGeometry
-from extensions.carla.curve_bounds import _lane_jet, _reference_work
+from extensions.carla.curve_bounds import (
+    _lane_jet,
+    _polynomial_jet,
+    _reference_work,
+)
 from extensions.carla.lane_value_bounds import _lane_value_bound
 from extensions.carla.curve_interval import _Interval, _Jet, _next_up
 from extensions.carla.lane_refinement import _midpoint
@@ -27,7 +31,7 @@ from extensions.carla.map_validation import (
 )
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import RoadInfo, info_index
+from extensions.carla.road_info import RoadInfo, _info_index_si as info_index
 from math.bounds import Box3
 from math.vector3 import Vector3
 from std.math import ceil, isfinite, sqrt
@@ -41,39 +45,16 @@ comptime _MAX_PIECES = 65536
 def _polynomial_bounds(
     p: CubicPolynomial, a: Float64, b: Float64
 ) -> Tuple[Float64, Float64, Float64, Float64]:
-    # Bernstein control values bound a cubic and its first two derivatives.
-    var h = b - a
-    var fa = p.evaluate(a)
-    var fb = p.evaluate(b)
-    var da = p.tangent(a)
-    var db = p.tangent(b)
-    var dda = 2.0 * p.c + 6.0 * p.d * a
-    var ddb = 2.0 * p.c + 6.0 * p.d * b
-    # Records are re-expanded about road s. Large s can cause cancellation
-    # even for a small local polynomial. Bound Horner error by absolute
-    # coefficient magnitudes, not by the small computed endpoint values.
-    comptime epsilon = 8.0 * 2.220446049250313e-16
-    var s = max(abs(a), abs(b))
-    var value_error = epsilon * (
-        abs(p.a) + s * (abs(p.b) + s * (abs(p.c) + s * abs(p.d)))
-    )
-    var tangent_error = epsilon * (
-        abs(p.b) + s * (2.0 * abs(p.c) + s * 3.0 * abs(p.d))
-    )
-    var second_error = epsilon * (2.0 * abs(p.c) + s * 6.0 * abs(p.d))
+    # Bound the same local Horner graph as the scalar evaluator. The Jet
+    # includes the rounded subtraction of the stored record origin. Its
+    # derivative intervals enclose the exact local polynomial, and its error
+    # encloses the scalar graph (including permitted contraction).
+    var bound = _polynomial_jet(p, _Jet.variable(a, b))
     return (
-        max(
-            max(abs(fa), abs(fb)),
-            max(abs(fa + h * da / 3.0), abs(fb - h * db / 3.0)),
-        )
-        * (1.0 + epsilon)
-        + value_error
-        + h * tangent_error / 3.0,
-        max(max(abs(da), abs(db)), abs(da + h * dda / 2.0)) * (1.0 + epsilon)
-        + tangent_error
-        + h * second_error / 2.0,
-        max(abs(dda), abs(ddb)) + second_error,
-        value_error,
+        bound.rounded_value().magnitude(),
+        bound.first.magnitude(),
+        bound.second.magnitude(),
+        bound.error,
     )
 
 
@@ -94,7 +75,7 @@ def _insert_break(mut values: List[Float64], s: Float64):
 
 def _record_breaks[T: RoadInfo](mut values: List[Float64], records: List[T]):
     for record in records:
-        _insert_break(values, record.distance())
+        _insert_break(values, record._distance_si())
 
 
 def _geometry_rates(
@@ -284,9 +265,11 @@ def _span_box(
         # _certify_junction_span must still prove the actual lane graph fits.
         # This proposal deliberately has no 1 cm tightness claim.
         _reserve_reference_point(road, a, work)
-        var first = road.directed_point_no_lane_offset(a).to_carla().location
+        var first = (
+            road._directed_point_no_lane_offset_si(a).to_carla().location
+        )
         _reserve_reference_point(road, b, work)
-        var last = road.directed_point_no_lane_offset(b).to_carla().location
+        var last = road._directed_point_no_lane_offset_si(b).to_carla().location
         var pad = (
             rates[2] * (b - a) * (b - a) / 8.0
             + q[0]
@@ -358,7 +341,7 @@ def _budgeted_pose(
     _reserve_reference_point(road, s, work)
     var terms = _reference_work(road, s, s)
     work.term(terms)
-    return road.lane_transform(section, lane, s).location
+    return road._lane_transform_si(section, lane, s).location
 
 
 def _canonical_endpoint(
@@ -425,7 +408,8 @@ def _centered_elevation_enclosure(
     if at < 0 or info_index(road.info.elevations, high) != at:
         return original
     ref p = road.info.elevations[at].polynomial
-    var m = _Interval.point(_midpoint(low, high))
+    var center = _Interval.point(_midpoint(low, high))
+    var m = center - _Interval.point(p.s)
     var a = _Interval.point(p.a)
     var b = _Interval.point(p.b)
     var c = _Interval.point(p.c)
@@ -435,7 +419,7 @@ def _centered_elevation_enclosure(
         _Interval.point(2.0) * c + m * _Interval.point(3.0) * d
     )
     var second = c + _Interval.point(3.0) * m * d
-    var delta = _Interval(low, high) - m
+    var delta = _Interval(low, high) - center
     var ideal = value + delta * (first + delta * (second + delta * d))
     var stored = ideal + _Interval(-scalar_error, scalar_error)
     var lower = max(original.low, stored.low)
@@ -659,7 +643,7 @@ def _lane_section_box_with_work(
     # Use the stored endpoint. Re-adding a rounded section length can
     # overshoot it, including for a=10.2 and road.length=50.1.
     work.step(len(road.sections))
-    var b = min(road.upper_bound(a), road.length)
+    var b = min(road._upper_bound_si(a), road.length)
     if not (isfinite(a) and isfinite(b) and a >= 0.0 and b >= a):
         raise Error("A junction lane has an invalid section interval")
     if a == b:

@@ -17,7 +17,7 @@ from extensions.carla.curve_interval import _Jet, _stored_difference
 from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.geometry import SPIRAL
 from extensions.carla.road import Road
-from extensions.carla.road_info import info_index
+from extensions.carla.road_info import _info_index_si as info_index
 from extensions.carla.spiral_domain_proof import (
     _SpiralDomainProof,
     _SpiralRootCapture,

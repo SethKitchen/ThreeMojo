@@ -65,11 +65,13 @@ def test_validated_length_sample_refuses_raw_cut_without_wrapper_unwrap() raises
 
 
 def _adjacent_section_road() raises -> Road:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, _next_up(1.0)))
-    var section = road.add_section(SectionId(1), 1.0)
+    var road = _road(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, _next_up(1.0))
+    )
+    var section = road.add_section_meters(SectionId(1), 1.0)
     _ = road.sections[section].add_lane(LaneId(-1))
     road.sections[section].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(1.0, CubicPolynomial.constant(3.5))
+        RoadInfoLaneWidth._from_si(1.0, CubicPolynomial._constant_si(3.5))
     )
     var validation = _MapBuildWork(MapBuildBudget())
     _preflight_road_records(road, validation)

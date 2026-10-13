@@ -42,6 +42,9 @@ three.js's frame with `mesh_factory.to_three_frame` or
 The sizes, colors and spacings here are this port's own choices.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _positive_si
+from units.si import Length64
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -406,6 +409,51 @@ struct LampPost(ImplicitlyCopyable):
 
 
 def roadside(
+    road: Road, s: Length64, right: Bool
+) raises -> Optional[Tuple[Vector3, Vector3]]:
+    """Checked typed boundary. Return the outer edge of a road's outermost lane and the way out.
+
+    Args:
+        road: The road.
+        s: Meters along it; clamped to the road.
+        right: True for the right side of the reference line, False for
+            the left.
+
+    Returns:
+        The edge's point at s and the unit direction away from the road,
+        both in CARLA's frame and level; None when the road has no lane on
+        that side there.
+
+    Raises:
+        Error: If a lane's records are missing.
+    """
+    return roadside_si(road, s.value, right)
+
+
+def roadside_si(
+    road: Road, s: Float64, right: Bool
+) raises -> Optional[Tuple[Vector3, Vector3]]:
+    """Explicit source-unit compatibility adapter. Return the outer edge of a road's outermost lane and the way out.
+
+    Args:
+        road: The road.
+        s: Meters along it; clamped to the road.
+        right: True for the right side of the reference line, False for
+            the left.
+
+    Returns:
+        The edge's point at s and the unit direction away from the road,
+        both in CARLA's frame and level; None when the road has no lane on
+        that side there.
+
+    Raises:
+        Error: If a lane's records are missing.
+    """
+    _ = _finite_si(Float64(s))
+    return _roadside_si(road, s, right)
+
+
+def _roadside_si(
     road: Road, s: Float64, right: Bool
 ) raises -> Optional[Tuple[Vector3, Vector3]]:
     """Return the outer edge of a road's outermost lane and the way out.
@@ -433,7 +481,7 @@ def roadside(
     var lane = 0 if right else len(lanes) - 1
     if lanes[lane].id.value == 0:
         return None
-    var corners = road.lane_corners(section, lane, s)
+    var corners = road._lane_corners_si(section, lane, s)
     var outer = corners[0] if right else corners[1]
     var inner = corners[1] if right else corners[0]
     var away = Vector3(outer.x - inner.x, outer.y - inner.y, 0)
@@ -484,7 +532,7 @@ def building_lots(map: Map, settings: TownSettings) raises -> List[Lot]:
                 var h = hash2(road.id.value, n * 2 + side, settings.seed)
                 var width = Float32(10) + h * 8
                 var mid = min(s + Float64(width) / 2, road.length)
-                var found = roadside(road, mid, side == 0)
+                var found = _roadside_si(road, mid, side == 0)
                 if not Bool(found):
                     break
                 var edge = found.value()
@@ -500,7 +548,7 @@ def building_lots(map: Map, settings: TownSettings) raises -> List[Lot]:
                     if gap < radius + other.width.to(METER) / 2 + 1:
                         free = False
                 if free:
-                    var tangent = road.directed_point(mid).tangent
+                    var tangent = road._directed_point_si(mid).tangent
                     lots.append(
                         Lot(
                             Vector3(center.x, center.y, edge[0].z),
@@ -595,7 +643,7 @@ def lamp_posts(map: Map, spacing: Length) raises -> List[LampPost]:
         for side in range(2):  # pragma: no branch
             var s = step / 2
             while s < road.length:
-                var found = roadside(road, s, side == 0)
+                var found = _roadside_si(road, s, side == 0)
                 if not Bool(found):
                     break
                 var edge = found.value()
@@ -1811,6 +1859,7 @@ struct Town(Movable):
         Raises:
             Error: If a material or a light the town added is gone.
         """
+        weather.validate()
         var wet = wet_surface(weather)
         # A constant count, more than zero.
         for k in range(SURFACE_KINDS):  # pragma: no branch
@@ -1983,7 +2032,9 @@ def road_bounds(map: Map) raises -> Box3:
         # Three points.
         for k in range(3):  # pragma: no branch
             var s = road.length * Float64(k) / 2
-            bounds.expand_by_point(road.directed_point(s).to_carla().location)
+            bounds.expand_by_point(
+                road._directed_point_si(s).to_carla().location
+            )
     if bounds.is_empty():
         raise Error("The map has no roads")
     return bounds

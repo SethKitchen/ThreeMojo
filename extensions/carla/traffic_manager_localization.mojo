@@ -66,7 +66,7 @@ from extensions.carla.traffic_manager_map import (
     ROAD_OPTION_VOID,
     RoadOption,
     SimpleWaypointIndex,
-    distance_squared,
+    _distance_squared_si as distance_squared,
 )
 from extensions.carla.traffic_manager_shared import (
     LocalizationData,
@@ -74,6 +74,7 @@ from extensions.carla.traffic_manager_shared import (
     TrafficManagerShared,
 )
 from extensions.carla.traffic_manager_state import (
+    _check_actor_id,
     FLOAT_MAX,
     deviation_dot_product,
     get_target_waypoint,
@@ -160,7 +161,7 @@ def _span_squared(
     map: InMemoryMap, buffer: List[SimpleWaypointIndex]
 ) raises -> Float32:
     """The squared distance from the path's first node to its last."""
-    return map.at(buffer[len(buffer) - 1]).distance_squared(
+    return map.at(buffer[len(buffer) - 1])._distance_squared_si(
         map.at(buffer[0]).location()
     )
 
@@ -233,7 +234,8 @@ struct LocalizationStage(Movable):
             shared: The traffic manager's state.
 
         Raises:
-            Error: If the index is out of range, the vehicle is not
+            Error: If an actor id is not valid, or the index is out of range,
+                the vehicle is not
                 tracked, or a walk reads past a dead end.
         """
         if index < 0 or index >= len(shared.vehicle_id_list):
@@ -542,7 +544,7 @@ struct LocalizationStage(Movable):
             var visited = Set[Int]()
             visited.add(change_over_point.value)
             while (
-                map.at(change_over_point).distance_squared(start)
+                map.at(change_over_point)._distance_squared_si(start)
                 < change_over_distance * change_over_distance
                 and not map.at(change_over_point).check_junction()
             ):
@@ -622,7 +624,9 @@ struct LocalizationStage(Movable):
                     past
                     and shared.local_map.at(
                         junction_end_point
-                    ).distance_squared(shared.local_map.at(current).location())
+                    )._distance_squared_si(
+                        shared.local_map.at(current).location()
+                    )
                     > safe_squared
                 ):
                     found = True
@@ -653,7 +657,7 @@ struct LocalizationStage(Movable):
                     if (
                         shared.local_map.at(
                             junction_end_point
-                        ).distance_squared(
+                        )._distance_squared_si(
                             shared.local_map.at(current).location()
                         )
                         > safe_squared
@@ -673,7 +677,7 @@ struct LocalizationStage(Movable):
             if (
                 junction_end_point.is_some()
                 and safe_point.is_some()
-                and shared.local_map.at(begin).distance_squared(
+                and shared.local_map.at(begin)._distance_squared_si(
                     shared.local_map.at(junction_end_point).location()
                 )
                 < MIN_JUNCTION_LENGTH.value * MIN_JUNCTION_LENGTH.value
@@ -721,7 +725,7 @@ struct LocalizationStage(Movable):
                 if not entered and current.check_junction():
                     entered = True
                 if i > 0 and entered:
-                    junction_length += current.distance(
+                    junction_length += current._distance_si(
                         map.at(buffer[i - 1]).location()
                     )
                     if straight:
@@ -776,7 +780,7 @@ struct LocalizationStage(Movable):
                 break
             var chosen = nexts[selection]
             if (
-                shared.local_map.at(chosen).distance_squared(
+                shared.local_map.at(chosen)._distance_squared_si(
                     shared.local_map.at(imported).location()
                 )
                 < 30.0
@@ -862,8 +866,9 @@ struct LocalizationStage(Movable):
             actor: The vehicle.
 
         Raises:
-            Error: Never; the lookups are checked.
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor)
         var a = actor.value
         if a in self.last_lane_change_swpt:
             _ = self.last_lane_change_swpt.pop(a)
@@ -912,8 +917,10 @@ struct LocalizationStage(Movable):
             end otherwise; void for a vehicle with no path.
 
         Raises:
-            Error: If the vehicle's path is empty or it is not tracked.
+            Error: If an actor id is not valid, or the vehicle's path is empty
+                or it is not tracked.
         """
+        _ = _check_actor_id(actor)
         var a = actor.value
         if a not in shared.buffer_map:
             return TrafficAction(ROAD_OPTION_VOID, None)
@@ -961,8 +968,10 @@ struct LocalizationStage(Movable):
             The moves, or none for a vehicle with no path.
 
         Raises:
-            Error: If the vehicle's path is empty or it is not tracked.
+            Error: If an actor id is not valid, or the vehicle's path is empty
+                or it is not tracked.
         """
+        _ = _check_actor_id(actor)
         var out = List[TrafficAction]()
         var a = actor.value
         if a not in shared.buffer_map:
@@ -1016,7 +1025,8 @@ def _branch_end(
             past = True
         if (
             past
-            and map.at(start).distance_squared(map.at(end).location()) >= 50.0
+            and map.at(start)._distance_squared_si(map.at(end).location())
+            >= 50.0
         ):
             return end
         var next = first_next(map, end)
@@ -1046,7 +1056,9 @@ def _closest_branch(
             continue
         if map.at(end).waypoint.road_id == imported_road:
             return k
-        var distance = map.at(end).distance_squared(map.at(imported).location())
+        var distance = map.at(end)._distance_squared_si(
+            map.at(imported).location()
+        )
         if distance < min_distance:
             min_distance = distance
             selection = k

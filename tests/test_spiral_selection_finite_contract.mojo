@@ -3,7 +3,11 @@
 
 """Preserve complete predecessor results at supported and malformed boundaries."""
 from extensions.carla.curve_interval import _Interval, _Jet
-from extensions.carla.geometry import RoadGeometry, SPIRAL, with_spiral
+from extensions.carla.geometry import (
+    RoadGeometry,
+    SPIRAL,
+    with_spiral_si as with_spiral,
+)
 from extensions.carla.spiral_grouped_roundoff_proof import (
     _try_spiral_grouped_roundoff_envelope as _grouped,
 )
@@ -40,7 +44,9 @@ def _same(
 def test_normal_and_reversed_inputs_preserve_all_returned_bits() raises:
     for curvature in [-4.0, 0.0, 0.05, 1e10]:
         var geometry = with_spiral(
-            RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 20.0), 0.0, curvature
+            RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 20.0),
+            0.0,
+            curvature,
         )
         for fault in range(9):
             var d = _Jet.variable(2.125, 2.25)
@@ -76,7 +82,7 @@ def test_finite_overflow_domains_keep_complete_predecessor_refusals() raises:
     var maximum = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     for rate in [0.0, 1.0]:
         var geometry = with_spiral(
-            RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, maximum),
+            RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, maximum),
             0.0,
             maximum * rate,
         )
@@ -98,7 +104,7 @@ def test_finite_overflow_domains_keep_complete_predecessor_refusals() raises:
 
 def test_ordering_boundary_distinction_and_canonical_positive_control() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 20.0), 0.0, 0.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 20.0), 0.0, 0.0
     )
     var normal = _Jet.variable(2.125, 2.25)
     assert_true(Bool(_grouped(geometry, normal, 4)))

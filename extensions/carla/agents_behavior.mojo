@@ -75,7 +75,7 @@ from extensions.carla.agents_misc import (
     OPTION_VOID,
     RoadOption,
     behavior_parameters,
-    from_kmh,
+    _from_kmh_si as from_kmh,
     kmh,
     positive,
     speed_of,

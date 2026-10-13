@@ -65,7 +65,7 @@ def test_midpoint_exact_hit_keeps_original_four_term_availability() raises:
 
 def _valley_road(reverse: Bool) raises -> Road:
     var road = _dispatch_road()
-    road.info.elevations[0].polynomial = CubicPolynomial.constant(0.0)
+    road.info.elevations[0].polynomial = CubicPolynomial._constant_si(0.0)
     var values: Array[Float64, 4] = [2.0, 0.0, 2.0, 3.0]
     if reverse:
         values = [3.0, 1.0, 0.0, 2.0]

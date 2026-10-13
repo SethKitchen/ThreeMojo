@@ -122,7 +122,9 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         record = cleanup.read_record(self.root)
         records = {path: (self.root/path).read_bytes() for path in record['historical_records']}
         bindings = cleanup.proof_bindings(self.root)
-        self.assertNotIn('render/color_math.mojo', bindings)
+        # The new native closure reaches the rendering provider directly.
+        self.assertEqual(bindings['render/color_math.mojo'],
+                         cleanup.typed_boundary.CURRENT_DEPENDENCIES['render/color_math.mojo'])
         bindings.update(cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS))
         for path in (*helpers.SOURCE_PATHS, *helpers.PROVIDERS, *helpers.TESTS, LEAF):
             self.assertEqual(bindings[path], hashlib.sha256((self.root/path).read_bytes()).hexdigest())
@@ -137,7 +139,19 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         self.assertEqual(hashlib.sha256((self.root/cleanup.CONSUMER_LEDGER).read_bytes()).hexdigest(),
                          cleanup.CONSUMER_LEDGER_SHA256)
 
+    def test_typed_render_fixture_requires_the_complete_current_graph(self):
+        fixture = 'tests/test_carla_render_scene.mojo'
+        raw = (self.root/fixture).read_bytes()
+        self.assertTrue(cleanup.typed_boundary.is_current(fixture, raw))
+        self.assertEqual(cleanup.typed_boundary.edge(fixture)['before_sha256'],
+                         helpers.TESTS[fixture])
+        polynomial = 'extensions/carla/polynomial.mojo'
+        with self.changed(polynomial, (self.root/polynomial).read_bytes() + b'\n# changed\n'):
+            with self.assertRaises(ValueError):
+                cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
+
     def test_historical_helper_endpoints_keep_the_original_import_closure(self):
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         originals = {path: (self.root/path).read_bytes() for path in helpers.SOURCE_PATHS}
         try:
             for path, raw in originals.items():
@@ -217,35 +231,29 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         from functools import wraps
         import winner_sign_contracts as winner
         original = cleanup.shared_helper_edges
-        shadow = self.root/'render/color_math.mojopkg'
-        injected = []
-        @wraps(original)
-        def add_shadow(root, **kwargs):
-            result = original(root, **kwargs)
-            if sys._getframe(1).f_globals is vars(winner):
-                shadow.write_bytes(b'unreviewed compiled helper')
-                injected.append(True)
-            return result
-        originals = {path: (self.root/path).read_bytes() for path in cleanup.SOURCE_PATHS}
-        predecessors = fixtures.verified_predecessors(self.root)
-        try:
-            for historical in (False, True):
-                if historical: fixtures.write_predecessors(self.root, predecessors)
-                injected.clear()
-                with self.subTest(historical=historical), patch.object(
+        historical = fixtures.historical_root(self, ROOT)
+        for label, root in (('current', self.root), ('historical', historical)):
+            shadow = root/'render/color_math.mojopkg'
+            injected = []
+            @wraps(original)
+            def add_shadow(candidate, **kwargs):
+                result = original(candidate, **kwargs)
+                if sys._getframe(1).f_globals is vars(winner):
+                    shadow.write_bytes(b'unreviewed compiled helper')
+                    injected.append(True)
+                return result
+            try:
+                with self.subTest(endpoint=label), patch.object(
                         cleanup, 'shared_helper_edges', add_shadow):
-                    with self.assertRaises(cleanup._OperationCoherenceError): winner.verify(self.root)
+                    with self.assertRaises(cleanup._OperationCoherenceError): winner.verify(root)
                 self.assertEqual(injected, [True])
-                shadow.unlink()
-        finally:
-            if shadow.exists(): shadow.unlink()
-            for path, raw in originals.items(): (self.root/path).write_bytes(raw)
+            finally:
+                if shadow.exists(): shadow.unlink()
 
     def test_pending_historical_helper_bytes_are_rechecked_after_admission(self):
         from functools import wraps
         import winner_sign_contracts as winner
-        predecessors = fixtures.verified_predecessors(self.root)
-        fixtures.write_predecessors(self.root, predecessors)
+        self.root = fixtures.historical_root(self, ROOT)
         original = cleanup.shared_helper_edges
         for name in ('render/color_math.mojo', LEAF):
             target = self.root/name

@@ -29,8 +29,8 @@ from std.testing import TestSuite, assert_equal, assert_true
 def test_direct_road_translated_grid_and_exact_tie() raises:
     var base = Float64(1e20)
     var length = Float64(81920.0)
-    var geometry = RoadGeometry(LINE, base, 0.0, 0.0, 0.0, length)
-    var road = Road(
+    var geometry = RoadGeometry.from_meters(LINE, base, 0.0, 0.0, 0.0, length)
+    var road = Road._from_si(
         RoadId(1),
         "grid",
         base + length,
@@ -39,18 +39,18 @@ def test_direct_road_translated_grid_and_exact_tie() raises:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), base)
+    _ = road.add_section_meters(SectionId(0), base)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(base, CubicPolynomial.constant(0.0002))
+        RoadInfoLaneWidth._from_si(base, CubicPolynomial._constant_si(0.0002))
     )
-    road.info.geometries.append(RoadInfoGeometry(base, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(base, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     # Legal stored s values are base + k*16384. The x coordinate is exactly
     # k*16384, and y/z are constant. These answers follow from integer gaps.

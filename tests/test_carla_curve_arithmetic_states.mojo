@@ -22,9 +22,9 @@ from extensions.carla.geometry import (
     SPIRAL,
     PARAM_POLY3,
     NORMALIZED,
-    with_arc,
-    with_param_poly3,
-    with_spiral,
+    with_arc_si as with_arc,
+    with_param_poly3_from_coefficients as with_param_poly3,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.lane_geometry import _lane_geometry_pos_at
 from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
@@ -52,7 +52,7 @@ def _valid(road: Road) raises:
 
 
 def test_unscaled_distance_bound_encloses_its_scalar_lane_center() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 20.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 20.0))
     _valid(road)
     var location = Vector3(1, -2, 0)
     var bound = _distance_jet(road, 0, 0, 2.0, 2.25, location).rounded_value()
@@ -66,7 +66,9 @@ def test_unscaled_distance_bound_encloses_its_scalar_lane_center() raises:
 
 
 def test_arc_reference_and_broad_spiral_requests_keep_conservative_bounds() raises:
-    var arc = with_arc(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 20.0), 0.1)
+    var arc = with_arc(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 20.0), 0.1
+    )
     var arc_road = _road(arc.copy())
     _valid(arc_road)
     var reference = _reference_jet(
@@ -92,10 +94,12 @@ def test_arc_reference_and_broad_spiral_requests_keep_conservative_bounds() rais
 
 
 def test_reference_work_declines_a_valid_geometry_record_join() raises:
-    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 20.0))
+    var road = _road(RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 20.0))
     road.info.geometries[0].geometry.length = 10.0
     road.info.geometries.append(
-        RoadInfoGeometry(10.0, RoadGeometry(LINE, 10.0, 10.0, 0.0, 0.0, 10.0))
+        RoadInfoGeometry._from_si(
+            10.0, RoadGeometry.from_meters(LINE, 10.0, 10.0, 0.0, 0.0, 10.0)
+        )
     )
     _valid(road)
     assert_equal(_reference_work(road, 9.0, 9.5), 1)
@@ -105,9 +109,11 @@ def test_reference_work_declines_a_valid_geometry_record_join() raises:
 def test_builder_sample_tangent_crossings_keep_both_horizontal_signs() raises:
     for sign in [-1.0, 1.0]:
         var geometry = with_param_poly3(
-            RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0),
-            CubicPolynomial(0.0, sign * 0.9, -sign, 0.0, 0.0),
-            CubicPolynomial.constant(0.0),
+            RoadGeometry.from_meters(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0),
+            CubicPolynomial._from_coefficients(
+                0.0, sign * 0.9, -sign, 0.0, 0.0
+            ),
+            CubicPolynomial._constant_si(0.0),
             NORMALIZED,
         )
         var road = _road(geometry.copy())
@@ -184,7 +190,7 @@ def test_fresh_count_join_declines_single_branch_proof_expansion() raises:
 
 def test_moment_expansion_rejects_a_naturally_clamped_end_station() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 2.125), 0.0, 0.0
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 2.125), 0.0, 0.0
     )
     var road = _road(geometry.copy())
     _valid(road)
@@ -206,7 +212,7 @@ def test_roundoff_envelope_refuses_finite_origin_addition_overflow() raises:
     var maximum = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     for axis in range(3):
         var geometry = with_spiral(
-            RoadGeometry(
+            RoadGeometry.from_meters(
                 SPIRAL,
                 0.0,
                 maximum if axis == 1 else 0.0,

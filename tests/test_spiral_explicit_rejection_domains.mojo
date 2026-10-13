@@ -8,7 +8,11 @@ intentionally supply unsupported typed inputs to boundaries that validate them.
 """
 from extensions.carla.curve_bounds import _geometry_distance, _spiral_counts
 from extensions.carla.curve_interval import _Interval, _Jet
-from extensions.carla.geometry import RoadGeometry, SPIRAL, with_spiral
+from extensions.carla.geometry import (
+    RoadGeometry,
+    SPIRAL,
+    with_spiral_si as with_spiral,
+)
 from extensions.carla.spiral_grouped_roundoff_proof import (
     _try_spiral_grouped_roundoff_envelope,
 )
@@ -33,7 +37,9 @@ def test_fixed_count_helpers_refuse_large_finite_and_overflowing_phase() raises:
             0.001 if variant == 0 else 1e10 if variant == 1 else 1e308
         )
         var geometry = with_spiral(
-            RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, length), 0.0, curvature
+            RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, length),
+            0.0,
+            curvature,
         )
         var station = 2.125 if variant < 2 else 1e200
         var high = 2.25 if variant < 2 else 1.01e200

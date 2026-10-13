@@ -52,6 +52,9 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/MeshFactory.cpp`,
 `road/Map.cpp` and `geom/Mesh.cpp`.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _positive_si
+from units.si import Length64
+
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
@@ -76,7 +79,7 @@ from extensions.carla.road_info import (
     LaneType,
     RoadId,
     SOLID,
-    info_at,
+    _info_at_si as info_at,
 )
 from extensions.carla.rtree import PointCloudRtree
 from extensions.carla.transform import CarlaTransform
@@ -529,9 +532,12 @@ struct MeshFactory(Movable):
     def _resolution(self) raises -> Float64:
         if not (self.road_param.resolution.value > 0.0):
             raise Error("Mesh resolution must be positive")
-        return Float64(self.road_param.resolution.value)
+        return _positive_si(Float64(self.road_param.resolution.value))
 
-    def _width_vertices(self) -> Int:
+    def _width_vertices(self) raises -> Int:
+        _ = _finite_si(Float64(self.road_param.vertex_width_resolution))
+        if self.road_param.vertex_width_resolution > Float32(4194304):
+            raise Error("Mesh width exceeds the finite vertex work limit")
         if self.road_param.vertex_width_resolution >= 2.0:
             return Int(self.road_param.vertex_width_resolution)
         return 2
@@ -542,6 +548,8 @@ struct MeshFactory(Movable):
         # The rows a lane's strip takes: every resolution from the start,
         # or only the start on a straight lane, then its end if the last
         # row falls short of it.
+        _ = _finite_si(s_start)
+        _ = _finite_si(s_end)
         var step = self._resolution()
         var out = List[Float64]()
         var s = s_start
@@ -549,8 +557,10 @@ struct MeshFactory(Movable):
             out.append(s)
         else:
             while True:
+                if len(out) >= 4194304:
+                    raise Error("Mesh sampling exhausted its row work limit")
                 out.append(s)
-                s += step
+                s = _mesh_next_station(s, step)
                 if not (s < s_end):
                     break
         if s_end - (s - step) > EPSILON:
@@ -559,12 +569,16 @@ struct MeshFactory(Movable):
 
     def _rows(self, s_start: Float64, s_end: Float64) raises -> List[Float64]:
         # The rows of a tessellated lane or a sidewalk: no straight case.
+        _ = _finite_si(s_start)
+        _ = _finite_si(s_end)
         var step = self._resolution()
         var out = List[Float64]()
         var s = s_start
         while True:
+            if len(out) >= 4194304:
+                raise Error("Mesh sampling exhausted its row work limit")
             out.append(s)
-            s += step
+            s = _mesh_next_station(s, step)
             if not (s < s_end):
                 break
         if s_end - (s - step) > EPSILON:
@@ -573,7 +587,10 @@ struct MeshFactory(Movable):
 
     def _lane_s(self, road: Road, section: Int) -> Tuple[Float64, Float64]:
         var start = road.sections[section].s
-        return (start + EPSILON, start + road.section_length(section) - EPSILON)
+        return (
+            start + EPSILON,
+            start + road._section_length_si(section) - EPSILON,
+        )
 
     def _extra(self) -> Float32:
         return self.road_param.extra_lane_width.value
@@ -599,8 +616,8 @@ struct MeshFactory(Movable):
         var stations = self._stations(road, section, s_start, s_end)
         # There is one station at least.
         for s in stations:  # pragma: no branch
-            var edges = road.lane_corners(section, lane, s, self._extra())
-            var offsets = road.lane_edge_offsets(
+            var edges = road._lane_corners_si(section, lane, s, self._extra())
+            var offsets = road._lane_edge_offsets_si(
                 section, lane, s, self._extra()
             )
             draft.add(edges[0], Vector2(offsets[0], Float32(s)))
@@ -609,6 +626,62 @@ struct MeshFactory(Movable):
         return draft^
 
     def generate_lane(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Length64,
+        s_end: Length64,
+    ) raises -> BufferGeometry:
+        """Checked typed boundary. Return a lane's strip from one s to another, `Generate(lane, a, b)`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            Two vertices a row. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        return self.generate_lane_si(
+            road, section, lane, s_start.value, s_end.value
+        )
+
+    def generate_lane_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Float64,
+        s_end: Float64,
+    ) raises -> BufferGeometry:
+        """Explicit source-unit compatibility adapter. Return a lane's strip from one s to another, `Generate(lane, a, b)`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            Two vertices a row. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        _ = _finite_si(Float64(s_start))
+        _ = _finite_si(Float64(s_end))
+        return self._generate_lane_si(road, section, lane, s_start, s_end)
+
+    def _generate_lane_si(
         self,
         road: Road,
         section: Int,
@@ -652,7 +725,7 @@ struct MeshFactory(Movable):
             Error: If `generate_lane` would.
         """
         var span = self._lane_s(road, section)
-        return self.generate_lane(road, section, lane, span[0], span[1])
+        return self._generate_lane_si(road, section, lane, span[0], span[1])
 
     def _tesselated_draft(
         self,
@@ -669,11 +742,13 @@ struct MeshFactory(Movable):
         var across = self._width_vertices()
         var gaps = Float32(across - 1)
         var rows = self._rows(s_start, s_end)
+        if len(rows) > 4194304 // across:
+            raise Error("Mesh tessellation exceeds its vertex work limit")
         # There is one row at least.
         for row in range(len(rows)):  # pragma: no branch
             var s = rows[row]
-            var edges = road.lane_corners(section, lane, s, self._extra())
-            var offsets = road.lane_edge_offsets(
+            var edges = road._lane_corners_si(section, lane, s, self._extra())
+            var offsets = road._lane_edge_offsets_si(
                 section, lane, s, self._extra()
             )
             var step = (edges[1] - edges[0]) / gaps
@@ -697,6 +772,64 @@ struct MeshFactory(Movable):
         return draft^
 
     def generate_tesselated(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Length64,
+        s_end: Length64,
+    ) raises -> BufferGeometry:
+        """Checked typed boundary. Return a lane with several vertices across, `GenerateTesselated`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            `vertex_width_resolution` vertices a row, at least two, and
+            CARLA's grid coordinates in `uv1`. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        return self.generate_tesselated_si(
+            road, section, lane, s_start.value, s_end.value
+        )
+
+    def generate_tesselated_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Float64,
+        s_end: Float64,
+    ) raises -> BufferGeometry:
+        """Explicit source-unit compatibility adapter. Return a lane with several vertices across, `GenerateTesselated`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            `vertex_width_resolution` vertices a row, at least two, and
+            CARLA's grid coordinates in `uv1`. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        _ = _finite_si(Float64(s_start))
+        _ = _finite_si(Float64(s_end))
+        return self._generate_tesselated_si(road, section, lane, s_start, s_end)
+
+    def _generate_tesselated_si(
         self,
         road: Road,
         section: Int,
@@ -742,7 +875,9 @@ struct MeshFactory(Movable):
             Error: If `generate_tesselated` would.
         """
         var span = self._lane_s(road, section)
-        return self.generate_tesselated(road, section, lane, span[0], span[1])
+        return self._generate_tesselated_si(
+            road, section, lane, span[0], span[1]
+        )
 
     def _sidewalk_draft(
         self,
@@ -761,8 +896,8 @@ struct MeshFactory(Movable):
         # There is one row at least.
         for row in range(len(rows)):  # pragma: no branch
             var s = rows[row]
-            var e = road.lane_corners(section, lane, s, self._extra())
-            var t = road.lane_edge_offsets(section, lane, s, self._extra())
+            var e = road._lane_corners_si(section, lane, s, self._extra())
+            var t = road._lane_edge_offsets_si(section, lane, s, self._extra())
             var v = Float32(s)
             var low = e[0] - down
             var high = e[1] - down
@@ -787,6 +922,74 @@ struct MeshFactory(Movable):
         return draft^
 
     def generate_sidewalk(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Length64,
+        s_end: Length64,
+    ) raises -> BufferGeometry:
+        """Checked typed boundary. Return a lane as a raised block, `GenerateSidewalk(lane, a, b)`.
+
+        Each row is six vertices: one meter below the first edge, the
+        first edge twice, the second edge twice, and one meter below it.
+        The top wears the sidewalk kind on a sidewalk lane and the road
+        kind on any other; the two sides wear the curb kind.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            The block, with CARLA's coordinates 0 to 3 across in `uv1`.
+            Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        return self.generate_sidewalk_si(
+            road, section, lane, s_start.value, s_end.value
+        )
+
+    def generate_sidewalk_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Float64,
+        s_end: Float64,
+    ) raises -> BufferGeometry:
+        """Explicit source-unit compatibility adapter. Return a lane as a raised block, `GenerateSidewalk(lane, a, b)`.
+
+        Each row is six vertices: one meter below the first edge, the
+        first edge twice, the second edge twice, and one meter below it.
+        The top wears the sidewalk kind on a sidewalk lane and the road
+        kind on any other; the two sides wear the curb kind.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            The block, with CARLA's coordinates 0 to 3 across in `uv1`.
+            Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        _ = _finite_si(Float64(s_start))
+        _ = _finite_si(Float64(s_end))
+        return self._generate_sidewalk_si(road, section, lane, s_start, s_end)
+
+    def _generate_sidewalk_si(
         self,
         road: Road,
         section: Int,
@@ -837,7 +1040,7 @@ struct MeshFactory(Movable):
             Error: If `generate_sidewalk` would.
         """
         var span = self._lane_s(road, section)
-        return self.generate_sidewalk(road, section, lane, span[0], span[1])
+        return self._generate_sidewalk_si(road, section, lane, span[0], span[1])
 
     def generate_section_sidewalks(
         self, road: Road, section: Int
@@ -924,7 +1127,7 @@ struct MeshFactory(Movable):
         var stations = self._stations(road, section, s_start, s_end)
         # There is one station at least.
         for s in stations:  # pragma: no branch
-            var edges = road.lane_corners(section, lane, s, self._extra())
+            var edges = road._lane_corners_si(section, lane, s, self._extra())
             var v = Float32(s)
             if Bool(right):
                 var top = edges[0] + up
@@ -938,6 +1141,62 @@ struct MeshFactory(Movable):
         return draft^
 
     def generate_right_wall(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Length64,
+        s_end: Length64,
+    ) raises -> BufferGeometry:
+        """Checked typed boundary. Return a wall on a lane's first edge, `GenerateRightWall`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            A strip `wall_height` high. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        return self.generate_right_wall_si(
+            road, section, lane, s_start.value, s_end.value
+        )
+
+    def generate_right_wall_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Float64,
+        s_end: Float64,
+    ) raises -> BufferGeometry:
+        """Explicit source-unit compatibility adapter. Return a wall on a lane's first edge, `GenerateRightWall`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            A strip `wall_height` high. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        _ = _finite_si(Float64(s_start))
+        _ = _finite_si(Float64(s_end))
+        return self._generate_right_wall_si(road, section, lane, s_start, s_end)
+
+    def _generate_right_wall_si(
         self,
         road: Road,
         section: Int,
@@ -966,6 +1225,62 @@ struct MeshFactory(Movable):
         )
 
     def generate_left_wall(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Length64,
+        s_end: Length64,
+    ) raises -> BufferGeometry:
+        """Checked typed boundary. Return a wall on a lane's second edge, `GenerateLeftWall`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            A strip `wall_height` high. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        return self.generate_left_wall_si(
+            road, section, lane, s_start.value, s_end.value
+        )
+
+    def generate_left_wall_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s_start: Float64,
+        s_end: Float64,
+    ) raises -> BufferGeometry:
+        """Explicit source-unit compatibility adapter. Return a wall on a lane's second edge, `GenerateLeftWall`.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s_start: Where to start, in meters along the road.
+            s_end: Where to end.
+
+        Returns:
+            A strip `wall_height` high. Lane 0 has none.
+
+        Raises:
+            Error: If the resolution is not positive, or a record is
+                missing.
+        """
+        _ = _finite_si(Float64(s_start))
+        _ = _finite_si(Float64(s_end))
+        return self._generate_left_wall_si(road, section, lane, s_start, s_end)
+
+    def _generate_left_wall_si(
         self,
         road: Road,
         section: Int,
@@ -1049,20 +1364,24 @@ struct MeshFactory(Movable):
             raise Error("The chunk length must be positive")
         var out = List[Tuple[Float64, Float64, Bool]]()
         var start = road.sections[section].s
-        var length = road.section_length(section)
-        var max_len = Float64(self.road_param.max_road_len.value)
+        var length = road._section_length_si(section)
+        var max_len = _positive_si(Float64(self.road_param.max_road_len.value))
         var s = start + EPSILON
         var s_end = start + length - EPSILON
+        _ = _finite_si(s)
+        _ = _finite_si(s_end)
         while s + max_len < s_end:
+            if len(out) >= 4194304:
+                raise Error("Mesh chunking exhausted its work limit")
             out.append((s, s + max_len, False))
-            s += max_len
+            s = _mesh_next_station(s, max_len)
         if s_end - s > EPSILON:
             out.append((s, s_end, True))
         return out^
 
     def _is_long(self, road: Road, section: Int) -> Bool:
         return not (
-            road.section_length(section)
+            road._section_length_si(section)
             < Float64(self.road_param.max_road_len.value)
         )
 
@@ -1192,17 +1511,19 @@ struct MeshFactory(Movable):
         s_end: Float64,
     ) raises -> BufferGeometry:
         if road.sections[section].lanes[lane].type == LANE_DRIVING:
-            return self.generate_tesselated(road, section, lane, s_start, s_end)
-        return self.generate_sidewalk(road, section, lane, s_start, s_end)
+            return self._generate_tesselated_si(
+                road, section, lane, s_start, s_end
+            )
+        return self._generate_sidewalk_si(road, section, lane, s_start, s_end)
 
-    def _link_width(self, lane_type: LaneType) -> Int:
+    def _link_width(self, lane_type: LaneType) raises -> Int:
         if lane_type == LANE_DRIVING:
             return self._width_vertices()
         if lane_type == LANE_SIDEWALK:
             return 6
         return 2
 
-    def _link_kinds(self, lane_type: LaneType) -> List[SurfaceKind]:
+    def _link_kinds(self, lane_type: LaneType) raises -> List[SurfaceKind]:
         # The kind of each quad across a stitch: a driving lane's grid is
         # all road; a block is curb, curb, top, curb, curb, of which a
         # link of two keeps the first.
@@ -1450,6 +1771,75 @@ struct MeshFactory(Movable):
         road: Road,
         section: Int,
         lane: Int,
+        s: Length64,
+        width: Length64,
+        extra_width: Length,
+    ) raises -> Tuple[Vector3, Vector3]:
+        """Checked typed boundary. Return a mark's two edges, `ComputeEdgesForLanemark`.
+
+        The mark runs from the lane's first edge toward its second, one
+        mark width. A lane of no width borrows the direction of the first
+        lane of its section that has one.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: The distance along the road, in meters.
+            width: The mark's width, in meters.
+            extra_width: The junction widening to pass on.
+
+        Returns:
+            The lane's first edge and the mark's other edge.
+
+        Raises:
+            Error: If a record is missing.
+        """
+        return self.compute_edges_for_lanemark_si(
+            road, section, lane, s.value, width.value, extra_width.value
+        )
+
+    def compute_edges_for_lanemark_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
+        s: Float64,
+        width: Float64,
+        extra_width: Float32,
+    ) raises -> Tuple[Vector3, Vector3]:
+        """Explicit source-unit compatibility adapter. Return a mark's two edges, `ComputeEdgesForLanemark`.
+
+        The mark runs from the lane's first edge toward its second, one
+        mark width. A lane of no width borrows the direction of the first
+        lane of its section that has one.
+
+        Args:
+            road: The road.
+            section: The section's index.
+            lane: The lane's index in the section.
+            s: The distance along the road, in meters.
+            width: The mark's width, in meters.
+            extra_width: The junction widening to pass on.
+
+        Returns:
+            The lane's first edge and the mark's other edge.
+
+        Raises:
+            Error: If a record is missing.
+        """
+        _ = _finite_si(Float64(s))
+        _ = _finite_si(Float64(width))
+        _ = _finite_si(Float64(extra_width))
+        return self._compute_edges_for_lanemark_si(
+            road, section, lane, s, width, extra_width
+        )
+
+    def _compute_edges_for_lanemark_si(
+        self,
+        road: Road,
+        section: Int,
+        lane: Int,
         s: Float64,
         width: Float64,
         extra_width: Float32,
@@ -1474,7 +1864,7 @@ struct MeshFactory(Movable):
         Raises:
             Error: If a record is missing.
         """
-        var edges = road.lane_corners(section, lane, s, extra_width)
+        var edges = road._lane_corners_si(section, lane, s, extra_width)
         var director = Vector3(0, 0, 0)
         if edges[0] != edges[1]:
             director = edges[1] - edges[0]
@@ -1483,7 +1873,7 @@ struct MeshFactory(Movable):
             var count = len(road.sections[section].lanes)
             # The section holds the lane itself.
             for other in range(count):  # pragma: no branch
-                var e = road.lane_corners(section, other, s, extra_width)
+                var e = road._lane_corners_si(section, other, s, extra_width)
                 if e[0] != e[1]:
                     director = e[1] - e[0]
                     director = director / director.length()
@@ -1500,7 +1890,7 @@ struct MeshFactory(Movable):
     def _center_edges(
         self, road: Road, s: Float64, width: Float64
     ) raises -> Tuple[Vector3, Vector3]:
-        var right = road.directed_point(s)
+        var right = road._directed_point_si(s)
         var left = right
         right.apply_lateral_offset(Length(Float32(width * 0.5), METER))
         left.apply_lateral_offset(Length(Float32(width * -0.5), METER))
@@ -1516,54 +1906,58 @@ struct MeshFactory(Movable):
         var kind = YELLOW_MARK_SURFACE if center else WHITE_MARK_SURFACE
         var step = self._resolution()
         var s_start = road.sections[section].s
-        var s_end = s_start + road.section_length(section)
+        var s_end = s_start + road._section_length_si(section)
         var s = s_start
         ref marks = road.sections[section].lanes[lane].info.marks
+        var steps = 0
         while True:
+            if steps >= 4194304:
+                raise Error("Lane mark sampling exhausted its work limit")
+            steps += 1
             var found = info_at(marks, s)
             if not Bool(found):
                 # CARLA would loop forever here.
                 break
-            var info = LaneMarking(found.value())
+            var info = LaneMarking._from_si(found.value())
             var base = len(draft.positions)
             if info.type == SOLID:
                 var e: Tuple[Vector3, Vector3]
                 if center:
                     e = self._center_edges(road, s, info.width)
                 else:
-                    e = self.compute_edges_for_lanemark(
+                    e = self._compute_edges_for_lanemark_si(
                         road, section, lane, s, info.width, 0.0
                     )
                 self._mark_quad(draft, e[0], e[1], s)
                 draft.triangle(base, base + 1, base + 2, kind)
                 draft.triangle(base + 1, base + 3, base + 2, kind)
-                s += step
+                s = _mesh_next_station(s, step)
             elif info.type == BROKEN:
-                var e = self.compute_edges_for_lanemark(
+                var e = self._compute_edges_for_lanemark_si(
                     road, section, lane, s, info.width, self._extra()
                 )
                 self._mark_quad(draft, e[0], e[1], s)
-                s = min(s + step * 3.0, s_end)
-                e = self.compute_edges_for_lanemark(
+                s = min(_mesh_next_station(s, step * 3.0), s_end)
+                e = self._compute_edges_for_lanemark_si(
                     road, section, lane, s, info.width, self._extra()
                 )
                 self._mark_quad(draft, e[0], e[1], s)
                 draft.triangle(base, base + 1, base + 2, kind)
                 draft.triangle(base + 1, base + 3, base + 2, kind)
-                s += step * 3.0
+                s = _mesh_next_station(s, step * 3.0)
             else:
-                s += step
+                s = _mesh_next_station(s, step)
             if not (s < s_end):
                 break
         if len(draft.positions) == 0:
             return None
         # A mark was found at a smaller s, so one holds at s too.
-        var width = LaneMarking(info_at(marks, s).value()).width
+        var width = LaneMarking._from_si(info_at(marks, s).value()).width
         var e: Tuple[Vector3, Vector3]
         if center:
             e = self._center_edges(road, s, width)
         else:
-            e = self.compute_edges_for_lanemark(
+            e = self._compute_edges_for_lanemark_si(
                 road, section, lane, s_end, width, 0.0
             )
         self._mark_quad(draft, e[0], e[1], s_end if not center else s)
@@ -1775,8 +2169,15 @@ def generate_chunked_mesh(
         high.x = max(high.x, p.x)
         high.y = max(high.y, p.y)
     var size = params.max_road_length.value
-    var nx = Int((high.x - low.x) / size) + 1
-    var ny = Int((high.y - low.y) / size) + 1
+    _ = _positive_si(Float64(size))
+    var x_count = _finite_si(Float64((high.x - low.x) / size))
+    var y_count = _finite_si(Float64((high.y - low.y) / size))
+    if x_count < 0 or y_count < 0 or x_count >= 4194304 or y_count >= 4194304:
+        raise Error("Mesh chunk grid exceeds its finite work limit")
+    var nx = Int(x_count) + 1
+    var ny = Int(y_count) + 1
+    if nx > 4194304 // ny:
+        raise Error("Mesh chunk grid exceeds its cell work limit")
     var cells = List[_Draft]()
     # The grid has one cell at least.
     for _ in range(nx * ny):  # pragma: no branch
@@ -1857,8 +2258,8 @@ def filter_roads_by_position(
                     lane = i
         if lane < 0:
             continue
-        var s = section.s + road.section_length(0) * 0.5
-        var at = road.lane_transform(0, lane, s).location
+        var s = section.s + road._section_length_si(0) * 0.5
+        var at = road._lane_transform_si(0, lane, s).location
         if low.x < at.x and at.x < high.x and low.y > at.y and at.y > high.y:
             out.append(road.id)
     return out^
@@ -1908,9 +2309,10 @@ def generate_single_junction(
                     continue
                 if many:
                     var s = (
-                        the_lane.distance + road.section_length(section) * 0.5
+                        the_lane.distance
+                        + road._section_length_si(section) * 0.5
                     )
-                    var w = map.waypoint_xodr(
+                    var w = map.waypoint_xodr_float32(
                         road.id, the_lane.id, Length(Float32(s), METER)
                     )
                     if not Bool(w):
@@ -2010,6 +2412,9 @@ def trees_transform(
     """
     if not (distance_between_trees.value > 0.0):
         raise Error("The distance between trees must be positive")
+    _ = _positive_si(Float64(distance_between_trees.value))
+    _ = _finite_si(Float64(s_offset.value))
+    _ = _finite_si(Float64(distance_from_border.value))
     var out = List[TreeTransform]()
     comptime tiny = 1.0e-4
     for id in filter_roads_by_position(map, low, high):
@@ -2037,10 +2442,16 @@ def trees_transform(
                 continue
             var ln = section.lane_index(LaneId(outer))
             var s = section.s + Float64(s_offset.value)
-            var s_end = section.s + road.section_length(sec)
+            var s_end = section.s + road._section_length_si(sec)
+            _ = _finite_si(s)
+            _ = _finite_si(s_end)
+            var steps = 0
             while s < s_end:
-                if road.lane_width(sec, ln, s) != 0.0:
-                    var edges = road.lane_corners(sec, ln, s, 0.0)
+                if steps >= 4194304:
+                    raise Error("Tree sampling exhausted its work limit")
+                steps += 1
+                if road._lane_width_si(sec, ln, s) != 0.0:
+                    var edges = road._lane_corners_si(sec, ln, s, 0.0)
                     var d = edges[1] - edges[0]
                     var squared = (
                         Float64(d.x) * Float64(d.x)
@@ -2048,7 +2459,9 @@ def trees_transform(
                         + Float64(d.z) * Float64(d.z)
                     )
                     if squared <= tiny * tiny:
-                        s += Float64(distance_between_trees.value)
+                        s = _mesh_next_station(
+                            s, Float64(distance_between_trees.value)
+                        )
                         continue
                     var positive = outer > 0
                     var outer_corner = edges[1] if positive else edges[0]
@@ -2057,7 +2470,7 @@ def trees_transform(
                     var position = (
                         outer_corner + outward * distance_from_border.value
                     )
-                    var rotation = road.lane_transform(sec, ln, s).rotation
+                    var rotation = road._lane_transform_si(sec, ln, s).rotation
                     var speed = info_at(section.lanes[ln].info.speeds, s)
                     var type = String("Town")
                     if Bool(speed):
@@ -2069,7 +2482,7 @@ def trees_transform(
                         rotation,
                     )
                     out.append(TreeTransform(placed, type))
-                s += Float64(distance_between_trees.value)
+                s = _mesh_next_station(s, Float64(distance_between_trees.value))
     return out^
 
 
@@ -2177,3 +2590,12 @@ def junctions_bounding_boxes(map: Map) -> List[Box3]:
         var extent = junction.extent() * 1.5
         out.append(Box3(center - extent, center + extent))
     return out^
+
+
+def _mesh_next_station(s: Float64, step: Float64) raises -> Float64:
+    """Advance one finite mesh station or refuse unrepresentable progress."""
+    _ = _positive_si(step)
+    var following = _finite_si(s + step)
+    if not (following > s):
+        raise Error("Mesh sampling cannot advance its station")
+    return following

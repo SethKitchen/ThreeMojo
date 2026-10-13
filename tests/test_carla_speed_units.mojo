@@ -174,7 +174,7 @@ def test_parser_preserves_units_and_lane_over_road_precedence() raises:
     assert_equal(road.info.speeds[0].speed, Float64(72.42048))
     assert_equal(road.info.speeds[0].unit, "km/h")
     assert_equal(road.info.speeds[0].max_text, "72.42048")
-    var waypoint = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 10)
+    var waypoint = Waypoint._from_si(RoadId(1), SectionId(0), LaneId(-1), 10)
     assert_almost_equal(
         map.speed_limit_at(waypoint).value().value, Float64(20.1168), atol=1e-12
     )

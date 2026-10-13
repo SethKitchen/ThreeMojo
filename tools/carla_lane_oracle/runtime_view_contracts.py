@@ -12,7 +12,13 @@ records then see one edge from the historical digest to the live source.
 The bound correctness test and compile-fail fixtures must be unchanged.
 This module reads no consumer source; it never repins one by itself.
 """
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import sys
 
@@ -51,24 +57,32 @@ def _read(root, path, operation):
     return ledger._audit()._observe_bytes(root, path, raw, _operation=operation)
 
 
+
 def steps(root, *, _operation=None):
     """Return each reviewed step by path once its record and tests match."""
     with ledger._validation(root, _operation):
         raw = _read(root, MIGRATION, _operation)
         require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact step')
         record = json.loads(raw, object_pairs_hook=source.unique_keys)
-        require(type(record['schema']) is int and record['schema'] == 1
-                and record['issue'] == 333 and set(record['steps']) == set(MODULES),
-                'unexpected successor scope')
-        require(set(record['correctness_tests']) == set(TESTS), 'unexpected correctness test set')
-        result = {}
-        for path in MODULES:
-            step = record['steps'][path]
-            require(set(step) == KEYS and step['before_sha256'] != step['after_sha256']
-                    and step['before_token_sha256'] != step['after_token_sha256'],
-                    'malformed step: ' + path)
-            result[path] = dict(step)
+        result = checked_steps(record)
         for path, expected in record['correctness_tests'].items():
-            require(hashlib.sha256(_read(root, path, _operation)).hexdigest() == expected,
+            require(hashlib.sha256(_typed_source.historical_bytes(root, path, _read(root, path, _operation),
+                _operation=_operation)).hexdigest() == expected,
                     'bound runtime view test changed: ' + path)
         return result
+
+
+def checked_steps(record):
+    """Validate the unchanged record without reading or granting a root."""
+    require(type(record['schema']) is int and record['schema'] == 1
+            and record['issue'] == 333 and set(record['steps']) == set(MODULES),
+            'unexpected successor scope')
+    require(set(record['correctness_tests']) == set(TESTS), 'unexpected correctness test set')
+    result = {}
+    for path in MODULES:
+        step = record['steps'][path]
+        require(set(step) == KEYS and step['before_sha256'] != step['after_sha256']
+                and step['before_token_sha256'] != step['after_token_sha256'],
+                'malformed step: ' + path)
+        result[path] = dict(step)
+    return result

@@ -68,7 +68,9 @@ def _check_center(
     map: Map, section: Int, lane: Int, s: Float64, s_tolerance: Float64
 ) raises:
     # Query at the exact lane center and require the same lane back.
-    var target = Waypoint(RoadId(1), SectionId(section), LaneId(lane), s)
+    var target = Waypoint._from_si(
+        RoadId(1), SectionId(section), LaneId(lane), s
+    )
     var query = map.compute_transform(target).location
     var found = map.closest_waypoint_on_road(query)
     assert_true(Bool(found))

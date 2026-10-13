@@ -6,9 +6,20 @@
 Python standard library only. Default and --check are read-only. No evaluator,
 compiler, subprocess, network, private snapshots, or geometry sample is used.
 """
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import argparse
 from fractions import Fraction
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import os
 from pathlib import Path
@@ -264,7 +275,7 @@ def parse_array(text, name, size):
 
 
 def verify_inputs(root):
-    pins = json.loads((root / PINS).read_text(encoding='utf-8'),
+    pins = json.loads(_typed_source.historical_text(root, root / PINS, (root / PINS).read_text(encoding='utf-8')),
                       object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == PIN_KEYS, 'wrong top-level pin set')
     require(type(pins['schema']) is int and pins['schema'] == 3, 'unsupported pin schema')
@@ -279,7 +290,7 @@ def verify_inputs(root):
         path, size = ARRAY_SPECS[name]
         require(record['path'] == path and len(record['words']) == size,
                 'wrong array pin path/shape: ' + name)
-        words = parse_array((root / record['path']).read_text(encoding='utf-8'),
+        words = parse_array(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
                             name, len(record['words']))
         require([hexword(word) for word in words] == record['words'],
                 'stored constant words changed: ' + name)
@@ -291,7 +302,7 @@ def verify_inputs(root):
         require(set(record) == {'path', 'word'}, 'wrong scalar pin keys: ' + name)
         require(record['path'] == 'extensions/carla/curve_trig.mojo',
                 'wrong scalar pin path: ' + name)
-        text = (root / record['path']).read_text(encoding='utf-8')
+        text = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
         declarations = ideal_projection.module_statements(text)
         matches = [statement for statement in declarations
                    if statement[:2] == [('NAME', 'comptime'), ('NAME', name)]]
@@ -311,7 +322,7 @@ def verify_inputs(root):
         require((record['begin'], record['end']) == BLOCK_BOUNDARIES[name],
                 'wrong source-block boundary pin: ' + name)
         require(record['path'] == BLOCK_PATHS[name], 'wrong operation pin path: ' + name)
-        current = selected_block((root / record['path']).read_text(encoding='utf-8'),
+        current = selected_block(_typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8')),
                                  record['begin'], record['end'])
         expected = record['normalized_source']
         require(digest(expected.encode()) == record['sha256'],
@@ -324,7 +335,7 @@ def verify_inputs(root):
         require(record['path'] == ROUTING_PATHS[name], 'wrong routing pin path: ' + name)
         expected = record['normalized_tokens']
         require(digest(expected.encode()) == record['sha256'], 'inconsistent routing pin: ' + name)
-        source = (root / record['path']).read_text(encoding='utf-8')
+        source = _typed_source.historical_text(root, root / record['path'], (root / record['path']).read_text(encoding='utf-8'))
         current = ideal_projection.module_routing(source, set(ARRAY_SPECS) | SCALAR_NAMES)
         if name == 'ideal_caller':
             # Keep the historical routing pin. Validate the exact additive
@@ -362,7 +373,7 @@ def verify_inputs(root):
                                'sum2_error_writes', 'sum2_environment_guards'}, 'wrong ideal-projection pin set')
     require(projection['legacy_sha256'] == ideal_projection.LEGACY_SHA256,
             'historical ideal pin digest changed')
-    interval = (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8')
+    interval = _typed_source.historical_text(root, root / DEPENDENCIES['paths'][0], (root / DEPENDENCIES['paths'][0]).read_text(encoding='utf-8'))
     marker = 'def _stored_half['
     require(interval.count(marker) == 1, 'missing or ambiguous stored-half declaration')
     helper = interval[interval.index(marker):]
@@ -476,9 +487,9 @@ def make_report(root, rows, pins):
         'counts': 64, 'coefficients': 1408, 'words': WORD_COUNT, 'payload_bytes': len(packed),
         'zeroth_moment': str(F(1) + F(3, 1 << 55)),
         'source_sha256': digest(generate_source(rows)), 'words_be64_sha256': digest(packed),
-        'pin_file_sha256': digest((root / PINS).read_bytes()),
-        'dependency_pin_file_sha256': digest((root / source_contracts.PINS).read_bytes()),
-        'environment_guard_pin_sha256': digest((root / sum2_guard_contracts.PINS).read_bytes()),
+        'pin_file_sha256': digest(_typed_source.historical_bytes(root, root / PINS, (root / PINS).read_bytes())),
+        'dependency_pin_file_sha256': digest(_typed_source.historical_bytes(root, root / source_contracts.PINS, (root / source_contracts.PINS).read_bytes())),
+        'environment_guard_pin_sha256': digest(_typed_source.historical_bytes(root, root / sum2_guard_contracts.PINS, (root / sum2_guard_contracts.PINS).read_bytes())),
         'environment_guard_scope': 'Invocation-local predicate and caller source contracts only; no native FP-state/codegen qualification',
         'checked_source_root': str(root.resolve()),
         'ideal_half_projection': {key: pins['ideal_projection'][key] for key in

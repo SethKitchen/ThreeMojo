@@ -24,13 +24,13 @@ from extensions.carla.geometry import (
     SPIRAL,
     arc,
     line,
-    param_poly3,
-    poly3,
+    param_poly3_from_coefficients as param_poly3,
+    poly3_from_coefficients as poly3,
     spiral,
-    with_arc,
-    with_param_poly3,
-    with_poly3,
-    with_spiral,
+    with_arc_si as with_arc,
+    with_param_poly3_from_coefficients as with_param_poly3,
+    with_poly3_si as with_poly3,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.lidar import LidarDescription, scan_lidar
 from extensions.carla.polynomial import CubicPolynomial
@@ -184,11 +184,19 @@ def test_transform_round_trips() raises:
 
 
 def test_cubic_polynomial_shifts() raises:
-    var local = CubicPolynomial(1.5, -0.2, 0.03, 0.004, 0.0)
-    var shifted = CubicPolynomial(1.5, -0.2, 0.03, 0.004, 7.0)
-    assert_almost_equal(shifted.evaluate(10.0), local.evaluate(3.0), atol=1e-9)
-    assert_almost_equal(shifted.tangent(10.0), local.tangent(3.0), atol=1e-9)
-    assert_almost_equal(CubicPolynomial.constant(3.5).evaluate(99.0), 3.5)
+    var local = CubicPolynomial._from_coefficients(1.5, -0.2, 0.03, 0.004, 0.0)
+    var shifted = CubicPolynomial._from_coefficients(
+        1.5, -0.2, 0.03, 0.004, 7.0
+    )
+    assert_almost_equal(
+        shifted.evaluate_meters(10.0), local.evaluate_meters(3.0), atol=1e-9
+    )
+    assert_almost_equal(
+        shifted.tangent_meters(10.0), local.tangent_meters(3.0), atol=1e-9
+    )
+    assert_almost_equal(
+        CubicPolynomial._constant_si(3.5).evaluate_meters(99.0), 3.5
+    )
     assert_almost_equal(shifted.s, 7.0)
 
 
@@ -202,7 +210,7 @@ def test_line_and_arc() raises:
     assert_almost_equal(clamped.x, 1.0 + 10.0 * cos(0.5), atol=1e-5)
     var before = l.pos_from_dist(_m(-3))
     assert_almost_equal(before.x, 1.0, atol=1e-6)
-    assert_almost_equal(l.end_s(), 10.0)
+    assert_almost_equal(l.end_s_meters(), 10.0)
     # A quarter circle of radius 10, turning left from east.
     var quarter = Float32(3.14159265358979 * 5.0)
     var a = arc(
@@ -305,8 +313,8 @@ def test_param_poly3_follows_carla_table() raises:
         _m(0),
         Angle(0, RADIAN),
         _m(10),
-        CubicPolynomial(0, 1, 0, 0, 0),
-        CubicPolynomial(0, 0, 0.02, 0, 0),
+        CubicPolynomial._from_coefficients(0, 1, 0, 0, 0),
+        CubicPolynomial._from_coefficients(0, 0, 0.02, 0, 0),
         ARC_LENGTH,
     )
     assert_equal(arc_length.kind, PARAM_POLY3)
@@ -320,8 +328,8 @@ def test_param_poly3_follows_carla_table() raises:
         _m(1),
         Angle(1.0, RADIAN),
         _m(10),
-        CubicPolynomial(0, 10, 0, 0, 0),
-        CubicPolynomial(0, 0, 2, 0, 0),
+        CubicPolynomial._from_coefficients(0, 10, 0, 0, 0),
+        CubicPolynomial._from_coefficients(0, 0, 2, 0, 0),
         NORMALIZED,
     )
     var q = normalized.pos_from_dist(_m(5))
@@ -335,8 +343,8 @@ def test_param_poly3_follows_carla_table() raises:
             _m(0),
             Angle(0, RADIAN),
             _m(10),
-            CubicPolynomial.constant(1),
-            CubicPolynomial.constant(2),
+            CubicPolynomial._constant_si(1),
+            CubicPolynomial._constant_si(2),
             ARC_LENGTH,
         )
     with assert_raises():
@@ -346,15 +354,15 @@ def test_param_poly3_follows_carla_table() raises:
             _m(0),
             Angle(0, RADIAN),
             _m(10),
-            CubicPolynomial(0, 1, 0, 0, 0),
-            CubicPolynomial.constant(0),
+            CubicPolynomial._from_coefficients(0, 1, 0, 0, 0),
+            CubicPolynomial._constant_si(0),
             ParamPoly3Range(7),
         )
 
 
 def test_geometry_refuses_bad_records() raises:
     with assert_raises():
-        _ = RoadGeometry(
+        _ = RoadGeometry.from_float32(
             RoadGeometryKind(9), _m(0), _m(0), _m(0), Angle(0, RADIAN), _m(1)
         )
     with assert_raises():
@@ -365,43 +373,53 @@ def test_geometry_refuses_bad_records() raises:
 
 def test_geometry_in_double() raises:
     # The builder's form keeps s, the heading and the length in double.
-    var g = RoadGeometry(LINE, 0.1, 2.0, 3.0, 0.25, 7.5)
+    var g = RoadGeometry.from_meters(LINE, 0.1, 2.0, 3.0, 0.25, 7.5)
     assert_equal(g.s, 0.1)
     assert_equal(g.length, 7.5)
-    var p = g.pos_at(2.0)
+    var p = g.pos_at_meters(2.0)
     assert_almost_equal(p.x, 2.0 + 2.0 * cos(0.25), atol=1e-12)
     assert_almost_equal(p.y, 3.0 + 2.0 * sin(0.25), atol=1e-12)
-    var a = with_arc(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0.5)
+    var a = with_arc(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0.5
+    )
     assert_equal(a.kind, ARC)
     assert_equal(a.curvature_end, 0.5)
     with assert_raises():
-        _ = with_arc(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0)
-    var sp = with_spiral(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0, 0.1)
+        _ = with_arc(
+            RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0
+        )
+    var sp = with_spiral(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0.0, 0.1
+    )
     assert_equal(sp.kind, SPIRAL)
-    var p3 = with_poly3(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0, 0, 0, 0)
+    var p3 = with_poly3(
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0), 0, 0, 0, 0
+    )
     assert_equal(p3.kind, POLY3)
     var pp = with_param_poly3(
-        RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0),
-        CubicPolynomial(0, 1, 0, 0, 0),
-        CubicPolynomial.constant(0),
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0),
+        CubicPolynomial._from_coefficients(0, 1, 0, 0, 0),
+        CubicPolynomial._constant_si(0),
         NORMALIZED,
     )
     assert_equal(pp.kind, PARAM_POLY3)
     with assert_raises():
-        _ = RoadGeometry(RoadGeometryKind(7), 0.0, 0.0, 0.0, 0.0, 1.0)
+        _ = RoadGeometry.from_meters(
+            RoadGeometryKind(7), 0.0, 0.0, 0.0, 0.0, 1.0
+        )
     with assert_raises():
-        _ = RoadGeometry(LINE, -0.5, 0.0, 0.0, 0.0, 1.0)
+        _ = RoadGeometry.from_meters(LINE, -0.5, 0.0, 0.0, 0.0, 1.0)
     with assert_raises():
-        _ = RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, -1.0)
+        _ = RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, -1.0)
 
 
 def test_geometry_distance_to() raises:
     # CARLA's `Geometry::DistanceTo`, record by record.
     var l = line(_m(0), _m(0), _m(0), Angle(0, RADIAN), _m(10))
-    var d = l.distance_to(Vector3(4, 3, 0))
+    var d = l.distance_to_meters(Vector3(4, 3, 0))
     assert_almost_equal(d[0], 4.0, atol=1e-6)
     assert_almost_equal(d[1], 3.0, atol=1e-6)
-    d = l.distance_to(Vector3(-2, 1, 0))
+    d = l.distance_to_meters(Vector3(-2, 1, 0))
     assert_almost_equal(d[0], 0.0, atol=1e-6)
     assert_almost_equal(d[1], 2.2360680, atol=1e-6)
     # A quarter circle of radius 10: the values come from a Python copy
@@ -415,7 +433,7 @@ def test_geometry_distance_to() raises:
         _m(quarter),
         InverseLength(0.1, PER_METER),
     )
-    d = a.distance_to(Vector3(3, 2, 0))
+    d = a.distance_to_meters(Vector3(3, 2, 0))
     assert_almost_equal(d[0], 3.587706702705722, atol=1e-4)
     assert_almost_equal(d[1], 1.4559962546824692, atol=1e-4)
     var s = spiral(
@@ -427,19 +445,19 @@ def test_geometry_distance_to() raises:
         InverseLength(0, PER_METER),
         InverseLength(0.1, PER_METER),
     )
-    d = s.distance_to(Vector3(4, 7, 0))
+    d = s.distance_to_meters(Vector3(4, 7, 0))
     assert_almost_equal(d[0], 3.0, atol=1e-6)
     assert_almost_equal(d[1], 5.0, atol=1e-6)
     var p = poly3(_m(0), _m(3), _m(4), Angle(0, RADIAN), _m(10), 0, 0, 0.01, 0)
-    d = p.distance_to(Vector3(40, 70, 0))
+    d = p.distance_to_meters(Vector3(40, 70, 0))
     assert_almost_equal(d[0], 3.0, atol=1e-6)
     assert_almost_equal(d[1], 4.0, atol=1e-6)
 
 
 def test_directed_point() raises:
-    var p = DirectedPoint(1, 2, 3, 1.5707963267948966)
+    var p = DirectedPoint._from_si(1, 2, 3, 1.5707963267948966)
     assert_equal(p.pitch, 0.0)
-    assert_equal(DirectedPoint(0, 0, 0, 0, 0.25).pitch, 0.25)
+    assert_equal(DirectedPoint._from_si(0, 0, 0, 0, 0.25).pitch, 0.25)
     p.apply_lateral_offset(_m(2))
     assert_almost_equal(p.x, 3.0, atol=1e-6)
     assert_almost_equal(p.y, 2.0, atol=1e-6)

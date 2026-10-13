@@ -1,4 +1,14 @@
 """Exact bounded representation checks; not capture/proof authentication."""
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
 from pathlib import Path
 if __package__:
     from . import source_contracts
@@ -27,4 +37,6 @@ def verify(root, *, _operation=None):
     if _operation is not None:
         interval = full_audit._observe_text(
             root, 'extensions/carla/curve_interval.mojo', interval, _operation=_operation)
+    module = _typed_source.historical_text(root, MODULE, module, _operation=_operation)
+    interval = _typed_source.historical_text(root, 'extensions/carla/curve_interval.mojo', interval, _operation=_operation)
     return verify_text(module, interval)

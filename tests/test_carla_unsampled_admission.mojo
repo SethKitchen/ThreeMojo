@@ -25,7 +25,7 @@ from std.testing import TestSuite, assert_equal, assert_true
 
 
 def _road(id: Int, var geometry: RoadGeometry) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(id),
         "unsampled peak",
         1.0,
@@ -34,25 +34,29 @@ def _road(id: Int, var geometry: RoadGeometry) raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(0.000001))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(0.000001))
     )
-    road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
     # Cancel the half-width exactly. The center is the stored reference path.
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0000005))
+        RoadInfoLaneOffset._from_si(
+            0.0, CubicPolynomial._constant_si(0.0000005)
+        )
     )
     return road^
 
 
 def test_full_curve_admission_retains_a_narrow_lane_between_quarter_samples() raises:
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0
+    )
     for s in [0.0, 0.125, 0.25, 0.5, 0.75, 1.0]:
         var height = Float64(0.005) if s == 0.125 else Float64(0.0)
         geometry.samples.append(_Sample(s, height, s, 1.0, 0.0))
@@ -69,7 +73,7 @@ def test_full_curve_admission_retains_a_narrow_lane_between_quarter_samples() ra
         roads.append(
             _road(
                 i + 2,
-                RoadGeometry(
+                RoadGeometry.from_meters(
                     LINE, 0.0, 0.0, 0.002 + Float64(i) * 0.0005, 0.0, 1.0
                 ),
             )

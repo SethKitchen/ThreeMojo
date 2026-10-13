@@ -5,7 +5,12 @@
 
 """Additive controls for complete Road record and center-helper coverage."""
 
-from extensions.carla.geometry import ARC, LINE, RoadGeometry, with_arc
+from extensions.carla.geometry import (
+    ARC,
+    LINE,
+    RoadGeometry,
+    with_arc_si as with_arc,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import (
@@ -30,23 +35,25 @@ from std.testing import (
 
 
 def _road() raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "records", 10, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0)
+    _ = road.add_section_meters(SectionId(0), 0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0, CubicPolynomial.constant(2))
+        RoadInfoLaneWidth._from_si(0, CubicPolynomial._constant_si(2))
     )
     road.info.geometries.append(
-        RoadInfoGeometry(0, RoadGeometry(LINE, 0, 0, 0, 0, 10))
+        RoadInfoGeometry._from_si(
+            0, RoadGeometry.from_meters(LINE, 0, 0, 0, 0, 10)
+        )
     )
     road.info.elevations.append(
-        RoadInfoElevation(0, CubicPolynomial.constant(0))
+        RoadInfoElevation._from_si(0, CubicPolynomial._constant_si(0))
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0, CubicPolynomial.constant(0))
+        RoadInfoLaneOffset._from_si(0, CubicPolynomial._constant_si(0))
     )
     return road^
 
@@ -55,12 +62,12 @@ def test_straight_lane_shortcut_requires_single_linear_records() raises:
     var road = _road()
     assert_true(road.lane_is_straight(0))
     road.info.elevations.append(
-        RoadInfoElevation(5, CubicPolynomial.constant(0))
+        RoadInfoElevation._from_si(5, CubicPolynomial._constant_si(0))
     )
     assert_false(road.lane_is_straight(0))
     _ = road.info.elevations.pop()
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(5, CubicPolynomial.constant(0))
+        RoadInfoLaneOffset._from_si(5, CubicPolynomial._constant_si(0))
     )
     assert_false(road.lane_is_straight(0))
     _ = road.info.lane_offsets.pop()
@@ -99,8 +106,8 @@ def test_internal_lane_point_requires_its_own_offset_record() raises:
 
 def test_distance_derivative_refuses_a_non_line_record() raises:
     var road = _road()
-    road.info.geometries[0] = RoadInfoGeometry(
-        0, with_arc(RoadGeometry(ARC, 0, 0, 0, 0, 10), 0.1)
+    road.info.geometries[0] = RoadInfoGeometry._from_si(
+        0, with_arc(RoadGeometry.from_meters(ARC, 0, 0, 0, 0, 10), 0.1)
     )
     assert_equal(
         len(road._lane_distance_derivative(0, 0, 0, 1, Vector3(0, 0, 0))), 0
@@ -113,7 +120,7 @@ def test_distance_derivative_keeps_each_lane_sign_and_ignores_outer_lanes() rais
         var lane = road.sections[0].add_lane(LaneId(id))
         road.sections[0].lanes[lane].type = LANE_DRIVING
         road.sections[0].lanes[lane].info.widths.append(
-            RoadInfoLaneWidth(0, CubicPolynomial.constant(2))
+            RoadInfoLaneWidth._from_si(0, CubicPolynomial._constant_si(2))
         )
     _ = road.sections[0].add_lane(LaneId(0))
     for id in [-1, 1]:

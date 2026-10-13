@@ -6,7 +6,13 @@ Historical records remain immutable. Current live guarded bodies and protected
 use inventories remain checked by the maintained guard. These source checks do
 not supply runtime hits, waive required outcomes, or establish a native pass.
 """
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 if __package__:
     from . import source_contracts as source
@@ -32,7 +38,7 @@ def require(condition, message):
         raise ValueError('coverage invariant successor: ' + message)
 
 def read_record(root):
-    payload = (root/MIGRATION).read_bytes()
+    payload = _typed_source.historical_bytes(root, root/MIGRATION, (root/MIGRATION).read_bytes())
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'unreviewed migration record')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -40,10 +46,10 @@ def read_record(root):
             'unsupported schema')
     require(set(record['sources']) == set(SOURCE_PATHS), 'wrong successor set')
     prior = root/'tools/carla_lane_oracle/frozen-arc-producer-migration.json'
-    require(hashlib.sha256(prior.read_bytes()).hexdigest() ==
+    require(hashlib.sha256(_typed_source.historical_bytes(root, prior, prior.read_bytes())).hexdigest() ==
             record['prior_frozen_migration_sha256'], 'historical frozen record changed')
     for name, expected in record['components'].items():
-        require(hashlib.sha256((root/'tools/carla_lane_oracle'/name).read_bytes()).hexdigest()
+        require(hashlib.sha256(_typed_source.historical_bytes(root, root/'tools/carla_lane_oracle'/name, (root/'tools/carla_lane_oracle'/name).read_bytes())).hexdigest()
                 == expected, 'component record changed: ' + name)
     return record
 
@@ -87,7 +93,7 @@ def verify(root, *, _operation=None):
             (predecessor_pin_pair(root) if _operation is None else
              _predecessor_pin_pair(root, _operation=_operation))
             for path, item in record['sources'].items():
-                matches = source.token_sha256(full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation)) == item['after_token_sha256']
+                matches = source.token_sha256(_typed_source.historical_text(root, path, full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation), _operation=_operation)) == item['after_token_sha256']
                 if not matches:
                     if __package__:
                         from . import coverage_followup_contracts as followup

@@ -164,8 +164,8 @@ def test_translated_origins_use_fresh_proofs_and_exact_distance_lower_controls()
         var road = map.roads[at[0]].copy()
         road.info.geometries[source_proof.record_at].geometry.x = origin
         road.info.geometries[source_proof.record_at].geometry.y = -origin
-        var first = road.lane_transform(at[1], at[2], low).location
-        var last = road.lane_transform(at[1], at[2], high).location
+        var first = road.lane_transform_meters(at[1], at[2], low).location
+        var last = road.lane_transform_meters(at[1], at[2], high).location
         var captured = _SpiralRootCapture()
         var chord = _chord_certificate_capture(
             road, at[1], at[2], low, high, first, last, captured
@@ -175,9 +175,9 @@ def test_translated_origins_use_fresh_proofs_and_exact_distance_lower_controls()
         var fresh = _try_pack_spiral_proof(
             road, low, high, 0, captured, 0, terms, units
         ).value()
-        var query = road.lane_transform(at[1], at[2], s).location + Vector3(
-            0.125, 0.25, -0.5
-        )
+        var query = road.lane_transform_meters(
+            at[1], at[2], s
+        ).location + Vector3(0.125, 0.25, -0.5)
         var fast = _try_proof_expansion_jet(
             road, at[1], at[2], s, query, 1, low, high, fresh
         ).value()

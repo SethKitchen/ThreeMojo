@@ -450,11 +450,14 @@ class FullAuditCleanupContracts(unittest.TestCase):
         self.assertEqual(cleanup.sha(runtime_raw), runtime.MIGRATION_SHA256)
         runtime_record = json.loads(runtime_raw)
         self.assertEqual(set(runtime_record['correctness_tests']), set(runtime.TESTS))
-        # The physical Map is the deviation endpoint (#685). Its edge extends
-        # the station edge, so both leaves and both test sets are bound.
-        self.assertEqual(cleanup.sha((self.root/station.MODULE).read_bytes()), deviation.AFTER_SHA256)
+        # The physical Map extends the fixed deviation endpoint (#685).
+        # Historical receipts keep their hashes; live bindings name real bytes.
+        typed = cleanup.typed_boundary
+        map_edge = typed.edge(station.MODULE)
+        self.assertEqual(map_edge['before_sha256'], deviation.AFTER_SHA256)
+        self.assertEqual(cleanup.sha((self.root/station.MODULE).read_bytes()), map_edge['after_sha256'])
         supplemental = {
-            station.MODULE: deviation.AFTER_SHA256, **station.TESTS, **deviation.TESTS,
+            station.MODULE: map_edge['after_sha256'], **station.TESTS, **deviation.TESTS,
             runtime.MIGRATION: runtime.MIGRATION_SHA256,
             **runtime_record['correctness_tests'],
         }
@@ -462,6 +465,15 @@ class FullAuditCleanupContracts(unittest.TestCase):
             path = 'tools/carla_lane_oracle/' + leaf
             supplemental[path] = cleanup.DEPENDENCY_TOOL_SHA256[path]
         supplemental.update(cleanup._witness_format_bindings(self.root))
+        # Enumerate the current graph's independent obligations, rather than
+        # treating the verifier's returned dictionary as its own expectation.
+        for paths in (typed.CURRENT_DEPENDENCIES, typed.NEW_INPUTS,
+                      typed.TESTS, typed.BINDING_INPUTS,
+                      cleanup.conditioned_cubic.BINDING_INPUTS):
+            supplemental.update(paths)
+        for path in set(supplemental) | set(typed.SOURCE_PATHS):
+            if path in typed.EDGES:
+                supplemental[path] = typed.edge(path)['after_sha256']
         expected.update(supplemental)
         self.assertEqual(set(bindings), expected)
         self.assertEqual({path: bindings[path] for path in supplemental}, supplemental)
@@ -834,18 +846,25 @@ class FullAuditCleanupContracts(unittest.TestCase):
                 cleanup.verify_center_correspondence(changed, self.current, self.descriptor)
 
     def test_exact_token_physical_crlf_and_string_spellings_remain_distinct(self):
-        for name in cleanup.SOURCE_PATHS:
-            raw = (self.root/name).read_bytes()
-            for changed in (b'# Inert source comment.\n' + raw, raw.replace(b'\n', b'\r\n')):
-                with self.subTest(path=name, crlf=b'\r\n' in changed), physical_change(self.root, name, changed):
-                    cleanup.verify(self.root)
-                    self.assertEqual(cleanup.predecessor_source(self.root, name),
-                                     self.record['sources'][name]['before_source'])
-                    with self.assertRaises(cleanup.ContractError):
-                        cleanup.verify(self.root, exact=True)
-                    with self.assertRaises(cleanup.ContractError):
-                        cleanup.proof_bindings(self.root)
-                    self.assertEqual((self.root/name).read_bytes(), changed)
+        historical = fixtures.copy_historical_boundary_root(self, ROOT)
+        for root, typed in ((self.root, True), (historical, False)):
+            for name in cleanup.SOURCE_PATHS:
+                raw = (root/name).read_bytes()
+                for changed in (b'# Inert source comment.\n' + raw, raw.replace(b'\n', b'\r\n')):
+                    with self.subTest(path=name, typed=typed, crlf=b'\r\n' in changed), physical_change(root, name, changed):
+                        if typed:
+                            # Current typed endpoints are exact physical inputs,
+                            # even when old semantic callers request exact=False.
+                            with self.assertRaises(cleanup.ContractError): cleanup.verify(root)
+                            with self.assertRaises(cleanup.ContractError):
+                                cleanup.predecessor_source(root, name)
+                        else:
+                            cleanup.verify(root)
+                            self.assertEqual(cleanup.predecessor_source(root, name),
+                                             self.record['sources'][name]['before_source'])
+                        with self.assertRaises(cleanup.ContractError): cleanup.verify(root, exact=True)
+                        with self.assertRaises(cleanup.ContractError): cleanup.proof_bindings(root)
+                        self.assertEqual((root/name).read_bytes(), changed)
         self.assertNotEqual(cleanup._rows('var word = r"\\r\\n"\n'),
                             cleanup._rows('var word = r"\\n"\n'))
         self.assertNotEqual(cleanup._rows('var word = "\\r\\n"\n'),
@@ -1924,16 +1943,21 @@ print('consumer-first accepted: ' + route)
 
     def test_selector_projection_stable_formatting_exact_authority_and_removed_read(self):
         from functools import wraps
+        historical = fixtures.copy_historical_boundary_root(self, ROOT)
+        for root, typed in ((self.root, True), (historical, False)):
+            raw = (root/LANE).read_bytes()
+            comments = (b'# def delimiter_in_a_comment():\n# @comment\n# struct Comment:\n' + raw).replace(
+                b'    _lane_jet,\n', b'    _lane_jet,  # Multiline import stays complete.\n', 1)
+            for changed in (comments, comments.replace(b'\n', b'\r\n')):
+                with self.subTest(typed=typed, crlf=b'\r\n' in changed), physical_change(root, LANE, changed):
+                    if typed:
+                        with self.assertRaises(ValueError): selector.verify_premises(root)
+                        with self.assertRaises(ValueError): selector.verify(root)
+                    else:
+                        self.assertEqual(selector.verify_premises(root), selector.verify(root))
+                    with self.assertRaises(cleanup.ContractError): cleanup.verify(root, exact=True)
+                    with self.assertRaises(cleanup.ContractError): cleanup.proof_bindings(root)
         raw = (self.root/LANE).read_bytes()
-        comments = (b'# def delimiter_in_a_comment():\n# @comment\n# struct Comment:\n' + raw).replace(
-            b'    _lane_jet,\n', b'    _lane_jet,  # Multiline import stays complete.\n', 1)
-        for changed in (comments, comments.replace(b'\n', b'\r\n')):
-            with self.subTest(crlf=b'\r\n' in changed), physical_change(self.root, LANE, changed):
-                self.assertEqual(selector.verify_premises(self.root), selector.verify(self.root))
-                with self.assertRaises(cleanup.ContractError):
-                    cleanup.verify(self.root, exact=True)
-                with self.assertRaises(cleanup.ContractError):
-                    cleanup.proof_bindings(self.root)
         # STRING spelling and extra grouping are still token-significant.
         for changed in (raw.replace(b'Finite global refinement', b'def misleading():\nFinite global refinement', 1),
                         raw.replace(b'while steps < 40:', b'while (steps < 40):', 1)):
@@ -2036,6 +2060,13 @@ print('selector projection import accepted: ' + sys.argv[2])
 # The fake class is a bounded ownership/decoding preflight. It deliberately
 # replaces qualification, and makes no claim about real source admission.
 class CacheInputViewPreflight(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import _full_audit_test_fixtures as historical_fixtures
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.historical_root = historical_fixtures.copy_historical_boundary_root(owner, ROOT)
+
     def setUp(self):
         from contextlib import ExitStack
         import types
@@ -2045,17 +2076,17 @@ class CacheInputViewPreflight(unittest.TestCase):
         self.root = Path(folder.name)
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
-        self.authority = json.loads((ROOT/cleanup.MIGRATION).read_bytes())
-        self.cache_record = json.loads((ROOT/cache.MIGRATION).read_bytes())
+        self.authority = json.loads((self.historical_root/cleanup.MIGRATION).read_bytes())
+        self.cache_record = json.loads((self.historical_root/cache.MIGRATION).read_bytes())
         self.cache_record['preserved_records'] = {}
         self.cache_record['inventory'] = {}
         for name in cleanup.SOURCE_PATHS:
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes((ROOT/name).read_bytes())
+            target.write_bytes((self.historical_root/name).read_bytes())
         authority = self.root/cleanup.MIGRATION
         authority.parent.mkdir(parents=True, exist_ok=True)
-        authority.write_bytes((ROOT/cleanup.MIGRATION).read_bytes())
+        authority.write_bytes((self.historical_root/cleanup.MIGRATION).read_bytes())
         self.sample = 'sample.mojo'
         (self.root/self.sample).write_bytes('# café\r\nvar label = "a\\r\\nb"\r\n'.encode('utf-8'))
         self.views = []
@@ -2311,7 +2342,7 @@ class CacheInputViewPreflight(unittest.TestCase):
         import seed_count_contracts as seed
         target = self.root/seed.MIGRATION
         target.parent.mkdir(parents=True, exist_ok=True)
-        original = (ROOT/seed.MIGRATION).read_bytes()
+        original = (self.historical_root/seed.MIGRATION).read_bytes()
         target.write_bytes(original)
         def consume(view, owner):
             expected = seed.read_record(self.root, _inputs=view, _input_owner=owner)
@@ -2737,43 +2768,53 @@ class CacheInputViewCurrentControls(unittest.TestCase):
     def test_current_exact_condition_stays_at_seed_boundary_and_all_four_endpoints(self):
         from contextlib import ExitStack
         edges = cleanup._CacheInputs.exact_edges
-        raw = {name: (self.root/name).read_bytes() for name in cleanup.SOURCE_PATHS}
-        for changed_paths, expected_calls in tuple(((name,), 1) for name in cleanup.SOURCE_PATHS) + ((tuple(cleanup.SOURCE_PATHS), 0),):
-            calls, semantic_completed = [], []
-            @wraps(edges)
-            def exact(view, owner, root):
-                calls.append(view)
-                return edges(view, owner, root)
-            def admitted(view, owner):
-                semantic_completed.append(view)
-                self.assertEqual(view._state, 'active')
-            with self.subTest(changed_paths=changed_paths), ExitStack() as stack:
-                for name in changed_paths:
-                    stack.enter_context(physical_change(self.root, name, b'# Stable token-only endpoint.\n' + raw[name]))
-                stack.enter_context(patch.object(cleanup._CacheInputs, 'exact_edges', exact))
-                stack.enter_context(self.at_inventory(admitted))
-                message = ('unreviewed complete live endpoint' if expected_calls else
-                           'historical record, live dependency or regression fixture changed')
-                with self.assertRaisesRegex(ValueError, message):
-                    cache.verify(self.root)
-                self.assertEqual(len(calls), expected_calls)
-                self.assertEqual(len(semantic_completed), 1, 'first admission must remain semantic')
-        # A single exact captured source is sufficient to trigger all four
-        # exact assertions; three other comment-compatible variants must fail.
-        for exact_path in (CURVE, LANE, VALUE):
-            calls = []
-            @wraps(edges)
-            def exact(view, owner, root):
-                calls.append(view)
-                return edges(view, owner, root)
-            with self.subTest(single_exact=exact_path), ExitStack() as stack:
-                for name in cleanup.SOURCE_PATHS:
-                    if name != exact_path:
-                        stack.enter_context(physical_change(self.root, name, b'# Token-compatible.\n' + raw[name]))
-                stack.enter_context(patch.object(cleanup._CacheInputs, 'exact_edges', exact))
-                with self.assertRaisesRegex(ValueError, 'unreviewed complete live endpoint'):
-                    cache.verify(self.root)
-            self.assertEqual(len(calls), 1)
+        historical = fixtures.copy_historical_boundary_root(self, ROOT)
+        variants = tuple(((name,), 1) for name in cleanup.SOURCE_PATHS) + ((tuple(cleanup.SOURCE_PATHS), 0),)
+        for root, typed in ((self.root, True), (historical, False)):
+            raw = {name: (root/name).read_bytes() for name in cleanup.SOURCE_PATHS}
+            for changed_paths, historical_calls in variants:
+                calls, semantic_completed = [], []
+                @wraps(edges)
+                def exact(view, owner, candidate):
+                    calls.append(view)
+                    return edges(view, owner, candidate)
+                def admitted(view, owner):
+                    semantic_completed.append(view)
+                    self.assertEqual(view._state, 'active')
+                with self.subTest(typed=typed, changed_paths=changed_paths), ExitStack() as stack:
+                    for name in changed_paths:
+                        stack.enter_context(physical_change(root, name, b'# Stable token-only endpoint.\n' + raw[name]))
+                    stack.enter_context(patch.object(cleanup._CacheInputs, 'exact_edges', exact))
+                    stack.enter_context(self.at_inventory(admitted))
+                    if typed:
+                        with self.assertRaises(ValueError): cache.verify(root)
+                        self.assertEqual(calls, [])
+                        self.assertEqual(semantic_completed, [], 'current exact bytes must precede semantic consumption')
+                    else:
+                        message = ('unreviewed complete live endpoint' if historical_calls else
+                                   'historical record, live dependency or regression fixture changed')
+                        with self.assertRaisesRegex(ValueError, message): cache.verify(root)
+                        self.assertEqual(len(calls), historical_calls)
+                        self.assertEqual(len(semantic_completed), 1, 'historical first admission remains semantic')
+            # Historical seed admission still checks all four when any one is
+            # exact. Current typed input refusal must happen before this stage.
+            for exact_path in (CURVE, LANE, VALUE):
+                calls = []
+                @wraps(edges)
+                def exact(view, owner, candidate):
+                    calls.append(view)
+                    return edges(view, owner, candidate)
+                with self.subTest(typed=typed, single_exact=exact_path), ExitStack() as stack:
+                    for name in cleanup.SOURCE_PATHS:
+                        if name != exact_path:
+                            stack.enter_context(physical_change(root, name, b'# Token-compatible.\n' + raw[name]))
+                    stack.enter_context(patch.object(cleanup._CacheInputs, 'exact_edges', exact))
+                    if typed:
+                        with self.assertRaises(ValueError): cache.verify(root)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'unreviewed complete live endpoint'):
+                            cache.verify(root)
+                self.assertEqual(len(calls), 0 if typed else 1)
 
     def test_current_fresh_seed_lookup_uses_separate_modules_and_none_entries(self):
         seed = self.seed

@@ -18,8 +18,8 @@ from extensions.carla.geometry import (
     SPIRAL,
     RoadGeometry,
     _Sample,
-    with_arc,
-    with_spiral,
+    with_arc_si as with_arc,
+    with_spiral_si as with_spiral,
 )
 from extensions.carla.lane_geometry import (
     _lane_geometry_pos_at,
@@ -53,10 +53,10 @@ from std.testing import (
 
 def _road(
     var geometry: RoadGeometry,
-    offset: CubicPolynomial = CubicPolynomial.constant(0.0),
+    offset: CubicPolynomial = CubicPolynomial._constant_si(0.0),
     width: Float64 = 0.0002,
 ) raises -> Road:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1),
         "bounded",
         geometry.length,
@@ -65,17 +65,17 @@ def _road(
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(width))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(width))
     )
-    road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(0.0, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0.0))
     )
-    road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, offset))
+    road.info.lane_offsets.append(RoadInfoLaneOffset._from_si(0.0, offset))
     return road^
 
 
@@ -84,7 +84,7 @@ def test_tiny_curvature_uses_the_canonical_reference_and_lane_recipe() raises:
     # public reference API keeps main's separate circle-subtraction graph.
     for curvature in [-1e-18, 1e-18]:
         var geometry = with_arc(
-            RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 1.0), curvature
+            RoadGeometry.from_meters(ARC, 0.0, 0.0, 0.0, 0.0, 1.0), curvature
         )
         var point = _lane_geometry_pos_at(geometry, 0.001)
         assert_almost_equal(point.x, 0.001, atol=1e-18)
@@ -103,7 +103,7 @@ def test_tiny_curvature_uses_the_canonical_reference_and_lane_recipe() raises:
 def test_collapsed_reversed_and_vertical_arc_centers_keep_orientation() raises:
     for curvature in [-0.01, 0.01]:
         var geometry = with_arc(
-            RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 100.0), curvature
+            RoadGeometry.from_meters(ARC, 0.0, 0.0, 0.0, 0.0, 100.0), curvature
         )
         var radius = 1.0 / curvature
         for s in [0.0, 0.01, 20.0, 99.0]:
@@ -115,21 +115,25 @@ def test_collapsed_reversed_and_vertical_arc_centers_keep_orientation() raises:
             )
             assert_equal(derivative[0], 0.0)
             assert_equal(derivative[1], 0.0)
-        var road = _road(geometry^, CubicPolynomial.constant(1.0 + radius), 2.0)
-        assert_almost_equal(
-            road.lane_transform(0, 0, 0.0).rotation.yaw, 0.0, atol=1e-6
-        )
-        road.info.elevations[0] = RoadInfoElevation(
-            0.0, CubicPolynomial(0.0, 0.1, 0.0, 0.0, 0.0)
+        var road = _road(
+            geometry^, CubicPolynomial._constant_si(1.0 + radius), 2.0
         )
         assert_almost_equal(
-            road.lane_transform(0, 0, 0.0).rotation.pitch, -90.0, atol=1e-6
+            road.lane_transform_meters(0, 0, 0.0).rotation.yaw, 0.0, atol=1e-6
+        )
+        road.info.elevations[0] = RoadInfoElevation._from_si(
+            0.0, CubicPolynomial._from_coefficients(0.0, 0.1, 0.0, 0.0, 0.0)
+        )
+        assert_almost_equal(
+            road.lane_transform_meters(0, 0, 0.0).rotation.pitch,
+            -90.0,
+            atol=1e-6,
         )
 
 
 def test_actual_gauss_piece_transitions_are_enclosed_without_unit_speed() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.01
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.01
     )
     var threshold = 1.0 / 1.01
     var counts = _spiral_counts(
@@ -148,7 +152,9 @@ def test_actual_gauss_piece_transitions_are_enclosed_without_unit_speed() raises
 
 
 def test_sampled_stationary_tangent_retains_both_sides_and_the_exact_point() raises:
-    var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
+    var geometry = RoadGeometry.from_meters(
+        PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0
+    )
     geometry.samples.append(_Sample(0.0, 0.0, 0.0, -1.0, 0.0))
     geometry.samples.append(_Sample(1.0, 0.0, 1.0, 1.0, 0.0))
     var road = _road(geometry^)
@@ -167,11 +173,13 @@ def test_sampled_stationary_tangent_retains_both_sides_and_the_exact_point() rai
 def test_between_quarter_deviation_is_not_the_sampled_one_millimeter() raises:
     var amplitude = 0.001 / 0.046875
     var road = _road(
-        RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 1.0),
-        CubicPolynomial(0.0, amplitude * 0.5, -amplitude * 1.5, amplitude, 0.0),
+        RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 1.0),
+        CubicPolynomial._from_coefficients(
+            0.0, amplitude * 0.5, -amplitude * 1.5, amplitude, 0.0
+        ),
     )
-    var first = road.lane_transform(0, 0, 0.0).location
-    var last = road.lane_transform(0, 0, 1.0).location
+    var first = road.lane_transform_meters(0, 0, 0.0).location
+    var last = road.lane_transform_meters(0, 0, 1.0).location
     var bound = _chord_error(road, 0, 0, 0.0, 1.0, first, last)
     # Independent cubic extrema are (3 +/- sqrt(3))/6, not quarter points.
     assert_true(bound >= 0.0010264004785593347)
@@ -182,11 +190,13 @@ def test_between_quarter_deviation_is_not_the_sampled_one_millimeter() raises:
 
 def test_local_work_and_accuracy_exhaustion_are_explicit_errors() raises:
     var geometry = with_arc(
-        RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 0.001001), 0.001
+        RoadGeometry.from_meters(ARC, 0.0, 0.0, 0.0, 0.0, 0.001001), 0.001
     )
     var road = _road(
         geometry^,
-        CubicPolynomial(0.00039575, -6.7925, 18200.0, -13000000.0, 0.0),
+        CubicPolynomial._from_coefficients(
+            0.00039575, -6.7925, 18200.0, -13000000.0, 0.0
+        ),
     )
     var query = Vector3(0.0009, 0.0005525, 0.0)
     var distance = road._lane_distance_squared(0, 0, 0.0, query)

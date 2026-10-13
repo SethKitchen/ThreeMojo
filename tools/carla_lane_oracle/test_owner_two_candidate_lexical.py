@@ -61,7 +61,7 @@ def _baseline_operation_frame_kind(frame, *, include_aliases=False):
         return 'alias_loops'
     return None
 
-REFERENCE = types.FunctionType(_baseline_operation_frame_kind.__code__, vars(cleanup))
+REFERENCE = fixtures.typed_reference(_baseline_operation_frame_kind, 'operation', 'registry')
 REFERENCE_AST = '7fb32652f190b1f87b8e794aa549193d808d048f5ebc1a5656b6eaf80e96f611'
 
 

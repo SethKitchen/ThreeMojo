@@ -102,7 +102,9 @@ def _width(s_offset: Float64, a: Float64) -> String:
 
 
 def _at(map: Map, section: Int, lane: Int, s: Float32) raises -> Waypoint:
-    return map.waypoint_xodr(RoadId(1), LaneId(lane), Length(s, METER)).value()
+    return map.waypoint_xodr_float32(
+        RoadId(1), LaneId(lane), Length(s, METER)
+    ).value()
 
 
 def _width_at(map: Map, lane: Int, s: Float32) raises -> Float64:

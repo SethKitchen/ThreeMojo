@@ -16,6 +16,7 @@ import full_audit_cleanup_contracts as cleanup
 import _full_audit_test_fixtures as fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
+
 LEAF = 'tools/carla_lane_oracle/map_deviation_contracts.py'
 STATION_LEAF = 'tools/carla_lane_oracle/map_station_contracts.py'
 
@@ -33,7 +34,10 @@ def _loops(case):
 class DeviationLeafControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.current = (ROOT/deviation.MODULE).read_text()
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.historical_root = fixtures.copy_historical_boundary_root(owner, ROOT)
+        cls.current = (cls.historical_root/deviation.MODULE).read_text()
         cls.before = deviation.predecessor_source(cls.current)
 
     def test_exact_seventh_edge_reconstructs_the_station_endpoint(self):
@@ -144,7 +148,7 @@ class DeviationLeafControls(unittest.TestCase):
 
 class DeviationIntegrationControls(unittest.TestCase):
     def setUp(self):
-        self.root = fixtures.copy_current_root(self, ROOT)
+        self.root = fixtures.copy_historical_boundary_root(self, ROOT)
         self.current = (self.root/deviation.MODULE).read_bytes()
         self.before = deviation.predecessor_source(self.current.decode()).encode()
 
@@ -243,6 +247,61 @@ class DeviationIntegrationControls(unittest.TestCase):
             self.assertEqual(sorted(earlier), sorted([*loops._MAP_STATION_SUCCESSOR_LINES.values(), 4099]))
         with self.map_state(self.current + b'\n# forged\n'):
             self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'), {})
+
+
+class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
+    """Retain the same physical attack matrix on the complete typed graph."""
+
+    def setUp(self):
+        self.root = fixtures.copy_current_root(self, ROOT)
+        self.current = (self.root/deviation.MODULE).read_bytes()
+        self.historical = cleanup.typed_boundary.historical_source(
+            deviation.MODULE, self.current.decode())
+        self.before = deviation.predecessor_source(self.historical).encode()
+
+    def test_seventh_and_sixth_edges_retain_exact_historical_chain_and_receipts(self):
+        edge = cleanup.typed_boundary.edge(deviation.MODULE)
+        self.assertEqual(edge['before_sha256'], deviation.AFTER_SHA256)
+        self.assertEqual(edge['after_sha256'], cleanup.sha(self.current))
+        current = seed.verify(self.root)
+        self.assertEqual(len(current['edges']), 7)
+        self.assertEqual(current['edges'][-2:], [station.edge(), deviation.edge()])
+        bound = cleanup.proof_bindings(self.root)
+        self.assertEqual(bound[deviation.MODULE], cleanup.sha(self.current))
+        for name in (*deviation.TESTS, *station.TESTS, LEAF, STATION_LEAF):
+            self.assertEqual(bound[name], cleanup.sha((self.root/name).read_bytes()))
+        record = cleanup.read_record(self.root)
+        for group in ('unchanged_inputs', 'native_dependency_inputs'):
+            self.assertEqual(record[group][deviation.MODULE], station.BEFORE_SHA256)
+        with self.map_state(self.before):
+            with self.assertRaises(ValueError): cleanup.verify(self.root)
+        self.assertEqual((self.root/deviation.MODULE).read_bytes(), self.current)
+
+    def test_loop_proofs_map_every_row_and_bind_the_new_leaf(self):
+        import difflib
+        loops = _loops(self)
+        proofs = loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map')
+        # Derive physical coordinates independently from exact unchanged lines
+        # in the sealed old/new full sources, not from the production mapper.
+        old, new = self.historical.splitlines(), self.current.decode().splitlines()
+        mapping = {}
+        for block in difflib.SequenceMatcher(None, old, new, autojunk=False).get_matching_blocks():
+            mapping.update({block.a + offset + 1: block.b + offset + 1
+                            for offset in range(block.size)})
+        historical_lines = [*loops._MAP_DEVIATION_SUCCESSOR_LINES.values(), 4106]
+        expected = {mapping[line] for line in historical_lines}
+        self.assertEqual(len(expected), len(historical_lines))
+        self.assertEqual(set(proofs), expected)
+        for line, proof in proofs.items():
+            self.assertTrue(new[line - 1].lstrip().startswith('for '))
+            self.assertEqual(proof['required'], 'T')
+            self.assertEqual(proof['dependency_sha256'][deviation.MODULE], cleanup.sha(self.current))
+            for name in (*deviation.TESTS, LEAF, STATION_LEAF):
+                self.assertEqual(proof['dependency_sha256'][name],
+                                 cleanup.sha((self.root/name).read_bytes()))
+        for raw in (self.before, self.current + b'\n# forged\n'):
+            with self.map_state(raw):
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'), {})
 
 
 if __name__ == '__main__':

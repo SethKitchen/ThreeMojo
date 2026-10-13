@@ -18,7 +18,13 @@ digest, and the last edge's bound tests must be unchanged. Any other
 consumer change still fails closed in both records.
 """
 from contextlib import contextmanager
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import hashlib
+# #333 explicit historical provenance views; current inputs remain operation-owned.
 import json
 import re
 import sys
@@ -81,6 +87,7 @@ def _read(root, path, *, _operation=None):
     audit = _audit()
     return audit._observe_bytes(root, path, audit._regular(root, path).read_bytes(),
                                 _operation=_operation)
+
 
 
 @contextmanager
@@ -203,12 +210,12 @@ def verify(root, *, _operation=None):
                                                               'after_token_sha256')}}
             last[path] = edge
         for path, chain in chains.items():
-            actual = _read(root, path, _operation=_operation)
+            actual = _typed_source.historical_bytes(root, path, _read(root, path, _operation=_operation), _operation=_operation)
             require(_sha(actual) == chain['after_sha256']
                     and source.token_sha256(actual.decode('utf-8')) == chain['after_token_sha256'],
                     'live consumer is not the last reviewed edge: ' + path)
             for name, expected in last[path]['correctness_tests'].items():
-                require((root/name).is_file() and _sha(_read(root, name, _operation=_operation)) == expected,
+                require((root/name).is_file() and _sha(_typed_source.historical_bytes(root, name, _read(root, name, _operation=_operation), _operation=_operation)) == expected,
                         'bound correctness test changed: ' + name)
         return chains
 

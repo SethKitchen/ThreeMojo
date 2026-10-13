@@ -188,16 +188,20 @@ def test_road_records() raises:
     assert_equal(len(curvy.elevations), 2)
     assert_equal(curvy.elevations[1].s, 30.0)
     # The cubic is shifted to read the road's s: 1.6 + 0.001 (s - 30)^2.
-    assert_almost_equal(curvy.elevations[1].polynomial.evaluate(40.0), 1.7)
+    assert_almost_equal(
+        curvy.elevations[1].polynomial.evaluate_meters(40.0), 1.7
+    )
     assert_equal(len(curvy.lane_offsets), 2)
-    assert_almost_equal(curvy.lane_offsets[1].polynomial.evaluate(30.0), 0.6)
+    assert_almost_equal(
+        curvy.lane_offsets[1].polynomial.evaluate_meters(30.0), 0.6
+    )
     assert_equal(len(curvy.speeds), 1)
     assert_equal(curvy.speeds[0].speed, 80.0)
     assert_equal(curvy.speeds[0].type, "Town")
     # A road with no laneOffset and no elevation gets zero records.
     ref through = map.road(RoadId(10)).info
     assert_equal(len(through.lane_offsets), 1)
-    assert_equal(through.lane_offsets[0].polynomial.evaluate(12.0), 0.0)
+    assert_equal(through.lane_offsets[0].polynomial.evaluate_meters(12.0), 0.0)
     assert_equal(len(through.elevations), 1)
 
 
@@ -208,7 +212,9 @@ def test_lane_records() raises:
     assert_equal(len(right.info.widths), 2)
     # sOffset 10 in the section at 30 starts at s = 40.
     assert_equal(right.info.widths[1].s, 40.0)
-    assert_almost_equal(right.info.widths[1].polynomial.evaluate(50.0), 4.0)
+    assert_almost_equal(
+        right.info.widths[1].polynomial.evaluate_meters(50.0), 4.0
+    )
     ref lane = one.sections[0].lanes[one.sections[0].lane_index(LaneId(-1))]
     assert_equal(len(lane.info.materials), 1)
     assert_equal(lane.info.materials[0].surface, "asphalt")
@@ -237,7 +243,7 @@ def test_lane_records() raises:
     assert_equal(mark.lines[0].space, 9.0)
     assert_equal(mark.lines[0].rule, "caution")
     ref walk = one.sections[0].lanes[0]
-    assert_equal(walk.info.borders[0].polynomial.evaluate(3.0), 5.5)
+    assert_equal(walk.info.borders[0].polynomial.evaluate_meters(3.0), 5.5)
     assert_equal(walk.info.heights[0].inner, 0.15)
     assert_equal(walk.info.heights[0].outer, 0.15)
     # No laneChange reads as both, and no type child gives no lines.
@@ -253,7 +259,7 @@ def test_lane_records() raises:
     ref curvy = map.road(RoadId(5)).sections[0]
     ref border = curvy.lanes[curvy.lane_index(LaneId(-3))]
     assert_equal(len(border.info.widths), 1)
-    assert_equal(border.info.widths[0].polynomial.evaluate(3.0), 0.0)
+    assert_equal(border.info.widths[0].polynomial.evaluate_meters(3.0), 0.0)
     ref left_hand = map.road(RoadId(6)).sections[0]
     ref parking = left_hand.lanes[left_hand.lane_index(LaneId(2))]
     assert_equal(parking.info.marks[0].lane_change, MARK_CHANGE_DECREASE)

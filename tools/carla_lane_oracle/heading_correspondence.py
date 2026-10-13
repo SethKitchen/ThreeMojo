@@ -7,6 +7,16 @@ This projection expands only the fresh local k0 constant and specializes its
 Expression name to the full Jet alias. It never projects ideal u or eligibility
 into a scalar-heading proof and does not claim arbitrary error equivalence.
 """
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import ast
 import copy
 from pathlib import Path
@@ -55,9 +65,9 @@ def expression(text):
     return ast.parse(text, mode='eval').body
 
 
-def verify(root):
+def verify(root, *, _operation=None):
     path = root/'extensions/carla'
-    fresh = declaration((path/'curve_bounds.mojo').read_text(), '_spiral_expression')
+    fresh = declaration(_typed_source.historical_text(root, path/'curve_bounds.mojo', source._observe_text(root, 'extensions/carla/curve_bounds.mojo', (path/'curve_bounds.mojo').read_text(), _operation=_operation), _operation=_operation), '_spiral_expression')
     k0 = Specialize().visit(assigned(fresh, 'k0'))
     expected_k0 = expression('_Jet.constant(geometry.curvature_start)')
     require(dump(k0) == dump(expected_k0), 'heading correspondence: fresh k0 changed')
@@ -69,7 +79,7 @@ def verify(root):
     require(dump(heading) == dump(expected_heading), 'heading correspondence: fresh half heading changed')
     ideal_u = expression('_Jet.constant(0.5) * rate * d * d')
     for filename, name in CONSUMERS.items():
-        consumer = declaration((path/filename).read_text(), name)
+        consumer = declaration(_typed_source.historical_text(root, path/filename, source._observe_text(root, 'extensions/carla/' + filename, (path/filename).read_text(), _operation=_operation), _operation=_operation), name)
         require(dump(assigned(consumer, 'rate')) == dump(rate),
                 'heading correspondence: stored rate differs: ' + filename)
         require(dump(assigned(consumer, 'heading')) == dump(heading),
@@ -80,7 +90,7 @@ def verify(root):
                  and isinstance(node.func, ast.Name) and node.func.id == '_stored_half']
         require(len(calls) == 1 and dump(calls[0]) == dump(expression('_stored_half(rate)')),
                 'heading correspondence: unexpected helper consumer: ' + filename)
-    eligibility = declaration((path/'spiral_moment_proof.mojo').read_text(),
+    eligibility = declaration(_typed_source.historical_text(root, path/'spiral_moment_proof.mojo', source._observe_text(root, 'extensions/carla/spiral_moment_proof.mojo', (path/'spiral_moment_proof.mojo').read_text(), _operation=_operation), _operation=_operation),
                               '_all_spiral_nodes_quadrant_zero')
     expected_theta = expression('_Jet.constant(geometry.heading) + t * (_Jet.constant(geometry.curvature_start) + _Jet.constant(0.5) * rate * t)')
     require(dump(assigned(eligibility, 'theta')) == dump(expected_theta),

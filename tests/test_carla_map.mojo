@@ -11,7 +11,11 @@ rest are worked by hand from the file: road 1 runs east from the origin,
 each lane is 3.5 meters wide, and CARLA's y is OpenDRIVE's y negated.
 """
 
-from extensions.carla.geometry import LINE, RoadGeometry, with_arc
+from extensions.carla.geometry import (
+    LINE,
+    RoadGeometry,
+    with_arc_si as with_arc,
+)
 from extensions.carla.map import (
     Connection,
     Controller,
@@ -26,7 +30,7 @@ from extensions.carla.map import (
     bump_deformation,
     is_traffic_light,
     map_deformation,
-    segment_distance_2d,
+    segment_distance_2d_meters as segment_distance_2d,
     z_pos_in_deformation,
 )
 from extensions.carla.map_builder import (
@@ -104,8 +108,8 @@ from extensions.carla.road_info import (
     SectionId,
     SignalId,
     SignalOrientation,
-    info_at,
-    infos_in_range,
+    info_at_meters as info_at,
+    infos_in_range_meters as infos_in_range,
     lane_marking_color_of,
     lane_marking_type_of,
     lane_type_of,
@@ -129,7 +133,7 @@ comptime TOWN = "assets/carla/town.xodr"
 
 
 def _w(road: Int, section: Int, lane: Int, s: Float64) -> Waypoint:
-    return Waypoint(RoadId(road), SectionId(section), LaneId(lane), s)
+    return Waypoint._from_si(RoadId(road), SectionId(section), LaneId(lane), s)
 
 
 def _m(value: Float32) -> Length:
@@ -165,7 +169,7 @@ def _flat_road(
     lanes: List[Tuple[Int, LaneType, Int, Int]],
 ) raises -> Int:
     # One flat, straight section; each lane 3.5 m wide, lane 0 none.
-    var r = b.add_road(
+    var r = b.add_road_si(
         RoadId(id),
         "road",
         length,
@@ -174,7 +178,7 @@ def _flat_road(
         RoadId(successor),
         rht,
     )
-    var sec = b.add_road_section(r, SectionId(0), 0.0)
+    var sec = b.add_road_section_si(r, SectionId(0), 0.0)
     for lane in lanes:
         _ = b.add_road_section_lane(
             r,
@@ -186,12 +190,12 @@ def _flat_road(
             LaneId(lane[3]),
         )
         var width = 0.0 if lane[0] == 0 else 3.5
-        b.create_lane_width(
-            b.lane(RoadId(id), LaneId(lane[0]), 0.0), 0.0, width, 0, 0, 0
+        b.create_lane_width_si(
+            b.lane_si(RoadId(id), LaneId(lane[0]), 0.0), 0.0, width, 0, 0, 0
         )
-    b.create_section_offset(r, 0.0, 0, 0, 0, 0)
-    b.add_road_elevation_profile(r, 0.0, 0, 0, 0, 0)
-    b.add_road_geometry_line(r, 0.0, x, y, heading, length)
+    b.create_section_offset_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_geometry_line_si(r, 0.0, x, y, heading, length)
     return r
 
 
@@ -272,9 +276,9 @@ def test_names_to_kinds() raises:
 
 
 def test_lane_marking() raises:
-    # `LaneMarking(RoadInfoMarkRecord)`: increase is right on a right-hand
+    # `LaneMarking._from_si(RoadInfoMarkRecord)`: increase is right on a right-hand
     # road and left on a left-hand one.
-    var right = RoadInfoMarkRecord(
+    var right = RoadInfoMarkRecord._from_si(
         0.0,
         0,
         "solid",
@@ -288,53 +292,61 @@ def test_lane_marking() raises:
         0,
         True,
     )
-    var m = LaneMarking(right)
+    var m = LaneMarking._from_si(right)
     assert_equal(m.type, SOLID)
     assert_equal(m.color, MARKING_YELLOW)
     assert_equal(m.lane_change, CHANGE_RIGHT)
     assert_equal(m.width, 0.2)
     assert_equal(m.color_name(), "yellow")
     right.is_rht = False
-    assert_equal(LaneMarking(right).lane_change, CHANGE_LEFT)
+    assert_equal(LaneMarking._from_si(right).lane_change, CHANGE_LEFT)
     right.lane_change = MARK_CHANGE_DECREASE
-    assert_equal(LaneMarking(right).lane_change, CHANGE_RIGHT)
+    assert_equal(LaneMarking._from_si(right).lane_change, CHANGE_RIGHT)
     right.is_rht = True
-    assert_equal(LaneMarking(right).lane_change, CHANGE_LEFT)
+    assert_equal(LaneMarking._from_si(right).lane_change, CHANGE_LEFT)
     right.lane_change = MARK_CHANGE_BOTH
-    assert_equal(LaneMarking(right).lane_change, CHANGE_BOTH)
+    assert_equal(LaneMarking._from_si(right).lane_change, CHANGE_BOTH)
     right.lane_change = MARK_CHANGE_NONE
-    assert_equal(LaneMarking(right).lane_change, CHANGE_NONE)
+    assert_equal(LaneMarking._from_si(right).lane_change, CHANGE_NONE)
     right.color = "blue"
-    assert_equal(LaneMarking(right).color_name(), "white")
+    assert_equal(LaneMarking._from_si(right).color_name(), "white")
     assert_equal(
-        String(LaneMarking(right)),
+        String(LaneMarking._from_si(right)),
         "LaneMarking(type=2, color=1, lane_change=0, width=0.2)",
     )
     # CARLA's defaults: white standard paint 0.15 m wide, right-hand.
-    var plain = RoadInfoMarkRecord(3.0, 1)
+    var plain = RoadInfoMarkRecord._from_si(3.0, 1)
     assert_equal(plain.color, "white")
     assert_equal(plain.material, "standard")
     assert_equal(plain.width, 0.15)
     assert_equal(plain.lane_change, MARK_CHANGE_NONE)
     assert_true(plain.is_rht)
-    assert_equal(plain.distance(), 3.0)
+    assert_equal(plain.distance_meters(), 3.0)
     # A marking made from its parts checks each part.
-    var made = LaneMarking(SOLID, MARKING_WHITE, CHANGE_LEFT, 0.25)
+    var made = LaneMarking._from_si(SOLID, MARKING_WHITE, CHANGE_LEFT, 0.25)
     assert_equal(made.lane_change, CHANGE_LEFT)
     assert_equal(made.width, 0.25)
     with assert_raises():
-        _ = LaneMarking(LaneMarkingType(11), MARKING_WHITE, CHANGE_NONE, 0.1)
+        _ = LaneMarking._from_si(
+            LaneMarkingType(11), MARKING_WHITE, CHANGE_NONE, 0.1
+        )
     with assert_raises():
-        _ = LaneMarking(SOLID, LaneMarkingColor(6), CHANGE_NONE, 0.1)
+        _ = LaneMarking._from_si(SOLID, LaneMarkingColor(6), CHANGE_NONE, 0.1)
     with assert_raises():
-        _ = LaneMarking(SOLID, MARKING_WHITE, LaneChange(4), 0.1)
+        _ = LaneMarking._from_si(SOLID, MARKING_WHITE, LaneChange(4), 0.1)
 
 
 def test_information_set() raises:
     var widths = List[RoadInfoLaneWidth]()
-    widths.append(RoadInfoLaneWidth(10.0, CubicPolynomial.constant(2.0)))
-    widths.append(RoadInfoLaneWidth(0.0, CubicPolynomial.constant(1.0)))
-    widths.append(RoadInfoLaneWidth(10.0, CubicPolynomial.constant(3.0)))
+    widths.append(
+        RoadInfoLaneWidth._from_si(10.0, CubicPolynomial._constant_si(2.0))
+    )
+    widths.append(
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(1.0))
+    )
+    widths.append(
+        RoadInfoLaneWidth._from_si(10.0, CubicPolynomial._constant_si(3.0))
+    )
     sort_infos(widths)
     assert_equal(widths[0].s, 0.0)
     # A tie keeps the order the records came in.
@@ -352,16 +364,20 @@ def test_information_set() raises:
     var none = infos_in_range(widths, 1.0, 2.0)
     assert_equal(len(none), 0)
     var info = InformationSet()
-    info.elevations.append(RoadInfoElevation(5.0, CubicPolynomial.constant(1)))
-    info.elevations.append(RoadInfoElevation(1.0, CubicPolynomial.constant(2)))
+    info.elevations.append(
+        RoadInfoElevation._from_si(5.0, CubicPolynomial._constant_si(1))
+    )
+    info.elevations.append(
+        RoadInfoElevation._from_si(1.0, CubicPolynomial._constant_si(2))
+    )
     for s in [5.0, 1.0]:
-        var c = CubicPolynomial.constant(s)
-        info.borders.append(RoadInfoLaneBorder(s, c))
-        info.heights.append(RoadInfoLaneHeight(s, s, s))
-        info.materials.append(RoadInfoLaneMaterial(s, "asphalt", s, s))
-        info.visibilities.append(RoadInfoLaneVisibility(s, s, s, s, s))
-        info.accesses.append(RoadInfoLaneAccess(s, "bus"))
-        info.rules.append(RoadInfoLaneRule(s, "no stopping"))
+        var c = CubicPolynomial._constant_si(s)
+        info.borders.append(RoadInfoLaneBorder._from_si(s, c))
+        info.heights.append(RoadInfoLaneHeight._from_si(s, s, s))
+        info.materials.append(RoadInfoLaneMaterial._from_si(s, "asphalt", s, s))
+        info.visibilities.append(RoadInfoLaneVisibility._from_si(s, s, s, s, s))
+        info.accesses.append(RoadInfoLaneAccess._from_si(s, "bus"))
+        info.rules.append(RoadInfoLaneRule._from_si(s, "no stopping"))
     info.sort()
     assert_equal(info.elevations[0].s, 1.0)
     assert_equal(info.borders[0].s, 1.0)
@@ -371,8 +387,12 @@ def test_information_set() raises:
     assert_equal(info.accesses[1].s, 5.0)
     assert_equal(info.rules[1].s, 5.0)
     var lines = List[RoadInfoMarkTypeLine]()
-    lines.append(RoadInfoMarkTypeLine(5.0, 0, 3.0, 9.0, 0.0, "none", 0.15))
-    lines.append(RoadInfoMarkTypeLine(1.0, 0, 3.0, 9.0, 0.0, "none", 0.15))
+    lines.append(
+        RoadInfoMarkTypeLine._from_si(5.0, 0, 3.0, 9.0, 0.0, "none", 0.15)
+    )
+    lines.append(
+        RoadInfoMarkTypeLine._from_si(1.0, 0, 3.0, 9.0, 0.0, "none", 0.15)
+    )
     sort_infos(lines)
     assert_equal(lines[0].s, 1.0)
     # A backward walk over no records finds none.
@@ -381,11 +401,11 @@ def test_information_set() raises:
     assert_true(v.holds_for(LaneId(-1)))
     assert_false(v.holds_for(LaneId(0)))
     assert_false(v.holds_for(LaneId(-3)))
-    var reference = RoadInfoSignal(
+    var reference = RoadInfoSignal._from_si(
         SignalId("s"), RoadId(1), 4.0, 1.0, "-", List[LaneValidity]()
     )
     assert_equal(reference.orientation(), ORIENTATION_NEGATIVE)
-    assert_equal(reference.distance(), 4.0)
+    assert_equal(reference.distance_meters(), 4.0)
 
 
 # --- road -----------------------------------------------------------------
@@ -393,8 +413,8 @@ def test_information_set() raises:
 
 def test_sections_and_lanes() raises:
     with assert_raises():
-        _ = LaneSection(SectionId(-1), 0.0)
-    var section = LaneSection(SectionId(0), 5.0)
+        _ = LaneSection._from_si(SectionId(-1), 0.0)
+    var section = LaneSection._from_si(SectionId(0), 5.0)
     assert_equal(section.add_lane(LaneId(1)), 0)
     assert_equal(section.add_lane(LaneId(-1)), 0)
     assert_equal(section.add_lane(LaneId(0)), 1)
@@ -417,159 +437,175 @@ def test_sections_and_lanes() raises:
 
 def test_road_refuses_bad_ids() raises:
     with assert_raises():
-        _ = Road(RoadId(-1), "", 1.0, NO_JUNCTION, RoadId(0), RoadId(0), True)
+        _ = Road._from_si(
+            RoadId(-1), "", 1.0, NO_JUNCTION, RoadId(0), RoadId(0), True
+        )
     with assert_raises():
-        _ = Road(
+        _ = Road._from_si(
             RoadId(1), "", 1.0, JuncId(1 << 40), RoadId(0), RoadId(0), True
         )
     with assert_raises():
-        _ = Road(RoadId(1), "", 1.0, NO_JUNCTION, RoadId(-5), RoadId(0), True)
+        _ = Road._from_si(
+            RoadId(1), "", 1.0, NO_JUNCTION, RoadId(-5), RoadId(0), True
+        )
     with assert_raises():
-        _ = Road(RoadId(1), "", 1.0, NO_JUNCTION, RoadId(0), RoadId(-5), True)
+        _ = Road._from_si(
+            RoadId(1), "", 1.0, NO_JUNCTION, RoadId(0), RoadId(-5), True
+        )
 
 
 def test_road_sections() raises:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "r", 50.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    assert_equal(road.add_section(SectionId(0), 0.0), 0)
-    assert_equal(road.add_section(SectionId(1), 20.0), 1)
+    assert_equal(road.add_section_meters(SectionId(0), 0.0), 0)
+    assert_equal(road.add_section_meters(SectionId(1), 20.0), 1)
     # A second section at the same s goes after the first, as in a
     # multimap.
-    assert_equal(road.add_section(SectionId(2), 20.0), 2)
-    assert_equal(road.add_section(SectionId(3), 10.0), 1)
+    assert_equal(road.add_section_meters(SectionId(2), 20.0), 2)
+    assert_equal(road.add_section_meters(SectionId(3), 10.0), 1)
     assert_equal(road.section_index(SectionId(2)), 3)
     with assert_raises():
         _ = road.section_index(SectionId(9))
-    assert_equal(road.upper_bound(12.0), 20.0)
-    assert_equal(road.upper_bound(25.0), 50.0)
-    assert_equal(road.section_length(1), 10.0)
-    assert_equal(len(road.sections_at(-1.0)), 0)
-    var both = road.sections_at(25.0)
+    assert_equal(road.upper_bound_meters(12.0), 20.0)
+    assert_equal(road.upper_bound_meters(25.0), 50.0)
+    assert_equal(road.section_length_meters(1), 10.0)
+    assert_equal(len(road.sections_at_meters(-1.0)), 0)
+    var both = road.sections_at_meters(25.0)
     assert_equal(len(both), 2)
     assert_equal(both[1], 3)
     _ = road.sections[2].add_lane(LaneId(-1))
     _ = road.sections[3].add_lane(LaneId(-1))
     _ = road.sections[3].add_lane(LaneId(2))
     _ = road.sections[0].add_lane(LaneId(2))
-    var found = road.lane_by_distance(22.0, LaneId(2))
+    var found = road.lane_by_distance_meters(22.0, LaneId(2))
     assert_equal(found[0], 3)
     with assert_raises():
-        _ = road.lane_by_distance(22.0, LaneId(5))
-    assert_equal(len(road.lanes_by_distance(22.0)), 3)
+        _ = road.lane_by_distance_meters(22.0, LaneId(5))
+    assert_equal(len(road.lanes_by_distance_meters(22.0)), 3)
     # The later section wins an id both have.
-    var by_id = road.lanes_at(22.0)
+    var by_id = road.lanes_at_meters(22.0)
     assert_equal(len(by_id), 2)
     assert_equal(by_id[0][0], 3)
-    assert_equal(road.next_lane(0.0, LaneId(-1)).value()[0], 2)
-    assert_false(road.next_lane(0.0, LaneId(7)))
-    assert_equal(road.prev_lane(20.0, LaneId(2)).value()[0], 0)
-    assert_false(road.prev_lane(20.0, LaneId(7)))
+    assert_equal(road.next_lane_meters(0.0, LaneId(-1)).value()[0], 2)
+    assert_false(road.next_lane_meters(0.0, LaneId(7)))
+    assert_equal(road.prev_lane_meters(20.0, LaneId(2)).value()[0], 0)
+    assert_false(road.prev_lane_meters(20.0, LaneId(7)))
     assert_equal(road.start_section(LaneId(-1)), 2)
     assert_equal(road.end_section(LaneId(2)), 3)
     assert_equal(road.start_section(LaneId(9)), -1)
     assert_equal(road.end_section(LaneId(9)), -1)
-    assert_equal(road.lane_length(0), 10.0)
+    assert_equal(road.lane_length_meters(0), 10.0)
 
 
 def test_road_records_are_needed() raises:
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "r", 10.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     with assert_raises():
-        _ = road.elevation_on(1.0)
+        _ = road.elevation_on_meters(1.0)
     with assert_raises():
-        _ = road.directed_point(1.0)
+        _ = road.directed_point_meters(1.0)
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial(1.0, 0.1, 0, 0, 0))
+        RoadInfoElevation._from_si(
+            0.0, CubicPolynomial._from_coefficients(1.0, 0.1, 0, 0, 0)
+        )
     )
     with assert_raises():
-        _ = road.directed_point(1.0)
+        _ = road.directed_point_meters(1.0)
     with assert_raises():
         _ = road.lane_is_straight(0)
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 10.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 10.0)
+        )
     )
     # No lane offset record: CARLA keeps the line where it is.
-    var p = road.directed_point(4.0)
+    var p = road.directed_point_meters(4.0)
     assert_almost_equal(p.x, 4.0)
     assert_almost_equal(p.z, 1.4, atol=1e-6)
     assert_almost_equal(p.pitch, 0.1)
     # The width of a lane with no record is zero.
-    assert_equal(road.lane_width(0, 0, 5.0), 0.0)
+    assert_equal(road.lane_width_meters(0, 0, 5.0), 0.0)
     with assert_raises():
-        _ = road.lane_width(0, 0, 11.0)
+        _ = road.lane_width_meters(0, 0, 11.0)
     # A transform needs a width record and a lane offset record.
     with assert_raises():
-        _ = road.lane_transform(0, 0, 5.0)
+        _ = road.lane_transform_meters(0, 0, 5.0)
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(3.0))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(3.0))
     )
     with assert_raises():
-        _ = road.lane_transform(0, 0, 5.0)
+        _ = road.lane_transform_meters(0, 0, 5.0)
     with assert_raises():
-        _ = road.lane_transform(0, 0, 11.0)
+        _ = road.lane_transform_meters(0, 0, 11.0)
     with assert_raises():
-        _ = road.lane_transform(0, 0, -1.0)
+        _ = road.lane_transform_meters(0, 0, -1.0)
     with assert_raises():
-        _ = road.lane_transform(1, 0, 5.0)
+        _ = road.lane_transform_meters(1, 0, 5.0)
     with assert_raises():
-        _ = road.lane_transform(-1, 0, 5.0)
+        _ = road.lane_transform_meters(-1, 0, 5.0)
     with assert_raises():
-        _ = road.lane_transform(0, 3, 5.0)
+        _ = road.lane_transform_meters(0, 3, 5.0)
     with assert_raises():
-        _ = road.lane_transform(0, -1, 5.0)
+        _ = road.lane_transform_meters(0, -1, 5.0)
     with assert_raises():
-        _ = road.nearest_lane(5.0, Vector3(0, 0, 0), LaneType(0))
+        _ = road.nearest_lane_meters(5.0, Vector3(0, 0, 0), LaneType(0))
 
 
 def test_road_edges() raises:
     # A section with no lanes has no lanes of any type.
-    assert_equal(len(LaneSection(SectionId(0), 0.0).lanes_of_type(LANE_ANY)), 0)
+    assert_equal(
+        len(LaneSection._from_si(SectionId(0), 0.0).lanes_of_type(LANE_ANY)), 0
+    )
     # A road with no sections finds nothing.
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "r", 10.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
     with assert_raises():
         _ = road.section_index(SectionId(0))
-    assert_equal(road.upper_bound(2.5), 10.0)
-    assert_equal(len(road.sections_at(2.5)), 0)
-    assert_false(road.next_lane(2.5, LaneId(-1)))
-    assert_false(road.prev_lane(2.5, LaneId(-1)))
+    assert_equal(road.upper_bound_meters(2.5), 10.0)
+    assert_equal(len(road.sections_at_meters(2.5)), 0)
+    assert_false(road.next_lane_meters(2.5, LaneId(-1)))
+    assert_false(road.prev_lane_meters(2.5, LaneId(-1)))
     assert_equal(road.start_section(LaneId(-1)), -1)
     assert_equal(road.end_section(LaneId(-1)), -1)
     # Before the first section there are no lanes.
-    _ = road.add_section(SectionId(0), 5.0)
+    _ = road.add_section_meters(SectionId(0), 5.0)
     _ = road.sections[0].add_lane(LaneId(1))
     with assert_raises():
-        _ = road.lane_by_distance(2.5, LaneId(1))
-    assert_equal(len(road.lanes_by_distance(2.5)), 0)
-    assert_equal(len(road.lanes_at(2.5)), 0)
+        _ = road.lane_by_distance_meters(2.5, LaneId(1))
+    assert_equal(len(road.lanes_by_distance_meters(2.5)), 0)
+    assert_equal(len(road.lanes_at_meters(2.5)), 0)
     # A second section at the same s puts its lower id first.
-    _ = road.add_section(SectionId(1), 5.0)
+    _ = road.add_section_meters(SectionId(1), 5.0)
     _ = road.sections[1].add_lane(LaneId(-1))
-    var by_id = road.lanes_at(7.5)
+    var by_id = road.lanes_at_meters(7.5)
     assert_equal(len(by_id), 2)
     assert_equal(by_id[0][0], 1)
     assert_equal(by_id[1][0], 0)
     # A section with no lanes adds none.
-    var bare = Road(
+    var bare = Road._from_si(
         RoadId(2), "r", 10.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = bare.add_section(SectionId(0), 0.0)
-    assert_equal(len(bare.lanes_by_distance(2.5)), 0)
-    assert_equal(len(bare.lanes_at(2.5)), 0)
+    _ = bare.add_section_meters(SectionId(0), 0.0)
+    assert_equal(len(bare.lanes_by_distance_meters(2.5)), 0)
+    assert_equal(len(bare.lanes_at_meters(2.5)), 0)
     bare.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 10.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 10.0)
+        )
     )
     # With no elevation record a line section is straight.
     assert_true(bare.lane_is_straight(0))
     bare.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial(0, 0, 0, 0, 0))
+        RoadInfoElevation._from_si(
+            0.0, CubicPolynomial._from_coefficients(0, 0, 0, 0, 0)
+        )
     )
-    var nearest = bare.nearest_lane(2.5, Vector3(2.5, 1, 0))
+    var nearest = bare.nearest_lane_meters(2.5, Vector3(2.5, 1, 0))
     assert_false(nearest[0])
     assert_equal(nearest[1], 1.7976931348623157e308)
 
@@ -581,21 +617,25 @@ def test_straight_lanes() raises:
     # a road whose elevation curves.
     assert_false(map.road(RoadId(11)).lane_is_straight(0))
     assert_false(map.road(RoadId(5)).lane_is_straight(0))
-    var road = Road(
+    var road = Road._from_si(
         RoadId(1), "r", 20.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     road.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 10.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 10.0)
+        )
     )
     assert_false(road.lane_is_straight(0))
     road.length = 10.0
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial(0, 0, 0, 0.001, 0))
+        RoadInfoElevation._from_si(
+            0.0, CubicPolynomial._from_coefficients(0, 0, 0, 0.001, 0)
+        )
     )
     assert_false(road.lane_is_straight(0))
-    road.info.elevations[0] = RoadInfoElevation(
-        0.0, CubicPolynomial(0, 0.1, 0, 0, 0)
+    road.info.elevations[0] = RoadInfoElevation._from_si(
+        0.0, CubicPolynomial._from_coefficients(0, 0.1, 0, 0, 0)
     )
     assert_true(road.lane_is_straight(0))
 
@@ -657,13 +697,13 @@ def test_lane_pitch_follows_grade_and_traffic_direction() raises:
                 rht,
                 [(-1, LANE_DRIVING, 0, 0), (1, LANE_DRIVING, 0, 0)],
             )
-            builder.roads[r].info.elevations[0] = RoadInfoElevation(
-                0.0, CubicPolynomial(0, grade, 0, 0, 0)
+            builder.roads[r].info.elevations[0] = RoadInfoElevation._from_si(
+                0.0, CubicPolynomial._from_coefficients(0, grade, 0, 0, 0)
             )
             var map = builder.build()
             for lane in [-1, 1]:
                 var here = _w(1, 0, lane, 40.0)
-                var next = map.next(here, 1.0)[0]
+                var next = map.next_meters(here, 1.0)[0]
                 var pose = map.compute_transform(here)
                 var along = map.compute_transform(next).location - pose.location
                 along.normalize()
@@ -676,75 +716,79 @@ def test_lane_pitch_follows_grade_and_traffic_direction() raises:
 
 def test_lane_corners() raises:
     var map = load_opendrive_file(TOWN)
-    var c = map.road(RoadId(1)).lane_corners(0, 1, 10.0)
+    var c = map.road(RoadId(1)).lane_corners_meters(0, 1, 10.0)
     _near(c[0], 10.0, 3.5, 0.0)
     _near(c[1], 10.0, 0.0, 0.0)
     # A sidewalk rises six inches.
-    c = map.road(RoadId(1)).lane_corners(0, 0, 10.0)
+    c = map.road(RoadId(1)).lane_corners_meters(0, 0, 10.0)
     _near(c[0], 10.0, 5.5, 0.1524)
     _near(c[1], 10.0, 3.5, 0.1524)
     # A junction's driving lane widens; others do not.
-    c = map.road(RoadId(10)).lane_corners(0, 0, 5.0, 0.5)
+    c = map.road(RoadId(10)).lane_corners_meters(0, 0, 5.0, 0.5)
     _near(c[0], 65.0, 4.0, 0.0)
     _near(c[1], 65.0, -0.5, 0.0)
-    c = map.road(RoadId(1)).lane_corners(0, 1, 5.0, 0.5)
+    c = map.road(RoadId(1)).lane_corners_meters(0, 1, 5.0, 0.5)
     _near(c[0], 5.0, 3.5, 0.0)
-    c = map.road(RoadId(11)).lane_corners(0, 0, 0.0, 0.5)
+    c = map.road(RoadId(11)).lane_corners_meters(0, 0, 0.0, 0.5)
     _near(c[0], 60.0, 5.5, 0.1524)
     # Past the road's end the corners clamp.
-    c = map.road(RoadId(1)).lane_corners(1, 1, 99.0)
+    c = map.road(RoadId(1)).lane_corners_meters(1, 1, 99.0)
     _near(c[0], 60.0, 4.5, 0.0)
-    var o = map.road(RoadId(1)).lane_edge_offsets(1, 1, 50.0)
+    var o = map.road(RoadId(1)).lane_edge_offsets_meters(1, 1, 50.0)
     assert_almost_equal(o[0], 4.0, atol=1e-6)
     assert_almost_equal(o[1], 0.0, atol=1e-6)
 
 
 def test_nearest_point_and_lane() raises:
     var map = load_opendrive_file(TOWN)
-    var p = map.road(RoadId(1)).nearest_point(Vector3(20, 3, 0))
+    var p = map.road(RoadId(1)).nearest_point_meters(Vector3(20, 3, 0))
     assert_almost_equal(p[0], 20.0, atol=1e-5)
     assert_almost_equal(p[1], 3.0, atol=1e-5)
     # Road 5: the spiral's distance is the offset from its start, the
     # nearest here; the lengths before it are none.
-    var q = map.road(RoadId(5)).nearest_point(Vector3(1, 101, 0))
+    var q = map.road(RoadId(5)).nearest_point_meters(Vector3(1, 101, 0))
     assert_almost_equal(q[0], 1.0, atol=1e-5)
     assert_almost_equal(q[1], 1.0, atol=1e-5)
     # The poly3's answer is its start, so a point there picks it and adds
     # the spiral's 20 m.
-    var r = map.road(RoadId(5)).nearest_point(Vector3(1000, 1000, 0))
+    var r = map.road(RoadId(5)).nearest_point_meters(Vector3(1000, 1000, 0))
     assert_almost_equal(r[0], 20.0 + 20.0, atol=1e-5)
-    var empty = Road(
+    var empty = Road._from_si(
         RoadId(9), "", 1.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
     assert_equal(
-        empty.nearest_point(Vector3(0, 0, 0))[1], 1.7976931348623157e308
+        empty.nearest_point_meters(Vector3(0, 0, 0))[1], 1.7976931348623157e308
     )
     # `GetNearestLane` measures in OpenDRIVE's frame: lane -1's center is
     # at y = -1.75 there.
-    var n = map.road(RoadId(1)).nearest_lane(10.0, Vector3(10, -1.75, 0))
+    var n = map.road(RoadId(1)).nearest_lane_meters(10.0, Vector3(10, -1.75, 0))
     assert_equal(n[0].value(), LaneKey(RoadId(1), SectionId(0), LaneId(-1)))
     assert_almost_equal(n[1], 0.0, atol=1e-5)
-    n = map.road(RoadId(1)).nearest_lane(10.0, Vector3(10, 4.5, 0))
+    n = map.road(RoadId(1)).nearest_lane_meters(10.0, Vector3(10, 4.5, 0))
     assert_equal(n[0].value().lane_id, LaneId(2))
-    n = map.road(RoadId(1)).nearest_lane(
+    n = map.road(RoadId(1)).nearest_lane_meters(
         10.0, Vector3(10, 4.5, 0), LANE_DRIVING
     )
     assert_equal(n[0].value().lane_id, LaneId(1))
-    n = map.road(RoadId(1)).nearest_lane(10.0, Vector3(10, 4.5, 0), LANE_TRAM)
+    n = map.road(RoadId(1)).nearest_lane_meters(
+        10.0, Vector3(10, 4.5, 0), LANE_TRAM
+    )
     assert_false(n[0])
-    var bare = Road(
+    var bare = Road._from_si(
         RoadId(1), "r", 10.0, NO_JUNCTION, RoadId(0), RoadId(0), True
     )
-    _ = bare.add_section(SectionId(0), 0.0)
+    _ = bare.add_section_meters(SectionId(0), 0.0)
     _ = bare.sections[0].add_lane(LaneId(-1))
     bare.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial.constant(0))
+        RoadInfoElevation._from_si(0.0, CubicPolynomial._constant_si(0))
     )
     bare.info.geometries.append(
-        RoadInfoGeometry(0.0, RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.0, 10.0))
+        RoadInfoGeometry._from_si(
+            0.0, RoadGeometry.from_meters(LINE, 0.0, 0.0, 0.0, 0.0, 10.0)
+        )
     )
     with assert_raises():
-        _ = bare.nearest_lane(5.0, Vector3(0, 0, 0))
+        _ = bare.nearest_lane_meters(5.0, Vector3(0, 0, 0))
 
 
 # --- the map's lookups ----------------------------------------------------
@@ -790,10 +834,10 @@ def test_lookups() raises:
     with assert_raises():
         _ = map.controller(ControllerId("nope"))
     assert_equal(map.lane_type(_w(1, 0, -1, 1.0)), LANE_DRIVING)
-    assert_almost_equal(map.lane_width(_w(1, 1, -1, 50.0)).value, 4.0)
+    assert_almost_equal(map.lane_width_float32(_w(1, 1, -1, 50.0)).value, 4.0)
     assert_almost_equal(map.lane_width_meters(_w(1, 1, -1, 50.0)), 4.0)
     with assert_raises():
-        _ = map.lane_width(_w(1, 1, -1, 61.0))
+        _ = map.lane_width_float32(_w(1, 1, -1, 61.0))
     with assert_raises():
         _ = map.lane_width_meters(_w(1, 1, -1, 61.0))
     assert_equal(map.junction_id(RoadId(11)), JuncId(100))
@@ -803,7 +847,7 @@ def test_lookups() raises:
     assert_false(map.is_positive_direction(_w(1, 0, 1, 1.0)))
     # Before the first width record there is none.
     with assert_raises():
-        _ = map.lane_width(_w(1, 0, -1, -1.0))
+        _ = map.lane_width_float32(_w(1, 0, -1, -1.0))
     with assert_raises():
         _ = map.lane_width_meters(_w(1, 0, -1, -1.0))
 
@@ -904,7 +948,7 @@ def _assert_town_segment_index(map: Map) raises:
                 lane_count += 1
                 var positive = road.is_rht == (lane.value < 0)
                 var start = section.s
-                var end = start + road.section_length(sec)
+                var end = start + road.section_length_meters(sec)
                 var begin = index
                 var previous = Float64(0.0)
                 while index < map.segment_count():
@@ -1062,7 +1106,7 @@ def test_default_queries_answer_across_the_town() raises:
     var low_y = Float32(1.0e30)
     var high_y = Float32(-1.0e30)
     var points = 0
-    for w in map.generate_waypoints(2.0):
+    for w in map.generate_waypoints_meters(2.0):
         var at = map.compute_transform(w).location
         low_x = min(low_x, at.x)
         high_x = max(high_x, at.x)
@@ -1176,19 +1220,27 @@ def test_certified_closest_waypoints() raises:
 def test_waypoint_xodr() raises:
     var map = load_opendrive_file(TOWN)
     _same(
-        map.waypoint_xodr(RoadId(1), LaneId(-1), _m(35)).value(), 1, 1, -1, 35.0
+        map.waypoint_xodr_float32(RoadId(1), LaneId(-1), _m(35)).value(),
+        1,
+        1,
+        -1,
+        35.0,
     )
     _same(
-        map.waypoint_xodr(RoadId(1), LaneId(-1), _m(0)).value(), 1, 0, -1, 0.0
+        map.waypoint_xodr_float32(RoadId(1), LaneId(-1), _m(0)).value(),
+        1,
+        0,
+        -1,
+        0.0,
     )
-    assert_false(map.waypoint_xodr(RoadId(4), LaneId(-1), _m(1)))
-    assert_false(map.waypoint_xodr(RoadId(1), LaneId(-1), _m(-1)))
-    assert_false(map.waypoint_xodr(RoadId(1), LaneId(-1), _m(60)))
-    assert_false(map.waypoint_xodr(RoadId(1), LaneId(-9), _m(1)))
+    assert_false(map.waypoint_xodr_float32(RoadId(4), LaneId(-1), _m(1)))
+    assert_false(map.waypoint_xodr_float32(RoadId(1), LaneId(-1), _m(-1)))
+    assert_false(map.waypoint_xodr_float32(RoadId(1), LaneId(-1), _m(60)))
+    assert_false(map.waypoint_xodr_float32(RoadId(1), LaneId(-9), _m(1)))
     with assert_raises():
-        _ = map.waypoint_xodr(RoadId(-1), LaneId(-1), _m(1))
+        _ = map.waypoint_xodr_float32(RoadId(-1), LaneId(-1), _m(1))
     with assert_raises():
-        _ = map.waypoint_xodr(RoadId(1), LaneId(1 << 40), _m(1))
+        _ = map.waypoint_xodr_float32(RoadId(1), LaneId(1 << 40), _m(1))
 
 
 # --- walking --------------------------------------------------------------------
@@ -1207,26 +1259,26 @@ def test_successors_and_next() raises:
     # Lane 0 is left out of both.
     assert_equal(len(map.successors(_w(1, 0, 0, 5.0))), 0)
     assert_equal(len(map.predecessors(_w(1, 1, 0, 35.0))), 0)
-    var n = map.next(_w(1, 1, -1, 40.0), 35.0)
+    var n = map.next_meters(_w(1, 1, -1, 40.0), 35.0)
     assert_equal(len(n), 3)
     _same(n[0], 10, 0, -1, 15.0)
     _same(n[1], 11, 0, -1, 15.0)
-    var within = map.next(_w(1, 0, -1, 5.0), 2.0)
+    var within = map.next_meters(_w(1, 0, -1, 5.0), 2.0)
     _same(within[0], 1, 0, -1, 7.0)
-    var back = map.previous(_w(2, 0, -1, 5.0), 10.0)
+    var back = map.previous_meters(_w(2, 0, -1, 5.0), 10.0)
     assert_equal(len(back), 1)
     _same(back[0], 10, 0, -1, 25.0)
     # A lane that runs against s steps the other way.
-    _same(map.next(_w(1, 1, 1, 50.0), 5.0)[0], 1, 1, 1, 45.0)
-    _same(map.previous(_w(1, 1, 1, 50.0), 5.0)[0], 1, 1, 1, 55.0)
+    _same(map.next_meters(_w(1, 1, 1, 50.0), 5.0)[0], 1, 1, 1, 45.0)
+    _same(map.previous_meters(_w(1, 1, 1, 50.0), 5.0)[0], 1, 1, 1, 55.0)
     # A step no longer than EPSILON gives the waypoint back.
-    _same(map.next(_w(1, 0, -1, 5.0), 1e-16)[0], 1, 0, -1, 5.0)
+    _same(map.next_meters(_w(1, 0, -1, 5.0), 1e-16)[0], 1, 0, -1, 5.0)
     with assert_raises():
-        _ = map.next(_w(1, 0, -1, 5.0), 0.0)
+        _ = map.next_meters(_w(1, 0, -1, 5.0), 0.0)
     with assert_raises():
-        _ = map.next(_w(1, 0, -1, -5.0), 1.0)
+        _ = map.next_meters(_w(1, 0, -1, -5.0), 1.0)
     # A dead end gives nothing.
-    assert_equal(len(map.next(_w(2, 0, -1, 30.0), 20.0)), 0)
+    assert_equal(len(map.next_meters(_w(2, 0, -1, 30.0), 20.0)), 0)
 
 
 def test_next_skips_loops() raises:
@@ -1241,8 +1293,8 @@ def test_next_skips_loops() raises:
     )
     var map = b.build()
     assert_equal(len(map.successors(_w(1, 0, -1, 5.0))), 1)
-    assert_equal(len(map.next(_w(1, 0, -1, 5.0), 20.0)), 0)
-    assert_equal(len(map.previous(_w(2, 0, 1, 5.0), 20.0)), 0)
+    assert_equal(len(map.next_meters(_w(1, 0, -1, 5.0), 20.0)), 0)
+    assert_equal(len(map.previous_meters(_w(2, 0, 1, 5.0), 20.0)), 0)
 
 
 def test_right_and_left() raises:
@@ -1268,7 +1320,7 @@ def test_right_and_left() raises:
 
 def test_until_lane_end() raises:
     var map = load_opendrive_file(TOWN)
-    var ahead = map.next_until_lane_end(_w(1, 0, -1, 1.0), 7.0)
+    var ahead = map.next_until_lane_end_meters(_w(1, 0, -1, 1.0), 7.0)
     assert_equal(len(ahead), 9)
     _same(ahead[3], 1, 0, -1, 29.0)
     _same(ahead[4], 1, 1, -1, 36.0)
@@ -1276,26 +1328,26 @@ def test_until_lane_end() raises:
     var expected = [8.0, 15.0, 22.0, 29.0, 36.0, 43.0, 50.0, 57.0, 60.0]
     for i in range(len(expected)):
         _same(ahead[i], 1, 0 if i < 4 else 1, -1, expected[i])
-    var back = map.next_until_lane_end(_w(2, 0, 1, 39.0), 15.0)
+    var back = map.next_until_lane_end_meters(_w(2, 0, 1, 39.0), 15.0)
     assert_equal(len(back), 3)
     _same(back[2], 2, 0, 1, 0.0)
-    var prev = map.previous_until_lane_start(_w(10, 0, -1, 20.0), 5.0)
+    var prev = map.previous_until_lane_start_meters(_w(10, 0, -1, 20.0), 5.0)
     assert_equal(len(prev), 4)
     _same(prev[3], 10, 0, -1, 0.0)
     # The remainder follows the backward direction on an isolated end.
-    var isolated = map.previous_until_lane_start(_w(1, 1, -1, 50.0), 4.0)
+    var isolated = map.previous_until_lane_start_meters(_w(1, 1, -1, 50.0), 4.0)
     assert_equal(len(isolated), 13)
     _same(isolated[12], 1, 0, -1, 0.0)
 
 
 def test_generation() raises:
     var map = load_opendrive_file(TOWN)
-    var all = map.generate_waypoints(10.0)
+    var all = map.generate_waypoints_meters(10.0)
     assert_equal(len(all), 50)
     _same(all[0], 1, 0, -1, 0.0)
     _same(all[49], 11, 0, -1, 30.0)
     with assert_raises():
-        _ = map.generate_waypoints(0.0)
+        _ = map.generate_waypoints_meters(0.0)
     var entries = map.generate_waypoints_on_road_entries()
     assert_equal(len(entries), 13)
     _same(entries[1], 1, 1, 1, 60.0)
@@ -1442,7 +1494,7 @@ def test_signal_transforms() raises:
     assert_false(is_traffic_light(SIGNAL_STOP))
     assert_equal(SIGNAL_MAXIMUM_SPEED, "274")
     with assert_raises():
-        _ = Signal(
+        _ = Signal._from_si(
             RoadId(-1),
             SignalId("a"),
             0,
@@ -1464,7 +1516,7 @@ def test_signal_transforms() raises:
             0,
         )
     with assert_raises():
-        _ = Signal(
+        _ = Signal._from_si(
             RoadId(1),
             SignalId(""),
             0,
@@ -1501,7 +1553,7 @@ def test_signals_in_distance() raises:
     # From the Python copy of `GetSignalsInDistance`: the longer list of
     # the successor comes first.
     # Road 2's yield sign comes twice: two connections lead there.
-    var found = map.signals_in_distance(_w(1, 0, -1, 1.0), 100.0)
+    var found = map.signals_in_distance_meters(_w(1, 0, -1, 1.0), 100.0)
     assert_equal(len(found), 6)
     assert_equal(found[0].signal.signal_id, SignalId("1002"))
     _same(found[0].waypoint, 1, 1, -1, 50.0)
@@ -1511,16 +1563,16 @@ def test_signals_in_distance() raises:
     assert_almost_equal(found[3].accumulated_s, 99.0, atol=1e-9)
     assert_equal(found[5].signal.signal_id, SignalId("1004"))
     assert_almost_equal(found[5].accumulated_s, 24.0, atol=1e-9)
-    var back = map.signals_in_distance(_w(1, 1, 1, 59.0), 100.0)
+    var back = map.signals_in_distance_meters(_w(1, 1, 1, 59.0), 100.0)
     assert_equal(len(back), 4)
     assert_equal(back[1].signal.signal_id, SignalId("2003"))
     assert_almost_equal(back[3].accumulated_s, 54.0, atol=1e-9)
-    var stop = map.signals_in_distance(_w(1, 1, -1, 40.0), 100.0, True)
+    var stop = map.signals_in_distance_meters(_w(1, 1, -1, 40.0), 100.0, True)
     assert_equal(len(stop), 3)
-    var into = map.signals_in_distance(_w(1, 1, -1, 40.0), 100.0)
+    var into = map.signals_in_distance_meters(_w(1, 1, -1, 40.0), 100.0)
     assert_equal(len(into), 5)
     # A signal right at the start comes with the start waypoint.
-    var here = map.signals_in_distance(_w(1, 1, -1, 50.0), 1.0)
+    var here = map.signals_in_distance_meters(_w(1, 1, -1, 50.0), 1.0)
     assert_equal(len(here), 1)
     assert_equal(here[0].accumulated_s, 0.0)
     assert_equal(len(map.all_signal_references()), 8)
@@ -1528,11 +1580,11 @@ def test_signals_in_distance() raises:
 
 def test_landmarks() raises:
     var map = load_opendrive_file(TOWN)
-    var marks = map.landmarks_in_distance(_w(1, 0, -1, 1.0), 100.0)
+    var marks = map.landmarks_in_distance_meters(_w(1, 0, -1, 1.0), 100.0)
     # 1002 has two references, at 50 and 58; 1003's one reference is
     # found twice and kept once.
     assert_equal(len(marks), 5)
-    var typed = map.landmarks_of_type_in_distance(
+    var typed = map.landmarks_of_type_in_distance_meters(
         _w(1, 0, -1, 1.0), 100.0, "206"
     )
     assert_equal(len(typed), 2)
@@ -1552,7 +1604,7 @@ def test_landmarks() raises:
     var r = _flat_road(
         b, 1, 0, 0, 0, 10, -1, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         1,
@@ -1708,7 +1760,7 @@ def _bare_road(
     successor: Int,
 ) raises -> Int:
     # A flat, straight road along x with its records and no sections.
-    var r = b.add_road(
+    var r = b.add_road_si(
         RoadId(id),
         "bare",
         length,
@@ -1717,16 +1769,16 @@ def _bare_road(
         RoadId(successor),
         True,
     )
-    b.create_section_offset(r, 0.0, 0, 0, 0, 0)
-    b.add_road_elevation_profile(r, 0.0, 0, 0, 0, 0)
-    b.add_road_geometry_line(r, 0.0, 0.0, y, 0.0, length)
+    b.create_section_offset_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_geometry_line_si(r, 0.0, 0.0, y, 0.0, length)
     return r
 
 
 def _sign(
     mut b: MapBuilder, road: Int, id: String, s: Float64, t: Float64
 ) raises:
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         road,
         SignalId(id),
         s,
@@ -1757,7 +1809,7 @@ def test_empty_map() raises:
         _ = empty.signal(SignalId("s"))
     with assert_raises():
         _ = empty.controller(ControllerId("c"))
-    assert_equal(len(empty.generate_waypoints(1.0)), 0)
+    assert_equal(len(empty.generate_waypoints_meters(1.0)), 0)
     assert_equal(len(empty.generate_waypoints_on_road_entries()), 0)
     assert_equal(len(empty.generate_topology()), 0)
     assert_equal(len(empty.all_crosswalk_zones()), 0)
@@ -1776,7 +1828,7 @@ def test_map_of_odd_roads() raises:
     var b = MapBuilder()
     # Road 1 has one section, from s = 5, and leads into junction 7.
     var r1 = _bare_road(b, 1, 0.0, 10.0, -1, 0, 7)
-    var sec = b.add_road_section(r1, SectionId(0), 5.0)
+    var sec = b.add_road_section_si(r1, SectionId(0), 5.0)
     for id in [-1, 0]:
         _ = b.add_road_section_lane(
             r1,
@@ -1787,8 +1839,8 @@ def test_map_of_odd_roads() raises:
             LaneId(0),
             LaneId(id),
         )
-        b.create_lane_width(
-            b.lane(RoadId(1), LaneId(id), 5.0),
+        b.create_lane_width_si(
+            b.lane_si(RoadId(1), LaneId(id), 5.0),
             5.0,
             0.0 if id == 0 else 3.5,
             0,
@@ -1797,7 +1849,7 @@ def test_map_of_odd_roads() raises:
         )
     # A sign and a crosswalk before the first section.
     _sign(b, r1, "s", 1.0, 5.0)
-    b.add_road_object_crosswalk(
+    b.add_road_object_crosswalk_si(
         r1,
         "cw",
         1.0,
@@ -1809,14 +1861,17 @@ def test_map_of_odd_roads() raises:
         "+",
         2.0,
         4.0,
-        [CrosswalkPoint(-1.5, 1.0, 0.0), CrosswalkPoint(1.5, 1.0, 0.0)],
+        [
+            CrosswalkPoint._from_si(-1.5, 1.0, 0.0),
+            CrosswalkPoint._from_si(1.5, 1.0, 0.0),
+        ],
     )
     # Junction 7 holds road 2, with no sections, and road 3, with a
     # section that has no lanes.
     _ = _bare_road(b, 2, 50.0, 10.0, 7, 1, 0)
     var r3 = _bare_road(b, 3, 60.0, 10.0, 7, 0, 1)
-    _ = b.add_road_section(r3, SectionId(0), 0.0)
-    b.add_road_object_crosswalk(
+    _ = b.add_road_section_si(r3, SectionId(0), 0.0)
+    b.add_road_object_crosswalk_si(
         r3,
         "bare",
         2.5,
@@ -1845,7 +1900,7 @@ def test_map_of_odd_roads() raises:
     assert_equal(len(map.successors(_w(1, 0, -1, 7.5))), 0)
     assert_equal(len(map.successors(_w(4, 0, -1, 7.5))), 0)
     # Waypoints start where the section does.
-    var all = map.generate_waypoints(2.0)
+    var all = map.generate_waypoints_meters(2.0)
     assert_equal(len(all), 7)
     _same(all[0], 1, 0, -1, 6.0)
     _same(all[2], 4, 0, -1, 0.0)
@@ -1859,7 +1914,7 @@ def test_map_of_odd_roads() raises:
     _same(topology[0][1], 1, 0, -1, 10.0)
     _same(topology[1][0], 4, 0, -1, 0.0)
     _same(topology[1][1], 4, 0, -1, 10.0)
-    assert_false(map.waypoint_xodr(RoadId(2), LaneId(-1), _m(2.5)))
+    assert_false(map.waypoint_xodr_float32(RoadId(2), LaneId(-1), _m(2.5)))
     assert_equal(len(map.junction_waypoints(JuncId(7), LANE_ANY)), 0)
     # The crosswalk before the section stands at the origin, each corner
     # a meter wider; the one with no outline adds no corners.
@@ -1901,7 +1956,7 @@ def test_signal_on_a_missing_road() raises:
         b, 1, 0, 0, 0, 10, -1, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]
     )
     _sign(b, r, "s", 5.0, 0.0)
-    b.add_signal_position_road(SignalId("s"), RoadId(9), 5, 0, 0, 0, 0, 0)
+    b.add_signal_position_road_si(SignalId("s"), RoadId(9), 5, 0, 0, 0, 0, 0)
     with assert_raises():
         _ = b.build()
 
@@ -1976,12 +2031,12 @@ def test_tiny_straight_section() raises:
     )
     var starts: List[Float64] = [10.0, 10.0000005]
     for i in range(2):
-        var sec = b.add_road_section(r, SectionId(i + 1), starts[i])
+        var sec = b.add_road_section_si(r, SectionId(i + 1), starts[i])
         _ = b.add_road_section_lane(
             r, sec, LaneId(-1), LANE_DRIVING, False, LaneId(0), LaneId(0)
         )
-        b.create_lane_width(
-            b.lane(RoadId(1), LaneId(-1), starts[i]), starts[i], 3.5, 0, 0, 0
+        b.create_lane_width_si(
+            b.lane_si(RoadId(1), LaneId(-1), starts[i]), starts[i], 3.5, 0, 0, 0
         )
     var map = b.build()
     assert_equal(map.segment_count(), 2)
@@ -2006,22 +2061,30 @@ def test_town_edges() raises:
     var map = load_opendrive_file(TOWN)
     # The first step leaves road 10, so the walk to the lane's end is one
     # step to it.
-    var ends = map.next_until_lane_end(_w(10, 0, -1, 29.0), 5.0)
+    var ends = map.next_until_lane_end_meters(_w(10, 0, -1, 29.0), 5.0)
     assert_equal(len(ends), 1)
     _same(ends[0], 10, 0, -1, 30.0)
     # Road 10 has no marks, so a vehicle may change either way.
     assert_equal(map.lane_change(_w(10, 0, -1, 5.0)), CHANGE_BOTH)
     # Road 3 has no signals.
-    assert_equal(len(map.landmarks_in_distance(_w(3, 0, -1, 5.0), 5.0)), 0)
     assert_equal(
-        len(map.landmarks_of_type_in_distance(_w(3, 0, -1, 5.0), 5.0, "274")),
+        len(map.landmarks_in_distance_meters(_w(3, 0, -1, 5.0), 5.0)), 0
+    )
+    assert_equal(
+        len(
+            map.landmarks_of_type_in_distance_meters(
+                _w(3, 0, -1, 5.0), 5.0, "274"
+            )
+        ),
         0,
     )
     # A reference that faces no lane is never found.
     var r = map.road_index(RoadId(1))
     for k in range(len(map.roads[r].info.signals)):
         map.roads[r].info.signals[k].validities = List[LaneValidity]()
-    assert_equal(len(map.signals_in_distance(_w(1, 0, -1, 15.0), 8.0)), 0)
+    assert_equal(
+        len(map.signals_in_distance_meters(_w(1, 0, -1, 15.0), 8.0)), 0
+    )
 
 
 def test_default_validities() raises:
@@ -2047,7 +2110,7 @@ def test_builder_edges() raises:
     )
     # A second road with the same id resets the fields.
     assert_equal(
-        b.add_road(
+        b.add_road_si(
             RoadId(1), "again", 12.0, JuncId(3), RoadId(0), RoadId(0), False
         ),
         r,
@@ -2068,36 +2131,40 @@ def test_builder_edges() raises:
         _ = b.add_road_section_lane(
             r, 0, LaneId(-2), LANE_DRIVING, False, LaneId(0), LaneId(1 << 40)
         )
-    var lane = b.lane(RoadId(1), LaneId(-1), 0.0)
-    b.create_road_mark_type_line(lane, 5, 1, 1, 0, 0, "", 0.1)
+    var lane = b.lane_si(RoadId(1), LaneId(-1), 0.0)
+    b.create_road_mark_type_line_si(lane, 5, 1, 1, 0, 0, "", 0.1)
     assert_equal(len(b.roads[r].sections[0].lanes[0].info.marks), 0)
-    b.create_road_mark(
+    b.create_road_mark_si(
         lane, 0, 0.0, "solid", "", "white", "", 0.1, "", 0, "", 0, True
     )
-    b.create_road_mark(
+    b.create_road_mark_si(
         lane, 1, 0.0, "solid", "", "white", "", 0.1, "", 0, "", 0, True
     )
-    b.create_road_mark_type_line(lane, 1, 1, 1, 0, 0, "", 0.1)
+    b.create_road_mark_type_line_si(lane, 1, 1, 1, 0, 0, "", 0.1)
     assert_equal(len(b.roads[r].sections[0].lanes[0].info.marks[1].lines), 1)
     assert_equal(len(b.roads[r].sections[0].lanes[0].info.marks[0].lines), 0)
     with assert_raises():
-        _ = b.add_signal_reference(r, SignalId("x"), -1.0, 0.0, "+")
+        _ = b.add_signal_reference_si(r, SignalId("x"), -1.0, 0.0, "+")
     with assert_raises():
-        _ = b.add_signal_reference(r, SignalId(""), 1.0, 0.0, "+")
-    var handle = b.add_signal_reference(r, SignalId("x"), 50.0, 0.0, "+")
+        _ = b.add_signal_reference_si(r, SignalId(""), 1.0, 0.0, "+")
+    var handle = b.add_signal_reference_si(r, SignalId("x"), 50.0, 0.0, "+")
     assert_almost_equal(b.roads[r].info.signals[0].s, 12.0 - 0.00001)
     with assert_raises():
         b.add_validity_to_signal_reference(handle, LaneId(1 << 40), LaneId(0))
     with assert_raises():
         b.add_validity_to_signal_reference(handle, LaneId(0), LaneId(1 << 40))
     with assert_raises():
-        b.add_signal_position_inertial(SignalId("x"), 0, 0, 0, 0, 0, 0)
+        b.add_signal_position_inertial_si(SignalId("x"), 0, 0, 0, 0, 0, 0)
     with assert_raises():
         b.add_dependency_to_signal(SignalId("x"), "a", "b")
     with assert_raises():
-        b.add_signal_position_road(SignalId("x"), RoadId(1), 0, 0, 0, 0, 0, 0)
+        b.add_signal_position_road_si(
+            SignalId("x"), RoadId(1), 0, 0, 0, 0, 0, 0
+        )
     with assert_raises():
-        b.add_signal_position_road(SignalId("x"), RoadId(-1), 0, 0, 0, 0, 0, 0)
+        b.add_signal_position_road_si(
+            SignalId("x"), RoadId(-1), 0, 0, 0, 0, 0, 0
+        )
     # The builder refuses to build a reference to no signal.
     with assert_raises():
         _ = b.build()
@@ -2108,7 +2175,7 @@ def test_builder_signals() raises:
     var r = _flat_road(
         b, 1, 0, 0, 0, 20, -1, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("a"),
         5,
@@ -2130,7 +2197,7 @@ def test_builder_signals() raises:
         0,
     )
     # The same id replaces the signal and adds a second reference.
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("a"),
         6,
@@ -2151,7 +2218,7 @@ def test_builder_signals() raises:
         0,
         0,
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("b"),
         1,
@@ -2172,7 +2239,7 @@ def test_builder_signals() raises:
         0,
         0,
     )
-    b.add_signal_position_road(
+    b.add_signal_position_road_si(
         SignalId("b"), RoadId(1), 8.0, -12.0, 1.0, 0.0, 0.0, 0.0
     )
     # A junction whose road has only lane 0.
@@ -2246,15 +2313,19 @@ def test_builder_links() raises:
     var r3 = _flat_road(
         b, 3, 0, 50, 0, 20, -1, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]
     )
-    var sec = b.add_road_section(r3, SectionId(1), 10.0)
+    var sec = b.add_road_section_si(r3, SectionId(1), 10.0)
     _ = b.add_road_section_lane(
         r3, sec, LaneId(-1), LANE_DRIVING, False, LaneId(0), LaneId(0)
     )
     _ = b.add_road_section_lane(
         r3, sec, LaneId(1), LANE_DRIVING, False, LaneId(7), LaneId(0)
     )
-    b.create_lane_width(b.lane(RoadId(3), LaneId(-1), 10.0), 10.0, 3.5, 0, 0, 0)
-    b.create_lane_width(b.lane(RoadId(3), LaneId(1), 10.0), 10.0, 3.5, 0, 0, 0)
+    b.create_lane_width_si(
+        b.lane_si(RoadId(3), LaneId(-1), 10.0), 10.0, 3.5, 0, 0, 0
+    )
+    b.create_lane_width_si(
+        b.lane_si(RoadId(3), LaneId(1), 10.0), 10.0, 3.5, 0, 0, 0
+    )
     # A road into a junction id that is not a junction.
     _ = _flat_road(
         b, 4, 0, 90, 0, 10, -1, 0, 50, True, [(-1, LANE_DRIVING, 0, -1)]
@@ -2310,7 +2381,7 @@ def test_signals_move_off_lanes() raises:
             (1, LANE_DRIVING, 0, 0),
         ],
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         10,
@@ -2353,7 +2424,7 @@ def test_signals_move_off_lanes() raises:
             (1, LANE_SIDEWALK, 0, 0),
         ],
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         10,
@@ -2395,7 +2466,7 @@ def test_signals_move_off_lanes() raises:
             (1, LANE_DRIVING, 0, 0),
         ],
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         10,
@@ -2438,7 +2509,7 @@ def test_signals_move_off_lanes() raises:
             (2, LANE_DRIVING, 0, 0),
         ],
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         10,
@@ -2468,7 +2539,7 @@ def test_signals_move_off_lanes() raises:
     for i in range(2, 16):
         lanes.append((-i, LANE_SHOULDER, 0, 0))
     r = _flat_road(b, 1, 0, 0, 0, 30, -1, 0, 0, True, lanes)
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         10,
@@ -2496,7 +2567,7 @@ def test_signals_move_off_lanes() raises:
     r = _flat_road(
         b, 1, 0, 0, 0, 30, -1, 0, 0, True, [(-1, LANE_SIDEWALK, 0, 0)]
     )
-    _ = b.add_signal(
+    _ = b.add_signal_si(
         r,
         SignalId("s"),
         10,
@@ -2537,7 +2608,7 @@ def test_signal_validity_from_center_to_driving_lane_is_kept() raises:
         True,
         [(0, LANE_NONE, 0, 0), (1, LANE_DRIVING, 0, 0)],
     )
-    var handle = builder.add_signal(
+    var handle = builder.add_signal_si(
         road,
         SignalId("edge"),
         2,
@@ -2586,7 +2657,7 @@ def test_returning_to_another_lane_is_not_a_two_node_loop() raises:
         builder, 2, 10, 0, 0, 10, -1, 1, 0, True, [(1, LANE_DRIVING, -2, 0)]
     )
     var map = builder.build()
-    var next = map.next(_w(1, 0, -1, 5), 20)
+    var next = map.next_meters(_w(1, 0, -1, 5), 20)
     assert_equal(len(next), 1)
     assert_equal(next[0].road_id.value, 1)
     assert_equal(next[0].lane_id.value, -2)
@@ -2600,15 +2671,15 @@ def test_same_lane_in_a_later_section_is_not_a_return_loop() raises:
     )
     for section in range(1, 3):
         var start = Float64(section * 10)
-        var index = builder.add_road_section(road, SectionId(section), start)
+        var index = builder.add_road_section_si(road, SectionId(section), start)
         _ = builder.add_road_section_lane(
             road, index, LaneId(-1), LANE_DRIVING, False, LaneId(-1), LaneId(-1)
         )
-        builder.create_lane_width(
-            builder.lane(RoadId(1), LaneId(-1), start), start, 3.5, 0, 0, 0
+        builder.create_lane_width_si(
+            builder.lane_si(RoadId(1), LaneId(-1), start), start, 3.5, 0, 0, 0
         )
     var map = builder.build()
-    var next = map.next(_w(1, 0, -1, 5), 20)
+    var next = map.next_meters(_w(1, 0, -1, 5), 20)
     assert_equal(len(next), 1)
     assert_equal(next[0].section_id.value, 2)
     assert_almost_equal(next[0].s, 25, atol=0.001)

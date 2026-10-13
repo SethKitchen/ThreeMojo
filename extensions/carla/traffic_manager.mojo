@@ -40,6 +40,12 @@ actors, even if they were never registered. Unknown future ids stay pending.
 `stop` and `release` preserve them. All three keep global settings. This is an
 explicit local lifetime contract, not a claim of exact CARLA cleanup behavior.
 
+**Actor id boundaries.** Every public actor-id input must fit UInt32.
+Zero remains the valid no-actor sentinel. Queries and removals retain their
+unknown-valid-id behavior. Bulk input lists are checked before mutation,
+including live-world validation before registration. A command batch refuses
+invalid ids before execution; other world errors do not roll the batch back.
+
 **What the world lacks.** The world has no `set_simulate_physics`. To
 turn a vehicle's physics off, the traffic manager makes its body
 kinematic and stops it; the body then moves only where the traffic
@@ -99,6 +105,7 @@ from extensions.carla.traffic_manager_shared import (
     TrafficManagerShared,
 )
 from extensions.carla.traffic_manager_state import (
+    _check_actor_id,
     KinematicState,
     StaticAttributes,
     TRAFFIC_ANY,
@@ -154,6 +161,7 @@ struct ActorSet(Movable):
         for actor in actors:
             if not actor.is_valid():
                 raise Error("Actor id is not valid")
+        for actor in actors:
             if actor.value in self.ids:
                 continue
             var k = len(self.ids)
@@ -162,12 +170,17 @@ struct ActorSet(Movable):
             self.ids.insert(k, actor.value)
         self.state += 1
 
-    def remove(mut self, actors: List[ActorId]):
+    def remove(mut self, actors: List[ActorId]) raises:
         """Remove vehicles, `Remove`. The counter moves once.
 
         Args:
             actors: The vehicles; unknown ones are ignored.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
+        for actor in actors:
+            _ = _check_actor_id(actor)
         for actor in actors:
             for i in range(len(self.ids)):
                 if self.ids[i] == actor.value:
@@ -184,13 +197,15 @@ struct ActorSet(Movable):
             world: The world.
 
         Raises:
-            Error: If the world fails to destroy it.
+            Error: If an actor id is not valid, or the world fails to destroy
+                it.
         """
+        _ = _check_actor_id(actor)
         if actor.value in self.ids:
             _ = world.destroy_actor(actor)
             self.remove([actor])
 
-    def contains(self, actor: ActorId) -> Bool:
+    def contains(self, actor: ActorId) raises -> Bool:
         """Return True if a vehicle is here, `Contains`.
 
         Args:
@@ -198,7 +213,11 @@ struct ActorSet(Movable):
 
         Returns:
             Whether it is.
+
+        Raises:
+            Error: If an actor id is not valid.
         """
+        _ = _check_actor_id(actor)
         return actor.value in self.ids
 
     def size(self) -> Int:
@@ -232,7 +251,8 @@ def set_simulate_physics(
         enabled: True for on.
 
     Raises:
-        Error: If the id names no living actor, or the body cannot enter
+        Error: If an actor id is not valid, or the id names no living actor, or
+            the body cannot enter
             the requested mode.
     """
     var body = world.actor(actor).body
@@ -258,7 +278,7 @@ def is_physics_enabled(world: World, actor: ActorId) raises -> Bool:
         Whether it has a dynamic body.
 
     Raises:
-        Error: If the id names no living actor.
+        Error: If an actor id is not valid, or the id names no living actor.
     """
     var body = world.actor(actor).body
     return (
@@ -285,12 +305,15 @@ def apply_batch(mut world: World, commands: List[TrafficCommand]) raises:
         commands: The commands, in order.
 
     Raises:
-        Error: If a command's kind is not valid, or the world refuses a
+        Error: If a command's kind or actor id is not valid, or the world
+            refuses a
             command.
     """
     for command in commands:
         if not command.kind.is_valid():
             raise Error("A traffic manager command's kind is not valid")
+        _ = _check_actor_id(command.actor)
+    for command in commands:
         if command.kind == APPLY_VEHICLE_CONTROL:
             var control = command.control
             control.throttle = _pedal(control.throttle)
@@ -361,8 +384,10 @@ struct ALSM(Movable):
             motion_plan: The motion-planning stage.
 
         Raises:
-            Error: If a world query fails.
+            Error: If an actor id is not valid, or a world query fails.
         """
+        for actor in shared.marked_for_removal:
+            _ = _check_actor_id(actor)
         var hybrid = shared.parameters.get_hybrid_physics_mode()
         self.current_time = world.get_snapshot().timestamp.elapsed_seconds
         var actors = world.get_actors()
@@ -685,8 +710,10 @@ struct ALSM(Movable):
             Whether it has been idle 180 s, or 90 s away from a red light.
 
         Raises:
-            Error: If an idle vehicle is not tracked.
+            Error: If an actor id is not valid, or an idle vehicle is not
+                tracked.
         """
+        _ = _check_actor_id(actor)
         var since = self.idle_time.get(actor.value)
         if not Bool(since):
             return False
@@ -711,7 +738,8 @@ struct ALSM(Movable):
             shared: The traffic manager's state.
 
         Raises:
-            Error: If the id names no living actor.
+            Error: If an actor id is not valid, or the id names no living
+                actor.
         """
         var base_type = world.actor(actor).attribute("base_type")
         if Bool(base_type):
@@ -745,8 +773,9 @@ struct ALSM(Movable):
             motion_plan: The motion-planning stage.
 
         Raises:
-            Error: If the id is not valid.
+            Error: If the actor id is not valid.
         """
+        _ = _check_actor_id(actor)
         var a = actor.value
         # This is runtime state, not the user's per-actor preferences.
         # Re-registering must observe a fresh physics decision.
@@ -1007,6 +1036,9 @@ struct TrafficManagerLocal(Movable):
         Raises:
             Error: If an id is not valid or names no living actor.
         """
+        for actor in actors:
+            _ = _check_actor_id(actor)
+            _ = world.actor(actor)
         self.registered_vehicles.insert(actors)
         for actor in actors:
             self.alsm.add_actor(world, actor, self.shared)
@@ -1021,6 +1053,8 @@ struct TrafficManagerLocal(Movable):
         Raises:
             Error: If an id is not valid.
         """
+        for actor in actors:
+            _ = _check_actor_id(actor)
         for actor in actors:
             self.alsm.remove_actor(
                 actor,
@@ -1051,7 +1085,7 @@ struct TrafficManagerLocal(Movable):
             Its next road option and where.
 
         Raises:
-            Error: If its path is empty.
+            Error: If an actor id is not valid, or its path is empty.
         """
         return self.localization_stage.compute_next_action(actor, self.shared)
 
@@ -1065,7 +1099,7 @@ struct TrafficManagerLocal(Movable):
             The moves.
 
         Raises:
-            Error: If its path is empty.
+            Error: If an actor id is not valid, or its path is empty.
         """
         return self.localization_stage.compute_action_buffer(actor, self.shared)
 
@@ -1082,8 +1116,11 @@ struct TrafficManagerLocal(Movable):
             Whether each light is frozen and red; True for no lights.
 
         Raises:
-            Error: If an id names no traffic light.
+            Error: If an actor id is not valid, or an id names no traffic
+                light.
         """
+        for light in lights:
+            _ = _check_actor_id(light)
         for light in lights:
             if (
                 not world.is_frozen(light)

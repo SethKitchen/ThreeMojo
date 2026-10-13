@@ -56,7 +56,7 @@ from extensions.carla.agents_misc import (
     OPTION_LANE_FOLLOW,
     RoadOption,
     compute_distance,
-    from_kmh,
+    _from_kmh_si as from_kmh,
     get_trafficlight_trigger_location,
     is_within_distance,
     speed_of,
@@ -832,7 +832,7 @@ struct BasicAgent(Movable):
         var allowed = CHANGE_LEFT if left else CHANGE_RIGHT
         across = across / Float64(lane_changes)
         for _ in range(lane_changes):
-            var nexts = map.next(plan[len(plan) - 1].waypoint, across)
+            var nexts = map.next_meters(plan[len(plan) - 1].waypoint, across)
             if len(nexts) == 0:
                 return empty^
             var change = map.lane_change(nexts[0])
@@ -860,7 +860,7 @@ def _drive_on(
     var distance = 0.0
     while distance < length:
         var last = plan[len(plan) - 1]
-        var nexts = map.next(last.waypoint, step)
+        var nexts = map.next_meters(last.waypoint, step)
         if len(nexts) == 0:
             return False
         var item = plan_item(map, nexts[0], OPTION_LANE_FOLLOW)

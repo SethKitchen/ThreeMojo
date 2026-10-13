@@ -26,6 +26,32 @@ from carla_lane_oracle import full_audit_cleanup_contracts as full_audit
 from carla_lane_oracle import _full_audit_test_fixtures as audit_fixtures
 
 
+_HISTORICAL_BOUNDARY_ROOT = None
+
+
+def _clear_historical_boundary_root():
+    global _HISTORICAL_BOUNDARY_ROOT
+    _HISTORICAL_BOUNDARY_ROOT = None
+
+
+def historical_boundary_root(case):
+    """One physical main2d81 fixture for the historical protocol controls.
+
+    The factory first verifies the actual current typed/conditioned root.
+    Only test bytes are retained; no verifier result is cached, and every
+    tested admission still performs its normal fresh reads and validation.
+    Mutants are written only into the existing per-test copies below.
+    """
+    global _HISTORICAL_BOUNDARY_ROOT
+    if _HISTORICAL_BOUNDARY_ROOT is None:
+        class Lifetime:
+            addCleanup = staticmethod(unittest.addModuleCleanup)
+        _HISTORICAL_BOUNDARY_ROOT = audit_fixtures.copy_historical_boundary_root(
+            Lifetime(), Path(__file__).resolve().parents[1])
+        unittest.addModuleCleanup(_clear_historical_boundary_root)
+    return _HISTORICAL_BOUNDARY_ROOT
+
+
 def source(expression, body='pass', ending='\n'):
     return ending.join(['def f():', '    for item in ' + expression + ':',
                         '        ' + body, ''])
@@ -751,7 +777,7 @@ class GuardedLoopTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='guarded-loop-proof-')
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.repo = Path(__file__).resolve().parents[1]
+        self.repo = historical_boundary_root(self)
         predecessors = audit_fixtures.verified_predecessors(self.repo)
         for relative in loops.GUARDED_LOOP_SOURCE_SHA256:
             destination = self.root / relative
@@ -1772,12 +1798,15 @@ class DensityBoundaryLoopTests(unittest.TestCase):
 
 
 class MapSuccessorLoopTests(unittest.TestCase):
-    """Exercise actual live states separately from historical premise fixtures."""
+    """Exercise physical historical seed-count states and their protocol edges.
+
+    Current #333 numerical/API acceptance has separate conditioned tests.
+    """
 
     def setUp(self):
         from carla_lane_oracle import seed_count_contracts as seed_count
         self.seed = seed_count
-        self.repo = Path(__file__).resolve().parents[1]
+        self.repo = historical_boundary_root(self)
         self.name = seed_count.MODULE
         self.rules = [rule for rule in loops.GUARDED_LOOP_RULES
                       if rule[0] == 'extensions/carla/map']
@@ -2412,7 +2441,7 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
     score = False
 
     def setUp(self):
-        self.repo = Path(__file__).resolve().parents[1]
+        self.repo = historical_boundary_root(self)
         temporary = tempfile.TemporaryDirectory(prefix='construction-boundary-',
             dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(temporary.cleanup)
@@ -2724,12 +2753,15 @@ class DeviationConstructionBoundaryLoopTests(StationConstructionBoundaryLoopTest
 
 
 class FullAuditCleanupLoopTests(unittest.TestCase):
-    """Current source edges retain their exact old theorems and required T."""
+    """Historical cleanup endpoint protocols retain their original premises.
+
+    The #333 current physical graph has separate conditioned coverage tests.
+    """
 
     def setUp(self):
-        self.repo = Path(__file__).resolve().parents[1]
+        self.repo = historical_boundary_root(self)
 
-    def current_root(self):
+    def historical_cleanup_root(self):
         return audit_fixtures.copy_current_root(self, self.repo)
 
     def test_complete_current_rows_keep_true_and_all_source_bindings(self):
@@ -2771,7 +2803,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
             self.assertEqual(row['dependency_sha256'][name], loops.file_sha256(self.repo/name))
 
     def test_source_witness_record_and_checker_mutations_revoke_then_restore(self):
-        root = self.current_root()
+        root = self.historical_cleanup_root()
         paths = (*full_audit.SOURCE_PATHS, full_audit.NATIVE_WITNESSES[0],
                  full_audit.MIGRATION, full_audit.CHECKER_PATHS[0])
         module = 'extensions/carla/curve_sample_dispatch'
@@ -2790,7 +2822,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
         self.assertEqual(set(loops.construction_boundary_loops(root)), {4106})
 
     def test_mixed_historical_endpoint_cannot_keep_current_receipt(self):
-        root = self.current_root()
+        root = self.historical_cleanup_root()
         record = full_audit.verify(root, exact=True)
         name = full_audit.SOURCE_PATHS[0]
         path = root/name
@@ -2805,7 +2837,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
                          {146, 736, 1299, 1324})
 
     def test_each_include_root_reaches_count_and_map_dependencies(self):
-        root = self.current_root()
+        root = self.historical_cleanup_root()
         with tempfile.TemporaryDirectory(
                 prefix='cleanup-loop-include-', dir=Path(tempfile.gettempdir()).resolve()) as name:
             include = Path(name)
@@ -2818,7 +2850,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
                     self.assertEqual(loops.reviewed_nonempty_loops(root, module, include_roots=(include,)), {})
 
     def test_instrumented_include_bytes_remain_bound_by_generation_origins(self):
-        root = self.current_root()
+        root = self.historical_cleanup_root()
         build = root/'coverage/build'
         module = 'extensions/carla/curve_sample_dispatch.mojo'
         generated = build/module
@@ -2853,7 +2885,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
         loops.generation_origins(root, build, manifest, 'Modeled compiler', '', command)
 
     def test_mapped_row_requires_its_named_owner_and_expression(self):
-        root = self.current_root()
+        root = self.historical_cleanup_root()
         module = 'extensions/carla/lane_refinement'
         path = root/(module + '.mojo')
         original = path.read_text()

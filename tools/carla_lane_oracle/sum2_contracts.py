@@ -10,6 +10,16 @@ the environment guard, keyword subscripts, callers and decorators; dependency
 and qualifier token gates separately cover the surrounding modules. This
 checker never executes Mojo and cannot qualify native code generation.
 """
+if __package__:
+    from . import source_contracts as source
+else:
+    import source_contracts as source
+
+if __package__:
+    from . import source_contracts as _typed_source
+else:
+    import source_contracts as _typed_source
+
 import ast
 import copy
 if __package__:
@@ -278,16 +288,16 @@ def verify_binding(tree, name, allowed_definition=None, allowed_import=None):
             require(node.name != name, 'reviewed helper exception binding shadows: ' + name)
 
 
-def verify(root):
+def verify(root, *, _operation=None):
     # Lazy import avoids a checker-module cycle; no source is executed.
     if __package__:
         from . import check_sampled_values as c
     else:
         import check_sampled_values as c
     names = ('curve_sum2', 'lane_geometry', 'curve_bounds', 'spiral_roundoff_proof')
-    texts = {name: (root / ('extensions/carla/' + name + '.mojo')).read_text()
+    texts = {name: _typed_source.historical_text(root, root / ('extensions/carla/' + name + '.mojo'), source._observe_text(root, (root / ('extensions/carla/' + name + '.mojo')).relative_to(root).as_posix(), (root / ('extensions/carla/' + name + '.mojo')).read_text(), _operation=_operation), _operation=_operation)
              for name in names}
-    guard_result = guards.verify(root)
+    guard_result = guards.verify(root, _operation=_operation)
     # Validate actual selector producers before restoring the exact historical
     # eligibility helper for the retained complete-function comparison.
     if __package__:
@@ -295,7 +305,7 @@ def verify(root):
     else:
         import selection_finiteness_contracts as selection
     texts['spiral_roundoff_proof'] = selection.predecessor_text(
-        root, 'extensions/carla/spiral_roundoff_proof.mojo')
+        root, 'extensions/carla/spiral_roundoff_proof.mojo', _operation=_operation)
 
     trees = {name: c.syntax_tree(text) for name, text in texts.items()
              if name != 'curve_sum2'}
@@ -338,8 +348,8 @@ def verify(root):
                 'Sum2 direct helper import changed: ' + module)
         for helper in helpers:
             verify_binding(trees[module], helper, allowed_import=matches[0])
-    pins = json.loads((root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text())
-    interval = (root / 'extensions/carla/curve_interval.mojo').read_text()
+    pins = json.loads(_typed_source.historical_text(root, root / 'tools/carla_lane_oracle/spiral-moment-pins.json', source._observe_text(root, (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').relative_to(root).as_posix(), (root / 'tools/carla_lane_oracle/spiral-moment-pins.json').read_text(), _operation=_operation), _operation=_operation))
+    interval = _typed_source.historical_text(root, root / 'extensions/carla/curve_interval.mojo', source._observe_text(root, (root / 'extensions/carla/curve_interval.mojo').relative_to(root).as_posix(), (root / 'extensions/carla/curve_interval.mojo').read_text(), _operation=_operation), _operation=_operation)
     interval_tree = c.syntax_tree(interval)
     half = c.unique_function(interval_tree, '_stored_half')
     half_imports = [node for node in trees['curve_bounds'].body
