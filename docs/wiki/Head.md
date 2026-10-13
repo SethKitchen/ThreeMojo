@@ -59,7 +59,7 @@ Vertebral bodies use flat endplates at the authored lower and upper y coordinate
 
 An edited C2 through C7 body must be tall enough to contain the authored articular pillar diameter. `head_bone_field` refuses a shorter body. Equality is permitted: the pillar becomes one rounded station, with coincident segment endpoints. The canonical dimensions keep their existing pillar radius.
 
-The vault is a thin dome of bone about seven millimeters thick. The face is one solid with the orbits and the nasal opening cut out. The mandible is a U of bone with a ramus and a condyle on each side. The condyles sit in front of the ear canals. The occipital condyles sit on the atlas.
+The vault is a thin dome of bone about seven millimeters thick. The face is one solid with the orbits and the nasal opening cut out. The mandible is a U of bone with a ramus and a condyle on each side. An alveolar arch on the crest of its body holds the lower teeth, as the maxilla's arch holds the upper teeth. The condyles sit in front of the ear canals. The occipital condyles sit on the atlas.
 
 ## Joint tissues and cartilages
 

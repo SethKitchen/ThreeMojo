@@ -142,7 +142,17 @@ struct PelvisSkinField(Copyable, DistanceField, Movable):
         self.subcutaneous = pelvic_fat(p.sex)
         self.dermis = DERMIS
         self.cleft_top = p.sacral_apex.y
-        self.cleft_front = p.coccyx_tip.z - 0.006 * S
+        var coccyx = PelvisBoneField(p, COCCYX)
+        # The cleft stays behind the most posterior coccygeal segment, not
+        # only behind the tip: the coccyx curves forward to its tip.
+        self.cleft_front = (
+            min(
+                min(coccyx.coccyx0.z, coccyx.coccyx1.z),
+                min(coccyx.coccyx2.z, coccyx.coccyx3.z),
+            )
+            - coccyx.coccyx_ap
+            - 0.006 * S
+        )
         self.cleft_half = CLEFT_HALF * S
         self.cleft_round = CLEFT_ROUND * S
         self.epsilon = dimensions.epsilon
@@ -151,8 +161,8 @@ struct PelvisSkinField(Copyable, DistanceField, Movable):
         _append_hip_bone(points, bones.hip_bone, False)
         _append_hip_bone(points, bones.hip_bone, True)
         _append_sacrum(points, bones.sacrum)
-        var coccyx = PelvisBoneField(p, COCCYX)
         _append_sphere(points, coccyx.coccyx0, coccyx.coccyx_ml)
+        _append_sphere(points, coccyx.coccyx1, coccyx.coccyx_ml)
         _append_sphere(points, coccyx.coccyx2, coccyx.coccyx_ml)
         var muscles = named_pelvis_muscles()
         for index in range(len(muscles)):  # pragma: no branch

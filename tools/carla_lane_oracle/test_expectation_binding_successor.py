@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Check the exact four-record expectation extension of the #333 input."""
+"""Check the exact 8-record expectation extension of the #333 input."""
 import copy
 import hashlib
 import json
@@ -17,9 +17,13 @@ ROOT = Path(__file__).resolve().parents[2]
 PATH = 'tools/compile_fail_expectations.json'
 BEFORE = '85020fb32ec96121aba108288eaabf41c4483e2f94e91b6beee4528af2206653'
 ADDED = {
+    'tests/compile_fail/a_body_region_is_not_a_bare_int.mojo',
+    'tests/compile_fail/a_canonical_tissue_is_not_a_bare_int.mojo',
     'tests/compile_fail/a_contact_mode_is_not_a_bare_int.mojo',
+    'tests/compile_fail/a_dentition_is_not_a_bare_int.mojo',
     'tests/compile_fail/a_failure_mode_is_not_a_bare_int.mojo',
     'tests/compile_fail/a_load_kind_is_not_a_bare_int.mojo',
+    'tests/compile_fail/a_mapping_kind_is_not_a_bare_int.mojo',
     'tests/compile_fail/a_pipe_run_is_not_a_bare_int.mojo',
 }
 
@@ -32,11 +36,11 @@ class ExpectationBindingSuccessor(unittest.TestCase):
         before = typed.expectation_predecessor(self.raw)
         self.assertEqual(hashlib.sha256(before).hexdigest(), BEFORE)
         self.assertEqual(typed.HISTORICAL_BINDING_INPUTS[PATH], BEFORE)
-        self.assertEqual(len(typed.EXPECTATION_SUCCESSOR['edits']), 4)
+        self.assertEqual(len(typed.EXPECTATION_SUCCESSOR['edits']), 8)
         self.assertTrue(all(not before for _, _, before, _ in
                             typed.EXPECTATION_SUCCESSOR['edits']))
         old, current = json.loads(before), json.loads(self.raw)
-        self.assertEqual((len(old), len(current)), (689, 693))
+        self.assertEqual((len(old), len(current)), (689, 697))
         self.assertEqual(set(current)-set(old), ADDED)
         self.assertEqual({key: current[key] for key in old}, old)
         self.assertEqual({key: current[key] for key in ADDED},
