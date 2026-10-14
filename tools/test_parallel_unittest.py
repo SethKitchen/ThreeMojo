@@ -107,6 +107,8 @@ class ParallelUnittest(unittest.TestCase):
         self.assertIn('6 of 6 units passed (3 modules)', out)
 
     def test_shards_partition_the_units(self):
+        for index, count in ((1, 1), (1, 6), (6, 6), (10, 12)):
+            self.assertEqual(runner.shard(f'{index}/{count}'), (index, count))
         with tempfile.TemporaryDirectory() as directory:
             _write(directory, 'test_a.py', _PASS)
             _write(directory, 'test_b.py', _FAIL)
@@ -115,10 +117,13 @@ class ParallelUnittest(unittest.TestCase):
         counts = [int(out.rsplit(' units passed', 1)[0].rsplit(' of ', 1)[1]) for _, out, _ in results]
         self.assertEqual(sum(counts), 7)
         self.assertEqual(sorted(code for code, _, _ in results), [0, 0, 1])
-        for bad in ('0/3', '4/3', '1', 'a/b'):
+        for bad in ('0/3', '4/3', '1', 'a/b', '01/6', '1/06', '+1/6', '1/+6',
+                    ' 1/6', '1/6 ', '1 /6', '1/ 6', '\t1/6', '1/6\n',
+                    '1/1_0', '١/6', '1/６'):
             with self.subTest(shard=bad), tempfile.TemporaryDirectory() as directory:
-                with self.assertRaises(SystemExit):
+                with self.assertRaises(SystemExit) as raised:
                     self.run_main('--shard', bad, directory)
+                self.assertEqual(raised.exception.code, 2)
 
     def test_an_import_error_runs_and_fails_as_one_module(self):
         with tempfile.TemporaryDirectory() as directory:
