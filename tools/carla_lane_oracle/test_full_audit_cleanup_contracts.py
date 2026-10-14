@@ -42,8 +42,13 @@ _CONSUMER_FIRST_SLOW_TIMEOUTS = {
 }
 
 
+# Every route runs the complete gate first. Under hosted runner load the
+# fast routes have also passed 120 s, so their bound is a hang guard.
+_CONSUMER_FIRST_DEFAULT_TIMEOUT = 600
+
+
 def _consumer_first_timeout(route):
-    return _CONSUMER_FIRST_SLOW_TIMEOUTS.get(route, 120)
+    return _CONSUMER_FIRST_SLOW_TIMEOUTS.get(route, _CONSUMER_FIRST_DEFAULT_TIMEOUT)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -3817,7 +3822,7 @@ class PublicSeedScoreAdmissionControls(unittest.TestCase):
 
 
 class ConsumerFirstTimeoutControls(unittest.TestCase):
-    """Only the four measured whole-consumer routes receive larger budgets."""
+    """The four whole-consumer routes get 1200 s; the others keep 600 s."""
 
     def test_exact_route_budgets_and_default_remain_bounded(self):
         slow = {'sum2_guard_contracts': 1200, 'sampled-spec': 1200,
@@ -3830,7 +3835,7 @@ class ConsumerFirstTimeoutControls(unittest.TestCase):
         for route in ('cache_key_contracts', 'seed_count_contracts', 'source_contracts',
                       '', 'unrelated_contracts', 'sum2_guard_contracts_extra'):
             with self.subTest(default_route=route):
-                self.assertEqual(_consumer_first_timeout(route), 120)
+                self.assertEqual(_consumer_first_timeout(route), 600)
         calls = []
         def observed(command, **kwargs):
             route = command[-1]
@@ -3842,7 +3847,7 @@ class ConsumerFirstTimeoutControls(unittest.TestCase):
         case.root = ROOT
         with patch.object(subprocess, 'run', observed):
             case.test_consumer_first_import_orders_normal_and_optimized()
-        self.assertEqual(calls, [(optimized, route, slow.get(route, 120))
+        self.assertEqual(calls, [(optimized, route, slow.get(route, 600))
                                 for optimized in (False, True) for route in routes])
 
 if __name__ == '__main__':
