@@ -219,6 +219,8 @@ struct Options(Movable):
     """The JSON report path, or empty for none."""
     var has_json: Bool
     """True when `--json` was given."""
+    var positional: String
+    """The positional argument, or empty when the tool takes none."""
 
     def __init__(out self):
         """Start with no options."""
@@ -227,10 +229,14 @@ struct Options(Movable):
         self.check = False
         self.json = String()
         self.has_json = False
+        self.positional = String()
 
 
 def parse_options(
-    program: String, description: String, arguments: List[String]
+    program: String,
+    description: String,
+    arguments: List[String],
+    positional: String = "",
 ) -> Options:
     """Parse `[--json PATH] [--check]` as `argparse` does without
     abbreviations.
@@ -239,28 +245,56 @@ def parse_options(
         program: The program name for the usage line.
         description: The help description.
         arguments: The arguments, without the program name.
+        positional: The name of one required positional argument, or empty
+            for none.
 
     Returns:
         The options. A nonzero status carries the text to print.
     """
     var options = Options()
-    var usage = "usage: " + program + USAGE_TAIL + "\n"
+    var takes = positional.byte_length() > 0
+    var usage = "usage: " + program + USAGE_TAIL
+    if takes:
+        usage += " " + positional
+    usage += "\n"
     var unknown = List[String]()
     var i = 0
     var problem = String()
+    var found = False
+    var only_positional = False
     while i < len(arguments):
         var word = arguments[i]
-        if word == "-h" or word == "--help":
+        var dashed = (
+            not only_positional
+            and word.startswith("-")
+            and word.byte_length() > 1
+        )
+        if not dashed:
+            if takes and not found:
+                options.positional = word
+                found = True
+            else:
+                unknown.append(word)
+        elif word == "--" and takes:
+            only_positional = True
+        elif word == "-h" or word == "--help":
             options.status = -1
+            var arguments_help = String()
+            if takes:
+                arguments_help = (
+                    "\npositional arguments:\n  " + positional + "\n"
+                )
             options.message = (
                 usage
                 + "\n"
                 + description
-                + "\n\noptions:\n  -h, --help   show this help message and"
+                + "\n"
+                + arguments_help
+                + "\noptions:\n  -h, --help   show this help message and"
                 " exit\n  --json JSON\n  --check      verify without writing\n"
             )
             return options^
-        if word == "--check":
+        elif word == "--check":
             options.check = True
         elif word == "--json":
             if i + 1 >= len(arguments) or (
@@ -278,6 +312,8 @@ def parse_options(
         else:
             unknown.append(word)
         i += 1
+    if not problem and takes and not found:
+        problem = "the following arguments are required: " + positional
     if not problem and len(unknown) > 0:
         problem = "unrecognized arguments: " + " ".join(unknown)
     if not problem and options.check and options.has_json:

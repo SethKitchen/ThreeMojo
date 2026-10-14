@@ -312,7 +312,15 @@ def _with_replay_suite(name: String) -> Dict[String, String]:
 def test_carla_control_generators_select_their_replay_suite() raises:
     # The generators are Mojo tools: a change runs the tool checks and the
     # suites that import them. It measures no library.
-    for name in ["lane_distance", "power", "directed", "index"]:
+    for name in [
+        "lane_distance",
+        "power",
+        "directed",
+        "index",
+        "distance",
+        "fixed_s",
+        "lane_orientation",
+    ]:
         var tool = "tools/generate_carla_" + name + "_controls.mojo"
         var value = _plan(_change([tool]), _with_replay_suite(name))
         assert_false(value.full, tool)
@@ -325,6 +333,9 @@ def test_carla_control_generators_select_their_replay_suite() raises:
     # The removed Python generators and unknown names are not exempt.
     for path in [
         "tools/generate_carla_power_controls.py",
+        "tools/generate_carla_distance_controls.py",
+        "tools/generate_carla_fixed_s_controls.py",
+        "tools/generate_carla_lane_orientation_controls.py",
         "tools/generate_carla_unknown_controls.py",
         "tools/generate_carla_power_controls.mojo.extra",
     ]:
@@ -337,6 +348,8 @@ def test_carla_generated_fixtures_keep_native_consumers() raises:
         "power_fraction",
         "directed_fraction",
         "index_admission",
+        "curve_distance_fraction",
+        "fixed_s_fraction",
     ]:
         var fixture = "tests/test_carla_" + name + ".mojo"
         var sources = _with_replay_suite("power")

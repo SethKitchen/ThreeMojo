@@ -55,7 +55,9 @@ Exact bisection gives a norm bracket independent of the native implementation.
 The output controls permit four additional ULPs around that bracket.
 Nonfinite inputs and out-of-range norms must raise.
 
-Run `python3 tools/generate_carla_distance_controls.py` to regenerate the point corpus.
+`tools/generate_carla_distance_controls.mojo` writes the point corpus, and `--check` replays it.
 Run `tools/capture_carla_fixed_s_controls.mojo` to capture geometry seeds with the pinned toolchain.
-Pass the capture file to `tools/generate_carla_fixed_s_controls.py` to regenerate the road corpus.
-Run `mojo format` on each generated Mojo file.
+Pass the capture file to `tools/generate_carla_fixed_s_controls.mojo` to write the road corpus.
+Add `--check` to replay the road corpus without writes.
+Both tools write formatted Mojo, so the files need no `mojo format`.
+`tests/test_carla_control_replay_tool.mojo` replays both corpora.

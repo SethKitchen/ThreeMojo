@@ -7,14 +7,21 @@
 
 Each test copies the committed fixtures to a temporary root and calls the
 generators there. A check must not write, and a bad argument must fail
-before any write.
+before any write. The fixed-s generator reads the geometry seeds that
+`tools/capture_carla_fixed_s_controls.mojo` captures in this build.
 """
 
 from std.os import listdir, makedirs, remove, rmdir
 from std.os.path import exists, isdir
 from std.pathlib import Path
 from std.tempfile import mkdtemp
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 from loaders.json import parse_json
 from tools._carla_controls import (
@@ -27,18 +34,148 @@ from tools._carla_controls import (
 )
 from tools._bigint import BigInt
 from tools._fraction import Fraction
+from tools.capture_carla_fixed_s_controls import capture
 from tools.generate_carla_directed_controls import run as run_directed
+from tools.generate_carla_distance_controls import run as run_distance
+from tools.generate_carla_fixed_s_controls import run as run_fixed_s
 from tools.generate_carla_index_controls import run as run_index
 from tools.generate_carla_lane_distance_controls import run as run_lane
+from tools.generate_carla_lane_orientation_controls import (
+    report as orientation_report,
+    run as run_orientation,
+)
 from tools.generate_carla_power_controls import run as run_power
 
 
-comptime NAMES = ["lane_distance", "power", "directed", "index"]
+comptime NAMES = [
+    "lane_distance",
+    "power",
+    "directed",
+    "index",
+    "distance",
+    "fixed_s",
+]
 """The generators."""
+
+comptime CAPTURE = "capture.txt"
+"""The fixed-s capture below the temporary root."""
+
+comptime ORIENTATION = (
+    "{\n"
+    '  "orientation_controls": [\n'
+    "    {\n"
+    '      "road": 1,\n'
+    '      "section": 1,\n'
+    '      "lane": -1,\n'
+    '      "s": 50,\n'
+    '      "yaw": 1.4320961841646465,\n'
+    '      "pitch": -0.0,\n'
+    '      "forward": [\n'
+    "        0.9996876464081226,\n"
+    "        0.024992191160203066,\n"
+    "        0.0\n"
+    "      ]\n"
+    "    },\n"
+    "    {\n"
+    '      "road": 5,\n'
+    '      "section": 0,\n'
+    '      "lane": -1,\n'
+    '      "s": 10,\n'
+    '      "yaw": -7.16197243913529,\n'
+    '      "pitch": -1.1110515913233194,\n'
+    '      "forward": [\n'
+    "        0.9920111247332872,\n"
+    "        -0.1246512933624105,\n"
+    "        0.019390293150875013\n"
+    "      ]\n"
+    "    },\n"
+    "    {\n"
+    '      "road": 5,\n'
+    '      "section": 0,\n'
+    '      "lane": 1,\n'
+    '      "s": 40,\n'
+    '      "yaw": 133.9651124804412,\n'
+    '      "pitch": 361.2666524315157,\n'
+    '      "forward": [\n'
+    "        -0.694050597730119,\n"
+    "        0.719586767987595,\n"
+    "        -0.02210545470312238\n"
+    "      ]\n"
+    "    },\n"
+    "    {\n"
+    '      "road": 5,\n'
+    '      "section": 0,\n'
+    '      "lane": -2,\n'
+    '      "s": 50,\n'
+    '      "yaw": -46.954509986767036,\n'
+    '      "pitch": -2.018064258751107,\n'
+    '      "forward": [\n'
+    "        0.6821554507134533,\n"
+    "        -0.7303587297740473,\n"
+    "        0.035214583694340454\n"
+    "      ]\n"
+    "    }\n"
+    "  ],\n"
+    '  "segment_count": 230,\n'
+    '  "segments_by_road_section_lane": {\n'
+    '    "1/0": {\n'
+    '      "2": 1,\n'
+    '      "1": 1,\n'
+    '      "-1": 1,\n'
+    '      "-2": 1\n'
+    "    },\n"
+    '    "1/1": {\n'
+    '      "2": 1,\n'
+    '      "1": 1,\n'
+    '      "-1": 1,\n'
+    '      "-2": 1\n'
+    "    },\n"
+    '    "10/0": {\n'
+    '      "1": 1,\n'
+    '      "-1": 1\n'
+    "    },\n"
+    '    "11/0": {\n'
+    '      "-1": 32,\n'
+    '      "-2": 32\n'
+    "    },\n"
+    '    "2/0": {\n'
+    '      "1": 1,\n'
+    '      "-1": 1\n'
+    "    },\n"
+    '    "3/0": {\n'
+    '      "-1": 1,\n'
+    '      "-2": 1\n'
+    "    },\n"
+    '    "5/0": {\n'
+    '      "1": 38,\n'
+    '      "-1": 36,\n'
+    '      "-2": 36,\n'
+    '      "-3": 36\n'
+    "    },\n"
+    '    "6/0": {\n'
+    '      "2": 1,\n'
+    '      "1": 1,\n'
+    '      "-1": 1,\n'
+    '      "-2": 1,\n'
+    '      "-3": 1\n'
+    "    },\n"
+    '    "7/0": {\n'
+    '      "-1": 1\n'
+    "    }\n"
+    "  },\n"
+    '  "heading_threshold_decisions": 292,\n'
+    '  "minimum_threshold_margin_radians": 0.00011237220446894819\n'
+    "}\n"
+)
+"""The report of the Python generator that the tool replaces."""
 
 
 def _fixture(name: String) -> String:
     """Return a generator's fixture path below the root."""
+    if name == "distance":
+        return "tests/test_carla_curve_distance_fraction.mojo"
+    if name == "fixed_s":
+        return "tests/test_carla_fixed_s_fraction.mojo"
     if name == "lane_distance":
         return "tests/test_carla_lane_distance_fraction.mojo"
     if name == "power":
@@ -50,17 +187,25 @@ def _fixture(name: String) -> String:
 
 def _count(name: String) -> Int:
     """Return a generator's number of cases."""
-    if name == "lane_distance":
+    if name == "lane_distance" or name == "distance":
         return 100
     if name == "index":
         return 96
+    if name == "fixed_s":
+        return 135
     return 128
 
 
 def _run(
     name: String, root: String, arguments: List[String]
 ) raises -> Tuple[Int, String]:
-    """Call a generator."""
+    """Call a generator. The fixed-s generator gets the capture first."""
+    if name == "distance":
+        return run_distance(root, arguments)
+    if name == "fixed_s":
+        var given: List[String] = [root + "/" + CAPTURE]
+        given.extend(arguments.copy())
+        return run_fixed_s(root, given)
     if name == "lane_distance":
         return run_lane(root, arguments)
     if name == "power":
@@ -83,6 +228,7 @@ struct Copy(Movable):
         for name in materialize[NAMES]():
             var relative = _fixture(name)
             self.write(relative, Path(relative).read_bytes())
+        Path(self.path(CAPTURE)).write_text(capture())
 
     def path(self, relative: String) -> String:
         """Return a path below the root."""
@@ -358,6 +504,83 @@ def test_directed_rounding_brackets_rationals() raises:
     var below = bracket(-huge)
     assert_equal(below[0], -infinity)
     assert_equal(below[1], -Float64.MAX_FINITE)
+
+
+def test_a_bad_capture_fails_before_any_write() raises:
+    var copy = Copy()
+    var good = Path(copy.path(CAPTURE)).read_text()
+    var missing = copy.path("missing.txt")
+    var lines = good.split("\n")
+    var short = String()
+    for index in range(44):
+        short += String(lines[index]) + "\n"
+    var bad_inputs: List[String] = [
+        # One line too few gives 132 cases.
+        short,
+        good + "0 0 0 0 0 0 0\n",
+        "0 0 0 0 0 0\n" + good,
+        "0 0 0 0 0 0 18446744073709551616\n" + good,
+        "0 0 0 0 0 0 -1\n" + good,
+        "0 0 0 0 0 0 x\n" + good,
+    ]
+    for capture_text in bad_inputs:
+        Path(copy.path(CAPTURE)).write_text(capture_text)
+        var sets: List[List[String]] = [[], ["--check"]]
+        for arguments in sets:
+            var output = _assert_read_only(copy, "fixed_s", arguments, 1)
+            assert_true(output.startswith("Cannot read "), output)
+    Path(copy.path(CAPTURE)).write_text(good)
+    var before = copy.snapshot()
+    var outcome = run_fixed_s(copy.root, [missing, "--check"])
+    assert_equal(outcome[0], 1)
+    assert_true(outcome[1].startswith("Cannot read " + missing), outcome[1])
+    assert_true(copy.snapshot().same(before))
+    assert_false(exists(missing))
+    copy.close()
+
+
+def test_the_capture_is_a_required_positional_argument() raises:
+    var program = "generate_carla_fixed_s_controls"
+    var options = parse_options(program, "About.", [], "capture")
+    assert_equal(options.status, 2)
+    assert_true(
+        options.message.startswith(
+            "usage: " + program + " [-h] [--json JSON] [--check] capture\n"
+        )
+    )
+    assert_true("required: capture" in options.message)
+    options = parse_options(program, "About.", ["--bad"], "capture")
+    assert_true("required: capture" in options.message)
+    options = parse_options(program, "About.", ["a", "b"], "capture")
+    assert_true("unrecognized arguments: b" in options.message)
+    options = parse_options(program, "About.", ["--", "--check"], "capture")
+    assert_equal(options.status, 0)
+    assert_equal(options.positional, "--check")
+    assert_false(options.check)
+    options = parse_options(program, "About.", ["-", "--check"], "capture")
+    assert_equal(options.positional, "-")
+    assert_true(options.check)
+    options = parse_options(program, "About.", ["a", "--json"], "capture")
+    assert_true("--json: expected one argument" in options.message)
+    options = parse_options(program, "About.", ["-h"], "capture")
+    assert_equal(options.status, -1)
+    assert_true("\npositional arguments:\n  capture\n" in options.message)
+    # A tool without a positional argument refuses one, and "--" too.
+    options = parse_options(program, "About.", ["--"])
+    assert_true("unrecognized arguments: --" in options.message)
+
+
+def test_orientation_report_matches_the_python_generator() raises:
+    assert_equal(run_orientation("."), ORIENTATION)
+    # A left-hand town turns each lane the other way.
+    var town = Path("assets/carla/town.xodr").read_text()
+    var left = orientation_report(town.replace('rule="RHT"', 'rule="LHT"'))
+    assert_true(left != ORIENTATION)
+    assert_true('"segment_count": ' in left)
+    with assert_raises():
+        _ = orientation_report("<OpenDRIVE/>")
+    with assert_raises():
+        _ = run_orientation("/nonexistent")
 
 
 def main() raises:
