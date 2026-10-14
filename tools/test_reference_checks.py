@@ -4,7 +4,7 @@
 
 Each generator holds an exact oracle for one native fixture. Without this
 test, nothing ran them, so an edited fixture or expected value went stale
-silently.
+silently. A generator ported to Mojo has its own test suite instead.
 """
 
 from pathlib import Path
@@ -16,7 +16,6 @@ TOOLS = Path(__file__).resolve().parent
 
 # The segment script checks with top-level asserts and takes no --check flag.
 CHECKS = (('reference_volume_lighting.py', '--check'),
-          ('reference_remainders.py', '--check'),
           ('reference_animation_loops.py', '--check'),
           ('reference_segment_geometry.py',),
           ('generate_exact_predicates_oracle.py', '--check'),

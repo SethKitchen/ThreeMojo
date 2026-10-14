@@ -560,13 +560,14 @@ integer residual stays below a 53-bit divisor. Each shift is at most ten bits,
 so the intermediate fits UInt64. There are at most 205 shifts. The final exact
 remainder fits the input binary64 lattice, including subnormal values.
 
-`tools/reference_remainders.py` decodes inputs to exact Python fractions. It
+`tools/reference_remainders.mojo` decodes inputs to exact fractions. It
 uses rational floor division and rounds directly to the target format. The
 saved controls cover every finite exponent field, both signs, subnormals,
-exact multiples, representable neighbors, and seeded random pairs. Run
-`python3 tools/reference_remainders.py --check` to check the controls. Use
-`--write` only for an intentional fixture change. The native suite compares
-bits, without a tolerance.
+exact multiples, representable neighbors, and seeded random pairs.
+`tests/test_reference_remainders_tool.mojo` checks the controls. Run
+`mojo run -I . tools/reference_remainders.mojo --write` only for an
+intentional fixture change. The native suite compares bits, without a
+tolerance.
 
 `bench/periodic_remainder_bench.mojo` times ordinary calls and hard finite inputs.
 
