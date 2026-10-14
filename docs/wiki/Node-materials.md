@@ -256,6 +256,10 @@ rendered r186 parity. This port retains one minus transmittance plus
 `EMISSIVE_NODE`; r186 separately accumulates outgoing ray light and supports
 ray emission. Those differences remain outside this feature.
 
+`tools/reference_volume_lighting.mojo` writes the fixture
+`assets/volume_lighting/r186.json` with `--write` and verifies it with
+`--check`.
+
 
 ## Outputs
 
