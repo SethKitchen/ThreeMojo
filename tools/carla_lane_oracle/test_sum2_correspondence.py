@@ -160,19 +160,20 @@ class Sum2SourceTests(unittest.TestCase):
                                  sampled.dump(sampled.unique_function(
                                      sampled.syntax_tree(original), name)))
                 read = Path.read_text
-                error_type = (cleanup._OperationCoherenceError if module == 'curve_bounds'
-                              else ValueError)
                 with patch.object(Path, 'read_text', lambda path, *a, **k:
                                   changed if path == target else read(path, *a, **k)):
-                    with self.assertRaises(error_type) as raised:
+                    with self.assertRaises(ValueError) as raised:
                         sum2_contracts.verify(ROOT)
                 error = raised.exception
-                self.assertIs(type(error), error_type)
+                self.assertIs(type(error), ValueError)
                 message = ('full-audit cleanup successor: consumed operation text changed: '
                            + 'extensions/carla/' + module + '.mojo')
-                if module == 'curve_interval':
-                    self.assertEqual(str(error), 'unreviewed complete successor: ' + message)
-                    error = error.__cause__
+                # The retained current Map gate captures both physical inputs
+                # before the Sum2 semantic projection can select declarations.
+                self.assertEqual(str(error),
+                                 'Sum2 complete guarded caller changed or routing changed: '
+                                 'map (' + message + ')')
+                error = error.__cause__
                 self.assertIs(type(error), cleanup._OperationCoherenceError)
                 self.assertEqual(str(error), message)
                 self.assertIs(type(error.__cause__), cleanup.ContractError)
