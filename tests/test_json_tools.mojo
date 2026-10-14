@@ -26,6 +26,7 @@ from tools._json_tools import (
     get,
     index,
     is_none,
+    json_tokens,
     keys,
     python_text,
     quote_ascii,
@@ -179,6 +180,18 @@ def test_quote_ascii_matches_python() raises:
         '"a\\"\\\\\\n\\r\\t\\b\\f\\u0001\\u007f"',
     )
     assert_equal(quote_ascii("é😀"), '"\\u00e9\\ud83d\\ude00"')
+
+
+def test_tokens_keep_strings_numbers_and_lines() raises:
+    var found = json_tokens('{"a\\"b": [1.5e-3,\n  true, "x y"]}')
+    assert_equal(
+        " ".join(found[0]),
+        '{ "a\\"b" : [ 1.5e-3 , true , "x y" ] }',
+    )
+    assert_equal(found[1][0], 1)
+    assert_equal(found[1][len(found[1]) - 1], 2)
+    # An unclosed string runs to the end.
+    assert_equal(json_tokens('"ab')[0][0], '"ab')
 
 
 def main() raises:

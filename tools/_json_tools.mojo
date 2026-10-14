@@ -470,3 +470,52 @@ struct JsonWriter(Movable):
             The JSON text, without a final newline.
         """
         return self.out
+
+
+def json_tokens(text: String) -> Tuple[List[String], List[Int]]:
+    """Split JSON text into tokens, with the line of each.
+
+    A token is a bracket, a colon, a comma, a whole string with its quotes,
+    or a run of other characters: a number or a literal. The text is not
+    validated.
+
+    Args:
+        text: The JSON text.
+
+    Returns:
+        The tokens, and the line of each, from one.
+    """
+    var bytes = text.as_bytes()
+    var found = List[String]()
+    var lines = List[Int]()
+    var line = 1
+    var index = 0
+    while index < len(bytes):
+        var byte = Int(bytes[index])
+        if byte == ord("\n"):
+            line += 1
+            index += 1
+        elif byte == ord(" ") or byte == ord("\t") or byte == ord("\r"):
+            index += 1
+        elif chr(byte) in "{}[]:,":
+            found.append(chr(byte))
+            lines.append(line)
+            index += 1
+        elif byte == ord('"'):
+            var end = index + 1
+            while end < len(bytes) and Int(bytes[end]) != ord('"'):
+                end += 2 if Int(bytes[end]) == ord("\\") else 1
+            end = min(end + 1, len(bytes))
+            found.append(String(text[byte=index:end]))
+            lines.append(line)
+            index = end
+        else:
+            var end = index
+            while end < len(bytes) and not (
+                chr(Int(bytes[end])) in "{}[]:, \t\r\n"
+            ):
+                end += 1
+            found.append(String(text[byte=index:end]))
+            lines.append(line)
+            index = end
+    return (found^, lines^)

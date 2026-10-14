@@ -29,7 +29,7 @@ from std.math import sqrt, pi
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from tools._json_tools import JsonWriter
+from tools._json_tools import JsonWriter, json_tokens
 from tools._python_float import parse_float
 from tools._python_math import cos, exp, power, py_sum
 
@@ -1168,44 +1168,6 @@ def build_fixture() raises -> Tuple[String, Int, Int]:
     return (out.text() + "\n", len(cases), len(all_scenes))
 
 
-def _tokens(text: String) -> Tuple[List[String], List[Int]]:
-    """Split JSON text into tokens, with the line of each."""
-    var bytes = text.as_bytes()
-    var found = List[String]()
-    var lines = List[Int]()
-    var line = 1
-    var index = 0
-    while index < len(bytes):
-        var byte = Int(bytes[index])
-        if byte == ord("\n"):
-            line += 1
-            index += 1
-        elif byte == ord(" ") or byte == ord("\t") or byte == ord("\r"):
-            index += 1
-        elif chr(byte) in "{}[]:,":
-            found.append(chr(byte))
-            lines.append(line)
-            index += 1
-        elif byte == ord('"'):
-            var end = index + 1
-            while end < len(bytes) and Int(bytes[end]) != ord('"'):
-                end += 2 if Int(bytes[end]) == ord("\\") else 1
-            end = min(end + 1, len(bytes))
-            found.append(String(text[byte=index:end]))
-            lines.append(line)
-            index = end
-        else:
-            var end = index
-            while end < len(bytes) and not (
-                chr(Int(bytes[end])) in "{}[]:, \t\r\n"
-            ):
-                end += 1
-            found.append(String(text[byte=index:end]))
-            lines.append(line)
-            index = end
-    return (found^, lines^)
-
-
 def _is_number(token: String) -> Bool:
     """Return True for a JSON number token."""
     var first = Int(token.as_bytes()[0])
@@ -1233,8 +1195,8 @@ def compare(expected: String, actual: String) raises -> String:
     Raises:
         Error: If a number does not parse.
     """
-    var want = _tokens(expected)
-    var got = _tokens(actual)
+    var want = json_tokens(expected)
+    var got = json_tokens(actual)
     var count = min(len(want[0]), len(got[0]))
     for index in range(count):
         var e = want[0][index]

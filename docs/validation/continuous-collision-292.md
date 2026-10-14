@@ -30,12 +30,12 @@ These local results are focused qualification. They are not a repository-wide pa
 | Failure and numeric limits | Tests cover full mutable-state restoration, raycast-visible dirty-state rollback, invalid modes, overflow, unresolved scales and thin triangles. |
 | Work and performance bounds | The fixed benchmarks below report complete step costs, ray batches and the brute-force complexity boundary. |
 
-The separate reference generator is `tools/physics_ccd_reference.py`. It searches the convex nearest-triangle distance over time, then bisects the first radius crossing. It does not use the sweep's root formula. Seed 292 produces the saved entering-hit fixtures. The native assertions use a 1e-12 absolute hit-fraction tolerance.
+The separate reference generator is `tools/physics_ccd_reference.mojo`. It searches the convex nearest-triangle distance over time, then bisects the first radius crossing. It does not use the sweep's root formula. Seed 292 produces the saved entering-hit fixtures. The native assertions use a 1e-12 absolute hit-fraction tolerance. The recorded evidence pins the 70-digit Python generator that the Mojo tool replaced. The Mojo tool uses double-double arithmetic and reproduces the same fixtures.
 
 Reproduce the reference data with:
 
 ```sh
-python tools/physics_ccd_reference.py --check docs/validation/continuous-collision-292-reference.json
+mojo run -I . tools/physics_ccd_reference.mojo --check docs/validation/continuous-collision-292-reference.json
 ```
 
 Independent review also examined random oblique plastic contacts and isolated friction impulses. Those Python controls supplement the native tests. They do not replace compiled execution or establish a universal mathematical proof.
