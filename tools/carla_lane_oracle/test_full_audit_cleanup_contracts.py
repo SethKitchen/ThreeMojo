@@ -31,13 +31,14 @@ from test_optional_runtime_contracts import replace_token_fragment
 
 # Complete consumer-first commands measured approximately 392/429/281/596
 # seconds on the reviewed current graph. Keep all faster routes at 120 seconds.
-# The sampled route re-enters the complete gate for each nested public
-# check; it measured 650-730 s on hosted Linux and macOS.
+# These whole-consumer routes re-enter the complete gate for each nested
+# public check. On hosted Linux and macOS they measured 550-730 s, and the
+# slowest route changes with runner load, so each one has the same budget.
 _CONSUMER_FIRST_SLOW_TIMEOUTS = {
-    'sum2_guard_contracts': 600,
+    'sum2_guard_contracts': 1200,
     'sampled-spec': 1200,
-    'test_accepted_successor_contracts': 600,
-    'test_production_inventory_paths': 900,
+    'test_accepted_successor_contracts': 1200,
+    'test_production_inventory_paths': 1200,
 }
 
 
@@ -3819,9 +3820,9 @@ class ConsumerFirstTimeoutControls(unittest.TestCase):
     """Only the four measured whole-consumer routes receive larger budgets."""
 
     def test_exact_route_budgets_and_default_remain_bounded(self):
-        slow = {'sum2_guard_contracts': 600, 'sampled-spec': 1200,
-                'test_accepted_successor_contracts': 600,
-                'test_production_inventory_paths': 900}
+        slow = {'sum2_guard_contracts': 1200, 'sampled-spec': 1200,
+                'test_accepted_successor_contracts': 1200,
+                'test_production_inventory_paths': 1200}
         self.assertEqual(_CONSUMER_FIRST_SLOW_TIMEOUTS, slow)
         routes = ('sum2_guard_contracts', 'cache_key_contracts',
                   'seed_count_contracts', 'source_contracts', 'sampled-spec',
