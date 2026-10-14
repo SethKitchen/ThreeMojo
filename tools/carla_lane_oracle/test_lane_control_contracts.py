@@ -9,9 +9,24 @@ import unittest
 import lane_control_contracts as contract
 
 
+ROOT = Path(__file__).resolve().parents[2]
+_CURRENT_SOURCE_ROOT = ROOT
+
+
+def setUpModule():
+    # These partial fixtures exercise the historical lane/cache edge. Admit
+    # the complete current graph before restoring its physical predecessor.
+    global ROOT
+    contract.verify(_CURRENT_SOURCE_ROOT)
+    owner = type('HistoricalModuleFixture', (), {
+        'addCleanup': staticmethod(unittest.addModuleCleanup)})()
+    ROOT = cleanup_fixtures.copy_historical_boundary_root(owner, _CURRENT_SOURCE_ROOT)
+    unittest.addModuleCleanup(globals().__setitem__, 'ROOT', _CURRENT_SOURCE_ROOT)
+
+
 class LaneControlContracts(unittest.TestCase):
     def setUp(self):
-        self.source = Path(__file__).resolve().parents[2]
+        self.source = ROOT
         self.cleanup_sources = cleanup_fixtures.verified_predecessors(self.source)
         self.temp = tempfile.TemporaryDirectory(prefix='lane-migration-')
         self.root = Path(self.temp.name)
