@@ -28,16 +28,8 @@ from std.reflection import source_location
 from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
-from loaders.json import (
-    ARRAY,
-    BOOLEAN,
-    NULL,
-    NUMBER,
-    OBJECT,
-    STRING,
-    JsonDocument,
-    parse_json,
-)
+from loaders.json import OBJECT, JsonDocument, parse_json
+from tools.json_tools import JsonWriter, truthy
 from tools.process import run_program, shell_quote
 
 # The pinned compiler can emit this startup warning without failing to
@@ -48,8 +40,6 @@ comptime CRASHPAD_STARTUP_WARNING = (
     "  Cause: while locating crashpad handler: unable to locate crashpad"
     " handler executable"
 )
-comptime _HEX = "0123456789abcdef"
-comptime _INDENT = "  "
 
 
 @fieldwise_init
@@ -589,144 +579,6 @@ def compile_source(
 # --- expectations ------------------------------------------------------------
 
 
-def quote_ascii(text: String) -> String:
-    """Return a JSON string as Python's `json.dumps` writes it by default.
-
-    Every character outside printable ASCII is a `\\u` escape, with a
-    surrogate pair above U+FFFF.
-
-    Args:
-        text: The string.
-
-    Returns:
-        The quoted string.
-    """
-    var out = String('"')
-    for codepoint in text.codepoints():
-        var code = Int(codepoint.to_u32())
-        if code == 0x22:
-            out += '\\"'
-        elif code == 0x5C:
-            out += "\\\\"
-        elif code == 0x0A:
-            out += "\\n"
-        elif code == 0x0D:
-            out += "\\r"
-        elif code == 0x09:
-            out += "\\t"
-        elif code == 0x08:
-            out += "\\b"
-        elif code == 0x0C:
-            out += "\\f"
-        elif code >= 0x20 and code <= 0x7E:
-            out += chr(code)
-        elif code > 0xFFFF:
-            var value = code - 0x10000
-            out += _unicode_escape(0xD800 | (value >> 10))
-            out += _unicode_escape(0xDC00 | (value & 0x3FF))
-        else:
-            out += _unicode_escape(code)
-    out += '"'
-    return out^
-
-
-def _unicode_escape(unit: Int) -> String:
-    """Return `\\u` and four lowercase hexadecimal digits."""
-    var out = String("\\u")
-    for shift in [12, 8, 4, 0]:
-        out += chr(Int(_HEX.as_bytes()[(unit >> shift) & 15]))
-    return out^
-
-
-def _newline(level: Int) -> String:
-    """Return a newline and the indentation for `level`."""
-    return "\n" + _INDENT * level
-
-
-def _dump_node(
-    document: JsonDocument, node: Int, level: Int, mut out: String
-) raises:
-    """Append a parsed value as `json.dumps(..., indent=2)` writes it."""
-    var kind = document.kind(node)
-    if kind == OBJECT:
-        var count = document.length(node)
-        if count == 0:
-            out += "{}"
-            return
-        out += "{"
-        for i in range(count):
-            if i > 0:
-                out += ","
-            var key = document.key(node, i)
-            out += _newline(level + 1) + quote_ascii(key) + ": "
-            _dump_node(document, document.get(node, key), level + 1, out)
-        out += _newline(level) + "}"
-    elif kind == ARRAY:
-        var count = document.length(node)
-        if count == 0:
-            out += "[]"
-            return
-        out += "["
-        for i in range(count):
-            if i > 0:
-                out += ","
-            out += _newline(level + 1)
-            _dump_node(document, document.at(node, i), level + 1, out)
-        out += _newline(level) + "]"
-    elif kind == STRING:
-        out += quote_ascii(document.string(node))
-    elif kind == NUMBER:
-        out += String(document.integer(node))
-    elif kind == BOOLEAN:
-        out += "true" if document.boolean(node) else "false"
-    else:
-        out += "null"
-
-
-def _dump_diagnostics(record: Diagnostics, level: Int, mut out: String):
-    """Append a regenerated record with its errors first, then its notes."""
-    out += "{" + _newline(level + 1) + '"errors": '
-    if len(record.errors) == 0:
-        out += "[]"
-    else:
-        out += "["
-        for i in range(len(record.errors)):
-            ref item = record.errors[i]
-            if i > 0:
-                out += ","
-            out += _newline(level + 2) + "{"
-            out += _newline(level + 3) + '"line": ' + String(item.line) + ","
-            out += _newline(level + 3) + '"column": ' + String(item.column)
-            out += "," + _newline(level + 3) + '"message": '
-            out += quote_ascii(item.message) + _newline(level + 2) + "}"
-        out += _newline(level + 1) + "]"
-    out += "," + _newline(level + 1) + '"notes": '
-    if len(record.notes) == 0:
-        out += "[]"
-    else:
-        out += "["
-        for i in range(len(record.notes)):
-            if i > 0:
-                out += ","
-            out += _newline(level + 2) + quote_ascii(record.notes[i])
-        out += _newline(level + 1) + "]"
-    out += _newline(level) + "}"
-
-
-def _truthy(document: JsonDocument, node: Int) raises -> Bool:
-    """Return the Python truth value of a parsed value."""
-    var kind = document.kind(node)
-    if kind == OBJECT or kind == ARRAY:
-        return document.length(node) > 0
-    if kind == STRING:
-        return document.string(node).byte_length() > 0
-    if kind == NUMBER:
-        return document.number(node) != 0
-    if kind == BOOLEAN:
-        return document.boolean(node)
-    return False
-
-
 def read_record(document: JsonDocument, fixture: String) raises -> Diagnostics:
     """Read one fixture's reviewed diagnostics.
 
@@ -780,23 +632,41 @@ def expectations_text(
     for name in updated_names:
         names.append(name)
     names = _sorted_unique_strings(names^)
-    if len(names) == 0:
-        return "{}\n"
-    var out = String("{")
-    for i in range(len(names)):
-        if i > 0:
-            out += ","
-        out += _newline(1) + quote_ascii(names[i]) + ": "
-        var index = -1
+    var writer = JsonWriter()
+    writer.begin_object()
+    for name in names:
+        writer.key(name)
+        var position = -1
         for k in range(len(updated_names)):
-            if updated_names[k] == names[i]:
-                index = k
-        if index >= 0:
-            _dump_diagnostics(updated[index], 1, out)
-        else:
-            _dump_node(document, document.get(root, names[i]), 1, out)
-    out += "\n}\n"
-    return out^
+            if updated_names[k] == name:
+                position = k
+        if position < 0:
+            writer.node(document, document.get(root, name))
+            continue
+        # A regenerated record: errors first, then notes, as the Python
+        # checker built it.
+        ref record = updated[position]
+        writer.begin_object()
+        writer.key("errors")
+        writer.begin_array()
+        for item in record.errors:
+            writer.begin_object()
+            writer.key("line")
+            writer.integer(item.line)
+            writer.key("column")
+            writer.integer(item.column)
+            writer.key("message")
+            writer.string(item.message)
+            writer.end()
+        writer.end()
+        writer.key("notes")
+        writer.begin_array()
+        for note in record.notes:
+            writer.string(note)
+        writer.end()
+        writer.end()
+    writer.end()
+    return writer.text() + "\n"
 
 
 def _bytes(text: String) -> List[UInt8]:
@@ -1073,7 +943,7 @@ def _check_fixtures(
     for fixture in fixtures:
         if not options.update and not (
             document.has(document.root(), fixture)
-            and _truthy(document, document.get(document.root(), fixture))
+            and truthy(document, document.get(document.root(), fixture))
         ):
             raise Error("Missing expected diagnostics for " + fixture)
     for fixture in fixtures:

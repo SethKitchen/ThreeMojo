@@ -31,7 +31,6 @@ from tools.compile_fail import (
     clean_output,
     expected_diagnostics,
     parse_options,
-    quote_ascii,
     rejection_error,
     shell_split,
     split_lines,
@@ -264,14 +263,6 @@ def test_shell_split_matches_shlex() raises:
         _ = shell_split('"open')
     with assert_raises(contains="No escaped character"):
         _ = shell_split("end\\")
-
-
-def test_quote_ascii_matches_python() raises:
-    assert_equal(
-        quote_ascii('a"\\\n\r\t\b\f\x01\x7f'),
-        '"a\\"\\\\\\n\\r\\t\\b\\f\\u0001\\u007f"',
-    )
-    assert_equal(quote_ascii("é😀"), '"\\u00e9\\ud83d\\ude00"')
 
 
 # --- options ----------------------------------------------------------------
