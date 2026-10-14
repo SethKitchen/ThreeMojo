@@ -185,7 +185,7 @@ class TypedBoundaryContracts(unittest.TestCase):
         self.assertEqual(typed.edge(fixture)['before_sha256'], helpers.TESTS[fixture])
         function = ast.parse(inspect.getsource(audit._shared_helper_bindings))
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             for name in inputs:
                 path = root/name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,7 +264,20 @@ class TypedBoundaryContracts(unittest.TestCase):
         import ast
         import inspect
         import seed_count_contracts as seed
-        for name in ('verify', 'verify_score', 'verify_support', 'verify_frontier',
+        # The public verifier now owns standalone operation lifetime and
+        # delegates both paths to the same body. Bind that routing before
+        # inspecting the body's terminal comparison of physical bytes.
+        for name, targets in (('verify', ('_verify_seed_body', '_verify_standalone')),
+                              ('_verify_standalone', ('_verify_seed_body',))):
+            tree = ast.parse(inspect.getsource(getattr(seed, name)))
+            calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                     and isinstance(node.func, ast.Name) and node.func.id in targets]
+            self.assertCountEqual([node.func.id for node in calls], targets)
+            for call in calls:
+                self.assertEqual(ast.dump(call.args[0]), ast.dump(ast.Name(id='root', ctx=ast.Load())))
+                self.assertEqual(next(keyword.value.id for keyword in call.keywords
+                                      if keyword.arg == '_expected_raw'), '_expected_raw')
+        for name in ('_verify_seed_body', 'verify_score', 'verify_support', 'verify_frontier',
                      'verify_optional', 'historical_source', 'reviewed_text'):
             with self.subTest(adapter=name):
                 tree = ast.parse(inspect.getsource(getattr(seed, name)))
