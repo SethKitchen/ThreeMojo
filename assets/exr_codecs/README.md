@@ -9,7 +9,7 @@ These tools are only for fixture generation and independent checks.
 
 - `reference.cpp` generates 45 scanline images and decodes their RGBA samples with OpenEXR.
 - `variants.py` constructs 20 DWA variants and requires the native OpenEXR decoder to accept each one.
-- `package_fixtures.py` converts the native files and decoded samples to UTF-8 hex.
+- `package_fixtures.mojo` converts the native files and decoded samples to UTF-8 hex.
 - `manifest.json` records dimensions, channels, `pLinear`, chunk sizes, raw fallbacks, hashes and compression loss.
 - Each `.exr.hex` is one complete file. Its `.exr.rgba.hex` contains little-endian Float32 RGBA samples, from the top row.
 - `compare_three.mjs` runs the unmodified loader and records both successful results and upstream counterexamples.
@@ -141,7 +141,7 @@ export LD_LIBRARY_PATH="$REF/install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$REF/reference" generate "$REF/fixtures"
 python3 assets/exr_codecs/variants.py "$REF/reference" \
   "$REF/install/lib/libOpenEXR-3_1.so" "$REF/fixtures"
-python3 assets/exr_codecs/package_fixtures.py "$REF/fixtures"
+mojo run -I . assets/exr_codecs/package_fixtures.mojo "$REF/fixtures"
 npm install --prefix "$REF/js180" --save-exact three@0.180.0
 npm install --prefix "$REF/js186" --save-exact three@0.186.0
 node assets/exr_codecs/compare_three.mjs "$REF/js180/node_modules/three" \
