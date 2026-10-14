@@ -296,18 +296,37 @@ def test_the_planner_runs_its_own_suite() raises:
     assert_equal(_files(value, "cpu_tests"), "tests/test_ci_scope_tool.mojo")
 
 
-def test_carla_control_generators_select_their_replay_gate() raises:
+def _with_replay_suite(name: String) -> Dict[String, String]:
+    """Return the fixture tree with a control generator and its suite."""
+    var sources = _sources()
+    sources["tools/_carla_controls.mojo"] = "def bracket():\n    pass\n"
+    sources[
+        "tools/generate_carla_" + name + "_controls.mojo"
+    ] = "from tools._carla_controls import bracket\ndef run():\n    pass\n"
+    sources["tests/test_carla_control_replay_tool.mojo"] = (
+        "from tools.generate_carla_" + name + "_controls import run\n"
+    )
+    return sources^
+
+
+def test_carla_control_generators_select_their_replay_suite() raises:
+    # The generators are Mojo tools: a change runs the tool checks and the
+    # suites that import them. It measures no library.
     for name in ["lane_distance", "power", "directed", "index"]:
-        var value = _plan(
-            _change(["tools/generate_carla_" + name + "_controls.py"])
+        var tool = "tools/generate_carla_" + name + "_controls.mojo"
+        var value = _plan(_change([tool]), _with_replay_suite(name))
+        assert_false(value.full, tool)
+        assert_equal(_on(value), "cpu lint native tools", tool)
+        assert_equal(
+            _files(value, "cpu_tests"),
+            "tests/test_carla_control_replay_tool.mojo",
         )
-        assert_false(value.full)
-        assert_equal(_on(value), "lint tools")
-        assert_true(_no_files(value))
+        assert_equal(_files(value, "covered"), "")
+    # The removed Python generators and unknown names are not exempt.
     for path in [
+        "tools/generate_carla_power_controls.py",
         "tools/generate_carla_unknown_controls.py",
-        "tools/generate_carla_distance_controls.py",
-        "tools/generate_carla_power_controls.py.extra",
+        "tools/generate_carla_power_controls.mojo.extra",
     ]:
         assert_true(_plan(_change([path])).full, path)
 
@@ -320,7 +339,7 @@ def test_carla_generated_fixtures_keep_native_consumers() raises:
         "index_admission",
     ]:
         var fixture = "tests/test_carla_" + name + ".mojo"
-        var sources = _sources()
+        var sources = _with_replay_suite("power")
         sources[fixture] = "from core.used import used\n"
         sources["tests/test_replay_consumer.mojo"] = (
             "from tests.test_carla_" + name + " import used\n"
@@ -335,11 +354,13 @@ def test_carla_generated_fixtures_keep_native_consumers() raises:
         sort(expected)
         assert_equal(_files(value, "cpu_tests"), " ".join(expected))
         var mixed = _plan(
-            _change([fixture, "tools/generate_carla_power_controls.py"]),
+            _change([fixture, "tools/generate_carla_power_controls.mojo"]),
             sources,
         )
-        assert_equal(_files(mixed, "cpu_tests"), _files(value, "cpu_tests"))
-        assert_true(mixed.flag("tools"))
+        assert_false(mixed.full)
+        expected.append("tests/test_carla_control_replay_tool.mojo")
+        sort(expected)
+        assert_equal(_files(mixed, "cpu_tests"), " ".join(expected))
 
 
 def test_coverage_transport_and_proofs_run_the_coverage_tools() raises:

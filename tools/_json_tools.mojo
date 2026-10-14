@@ -396,6 +396,15 @@ struct JsonWriter(Movable):
         self._entry()
         self.out += String(value)
 
+    def unsigned(mut self, value: UInt64):
+        """Write an unsigned 64-bit integer, such as the bits of a double.
+
+        Args:
+            value: The integer.
+        """
+        self._entry()
+        self.out += String(value)
+
     def number(mut self, value: Float64):
         """Write a float as Python's `repr` writes it: the shortest text that
         reads back to the same value, and `NaN` or `Infinity` as
