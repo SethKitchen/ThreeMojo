@@ -267,7 +267,6 @@ def kind(path: String) -> String:
     for generator in [
         "tools/bench_examples.py",
         "tools/compiler_metadata.py",
-        "tools/humanoid_fidelity.py",
     ]:
         if path == generator:
             return "tools"

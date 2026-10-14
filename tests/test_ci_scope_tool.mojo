@@ -235,37 +235,53 @@ def test_carla_packaging_exceptions_keep_native_export_and_unknown_routing() rai
     assert_true(_same(_plan(_change(["core/used.mojo"])), _plan(_change(used))))
 
 
-def test_humanoid_snapshot_adapter_runs_the_tools_and_its_docs() raises:
+def _with_fidelity_suite() -> Dict[String, String]:
+    """Return the fixture tree with the snapshot tool and its suite."""
+    var sources = _sources()
+    sources["tools/_python_json.mojo"] = "def loads():\n    pass\n"
+    sources[
+        "tools/humanoid_fidelity.mojo"
+    ] = "from tools._python_json import loads\ndef run():\n    pass\n"
+    sources[
+        "tests/test_humanoid_fidelity_tool.mojo"
+    ] = "from tools.humanoid_fidelity import run\n"
+    return sources^
+
+
+def test_humanoid_snapshot_tool_runs_its_suite_and_its_docs() raises:
+    # The snapshot tool is a Mojo tool: a change runs the tool checks and
+    # the suite that imports it. It measures no library.
+    for path in ["tools/humanoid_fidelity.mojo", "tools/_python_json.mojo"]:
+        var value = _plan(_change([path]), _with_fidelity_suite())
+        assert_false(value.full, path)
+        assert_equal(_on(value), "cpu lint native tools", path)
+        assert_equal(
+            _files(value, "cpu_tests"),
+            "tests/test_humanoid_fidelity_tool.mojo",
+        )
+        assert_equal(_files(value, "covered"), "")
     var paths: List[String] = [
-        "tools/humanoid_fidelity.py",
-        "tools/test_humanoid_fidelity.py",
+        "tools/humanoid_fidelity.mojo",
+        "docs/wiki/Humanoid-fidelity.md",
     ]
-    var value = _plan(_change(paths))
+    var value = _plan(_change(paths), _with_fidelity_suite())
+    assert_false(value.full)
+    assert_equal(_on(value), "cpu docs lint native tools")
+
+
+def test_removed_humanoid_snapshot_python_is_not_exempt() raises:
+    # The removed Python tool and unknown names select the full audit.
+    for path in [
+        "tools/humanoid_fidelity.py",
+        "tools/humanoid_fidelity_new.py",
+        "tools/humanoid_fidelity.mojo.extra",
+    ]:
+        assert_true(_plan(_change([path])).full, path)
+    # A Python tool test still routes to the tool checks by its name.
+    var value = _plan(_change(["tools/test_humanoid_fidelity.py"]))
     assert_false(value.full)
     assert_equal(_on(value), "lint tools")
     assert_true(_no_files(value))
-    paths.append("docs/wiki/Humanoid-fidelity.md")
-    value = _plan(_change(paths))
-    assert_equal(_on(value), "docs lint tools")
-    assert_true(_no_files(value))
-
-
-def test_humanoid_adapter_exception_does_not_hide_other_changes() raises:
-    for path in [
-        "tools/anatomy_validity.py",
-        "tools/humanoid_fidelity_new.py",
-        "tools/humanoid_fidelity.py.extra",
-        "Makefile",
-    ]:
-        assert_true(
-            _plan(_change(["tools/humanoid_fidelity.py", path])).full, path
-        )
-    assert_true(
-        _same(
-            _plan(_change(["core/used.mojo"])),
-            _plan(_change(["core/used.mojo", "tools/humanoid_fidelity.py"])),
-        )
-    )
 
 
 def test_tool_tests_and_the_workflow_only_run_tools() raises:
