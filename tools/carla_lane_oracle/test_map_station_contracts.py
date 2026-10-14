@@ -139,10 +139,14 @@ class StationLeafControls(unittest.TestCase):
             keywords = [kw for kw in call.keywords if kw.arg == 'station_edge']
             self.assertEqual(len(keywords), 1)
             self.assertEqual(ast.dump(keywords[0].value), ast.dump(ast.Name(id='station_edge', ctx=ast.Load())))
+        # The public admission scope wraps the statements in one with block.
+        body = list(verify.body)
+        while any(isinstance(node, ast.With) for node in body):
+            body = [child for node in body for child in (node.body if isinstance(node, ast.With) else [node])]
         expected = ast.dump(ast.parse("station_edge = deviation_edge or sha(text) == station.AFTER_SHA256").body[0], include_attributes=False)
-        self.assertEqual(sum(ast.dump(node, include_attributes=False) == expected for node in verify.body), 1)
+        self.assertEqual(sum(ast.dump(node, include_attributes=False) == expected for node in body), 1)
         expected = ast.dump(ast.parse('deviation_edge = sha(text) == deviation.AFTER_SHA256').body[0], include_attributes=False)
-        self.assertEqual(sum(ast.dump(node, include_attributes=False) == expected for node in verify.body), 1)
+        self.assertEqual(sum(ast.dump(node, include_attributes=False) == expected for node in body), 1)
         names = [ast.unparse(node.func) for node in ast.walk(verify) if isinstance(node, ast.Call)]
         self.assertIn('station.predecessor_source', names)
         self.assertIn('score_predecessor_source', names)
