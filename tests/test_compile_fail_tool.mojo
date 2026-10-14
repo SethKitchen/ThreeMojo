@@ -34,10 +34,10 @@ from tools.compile_fail import (
     repository_errors,
     rejection_error,
     shell_split,
-    split_lines,
     strip_color,
 )
 from tools._process import run_program
+from tools._text import split_lines
 
 comptime FIXTURE = "tests/compile_fail/fixture.mojo"
 comptime MESSAGE = "cannot implicitly convert 'Int' value to 'BodyId'"

@@ -32,8 +32,6 @@ from unittest.mock import patch
 
 import affected
 import ci_scope
-import shard
-import suite_key
 
 PROBE = 'from pkg.one import value\n\n\ndef main():\n    print(value())\n'
 VALUE = 'def value() -> Int:\n    return 1\n'
@@ -196,21 +194,6 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(plan['files']['covered'], ['core/hidden.mojo'])
         self.assertIn('tests/test_hidden.mojo', plan['files']['coverage_tests'])
         self.assertNotIn('tests/test_hidden.mojo', plan['files']['cpu_tests'])
-
-    def test_suite_closure_and_weight_use_the_suite_directory(self):
-        self.write('tests/helper.mojo', VALUE)
-        known = set(affected.mojo_files())
-        imports = {}
-        self.assertEqual(suite_key.closure('tests/test_probe.mojo', known, imports),
-                         ['helper.mojo', 'pkg/one.mojo', 'tests/helper.mojo',
-                          'tests/test_probe.mojo'])
-        # The same cache serves a suite in another directory correctly.
-        self.assertEqual(suite_key.closure('tools/probe.mojo', known, imports),
-                         ['helper.mojo', 'pkg/one.mojo', 'tools/probe.mojo'])
-        sizes = {name: (self.root / name).stat().st_size for name in known}
-        self.assertEqual(shard.weight('tools/probe.mojo', known, sizes, {}),
-                         sizes['helper.mojo'] + sizes['pkg/one.mojo']
-                         + sizes['tools/probe.mojo'])
 
 
 if __name__ == '__main__':

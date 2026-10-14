@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 17</summary>
+<summary>Implemented: 18</summary>
+
+- [x] [Build tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): the Makefile selects, splits and keys the checks with Mojo programs that it builds once [#767](https://github.com/SethKitchen/ThreeMojo/issues/767)
 
 - [x] [Fixture verifiers in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#verify-generated-fixtures): the fixture manifest check and the pinned Node runtime verifier run as Mojo with shared helpers [#764](https://github.com/SethKitchen/ThreeMojo/issues/764)
 

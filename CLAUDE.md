@@ -50,7 +50,7 @@ way by habit:
 ## Process
 
 - Every feature has a GitHub issue and a line in the README checklist. Tick the box, link the wiki page, and close the issue in the same change.
-- Keep each PR to the files its work needs. Hosted CI uses `tools/ci_scope.py` to select checks for changed inputs and their consumers. Inspect the selection before a run; do not drop selected checks. The legacy `AFFECTED` path uses `tools/affected.py`, where a changed test expands through its full imported-library closure. Shared inputs can still select every suite.
+- Keep each PR to the files its work needs. Hosted CI uses `tools/ci_scope.py` to select checks for changed inputs and their consumers. Inspect the selection before a run; do not drop selected checks. The legacy `AFFECTED` path uses `tools/affected.mojo`, where a changed test expands through its full imported-library closure. Shared inputs can still select every suite.
 - Scoped coverage checks changed production modules and their affected production consumers at the full thresholds. Documentation changes select documentation checks. A manual CI run is the full audit. Scoped success does not establish global coverage of unchanged libraries.
 - Update an existing branch from `main` for material or relevant changes, or to resolve conflicts. Do not refresh it after every unrelated minor change.
 - Do not edit the `Makefile` for routine work. A new library module, test suite, helper library or gallery image needs no `Makefile` change. Helper libraries are `tests/_*.mojo` and `tools/_*.mojo`. The gallery is `examples/gallery.mk`. When routine work needs a `Makefile` edit, refactor that part first so the next change of the same kind does not.

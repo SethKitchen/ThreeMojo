@@ -91,7 +91,7 @@ jobs:
   # A check waits for its slowest job, and a job's time is almost all
   # compilation on a four-core runner. So the suites are split over runners
   # that work at once, `make ... SHARD=i/n`, each group balanced by the
-  # source its suites import; see tools/shard.py. Everything that is not a
+  # source its suites import; see tools/shard.mojo. Everything that is not a
   # suite runs whole, in the lint job. The splits are sized so that no group
   # outlasts the lint job by much.
   lint:

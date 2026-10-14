@@ -31,9 +31,13 @@ GPU = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo',
        'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo',
        'bench/water_gpu_bench.mojo', 'bench/hair_frame_bench.mojo'}
 GPU_TESTS = {name for name in GPU if name.startswith('tests/')}
+# The Makefile runs these Mojo tools to select, split and key the checks.
+# A change to one, or to any file it imports, changes the selection itself.
+BUILD_TOOLS = {'tools/affected.mojo', 'tools/cache_key.mojo', 'tools/suite_key.mojo',
+               'tools/shard.mojo', 'tools/coverage_shard.mojo', 'tools/example_inputs.mojo'}
 GLOBAL_TOOLS = {'tools/cache_key.py', 'tools/suite_key.py', 'tools/run_suite.py',
-                'tools/shard.py', 'tools/native_test_support.py', 'tools/test_environment.py',
-                'tools/fixture_runtime.mojo', 'tools/compiler_telemetry.py'}
+                'tools/native_test_support.py', 'tools/test_environment.py',
+                'tools/fixture_runtime.mojo', 'tools/compiler_telemetry.py'} | BUILD_TOOLS
 ROUTING = {'tools/ci_scope.py', '.github/workflows/ci.yml'}
 SAFE_PATH = re.compile(r'[A-Za-z0-9_./-]+\Z')
 LISTS = ('formatted', 'cpu_entries', 'cpu_docs', 'cpu_tests', 'compile_fail',
@@ -64,8 +68,8 @@ def kind(path):
         return 'docs'
     if path in ROUTING or path.startswith('tools/test_') and path.endswith('.py'):
         return 'tools'
-    # The gallery table is checked by tools/test_example_inputs.py; CI does not
-    # render the gallery.
+    # `make repository-check` checks the gallery table with
+    # tools/example_inputs.mojo; CI does not render the gallery.
     if path == 'examples/gallery.mk':
         return 'tools'
     if (path.startswith(('coverage/', 'tools/coverage_', 'tools/check_coverage_',
@@ -218,12 +222,15 @@ def plan(changed, *, base=None, old=None):
     sources = source_tree()
     inventory = inventories(sources)
     full = changed is None or any(kind(name) == 'all' for name in changed)
+    if not full:
+        imports, users = graph(sources)
+        build = affected.reachable(BUILD_TOOLS & sources.keys(), imports)
+        full = any(name in build for name in changed)
     reason = 'full audit: unknown input/history or manual request' if full else 'directed input selection'
     types = {kind(name) for name in changed or {}}
     if full:
         selected = inventory
     else:
-        imports, users = graph(sources)
         seeds = {name for name in changed if name in sources}
         assets = [name for name in changed if name.startswith('assets/') and kind(name) == 'native']
         for name, source in sources.items():

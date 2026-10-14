@@ -53,11 +53,26 @@ class RoutingTests(unittest.TestCase):
         # Other validation documents stay documentation.
         self.assertEqual(ci_scope.kind('docs/validation/water-gpu-300.md'), 'docs')
 
-    def test_gallery_table_selects_the_python_tool_checks(self):
+    def test_gallery_table_selects_the_tool_checks(self):
+        # The first tools shard runs `make repository-check`, which checks it.
         self.assertEqual(ci_scope.kind('examples/gallery.mk'), 'tools')
         value = selected({'examples/gallery.mk': False})
         self.assertFalse(value['full'])
         self.assertTrue(value['flags']['tools'])
+
+    def test_the_build_tools_and_their_imports_select_the_full_audit(self):
+        sources = dict(SOURCES)
+        sources.update({
+            'tools/suite_key.mojo': 'from tools._imports import closure\n\ndef main():\n    pass\n',
+            'tools/_imports.mojo': 'from loaders.json import parse_json\n',
+            'loaders/json.mojo': 'def parse_json():\n    pass\n',
+            'loaders/other.mojo': 'def other():\n    pass\n',
+        })
+        for path in ('tools/suite_key.mojo', 'tools/_imports.mojo', 'loaders/json.mojo',
+                     'tools/affected.mojo', 'tools/tool.sh'):
+            with self.subTest(path=path):
+                self.assertTrue(selected({path: False}, sources=sources)['full'])
+        self.assertFalse(selected({'loaders/other.mojo': False}, sources=sources)['full'])
 
     def test_carla_asset_packaging_tools_select_python_and_documentation_checks(self):
         paths = {'assets/carla/tools/carla_assets.py': False,

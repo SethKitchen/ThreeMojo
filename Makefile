@@ -26,6 +26,18 @@ define run
 out=$$($(1) 2>&1); rc=$$?; echo "$$out" | sed '/Crashpad/d'
 endef
 
+# Shell quoting also protects flags that contain spaces or shell punctuation.
+quote = '$(subst ','"'"',$(1))'
+# The project tools are Mojo programs. `$(TOOL) NAME ARGUMENT...` runs
+# tools/NAME.mojo. tools/tool.sh builds each program once, into .cache/tools/,
+# because this Makefile runs some of them many times while it parses. The
+# tools have their own compiler, so a test can give MOJO a stand-in. The
+# command must not start with an assignment such as `MOJO=...`: then make
+# passes it to the shell as one argument, and the cache key's argument
+# lists are longer than one argument can be.
+TOOL_MOJO := $(if $(wildcard .venv/bin/mojo),.venv/bin/mojo,mojo)
+TOOL = sh tools/tool.sh $(call quote,$(TOOL_MOJO))
+
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
@@ -108,7 +120,7 @@ OUT_DIR := out
 
 # --- affected ---------------------------------------------------------------
 # `make check-cpu AFFECTED=origin/main` checks only what the change since that
-# ref can reach, as nx's "affected" does. tools/affected.py walks the import
+# ref can reach, as nx's "affected" does. tools/affected.mojo walks the import
 # graph: a suite, an example or a module is checked when it imports a changed
 # module, directly or through others, or quotes a changed asset's path.
 # Formatting reads each file alone, so it checks the changed files only. A
@@ -124,9 +136,9 @@ OUT_DIR := out
 AFFECTED :=
 COMPILE_FAIL_RUN := $(COMPILE_FAIL)
 ifneq ($(strip $(AFFECTED)),)
-affected = $(shell python3 tools/affected.py --base $(AFFECTED) $(1))
-AFFECTED_CHANGE  := $(shell python3 tools/affected.py --base $(AFFECTED) --list)
-FORMATTED        := $(shell python3 tools/affected.py --base $(AFFECTED) \
+affected = $(shell $(TOOL) affected --base $(AFFECTED) $(1))
+AFFECTED_CHANGE  := $(shell $(TOOL) affected --base $(AFFECTED) --list)
+FORMATTED        := $(shell $(TOOL) affected --base $(AFFECTED) \
                       --changed $(FORMATTED))
 CPU_ENTRY_POINTS := $(call affected,$(CPU_ENTRY_POINTS))
 CPU_DOC_SOURCES  := $(call affected,$(CPU_DOC_SOURCES))
@@ -183,17 +195,17 @@ COVERAGE_TESTS := $(CPU_TESTS)
 
 # CI splits the suites over runners that work at once: `SHARD=i/n` keeps
 # group i of n, balanced by the source each suite imports, since a suite's
-# CPU time is mostly compilation. See tools/shard.py. Only the suites split:
+# CPU time is mostly compilation. See tools/shard.mojo. Only the suites split:
 # formatting, lint, the docs and the compile-fail cases run whole, on one
 # runner. `coverage-report` reads the captures of every group, so it checks
 # that each suite of the whole list left one.
 SHARD ?=
 TEST_SUITES := $(CPU_TESTS)
 ifneq ($(strip $(SHARD)),)
-TEST_SUITES := $(shell python3 tools/shard.py $(SHARD) $(CPU_TESTS) \
+TEST_SUITES := $(shell $(TOOL) shard $(SHARD) $(CPU_TESTS) \
                  || echo SHARD_ERROR)
 ifneq ($(filter SHARD_ERROR,$(TEST_SUITES)),)
-$(error tools/shard.py could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
+$(error tools/shard.mojo could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
 endif
 endif
 # Instrumented runtime can outweigh compilation by minutes. Keep CPU
@@ -202,10 +214,10 @@ endif
 COVERAGE_SUITES := $(COVERAGE_TESTS)
 ifneq ($(strip $(SHARD)),)
 ifneq ($(filter coverage coverage-capture,$(MAKECMDGOALS)),)
-COVERAGE_SUITES := $(shell python3 tools/coverage_shard.py $(SHARD) $(COVERAGE_TESTS) \
+COVERAGE_SUITES := $(shell $(TOOL) coverage_shard $(SHARD) $(COVERAGE_TESTS) \
                        || echo SHARD_ERROR)
 ifneq ($(filter SHARD_ERROR,$(COVERAGE_SUITES)),)
-$(error tools/coverage_shard.py could not split coverage suites for SHARD=$(SHARD))
+$(error tools/coverage_shard.mojo could not split coverage suites for SHARD=$(SHARD))
 endif
 endif
 endif
@@ -229,15 +241,13 @@ COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root
 endif
 
 CACHE_DIR := .cache
-# Shell quoting also protects flags that contain spaces or shell punctuation.
-quote = '$(subst ','"'"',$(1))'
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 # Native test fixtures are test-only. Their compiler identity also invalidates
 # suite stamps; a missing compiler is a build failure, never a skipped suite.
 export CC
 NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
-HASH := $(shell python3 tools/cache_key.py \
+HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
           --setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS)) \
@@ -347,7 +357,7 @@ test: test-cpu test-gpu
 
 # Each suite also has its own stamp, in $(SUITE_STAMPS), named by a key
 # over the files the suite imports and the assets it quotes: see
-# tools/suite_key.py. A change to one module builds and runs only the
+# tools/suite_key.mojo. A change to one module builds and runs only the
 # suites that reach it, and `make -B` drops every stamp. CI starts with no
 # cache, so this is for local runs; CI narrows the suites with AFFECTED.
 SUITE_STAMPS := $(CACHE_DIR)/suites
@@ -363,7 +373,7 @@ test-cpu: $(TEST_CPU_STAMP)
 $(TEST_CPU_STAMP):
 	@mkdir -p $(BIN_DIR) $(SUITE_STAMPS)
 	@$(if $(FORCED),rm -f $(SUITE_STAMPS)/*)
-	@python3 tools/suite_key.py --stamps $(SUITE_STAMPS) \
+	@$(TOOL) suite_key --stamps $(SUITE_STAMPS) \
 	    --setting=$(call quote,$(MOJO)) \
 	    --setting=$(call quote,$(MOJOFLAGS)) \
 	    --setting=$(call quote,$(TOOLCHAIN)) \
@@ -783,7 +793,7 @@ draco-export-check:
 # Reuse the import graph used by the suite cache. Keep extensions in the
 # lint/coverage lists, but do not rebuild a cube for an unrelated anatomy edit.
 # The writer uses atomic replacement, so concurrent make processes are safe.
-EXAMPLE_INPUTS_STATUS := $(shell python3 tools/example_inputs.py \
+EXAMPLE_INPUTS_STATUS := $(shell $(TOOL) example_inputs \
                           --output $(CACHE_DIR)/example-inputs.mk || echo failed)
 ifneq ($(strip $(EXAMPLE_INPUTS_STATUS)),)
 $(error Cannot read example prerequisites)
@@ -905,11 +915,13 @@ test-tools:
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
 
 # The negative-fixture manifest names exactly tests/compile_fail, no job
-# regenerates it, and the recorded three.js fixture hashes match. These read
-# repository files that the Mojo suite cache does not track, so they run here.
+# regenerates it, the recorded three.js fixture hashes match, and the gallery
+# draws every example. These read repository files that the Mojo suite cache
+# does not track, so they run here.
 repository-check:
 	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --check-repository
 	@$(MOJO) run $(MOJOFLAGS) tools/fixture_manifest.mojo
+	@$(TOOL) example_inputs --check-repository
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.

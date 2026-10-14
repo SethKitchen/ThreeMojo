@@ -84,7 +84,7 @@ make -B check
 make check-cpu coverage AFFECTED=origin/main
 ```
 
-This checks only what the change since the merge base with `origin/main` can reach, as nx's "affected" does. The change includes the files you have not committed. `tools/affected.py` reads the import graph. A suite, an example or a module is checked when it imports a changed module, directly or through other modules. A test that quotes the path of a changed asset is checked too. The format check reads the changed files only.
+This checks only what the change since the merge base with `origin/main` can reach, as nx's "affected" does. The change includes the files you have not committed. `tools/affected.mojo` reads the import graph. A suite, an example or a module is checked when it imports a changed module, directly or through other modules. A test that quotes the path of a changed asset is checked too. The format check reads the changed files only.
 
 A change to one leaf module, for example a loader, checks one suite in about a minute. A change to a module that most of the library imports, for example `core/scene.mojo`, still checks about half the suites. A documentation change checks no suite. A change to the Makefile, the CI workflow, the coverage tool or a file that the script cannot place checks everything.
 
@@ -94,7 +94,7 @@ The CI workflow checks a pull request with `AFFECTED` set to its base branch. It
 
 ## Verify generated fixtures
 
-`mojo run -I . tools/fixture_manifest.mojo` checks the accepted hashes. It does not regenerate fixtures. `make repository-check` runs this check. It also checks that the negative-fixture manifest names each file in `tests/compile_fail` and that no job regenerates the manifest. `make test-tools` runs `make repository-check` once.
+`mojo run -I . tools/fixture_manifest.mojo` checks the accepted hashes. It does not regenerate fixtures. `make repository-check` runs this check. It also checks that the negative-fixture manifest names each file in `tests/compile_fail` and that no job regenerates the manifest. It also checks that the gallery table in `examples/gallery.mk` draws every example and compresses every image. `make test-tools` runs `make repository-check` once.
 
 The VTK and sRGB generators have a verified runtime: Node 24.19.0, V8 13.6.233.17-node.51, Linux x64 and three 0.180.0. VTK also needs @xmldom/xmldom 0.9.12. The sRGB verifier supplies `--no-use-std-math-pow`; the default flag changes 30 Float64 words.
 
@@ -162,9 +162,21 @@ A suite's time is almost all compilation. So CI splits the suites over runners t
 make test-cpu SHARD=2/3
 ```
 
-`tools/shard.py` makes the groups. It weighs each suite by the source that the suite imports, and it gives the heaviest suite to the lightest group first. Every machine computes the same groups. `SHARD` splits the suites only. The format check, lint, the compile-fail cases and the documentation check run whole, in one job.
+`tools/shard.mojo` makes the groups. It weighs each suite by the source that the suite imports, and it gives the heaviest suite to the lightest group first. Every machine computes the same groups. `SHARD` splits the suites only. The format check, lint, the compile-fail cases and the documentation check run whole, in one job.
 
 Coverage splits into three steps. Each CI runner runs `coverage-instrument` and then `coverage-capture` for its group. One more runner runs `coverage-instrument`, collects the captures of every group in `coverage/build/hits/`, and runs `coverage-report`. The report fails if a suite of the whole list left no capture.
+
+## Rebuild the project tools
+
+The `Makefile` runs Mojo tools while it reads itself. They select the affected files, split the suites, key the stamps and list the prerequisites of each example. `tools/tool.sh` builds each tool once into `.cache/tools/` and then runs the program. It builds a tool again when a `.mojo` file in `tools/` or `loaders/` is newer than the program. A tool must import nothing outside these two directories, apart from the standard library.
+
+The tools use their own compiler, `TOOL_MOJO`. It is `.venv/bin/mojo` when that file exists, and `mojo` otherwise. So a test can give `MOJO` a stand-in compiler. To build the tools with a different compiler, set `TOOL_MOJO`:
+
+```bash
+make check-cpu TOOL_MOJO=/path/to/mojo
+```
+
+A change to a tool, or to a file that a tool imports, selects the full CI audit. The first `make` on a new machine builds the tools, which takes about ten seconds.
 
 ## Measure the examples
 

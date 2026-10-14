@@ -1,0 +1,288 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""An example's `make` prerequisites are what it uses, and no more.
+
+So an edit to one extension does not draw every gallery image again.
+"""
+
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
+
+from tests._tree import Tree
+from tools._process import run_program
+from tools.example_inputs import (
+    OPTIMIZER,
+    TOOLS,
+    dependencies,
+    gallery_entries,
+    makefile_text,
+    repository_errors,
+    write_if_changed,
+)
+
+
+def _has(paths: List[String], path: String) -> Bool:
+    """Return whether a list holds a path."""
+    for item in paths:
+        if item == path:
+            return True
+    return False
+
+
+def test_transitive_local_imports_packages_and_asset_prefixes() raises:
+    var tree = Tree()
+    tree.write("examples/cube.mojo", "from core.mesh import draw\n")
+    tree.write("examples/person.mojo", "from extensions.person import draw\n")
+    tree.write("core/__init__.mojo", "")
+    # Mojo resolves imports from the example's directory and the root, not
+    # beside core/mesh.mojo, so this import is absolute.
+    tree.write("core/mesh.mojo", 'import core.colors\n_ = "assets/brick/"\n')
+    tree.write("core/colors.mojo", "")
+    tree.write("extensions/__init__.mojo", "")
+    tree.write("extensions/person.mojo", "from core.mesh import draw\n")
+    tree.write("assets/brick/a.png", "a")
+    tree.write("assets/unrelated.png", "b")
+    # Every gallery recipe runs the optimizer after drawing.
+    tree.write(OPTIMIZER, "from render.optimize import run\n")
+    tree.write("render/__init__.mojo", "")
+    tree.write("render/optimize.mojo", "")
+    var result = dependencies(tree.root)
+    var cube = result["cube"].copy()
+    var person = result["person"].copy()
+    assert_true(_has(cube, "core/colors.mojo"))
+    assert_true(_has(cube, "core/__init__.mojo"))
+    assert_true(_has(cube, "assets/brick/a.png"))
+    assert_false(_has(cube, "assets/unrelated.png"))
+    assert_false(_has(cube, "extensions/person.mojo"))
+    assert_true(_has(person, "extensions/person.mojo"))
+    assert_true(_has(person, "core/mesh.mojo"))
+    for path in materialize[TOOLS]():
+        assert_true(_has(cube, path), path)
+    for paths in [cube.copy(), person.copy()]:
+        assert_true(_has(paths, OPTIMIZER))
+        assert_true(_has(paths, "render/optimize.mojo"))
+    tree.close()
+
+
+def _make(tree: Tree, target: String) raises -> Int:
+    """Return the status of `make -q TARGET`, with no flags from outside."""
+    var result = run_program(
+        [
+            "env",
+            "-u",
+            "MAKEFLAGS",
+            "-u",
+            "MFLAGS",
+            "-u",
+            "MAKEOVERRIDES",
+            "-u",
+            "MAKELEVEL",
+            "-u",
+            "MAKEFILES",
+            "-u",
+            "GNUMAKEFLAGS",
+            "make",
+            "-q",
+            target,
+        ],
+        5,
+        directory=tree.root,
+    )
+    return result.status
+
+
+def test_make_does_not_draw_again_for_an_unrelated_extension() raises:
+    var tree = Tree()
+    for path in materialize[TOOLS]():
+        tree.write(path, "")
+    tree.write(OPTIMIZER, "")
+    tree.write("examples/cube.mojo", "from core import draw\n")
+    tree.write("examples/person.mojo", "from extension import draw\n")
+    tree.write("core.mojo", "")
+    tree.write("extension.mojo", "from core import draw\n")
+    var rules = makefile_text(dependencies(tree.root))
+    tree.write(
+        "Makefile",
+        rules
+        + "cube.png: $(EXAMPLE_INPUTS_cube)\n\ttouch $@\n"
+        + "person.png: $(EXAMPLE_INPUTS_person)\n\ttouch $@\n",
+    )
+    tree.write("cube.png", "")
+    tree.write("person.png", "")
+    var stamps: List[String] = ["touch", "-t", "200001010000"]
+    for path in [
+        "Makefile",
+        "examples/gallery.mk",
+        "tools/tool.sh",
+        OPTIMIZER,
+        "examples/cube.mojo",
+        "examples/person.mojo",
+        "core.mojo",
+    ]:
+        stamps.append(tree.root + "/" + path)
+    _ = run_program(stamps, 5)
+    _ = run_program(
+        [
+            "touch",
+            "-t",
+            "201001010000",
+            tree.root + "/cube.png",
+            tree.root + "/person.png",
+        ],
+        5,
+    )
+    _ = run_program(
+        ["touch", "-t", "202001010000", tree.root + "/extension.mojo"], 5
+    )
+    assert_equal(_make(tree, "cube.png"), 0)
+    assert_equal(_make(tree, "person.png"), 1)
+    tree.close()
+
+
+def test_output_is_stable_and_rejects_make_syntax() raises:
+    var inputs = Dict[String, List[String]]()
+    inputs["cube"] = ["a.mojo"]
+    inputs["box"] = ["b.mojo", "c.mojo"]
+    assert_equal(
+        makefile_text(inputs),
+        "# Generated by tools/example_inputs.mojo; do not edit.\n"
+        + "EXAMPLE_INPUTS_box := b.mojo c.mojo\n"
+        + "EXAMPLE_INPUTS_cube := a.mojo\n",
+    )
+    for path in ["a b", "a\tb", "a#b", "$x", "a:b", "a\\b"]:
+        var bad = Dict[String, List[String]]()
+        bad["cube"] = [path]
+        with assert_raises(contains="unsupported Make prerequisite path"):
+            _ = makefile_text(bad)
+
+
+def test_the_file_is_written_only_when_it_changes() raises:
+    var tree = Tree()
+    var path = tree.root + "/cache/inputs.mk"
+    assert_true(write_if_changed(path, "a\n"))
+    assert_false(write_if_changed(path, "a\n"))
+    assert_true(write_if_changed(path, "b\n"))
+    assert_equal(tree.read("cache/inputs.mk"), "b\n")
+    tree.close()
+
+
+def test_gallery_lines() raises:
+    var errors = List[String]()
+    var table = (
+        "# comment\n\n$(call gallery,spin,spin)\n"
+        + "$(call gallery,skin-tones,skin, assets/x.bin)\n"
+        + "$(call gallery,bad name,spin)\n"
+        + "$(call gallery,a,b-c)\n"
+        + "$(call gallery,a)\n"
+        + "call gallery,a,b\n"
+    )
+    var examples = gallery_entries(table, errors)
+    assert_equal(" ".join(examples), "spin skin")
+    assert_equal(len(errors), 4)
+    assert_equal(
+        errors[0],
+        (
+            "examples/gallery.mk: not a gallery line: $(call gallery,bad"
+            " name,spin)"
+        ),
+    )
+
+
+def _gallery_tree() raises -> Tree:
+    """Return a tree whose Makefile and table pass the check."""
+    var tree = Tree()
+    tree.write("examples/spin.mojo", "")
+    tree.write("examples/viewer.mojo", "")
+    tree.write("examples/photo.mojo", "")
+    tree.write("examples/audio_game_humanoid.mojo", "")
+    tree.write("examples/gallery.mk", "$(call gallery,spin,spin)\n")
+    var carla = String()
+    for name in ["carla", "carla_town", "carla_towns"]:
+        carla += (
+            "$(OUT_DIR)/"
+            + name
+            + ".png: $(EXAMPLE_INPUTS_"
+            + name
+            + ") assets/carla/ATTRIBUTION.md\n"
+            + "\t@$(call run,x)\n\t@tools/optimize_png.mojo $@\n"
+            + "\t@credits --all --output $(@:.png=.credits.md)\n\n"
+        )
+    tree.write(
+        "Makefile",
+        "define GALLERY_RULE\n\t@$$(call run,x)\n\t@tools/optimize_png.mojo"
+        " $$@\nendef\n"
+        + "include examples/gallery.mk\n\n"
+        + "$(OUT_DIR)/photo.png: $(EXAMPLE_INPUTS_photo)\n\t@$(call run,x)\n"
+        + "\t@tools/optimize_png.mojo $@\n\n"
+        + carla
+        + "# Deliberately leaves the rest.\n"
+        + "$(OUT_DIR)/audio-character.glb:"
+        " $(EXAMPLE_INPUTS_audio_game_humanoid)\n"
+        + "\t@run examples/audio_game_humanoid.mojo $@\n",
+    )
+    return tree^
+
+
+def test_the_gallery_check_passes_a_complete_gallery() raises:
+    var tree = _gallery_tree()
+    var errors = repository_errors(tree.root)
+    assert_equal(len(errors), 0, "\n".join(errors))
+    tree.close()
+
+
+def test_the_gallery_check_finds_each_problem() raises:
+    var tree = _gallery_tree()
+    tree.write(
+        "examples/gallery.mk",
+        "$(call gallery,spin,spin)\n$(call gallery,gone,gone)\n",
+    )
+    tree.write("examples/new.mojo", "")
+    var makefile = tree.read("Makefile")
+    tree.write(
+        "Makefile",
+        makefile.replace(
+            "\t@tools/optimize_png.mojo $@\n\n$(OUT_DIR)/carla.png",
+            "\n$(OUT_DIR)/carla.png",
+        )
+        .replace("include examples/gallery.mk", "")
+        .replace(
+            (
+                "$(OUT_DIR)/carla_town.png: $(EXAMPLE_INPUTS_carla_town)"
+                " assets/carla/ATTRIBUTION.md"
+            ),
+            "$(OUT_DIR)/carla_town.png: $(LIB_SOURCES)",
+        )
+        .replace(
+            "examples/audio_game_humanoid.mojo $@",
+            "examples/audio_game_humanoid.mojo; optimize_png",
+        ),
+    )
+    var errors = repository_errors(tree.root)
+    var expected = [
+        "examples/gallery.mk: no examples/gone.mojo",
+        "examples/new.mojo: no gallery line or recipe",
+        "an image depends on every library source",
+        "Makefile: carla_town.png does not write its credits",
+        "Makefile: a gallery image is not compressed",
+        "Makefile: examples/gallery.mk is not included",
+        "Makefile: the audio game face recipe is wrong",
+    ]
+    assert_equal(len(errors), len(expected), "\n".join(errors))
+    for index in range(len(expected)):
+        assert_equal(errors[index], expected[index])
+    tree.write("Makefile", "no gallery\n")
+    errors = repository_errors(tree.root)
+    assert_equal(errors[len(errors) - 1], "Makefile: no gallery section")
+    tree.close()
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()

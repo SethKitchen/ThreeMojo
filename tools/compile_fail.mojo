@@ -31,6 +31,7 @@ from std.tempfile import mkdtemp
 from loaders.json import OBJECT, JsonDocument, parse_json
 from tools._json_tools import JsonWriter, truthy
 from tools._process import run_program, shell_quote
+from tools._text import split_lines
 
 # The pinned compiler can emit this startup warning without failing to
 # compile. Only the entire line is removed, so real crashes, import errors
@@ -136,55 +137,6 @@ def strip_color(text: String) -> String:
         out.append(bytes[i])
         i += 1
     return String(unsafe_from_utf8=out)
-
-
-def split_lines(text: String) -> List[String]:
-    """Split text at line boundaries, as Python's `str.splitlines` does.
-
-    The boundaries are LF, CR, CR LF, VT, FF, the separators 0x1C to 0x1E,
-    NEL, LINE SEPARATOR and PARAGRAPH SEPARATOR.
-
-    Args:
-        text: The text.
-
-    Returns:
-        The lines, without their boundaries. A final boundary does not make
-        an empty last line.
-    """
-    var bytes = text.as_bytes()
-    var lines = List[String]()
-    var start = 0
-    var i = 0
-    while i < len(bytes):
-        var width = 0
-        var byte = bytes[i]
-        if byte == 0x0D:
-            width = 2 if i + 1 < len(bytes) and bytes[i + 1] == 0x0A else 1
-        elif (
-            byte == 0x0A
-            or byte == 0x0B
-            or byte == 0x0C
-            or (byte >= 0x1C and byte <= 0x1E)
-        ):
-            width = 1
-        elif byte == 0xC2 and i + 1 < len(bytes) and bytes[i + 1] == 0x85:
-            width = 2
-        elif (
-            byte == 0xE2
-            and i + 2 < len(bytes)
-            and bytes[i + 1] == 0x80
-            and (bytes[i + 2] == 0xA8 or bytes[i + 2] == 0xA9)
-        ):
-            width = 3
-        if width > 0:
-            lines.append(String(unsafe_from_utf8=Span(bytes)[start:i]))
-            i += width
-            start = i
-        else:
-            i += 1
-    if start < len(bytes):
-        lines.append(String(unsafe_from_utf8=Span(bytes)[start:]))
-    return lines^
 
 
 def clean_output(output: String) -> String:

@@ -13,18 +13,21 @@ import unittest
 from unittest.mock import patch
 
 import coverage_io
-import coverage_shard
+
+PROFILE = Path(__file__).with_name('coverage_costs.json')
 
 
 class CoverageSchedulingTests(unittest.TestCase):
-    def test_profile_is_positive_finite_and_complete_for_recorded_suites(self):
-        costs = coverage_shard.load_costs(coverage_shard.PROFILE)
+    # tools/coverage_shard.mojo reads the profile; tests/test_shard_tool.mojo
+    # tests its checks and the schedule.
+    def test_profile_records_every_measured_suite(self):
+        costs = json.loads(PROFILE.read_text())['seconds']
         self.assertEqual(len(costs), 718)
         self.assertEqual(costs['tests/test_hair_styles.mojo'], 1471.6)
         self.assertEqual(costs['tests/test_carla_map.mojo'], 5354.3)
 
     def test_timeout_is_labeled_as_a_lower_bound_not_a_completed_cost(self):
-        profile = json.loads(coverage_shard.PROFILE.read_text())
+        profile = json.loads(PROFILE.read_text())
         self.assertEqual(profile['source_run_attempt'], 1)
         self.assertEqual(profile['workers_per_shard'], 4)
         self.assertEqual(profile['completed_measurements'], 717)
@@ -37,71 +40,6 @@ class CoverageSchedulingTests(unittest.TestCase):
         self.assertEqual(estimate['last_completed_capture']['seconds'], 6622.2)
         self.assertEqual(profile['seconds']['tests/test_carla_recorder_world.mojo'],
                          estimate['seconds'])
-
-    def test_rejects_invalid_costs_and_duplicate_keys(self):
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'costs.json'
-            for value in [0, -1, float('nan'), float('inf'), True, '4', None]:
-                path.write_text(json.dumps({'seconds': {'tests/test_a.mojo': value}}))
-                with self.assertRaises(ValueError):
-                    coverage_shard.load_costs(path)
-            path.write_text('{"seconds":{"tests/test_a.mojo":1,"tests/test_a.mojo":2}}')
-            with self.assertRaisesRegex(ValueError, 'duplicate'):
-                coverage_shard.load_costs(path)
-            for name in ['../test_a.mojo', 'tests/test_a/../b.mojo', 'tests/a.mojo']:
-                path.write_text(json.dumps({'seconds': {name: 1}}))
-                with self.assertRaises(ValueError):
-                    coverage_shard.load_costs(path)
-
-    def test_partition_is_complete_deterministic_and_longest_first(self):
-        costs = coverage_shard.load_costs(coverage_shard.PROFILE)
-        suites = list(costs)
-        groups = coverage_shard.schedule(suites, 6, costs, lambda suite: 1000)
-        self.assertEqual(sorted(sum(groups, [])), sorted(suites))
-        self.assertEqual(len(set(sum(groups, []))), len(suites))
-        self.assertEqual(groups, coverage_shard.schedule(list(reversed(suites)), 6, costs, lambda suite: 1000))
-        for group in groups:
-            self.assertEqual(group, sorted(group, key=lambda suite: (-costs[suite], suite)))
-
-    def test_eight_shards_start_the_known_expensive_suites_first(self):
-        costs = coverage_shard.load_costs(coverage_shard.PROFILE)
-        groups = coverage_shard.schedule(list(costs), 8, costs, lambda suite: 1)
-        self.assertEqual(len(groups), 8)
-        self.assertEqual(sorted(sum(groups, [])), sorted(costs))
-        self.assertEqual(len(set(sum(groups, []))), len(costs))
-        self.assertEqual(groups[0][0], 'tests/test_carla_recorder_world.mojo')
-        self.assertEqual(groups[1][0], 'tests/test_carla_map.mojo')
-        self.assertEqual(groups[2][0], 'tests/test_carla_world.mojo')
-        self.assertEqual(groups, coverage_shard.schedule(
-            list(reversed(costs)), 8, costs, lambda suite: 1))
-
-    def test_unknown_suites_and_empty_groups_are_kept(self):
-        costs = {'known': 20}
-        sizes = {'known': 200, 'new': 400, 'tiny': 1}
-        groups = coverage_shard.schedule(list(sizes), 5, costs, sizes.__getitem__)
-        self.assertEqual(groups, [['new'], ['known'], ['tiny'], [], []])
-        self.assertEqual(coverage_shard.schedule([], 2, costs, sizes.__getitem__), [[], []])
-        self.assertEqual(coverage_shard.schedule(['new'], 1, {}, sizes.__getitem__), [['new']])
-        with self.assertRaises(ValueError):
-            coverage_shard.schedule(['new', 'new'], 1, costs, sizes.__getitem__)
-        with self.assertRaises(ValueError):
-            coverage_shard.schedule(['new'], 0, costs, sizes.__getitem__)
-
-    def test_cpu_shard_keeps_its_existing_input_order(self):
-        # Coverage adds a separate scheduler; the CPU CLI keeps path order.
-        import shard
-        suites = ['tests/test_clock.mojo', 'tests/test_color_utils.mojo']
-        with patch('affected.mojo_files', return_value=suites), \
-                patch('os.path.getsize', return_value=100), \
-                patch('shard.weight', return_value=100), \
-                contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(shard.main(['1/1', *suites]), 0)
-        self.assertEqual(output.getvalue().split(), suites)
-
-    def test_invalid_cli_fails_closed(self):
-        with contextlib.redirect_stderr(io.StringIO()):
-            for args in [[], ['0/6'], ['7/6'], ['1/0'], ['x/6'], ['1/2/3']]:
-                self.assertEqual(coverage_shard.main(args), 2)
 
     def test_progress_is_flushed_without_modifying_records_or_status(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -135,12 +73,6 @@ class CoverageSchedulingTests(unittest.TestCase):
             self.assertTrue(any('complete (exit 7)' in text for text in messages))
             self.assertEqual((root / 'test_one.out').read_text(), 'diagnostic\n')
             self.assertEqual(gzip.decompress((root / 'err.gz').read_bytes()), b'COVLINE:m:1\n')
-
-    def test_absent_profile_fails_closed(self):
-        with tempfile.TemporaryDirectory() as folder, \
-                patch('coverage_shard.PROFILE', Path(folder) / 'absent.json'), \
-                contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(coverage_shard.main(['1/1', 'tests/test_new.mojo']), 2)
 
     def test_progress_stops_on_spawn_failure(self):
         with tempfile.TemporaryDirectory() as folder, patch('builtins.print') as output:
