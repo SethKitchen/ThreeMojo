@@ -20,6 +20,8 @@ character outside printable ASCII escaped.
 
 from std.math import isinf, isnan
 
+from tools._python_float import python_repr
+
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -408,7 +410,11 @@ struct JsonWriter(Movable):
         elif isinf(value):
             self.out += "Infinity" if value > 0 else "-Infinity"
         else:
-            self.out += String(value)
+            # Mojo's own float text does not always read back exactly.
+            try:
+                self.out += python_repr(value)
+            except:
+                self.out += String(value)
 
     def boolean(mut self, value: Bool):
         """Write `true` or `false`.
