@@ -50,12 +50,13 @@ class CarlaOracleWiringTests(unittest.TestCase):
             '    raise SystemExit(7)\n')
         source = (ROOT / 'Makefile').read_text()
         start = source.index('test-tools:\n')
-        end = source.index('\n# Native source-to-source regression:', start)
+        end = source.index('\n# The negative-fixture manifest names exactly', start)
         # The nested stage runs through the real parallel runner.
         runner = 'tools/parallel_unittest.py'
         (self.root / runner).write_bytes((ROOT / runner).read_bytes())
-        (self.root / 'Makefile').write_text('.PHONY: test-tools\nJOBS ?= 2\n'
-                                            + source[start:end] + '\n')
+        (self.root / 'Makefile').write_text(
+            '.PHONY: test-tools repository-check\nJOBS ?= 2\n' + source[start:end]
+            + '\nrepository-check:\n\t@echo repository >> "$$ORACLE_WIRING_EVENTS"\n')
 
     def make(self, fail=None):
         self.events.write_text('')
@@ -71,7 +72,7 @@ class CarlaOracleWiringTests(unittest.TestCase):
     def test_official_target_runs_all_discoveries_and_read_only_check_once(self):
         result, events = self.make()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(events, ['tools', 'assets', 'nested', 'check'])
+        self.assertEqual(events, ['tools', 'assets', 'nested', 'check', 'repository'])
 
     def test_each_discovery_failure_fails_target_before_later_stages(self):
         stages = ['tools', 'assets', 'nested']
@@ -111,8 +112,9 @@ class CarlaOracleWiringTests(unittest.TestCase):
                 self.assertNotIn('tools', events)
                 self.assertNotIn('assets', events)
                 self.assertNotIn('check', events)
+                self.assertNotIn('repository', events)
             seen += events
-        self.assertEqual(sorted(seen), ['assets', 'check', 'nested', 'tools'])
+        self.assertEqual(sorted(seen), ['assets', 'check', 'nested', 'repository', 'tools'])
 
 
 

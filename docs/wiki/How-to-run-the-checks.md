@@ -94,7 +94,7 @@ The CI workflow checks a pull request with `AFFECTED` set to its base branch. It
 
 ## Verify generated fixtures
 
-`mojo run -I . tools/fixture_manifest.mojo` checks the accepted hashes. It does not regenerate fixtures.
+`mojo run -I . tools/fixture_manifest.mojo` checks the accepted hashes. It does not regenerate fixtures. `make repository-check` runs this check. It also checks that the negative-fixture manifest names each file in `tests/compile_fail` and that no job regenerates the manifest. `make test-tools` runs `make repository-check` once.
 
 The VTK and sRGB generators have a verified runtime: Node 24.19.0, V8 13.6.233.17-node.51, Linux x64 and three 0.180.0. VTK also needs @xmldom/xmldom 0.9.12. The sRGB verifier supplies `--no-use-std-math-pow`; the default flag changes 30 Float64 words.
 

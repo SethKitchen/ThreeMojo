@@ -287,7 +287,8 @@ endef
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
-        clean clean-images optimize-images draco-export-check audio-game-humanoid
+        clean clean-images optimize-images draco-export-check audio-game-humanoid \
+        repository-check
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -1661,6 +1662,14 @@ test-tools:
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s assets/carla/tools -p 'test_*.py')
 	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
+	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
+
+# The negative-fixture manifest names exactly tests/compile_fail, no job
+# regenerates it, and the recorded three.js fixture hashes match. These read
+# repository files that the Mojo suite cache does not track, so they run here.
+repository-check:
+	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --check-repository
+	@$(MOJO) run $(MOJOFLAGS) tools/fixture_manifest.mojo
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.

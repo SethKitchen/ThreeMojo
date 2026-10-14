@@ -31,6 +31,7 @@ from tools.compile_fail import (
     clean_output,
     expected_diagnostics,
     parse_options,
+    repository_errors,
     rejection_error,
     shell_split,
     split_lines,
@@ -608,6 +609,94 @@ def test_update_refuses_a_symlink_and_keeps_the_mode() raises:
         10,
     )
     assert_equal(mode.output, "640\n")
+    box.close()
+
+
+# --- repository -------------------------------------------------------------
+
+
+def test_check_repository_takes_only_the_manifest() raises:
+    var options = parse_options(
+        _arguments("--check-repository --expectations=e.json")
+    )
+    assert_true(options.check_repository)
+    assert_equal(options.expectations, "e.json")
+    for extra in ["--compiler=mojo", "--update-expectations", "a.mojo"]:
+        with assert_raises(contains="takes only --expectations"):
+            _ = parse_options(_arguments("--check-repository " + extra))
+
+
+def test_repository_manifest_matches_the_fixtures() raises:
+    var box = Sandbox()
+    _ = run_program(
+        [
+            "mkdir",
+            "-p",
+            box.root + "/tests/compile_fail",
+            box.root + "/.github/workflows",
+        ],
+        10,
+    )
+    box.write("tests/compile_fail/a.mojo", "one\ntwo\n")
+    box.write("tests/compile_fail/notes.txt", "")
+    box.write("Makefile", "compile-fail:\n\tcheck\n")
+    box.write(".github/workflows/ci.yml", "run: make compile-fail\n")
+    var good = (
+        '{"tests/compile_fail/a.mojo": {"errors": [{"line": 2, "column": 1,'
+        + ' "message": "m"}], "notes": []}}'
+    )
+    box.write("expectations.json", good)
+    assert_equal(len(repository_errors(box.root, box.manifest)), 0)
+    # A fixture without a record, and a record without a fixture.
+    box.write("tests/compile_fail/b.mojo", "x\n")
+    box.write(
+        "expectations.json",
+        good.replace(
+            "}}",
+            '}, "tests/compile_fail/gone.mojo": {"errors": [],'
+            + ' "notes": []}}',
+        ),
+    )
+    var errors = repository_errors(box.root, box.manifest)
+    var text = String("\n").join(errors)
+    assert_true(text.find("no manifest record: tests/compile_fail/b.mojo") >= 0)
+    assert_true(text.find("no fixture: tests/compile_fail/gone.mojo") >= 0)
+    _ = run_program(["rm", box.root + "/tests/compile_fail/b.mojo"], 10)
+    # Locations must be on a fixture line, and a record needs an error.
+    for bad in ['"line": 3', '"line": 0', '"column": 0']:
+        var changed = good.replace('"line": 2', bad) if bad.find(
+            "line"
+        ) >= 0 else good.replace('"column": 1', bad)
+        box.write("expectations.json", changed)
+        assert_true(
+            String("\n")
+            .join(repository_errors(box.root, box.manifest))
+            .find("outside its fixture")
+            >= 0
+        )
+    box.write(
+        "expectations.json",
+        '{"tests/compile_fail/a.mojo": {"errors": [], "notes": []}}',
+    )
+    assert_true(
+        repository_errors(box.root, box.manifest)[0].find("no errors") >= 0
+    )
+    # No Make target or workflow may regenerate the manifest.
+    box.write("expectations.json", good)
+    box.write(".github/workflows/ci.yml", "run: x --update-expectations\n")
+    assert_equal(
+        repository_errors(box.root, box.manifest)[0],
+        "regeneration must stay manual: .github/workflows/ci.yml",
+    )
+    box.write(".github/workflows/ci.yml", "")
+    box.write("Makefile", "--update-expectations\n")
+    assert_equal(
+        repository_errors(box.root, box.manifest)[0],
+        "regeneration must stay manual: Makefile",
+    )
+    box.write("expectations.json", "[]")
+    with assert_raises(contains="JSON object"):
+        _ = repository_errors(box.root, box.manifest)
     box.close()
 
 

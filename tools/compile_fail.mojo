@@ -790,6 +790,8 @@ struct Options(Movable):
     """The expectations file."""
     var update: Bool
     """True to regenerate the selected records."""
+    var check_repository: Bool
+    """True to check the manifest against the repository instead."""
     var fixtures: List[String]
     """The negative fixtures to check."""
 
@@ -803,13 +805,83 @@ struct Options(Movable):
             + "/compile_fail_expectations.json"
         )
         self.update = False
+        self.check_repository = False
         self.fixtures = List[String]()
+
+
+def repository_errors(root: String, manifest: String) raises -> List[String]:
+    """Check the manifest against the repository, not the compiler.
+
+    The manifest must name exactly the files `tests/compile_fail/*.mojo`.
+    Each record needs at least one error, on a line of its fixture and a
+    positive column. The `Makefile` and the CI workflows must never pass
+    `--update-expectations`: regeneration is a reviewed, manual step.
+
+    Args:
+        root: The repository root.
+        manifest: The expectations file.
+
+    Returns:
+        One message per problem.
+
+    Raises:
+        Error: If the manifest is not a JSON object of records.
+    """
+    var errors = List[String]()
+    var document = parse_json(Path(manifest).read_text())
+    var top = document.root()
+    if document.kind(top) != OBJECT:
+        raise Error("Expected a JSON object of fixture records")
+    var fixtures = List[String]()
+    for name in listdir(root + "/tests/compile_fail"):
+        if String(name).endswith(".mojo"):
+            fixtures.append("tests/compile_fail/" + String(name))
+    fixtures = _sorted_unique_strings(fixtures^)
+    var recorded = List[String]()
+    for i in range(document.length(top)):
+        recorded.append(document.key(top, i))
+    recorded = _sorted_unique_strings(recorded^)
+    for name in fixtures:
+        if name not in recorded:
+            errors.append("fixture has no manifest record: " + name)
+    for name in recorded:
+        if name not in fixtures:
+            errors.append("manifest record has no fixture: " + name)
+            continue
+        var lines = len(split_lines(Path(root + "/" + name).read_text()))
+        var record = read_record(document, name)
+        if len(record.errors) == 0:
+            errors.append("manifest record has no errors: " + name)
+        for item in record.errors:
+            if item.line < 1 or item.line > lines or item.column < 1:
+                errors.append(
+                    "manifest error is outside its fixture: "
+                    + name
+                    + ":"
+                    + String(item.line)
+                    + ":"
+                    + String(item.column)
+                )
+    var sources = List[String]()
+    sources.append("Makefile")
+    if Path(root + "/.github/workflows").exists():
+        for name in listdir(root + "/.github/workflows"):
+            if String(name).endswith(".yml"):
+                sources.append(".github/workflows/" + String(name))
+    for source in _sorted_unique_strings(sources^):
+        if (
+            Path(root + "/" + source).read_text().find("--update-expectations")
+            >= 0
+        ):
+            errors.append("regeneration must stay manual: " + source)
+    return errors^
 
 
 comptime USAGE = (
     "usage: compile_fail.mojo [-h] --compiler COMPILER [--flags FLAGS]"
     " [--timeout TIMEOUT] [--expectations EXPECTATIONS]"
-    " [--update-expectations] [fixtures ...]"
+    " [--update-expectations] [fixtures ...]\n"
+    "       compile_fail.mojo --check-repository [--expectations EXPECTATIONS]"
 )
 
 
@@ -837,6 +909,9 @@ def parse_options(arguments: List[String]) raises -> Options:
             continue
         if argument == "--":
             only_positional = True
+            continue
+        if argument == "--check-repository":
+            options.check_repository = True
             continue
         if argument == "--update-expectations":
             options.update = True
@@ -875,6 +950,10 @@ def parse_options(arguments: List[String]) raises -> Options:
                 )
         else:
             options.expectations = value
+    if options.check_repository:
+        if have_compiler or options.update or len(options.fixtures) > 0:
+            raise Error("--check-repository takes only --expectations")
+        return options^
     if not have_compiler:
         raise Error("the following arguments are required: --compiler")
     if options.timeout <= 0:
@@ -1017,6 +1096,17 @@ def main() raises:
         options = parse_options(arguments)
     except error:
         _usage_error(String(error))
+        return
+    if options.check_repository:
+        var root = dirname(dirname(String(source_location().file_name())))
+        var problems = repository_errors(root, options.expectations)
+        for problem in problems:
+            print(problem)
+        if len(problems) > 0:
+            exit(1)
+        print(
+            "The manifest covers the negative fixtures; no job regenerates it."
+        )
         return
     var report: Report
     try:
