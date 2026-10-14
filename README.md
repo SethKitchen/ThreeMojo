@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 15</summary>
+<summary>Implemented: 16</summary>
+
+- [x] [Negative-fixture checker in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#regenerate-negative-diagnostics): `tools/compile_fail.mojo` with a Mojo process helper replaces the Python checker; the manifest output is byte-identical [#763](https://github.com/SethKitchen/ThreeMojo/issues/763)
 
 - [x] [PNG optimizer in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#recompress-a-png): lossless PNG and APNG recompression with no Python, part of porting the project tools [#762](https://github.com/SethKitchen/ThreeMojo/issues/762)
 

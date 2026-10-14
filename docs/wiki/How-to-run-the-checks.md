@@ -114,7 +114,8 @@ CI never regenerates expectations.
 
 ```bash
 .venv/bin/mojo --version
-python3 tools/compile_fail.py --compiler=.venv/bin/mojo --flags='-I . --Werror' \
+.venv/bin/mojo run -I . tools/compile_fail.mojo --compiler=.venv/bin/mojo \
+  --flags='-I . --Werror' \
   --update-expectations \
   tests/compile_fail/raw_float_is_not_an_angle.mojo \
   tests/compile_fail/sqrt_of_volume.mojo
@@ -143,7 +144,8 @@ Fix unintended changes before you repeat the command.
 Run the selected fixtures again without the update flag:
 
 ```bash
-python3 tools/compile_fail.py --compiler=.venv/bin/mojo --flags='-I . --Werror' \
+.venv/bin/mojo run -I . tools/compile_fail.mojo --compiler=.venv/bin/mojo \
+  --flags='-I . --Werror' \
   tests/compile_fail/raw_float_is_not_an_angle.mojo \
   tests/compile_fail/sqrt_of_volume.mojo
 make -B compile-fail

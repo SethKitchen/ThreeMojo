@@ -694,7 +694,7 @@ endif
 # valid control and distinguishes source rejections from infrastructure errors.
 compile-fail: $(NEG_STAMP)
 $(NEG_STAMP):
-	@python3 tools/compile_fail.py --compiler=$(call quote,$(MOJO)) \
+	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --compiler=$(call quote,$(MOJO)) \
 	  --flags=$(call quote,$(MOJOFLAGS)) $(COMPILE_FAIL_RUN)
 	@$(call stamp,compile-fail)
 
