@@ -148,6 +148,31 @@ def test_writer_matches_json_dumps() raises:
         refused.node(fraction, fraction.root())
 
 
+def test_floats_are_written_as_python_writes_them() raises:
+    var writer = JsonWriter()
+    writer.begin_array()
+    for value in [
+        0.1,
+        1.0,
+        -0.0,
+        5.551115123125783e-17,
+        1e16,
+        1.2345678901234568e16,
+    ]:
+        writer.number(value)
+    writer.number(Float64.MAX * 2)
+    writer.number(-Float64.MAX * 2)
+    writer.number((Float64.MAX * 2) - (Float64.MAX * 2))
+    writer.end()
+    # json.dumps([0.1, 1.0, -0.0, 5.551115123125783e-17, 1e16,
+    # 1.2345678901234568e16, inf, -inf, nan], indent=2)
+    assert_equal(
+        writer.text(),
+        "[\n  0.1,\n  1.0,\n  -0.0,\n  5.551115123125783e-17,\n  1e+16,\n"
+        + "  1.2345678901234568e+16,\n  Infinity,\n  -Infinity,\n  NaN\n]",
+    )
+
+
 def test_quote_ascii_matches_python() raises:
     assert_equal(
         quote_ascii('a"\\\n\r\t\b\f\x01\x7f'),

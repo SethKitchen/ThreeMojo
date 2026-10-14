@@ -11,7 +11,7 @@ Both this file and the reference script build it the same way. The
 expected values were calculated by three.js 0.180, by node on
 `examples/jsm/math/Octree.js`: which triangles each query gathers, in
 three.js's order, and each ray hit. Corrected sphere and capsule pushes
-use the independent Float64 oracle in `tools/reference_octree_contacts.py`.
+use the independent Float64 oracle in `tools/reference_octree_contacts.mojo`.
 That oracle enumerates segment boundaries and solves projected faces in 2D.
 It does not call production Mojo or three.js. Tolerances are unchanged.
 """

@@ -18,6 +18,8 @@ Python meanings that the old tools relied on:
 character outside printable ASCII escaped.
 """
 
+from std.math import isinf, isnan
+
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -391,6 +393,22 @@ struct JsonWriter(Movable):
         """
         self._entry()
         self.out += String(value)
+
+    def number(mut self, value: Float64):
+        """Write a float as Python's `repr` writes it: the shortest text that
+        reads back to the same value, and `NaN` or `Infinity` as
+        `json.dumps` writes them.
+
+        Args:
+            value: The number.
+        """
+        self._entry()
+        if isnan(value):
+            self.out += "NaN"
+        elif isinf(value):
+            self.out += "Infinity" if value > 0 else "-Infinity"
+        else:
+            self.out += String(value)
 
     def boolean(mut self, value: Bool):
         """Write `true` or `false`.
