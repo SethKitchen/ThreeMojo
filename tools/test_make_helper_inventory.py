@@ -35,6 +35,7 @@ class TestHelperInventoryTests(unittest.TestCase):
             'tests/exact_predicates_oracle.mojo': '# named oracle\n',
             'tools/anatomy_pairs.mojo': '# diagnostic adapter\n',
             'tools/process.mojo': '# process helper\n',
+            'tools/sha256.mojo': '# hash helper\n',
             'tools/driver.mojo': 'def main():\n    pass\n',
             'coverage/runtime.mojo': '# runtime\n',
             'coverage/build_cli.mojo': 'def main():\n    pass\n',
@@ -74,7 +75,8 @@ class TestHelperInventoryTests(unittest.TestCase):
                    'tests/carla_fixed_s_fixture.mojo', 'tests/exact_predicates_oracle.mojo']
         self.assertCountEqual(values['TEST_HELPER_LIBS'], helpers)
         self.assertCountEqual(values['HELPER_LIBS'],
-                              helpers + ['tools/anatomy_pairs.mojo', 'tools/process.mojo'])
+                              helpers + ['tools/anatomy_pairs.mojo', 'tools/process.mojo',
+                                         'tools/sha256.mojo'])
         for helper in values['HELPER_LIBS']:
             for name in ('TOOL_LIBS', 'DOC_SOURCES', 'FORMATTED'):
                 self.assertEqual(values[name].count(helper), 1, (name, helper))
