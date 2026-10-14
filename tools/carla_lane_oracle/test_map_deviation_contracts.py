@@ -222,8 +222,17 @@ class DeviationIntegrationControls(unittest.TestCase):
                 try:
                     with self.assertRaises(ValueError): cleanup.verify(self.root)
                     if name in deviation.TESTS:
-                        with self.assertRaisesRegex(ValueError, 'deviation correctness fixture'):
+                        current_typed = cleanup.typed_boundary.is_current(name, original.decode('utf-8'))
+                        reason = (('reviewed typed boundary successor: unknown complete typed endpoint: '
+                                   if current_typed else
+                                   'reviewed seed-count successor: deviation correctness fixture changed: ')
+                                  + name)
+                        with self.assertRaises(cleanup._OperationCoherenceError) as caught:
                             seed.verify(self.root)
+                        self.assertIs(type(caught.exception), cleanup._OperationCoherenceError)
+                        self.assertEqual(str(caught.exception), reason)
+                        self.assertIs(type(caught.exception.__cause__), ValueError)
+                        self.assertEqual(str(caught.exception.__cause__), reason)
                 finally: path.write_bytes(original)
                 read = Path.read_bytes
                 def denied(actual, *args, **kwargs):
@@ -281,16 +290,20 @@ class DeviationCurrentIntegrationControls(DeviationIntegrationControls):
         import difflib
         loops = _loops(self)
         proofs = loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map')
-        # Derive physical coordinates independently from exact unchanged lines
-        # in the sealed old/new full sources, not from the production mapper.
+        # Derive physical coordinates independently from the sealed old/new
+        # full sources, not from the production mapper. Current loop headers
+        # carry this exact coverage annotation; executable text stays bound.
         old, new = self.historical.splitlines(), self.current.decode().splitlines()
+        annotated = [line.removesuffix('  # pragma: no branch') for line in new]
         mapping = {}
-        for block in difflib.SequenceMatcher(None, old, new, autojunk=False).get_matching_blocks():
+        for block in difflib.SequenceMatcher(None, old, annotated, autojunk=False).get_matching_blocks():
             mapping.update({block.a + offset + 1: block.b + offset + 1
                             for offset in range(block.size)})
         historical_lines = [*loops._MAP_DEVIATION_SUCCESSOR_LINES.values(), 4106]
         expected = {mapping[line] for line in historical_lines}
         self.assertEqual(len(expected), len(historical_lines))
+        for line in historical_lines:
+            self.assertEqual(annotated[mapping[line] - 1], old[line - 1])
         self.assertEqual(set(proofs), expected)
         for line, proof in proofs.items():
             self.assertTrue(new[line - 1].lstrip().startswith('for '))
