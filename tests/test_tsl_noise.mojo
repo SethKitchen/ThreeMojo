@@ -6,7 +6,7 @@
 """Tests for `materials.tsl_noise`: `triNoise3D`, the simplex and curl
 noise, the Voronoi noise and `RNoise`.
 
-`assets/tsl/tsl_reference.py` transcribes three.js's functions in 32-bit
+`tools/tsl_reference.mojo` transcribes three.js's functions in 32-bit
 floats and gives each expected value. Each test point is one where a small
 change of the point makes a small change of the value, so no `floor`
 sits on an edge.

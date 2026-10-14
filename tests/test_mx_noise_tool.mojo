@@ -11,7 +11,8 @@ The expected text is what the numpy transcription printed with numpy 2.5.
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal
 
-from assets.noise.mx_noise import report, round32
+from assets.noise.mx_noise import report
+from tools._float32 import round32
 
 
 def test_the_values_match_the_numpy_transcription() raises:

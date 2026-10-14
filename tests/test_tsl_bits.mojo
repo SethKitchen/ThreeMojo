@@ -7,7 +7,7 @@
 bit counts and the packings.
 
 Each expected value is three.js's, worked out on 32-bit integers in
-`assets/tsl/tsl_reference.py` or by hand, and read back through the
+`tools/tsl_reference.mojo` or by hand, and read back through the
 compiled program, so a test checks the builder and the interpreter
 together.
 """
@@ -192,7 +192,7 @@ def test_a_word_shifts_across_its_halves() raises:
 
 
 def test_hash_gives_three_js_bits() raises:
-    # PCG's hash on 32-bit integers, from `tsl_reference.py`.
+    # PCG's hash on 32-bit integers, from `tsl_reference.mojo`.
     var seeds: List[Float32] = [0, 1, 7, 12345, 16777215]
     var expected: List[Float32] = [
         0.030199997127056122,
@@ -344,7 +344,8 @@ def half_pair(x: Float32, y: Float32) raises -> Lanes:
 
 
 def test_a_half_pack_rounds_to_the_nearest_half() raises:
-    # Each expected half is numpy's float16, from `tsl_reference.py`.
+    # Each expected half rounds as numpy's float16 does, from
+    # `tsl_reference.mojo`.
     var got = half_pair(1, -2)
     assert_equal(got[0], 0x3C00)
     assert_equal(got[1], 0xC000)

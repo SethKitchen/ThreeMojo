@@ -66,7 +66,7 @@ An input that three.js gives a default is an `Optional` here. `None` reads three
 
 A TSL `Loop` with a fixed count is a loop in Mojo that builds the body each time through. So the Voronoi noise and `triNoise3D` open no `Loop` block. `snoise_vec3` keeps three.js's order of operations: its first and third components scale the point before the noise, and its second scales the noise.
 
-`assets/tsl/tsl_reference.py` transcribes these functions in 32-bit floats. The tests check the values that it gives.
+`tools/tsl_reference.mojo` transcribes these functions in 32-bit floats. The tests check the values that it gives.
 
 ## Integers and bits
 

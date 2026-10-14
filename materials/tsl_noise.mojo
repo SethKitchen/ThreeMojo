@@ -17,7 +17,7 @@ with a fixed count is a loop in Mojo here that builds each time through,
 so it needs no `Loop` block. None adds an instruction to the bytecode, so
 the CPU and the GPU run it with the one interpreter.
 
-`assets/tsl/tsl_reference.py` transcribes the functions in 32-bit floats
+`tools/tsl_reference.mojo` transcribes the functions in 32-bit floats
 and gives the values the tests check.
 """
 
