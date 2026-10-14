@@ -268,10 +268,6 @@ def kind(path: String) -> String:
         "tools/bench_examples.py",
         "tools/compiler_metadata.py",
         "tools/humanoid_fidelity.py",
-        "tools/generate_carla_lane_distance_controls.py",
-        "tools/generate_carla_power_controls.py",
-        "tools/generate_carla_directed_controls.py",
-        "tools/generate_carla_index_controls.py",
     ]:
         if path == generator:
             return "tools"

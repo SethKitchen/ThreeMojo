@@ -53,6 +53,7 @@ from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
 
 The retained regressions cover a wide origin and a false zero-square tie.
 Focused controls include strict boundaries, subnormal widths, and finite-limit points.
-A deterministic Python Fraction generator supplies 100 exact bit-pattern cases.
+A deterministic Fraction generator supplies 100 exact bit-pattern cases.
+`tools/generate_carla_lane_distance_controls.mojo` writes them, and `--check` replays them.
 The integer fallback and scaled fast path each match those independent signs.
 Full consumer coverage and performance remain publication gates.
