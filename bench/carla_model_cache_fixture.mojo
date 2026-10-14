@@ -9,9 +9,9 @@ This is a load-size proxy, not a CARLA source asset: 34,992 indexed
 triangles, six materials, and one 1024-square RGBA texture with mipmaps.
 Run: `mojo run -I . bench/carla_model_cache_fixture.mojo /tmp/carla-cache-bench`
 
-The texture's zlib stream comes from `render/deflate` at level 6, so its
-bytes, and its SHA-256, differ from the Python generator that this tool
-replaces. Its pixels, the geometry and the glTF text are the same.
+The texture's zlib stream comes from the system zlib at level 6, so every
+file is the same, byte for byte, as the Python generator's that this tool
+replaces.
 """
 
 from std.memory import bitcast
@@ -19,10 +19,10 @@ from std.os import makedirs
 from std.pathlib import Path
 from std.sys import argv, exit, stderr
 
-from render.deflate import zlib_deflate
 from render.png import push_be32, push_chunk, push_ihdr, push_signature
 from tools._json_tools import JsonWriter
 from tools._sha256 import sha256_hex
+from tools._zlib import compress
 
 comptime CELLS = 54
 """The grid cells along each edge of each box face."""
@@ -200,7 +200,7 @@ def texture() raises -> List[UInt8]:
     var png = List[UInt8]()
     push_signature(png)
     push_ihdr(png, SIZE, SIZE)
-    push_chunk(png, "IDAT", zlib_deflate(Span(rows)))
+    push_chunk(png, "IDAT", compress(rows))
     push_chunk(png, "IEND", List[UInt8]())
     return png^
 
