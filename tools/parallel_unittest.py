@@ -6,11 +6,14 @@
 
 The #333 oracle tests copy whole repository roots and replay proofs; run one
 after another they exceed a CI job's time limit, and one module alone takes
-hours. A module with shared set-up (`setUpModule` or a `setUpClass`) runs as
-one `python -m unittest discover -s DIR -p MODULE` process, exactly as plain
-discovery loads it. Every other module runs one process per test, because
-each test sets up its own fixtures. A failing unit prints its output in one
-piece. The exit code is nonzero when a unit fails or no test is found.
+hours. A test without shared set-up runs alone in its own process. Tests of
+one class with shared set-up (`setUpModule` or `setUpClass`) run a few at a
+time, so each process repeats the cheap shared set-up for a short run of
+tests. A module that cannot be listed runs as one `python -m unittest
+discover -s DIR -p MODULE` process, exactly as plain discovery loads it.
+`--shard I/N` keeps every N-th unit, so N runners together run each unit
+once. A failing unit prints its output in one piece. The exit code is
+nonzero when a unit fails or no test module is found.
 """
 
 import argparse
@@ -26,32 +29,34 @@ _LIST = r'''
 import json, sys, unittest
 directory, name = sys.argv[1], sys.argv[2]
 suite = unittest.TestLoader().discover(directory, pattern=name, top_level_dir=directory)
-ids, shared = [], False
+tests, broken = [], False
+def overridden(cls, name):
+    return getattr(cls, name).__func__ is not getattr(unittest.TestCase, name).__func__
 def walk(item):
-    global shared
+    global broken
     if isinstance(item, unittest.TestSuite):
         for child in item:
             walk(child)
         return
     if type(item).__name__ in ('_FailedTest', 'ModuleImportFailure'):
-        shared = True
+        broken = True
     cls = type(item)
     module = sys.modules.get(cls.__module__)
-    if getattr(module, 'setUpModule', None) or getattr(module, 'tearDownModule', None):
-        shared = True
-    if cls.setUpClass.__func__ is not unittest.TestCase.setUpClass.__func__:
-        shared = True
-    if cls.tearDownClass.__func__ is not unittest.TestCase.tearDownClass.__func__:
-        shared = True
-    ids.append(item.id())
+    shared = bool(getattr(module, 'setUpModule', None) or getattr(module, 'tearDownModule', None)
+                  or overridden(cls, 'setUpClass') or overridden(cls, 'tearDownClass'))
+    tests.append([item.id(), shared])
 walk(suite)
-print(json.dumps({'ids': ids, 'shared': shared}))
+print(json.dumps({'tests': tests, 'broken': broken}))
 '''
 
 
 def modules(directory, pattern='test_*.py'):
     """Return the test module file names in one directory, sorted."""
     return sorted(path.name for path in Path(directory).glob(pattern) if path.is_file())
+
+
+# Tests that share set-up run this many to a process; the set-up repeats.
+CHUNK = 4
 
 
 def units(directory, name, python=sys.executable):
@@ -61,10 +66,37 @@ def units(directory, name, python=sys.executable):
     try:
         found = json.loads(listed.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
-        found = {'ids': [], 'shared': True}
-    if found['shared'] or listed.returncode != 0:
+        found = {'tests': [], 'broken': True}
+    if found['broken'] or listed.returncode != 0 or not found['tests']:
         return [(name, [python, '-m', 'unittest', 'discover', '-s', str(directory), '-p', name])]
-    return [(test, [python, '-m', 'unittest', test]) for test in found['ids']]
+    result, group = [], []
+    def flush():
+        if group:
+            label = group[0] + ('' if len(group) == 1 else f' (+{len(group) - 1})')
+            result.append((label, [python, '-m', 'unittest', *group]))
+            group.clear()
+    for test, shared in found['tests']:
+        if group and (not shared or len(group) == CHUNK
+                      or test.rsplit('.', 1)[0] != group[0].rsplit('.', 1)[0]):
+            flush()
+        group.append(test)
+        if not shared:
+            flush()
+    flush()
+    return result
+
+
+def shard(text):
+    """Parse canonical I/N with 1 <= I <= N."""
+    try:
+        index, count = (int(part) for part in text.split('/'))
+    except ValueError:
+        raise argparse.ArgumentTypeError('--shard must be I/N') from None
+    if text != f'{index}/{count}':
+        raise argparse.ArgumentTypeError('--shard must be canonical I/N')
+    if not 1 <= index <= count:
+        raise argparse.ArgumentTypeError('--shard must be I/N with 1 <= I <= N')
+    return index, count
 
 
 def run_unit(directory, label, command):
@@ -78,6 +110,7 @@ def run_unit(directory, label, command):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--jobs', type=int, default=4)
+    parser.add_argument('--shard', type=shard, default=(1, 1))
     parser.add_argument('directory')
     args = parser.parse_args(argv)
     if args.jobs < 1:
@@ -89,6 +122,8 @@ def main(argv=None):
         return 1
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         work = [unit for listed in pool.map(lambda n: units(directory, n), names) for unit in listed]
+        index, count = args.shard
+        work = work[index - 1::count]
         # Whole-module units are the long ones; start them first.
         work.sort(key=lambda unit: unit[1][2] != 'discover')
         failed = []

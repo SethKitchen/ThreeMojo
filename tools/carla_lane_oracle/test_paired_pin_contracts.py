@@ -59,7 +59,8 @@ NAMES = ('runtime-source-pins.json', 'sum2-guard-pins.json')
 PIN_DIR = 'tools/carla_lane_oracle'
 LANE = 'extensions/carla/lane_refinement.mojo'
 ROAD = 'extensions/carla/road.mojo'
-SELECTOR_V13_AST_SHA256 = '88df2a81f6dbc2934c365c7f9dbbdabeed189856de7fdccdfad4661ae2025ac5'
+# v14 admits the consumed lane scope first, inside the public admission scope.
+SELECTOR_V14_AST_SHA256 = 'e6f5e508ba1180b670fbfa37abef1a0331a710dd3b3877376b6d0487adf2e820'
 EXPECTED = {
     'accepted': (('90352ea83ea07dd289184995e7c00147067d2344c583090a62600ac622a8026d', 7),
                  ('4db78e328de5b3fcf75a3d33ed7f9cc26958f57c7b95dd12c7f00a8b1e752f45', 4)),
@@ -481,24 +482,40 @@ class SelectorOutputFakeControls(unittest.TestCase):
         tree = ast.parse(Path(selector.__file__).read_text())
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
                         and node.name == 'verify_premises')
-        self.assertEqual([arg.arg for arg in function.args.kwonlyargs], ['_return_current_admission'])
-        self.assertEqual(ast.dump(function.args.kw_defaults[0]), 'Constant(value=False)')
+        self.assertEqual([arg.arg for arg in function.args.kwonlyargs],
+                         ['_return_current_admission', '_check_complete'])
+        self.assertEqual([ast.dump(value) for value in function.args.kw_defaults],
+                         ['Constant(value=False)'] * 2)
         function.args.kwonlyargs = []
         function.args.kw_defaults = []
-        extras = [node for node in function.body if any(
-            isinstance(child, ast.Name) and child.id == '_return_current_admission' for child in ast.walk(node))]
-        self.assertEqual(len(extras), 2)
-        validation, output = extras
-        self.assertIsInstance(validation, ast.Expr)
-        self.assertEqual(ast.unparse(validation),
-                         "require(type(_return_current_admission) is bool, 'invalid current-admission output request')")
-        self.assertIsInstance(output, ast.If)
-        self.assertEqual(ast.unparse(output),
-                         'if _return_current_admission:\n    return (record, lane_predecessor is not None)')
-        self.assertIs(function.body[-2], output)
-        function.body = [node for node in function.body if node not in extras]
+        # The public admission scope owns the complete premise body.
+        self.assertEqual(len(function.body), 1)
+        scope = function.body[0]
+        self.assertIsInstance(scope, ast.With)
+        self.assertEqual([ast.unparse(item) for item in scope.items],
+                         ['_typed_source.typed_admission_scope(root) as _typed_admission'])
+        function.body = scope.body
+        for flag, count in (('_return_current_admission', 2), ('_check_complete', 2)):
+            extras = [node for node in function.body if any(
+                isinstance(child, ast.Name) and child.id == flag for child in ast.walk(node))]
+            self.assertEqual(len(extras), count)
+            validation, output = extras
+            self.assertIsInstance(validation, ast.Expr)
+            self.assertIsInstance(output, ast.If)
+            if flag == '_return_current_admission':
+                self.assertEqual(ast.unparse(validation),
+                                 "require(type(_return_current_admission) is bool, 'invalid current-admission output request')")
+                self.assertEqual(ast.unparse(output),
+                                 'if _return_current_admission:\n    return (record, lane_predecessor is not None)')
+                self.assertIs(function.body[-2], output)
+            else:
+                self.assertEqual(ast.unparse(validation),
+                                 "require(type(_check_complete) is bool, 'invalid complete-selector request')")
+                self.assertIs(function.body[-3], validation)
+                self.assertIs(function.body[-2], output)
+            function.body = [node for node in function.body if node not in extras]
         function = _WithoutTypedProjection().visit(function)
-        self.assertEqual(sha(ast.dump(function, include_attributes=False).encode()), SELECTOR_V13_AST_SHA256)
+        self.assertEqual(sha(ast.dump(function, include_attributes=False).encode()), SELECTOR_V14_AST_SHA256)
         self.assertEqual(tuple(inspect.signature(selector.verify).parameters), ('root',))
         self.assertEqual(tuple(inspect.signature(accepted.verify_current).parameters), ('root',))
 
@@ -524,23 +541,35 @@ class SelectorOutputFakeControls(unittest.TestCase):
                 patch.object(guard, 'declaration', return_value='fake'):
             for kwargs in ({}, {'_return_current_admission': False}, {'_return_current_admission': True}):
                 events = []
+                # Public admission also reads checker sources outside root.
                 def observed_bytes(path, *args, **kw):
-                    events.append(('bytes', path.relative_to(root).as_posix()))
+                    if path.is_relative_to(root):
+                        events.append(('bytes', path.relative_to(root).as_posix()))
                     return read_bytes(path, *args, **kw)
                 def observed_text(path, *args, **kw):
-                    events.append(('text', path.relative_to(root).as_posix()))
+                    if path.is_relative_to(root):
+                        events.append(('text', path.relative_to(root).as_posix()))
                     return read_text(path, *args, **kw)
                 with patch.object(Path, 'read_bytes', observed_bytes), patch.object(Path, 'read_text', observed_text):
                     result = selector.verify_premises(root, **kwargs)
                 self.assertEqual(result, (record, False) if kwargs.get('_return_current_admission') else record)
                 traces.append(events)
             self.assertEqual(traces, [traces[0]] * 3)
-            with patch.object(selector, 'verify_premises', wraps=selector.verify_premises) as premises:
-                self.assertIs(selector.verify(root), record)
-                premises.assert_called_once_with(root)
-            with patch.object(selector, 'verify_premises', wraps=selector.verify_premises) as premises:
-                self.assertEqual(selector._verify_for_pin_pair(root), (record, False))
-                premises.assert_called_once_with(root, _return_current_admission=True)
+            # Public admission authenticates the live owner through __wrapped__,
+            # so record calls with a functools wrapper rather than a mock.
+            original = selector.verify_premises
+            for call, expected, arguments in (
+                    (selector.verify, record, {'_check_complete': True}),
+                    (selector._verify_for_pin_pair, (record, False),
+                     {'_return_current_admission': True, '_check_complete': True})):
+                calls = []
+                @wraps(original)
+                def premises(*args, **kw):
+                    calls.append((args, kw))
+                    return original(*args, **kw)
+                with patch.object(selector, 'verify_premises', premises):
+                    self.assertEqual(call(root), expected)
+                self.assertEqual(calls, [((root,), arguments)])
 
     def test_output_request_rejects_nonbuiltin_bool_before_reads(self):
         for value in (None, 0, 1, '', 'True', [], {}, object()):
@@ -730,11 +759,19 @@ class PairedPinRealControls(unittest.TestCase):
     def test_historical_matching_aliases_stay_accepted_current_root_alias_rejects(self):
         historical = fixtures.historical_root(self, ROOT)
         expected = tuple(accepted.predecessor_pins(historical, name) for name in NAMES)
+        regular = cleanup._regular
+        # Public admission authenticates the executing checker from the
+        # repository; the historical root itself still gets no regular read.
+        @wraps(regular)
+        def restricted(root, path):
+            if Path(root).absolute().is_relative_to(Path(historical).absolute()):
+                raise AssertionError('historical regular restriction')
+            return regular(root, path)
         for name in NAMES:
             for kind in ('leaf', 'ancestor', 'root'):
                 with self.subTest(name=name, kind=kind), alias(historical, PIN_DIR + '/' + name, kind), \
                         patch.object(cleanup, 'verify', side_effect=AssertionError('historical current gate')), \
-                        patch.object(cleanup, '_regular', side_effect=AssertionError('historical regular restriction')), \
+                        patch.object(cleanup, '_regular', restricted), \
                         patch.object(cleanup, 'executing_checker_bindings', side_effect=AssertionError('historical checker restriction')):
                     self.assertEqual(accepted.predecessor_pin_pair(historical), expected)
         with alias(self.root, PIN_DIR + '/' + NAMES[0], 'root'):
@@ -792,8 +829,13 @@ class PairedPinRealControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'unreviewed complete successor:') as caught:
                 accepted.predecessor_pin_pair(self.root)
             self.assertIsInstance(caught.exception.__cause__, cleanup.ContractError)
+        # The retained first gate rejects std.mojo through the active Float32
+        # native closure or the common resolver surface, whichever runs first.
         with authority_helpers.physical_change(self.root, 'std.mojo', b'# Resolver competitor.\n'):
-            with self.assertRaisesRegex(ValueError, 'unreviewed complete successor: .*resolver surface') as caught:
+            with self.assertRaisesRegex(ValueError,
+                    r'^unreviewed complete successor: full-audit cleanup successor: '
+                    r'(?:scaled native import closure changed|unreviewed alternate, '
+                    r'compiled, package, symlink or std resolver surface)$') as caught:
                 accepted.predecessor_pin_pair(self.root)
             self.assertIsInstance(caught.exception.__cause__, cleanup.ContractError)
 
@@ -910,7 +952,8 @@ class SelectorOutputRealControls(unittest.TestCase):
         before = cleanup.read_record(self.root)['sources'][LANE]['before_source']
         observe, project = selector._lane_observation, cleanup._reviewed_lane_observation
         visits = []
-        def observed(root):
+        @wraps(observe)
+        def observed(root, *, _operation=None):
             visits.append(root)
             if len(visits) == 1:
                 return before, before.encode()
@@ -958,14 +1001,15 @@ class SelectorOutputRealControls(unittest.TestCase):
         seen = []
         def changed(path_object, *args, **kwargs):
             text = read_text(path_object, *args, **kwargs)
-            if path_object == self.root/path and sys._getframe(1).f_code is selector._verify_for_pin_pair.__code__:
+            if path_object == self.root/path and sys._getframe(1).f_code is selector.verify_premises.__code__:
                 seen.append(path)
-                return text + '\ndef unreviewed_selector_tail():\n    pass\n'
+                if len(seen) == 2:
+                    return text + '\ndef unreviewed_selector_tail():\n    pass\n'
             return text
         with patch.object(Path, 'read_text', changed):
             with self.assertRaisesRegex(ValueError, 'complete selector successor changed'):
                 accepted.predecessor_pin_pair(self.root)
-        self.assertEqual(seen, [path])
+        self.assertEqual(seen, [path, path])
 
     def test_distance_and_grouped_failure_preserve_wrapper_and_block_pin_consumption(self):
         for module in (distance, grouped_y):

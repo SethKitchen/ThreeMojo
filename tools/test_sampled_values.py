@@ -17,9 +17,7 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT/'tools/carla_lane_oracle/check_sampled_values.py'
-spec = importlib.util.spec_from_file_location('carla_lane_oracle.carla_sampled_value_checker', SCRIPT)
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
+from tools.carla_lane_oracle import check_sampled_values as m
 
 
 class SampledValueCorrespondenceTests(unittest.TestCase):
@@ -331,6 +329,62 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         self.change('lane_value_bounds.mojo', '    var magnitude = value',
                     '    var magnitude = value\n    comptime if _ValueJet.derivatives:\n        magnitude = _ValueJet.constant(0.0)')
         self.rejected()
+
+
+class SampledLoaderBoundaryTests(unittest.TestCase):
+    def test_unregistered_alias_stays_unowned_before_first_observation(self):
+        # The actual-current fixture above uses the canonical owner. Keep the
+        # old unregistered loader boundary explicit in its own fresh process.
+        # This deliberately stops before verification; it is not a PASS claim
+        # for the expensive unowned sampled correspondence calculation.
+        command = r'''import importlib.util, pathlib, sys, tempfile
+root = pathlib.Path(sys.argv[1]).resolve()
+sys.path[:0] = [str(root / 'tools'), str(root)]
+name = 'carla_lane_oracle.carla_sampled_value_checker'
+if name in sys.modules:
+    raise RuntimeError('alias was registered before loading')
+spec = importlib.util.spec_from_file_location(
+    name, root / 'tools/carla_lane_oracle/check_sampled_values.py')
+alias = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(alias)
+class IntentionalObservationStop(BaseException):
+    pass
+observations = []
+class FirstObservation:
+    def historical_text(self, *args, **kwargs):
+        raise RuntimeError('observation sentinel was bypassed')
+    def _observe_text(self, *args, **kwargs):
+        operation = kwargs.get('_operation', 'missing')
+        if operation is not None:
+            raise RuntimeError('unregistered alias received an operation owner')
+        observations.append(operation)
+        raise IntentionalObservationStop()
+original = alias._typed_source
+with tempfile.TemporaryDirectory() as directory:
+    fixture = pathlib.Path(directory)
+    path = fixture / 'extensions/carla/curve_bounds.mojo'
+    path.parent.mkdir(parents=True)
+    path.write_text('# First observation only; never an admitted source root.\n')
+    alias._typed_source = FirstObservation()
+    try:
+        try:
+            alias.verify(fixture)
+        except IntentionalObservationStop:
+            pass
+        else:
+            raise RuntimeError('alias did not reach the intentional stop')
+    finally:
+        alias._typed_source = original
+if observations != [None] or name in sys.modules:
+    raise RuntimeError('alias observation or registration changed')
+print('PASS: alias unowned; intentionally stopped before verification')
+'''
+        result = subprocess.run([sys.executable, '-B', '-c', command, str(ROOT)],
+                                cwd=ROOT, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout,
+                         'PASS: alias unowned; intentionally stopped before verification\n')
+        self.assertEqual(result.stderr, '')
 
 
 if __name__ == '__main__':

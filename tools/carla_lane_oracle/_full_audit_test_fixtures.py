@@ -38,6 +38,7 @@ def write_predecessors(root, predecessors):
 def copy_shared_helper_inputs(root, source):
     """Copy the verified arithmetic helper closure into a partial fixture."""
     bindings = cleanup.shared_helper_proof_bindings(source)
+    bindings.update(cleanup.scaled_float32_proof_bindings(source))
     for name, digest in bindings.items():
         raw = (Path(source)/name).read_bytes()
         if cleanup.sha(raw) != digest:
@@ -47,7 +48,9 @@ def copy_shared_helper_inputs(root, source):
         target.write_bytes(raw)
         if cleanup.sha(target.read_bytes()) != digest:
             raise AssertionError('shared-helper fixture copy changed: ' + name)
-    if cleanup.shared_helper_proof_bindings(root) != bindings:
+    copied = cleanup.shared_helper_proof_bindings(root)
+    copied.update(cleanup.scaled_float32_proof_bindings(root))
+    if copied != bindings:
         raise AssertionError('shared-helper fixture closure changed')
     return bindings
 
@@ -63,11 +66,13 @@ def copy_current_root(case, source, *, destination=None):
         case.addCleanup(directory.cleanup)
         destination = Path(directory.name)
     destination = Path(destination)
-    paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
+    paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.DEPENDENCY_TOOL_SHA256,
+             *cleanup.SOURCE_PATHS}
     # The accepted-successor consumer also binds this proof document.
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
     # Supplemental witness-format proof inputs are physically copied too.
     paths.update(cleanup.witness_format.BOUND_INPUTS)
+    paths.update(cleanup.scaled_float32_proof_bindings(source))
     paths.update(cleanup.typed_boundary.NEW_INPUTS)
     paths.update(cleanup.typed_boundary.TESTS)
     paths.update(cleanup.typed_boundary.BINDING_INPUTS)

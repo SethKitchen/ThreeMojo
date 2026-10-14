@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -62,6 +63,36 @@ class ToolchainIdentityTests(unittest.TestCase):
         self.assertEqual(identity.executable_identity(self.launcher_a), identity.executable_identity(self.launcher_b))
         self.assertEqual(loops._command_identity(str(self.launcher_a), self.a, self.a / 'stage'),
                          loops._command_identity(str(self.launcher_b), self.b, self.b / 'stage'))
+
+    def test_isolated_probe_disables_bytecode_without_changing_identity(self):
+        module = self.site_a / '_identity_bytecode_probe.py'
+        module.write_text('VALUE = 17\n')
+        before = {str(path.relative_to(self.site_a)): path.read_bytes()
+                  for path in self.site_a.rglob('*') if path.is_file()}
+        actual_run = identity.subprocess.run
+        commands = []
+
+        def observed(command, **kwargs):
+            commands.append(list(command))
+            self.assertEqual(command[1:4], ['-I', '-B', '-c'])
+            command = list(command)
+            command[-1] = (
+                'import sys; assert sys.flags.isolated == 1; '
+                'assert sys.dont_write_bytecode; '
+                'import _identity_bytecode_probe; '
+                'assert _identity_bytecode_probe.VALUE == 17; ' + command[-1])
+            return actual_run(command, **kwargs)
+
+        baseline = identity.executable_identity(self.launcher_a)
+        for inherited in ('', '1'):
+            with self.subTest(inherited=inherited), \
+                    patch.dict(os.environ, {'PYTHONDONTWRITEBYTECODE': inherited}), \
+                    patch.object(identity.subprocess, 'run', side_effect=observed):
+                self.assertEqual(baseline, identity.executable_identity(self.launcher_a))
+        self.assertEqual(len(commands), 2)
+        self.assertEqual(before, {str(path.relative_to(self.site_a)): path.read_bytes()
+                                 for path in self.site_a.rglob('*') if path.is_file()})
+        self.assertFalse((self.site_a / '__pycache__').exists())
 
     def test_generation_checkpoint_resolves_aliases_without_hiding_external_paths(self):
         alias = self.base / 'checkout-alias'
@@ -216,13 +247,18 @@ class AliasedTemporaryRootTests(unittest.TestCase):
 
 
 class HostedIdentitySetupTests(unittest.TestCase):
-    def test_hosted_tooling_uses_an_upstream_test_interpreter(self):
+    def workflow_jobs(self):
         root = Path(__file__).resolve().parent.parent
         workflow = (root / '.github/workflows/ci.yml').read_text()
-        for start, end in (('  lint:', '  cpu:'),
-                           ('  cpu-macos:', '  # Coverage runs beside')):
-            with self.subTest(job=start.strip()):
-                job = workflow.split(start, 1)[1].split(end, 1)[0]
+        parts = re.split(r'^  ([A-Za-z_][A-Za-z0-9_-]*):[ \t]*$',
+                         workflow.split('\njobs:\n', 1)[1], flags=re.MULTILINE)
+        return dict(zip(parts[1::2], parts[2::2]))
+
+    def test_hosted_tooling_uses_an_upstream_test_interpreter(self):
+        jobs = self.workflow_jobs()
+        for name in ('lint', 'lint-macos', 'tools', 'tools-macos', 'cpu-macos'):
+            with self.subTest(job=name):
+                job = jobs[name]
                 self.assertIn('uv python install --no-bin 3.12.14', job)
                 self.assertIn('uv python find --managed-python --no-project 3.12.14', job)
                 self.assertIn('echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"', job)
@@ -233,10 +269,8 @@ class HostedIdentitySetupTests(unittest.TestCase):
                 self.assertNotIn('LD_LIBRARY_PATH', job)
 
     def test_capture_and_report_pin_the_same_immutable_toolchain_image(self):
-        root = Path(__file__).resolve().parent.parent
-        workflow = (root / '.github/workflows/ci.yml').read_text()
-        capture = workflow.split('  coverage-capture:', 1)[1].split('  coverage:', 1)[0]
-        report = workflow.split('  coverage:', 1)[1].split('  # Compile the GPU', 1)[0]
+        jobs = self.workflow_jobs()
+        capture, report = jobs['coverage-capture'], jobs['coverage']
         image = 'python:3.12.14-bookworm@sha256:dbbe4ceb97851e2e5fa83798b239811f871cb743b259ba3563737349f6bcfaa0'
         self.assertIn('    container: ' + image, capture)
         self.assertIn('    container: ' + image, report)

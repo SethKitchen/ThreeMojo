@@ -143,31 +143,46 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         cls.sampled_positive = sampled.verify(ROOT)
         cls.support_positive = runtime.verify(ROOT)
         cls.pin = (ROOT/contracts.PINS).read_bytes()
+        owner = type('HistoricalClassFixture', (), {
+            'addCleanup': staticmethod(cls.addClassCleanup)})()
+        # Preserve the original fixed-pin arithmetic/AST controls on the
+        # complete reviewed predecessor graph. Current typed admission is a
+        # separate boundary, checked by the live baselines and controls below.
+        cls.historical_root = cleanup_fixtures.historical_root(owner, ROOT)
+        cls.sampled_historical_positive = sampled.verify(cls.historical_root)
+        for gate in sorted({case[1] for case in CASES} - {'sampled'}):
+            contracts.verify_group(cls.historical_root, gate)
+        if (cls.historical_root/contracts.PINS).read_bytes() != cls.pin:
+            raise AssertionError('historical fixture changed runtime pins')
 
     def exercise(self, case):
         name, gate, file, function, before, after = case
-        root = ROOT
-        if name == 'sample_negative_guard':
-            root = cleanup_fixtures.historical_root(self, ROOT)
-            sampled.verify(root)
+        root = self.historical_root
         path = root/'extensions/carla'/file
-        original = path.read_text()
+        original_raw = path.read_bytes()
+        original = original_raw.decode('utf-8')
         if function:
             changed = replace_in_function(original, function, before, after)
         else:
             self.assertIn(before, original)
             changed = original.replace(before, after, 1)
         self.assertNotEqual(original, changed)
-        read = Path.read_text
-        def read_changed(current, *args, **kwargs):
-            return changed if current == path else read(current, *args, **kwargs)
-        with patch.object(Path, 'read_text', read_changed):
+        # Mutate real isolated input bytes so admission sees one coherent
+        # source image. A read_text-only replacement tests split-read refusal
+        # instead of the semantic/dependency boundary named by this case.
+        try:
+            path.write_bytes(changed.encode('utf-8'))
+            self.assertEqual(path.read_text(encoding='utf-8'), changed)
             if gate == 'sampled':
                 with self.assertRaises((sampled.CheckError, SyntaxError)):
                     sampled.verify(root)
             else:
                 with self.assertRaisesRegex(ValueError, 'runtime source dependency changed \\[' + gate + '\\]'):
-                    contracts.verify_group(ROOT, gate)
+                    contracts.verify_group(root, gate)
+        finally:
+            path.write_bytes(original_raw)
+        self.assertEqual(path.read_bytes(), original_raw)
+        self.assertEqual((root/contracts.PINS).read_bytes(), self.pin)
         self.assertEqual((ROOT/contracts.PINS).read_bytes(), self.pin)
 
     def test_positive_reports_name_real_root_and_keep_primitive(self):
@@ -176,47 +191,66 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         self.assertEqual(self.sampled_positive['additional_source_pairs'], 3)
         self.assertEqual(self.support_positive['repo_root'], str(ROOT))
 
+    def test_current_physical_mutations_reject_before_historical_projection(self):
+        root = cleanup_fixtures.copy_current_root(self, ROOT)
+        for name in ('arc_translation', 'global_domain_error'):
+            case = next(case for case in CASES if case[0] == name)
+            _, _, file, function, before, after = case
+            path = root/'extensions/carla'/file
+            original = path.read_bytes()
+            changed = replace_in_function(original.decode('utf-8'), function, before, after)
+            message = ('reviewed typed boundary successor: unknown complete typed endpoint: '
+                       'extensions/carla/' + file)
+            try:
+                path.write_bytes(changed.encode('utf-8'))
+                self.assertEqual(path.read_text(encoding='utf-8'), changed)
+                for verifier in (sampled.verify, runtime.verify):
+                    with self.subTest(case=name, verifier=verifier.__module__):
+                        with self.assertRaises(cleanup._OperationCoherenceError) as raised:
+                            verifier(root)
+                        self.assertIs(type(raised.exception), cleanup._OperationCoherenceError)
+                        self.assertEqual(str(raised.exception), message)
+                        self.assertIs(type(raised.exception.__cause__), ValueError)
+                        self.assertEqual(str(raised.exception.__cause__), message)
+            finally:
+                path.write_bytes(original)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual((root/contracts.PINS).read_bytes(), self.pin)
+
     def test_benign_comment_semantics_and_split_read_rejection(self):
         read = Path.read_text
+        target = ROOT/'extensions/carla/curve_bounds.mojo'
         reached = set()
         def annotated(path, *args, **kwargs):
             text = read(path, *args, **kwargs)
-            if path.suffix != '.mojo':
+            if path != target:
                 return text
             changed = text + '\n# Benign source commentary\n'
-            if (path, text) not in reached:
-                # These are lexical positives for the actual consumed views,
+            if text not in reached:
+                # These are lexical positives for the actual consumed view,
                 # not a substitute for coherent full source admission.
                 for helper in (contracts.token_sha256,
                                sum2_guard_contracts.declaration_routing,
                                sum2_guard_contracts.protected_source_digest):
                     self.assertEqual(helper(changed), helper(text))
-                reached.add((path, text))
+                reached.add(text)
             return changed
+        # Current typed admission owns this first consumed reference before
+        # either verifier can enter the old rounded-line source graph.
         message = ('full-audit cleanup successor: consumed operation text changed: '
-                   'extensions/carla/curve_rounded_line.mojo')
-        wrapped = 'unreviewed complete successor: ' + message
-        for verifier, error_type in ((sampled.verify, sampled.CheckError),
-                                     (runtime.verify, ValueError)):
+                   'extensions/carla/curve_bounds.mojo')
+        for verifier in (sampled.verify, runtime.verify):
             reached.clear()
             with self.subTest(verifier=verifier.__module__), \
                     patch.object(Path, 'read_text', annotated):
-                with self.assertRaises(error_type) as raised:
+                with self.assertRaises(cleanup._OperationCoherenceError) as raised:
                     verifier(ROOT)
             self.assertTrue(reached)
-            self.assertIn(ROOT/'extensions/carla/curve_rounded_line.mojo',
-                          {path for path, text in reached})
             error = raised.exception
-            self.assertIs(type(error), error_type)
-            self.assertEqual(str(error), wrapped)
-            if verifier is sampled.verify:
-                error = error.__cause__
-                self.assertIs(type(error), ValueError)
-                self.assertEqual(str(error), wrapped)
-            self.assertIs(type(error.__cause__), cleanup._OperationCoherenceError)
+            self.assertIs(type(error), cleanup._OperationCoherenceError)
+            self.assertEqual(str(error), message)
+            self.assertIs(type(error.__cause__), cleanup.ContractError)
             self.assertEqual(str(error.__cause__), message)
-            self.assertIs(type(error.__cause__.__cause__), cleanup.ContractError)
-            self.assertEqual(str(error.__cause__.__cause__), message)
 
     def test_matched_wrong_full_and_value_blends_reject_reference(self):
         read = Path.read_text

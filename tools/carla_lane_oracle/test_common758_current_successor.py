@@ -33,8 +33,15 @@ REPAIRED = {
     'tests/test_carla_lane_borders.mojo',
     'tests/test_carla_lane_search_positive_controls.mojo',
     'tests/test_carla_map_budget.mojo',
+    'tests/test_carla_opendrive.mojo',
     'tests/test_carla_road_fixed_s.mojo',
     'tests/test_carla_support_dispatch_successor.mojo',
+}
+METAL_SOURCES = {
+    'materials/nodes.mojo',
+    'math/matrix_inverse.mojo',
+    'math/scaled_products.mojo',
+    'render/texture.mojo',
 }
 PAYLOAD_NAMES = (
     'SOURCE_PATHS', 'EDGES', 'EDGE_SHA256', 'NEW_INPUTS', 'TESTS',
@@ -84,7 +91,8 @@ class Common758CurrentSuccessor(unittest.TestCase):
 
     def test_current_tables_are_only_the_closed_reviewed_overrides(self):
         expected = {'EDGES': REPAIRED, 'EDGE_SHA256': REPAIRED,
-                    'CURRENT_DEPENDENCIES': REPAIRED,
+                    # #746 also rebinds four unedged Metal sources.
+                    'CURRENT_DEPENDENCIES': REPAIRED | METAL_SOURCES,
                     'TESTS': {p for p in REPAIRED if p.startswith('tests/')},
                     'INVENTORY': {'extensions/carla/map.mojo', 'extensions/carla/map_builder.mojo'}}
         for name, paths in expected.items():
@@ -94,10 +102,12 @@ class Common758CurrentSuccessor(unittest.TestCase):
                 self.assertEqual({p for p in old if old[p] != current[p]}, paths)
         self.assertIn(SELF, typed.BINDING_INPUTS)
         self.assertEqual(typed.BINDING_INPUTS[SELF], _sha((ROOT/SELF).read_bytes()))
+        conditioned = 'tools/test_conditioned_coverage_loops.py'
+        self.assertEqual(typed.BINDING_INPUTS[conditioned], _sha((ROOT/conditioned).read_bytes()))
         self.assertEqual(typed.HISTORICAL_BINDING_INPUTS['tools/compile_fail_expectations.json'],
                          EXPECTATIONS)
-        # Common admission checks actual689 bytes. Each feature extension owns
-        # its exact693 endpoint and six controls; all current binding entries
+        # Merged admission checks the exact697 endpoint and eight additions.
+        # The six endpoint controls and all current binding entries
         # remain authenticated by the current authority and physical owner.
         typed.verify_authority()
 

@@ -49,6 +49,26 @@ _CLASS_SETUP = '''
             self.assertEqual(self.value, 3)
 '''
 
+# A class over CHUNK tests, a single-test class and a class without set-up.
+_CHUNKED = '''
+    import unittest
+    class A(unittest.TestCase):
+        @classmethod
+        def setUpClass(cls):
+            cls.value = 1
+''' + ''.join(f'''        def test_{i}(self):
+            self.assertEqual(self.value, 1)
+''' for i in range(5)) + '''    class B(unittest.TestCase):
+        @classmethod
+        def tearDownClass(cls):
+            pass
+        def test_0(self):
+            pass
+    class C(unittest.TestCase):
+        def test_0(self):
+            pass
+'''
+
 
 class ParallelUnittest(unittest.TestCase):
     def run_main(self, *argv):
@@ -69,17 +89,41 @@ class ParallelUnittest(unittest.TestCase):
         self.assertIn('2 of 2 units passed (1 modules)', out)
         self.assertEqual(err, '')
 
-    def test_shared_set_up_keeps_the_module_whole(self):
+    def test_shared_set_up_runs_a_few_tests_of_one_class_per_process(self):
         with tempfile.TemporaryDirectory() as directory:
             _write(directory, 'test_m.py', _MODULE_SETUP)
             _write(directory, 'test_c.py', _CLASS_SETUP)
+            _write(directory, 'test_k.py', _CHUNKED)
             for name in ('test_m.py', 'test_c.py'):
                 (unit,) = runner.units(directory, name)
-                self.assertEqual(unit[0], name)
-                self.assertIn('discover', unit[1])
+                self.assertNotIn('discover', unit[1])
+            listed = runner.units(directory, 'test_k.py')
+            self.assertEqual([label for label, _ in listed],
+                             [f'test_k.A.test_0 (+{runner.CHUNK - 1})',
+                              f'test_k.A.test_{runner.CHUNK}', 'test_k.B.test_0', 'test_k.C.test_0'])
+            self.assertEqual(listed[0][1][3:], [f'test_k.A.test_{i}' for i in range(runner.CHUNK)])
             code, out, _ = self.run_main(directory)
         self.assertEqual(code, 0)
-        self.assertIn('2 of 2 units passed (2 modules)', out)
+        self.assertIn('6 of 6 units passed (3 modules)', out)
+
+    def test_shards_partition_the_units(self):
+        for index, count in ((1, 1), (1, 6), (6, 6), (10, 12)):
+            self.assertEqual(runner.shard(f'{index}/{count}'), (index, count))
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, 'test_a.py', _PASS)
+            _write(directory, 'test_b.py', _FAIL)
+            _write(directory, 'test_k.py', _CHUNKED)
+            results = [self.run_main('--shard', f'{index}/3', directory) for index in (1, 2, 3)]
+        counts = [int(out.rsplit(' units passed', 1)[0].rsplit(' of ', 1)[1]) for _, out, _ in results]
+        self.assertEqual(sum(counts), 7)
+        self.assertEqual(sorted(code for code, _, _ in results), [0, 0, 1])
+        for bad in ('0/3', '4/3', '1', 'a/b', '01/6', '1/06', '+1/6', '1/+6',
+                    ' 1/6', '1/6 ', '1 /6', '1/ 6', '\t1/6', '1/6\n',
+                    '1/1_0', '١/6', '1/６'):
+            with self.subTest(shard=bad), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaises(SystemExit) as raised:
+                    self.run_main('--shard', bad, directory)
+                self.assertEqual(raised.exception.code, 2)
 
     def test_an_import_error_runs_and_fails_as_one_module(self):
         with tempfile.TemporaryDirectory() as directory:

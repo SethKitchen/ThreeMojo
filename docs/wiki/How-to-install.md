@@ -28,7 +28,8 @@ xcode-select --install
 ```bash
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
-uv venv --prompt ThreeMojo
+uv python install --no-bin 3.12.14
+"$(uv python find --managed-python --no-project 3.12.14)" -m venv --without-pip --prompt ThreeMojo .venv
 uv pip install "mojo==1.1.0"
 ```
 
@@ -48,7 +49,8 @@ On Fedora, use `sudo dnf install -y make gcc git curl xorg-x11-server-Xvfb`. On 
 ```bash
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
-uv venv --prompt ThreeMojo
+uv python install --no-bin 3.12.14
+"$(uv python find --managed-python --no-project 3.12.14)" -m venv --without-pip --prompt ThreeMojo .venv
 uv pip install "mojo==1.1.0"
 ```
 
@@ -64,6 +66,8 @@ wsl --install -d Ubuntu
 3. Follow the Linux steps above.
 
 Clone into the Linux filesystem, for example `~/ThreeMojo`. Do not clone into `/mnt/c/`. Builds across the filesystem boundary are much slower.
+
+The environment uses an upstream CPython that uv manages. `make coverage` refuses an interpreter that loads import hooks. Homebrew's Python loads a `sitecustomize` module, and `uv venv` adds an import hook, so neither can measure coverage. CI builds its environment the same way.
 
 ## Without uv
 

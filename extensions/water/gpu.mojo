@@ -45,7 +45,7 @@ from max.gpu.host import DeviceBuffer, DeviceContext
 from max.gpu.memory import AddressSpace
 from render.framebuffer import Framebuffer
 from std.math import ceildiv
-from std.sys import has_nvidia_gpu_accelerator
+from std.sys import has_accelerator
 from units.si import SECOND, Angle, Duration, Length
 
 comptime _GLOBAL = AddressSpace.GLOBAL
@@ -186,10 +186,11 @@ def water_kernel(
 
 
 struct GpuWater(Movable):
-    """An NVIDIA GPU that shades water frames, holding the pebble photograph.
+    """A GPU that shades water frames, holding the pebble photograph.
 
-    CUDA is the only supported backend. The kernel was run on a TITAN RTX,
-    and CI builds it for sm_80. No Metal check covers this kernel.
+    It runs on CUDA and on Apple Metal. The kernel was run on a TITAN RTX
+    and on an Apple M4 Max. CI builds it for sm_80, and `make check-gpu-air`
+    checks its Metal calls.
     """
 
     var _pebble: DeviceBuffer[DType.float32]
@@ -199,12 +200,12 @@ struct GpuWater(Movable):
     var _fail_after_uploads: Bool
     # Declared last, and released last in `__deinit__`.
     var context: DeviceContext
-    """The CUDA device the frames run on."""
+    """The device the frames run on."""
 
     def __init__(
         out self, bed: PebbleBed, _fail_after_first_upload: Bool = False
     ) raises:
-        """Open the CUDA GPU and copy the photograph to it once.
+        """Open the GPU and copy the photograph to it once.
 
         Args:
             bed: The pebble photograph.
@@ -213,11 +214,11 @@ struct GpuWater(Movable):
                 would, to check the cleanup of a partial construction.
 
         Raises:
-            Error: If there is no NVIDIA GPU, or a copy fails.
+            Error: If there is no GPU, or a copy fails.
         """
-        if not has_nvidia_gpu_accelerator():
-            raise Error("GpuWater needs an NVIDIA CUDA GPU")
-        var context = DeviceContext(api="cuda")
+        if not has_accelerator():
+            raise Error("GpuWater needs a GPU")
+        var context = DeviceContext()
         var buffers = _upload_bed(
             context, pack_pebbles(bed), _fail_after_first_upload
         )

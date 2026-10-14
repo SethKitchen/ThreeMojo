@@ -96,7 +96,6 @@ limits, and explicit zero and nonfinite rules.
 
 from std.math import exp2
 from math.norm import length2, _ordinary_squared
-from math.scaled_products import _split, _sum_products, _at_exponent
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -2034,6 +2033,20 @@ struct Footprint(ImplicitlyCopyable):
             raise Error("A footprint's step must be finite")
 
 
+def _binade(value: Float32) -> Float32:
+    """Return the largest power of two at most `value`.
+
+    Args:
+        value: A positive, finite, normal number.
+
+    Returns:
+        The power of two that shares its exponent.
+    """
+    return bitcast[DType.float32](
+        bitcast[DType.uint32](value) & UInt32(0x7F800000)
+    )
+
+
 def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
     """Return the footprint ellipse's two principal lengths, longer first.
 
@@ -2101,19 +2114,23 @@ def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
         minor = abs(determinant + residual) / major
     else:
         # Dividing columns by an arbitrary scale can erase the difference
-        # between nearly parallel columns. Keep the original determinant
-        # as a fraction and exponent instead. Only the final length is
-        # narrowed back to Float32; no squared scale is materialized.
-        var area = _sum_products[DType.float32, 2](
-            [u.x, -u.y], [v.y, v.x], [1, 1]
-        )
-        var major_parts = _split(major)
-        var scale_parts = _split(scale)
-        var quotient = _split(
-            abs(area.fraction) / (major_parts.fraction * scale_parts.fraction),
-            area.exponent - major_parts.exponent - scale_parts.exponent,
-        )
-        minor = _at_exponent(quotient, 0)
+        # between nearly parallel columns. Dividing by a power of two is
+        # exact, so the columns keep it, and the determinant above applies.
+        # The scale is normal here: a subnormal one squares to zero and
+        # never reaches this branch. The quotient is taken against the
+        # scale's power of two and its remaining factor in [1, 2), so no
+        # square of the scale is formed. Tagged expansions did this before;
+        # Metal inlines every call, and their copies in every texture read
+        # crashed the compiler in macOS 26.
+        var power = _binade(scale)
+        var pu = u / power
+        var pv = v / power
+        var product = pu.y * pv.x
+        var residual = fma(-pu.y, pv.x, product)
+        var determinant = fma(pu.x, pv.y, -product)
+        minor = (
+            abs(determinant + residual) / (major * (scale / power))
+        ) * power
     var long_axis = major * scale
     return Vector2(long_axis, min(long_axis, minor))
 
@@ -2184,51 +2201,6 @@ def _major_direction(
     return chosen
 
 
-def _scaled_footprint(
-    along_x: Vector2, along_y: Vector2, width: Int, height: Int, anisotropy: Int
-) -> Footprint:
-    """Keep a finite derivative's length in log space when texel products overflow.
-    """
-    var derivative_scale = max(
-        max(abs(along_x.x), abs(along_x.y)), max(abs(along_y.x), abs(along_y.y))
-    )
-    var size = max(Float32(width), Float32(height))
-    if derivative_scale == 0:
-        return Footprint(0, 1, Vector2(0, 0))
-    var u = Vector2(
-        (along_x.x / derivative_scale) * (Float32(width) / size),
-        (along_x.y / derivative_scale) * (Float32(height) / size),
-    )
-    var v = Vector2(
-        (along_y.x / derivative_scale) * (Float32(width) / size),
-        (along_y.y / derivative_scale) * (Float32(height) / size),
-    )
-    var log_scale = log2(derivative_scale) + log2(size)
-    var longest = max(u.length(), v.length())
-    var level = log2(longest) + log_scale
-    if anisotropy <= 1 or level <= 0 or not isfinite(level):
-        return Footprint(level, 1, Vector2(0, 0))
-    var allowed = min(anisotropy, MAX_ANISOTROPY)
-    var axes = _principal_axes(u, v)
-    var effective_minor = max(
-        max(axes.y, axes.x / Float32(allowed)), exp2(-log_scale)
-    )
-    var taps = max(1, min(Int(ceil(axes.x / effective_minor)), allowed))
-    if taps == 1:
-        return Footprint(level, 1, Vector2(0, 0))
-    var direction = _major_direction(u, v, axes.x)
-    var step = axes.x / Float32(taps)
-    return Footprint(
-        log2(effective_minor) + log_scale,
-        taps,
-        Vector2(
-            derivative_scale * ((direction.x * step) * (size / Float32(width))),
-            derivative_scale
-            * ((direction.y * step) * (size / Float32(height))),
-        ),
-    )
-
-
 def anisotropic_footprint(
     along_x: Vector2,
     along_y: Vector2,
@@ -2288,32 +2260,67 @@ def anisotropic_footprint(
     """
     var u = Vector2(along_x.x * Float32(width), along_x.y * Float32(height))
     var v = Vector2(along_y.x * Float32(width), along_y.y * Float32(height))
-    if not _ordinary_squared(u.dot(u) + v.dot(v)):
-        return _scaled_footprint(along_x, along_y, width, height, anisotropy)
-    var in_x = u.length()
-    var in_y = v.length()
-    var longest = in_x
-    if in_y > in_x:
-        longest = in_y
-    # The normal finite squared norm above guarantees a positive length.
-    # The isotropic read, unchanged: the longer derivative's own level,
-    # negative where the texture is magnified.
-    if anisotropy <= 1:
-        return Footprint(log2(longest), 1, Vector2(0, 0))
+    # When a texel product overflows, keep the derivatives' length in log
+    # space. Both paths then share one `_principal_axes` and one
+    # `_major_direction`: a GPU inlines every call, and each call site is
+    # copied into the kernel once for every map that samples.
+    var scaled = not _ordinary_squared(u.dot(u) + v.dot(v))
+    var derivative_scale = Float32(1)
+    var size = Float32(1)
+    var log_scale = Float32(0)
+    var level: Float32
+    if scaled:
+        derivative_scale = max(
+            max(abs(along_x.x), abs(along_x.y)),
+            max(abs(along_y.x), abs(along_y.y)),
+        )
+        size = max(Float32(width), Float32(height))
+        if derivative_scale == 0:
+            return Footprint(0, 1, Vector2(0, 0))
+        u = Vector2(
+            (along_x.x / derivative_scale) * (Float32(width) / size),
+            (along_x.y / derivative_scale) * (Float32(height) / size),
+        )
+        v = Vector2(
+            (along_y.x / derivative_scale) * (Float32(width) / size),
+            (along_y.y / derivative_scale) * (Float32(height) / size),
+        )
+        log_scale = log2(derivative_scale) + log2(size)
+        level = log2(max(u.length(), v.length())) + log_scale
+        if anisotropy <= 1 or level <= 0 or not isfinite(level):
+            return Footprint(level, 1, Vector2(0, 0))
+    else:
+        var in_x = u.length()
+        var in_y = v.length()
+        var longest = in_x
+        if in_y > in_x:
+            longest = in_y
+        # The normal finite squared norm above guarantees a positive
+        # length. The isotropic read, unchanged: the longer derivative's
+        # own level, negative where the texture is magnified.
+        level = log2(longest)
+        if anisotropy <= 1:
+            return Footprint(level, 1, Vector2(0, 0))
     var allowed = anisotropy
     if allowed > MAX_ANISOTROPY:
         allowed = MAX_ANISOTROPY
     var axes = _principal_axes(u, v)
     var major = axes.x
     var minor = axes.y
-    # A degenerate footprint -- a surface collapsed to a line -- has no
-    # minor axis at all, and this floor is what keeps its level finite.
-    var effective_minor = minor
-    if effective_minor < 1:
-        effective_minor = 1
-    var reach_of_one = major / Float32(allowed)
-    if reach_of_one > effective_minor:
-        effective_minor = reach_of_one
+    var effective_minor: Float32
+    if scaled:
+        effective_minor = max(
+            max(minor, major / Float32(allowed)), exp2(-log_scale)
+        )
+    else:
+        # A degenerate footprint -- a surface collapsed to a line -- has no
+        # minor axis at all, and this floor is what keeps its level finite.
+        effective_minor = minor
+        if effective_minor < 1:
+            effective_minor = 1
+        var reach_of_one = major / Float32(allowed)
+        if reach_of_one > effective_minor:
+            effective_minor = reach_of_one
     # Both ends clamped with `min` and `max` rather than with an `if`.
     # `effective_minor` is at least one and at least `major / allowed`, so
     # the quotient already lies between one and `allowed` and neither
@@ -2327,12 +2334,23 @@ def anisotropic_footprint(
         # number the isotropic path above returns, so a texture whose
         # footprint happens to be round reads the same whether or not it
         # asked for taps it cannot use.
-        return Footprint(log2(longest), 1, Vector2(0, 0))
+        return Footprint(level, 1, Vector2(0, 0))
     var direction = _major_direction(u, v, major)
     # The taps span the long axis once: `taps` steps of the axis divided by
     # the count, in texels, taken back into texture coordinates by the size
     # they were measured against.
     var step = major / Float32(taps)
+    if scaled:
+        return Footprint(
+            log2(effective_minor) + log_scale,
+            taps,
+            Vector2(
+                derivative_scale
+                * ((direction.x * step) * (size / Float32(width))),
+                derivative_scale
+                * ((direction.y * step) * (size / Float32(height))),
+            ),
+        )
     return Footprint(
         log2(effective_minor),
         taps,

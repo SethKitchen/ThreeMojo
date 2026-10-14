@@ -6851,6 +6851,37 @@ trait NodeSource:
         )
         return self.sample_level(slot, u, v, footprint.level)
 
+    def sample_either(
+        self,
+        slot: Int,
+        u: Float32,
+        v: Float32,
+        explicit: Bool,
+        dx: Vector2,
+        dy: Vector2,
+    ) -> FloatColor:
+        """Read as `sample_grad` when `explicit` is set, else as `sample`.
+
+        The interpreter reads both kinds of texture node through this one
+        call. A GPU inlines every call, so a source whose two reads share
+        their footprint arithmetic can override this method and keep one
+        copy of it per program.
+
+        Args:
+            slot: The texture's id.
+            u: Across, already placed.
+            v: Up, already placed.
+            explicit: Whether `dx` and `dy` are the gradients to use.
+            dx: Coordinate change per screen pixel across.
+            dy: Coordinate change per screen pixel up.
+
+        Returns:
+            The linear color with straight alpha.
+        """
+        if explicit:
+            return self.sample_grad(slot, u, v, dx, dy)
+        return self.sample(slot, u, v)
+
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, GLSL's `texelFetch`.
 
@@ -7404,33 +7435,31 @@ def _leaf[
         return Lanes(source.word(PROGRAM_TIME))
     if op == NODE_CAMERA_POSITION.value:
         return _camera_position(source)
-    if op == NODE_TEXTURE.value:
+    if op == NODE_TEXTURE.value or op == NODE_TEXTURE_GRAD.value:
         if not inputs.textured:
             return Lanes(1)
-        var texel = source.sample(Int(source.word(Int(immediate))), x[0], x[1])
+        # One read for both nodes; see `NodeSource.sample_either`.
+        var explicit = op == NODE_TEXTURE_GRAD.value
+        if explicit and (
+            not isfinite(x[0])
+            or not isfinite(x[1])
+            or not isfinite(z).reduce_and()
+        ):
+            return Lanes(0)
+        var texel = source.sample_either(
+            Int(source.word(Int(immediate))),
+            x[0],
+            x[1],
+            explicit,
+            Vector2(z[0], z[1]),
+            Vector2(z[2], z[3]),
+        )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
     if op == NODE_TEXTURE_LEVEL.value:
         if not inputs.textured:
             return Lanes(1)
         var texel = source.sample_level(
             Int(source.word(Int(immediate))), x[0], x[1], z[0]
-        )
-        return Lanes(texel.r, texel.g, texel.b, texel.a)
-    if op == NODE_TEXTURE_GRAD.value:
-        if not inputs.textured:
-            return Lanes(1)
-        if (
-            not isfinite(x[0])
-            or not isfinite(x[1])
-            or not isfinite(z).reduce_and()
-        ):
-            return Lanes(0)
-        var texel = source.sample_grad(
-            Int(source.word(Int(immediate))),
-            x[0],
-            x[1],
-            Vector2(z[0], z[1]),
-            Vector2(z[2], z[3]),
         )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
     if op == NODE_TEXEL_FETCH.value:

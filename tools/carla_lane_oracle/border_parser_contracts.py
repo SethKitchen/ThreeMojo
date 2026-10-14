@@ -182,6 +182,10 @@ def verify(root, *, _operation=None):
             if path in record['unchanged_inputs']:
                 require(path not in consumers, 'duplicate shared-helper consumer edge: ' + path)
                 consumers[path] = reviewed
+        for path, reviewed in full_audit.scaled_float32_edges(root, _operation=_operation).items():
+            if path in record['unchanged_inputs']:
+                require(path not in consumers, 'duplicate scaled consumer edge: ' + path)
+                consumers[path] = reviewed
         for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
             for path, expected in record[group].items():
                 actual = hashlib.sha256(_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation)).hexdigest()

@@ -64,8 +64,17 @@ def inventory_entry(text):
     return {'routing': guard.declaration_routing(text), 'uses': uses} if uses else None
 
 
-def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None, _operation=None):
+def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None, _operation=None, _admission=None):
     operation_args = {} if _operation is None else {'_operation': _operation}
+    if _admission is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        require(type(_admission) is full_audit._PublicAdmission
+                and full_audit._cache_inventory_admission_frame(sys._getframe(), _admission),
+                'invalid public inventory admission')
+        _admission._check(_admission._owner, root)
     # Reuse the established production boundary, including nested namespaces
     # and __init__ re-exports. Do not normalize identifier ordinals.
     if __package__:
@@ -213,48 +222,51 @@ def verify(root, *, _operation=None):
             # An unsupported alias remains a wholly fresh independent call.
             _operation = None
             operation_args = {}
-    record = read_record(root)
-    for name, expected in record['preserved_records'].items():
-        require(hashlib.sha256((root / 'tools/carla_lane_oracle' / name).read_bytes()).hexdigest() == expected,
-                'historical component changed: ' + name)
-    _input_owner = object()
-    _inputs = None
-    try:
-        current = (root / MODULE).read_text()
-        if _operation is not None:
-            current = full_audit._observe_text(root, MODULE, current, _operation=_operation, supplied=True)
-        if source.token_sha256(current) != AFTER_TOKEN_SHA256:
-            try:
-                if __package__:
-                    from . import full_audit_cleanup_contracts as full_audit
-                else:
-                    import full_audit_cleanup_contracts as full_audit
-                if full_audit._cache_verify_frame(sys._getframe()):
-                    current, _inputs = full_audit._cache_lane_inputs(root, current, _input_owner, **operation_args)
-                else:
-                    # Unsupported import aliases preserve the complete fresh
-                    # public path; they cannot acquire or borrow an input view.
-                    current = full_audit.reviewed_text(root, MODULE, current, **operation_args)
-            except (ValueError, OSError) as error:
-                raise ContractError('cache-key successor: ' + str(error)) from error
-        require(source.token_sha256(current) == AFTER_TOKEN_SHA256,
-                'complete live successor tokens changed')
-        # Exact adopted bytes reverse independently. General live source keeps the
-        # established comment/whitespace compatibility of the historical gates.
-        # Full tokens retain indentation, boundaries, qualifiers and operations.
-        reverse_exact(record['after'], record)
-        observed = (inventory(root, verified_lane_source=current, **operation_args) if _inputs is None else
-                    inventory(root, verified_lane_source=current, _inputs=_inputs, _input_owner=_input_owner, **operation_args))
-        require(observed == record['inventory'],
-                'production helper/caller inventory changed')
-        # Complete module tokens retain imports, builtin name resolution, types,
-        # external-witness/Optional guards, word order, memo lifetimes and ledgers.
-        if _inputs is not None:
-            _inputs.checkpoint(_input_owner, root)
-        return record
-    finally:
-        if _inputs is not None:
-            _inputs.close(_input_owner)
+    with _typed_source.typed_admission_scope(root) as _typed_admission:
+        record = read_record(root)
+        for name, expected in record['preserved_records'].items():
+            require(hashlib.sha256((root / 'tools/carla_lane_oracle' / name).read_bytes()).hexdigest() == expected,
+                    'historical component changed: ' + name)
+        _input_owner = object()
+        _inputs = None
+        try:
+            current = (root / MODULE).read_text()
+            if _operation is not None:
+                current = full_audit._observe_text(root, MODULE, current, _operation=_operation, supplied=True)
+            if source.token_sha256(current) != AFTER_TOKEN_SHA256:
+                try:
+                    if __package__:
+                        from . import full_audit_cleanup_contracts as full_audit
+                    else:
+                        import full_audit_cleanup_contracts as full_audit
+                    if full_audit._cache_verify_frame(sys._getframe()):
+                        current, _inputs = full_audit._cache_lane_inputs(root, current, _input_owner, **operation_args)
+                    else:
+                        # Unsupported import aliases preserve the complete fresh
+                        # public path; they cannot acquire or borrow an input view.
+                        current = full_audit.reviewed_text(root, MODULE, current, **operation_args)
+                except (ValueError, OSError) as error:
+                    raise ContractError('cache-key successor: ' + str(error)) from error
+            require(source.token_sha256(current) == AFTER_TOKEN_SHA256,
+                    'complete live successor tokens changed')
+            # Exact adopted bytes reverse independently. General live source keeps the
+            # established comment/whitespace compatibility of the historical gates.
+            # Full tokens retain indentation, boundaries, qualifiers and operations.
+            reverse_exact(record['after'], record)
+            observed = (inventory(root, verified_lane_source=current,
+                        **({} if _typed_admission is None else {'_admission': _typed_admission}),
+                        **operation_args) if _inputs is None else
+                        inventory(root, verified_lane_source=current, _inputs=_inputs, _input_owner=_input_owner, **operation_args))
+            require(observed == record['inventory'],
+                    'production helper/caller inventory changed')
+            # Complete module tokens retain imports, builtin name resolution, types,
+            # external-witness/Optional guards, word order, memo lifetimes and ledgers.
+            if _inputs is not None:
+                _inputs.checkpoint(_input_owner, root)
+            return record
+        finally:
+            if _inputs is not None:
+                _inputs.close(_input_owner)
 
 
 def predecessor_source(root, *, _operation=None):

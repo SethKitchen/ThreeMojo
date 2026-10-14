@@ -16,7 +16,8 @@ GUARD = ("github.event_name != 'pull_request' || "
          "(github.event.pull_request.draft == false && "
          "github.event.pull_request.base.ref == 'main')")
 WIKI_GUARD = "always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.required.result == 'success'"
-CHECK_JOBS = {'lint', 'lint-macos', 'cpu', 'cpu-macos', 'coverage-capture', 'coverage', 'gpu-host'}
+CHECK_JOBS = {'lint', 'tools', 'lint-macos', 'tools-macos', 'cpu', 'cpu-macos',
+              'coverage-capture', 'coverage', 'gpu-host'}
 
 
 def jobs_of(text):
@@ -51,7 +52,8 @@ class CiPolicyTests(unittest.TestCase):
         for name in ('lint', 'lint-macos'):
             job = self.jobs[name]
             self.assertRegex(job, r'(?m)^    timeout-minutes: 240$')
-            for flag, target in [('tools', 'test-tools'), ('coverage_tools', 'test-coverage-tool'),
+            self.assertNotIn('test-tools', job)
+            for flag, target in [('coverage_tools', 'test-coverage-tool'),
                                  ('portability', 'test-portability'), ('docs', 'docs-check')]:
                 self.assertRegex(job, "if: needs.scope.outputs.run_" + flag +
                                  " == 'true'\n        run: python3 tools/ci_scope.py run -- " + target)
@@ -61,6 +63,21 @@ class CiPolicyTests(unittest.TestCase):
         self.assertIn('run -- compile-fail', self.jobs['lint'])
         self.assertIn('run -- lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu '
                       '--target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1', self.jobs['lint'])
+
+    def test_tool_regressions_run_in_every_group_on_both_platforms(self):
+        for name in ('tools', 'tools-macos'):
+            job = self.jobs[name]
+            self.assertRegex(job, r'(?m)^    timeout-minutes: 240$')
+            groups = re.search(r'(?m)^        shard: \[([0-9, ]+)\]$', job)
+            self.assertIsNotNone(groups)
+            count = len(groups.group(1).split(','))
+            self.assertEqual(groups.group(1), ', '.join(str(i) for i in range(1, count + 1)))
+            commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
+            self.assertEqual(commands, ['python3 tools/ci_scope.py run -- test-tools '
+                                        'TOOLS_SHARD=${{ matrix.shard }}/' + str(count)])
+            self.assertIn('fail-fast: false', job)
+        self.assertRegex(self.jobs['tools'], r'(?m)^    runs-on: ubuntu-latest$')
+        self.assertRegex(self.jobs['tools-macos'], r'(?m)^    runs-on: macos-latest$')
 
     def test_macos_lint_preserves_name_and_serializes_compilers(self):
         job = self.jobs['lint-macos']
@@ -186,7 +203,8 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_required_check_has_all_results_and_no_ignored_failures(self):
         job = self.jobs['required']
-        self.assertIn('needs: [scope, lint, cpu, lint-macos, cpu-macos, coverage-capture, coverage, gpu-host]', job)
+        self.assertIn('needs: [scope, lint, tools, cpu, lint-macos, tools-macos, cpu-macos, '
+                      'coverage-capture, coverage, gpu-host]', job)
         self.assertIn('CI_NEEDS: ${{ toJSON(needs) }}', job)
         self.assertIn('run: python3 tools/ci_scope.py aggregate', job)
         self.assertNotIn('continue-on-error:', self.text)

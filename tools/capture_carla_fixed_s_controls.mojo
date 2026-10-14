@@ -8,6 +8,7 @@
 from std.math import cos, sin
 from std.memory import bitcast
 from tests.carla_fixed_s_fixture import _fixed_geometry
+from units.si import Length64
 
 
 def main() raises:
@@ -15,7 +16,7 @@ def main() raises:
         for origin in [Float64(0), Float64(1000000001), Float64(-1000000001)]:
             for heading in [Float64(0.37), Float64(-1.2), Float64(2.3)]:
                 var geometry = _fixed_geometry(kind, origin, heading)
-                var point = geometry.pos_at(3.25)
+                var point = geometry.pos_at(Length64(3.25))
                 print(
                     kind,
                     bitcast[DType.uint64](origin),

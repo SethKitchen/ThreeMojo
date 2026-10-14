@@ -206,6 +206,7 @@ class PathStringLexicalTests(unittest.TestCase):
     def observation(function, path, *, state='pending', mode='bytes', value=b'value'):
         events = []
         class Owner:
+            _kind = 'invariant'
             _state = state
             def __init__(self): self._observations = []
             def _check_owner(self, root): events.append(('owner', root))

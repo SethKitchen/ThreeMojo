@@ -48,6 +48,7 @@ try:
         from . import runtime_view_contracts as runtime_view
         from . import shared_helper_contracts as shared_helpers
         from . import witness_format_contracts as witness_format
+        from . import scaled_float32_contracts as scaled_float32
         from . import typed_boundary_contracts as typed_boundary
         from . import conditioned_cubic_contracts as conditioned_cubic
     else:
@@ -59,6 +60,7 @@ try:
         import runtime_view_contracts as runtime_view
         import shared_helper_contracts as shared_helpers
         import witness_format_contracts as witness_format
+        import scaled_float32_contracts as scaled_float32
         import typed_boundary_contracts as typed_boundary
         import conditioned_cubic_contracts as conditioned_cubic
 except ImportError as error:
@@ -141,7 +143,8 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
+ 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/conditioned_cubic_contracts.py': 'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',
  'tools/carla_lane_oracle/consumer_successor_ledger.py': 'ce9a639084dfcc1442c6ac7535060cf5a123c2eb96683d2f35816ec26b0599ed',
@@ -149,10 +152,13 @@ DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
- 'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
+ 'tools/carla_lane_oracle/source_contracts.py': '83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'a4b3d91ab83c3798ba98a4f0d5faf3f5ac1ac95bb73bb55b941ea78529c0018f',
- 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',
+ 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',
+ 'tools/carla_lane_oracle/cache_key_contracts.py': '87233ebca3701e3a79b57b324afd48fcffb38b87cb3988859b6ae36bd63d919f',
+ 'tools/carla_lane_oracle/rounded_line_selector_contracts.py': 'e47ff613bc198bc5cb629940fc0bcbe3c9517a153cd8e799e65ff0215f7b12bb',
+ 'tools/carla_lane_oracle/seed_count_contracts.py': 'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -223,7 +229,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/map_deviation_contracts.py',
                  'tools/carla_lane_oracle/witness_format_contracts.py',
                  'tools/carla_lane_oracle/typed_boundary_contracts.py',
-                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
+                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py',
+                 'tools/carla_lane_oracle/scaled_float32_contracts.py')
 
 
 def _center_require(ok, message):
@@ -629,6 +636,10 @@ def _code_constant(value):
         return ('complex', struct.pack('>dd', value.real, value.imag))
     if value is Ellipsis:
         return ('ellipsis',)
+    if type(value) is slice:
+        # Python 3.14 folds constant slices such as `x[:2]` into co_consts.
+        return ('slice', _code_constant(value.start), _code_constant(value.stop),
+                _code_constant(value.step))
     require(type(value) in (str, bytes, int, bool, type(None)), 'unsupported executed-code constant')
     return (type(value).__name__, value)
 
@@ -690,7 +701,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -711,6 +722,20 @@ for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), cons
     _IMPORT_DEFAULTS[str(_path)] = _compiled_defaults(_raw)
 
 
+# Public scopes can be entered by a consumer imported later (or by an importlib
+# alias). Bind its reviewed code now, without importing it through a cycle.
+for _relative, _digest in DEPENDENCY_TOOL_SHA256.items():
+    _path = Path(__file__).resolve().parents[2] / _relative
+    _key = str(_path.resolve())
+    if _key not in _IMPORT_IDENTITIES:
+        _raw = _path.read_bytes()
+        require(not _path.is_symlink() and sha(_raw) == _digest,
+                'unreviewed public consumer checker bytes: ' + _relative)
+        _IMPORT_IDENTITIES[_key] = _digest
+        _IMPORT_CODE[_key] = _compiled_functions(_raw, str(_path))
+        _IMPORT_DEFAULTS[_key] = _compiled_defaults(_raw)
+
+
 def _live_function_code(value):
     seen = set()
     while hasattr(value, '__wrapped__'):
@@ -728,7 +753,8 @@ def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
-               vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic))
+               vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic),
+               vars(scaled_float32))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -875,7 +901,8 @@ def _native_dependency_inventory(root, *, witnesses, _known=None, _snapshots=Non
     return found
 
 
-def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None):
+def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
+                        math_entries=None):
     """Refuse alternate qualified-module and namespace lookup surfaces.
 
     Every reviewed import begins at a protected top-level namespace. Guard
@@ -885,6 +912,8 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None)
     cannot shadow a qualified import and is not itself a namespace competitor.
     For the new render helper only, a separately verified source entry census
     can restrict bare render basenames to actual compiled lookup directories.
+    A separate math scope is only for the exact supplemental native witness.
+    It does not replace any production owner's existing resolver obligations.
     The default retains the historical conservative rule for every namespace.
     Exact consumed module/prefix coordinates still reject case, alternate
     suffix/package and symlink changes. Only three exact regular wiki files are
@@ -897,6 +926,10 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None)
     if render_entries is not None and (type(render_entries) is not frozenset
             or '.' not in render_entries or any(type(path) is not str or not path
             or Path(path).is_absolute() or '..' in Path(path).parts for path in render_entries)):
+        return False
+    if math_entries is not None and (type(math_entries) is not frozenset
+            or '.' not in math_entries or any(type(path) is not str or not path
+            or Path(path).is_absolute() or '..' in Path(path).parts for path in math_entries)):
         return False
     if typed_entries is not None and (type(typed_entries) is not frozenset
             or '.' not in typed_entries or any(type(path) is not str or not path
@@ -951,6 +984,8 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None)
                             or stem in prefixes or (scoped_name in top
                                 and (scoped_name != 'render' or render_entries is None
                                      or relative_dir.casefold() in render_entries)
+                                and (scoped_name != 'math' or math_entries is None
+                                     or relative_dir.casefold() in math_entries)
                                 and (scoped_name not in typed_families or typed_entries is None
                                      or relative_dir.casefold() in typed_entries))
                             or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
@@ -979,8 +1014,7 @@ def _render_lookup_args(paths, entries):
     Exact module and package prefixes never use this namespace-only exception.
     The caller checks the complete physical source/entry inventory before and
     after the operation; adding a new entry or import cannot reuse this scope.
-    verify() also applies this census to coverage include roots: they mirror
-    the source tree, so their compiled lookup directories are the same.
+    Include-root callers first bind their physical source/entry census.
     """
     render = any(path.startswith('render/') for path in paths)
     typed = any(path.split('/')[0] in ('animation', 'cameras', 'core', 'exporters',
@@ -1021,6 +1055,22 @@ def _helper_entry_census_finish(root, image, *, _operation=None):
              if path.suffix == '.mojo'}
     _operation_known_paths(root, known, _operation=_operation)
     require(known == set(image), 'render entry path census changed')
+
+
+def _include_entry_context(location, source_image, *, _operation=None):
+    """Bind an include surface to maintained source coordinates and entries.
+
+    The coverage generation owner authenticates origins and complete staged
+    bytes before requesting proofs. This additional structural gate records
+    every physical Mojo file and refuses unknown coordinates or changed entry
+    contexts; callers retain and reread its image through finalization.
+    """
+    entries, image = _helper_entry_census(location, _operation=_operation)
+    require(set(image) <= set(source_image), 'unmaintained include source coordinate')
+    expected = _sibling('affected').entry_directories(
+        {path: _physical_text(source_image[path]) for path in image})
+    require(list(entries) == expected, 'include compiled entry directories changed')
+    return entries, image
 
 
 def _helper_render_context(root, *, _inputs=None, _operation=None):
@@ -1119,6 +1169,42 @@ def _nearest_cache_verify():
     return None
 
 
+def _publish_input_image(view, snapshots, authority_raw, known, production,
+                         entries, resolver_paths, executing):
+    """Store an immutable image only after its concrete owner authenticated it."""
+    caller = sys._getframe(1)
+    require(caller.f_globals is globals()
+            and caller.f_code in (_live_function_code(_CacheInputs._publish),
+                                  _live_function_code(_PublicAdmission._publish))
+            and caller.f_locals.get('self') is view,
+            'input image publication requires its concrete publisher')
+    require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,
+            'invalid captured authority bytes')
+    image = dict(snapshots)
+    for path, raw in image.items():
+        require(type(path) is str and Path(path).as_posix() == path
+                and bool(Path(path).parts) and not Path(path).is_absolute()
+                and '..' not in Path(path).parts and type(raw) is bytes,
+                'invalid captured input bytes or path')
+    require(set(known) <= image.keys() and set(production) <= image.keys()
+            and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
+    require(not view._scaled_resolver_paths or
+            (view._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+             and view._scaled_resolver_paths <= image.keys()),
+            'pending scaled native context differs from captured image')
+    view._raw = types.MappingProxyType(image)
+    view._record_raw = authority_raw
+    view._known = frozenset(known)
+    view._production = frozenset(production)
+    view._entries = tuple(entries)
+    view._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
+    view._resolver_paths = frozenset(resolver_paths)
+    require(not view._executing or dict(view._executing) == executing,
+            'pending checker image differs from captured execution')
+    view._executing = types.MappingProxyType(dict(executing))
+    view._state = 'active'
+
+
 class _CacheInputs:
     """One synchronous cache.verify's immutable input image, never a receipt."""
 
@@ -1138,6 +1224,7 @@ class _CacheInputs:
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
 
     def _check_context(self, root):
@@ -1179,27 +1266,8 @@ class _CacheInputs:
                 and caller.f_code is _live_function_code(verify),
                 'cache input publication requires the full gate')
         self._check_pending(root)
-        require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,
-                'invalid captured authority bytes')
-        image = dict(snapshots)
-        for path, raw in image.items():
-            require(type(path) is str and Path(path).as_posix() == path
-                    and bool(Path(path).parts) and not Path(path).is_absolute()
-                    and '..' not in Path(path).parts and type(raw) is bytes,
-                    'invalid captured input bytes or path')
-        require(set(known) <= image.keys() and set(production) <= image.keys()
-                and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
-        self._raw = types.MappingProxyType(image)
-        self._record_raw = authority_raw
-        self._known = frozenset(known)
-        self._production = frozenset(production)
-        self._entries = tuple(entries)
-        self._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
-        self._resolver_paths = frozenset(resolver_paths)
-        require(not self._executing or dict(self._executing) == executing,
-                'pending checker image differs from captured execution')
-        self._executing = types.MappingProxyType(dict(executing))
-        self._state = 'active'
+        _publish_input_image(self, snapshots, authority_raw, known, production,
+                             entries, resolver_paths, executing)
 
     def _check(self, owner, root):
         require(type(self) is _CacheInputs and self._stamp == id(self)
@@ -1283,6 +1351,11 @@ class _CacheInputs:
                     and all(resolver_unshadowed(location, self._resolver_paths)
                             for location in self._include_roots),
                     'resolver surface changed during owned verification')
+            if self._scaled_resolver_paths:
+                require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+                        and resolver_unshadowed(root, self._scaled_resolver_paths,
+                                                **_scaled_lookup_args()),
+                        'scaled native resolver changed during owned verification')
             raw = _regular(root, MIGRATION).read_bytes()
             require(type(raw) is bytes and raw == self._record_raw,
                     'record changed during owned verification')
@@ -1304,6 +1377,7 @@ class _CacheInputs:
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._owner_frame = None
 
@@ -1315,6 +1389,330 @@ class _CacheInputs:
 
     def __reduce_ex__(self, protocol):
         raise ContractError('full-audit cleanup successor: cache input views cannot be serialized')
+
+
+# Only these explicit public entries can own a short-lived typed admission.
+# The existing dependency authority binds their complete executable sources.
+def _public_admission_entries():
+    return {'cache_key_contracts.py': ('verify',),
+            'rounded_line_selector_contracts.py': ('verify_premises',),
+            'seed_count_contracts.py': ('verify_score',)}
+
+
+
+def _public_admission_scope(root, frame):
+    caller = sys._getframe(1)
+    require(caller.f_globals is vars(source)
+            and caller.f_code is _live_function_code(source.typed_admission_scope)
+            and caller.f_back is frame,
+            'public admission requires its direct source factory')
+    return _PublicAdmission(root, frame)
+
+
+class _PublicAdmission:
+    """A live public call's fully admitted image, never an ambient PASS."""
+
+    def __init__(self, root, frame):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code is _public_admission_scope.__code__
+                and caller.f_locals.get('frame') is frame,
+                'public admission requires its direct factory')
+        filename = frame.f_globals.get('__file__')
+        require(type(filename) is str
+                and Path(filename).absolute().parent == Path(__file__).absolute().parent
+                and frame.f_code.co_name in _public_admission_entries().get(Path(filename).name, ()),
+                'unsupported public admission owner')
+        self._owner_frame = frame
+        self._owner = object()
+        self._stamp = id(self)
+        self._thread = threading.get_ident()
+        self._root = _absolute_root_text(root)
+        self._cwd = str(Path.cwd())
+        self._include_roots = ()
+        self._state = 'pending'
+        self._failed = False
+        self._raw = types.MappingProxyType({})
+        self._record_raw = None
+        self._known = self._production = frozenset()
+        self._entries = self._native_contexts = ()
+        self._resolver_paths = self._scaled_resolver_paths = frozenset()
+        self._executing = types.MappingProxyType({})
+        self._checker_raw = {}
+        self._checker_codes = {}
+        self._checker_frames = {}
+        self._inventory_frame = None
+        require(self._authenticate_frame(frame), 'unreviewed public admission owner code')
+
+    def _authenticate_frame(self, frame):
+        namespace = frame.f_globals
+        filename = namespace.get('__file__')
+        if type(filename) is not str:
+            return False
+        physical = Path(filename).absolute()
+        base = Path(__file__).absolute().parents[2]
+        if not physical.is_relative_to(base):
+            return False
+        relative = physical.relative_to(base).as_posix()
+        expected = _IMPORT_IDENTITIES.get(str(physical.resolve()))
+        if expected is None:
+            return False
+        require(physical == _SELF_PATH or DEPENDENCY_TOOL_SHA256.get(relative) == expected,
+                'public consumer checker authority changed: ' + relative)
+        raw = _regular(base, relative).read_bytes()
+        require(sha(raw) == expected, 'public admission checker changed: ' + relative)
+        previous = self._checker_raw.setdefault(relative, raw)
+        require(previous == raw, 'public admission checker changed during call: ' + relative)
+        if relative not in self._checker_codes:
+            def nested(code):
+                yield code
+                for child in code.co_consts:
+                    if type(child) is types.CodeType:
+                        yield from nested(child)
+            self._checker_codes[relative] = {
+                code.co_qualname: code for code in nested(compile(
+                    raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize))}
+        expected_code = self._checker_codes[relative].get(frame.f_code.co_qualname)
+        if expected_code is None or _code_identity(frame.f_code) != _code_identity(expected_code):
+            return False
+        parts = frame.f_code.co_qualname.split('.')
+        live = namespace.get(parts[0])
+        if type(live) is type and len(parts) > 1:
+            live = getattr(live, parts[1], None)
+        code = _live_function_code(live)
+        if code is frame.f_code:
+            self._checker_frames[(id(namespace), frame.f_code)] = frame
+            return True
+        # Comprehensions retain the identity of their executing parent code.
+        def contains(parent):
+            return parent is frame.f_code or any(contains(child) for child in parent.co_consts
+                if type(child) is types.CodeType)
+        return type(code) is types.CodeType and contains(code)
+
+    def __enter__(self):
+        require(sys._getframe(1) is self._owner_frame and self._state == 'pending',
+                'public admission entry requires its live owner')
+        return self
+
+    def _check_context(self, root):
+        require(_absolute_root_text(root) == self._root and str(Path.cwd()) == self._cwd
+                and self._thread == threading.get_ident(),
+                'public admission root, thread or working directory changed')
+
+    def _check(self, owner, root):
+        try:
+            require(type(self) is _PublicAdmission and self._stamp == id(self)
+                    and owner is self._owner and not self._failed
+                    and self._state in ('pending', 'active'), 'inactive public admission')
+            self._check_context(root)
+            methods = {code.co_name: code for code in
+                _IMPORT_CODE[str(_SELF_PATH)]['_PublicAdmission'].co_consts
+                if type(code) is types.CodeType}
+            for name in ('_publish', 'raw', 'observe_bytes'):
+                method = vars(_PublicAdmission).get(name)
+                require(name not in self.__dict__ and type(method) is types.FunctionType
+                        and method.__globals__ is globals()
+                        and '__wrapped__' not in method.__dict__
+                        and _code_identity(method.__code__) == _code_identity(methods[name]),
+                        'public admission image method changed: ' + name)
+            shared = {code.co_name: code for code in
+                _IMPORT_CODE[str(_SELF_PATH)]['_CacheInputs'].co_consts
+                if type(code) is types.CodeType}
+            for name in ('raw', 'observe_bytes', 'checkpoint'):
+                method = vars(_CacheInputs).get(name)
+                require(type(method) is types.FunctionType and method.__globals__ is globals()
+                        and '__wrapped__' not in method.__dict__
+                        and _code_identity(method.__code__) == _code_identity(shared[name]),
+                        'public admission shared method changed: ' + name)
+            frame = sys._getframe(1)
+            while frame is not None and frame is not self._owner_frame:
+                frame = frame.f_back
+            require(frame is self._owner_frame and frame is not None
+                    and frame.f_locals.get('_typed_admission') is self,
+                    'public admission owner is no longer active')
+            require(self._authenticate_frame(frame), 'public admission owner code changed')
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+            self.fail()
+            raise
+
+    def _check_pending(self, root):
+        self._check(self._owner, root)
+        require(self._state == 'pending' and not self._raw and self._record_raw is None,
+                'invalid pending public admission')
+        publisher = sys._getframe(1)
+        gate = publisher.f_back
+        require(publisher.f_code is _live_function_code(_PublicAdmission._publish)
+                and gate is not None and gate.f_globals is globals()
+                and gate.f_code is _live_function_code(verify)
+                and gate.f_locals.get('_public_admission') is self,
+                'public admission publication requires its complete gate')
+
+    def _publish(self, root, snapshots, authority_raw, known, production,
+                 entries, resolver_paths, executing):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code is _live_function_code(verify),
+                'public input publication requires the full gate')
+        self._check_pending(root)
+        _publish_input_image(self, snapshots, authority_raw, known, production,
+                             entries, resolver_paths, executing)
+
+    def raw(self, owner, root, path):
+        return _CacheInputs.raw(self, owner, root, path)
+
+    def observe_bytes(self, owner, root, path):
+        return _CacheInputs.observe_bytes(self, owner, root, path)
+
+
+    def _check_consumer_bindings(self):
+        for frame in tuple(self._checker_frames.values()):
+            require(self._authenticate_frame(frame), 'public consumer frame changed')
+            namespace = frame.f_globals
+            path = Path(namespace['__file__']).resolve()
+            relative = path.relative_to(_SELF_PATH.parents[2]).as_posix()
+            if relative in CHECKER_PATHS:
+                continue  # The complete gate/checkpoint checks these modules.
+            key = str(path)
+            for name, expected in _IMPORT_CODE[key].items():
+                if name.startswith('<'):
+                    continue
+                live = namespace.get(name)
+                members = ({child.co_name: child for child in expected.co_consts
+                            if type(child) is types.CodeType}
+                           if type(live) is type else {None: expected})
+                for member, code in members.items():
+                    value = getattr(live, member, None) if member else live
+                    label = relative + ':' + name + ('.' + member if member else '')
+                    _check_defaults(value, _IMPORT_DEFAULTS[key].get(
+                        name + '.' + member if member else name), label)
+                    actual = _live_function_code(value)
+                    require(actual is not None and _code_identity(actual) == _code_identity(code),
+                            'public consumer binding changed: ' + label)
+
+    def _publication_inputs(self, root, snapshots):
+        self._check(self._owner, root)
+        self._check_consumer_bindings()
+        image = dict(snapshots)
+        for path, expected in self._checker_raw.items():
+            raw = _regular(root, path).read_bytes()
+            require(raw == expected, 'public checker differs from admitted root: ' + path)
+            require(image.setdefault(path, raw) == raw, 'public checker observation changed: ' + path)
+        if self._state == 'active':
+            for path, raw in image.items():
+                require(self._raw.get(path) == raw or
+                        (path not in self._raw and self._checker_raw.get(path) == raw),
+                        'public input changed between admissions: ' + path)
+        return image
+
+    def project(self, root, path, raw):
+        try:
+            self._check(self._owner, root)
+            caller = sys._getframe(1)
+            require(caller.f_globals is globals()
+                    and caller.f_code is _live_function_code(reviewed_typed_text),
+                    'public projection requires its actual typed adapter')
+            require(self._state == 'active' and self._raw.get(path) == raw,
+                    'typed source differs from public admission: ' + path)
+            # A semantic admission is not an exact endpoint admission by itself.
+            for name in SOURCE_PATHS:
+                require(sha(_historical_typed_text(name, self._raw[name].decode('utf-8')))
+                        == AFTER_SHA256[name], 'unreviewed exact public endpoint: ' + name)
+            typed_boundary.verify_authority()
+            conditioned_cubic.verify_authority()
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+            self.fail()
+            raise
+
+    def fail(self):
+        self._failed = True
+
+    def __exit__(self, kind, error, traceback):
+        try:
+            require(sys._getframe(1) is self._owner_frame,
+                    'public admission exit requires its live owner')
+            if error is not None:
+                self.fail()
+            if kind is None:
+                self._check(self._owner, Path(self._root))
+                if self._state == 'active':
+                    self._check_consumer_bindings()
+                    for frame in tuple(self._checker_frames.values()):
+                        require(self._authenticate_frame(frame),
+                                'public admission consumer code changed')
+                    for path, raw in self._checker_raw.items():
+                        require(_regular(Path(self._root), path).read_bytes() == raw,
+                                'public consumer checker changed at exit: ' + path)
+                    _CacheInputs.checkpoint(self, self._owner, Path(self._root))
+                    self._check(self._owner, Path(self._root))
+        finally:
+            self._state = 'closed'
+            self._raw = types.MappingProxyType({})
+            self._record_raw = None
+            self._checker_raw.clear()
+            self._checker_codes.clear()
+            self._checker_frames.clear()
+            self._owner_frame = None
+            self._inventory_frame = None
+        return False
+
+    def __copy__(self):
+        raise ContractError('full-audit cleanup successor: public admissions cannot be copied')
+
+    def __deepcopy__(self, memo):
+        return self.__copy__()
+
+    def __reduce_ex__(self, protocol):
+        return self.__copy__()
+
+
+def _cache_inventory_admission_frame(frame, scope):
+    filename = frame.f_globals.get('__file__')
+    valid = (type(filename) is str and Path(filename).absolute() ==
+            Path(__file__).absolute().with_name('cache_key_contracts.py')
+            and frame.f_code is _live_function_code(frame.f_globals.get('inventory'))
+            and frame.f_locals.get('_admission') is scope
+            and scope._authenticate_frame(frame))
+    if valid:
+        if scope._inventory_frame is None:
+            scope._inventory_frame = frame
+        elif scope._inventory_frame is not frame:
+            scope.fail()
+            raise ContractError('full-audit cleanup successor: public inventory invocation changed')
+    return valid
+
+
+def _public_admission_for(root, *, publication=False):
+    """Find an explicitly entered owner through authenticated callsites only."""
+    frames = []
+    frame = sys._getframe(1)
+    while frame is not None:
+        scope = frame.f_locals.get('_typed_admission')
+        borrowed = frame.f_locals.get('_admission')
+        bridge = (type(borrowed) is _PublicAdmission
+                  and _cache_inventory_admission_frame(frame, borrowed))
+        if bridge:
+            scope = borrowed
+        if type(scope) is _PublicAdmission and (scope._owner_frame is frame or bridge):
+            try:
+                wrappers = set()
+                for call in frames:
+                    if publication and call.f_code in wrappers:
+                        wrappers.remove(call.f_code)
+                        continue
+                    if not scope._authenticate_frame(call):
+                        return None
+                    candidate = call.f_globals.get(call.f_code.co_name)
+                    while type(candidate) is types.FunctionType and hasattr(candidate, '__wrapped__'):
+                        wrappers.add(candidate.__code__)
+                        candidate = candidate.__wrapped__
+                scope._check(scope._owner, root)
+                return scope
+            except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+                scope.fail()
+                raise
+        frames.append(frame)
+        frame = frame.f_back
+    return None
 
 
 class _OperationCoherenceError(ContractError):
@@ -1358,11 +1756,42 @@ def _owner_module(kind):
     return sys.modules.get((__package__ + '.' if __package__ else '') + name) if name else None
 
 
+def _seed_frame_kind(frame, *, include_aliases=False):
+    """Recognize only the canonical standalone seed wrapper; aliases block reuse."""
+    namespace = frame.f_globals
+    if type(namespace) is not dict:
+        return None
+    candidate = namespace.get('_verify_standalone')
+    if type(candidate) is not types.FunctionType or frame.f_code is not candidate.__code__:
+        return None
+    filename = namespace.get('__file__')
+    if type(filename) is not str:
+        return None
+    expected = Path(__file__).absolute().with_name('seed_count_contracts.py')
+    if Path(filename).absolute() != expected:
+        return None
+    module_code = namespace.get('_EXECUTED_MODULE_CODE')
+    if type(module_code) is types.CodeType:
+        codes = [code for code in module_code.co_consts
+                 if type(code) is types.CodeType and code.co_name == '_verify_standalone']
+        module = sys.modules.get((__package__ + '.' if __package__ else '') + 'seed_count_contracts')
+        if (len(codes) == 1 and codes[0] is frame.f_code and candidate.__globals__ is namespace
+                and type(module) is types.ModuleType and namespace is vars(module)):
+            return 'seed'
+    return 'alias_seed' if include_aliases else None
+
+
 def _operation_frame_kind(frame, *, include_aliases=False):
     if frame is None:
         return None
     namespace = frame.f_globals
     filename = namespace.get('__file__')
+    receipt_kind = _receipt_frame_kind(frame, include_aliases=include_aliases)
+    if receipt_kind is not None:
+        return receipt_kind
+    seed_kind = _seed_frame_kind(frame, include_aliases=include_aliases)
+    if seed_kind is not None:
+        return seed_kind
     # Pure negative filter only for exact builtin absolute spellings and plain
     # functions. Relative paths and deeper/cyclic/exotic wrappers keep full checks.
     if (type(filename) is str and filename.startswith('/')
@@ -1449,6 +1878,59 @@ def _operation_frame_kind(frame, *, include_aliases=False):
     return None
 
 
+def _receipt_frame_kind(frame, *, include_aliases=False):
+    """Recognize the real maintained import or script; aliases only block reuse."""
+    namespace = frame.f_globals
+    if type(namespace) is not dict:
+        return None
+    candidate = namespace.get('build_receipt')
+    if type(candidate) is not types.FunctionType or frame.f_code is not candidate.__code__:
+        return None
+    filename = namespace.get('__file__')
+    if type(filename) is not str:
+        return None
+    expected = Path(__file__).absolute().parent.parent / 'coverage_loop_proofs.py'
+    if Path(filename).absolute() != expected:
+        return None
+    module_code = namespace.get('_EXECUTED_MODULE_CODE')
+    if type(module_code) is types.CodeType:
+        codes = [code for code in module_code.co_consts
+                 if type(code) is types.CodeType and code.co_name == 'build_receipt']
+        if len(codes) == 1 and codes[0] is frame.f_code and candidate.__globals__ is namespace:
+            for name in ('coverage_loop_proofs', 'tools.coverage_loop_proofs', '__main__'):
+                module = sys.modules.get(name)
+                if type(module) is types.ModuleType and namespace is vars(module):
+                    return 'generated_receipt'
+    return 'alias_generated_receipt' if include_aliases else None
+
+
+def _receipt_operation_enter(root, build, seed):
+    """Create a lazy image only for one live maintained generated receipt."""
+    frame = sys._getframe(1)
+    require(_receipt_frame_kind(frame) == 'generated_receipt'
+            and frame.f_locals.get('root') == root and frame.f_locals.get('build') == build
+            and frame.f_locals.get('_receipt_seed') is seed,
+            'generated receipt requires its direct producer frame')
+    return _InvariantInputs(root, frame, 'generated_receipt')
+
+
+def _operation_include_context(operation, root, include_roots):
+    """Nonempty include ownership belongs only to the exact generated invocation."""
+    try:
+        _operation_check(operation, root)
+        if operation is not None:
+            expected = operation._include_roots
+            supplied = tuple(_absolute_root_text(path) for path in include_roots)
+            # A generated receipt also admits root-only historical inputs.
+            require(supplied == expected or (supplied == ()
+                                             and operation._kind == 'generated_receipt'),
+                    'operation include root changed')
+            require(not expected or operation._kind == 'generated_receipt',
+                    'unowned coverage include roots')
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        _operation_fail(operation, error)
+
+
 def _invariant_verify_frame(frame, *, include_aliases=False):
     kind = _operation_frame_kind(frame, include_aliases=include_aliases)
     return kind == 'invariant' or (include_aliases and kind == 'alias_invariant')
@@ -1456,6 +1938,23 @@ def _invariant_verify_frame(frame, *, include_aliases=False):
 
 def _private_operation_wrapper(frame, kind, operation):
     """Return only the exact explicit child wrapper; never skip arbitrary frames."""
+    if kind in ('map_loops', 'rtree_loops', 'other_loops', 'alias_loops') and operation._kind == 'generated_receipt':
+        caller = frame.f_back
+        owner = operation._owner_frame
+        namespace = owner.f_globals
+        if (kind not in ('map_loops', 'rtree_loops', 'other_loops', 'alias_loops')
+                or frame.f_globals is not namespace or caller is None
+                or caller.f_globals is not namespace
+                or caller.f_code is not _live_function_code(namespace.get('_receipt_reviewed_nonempty_loops'))
+                or caller.f_back is not owner):
+            return None
+        for local in (frame.f_locals, caller.f_locals):
+            if (local.get('_operation') is not operation
+                    or _absolute_root_text(local.get('root')) != operation._root
+                    or tuple(_absolute_root_text(path) for path in local.get('include_roots', ()))
+                    != operation._include_roots):
+                return None
+        return caller
     if kind not in ('invariant', 'border') or operation._kind not in ('winner', 'runtime', 'sampled'):
         return None
     module = _owner_module(kind)
@@ -1516,7 +2015,7 @@ def _operation_enter(root, kind, _operation=None, *, module=None, include_roots=
         if kind is None or include_roots != ():
             require(_operation is None, 'unsupported context cannot borrow operation inputs')
             return None, False
-        require(kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'map_loops', 'rtree_loops'),
+        require(kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'seed', 'map_loops', 'rtree_loops'),
                 'unknown bounded operation kind')
         actual = _operation_frame_kind(frame)
         if _operation is not None:
@@ -1609,10 +2108,15 @@ def _operation_observe(operation, root, path, value, mode):
         _operation_fail(operation, error)
 
 
-def _operation_record(operation, root, *, exact=False, include_roots=(), expected_lane_raw=None):
+def _operation_record(operation, root, *, exact=False, include_roots=None, expected_lane_raw=None):
     try:
-        require(type(operation) is _InvariantInputs and include_roots == (),
+        require(type(operation) is _InvariantInputs,
                 'invalid private operation projection')
+        if include_roots is None:
+            include_roots = tuple(Path(path) for path in operation._include_roots)
+        _operation_include_context(operation, root, include_roots)
+        require(_absolute_root_text(root) == operation._root,
+                'generated input cannot supply source authority')
         return operation._admit(root, exact=exact, expected_lane_raw=expected_lane_raw)
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
         _operation_fail(operation, error)
@@ -1648,7 +2152,8 @@ class _InvariantInputs(_CacheInputs):
     def __init__(self, root, owner_frame, kind):
         caller = sys._getframe(1)
         require(caller.f_globals is globals()
-                and caller.f_code in (_live_function_code(_invariant_operation), _live_function_code(_operation_enter))
+                and caller.f_code in (_live_function_code(_invariant_operation), _live_function_code(_operation_enter),
+                                      _live_function_code(_receipt_operation_enter))
                 and caller.f_back is owner_frame and _operation_frame_kind(owner_frame) == kind,
                 'bounded inputs require their direct owner factory')
         super().__init__(object(), root, owner_frame)
@@ -1659,10 +2164,96 @@ class _InvariantInputs(_CacheInputs):
         self._discoveries = []
         self._capturing = False
         self._checker_receipt = False
+        self._receipt_seed = None
+        self._receipt_seed_token = None
+        self._receipt_source_digests = types.MappingProxyType({})
+        self._receipt_stage_digests = types.MappingProxyType({})
+        self._receipt_production = types.MappingProxyType({})
+        self._receipt_observations = []
+        self._receipt_discoveries = []
+        self._include_raw = types.MappingProxyType({})
+        self._include_entries = ()
+        self._include_production = frozenset()
+        self._proof_bindings = types.MappingProxyType({})
+        if kind == 'generated_receipt':
+            build = owner_frame.f_locals['build']
+            seed = owner_frame.f_locals['_receipt_seed']
+            require(type(seed) is dict and _absolute_root_text(build) != self._root,
+                    'invalid generated receipt coordinates')
+            self._include_roots = (_absolute_root_text(build),)
+            self._receipt_seed = _canonical(seed).encode('utf-8')
+            self._receipt_seed_token = seed
+            self._receipt_source_digests = types.MappingProxyType(dict(seed['root_inputs']))
+            self._receipt_stage_digests = types.MappingProxyType(
+                {path: item['instrumented'] for path, item in seed['inputs'].items()})
+            production = {}
+            for location, digests in ((self._root, self._receipt_source_digests),
+                                      (self._include_roots[0], self._receipt_stage_digests)):
+                production[location] = self._receipt_production_paths(location)
+                require(production[location] <= digests.keys(),
+                        'production census differs from producer coordinates')
+            self._receipt_production = types.MappingProxyType(production)
+
+    def _check_context(self, root):
+        if self._kind != 'generated_receipt':
+            return super()._check_context(root)
+        frame = self._owner_frame
+        require(frame is not None and str(Path.cwd()) == self._cwd
+                and _absolute_root_text(root) in (self._root, *self._include_roots)
+                and _absolute_root_text(frame.f_locals.get('root')) == self._root
+                and (_absolute_root_text(frame.f_locals.get('build')), ) == self._include_roots
+                and frame.f_locals.get('_receipt_seed') is self._receipt_seed_token,
+                'generated source/build context changed')
+
+    def _receipt_production_paths(self, location):
+        build = Path(self._include_roots[0])
+        return frozenset(path.relative_to(location).as_posix()
+            for path in guard.production_mojo_paths(Path(location))
+            if location != self._root or not path.absolute().is_relative_to(build))
+
+    def _receipt_inputs_check(self):
+        self._check_owner(Path(self._root))
+        require(self._kind == 'generated_receipt' and type(self._receipt_seed) is bytes,
+                'invalid generated input boundary')
+        require(_canonical(self._receipt_seed_token).encode('utf-8') == self._receipt_seed,
+                'generated receipt seed changed after consumption')
+        for location, expected in self._receipt_production.items():
+            require(self._receipt_production_paths(location) == expected,
+                'generated producer production census changed')
+        seed = json.loads(self._receipt_seed, object_pairs_hook=source.unique_keys)
+        self._owner_frame.f_globals['check_capture_inputs'](
+            {'receipt': seed}, Path(self._root), Path(self._include_roots[0]))
+
+    def _receipt_bindings(self, root, include_roots):
+        try:
+            _operation_include_context(self, root, include_roots)
+            require(self._kind == 'generated_receipt' and _absolute_root_text(root) == self._root,
+                    'invalid generated proof-binding request')
+            self._admit(root, exact=True)
+            # This authenticates live descriptor tables without replaying the
+            # complete source graph. Rows still read their actual physical bytes.
+            typed_boundary.verify_authority()
+            return dict(self._proof_bindings)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
+
+    def _clear_receipt(self):
+        self._receipt_seed = None
+        self._receipt_seed_token = None
+        self._receipt_source_digests = types.MappingProxyType({})
+        self._receipt_stage_digests = types.MappingProxyType({})
+        self._receipt_production = types.MappingProxyType({})
+        self._receipt_observations.clear()
+        self._receipt_discoveries.clear()
+        self._include_raw = types.MappingProxyType({})
+        self._include_entries = ()
+        self._include_production = frozenset()
+        self._proof_bindings = types.MappingProxyType({})
 
     def _invalidate(self, error):
         self._failed = True
         self._failure_reason = str(error)
+        self._clear_receipt()
         self._state = 'invalid'
         self._raw = types.MappingProxyType({})
         self._record_raw = None
@@ -1671,6 +2262,7 @@ class _InvariantInputs(_CacheInputs):
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._observations = []
         self._discoveries = []
@@ -1739,7 +2331,8 @@ class _InvariantInputs(_CacheInputs):
                 'invariant capture was not issued by its explicit owner')
 
     def _publish(self, root, snapshots, authority_raw, known, production,
-                 entries, resolver_paths, executing):
+                 entries, resolver_paths, executing, *, receipt_bindings=None,
+                 include_images=()):
         caller = sys._getframe(1)
         require(caller.f_globals is globals()
                 and caller.f_code is _live_function_code(verify),
@@ -1757,6 +2350,10 @@ class _InvariantInputs(_CacheInputs):
                     'invalid captured input bytes or path')
         require(set(known) <= image.keys() and set(production) <= image.keys()
                 and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
+        require(not self._scaled_resolver_paths or
+                (self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+                 and self._scaled_resolver_paths <= image.keys()),
+                'pending scaled native context differs from captured image')
         self._raw = types.MappingProxyType(image)
         self._record_raw = authority_raw
         self._known = frozenset(known)
@@ -1767,7 +2364,42 @@ class _InvariantInputs(_CacheInputs):
         require(not self._executing or dict(self._executing) == executing,
                 'pending checker image differs from captured execution')
         self._executing = types.MappingProxyType(dict(executing))
+        if self._kind == 'generated_receipt':
+            require(type(receipt_bindings) is dict and len(include_images) == 1,
+                    'missing generated binding image')
+            location, stage_image, stage_args = include_images[0]
+            require(_absolute_root_text(location) == self._include_roots[0],
+                    'captured generated root changed')
+            seed = json.loads(self._receipt_seed, object_pairs_hook=source.unique_keys)
+            require(all(seed['root_inputs'][path] == sha(raw) for path, raw in image.items()
+                        if path in seed['root_inputs']),
+                    'source differs from pre-admission producer observation')
+            require(all(seed['inputs'].get(path, {}).get('instrumented') == sha(raw)
+                        for path, raw in stage_image.items()),
+                    'include differs from pre-admission producer observation')
+            require(all(digest == (executing[path] if path in executing else
+                        sha(authority_raw if path == MIGRATION else image[path]))
+                        for path, digest in receipt_bindings.items()),
+                    'generated binding map differs from captured physical domains')
+            self._include_raw = types.MappingProxyType(dict(stage_image))
+            self._include_entries = tuple(_sibling('affected').entry_directories(
+                {path: _physical_text(raw) for path, raw in stage_image.items()}))
+            require(stage_args == _render_lookup_args(resolver_paths, self._include_entries),
+                    'generated resolver entry context changed')
+            self._include_production = frozenset(path.relative_to(location).as_posix()
+                for path in guard.production_mojo_paths(Path(location)))
+            self._proof_bindings = types.MappingProxyType(dict(receipt_bindings))
+            self._checker_receipt = True
+        else:
+            require(receipt_bindings is None and include_images == (),
+                    'non-generated owner received include admission')
         self._state = 'active'
+        for location, path, value, mode in self._receipt_observations:
+            self._match(Path(location), path, value, mode)
+        self._receipt_observations.clear()
+        for location, paths, kind in self._receipt_discoveries:
+            self._discovery(Path(location), paths, kind)
+        self._receipt_discoveries.clear()
         for path, value, mode in self._observations:
             self._match(root, path, value, mode)
         self._observations.clear()
@@ -1780,19 +2412,33 @@ class _InvariantInputs(_CacheInputs):
             self._check_owner(root)
             require(kind in ('production', 'known'), 'unknown operation discovery kind')
             require(all(type(path) is str for path in paths), 'invalid operation discovered path')
+            if self._kind == 'generated_receipt' and self._state == 'pending':
+                location = _absolute_root_text(root)
+                digests = (self._receipt_source_digests if location == self._root
+                           else self._receipt_stage_digests)
+                expected = (self._receipt_production[location] if kind == 'production'
+                            else frozenset(path for path in digests if path.endswith('.mojo')))
+                require(frozenset(paths) == expected,
+                        'consumed census differs from producer boundary: ' + kind)
+                self._receipt_discoveries.append((location, frozenset(paths), kind))
+                return
             if self._state == 'pending':
                 self._discoveries.append((frozenset(paths), kind))
             else:
-                expected = self._production if kind == 'production' else self._known
+                generated = self._kind == 'generated_receipt' and _absolute_root_text(root) != self._root
+                expected = ((self._include_production if kind == 'production' else frozenset(self._include_raw))
+                            if generated else (self._production if kind == 'production' else self._known))
                 require(paths == expected, 'consumed operation path census changed: ' + kind)
         except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
             _operation_fail(self, error)
 
     def _match(self, root, path, value, mode):
-        require(path in self._raw or path == MIGRATION,
+        generated = self._kind == 'generated_receipt' and _absolute_root_text(root) != self._root
+        image = self._include_raw if generated else self._raw
+        require(path in image or (not generated and path == MIGRATION),
                 'unlisted operation input: ' + path)
         _regular(root, path)
-        raw = self._record_raw if path == MIGRATION else self._raw[path]
+        raw = self._record_raw if not generated and path == MIGRATION else image[path]
         if mode == 'bytes':
             require(type(value) is bytes and value == raw,
                     'consumed operation bytes changed: ' + path)
@@ -1818,7 +2464,25 @@ class _InvariantInputs(_CacheInputs):
                     'unknown operation observation mode')
             require(type(value) is (bytes if mode == 'bytes' else str),
                     'non-builtin operation observation')
-            if self._state == 'pending':
+            if self._kind == 'generated_receipt' and self._state == 'pending':
+                # Join reads even when no current theorem will trigger capture.
+                # A consumed transient value cannot disappear before lazy admission.
+                generated = _absolute_root_text(root) != self._root
+                digests = self._receipt_stage_digests if generated else self._receipt_source_digests
+                digest = digests.get(path)
+                if digest is not None:
+                    raw = value if mode == 'bytes' else _regular(root, path).read_bytes()
+                    require(type(raw) is bytes and sha(raw) == digest,
+                            'consumed input differs from generation boundary: ' + path)
+                    if mode != 'bytes':
+                        expected = _operation_text(raw, mode)
+                        require((source.token_sha256(value) == source.token_sha256(expected))
+                                if mode.startswith('supplied_') else value == expected,
+                                'consumed text differs from generation boundary: ' + path)
+                else:
+                    require(not generated, 'unknown generated input observation: ' + path)
+                self._receipt_observations.append((_absolute_root_text(root), path, value, mode))
+            elif self._state == 'pending':
                 # Historical operations retain their existing physical path policy.
                 # Actual current acquisition must reconcile every prior value.
                 self._observations.append((path, value, mode))
@@ -1836,7 +2500,15 @@ class _InvariantInputs(_CacheInputs):
             if self._state == 'pending':
                 self._capturing = True
                 try:
-                    verify(root, _expected_lane_raw=expected_lane_raw, _capture=self)
+                    if self._kind == 'generated_receipt':
+                        require(_absolute_root_text(root) == self._root,
+                                'generated bytes cannot supply source admission')
+                        self._receipt_inputs_check()
+                    verify(root, _expected_lane_raw=expected_lane_raw, _capture=self,
+                           include_roots=tuple(Path(path) for path in self._include_roots))
+                    if self._kind == 'generated_receipt':
+                        require(executing_checker_bindings(root) == dict(self._executing),
+                                'generated receipt checker differs from executing image')
                 except BaseException:
                     self.close()
                     raise
@@ -1858,23 +2530,103 @@ class _InvariantInputs(_CacheInputs):
         # owned once by finish(), before the outer public result can escape.
         self._check(owner, root)
 
+    def _receipt_finish_inputs(self, root):
+        """One terminal physical sweep, never another source semantic replay."""
+        require(_absolute_root_text(root) == self._root, 'foreign generated finalizer root')
+        for path in self._raw:
+            self.observe_bytes(self._owner, root, path)
+        require({p.as_posix() for p in _sibling('cache_key').input_paths(root)
+                 if p.suffix == '.mojo'} == self._known,
+                'source path inventory changed during generated verification')
+        require({path.relative_to(root).as_posix() for path in guard.production_mojo_paths(Path(root))}
+                == self._production, 'production path inventory changed during generated verification')
+        require(_regular(root, MIGRATION).read_bytes() == self._record_raw,
+                'record changed during generated verification')
+        typed_boundary.verify_authority()
+        location = Path(self._include_roots[0])
+        _helper_entry_census_finish(location, self._include_raw, _operation=self)
+        require({path.relative_to(location).as_posix() for path in guard.production_mojo_paths(location)}
+                == self._include_production, 'generated production path census changed')
+        require(resolver_unshadowed(root, self._resolver_paths,
+                    **_render_lookup_args(self._resolver_paths, self._entries))
+                and resolver_unshadowed(location, self._resolver_paths | {path + '.cov-origin'
+                    for path in self._resolver_paths if path.endswith('.mojo')},
+                    **_render_lookup_args(self._resolver_paths, self._include_entries)),
+                'generated resolver surface changed during verification')
+        if self._scaled_resolver_paths:
+            require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+                    and _scaled_known_paths(root, _operation=self) == self._known,
+                    'generated scaled native context changed')
+            scaled_include_paths = self._scaled_resolver_paths | {
+                path + '.cov-origin' for path in self._scaled_resolver_paths}
+            require(resolver_unshadowed(root, self._scaled_resolver_paths,
+                                       **_scaled_lookup_args())
+                    and resolver_unshadowed(location, scaled_include_paths,
+                                            **_scaled_lookup_args()),
+                    'generated scaled native resolver changed during finalization')
+        self._receipt_inputs_check()
+
     def finish(self, root):
         try:
             self._check_owner(root)
             try:
                 if self._state == 'active':
-                    _CacheInputs.checkpoint(self, self._owner, root)
+                    if self._kind == 'generated_receipt':
+                        self._receipt_finish_inputs(root)
+                    else:
+                        _CacheInputs.checkpoint(self, self._owner, root)
                     require(type(self._checker_receipt) is bool,
                             'invalid consumed checker receipt state')
                     if self._checker_receipt:
                         require(executing_checker_bindings(root) == dict(self._executing),
                                 'consumed receipt checker changed during owned verification')
-                elif self._resolver_paths:
+                elif self._kind == 'generated_receipt':
+                    # No current theorem is needed, but every consumed read and
+                    # census still belongs to this producer observation image.
+                    for location, path, value, mode in tuple(self._receipt_observations):
+                        raw = _regular(Path(location), path).read_bytes()
+                        expected = raw if mode == 'bytes' else _operation_text(raw, mode)
+                        require((source.token_sha256(value) == source.token_sha256(expected))
+                                if mode.startswith('supplied_') else value == expected,
+                                'pending receipt input changed: ' + path)
+                    for location, paths, kind in tuple(self._receipt_discoveries):
+                        digests = (self._receipt_source_digests if location == self._root
+                                   else self._receipt_stage_digests)
+                        expected = (self._receipt_production[location] if kind == 'production'
+                                    else frozenset(path for path in digests if path.endswith('.mojo')))
+                        require(paths == expected, 'pending receipt census changed')
+                    location = self._include_roots[0]
+                    stage_image = {path: raw for observed_root, path, raw, mode in
+                        self._receipt_observations if observed_root == location
+                        and mode == 'bytes' and path.endswith('.mojo')}
+                    stage_entries = tuple(_sibling('affected').entry_directories(
+                        {path: _physical_text(raw) for path, raw in stage_image.items()}))
+                    stage_args = _render_lookup_args(self._resolver_paths, stage_entries)
+                    require(not stage_args or set(stage_image) == {
+                        path for path in self._receipt_stage_digests if path.endswith('.mojo')},
+                        'pending include entry context lacks complete observations')
+                    include_paths = self._resolver_paths | {path + '.cov-origin'
+                        for path in self._resolver_paths if path.endswith('.mojo')}
+                    require(resolver_unshadowed(Path(location), include_paths, **stage_args),
+                            'pending generated resolver surface changed')
+                    if self._scaled_resolver_paths:
+                        require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE,
+                                'pending generated scaled context changed')
+                        scaled_paths = self._scaled_resolver_paths | {
+                            path + '.cov-origin' for path in self._scaled_resolver_paths}
+                        require(resolver_unshadowed(Path(location), scaled_paths,
+                                                    **_scaled_lookup_args()),
+                                'pending generated scaled resolver surface changed')
+                    self._receipt_inputs_check()
+                if self._state == 'pending' and (self._resolver_paths or self._scaled_resolver_paths):
                     # Historical owners need no current-root admission. Retain
                     # only their supplemental helper observations until exit.
                     leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
                     for path, value, mode in self._observations:
                         if mode == 'bytes' and (path in self._resolver_paths or path == leaf
+                                or (self._scaled_resolver_paths and
+                                    (path in self._scaled_resolver_paths
+                                     or path == scaled_float32.LEAF or path in scaled_float32.TESTS))
                                 or (any(name.startswith('render/') for name in self._resolver_paths)
                                     and (path in self._known or path == MIGRATION))):
                             actual = _regular(root, path).read_bytes()
@@ -1889,6 +2641,17 @@ class _InvariantInputs(_CacheInputs):
                     require(resolver_unshadowed(root, self._resolver_paths,
                                 **_render_lookup_args(self._resolver_paths, self._entries)),
                             'supplemental resolver surface changed during historical operation')
+                    if self._scaled_resolver_paths:
+                        require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE,
+                                'historical scaled native context changed')
+                        current_known = _scaled_known_paths(root, _operation=self)
+                        for paths, kind in self._discoveries:
+                            if kind == 'known':
+                                require(paths == current_known,
+                                        'scaled source path census changed during historical operation')
+                        require(resolver_unshadowed(root, self._scaled_resolver_paths,
+                                                    **_scaled_lookup_args()),
+                                'scaled native resolver changed during historical operation')
             except BaseException:
                 self.close()
                 raise
@@ -1900,6 +2663,7 @@ class _InvariantInputs(_CacheInputs):
         require(type(self) is _InvariantInputs and self._stamp == id(self),
                 'invalid invariant input disposal')
         self._state = 'closed'
+        self._clear_receipt()
         self._raw = types.MappingProxyType({})
         self._record_raw = None
         self._known = frozenset()
@@ -1907,6 +2671,7 @@ class _InvariantInputs(_CacheInputs):
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._observations.clear()
         self._discoveries.clear()
@@ -1935,6 +2700,7 @@ class _BorrowedCacheInputs(_CacheInputs):
         self._entries = operation._entries
         self._native_contexts = operation._native_contexts
         self._resolver_paths = operation._resolver_paths
+        self._scaled_resolver_paths = operation._scaled_resolver_paths
         self._executing = operation._executing
         self._state = 'active'
 
@@ -1998,6 +2764,7 @@ class _BorrowedCacheInputs(_CacheInputs):
         self._entries = ()
         self._native_contexts = ()
         self._resolver_paths = frozenset()
+        self._scaled_resolver_paths = frozenset()
         self._executing = types.MappingProxyType({})
         self._operation = None
         self._owner_frame = None
@@ -2113,6 +2880,9 @@ def shared_helper_proof_bindings(root, *, paths=None, include_roots=(), _inputs=
     """Admit supplemental edges without replacing any historical input bytes."""
     try:
         _operation_check(_operation, root)
+        include_roots = tuple(include_roots)
+        if _operation is not None:
+            _operation_include_context(_operation, root, include_roots)
         require((_inputs is None) == (_input_owner is None), 'incomplete helper input ownership')
         if _inputs is not None:
             require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid helper input view')
@@ -2126,18 +2896,28 @@ def shared_helper_proof_bindings(root, *, paths=None, include_roots=(), _inputs=
                                          _input_owner=_input_owner, _operation=_operation)
         fresh_image = None
         render_args = {}
+        include_images = []
         if result:
             resolver_paths = {path for path in result if path.endswith('.mojo')}
             if any(path.startswith('render/') for path in resolver_paths):
-                require(include_roots == () or (_operation is None and _inputs is None),
+                require(include_roots == () or (_inputs is None and (_operation is None
+                        or _operation._kind == 'generated_receipt')),
                         'unowned helper include roots')
                 entries, fresh_image = _helper_render_context(
                     root, _inputs=_inputs, _operation=_operation)
                 render_args = _render_lookup_args(resolver_paths, entries)
                 result[MIGRATION] = MIGRATION_SHA256
+                for location in include_roots:
+                    source_image = (fresh_image if fresh_image is not None else
+                        {path: _operation._raw[path] for path in _operation._known})
+                    stage_entries, stage_image = _include_entry_context(
+                        location, source_image, _operation=_operation)
+                    include_images.append((location, stage_image,
+                        _render_lookup_args(resolver_paths, stage_entries)))
             require(resolver_unshadowed(root, resolver_paths, **render_args) and all(
-                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for path in resolver_paths})
-                    for location in include_roots), 'shared-helper resolver surface changed')
+                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for path in resolver_paths},
+                        **(include_images[index][2] if include_images else {}))
+                    for index, location in enumerate(include_roots)), 'shared-helper resolver surface changed')
             leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
             require(result[leaf] == executing[leaf], 'shared-helper receipt lacks executing leaf')
             # The same owner's exit sweep must retain every supplemental
@@ -2149,7 +2929,10 @@ def shared_helper_proof_bindings(root, *, paths=None, include_roots=(), _inputs=
                 owners += (_inputs._operation,)
             for owner in owners:
                 observed = (owner._raw.keys() if owner._state == 'active' else
-                            {path for path, value, mode in owner._observations})
+                    {path for location, path, value, mode in owner._receipt_observations
+                     if location == owner._root}
+                    if type(owner) is _InvariantInputs and owner._kind == 'generated_receipt' else
+                    {path for path, value, mode in owner._observations})
                 require(resolver_paths <= observed,
                         'helper resolver inputs were not observed by their owner')
                 owner._resolver_paths = frozenset(owner._resolver_paths | resolver_paths)
@@ -2162,11 +2945,12 @@ def shared_helper_proof_bindings(root, *, paths=None, include_roots=(), _inputs=
         if render_args:
             require(sha(_observe_bytes(root, MIGRATION, _regular(root, MIGRATION).read_bytes(),
                         _operation=_operation)) == MIGRATION_SHA256, 'render entry authority changed')
-            # Rendering callers have no include roots. Keep the historical
-            # conservative rule for explicitly supplied stage contexts.
+            for location, image, _ in include_images:
+                _helper_entry_census_finish(location, image, _operation=_operation)
             require(resolver_unshadowed(root, resolver_paths, **render_args) and all(
-                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for path in resolver_paths})
-                    for location in include_roots), 'shared-helper final resolver surface changed')
+                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for path in resolver_paths},
+                        **include_images[index][2])
+                    for index, location in enumerate(include_roots)), 'shared-helper final resolver surface changed')
         if standalone:
             require(executing_checker_bindings() == executing,
                     'shared-helper checker changed during admission')
@@ -2182,6 +2966,171 @@ def shared_helper_edges(root, *, paths=None, include_roots=(), _inputs=None,
         _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)
     return shared_helpers.edges(tuple(path for path in shared_helpers.SOURCE_PATHS
         if bindings.get(path) == shared_helpers.AFTER_SHA256[path]))
+
+
+def _scaled_known_paths(root, *, _operation=None):
+    """Validate every discovered path before a set can hide a typed alias."""
+    known = set()
+    for path in _sibling('cache_key').input_paths(root):
+        if path.suffix != '.mojo':
+            continue
+        name = path.as_posix()
+        require(type(name) is str and _canonical_relative_text(name),
+                'invalid scaled source path census item')
+        known.add(name)
+    _operation_known_paths(root, known, _operation=_operation)
+    return known
+
+
+def _scaled_lookup_args():
+    """Only the pinned native witnesses establish this supplemental context."""
+    return {'math_entries': frozenset(('.', *(str(Path(path).parent).casefold()
+        for path in scaled_float32.NATIVE_TESTS)))}
+
+
+def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
+                             _input_owner=None, _operation=None, _context=None):
+    """Bind the exact math edge and its own native witness, not caller roots."""
+    _operation_check(_operation, root)
+    require((_inputs is None) == (_input_owner is None), 'incomplete scaled input ownership')
+    if _inputs is not None:
+        require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid scaled input view')
+        _inputs._check(_input_owner, root)
+        require(_operation is None or (type(_inputs) is _BorrowedCacheInputs
+                and _operation is _inputs._operation), 'unjoined scaled input and operation owners')
+    observed = {}
+
+    def observe(path):
+        raw = (_observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+               if _inputs is None else _inputs.raw(_input_owner, root, path))
+        require(type(raw) is bytes, 'scaled input is not physical bytes: ' + path)
+        require(observed.setdefault(path, raw) == raw, 'scaled input changed after consumption: ' + path)
+        if _snapshots is not None:
+            require(_snapshots.setdefault(path, raw) == raw, 'scaled captured input changed: ' + path)
+        return raw
+
+    selected = scaled_float32.SOURCE_PATHS if paths is None else paths
+    require(type(selected) is tuple and selected == scaled_float32.SOURCE_PATHS,
+            'invalid scaled input scope')
+    sources = {name: observe(name) for name in selected}
+    active = scaled_float32.verify_sources({name: raw.decode('utf-8') for name, raw in sources.items()})
+    if not active:
+        return {}
+    expected = {scaled_float32.LEAF: DEPENDENCY_TOOL_SHA256[scaled_float32.LEAF],
+                **scaled_float32.PACKAGE_INPUTS, **scaled_float32.PROVIDER_INPUTS,
+                **scaled_float32.TESTS}
+    for name, digest in expected.items():
+        require(sha(observe(name)) == digest, 'scaled correctness input changed: ' + name)
+    # Source identity and its actual main declaration jointly establish the
+    # fixed witness entry context. No production entry census is inferred.
+    affected = _sibling('affected')
+    entries = tuple(affected.entry_directories({name: _physical_text(observe(name))
+                                              for name in scaled_float32.NATIVE_TESTS}))
+    require(entries == tuple(sorted({str(Path(name).parent)
+                                     for name in scaled_float32.NATIVE_TESTS})),
+            'scaled native entry context changed')
+    known = _scaled_known_paths(root, _operation=_operation)
+    if _inputs is not None:
+        require(known == _inputs._known, 'scaled captured source path census changed')
+    found, pending = set(), list(scaled_float32.NATIVE_TESTS)
+    while pending:
+        name = pending.pop()
+        if name in found:
+            continue
+        require(name in known, 'scaled native dependency missing: ' + name)
+        found.add(name)
+        for imported in affected.imported_names(_physical_text(observe(name))):
+            pending.extend(affected.resolve(imported, name, known, entries=entries))
+    require(found == scaled_float32.NATIVE_CLOSURE, 'scaled native import closure changed')
+    for name, raw in tuple(observed.items()):
+        require(observe(name) == raw, 'scaled input changed during admission: ' + name)
+    final_known = _scaled_known_paths(root, _operation=_operation)
+    require(final_known == known, 'scaled source path census changed during admission')
+    if _context is not None:
+        require(type(_context) is dict and not _context, 'invalid scaled source context output')
+        _context['known'] = frozenset(known)
+    return {name: sha(raw) for name, raw in observed.items()}
+
+
+def scaled_float32_proof_bindings(root, *, paths=None, include_roots=(), _inputs=None,
+                                   _input_owner=None, _operation=None):
+    """Admit one source substitution and its fixed native context, never PASS."""
+    failure_operation = _operation
+    try:
+        _operation_check(_operation, root)
+        require((_inputs is None) == (_input_owner is None), 'incomplete scaled input ownership')
+        if _inputs is not None:
+            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid scaled input view')
+            _inputs._check(_input_owner, root)
+            if type(_inputs) is _BorrowedCacheInputs:
+                # Only a validated real lease may identify its failure owner.
+                failure_operation = _inputs._operation
+            require(_operation is None or (type(_inputs) is _BorrowedCacheInputs
+                    and _operation is _inputs._operation), 'unjoined scaled input and operation owners')
+        include_roots = tuple(include_roots)
+        if _operation is not None:
+            _operation_include_context(_operation, root, include_roots)
+        require(include_roots == () or (_inputs is None and (_operation is None
+                or _operation._kind == 'generated_receipt')),
+                'unowned scaled include roots')
+        standalone = _inputs is None and (_operation is None or _operation._state != 'active')
+        executing = (executing_checker_bindings() if standalone else
+                     (_inputs._executing if _inputs is not None else _operation._executing))
+        context = {}
+        result = _scaled_float32_bindings(root, paths=paths, _inputs=_inputs,
+            _input_owner=_input_owner, _operation=_operation, _context=context)
+        if result:
+            require(result[scaled_float32.LEAF] == executing[scaled_float32.LEAF],
+                    'scaled receipt lacks executing leaf')
+            resolver_paths = {name for name in result if name.endswith('.mojo')}
+            require(resolver_paths == scaled_float32.NATIVE_CLOSURE,
+                    'scaled resolver scope differs from native closure')
+            include_paths = resolver_paths | {name + '.cov-origin' for name in resolver_paths}
+            require(resolver_unshadowed(root, resolver_paths, **_scaled_lookup_args()) and all(
+                resolver_unshadowed(location, include_paths, **_scaled_lookup_args())
+                for location in include_roots), 'scaled resolver surface changed')
+            owners = (() if _inputs is None else (_inputs,))
+            if _operation is not None:
+                owners += (_operation,)
+            if type(_inputs) is _BorrowedCacheInputs:
+                owners += (_inputs._operation,)
+            for owner in owners:
+                observed = (owner._raw.keys() if owner._state == 'active' else
+                    {path for location, path, value, mode in owner._receipt_observations
+                     if location == owner._root}
+                    if type(owner) is _InvariantInputs and owner._kind == 'generated_receipt' else
+                    {name for name, value, mode in owner._observations})
+                require(result.keys() <= observed, 'scaled inputs were not observed by their owner')
+                # This native-only context must never narrow or replace the
+                # owner's existing production/helper resolver obligations.
+                owner._scaled_resolver_paths = frozenset(resolver_paths)
+                if owner._state == 'pending':
+                    require(not owner._executing or dict(owner._executing) == executing,
+                            'pending scaled checker image changed')
+                    owner._executing = types.MappingProxyType(dict(executing))
+            for name, expected in result.items():
+                raw = (_observe_bytes(root, name, _regular(root, name).read_bytes(), _operation=_operation)
+                       if _inputs is None else _inputs.raw(_input_owner, root, name))
+                require(type(raw) is bytes and sha(raw) == expected,
+                        'scaled input changed before receipt: ' + name)
+            require(resolver_unshadowed(root, resolver_paths, **_scaled_lookup_args()) and all(
+                resolver_unshadowed(location, include_paths, **_scaled_lookup_args())
+                for location in include_roots), 'scaled final resolver surface changed')
+            final_known = _scaled_known_paths(root, _operation=_operation)
+            require(final_known == context['known'], 'scaled source path census changed before receipt')
+        if standalone:
+            require(executing_checker_bindings() == executing, 'scaled checker changed during admission')
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(failure_operation, error)
+
+
+def scaled_float32_edges(root, *, paths=None, _inputs=None, _input_owner=None, _operation=None):
+    """Return only the live math edge admitted through the same physical owner."""
+    bindings = scaled_float32_proof_bindings(root, paths=paths, _inputs=_inputs,
+        _input_owner=_input_owner, _operation=_operation)
+    return scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS
+        if bindings.get(name) == scaled_float32.AFTER_SHA256[name]))
 
 
 def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
@@ -2323,7 +3272,16 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
                 root, path, _regular(root, path).read_bytes(), _operation=_operation)
             require(type(raw) is bytes, 'typed source is not physical bytes: ' + path)
             image[path] = raw
-        typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
+        if (type(_operation) is _InvariantInputs
+                and _operation._kind == 'generated_receipt'
+                and _operation._state == 'active' and not _operation._capturing):
+            # Initial publication admitted this entire immutable source image.
+            # Every physical read above still joins it through _observe_bytes;
+            # authenticate live authority without replaying source semantics.
+            typed_boundary.verify_authority()
+            conditioned_cubic.verify_authority()
+        else:
+            typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
         leaves = ('tools/carla_lane_oracle/typed_boundary_contracts.py',
                   'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
         conditioned_inputs = {}
@@ -2332,7 +3290,7 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
                 edge = typed_boundary.edge(path)
                 require(edge['before_sha256'] == historical_digest,
                         'typed input misses fixed conditioned witness/provider: ' + path)
-                # verify_sources above reconstructed this complete predecessor.
+                # The semantic admission reconstructed this complete predecessor.
                 # Receipts bind current formatted bytes, not the old witness SHA.
                 conditioned_inputs[path] = edge['after_sha256']
             else:
@@ -2363,7 +3321,10 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
     edge = typed_boundary.EDGES.get(path)
     if edge is None:
         return text
+    _public_admission = None
     try:
+        if _inputs is None and _operation is None:
+            _public_admission = _public_admission_for(root)
         if _inputs is not None:
             require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs),
                     'invalid typed source owner')
@@ -2391,7 +3352,10 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
         if _inputs is not None:
             require(_inputs.raw(_input_owner, root, path) == raw, 'typed owner image changed: ' + path)
         elif _operation is None:
-            verify(root, exact=True)
+            if _public_admission is None or _public_admission._state == 'pending':
+                verify(root, exact=True)
+            if _public_admission is not None:
+                _public_admission.project(root, path, raw)
         else:
             _operation_record(_operation, root, exact=True)
         require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
@@ -2399,15 +3363,21 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 'typed source changed during provenance reconstruction: ' + path)
         return _historical_typed_text(path, physical_text)
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        if _public_admission is not None:
+            _public_admission.fail()
         _operation_fail(_operation, error)
 
 
 def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None, _expected_sources=None):
     """Check actual complete current endpoints and all premises without caches."""
     root = Path(root)
+    _public_admission = _public_admission_for(root, publication=True) if include_roots == () else None
     try:
         if _capture is not None:
-            require(type(_capture) in (_CacheInputs, _InvariantInputs) and not exact and include_roots == (),
+            generated = type(_capture) is _InvariantInputs and _capture._kind == 'generated_receipt'
+            require(type(_capture) in (_CacheInputs, _InvariantInputs) and not exact
+                    and (include_roots == () or (generated and tuple(
+                        _absolute_root_text(path) for path in include_roots) == _capture._include_roots)),
                     'invalid cache input capture request')
             _capture._check_pending(root)
         executing = executing_checker_bindings()
@@ -2435,12 +3405,15 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             _operation=_capture if type(_capture) is _InvariantInputs else None)
         for path in SOURCE_PATHS:
             raw = snapshots[path]
-            text = _historical_typed_text(path, _physical_text(raw))
+            # Exact provenance retains physical line endings. Universal-newline
+            # decoding belongs only to the separate semantic source view.
+            exact_text = _historical_typed_text(path, raw.decode('utf-8'))
+            text = _physical_text(exact_text.encode('utf-8'))
             supplied_view = (root / path).read_text(encoding='utf-8')
             require(source.token_sha256(supplied_view) == source.token_sha256(_physical_text(raw)),
                     'supplied and physical source views differ: ' + path)
             item = record['sources'][path]
-            require((not exact or sha(text) == AFTER_SHA256[path])
+            require((not exact or sha(exact_text) == AFTER_SHA256[path])
                     and source.token_sha256(text) == item['after_token_sha256']
                     and source.token_sha256(text) == item['after_token_sha256'],
                     'unreviewed complete live endpoint: ' + path)
@@ -2451,6 +3424,9 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             # Fixed exact inverse objects are not a normalization API. Only
             # sealed recorded endpoints may be inverted, after live checks.
             reverse_exact(path, item['after_source'], item)
+        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)
+        scaled_edges = scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS
+            if scaled_bindings.get(name) == scaled_float32.AFTER_SHA256[name]))
         helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots)
         helper_edges = shared_helpers.edges(tuple(
             path for path in shared_helpers.SOURCE_PATHS
@@ -2459,20 +3435,16 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
                           | set(record['native_dependency_inventory']) | helper_closure
                           | {path for path in helper_bindings if path.endswith('.mojo')}
+                          | {path for path in scaled_bindings if path.endswith('.mojo')}
                           | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else set())
                           | (set(_capture._resolver_paths) if _capture is not None else set()))
         # Coverage origin files cannot enter Mojo module lookup. Admit only
         # exact sidecar coordinates of reviewed Mojo inputs at include roots;
         # generation_origins and capture verification still bind their bytes.
-        # An include root mirrors the source tree, so its compiled lookup
-        # directories are the root's census; nested leaves elsewhere are inert.
         include_resolver_paths = resolver_paths | {path + '.cov-origin'
             for path in resolver_paths if path.endswith('.mojo')}
-        include_lookup = _render_lookup_args(include_resolver_paths, record['entry_directories'])
         require(resolver_unshadowed(root, resolver_paths,
-                    **_render_lookup_args(resolver_paths, record['entry_directories']))
-                and all(resolver_unshadowed(location, include_resolver_paths, **include_lookup)
-                        for location in include_roots),
+                    **_render_lookup_args(resolver_paths, record['entry_directories'])),
                 'unreviewed alternate, compiled, package, symlink or std resolver surface')
         known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'}
         # #720 resolves from actual compiled entrypoint directories. Bind all
@@ -2485,6 +3457,14 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             live_sources[path] = _physical_text(raw)
         entries = _sibling('affected').entry_directories(live_sources)
         require(entries == record['entry_directories'], 'maintained entrypoint directories changed')
+        include_images = []
+        for location in include_roots:
+            stage_entries, stage_image = _include_entry_context(
+                location, {path: snapshots[path] for path in known})
+            stage_args = _render_lookup_args(resolver_paths, stage_entries)
+            require(resolver_unshadowed(location, include_resolver_paths, **stage_args),
+                    'unreviewed include resolver surface')
+            include_images.append((location, stage_image, stage_args))
         require(dependency_inventory(root, roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,
                                      _known=known, _snapshots=snapshots)
                 == (set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings else
@@ -2512,7 +3492,7 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         ledger_raw = _regular(root, CONSUMER_LEDGER).read_bytes()
         require(sha(ledger_raw) == CONSUMER_LEDGER_SHA256, 'unreviewed consumer ledger')
         snapshots[CONSUMER_LEDGER] = ledger_raw
-        _runtime_view_bindings(root, _snapshots=snapshots)
+        runtime_bindings = _runtime_view_bindings(root, _snapshots=snapshots)
         station_bindings = _station_bindings(root, _snapshots=snapshots)
         witness_bindings = _witness_format_bindings(root, _snapshots=snapshots,
             _operation=_capture if type(_capture) is _InvariantInputs else None)
@@ -2532,6 +3512,11 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                             and expected == helper_edges[path]['before_sha256'],
                             'helper edge does not extend immutable input: ' + path)
                     expected = helper_edges[path]['after_sha256']
+                if path in scaled_edges:
+                    require(group in ('unchanged_inputs', 'native_dependency_inputs')
+                            and expected == scaled_edges[path]['before_sha256'],
+                            'scaled edge does not extend immutable input: ' + path)
+                    expected = scaled_edges[path]['after_sha256']
                 if path in witness_bindings:
                     require(path in witness_format.SOURCE_PATHS
                             and group in ('native_witnesses', 'native_dependency_inputs')
@@ -2544,8 +3529,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                 require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
-        production = set() if _capture is not None else None
-        observed_inventory = (inventory(root, _snapshots=snapshots) if _capture is None else
+        production = set() if _capture is not None or _public_admission is not None else None
+        observed_inventory = (inventory(root, _snapshots=snapshots) if production is None else
                               inventory(root, _snapshots=snapshots, _production=production))
         expected_inventory = dict(record['inventory'])
         if station_bindings:
@@ -2562,10 +3547,12 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             require(_regular(root, path).read_bytes() == raw, 'input changed during verification: ' + path)
         require({p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'} == known,
                 'source path inventory changed during verification')
+        for location, image, _ in include_images:
+            _helper_entry_census_finish(location, image)
         require(resolver_unshadowed(root, resolver_paths,
                     **_render_lookup_args(resolver_paths, record['entry_directories']))
-                and all(resolver_unshadowed(location, include_resolver_paths, **include_lookup)
-                        for location in include_roots),
+                and all(resolver_unshadowed(location, include_resolver_paths, **stage_args)
+                        for location, _, stage_args in include_images),
                 'resolver surface changed during verification')
         if _capture is not None:
             _regular(root, MIGRATION)
@@ -2573,12 +3560,49 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         require(sha(authority_raw) == MIGRATION_SHA256, 'record changed during verification')
         require(executing_checker_bindings() == executing, 'executing checker changed during verification')
         if _capture is not None:
-            _capture._publish(root, snapshots, authority_raw, known, production, entries,
-                              resolver_paths, executing)
+            if type(_capture) is _InvariantInputs and _capture._kind == 'generated_receipt':
+                receipt_bindings = {MIGRATION: MIGRATION_SHA256,
+                                    CONSUMER_LEDGER: CONSUMER_LEDGER_SHA256, **executing}
+                receipt_bindings.update({path: item['after_sha256'] for path, item in record['sources'].items()})
+                for group in BOUND_GROUPS:
+                    receipt_bindings.update(record[group])
+                for family in (station_bindings, scaled_bindings, typed_bindings,
+                               witness_bindings, runtime_bindings, helper_bindings):
+                    receipt_bindings.update(family)
+                if scaled_bindings:
+                    scaled_paths = frozenset(name for name in scaled_bindings if name.endswith('.mojo'))
+                    require(scaled_paths == scaled_float32.NATIVE_CLOSURE
+                            and _scaled_known_paths(root) == known,
+                            'generated scaled native context differs from source admission')
+                    scaled_include_paths = scaled_paths | {name + '.cov-origin' for name in scaled_paths}
+                    require(resolver_unshadowed(root, scaled_paths, **_scaled_lookup_args())
+                            and all(resolver_unshadowed(location, scaled_include_paths,
+                                                       **_scaled_lookup_args())
+                                    for location in include_roots),
+                            'generated scaled native resolver changed during admission')
+                    _capture._scaled_resolver_paths = scaled_paths
+                _capture._publish(root, snapshots, authority_raw, known, production, entries,
+                    resolver_paths, executing, receipt_bindings=receipt_bindings,
+                    include_images=tuple(include_images))
+            else:
+                _capture._publish(root, snapshots, authority_raw, known, production, entries,
+                                  resolver_paths, executing)
+        if _public_admission is not None:
+            public_image = _public_admission._publication_inputs(root, snapshots)
+            if _public_admission._state == 'pending':
+                if scaled_bindings:
+                    _public_admission._scaled_resolver_paths = frozenset(
+                        path for path in scaled_bindings if path.endswith('.mojo'))
+                _public_admission._publish(root, public_image, authority_raw, known,
+                    production, entries, resolver_paths, executing)
         return record
     except ContractError:
+        if _public_admission is not None:
+            _public_admission.fail()
         raise
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, SyntaxError) as error:
+        if _public_admission is not None:
+            _public_admission.fail()
         raise ContractError('full-audit cleanup successor: malformed or unreadable live input') from error
 
 
@@ -2596,15 +3620,35 @@ def reviewed_text(root, path, text=None, *, _operation=None):
     Historical composed fixtures still face their original consumer checks.
     Only a successor projection requires and grants complete live admission.
     """
-    path = str(path)
-    if text is None:
-        text = _observe_text(root, path, _regular(root, path).read_text(encoding='utf-8'),
-                             _operation=_operation, mode='physical')
-    text = reviewed_typed_text(root, path, text, _operation=_operation)
-    if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
-        return text
-    require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied successor source: ' + path)
-    return predecessor_source(root, path, _operation=_operation)
+    _public_admission = None
+    try:
+        if _operation is None:
+            _public_admission = _public_admission_for(root)
+        path = str(path)
+        if text is None:
+            text = _observe_text(root, path, _regular(root, path).read_text(encoding='utf-8'),
+                                 _operation=_operation, mode='physical')
+        if path in SOURCE_PATHS and typed_boundary.is_current(path, text):
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(typed_boundary.is_current(path, raw)
+                    and source.token_sha256(text) == source.token_sha256(_physical_text(raw)),
+                    'supplied typed successor differs from physical input: ' + path)
+            record = (verify(root) if _operation is None else _operation_record(_operation, root))
+            require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                   _operation=_operation) == raw,
+                    'typed successor changed during admission: ' + path)
+            item = record['sources'][path]
+            return reverse_exact(path, item['after_source'], item)
+        text = reviewed_typed_text(root, path, text, _operation=_operation)
+        if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
+            return text
+        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied successor source: ' + path)
+        return predecessor_source(root, path, _operation=_operation)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        if _public_admission is not None:
+            _public_admission.fail()
+        _operation_fail(_operation, error)
+
 
 
 def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
@@ -2814,6 +3858,8 @@ def station_proof_bindings(root, *, _operation=None):
 
 def proof_bindings(root, *, include_roots=(), _operation=None):
     try:
+        if type(_operation) is _InvariantInputs and _operation._kind == 'generated_receipt':
+            return _operation._receipt_bindings(root, include_roots)
         executing = executing_checker_bindings(root)
         record = (verify(root, exact=True, include_roots=include_roots) if _operation is None else
                   _operation_record(_operation, root, exact=True, include_roots=include_roots))
@@ -2825,6 +3871,8 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         # Receipts name the actual admitted Map and its bound native inputs.
         # The immutable record remains a historical premise, never a live hash.
         result.update(_station_bindings(root, _operation=_operation))
+        result.update(scaled_float32_proof_bindings(root, include_roots=include_roots,
+                                                   _operation=_operation))
         result.update(_typed_boundary_bindings(root, _operation=_operation))
         result.update(_witness_format_bindings(root, _operation=_operation))
         result.update(_runtime_view_bindings(root, _operation=_operation))

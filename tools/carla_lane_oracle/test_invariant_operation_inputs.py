@@ -67,6 +67,187 @@ def ast_key(node):
     return ast.dump(node, include_attributes=False)
 
 
+# These freeze the current public body/factory immediately before the single
+# seed-score scope addition. Historical checker predecessor hashes stay fixed.
+FROZEN_SEED_SCORE_PUBLIC_AST = 'f92febc4a765ea8133d2b3159df230e9d5cde658440312a21b588e5e2cb62439'
+FROZEN_PUBLIC_ADMISSION_FACTORY_AST = 'e61c4d146f3a64555fb1ff7062bd019619a333687cd98a396a417ec3a2e4b404'
+
+
+def _seed_score_admission_predecessor(node):
+    """Remove only one exact scope after the unchanged ownership precheck."""
+    node = copy.deepcopy(node)
+    def checked(condition, detail):
+        if not condition:
+            raise AssertionError('unreviewed seed score admission ' + detail)
+    checked(node.name == 'verify_score' and len(node.body) == 4
+            and isinstance(node.body[3], ast.With), 'scope position')
+    scope = node.body[3]
+    expected = ast.parse(
+        'with _typed_source.typed_admission_scope(root) as _typed_admission:\n    pass').body[0]
+    checked(len(scope.items) == 1 and ast_key(scope.items[0]) == ast_key(expected.items[0])
+            and scope.type_comment is None and len(scope.body) == 25, 'scope shape')
+    # Keep the actual 3 prefix and 25 body nodes. The hash authenticates every
+    # predicate, observation, argument, and final equality/return in order.
+    node.body = node.body[:3] + scope.body
+    checked(hashlib.sha256(ast_key(node).encode()).hexdigest() == FROZEN_SEED_SCORE_PUBLIC_AST,
+            'preserved body')
+    return node
+
+
+def _seed_admission_factory_predecessor(node, entries):
+    """Authenticate the single seed entry and its exact existing-parent guard."""
+    node = copy.deepcopy(node)
+    def checked(condition, detail):
+        if not condition:
+            raise AssertionError('unreviewed seed admission factory ' + detail)
+    expected_entries = ast.parse("def _public_admission_entries():\n"
+        "    return {'cache_key_contracts.py': ('verify',),\n"
+        "            'rounded_line_selector_contracts.py': ('verify_premises',),\n"
+        "            'seed_count_contracts.py': ('verify_score',)}").body[0]
+    checked(ast_key(entries) == ast_key(expected_entries), 'entry set')
+    checked(node.name == 'typed_admission_scope' and len(node.body) == 8,
+            'body shape')
+    expected = ast.parse("if Path(filename).name == 'seed_count_contracts.py':\n"
+        "    if frame.f_locals.get('_inputs') is not None:\n"
+        "        return nullcontext()\n"
+        "    parent = audit._public_admission_for(root)\n"
+        "    if parent is not None and parent._state == 'active':\n"
+        "        return nullcontext()").body[0]
+    checked(ast_key(node.body[6]) == ast_key(expected), 'owned input and parent guard')
+    node.body.pop(6)
+    checked(hashlib.sha256(ast_key(node).encode()).hexdigest() == FROZEN_PUBLIC_ADMISSION_FACTORY_AST,
+            'preserved original factory')
+    return node
+
+
+def _selector_admission_predecessor(node):
+    """Invert only the reviewed public scope, ordered split and final-read move."""
+    node = copy.deepcopy(node)
+    def checked(condition, detail):
+        if not condition:
+            raise AssertionError('unreviewed selector admission ' + detail)
+    def statement(text):
+        return ast.parse(text).body[0]
+    def same(actual, text):
+        return ast_key(actual) == ast_key(statement(text))
+    expected = statement('def verify_premises(root, *, _return_current_admission=False, '
+                         '_check_complete=False):\n    pass')
+    checked(node.name == expected.name and ast_key(node.args) == ast_key(expected.args),
+            'signature')
+    checked(len(node.body) == 1 and isinstance(node.body[0], ast.With), 'scope count')
+    scope = node.body[0]
+    wrapper = statement('with _typed_source.typed_admission_scope(root) as _typed_admission:\n    pass')
+    checked(len(scope.items) == 1 and ast_key(scope.items[0]) == ast_key(wrapper.items[0])
+            and scope.type_comment is None, 'scope factory')
+    body = scope.body
+    checked(len(body) == 16, 'body shape')
+    stage = body[7]
+    header = statement('for admission_stage in (True, False):\n    pass')
+    checked(isinstance(stage, ast.For) and ast_key(stage.target) == ast_key(header.target)
+            and ast_key(stage.iter) == ast_key(header.iter) and not stage.orelse
+            and stage.type_comment is None and len(stage.body) == 3, 'stage order')
+    imports, declarations, modules = stage.body
+    def loop_header(loop, text):
+        expected = statement(text)
+        checked(isinstance(loop, ast.For) and ast_key(loop.target) == ast_key(expected.target)
+                and ast_key(loop.iter) == ast_key(expected.iter) and not loop.orelse
+                and loop.type_comment is None, 'preserved loop header')
+    loop_header(imports, "for name, expected in old['import_scopes'].items():\n    pass")
+    loop_header(declarations, "for item in old['declarations']:\n    pass")
+    checked(len(imports.body) > 1 and same(imports.body[0],
+            "if (name == 'extensions/carla/lane_refinement.mojo') != admission_stage:\n    continue"),
+            'scope partition')
+    checked(len(declarations.body) > 2 and same(declarations.body[1],
+            'if selected != admission_stage:\n    continue'), 'declaration partition')
+    checked(isinstance(modules, ast.If) and ast_key(modules.test) == ast_key(ast.Name(
+            id='admission_stage', ctx=ast.Load())) and not modules.orelse
+            and len(modules.body) == 2, 'module placement')
+    checked(same(body[12], "require(type(_check_complete) is bool, 'invalid complete-selector request')"),
+            'complete-request guard')
+    checked(same(body[13], "if _check_complete:\n"
+            "    require(source.token_sha256(_typed_source.historical_text(root, record['path'], "
+            "(root/record['path']).read_text())) == record['after_token_sha256'], "
+            "'complete selector successor changed')"), 'complete physical read')
+    # Preserve every old predicate and read node. Only the two new partition
+    # guards and exactly authenticated scope/final-read machinery are removed.
+    imports.body = imports.body[1:]
+    declarations.body = declarations.body[:1] + declarations.body[2:]
+    node.body = body[:6] + modules.body + [body[6], imports, declarations] + body[8:12] + body[14:]
+    node.args.kwonlyargs.pop()
+    node.args.kw_defaults.pop()
+    return node
+
+
+def _selector_complete_dispatch(node):
+    """Require both public routes to request the moved final physical read."""
+    def checked(condition):
+        if not condition:
+            raise AssertionError('unreviewed selector complete-read dispatch')
+    def statement(text):
+        return ast.parse(text).body[0]
+    checked(node.name in ('_verify', '_verify_for_pin_pair') and len(node.body) >= 3)
+    body = node.body
+    if node.name == '_verify_for_pin_pair':
+        checked(isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+                and body[0].value.value == "Report only this completed selector execution's admission branch.")
+        body = body[1:]
+    checked(ast_key(body[0]) == ast_key(statement('if _operation is not None:\n'
+            '    full_audit._operation_check(_operation, root)')))
+    if node.name == '_verify':
+        expected = 'if _operation is None:\n    return verify_premises(root, _check_complete=True)'
+        checked(ast_key(body[2]) == ast_key(statement(
+            'record = _verify_premises(root, _operation=_operation)')))
+    else:
+        expected = ('if _operation is None:\n'
+            '    return verify_premises(root, _return_current_admission=True, _check_complete=True)\n'
+            'else:\n'
+            '    record, observed_current_admission = _verify_premises(\n'
+            '        root, _return_current_admission=True, _operation=_operation)')
+    checked(ast_key(body[1]) == ast_key(statement(expected)))
+
+
+def _generated_owner_predecessor_ast(node):
+    """Remove only the closed generated-receipt additions for old AST controls."""
+    def encode(value):
+        if isinstance(value, ast.AST):
+            return [type(value).__name__, [[name, encode(getattr(value, name))]
+                    for name in value._fields]]
+        if isinstance(value, list):
+            return [encode(item) for item in value]
+        if value is None or type(value) in (str, int, float, bool):
+            return value
+        raise AssertionError('unlisted AST primitive')
+    def digest(value):
+        return hashlib.sha256(json.dumps(encode(value), separators=(',', ':')).encode()).hexdigest()
+    value = copy.deepcopy(node)
+    if value.name == '_operation_frame_kind':
+        # Authenticate the exact three-line standalone seed dispatch before
+        # projecting the older generated-receipt prefix.  No general filter.
+        seed_added = ast.Module(body=value.body[5:7], type_ignores=[])
+        if digest(seed_added) != '2f250b6e96bc5eaa2f8ba7203a4ae4332476943c87da8a7ad4edc31e92f1dece':
+            raise AssertionError('standalone seed classifier prefix drift')
+        del value.body[5:7]
+        if digest(value) != '383bea3ac7016ef793cfba965036f797cf476e3f3c49ad46a53d43303e7655da':
+            raise AssertionError('complete pre-seed classifier drift')
+        added = ast.Module(body=value.body[3:5], type_ignores=[])
+        expected_added = 'b3c572a1c5dccb0e8908cee741858ce949562c672493138d1837fd98227005bd'
+        expected_original = '0b561ce9a6c15077e8d5e819a45a0e3b9971b40ba512f9f15cd6e8eac846fa42'
+        if digest(added) != expected_added:
+            raise AssertionError('generated receipt classifier prefix drift')
+        del value.body[3:5]
+    elif value.name == '_private_operation_wrapper':
+        expected_added = '1623332651b0d80825ba70f4bbba310dcca6a2caf06006187a5493c332c52d2d'
+        expected_original = '9d9920a63c1f4e8dd194fd71630aea08d25b9a5b45d22a8fc761774a365eccb2'
+        if digest(value.body[1]) != expected_added:
+            raise AssertionError('generated receipt private wrapper drift')
+        del value.body[1]
+    else:
+        raise AssertionError('unlisted generated owner projection')
+    if digest(value) != expected_original:
+        raise AssertionError('complete pre-receipt owner function drift')
+    return value
+
+
 # Complete, explicitly reviewed wrappers. Values inside _observe_* remain the
 # actual physical read objects; the provenance view is only their outer call.
 _TYPED_ADAPTER_CALLS = {'verify_premises': ("_typed_source.historical_text(root, root / item['path'], (root / "
@@ -107,8 +288,9 @@ _TYPED_ADAPTER_CALLS = {'verify_premises': ("_typed_source.historical_text(root,
 
 
 def typed_adapter_predecessor(node):
-    """Remove exactly #333 provenance wrappers and the checked reread view."""
-    node = copy.deepcopy(node)
+    """Remove exact public admission and #333 provenance adapters only."""
+    node = (_selector_admission_predecessor(node) if node.name == 'verify_premises'
+            else copy.deepcopy(node))
     expected = Counter(_TYPED_ADAPTER_CALLS[node.name])
     calls, removed = [], []
     assignment = ast.parse('text = _typed_source.historical_text(root, name, text'
@@ -225,12 +407,77 @@ class OperationAdapterAstControls(unittest.TestCase):
                          invariant.predecessor_pin_pair, accepted.verify_current, selector.verify):
             self.assertEqual(tuple(inspect.signature(function).parameters), ('root',))
         self.assertEqual(tuple(inspect.signature(selector.verify_premises).parameters),
-                         ('root', '_return_current_admission'))
+                         ('root', '_return_current_admission', '_check_complete'))
 
     def test_private_copies_preserve_original_predicates_constants_and_order(self):
         for kind in ('selector', 'pair'):
             with self.subTest(kind=kind):
                 self.assert_clone(kind)
+
+    def test_public_selector_admission_inverse_rejects_new_shape_drift(self):
+        node = function_ast(selector, 'verify_premises')
+        current = ast.unparse(node)
+        changes = (
+            ('_check_complete=False', '_check_complete=True'),
+            ('_check_complete=False', '_check_complete=False, _extra=False'),
+            ('_typed_source.typed_admission_scope(root)', '_typed_source.other_scope(root)'),
+            ('as _typed_admission:', 'as _other_admission:'),
+            ('for admission_stage in (True, False):', 'for admission_stage in (False, True):'),
+            ("if (name == 'extensions/carla/lane_refinement.mojo') != admission_stage:",
+             "if (name == 'extensions/carla/lane_refinement.mojo') == admission_stage:"),
+            ('if selected != admission_stage:', 'if selected == admission_stage:'),
+            ('if admission_stage:', 'if not admission_stage:'),
+            ('type(_check_complete) is bool', 'type(_check_complete) is int'),
+            ('if _check_complete:', 'if not _check_complete:'),
+            ("(root / record['path']).read_text()", "record['after_source']"),
+            ("== record['after_token_sha256']", "!= record['after_token_sha256']"),
+        )
+        for before, after in changes:
+            with self.subTest(shape=before):
+                self.assertEqual(current.count(before), 1)
+                changed = ast.parse(current.replace(before, after, 1)).body[0]
+                with self.assertRaisesRegex(AssertionError, 'unreviewed selector admission'):
+                    _selector_admission_predecessor(changed)
+        # Removing both the scope and its added keyword must not fall back to
+        # accepting the old node as though the new ownership guard were optional.
+        with self.assertRaisesRegex(AssertionError, 'unreviewed selector admission'):
+            _selector_admission_predecessor(_selector_admission_predecessor(node))
+        # Reconstruct actual old nodes, rather than substituting a known answer.
+        for before, after in (
+                ("guard.significant(record['before_source'])", "guard.significant(record['after_source'])"),
+                ("== guard.significant(record['after_source'])", "!= guard.significant(record['after_source'])"),
+                ("words.verify_dependency(name, actual, item['token_sha256'])", 'pass'),
+                ('guard.significant(actual) == guard.significant(expected)',
+                 'guard.significant(actual) != guard.significant(expected)'),
+                ('selected and lane_predecessor is not None', 'selected or lane_predecessor is not None'),
+                ('raw = physical.read_bytes()', 'raw = bytes()')):
+            with self.subTest(preserved=before):
+                self.assertEqual(current.count(before), 1)
+                changed = ast.parse(current.replace(before, after, 1)).body[0]
+                original = typed_adapter_predecessor(changed)
+                self.assertNotEqual(hashlib.sha256(ast_key(original).encode()).hexdigest(),
+                                    FROZEN_SELECTOR_AST)
+
+    def test_public_selector_dispatch_requires_complete_physical_read(self):
+        for name in ('_verify', '_verify_for_pin_pair'):
+            node = function_ast(selector, name)
+            _selector_complete_dispatch(node)
+            call = next(item for item in ast.walk(node) if isinstance(item, ast.Call)
+                        and isinstance(item.func, ast.Name) and item.func.id == 'verify_premises')
+            flags = tuple(keyword.arg for keyword in call.keywords)
+            for flag in flags:
+                for action in ('false', 'missing'):
+                    with self.subTest(route=name, flag=flag, mutation=action):
+                        changed = copy.deepcopy(node)
+                        current = next(item for item in ast.walk(changed) if isinstance(item, ast.Call)
+                            and isinstance(item.func, ast.Name) and item.func.id == 'verify_premises')
+                        keyword = next(item for item in current.keywords if item.arg == flag)
+                        if action == 'false':
+                            keyword.value = ast.Constant(value=False)
+                        else:
+                            current.keywords.remove(keyword)
+                        with self.assertRaisesRegex(AssertionError, 'unreviewed selector complete-read dispatch'):
+                            _selector_complete_dispatch(changed)
 
     def test_projection_rejects_semantic_and_observation_drift(self):
         for kind, module, name in (('selector', selector, '_verify_premises'),
@@ -252,6 +499,86 @@ class OperationAdapterAstControls(unittest.TestCase):
                     observed.args[0] = ast.Name(id='foreign_root', ctx=ast.Load())
                 with self.subTest(kind=kind, mutation=mutation), self.assertRaises(AssertionError):
                     self.assert_clone(kind, altered)
+
+
+class SeedScoreAdmissionAstControls(unittest.TestCase):
+    """Exact one-entry wrapper correspondence, separate from real admission."""
+
+    @staticmethod
+    def score_node():
+        path = Path(source.__file__).with_name('seed_count_contracts.py')
+        return next(node for node in ast.parse(path.read_text()).body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'verify_score')
+
+    def test_seed_score_scope_preserves_all_existing_body_nodes(self):
+        prior = _seed_score_admission_predecessor(self.score_node())
+        self.assertEqual(len(prior.body), 28)
+        self.assertEqual(hashlib.sha256(ast_key(prior).encode()).hexdigest(),
+                         FROZEN_SEED_SCORE_PUBLIC_AST)
+        # The ownership precheck precedes entry; final observation and equality
+        # stay inside the one scope, before its return and success sweep.
+        self.assertEqual(ast.unparse(prior.body[2]).split('(')[0], '_check_inputs')
+        self.assertEqual(prior.body[20].targets[0].id, 'final_raw')
+        self.assertEqual(ast.unparse(prior.body[21].value.args[0]), 'final_raw == current_raw')
+        self.assertIsInstance(prior.body[-1], ast.Return)
+
+    def test_seed_score_scope_rejects_guard_read_and_return_drift(self):
+        for fault in ('missing scope', 'factory', 'root', 'binding', 'early entry',
+                      'initial read', 'final read', 'expected raw', 'final equality',
+                      'predicate order', 'outside final read', 'outside return', 'signature'):
+            node = self.score_node()
+            scope = node.body[3]
+            assignments = {item.targets[0].id: item for item in scope.body
+                if isinstance(item, ast.Assign) and isinstance(item.targets[0], ast.Name)}
+            if fault == 'missing scope': node.body = node.body[:3] + scope.body
+            elif fault == 'factory': scope.items[0].context_expr.func.attr = 'other_scope'
+            elif fault == 'root': scope.items[0].context_expr.args[0] = ast.Name(id='other', ctx=ast.Load())
+            elif fault == 'binding': scope.items[0].optional_vars.id = '_other_admission'
+            elif fault == 'early entry': node.body[2], node.body[3] = node.body[3], node.body[2]
+            elif fault == 'initial read': assignments['current_raw'].value = ast.Constant(value=b'')
+            elif fault == 'final read': assignments['final_raw'].value = ast.Name(id='current_raw', ctx=ast.Load())
+            elif fault == 'expected raw': scope.body[2].body[0].value.args[0] = ast.Constant(value=True)
+            elif fault == 'final equality': scope.body[18].value.args[0] = ast.Constant(value=True)
+            elif fault == 'predicate order': scope.body[10], scope.body[11] = scope.body[11], scope.body[10]
+            elif fault == 'outside final read':
+                item = assignments['final_raw']; scope.body.remove(item); node.body.append(item)
+            elif fault == 'outside return': node.body.append(scope.body.pop())
+            else: node.args.kw_defaults[-1] = ast.Constant(value=b'')
+            with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'unreviewed seed score admission'):
+                _seed_score_admission_predecessor(node)
+
+    def test_seed_scope_factory_preserves_owned_paths_and_authenticated_parent_reuse(self):
+        node = function_ast(source, 'typed_admission_scope')
+        entries = function_ast(cleanup, '_public_admission_entries')
+        prior = _seed_admission_factory_predecessor(node, entries)
+        self.assertEqual(hashlib.sha256(ast_key(prior).encode()).hexdigest(),
+                         FROZEN_PUBLIC_ADMISSION_FACTORY_AST)
+        text = ast.unparse(node)
+        mutations = (
+            ("frame.f_locals.get('_operation') is not None", "frame.f_locals.get('_operation') is None"),
+            ("frame.f_locals.get('_inputs') is not None", "frame.f_locals.get('_inputs') is None"),
+            ("Path(filename).name == 'seed_count_contracts.py'", 'True'),
+            ('audit._public_admission_for(root)', 'audit._public_admission_for(other)'),
+            ('parent is not None and', 'parent is not None or'),
+            ("parent._state == 'active'", "parent._state == 'pending'"),
+            ('return audit._public_admission_scope(root, frame)', 'return nullcontext()'),
+        )
+        for before, after in mutations:
+            with self.subTest(fault=before):
+                self.assertEqual(text.count(before), 1)
+                changed = ast.parse(text.replace(before, after, 1)).body[0]
+                with self.assertRaisesRegex(AssertionError, 'unreviewed seed admission factory'):
+                    _seed_admission_factory_predecessor(changed, entries)
+        for fault in ('missing owned guard', 'missing parent guard', 'extra entry', 'different entry'):
+            changed, altered = copy.deepcopy(node), copy.deepcopy(entries)
+            if fault == 'missing owned guard': changed.body[6].body.pop(0)
+            elif fault == 'missing parent guard': changed.body[6].body.pop()
+            elif fault == 'extra entry':
+                altered.body[0].value.keys.append(ast.Constant(value='sum2_guard_contracts.py'))
+                altered.body[0].value.values.append(ast.Tuple(elts=[ast.Constant(value='verify')], ctx=ast.Load()))
+            else: altered.body[0].value.values[-1].elts[0].value = 'verify'
+            with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'unreviewed seed admission factory'):
+                _seed_admission_factory_predecessor(changed, altered)
 
 
 class OperationAdapterFakeFrameControls(unittest.TestCase):
@@ -341,7 +668,16 @@ class OperationAdapterFakeFrameControls(unittest.TestCase):
                 self.assertEqual(list(physical.iterdir()), [])
 
     def test_private_selector_positive_result_and_physical_read_order_match_public(self):
-        with self.selector_fixture() as (root, raw, record, interpreted), self.fake_image(root, raw) as operation:
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        # This tiny fixture checks adapter parity, not real admission. Replace
+        # only this selector's scope transport; retain both provenance helpers.
+        typed_source = SimpleNamespace(
+            historical_text=selector._typed_source.historical_text,
+            historical_bytes=selector._typed_source.historical_bytes,
+            typed_admission_scope=lambda root: nullcontext())
+        with self.selector_fixture() as (root, raw, record, interpreted), \
+                self.fake_image(root, raw) as operation, patch.object(selector, '_typed_source', typed_source):
             traces = []
             original_text, original_bytes = Path.read_text, Path.read_bytes
             for private in (False, True):
@@ -357,7 +693,18 @@ class OperationAdapterFakeFrameControls(unittest.TestCase):
                               if private else selector.verify_premises(root, _return_current_admission=True))
                 self.assertEqual(result, (record, True))
                 traces.append(events)
-            self.assertEqual(traces[0], traces[1])
+            # Public admission checks the lane before the selector; the private
+            # adapter keeps the frozen predecessor order. Only this prefix moves.
+            suffix = [
+                ('bytes', LANE), ('text', LANE),
+                ('bytes', ROAD), ('text', ROAD), ('text', 'reference.mojo'),
+                ('bytes', LANE), ('bytes', ROAD)]
+            self.assertEqual(traces[0], [
+                ('bytes', selector.prior.MIGRATION), ('text', LANE),
+                ('bytes', LANE), ('text', 'selector.mojo')] + suffix)
+            self.assertEqual(traces[1], [
+                ('bytes', selector.prior.MIGRATION), ('text', 'selector.mojo'),
+                ('text', LANE), ('bytes', LANE)] + suffix)
             self.assertEqual(traces[0].count(('bytes', LANE)), 3)
             self.assertEqual(traces[0].count(('bytes', ROAD)), 2)
 
@@ -1089,8 +1436,10 @@ class BoundedOwnerSyntheticBoundaryControls(unittest.TestCase):
         node = copy.deepcopy(function_ast(cleanup, '_operation_frame_kind'))
         # Remove the complete reviewed negative filter at its exact location.
         # Keep all authoritative comparisons and exceptional behavior.
-        _rc21_negative_filter(owner_helpers.typed_owner_ast(node, 'registry', reverse=True))
-        del node.body[3]
+        _rc21_negative_filter(owner_helpers.typed_owner_ast(
+            _generated_owner_predecessor_ast(node), 'registry', reverse=True))
+        # Keep the exact receipt and standalone seed prefixes in both classifiers.
+        del node.body[7]
         node.name = '_unfiltered_frame_kind'
         namespace = dict(vars(cleanup))
         exec(compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])),
@@ -1199,8 +1548,8 @@ def wrong_frame(root, executing, *, _operation, target):
                 namespace = self._receipt_control_namespace()
                 events = []
                 owner = types.SimpleNamespace(_state=state, _checker_receipt=registered,
-                    _owner=object(), _executing=types.MappingProxyType(captured),
-                    _resolver_paths=frozenset())
+                    _kind='invariant', _owner=object(), _executing=types.MappingProxyType(captured),
+                    _resolver_paths=frozenset(), _scaled_resolver_paths=frozenset())
                 def check(actual_root):
                     self.assertEqual(actual_root, root)
                     events.append('owner')
@@ -1336,7 +1685,8 @@ def _rc21_original_classifiers(new_text):
                 if isinstance(node, (_rc21_ast.FunctionDef, _rc21_ast.ClassDef))}
     old_defs.pop('_different_alias_leaf')
     operation = old_defs['_operation_frame_kind'] = owner_helpers.typed_owner_ast(
-        old_defs['_operation_frame_kind'], 'operation', 'registry', reverse=True)
+        _generated_owner_predecessor_ast(old_defs['_operation_frame_kind']),
+        'operation', 'registry', reverse=True)
     cache = old_defs['_cache_verify_frame']
     owner = old_defs['_owner_module'] = owner_helpers.typed_owner_predecessor(old_defs['_owner_module'])
 
@@ -2050,6 +2400,10 @@ typed_current = typed.is_current(module_path, current)
 # Tuple: module, original owner, physical expression, expected count, selections.
 # Each selection is (index, stable site suffix, comparator mode, narrow binding kind).
 _OPERATION_REACHED_READ_SPECS = (
+    ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', '_scaled_float32_bindings',
+     '_regular(root, path).read_bytes()', 1, ((0, 'scaled-source-and-witness-observation', 'bytes', 'observe'),)),
+    ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', 'scaled_float32_proof_bindings',
+     '_regular(root, name).read_bytes()', 1, ((0, 'scaled-receipt-final-observation', 'bytes', 'observe'),)),
     ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', 'reviewed_text',
      "_regular(root, path).read_text(encoding='utf-8')", 1,
      ((0, 'typed-public-utf8-default', 'physical', 'observe'),)),
@@ -2245,7 +2599,7 @@ _OPERATION_REACHED_READ_SPECS = (
      '(root / path).read_bytes()', 8, ((1, '648:1', 'bytes', 'observe'), (3, '659:1', 'bytes', 'observe'), (5, '678:1', 'bytes', 'observe'), (7, '684:1', 'bytes', 'observe'))),
     ('tools/carla_lane_oracle/seed_count_contracts.py', 'verify_premises',
      '(root / MODULE).read_bytes()', 2, ((1, '689:1', 'bytes', 'observe'),)),
-    ('tools/carla_lane_oracle/seed_count_contracts.py', 'verify',
+    ('tools/carla_lane_oracle/seed_count_contracts.py', '_verify_seed_body',
      '(root / MODULE).read_bytes()', 4, ((1, '709:1', 'bytes', 'observe'),
          (3, 'typed-seed-dispatch-final', 'bytes', 'observe'))),
     ('tools/carla_lane_oracle/seed_count_contracts.py', 'reviewed_text',
@@ -2336,6 +2690,26 @@ _OPERATION_REACHED_READ_SPECS = (
 )
 
 
+def _seed_dispatch_body_contract(node):
+    """Keep the physical seed read sites in the exact extracted old body."""
+    value = copy.deepcopy(node)
+    if value.name != '_verify_seed_body':
+        raise AssertionError('unreviewed seed observation owner')
+    value.name = 'verify'
+    def encode(item):
+        if isinstance(item, ast.AST):
+            return [type(item).__name__, [[name, encode(getattr(item, name))]
+                    for name in item._fields]]
+        if isinstance(item, list):
+            return [encode(child) for child in item]
+        if item is None or type(item) in (str, int, float, bool):
+            return item
+        raise AssertionError('unlisted seed AST primitive')
+    actual = hashlib.sha256(json.dumps(encode(value), separators=(',', ':')).encode()).hexdigest()
+    if actual != '3b0e4d0db954ccb0522fbc4f4345ac0992850e9d73e67410a4a4ea37d41102e0':
+        raise AssertionError('complete original seed dispatch body drift')
+
+
 @contextmanager
 def _operation_reached_bindings(case, code_root, physical_root, cores):
     """Observe reviewed read/comparison seams without changing their values.
@@ -2365,7 +2739,9 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
                 '_historical_reviewed_nonempty_loops', 'guarded_loop_proof'):
             _coverage_current_discriminator_contract(node)
         if relative == 'tools/carla_lane_oracle/seed_count_contracts.py':
-            if owner == 'reviewed_text':
+            if owner == '_verify_seed_body':
+                _seed_dispatch_body_contract(node)
+            elif owner == 'reviewed_text':
                 _seed_supplied_read_contract(node)
             elif owner == 'verify_score_caller_inventory':
                 _station_census_read_contract(node)
@@ -3169,82 +3545,185 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
     ),
-    'cache_key_contracts.py': (
-        (10, 15,
-         (),
-         (
-          'if __package__:\n',
-          '    from . import source_contracts as _typed_source\n',
-          'else:\n',
-          '    import source_contracts as _typed_source\n',
-          '\n',
-         ),
-        ),
-        (115, 118,
-         (
-          '            require(hashlib.sha256(physical).hexdigest() in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},\n',
-         ),
-         (
-          '            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,\n',
-          '                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)\n',
-          '            require(hashlib.sha256(provenance).hexdigest() in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},\n',
-         ),
-        ),
-        (121, 124,
-         (
-          '                    == seed_count.score_family_token_sha256(hashlib.sha256(physical).hexdigest()),\n',
-         ),
-         (
-          '                    and source.token_sha256(_typed_source.historical_text(root, rel.as_posix(), text,\n',
-          '                        _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
-          '                    == seed_count.score_family_token_sha256(hashlib.sha256(provenance).hexdigest()),\n',
-         ),
-        ),
-        (127, 130,
-         (),
-         (
-          '        supplied_text = text\n',
-          '        text = _typed_source.historical_text(root, rel.as_posix(), text, _operation=_operation,\n',
-          '                                              _inputs=_inputs, _input_owner=_input_owner)\n',
-         ),
-        ),
-        (144, 147,
-         (
-          '            physical_digest = hashlib.sha256(physical).hexdigest()\n',
-         ),
-         (
-          '            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,\n',
-          '                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)\n',
-          '            physical_digest = hashlib.sha256(provenance).hexdigest()\n',
-         ),
-        ),
-        (152, 154,
-         (
-          '                require(supplied_tokens == seed_count.score_family_token_sha256(physical_digest),\n',
-         ),
-         (
-          "                require(source.token_sha256(supplied_text) == source.token_sha256(physical.decode('utf-8'))\n",
-          '                        and supplied_tokens == seed_count.score_family_token_sha256(physical_digest),\n',
-         ),
-        ),
-        (167, 168,
-         (
-          "                text = seed_count.score_family_predecessor_source(physical.decode('utf-8'))\n",
-         ),
-         (
-          "                text = seed_count.score_family_predecessor_source(provenance.decode('utf-8'))\n",
-         ),
-        ),
-        (282, 286,
-         (),
-         (
-          '    text = _typed_source.historical_text(root, MODULE, text, _operation=_operation)\n',
-          '    observed = _typed_source.historical_text(root, MODULE, observed, _operation=_operation)\n',
-          '    require(source.token_sha256(text) == source.token_sha256(observed),\n',
-          "            'unreviewed supplied lane source')\n",
-         ),
-        ),
-    ),
+    'cache_key_contracts.py': ((10,
+  15,
+  (),
+  ('if __package__:\n',
+   '    from . import source_contracts as _typed_source\n',
+   'else:\n',
+   '    import source_contracts as _typed_source\n',
+   '\n')),
+ (66,
+  67,
+  ('def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None, '
+   '_operation=None):\n',),
+  ('def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None, '
+   '_operation=None, _admission=None):\n',)),
+ (68,
+  77,
+  (),
+  ('    if _admission is not None:\n',
+   '        if __package__:\n',
+   '            from . import full_audit_cleanup_contracts as full_audit\n',
+   '        else:\n',
+   '            import full_audit_cleanup_contracts as full_audit\n',
+   '        require(type(_admission) is full_audit._PublicAdmission\n',
+   '                and full_audit._cache_inventory_admission_frame(sys._getframe(), '
+   '_admission),\n',
+   "                'invalid public inventory admission')\n",
+   '        _admission._check(_admission._owner, root)\n')),
+ (124,
+  127,
+  ('            require(hashlib.sha256(physical).hexdigest() in {seed_count.SCORE_AFTER_SHA256, '
+   'seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},\n',),
+  ('            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,\n',
+   '                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)\n',
+   '            require(hashlib.sha256(provenance).hexdigest() in {seed_count.SCORE_AFTER_SHA256, '
+   'seed_count.station.AFTER_SHA256, seed_count.deviation.AFTER_SHA256},\n')),
+ (130,
+  133,
+  ('                    == '
+   'seed_count.score_family_token_sha256(hashlib.sha256(physical).hexdigest()),\n',),
+  ('                    and source.token_sha256(_typed_source.historical_text(root, '
+   'rel.as_posix(), text,\n',
+   '                        _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
+   '                    == '
+   'seed_count.score_family_token_sha256(hashlib.sha256(provenance).hexdigest()),\n')),
+ (136,
+  139,
+  (),
+  ('        supplied_text = text\n',
+   '        text = _typed_source.historical_text(root, rel.as_posix(), text, '
+   '_operation=_operation,\n',
+   '                                              _inputs=_inputs, _input_owner=_input_owner)\n')),
+ (153,
+  156,
+  ('            physical_digest = hashlib.sha256(physical).hexdigest()\n',),
+  ('            provenance = _typed_source.historical_bytes(root, rel.as_posix(), physical,\n',
+   '                _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)\n',
+   '            physical_digest = hashlib.sha256(provenance).hexdigest()\n')),
+ (161,
+  163,
+  ('                require(supplied_tokens == '
+   'seed_count.score_family_token_sha256(physical_digest),\n',),
+  ('                require(source.token_sha256(supplied_text) == '
+   "source.token_sha256(physical.decode('utf-8'))\n",
+   '                        and supplied_tokens == '
+   'seed_count.score_family_token_sha256(physical_digest),\n')),
+ (176,
+  177,
+  ('                text = '
+   "seed_count.score_family_predecessor_source(physical.decode('utf-8'))\n",),
+  ('                text = '
+   "seed_count.score_family_predecessor_source(provenance.decode('utf-8'))\n",)),
+ (224,
+  269,
+  ('    record = read_record(root)\n',
+   "    for name, expected in record['preserved_records'].items():\n",
+   "        require(hashlib.sha256((root / 'tools/carla_lane_oracle' / "
+   'name).read_bytes()).hexdigest() == expected,\n',
+   "                'historical component changed: ' + name)\n",
+   '    _input_owner = object()\n',
+   '    _inputs = None\n',
+   '    try:\n',
+   '        current = (root / MODULE).read_text()\n',
+   '        if _operation is not None:\n',
+   '            current = full_audit._observe_text(root, MODULE, current, _operation=_operation, '
+   'supplied=True)\n',
+   '        if source.token_sha256(current) != AFTER_TOKEN_SHA256:\n',
+   '            try:\n',
+   '                if __package__:\n',
+   '                    from . import full_audit_cleanup_contracts as full_audit\n',
+   '                else:\n',
+   '                    import full_audit_cleanup_contracts as full_audit\n',
+   '                if full_audit._cache_verify_frame(sys._getframe()):\n',
+   '                    current, _inputs = full_audit._cache_lane_inputs(root, current, '
+   '_input_owner, **operation_args)\n',
+   '                else:\n',
+   '                    # Unsupported import aliases preserve the complete fresh\n',
+   '                    # public path; they cannot acquire or borrow an input view.\n',
+   '                    current = full_audit.reviewed_text(root, MODULE, current, '
+   '**operation_args)\n',
+   '            except (ValueError, OSError) as error:\n',
+   "                raise ContractError('cache-key successor: ' + str(error)) from error\n",
+   '        require(source.token_sha256(current) == AFTER_TOKEN_SHA256,\n',
+   "                'complete live successor tokens changed')\n",
+   '        # Exact adopted bytes reverse independently. General live source keeps the\n',
+   '        # established comment/whitespace compatibility of the historical gates.\n',
+   '        # Full tokens retain indentation, boundaries, qualifiers and operations.\n',
+   "        reverse_exact(record['after'], record)\n",
+   '        observed = (inventory(root, verified_lane_source=current, **operation_args) if _inputs '
+   'is None else\n',
+   '                    inventory(root, verified_lane_source=current, _inputs=_inputs, '
+   '_input_owner=_input_owner, **operation_args))\n',
+   "        require(observed == record['inventory'],\n",
+   "                'production helper/caller inventory changed')\n",
+   '        # Complete module tokens retain imports, builtin name resolution, types,\n',
+   '        # external-witness/Optional guards, word order, memo lifetimes and ledgers.\n',
+   '        if _inputs is not None:\n',
+   '            _inputs.checkpoint(_input_owner, root)\n',
+   '        return record\n',
+   '    finally:\n',
+   '        if _inputs is not None:\n',
+   '            _inputs.close(_input_owner)\n'),
+  ('    with _typed_source.typed_admission_scope(root) as _typed_admission:\n',
+   '        record = read_record(root)\n',
+   "        for name, expected in record['preserved_records'].items():\n",
+   "            require(hashlib.sha256((root / 'tools/carla_lane_oracle' / "
+   'name).read_bytes()).hexdigest() == expected,\n',
+   "                    'historical component changed: ' + name)\n",
+   '        _input_owner = object()\n',
+   '        _inputs = None\n',
+   '        try:\n',
+   '            current = (root / MODULE).read_text()\n',
+   '            if _operation is not None:\n',
+   '                current = full_audit._observe_text(root, MODULE, current, '
+   '_operation=_operation, supplied=True)\n',
+   '            if source.token_sha256(current) != AFTER_TOKEN_SHA256:\n',
+   '                try:\n',
+   '                    if __package__:\n',
+   '                        from . import full_audit_cleanup_contracts as full_audit\n',
+   '                    else:\n',
+   '                        import full_audit_cleanup_contracts as full_audit\n',
+   '                    if full_audit._cache_verify_frame(sys._getframe()):\n',
+   '                        current, _inputs = full_audit._cache_lane_inputs(root, current, '
+   '_input_owner, **operation_args)\n',
+   '                    else:\n',
+   '                        # Unsupported import aliases preserve the complete fresh\n',
+   '                        # public path; they cannot acquire or borrow an input view.\n',
+   '                        current = full_audit.reviewed_text(root, MODULE, current, '
+   '**operation_args)\n',
+   '                except (ValueError, OSError) as error:\n',
+   "                    raise ContractError('cache-key successor: ' + str(error)) from error\n",
+   '            require(source.token_sha256(current) == AFTER_TOKEN_SHA256,\n',
+   "                    'complete live successor tokens changed')\n",
+   '            # Exact adopted bytes reverse independently. General live source keeps the\n',
+   '            # established comment/whitespace compatibility of the historical gates.\n',
+   '            # Full tokens retain indentation, boundaries, qualifiers and operations.\n',
+   "            reverse_exact(record['after'], record)\n",
+   '            observed = (inventory(root, verified_lane_source=current,\n',
+   "                        **({} if _typed_admission is None else {'_admission': "
+   '_typed_admission}),\n',
+   '                        **operation_args) if _inputs is None else\n',
+   '                        inventory(root, verified_lane_source=current, _inputs=_inputs, '
+   '_input_owner=_input_owner, **operation_args))\n',
+   "            require(observed == record['inventory'],\n",
+   "                    'production helper/caller inventory changed')\n",
+   '            # Complete module tokens retain imports, builtin name resolution, types,\n',
+   '            # external-witness/Optional guards, word order, memo lifetimes and ledgers.\n',
+   '            if _inputs is not None:\n',
+   '                _inputs.checkpoint(_input_owner, root)\n',
+   '            return record\n',
+   '        finally:\n',
+   '            if _inputs is not None:\n',
+   '                _inputs.close(_input_owner)\n')),
+ (294,
+  298,
+  (),
+  ('    text = _typed_source.historical_text(root, MODULE, text, _operation=_operation)\n',
+   '    observed = _typed_source.historical_text(root, MODULE, observed, _operation=_operation)\n',
+   '    require(source.token_sha256(text) == source.token_sha256(observed),\n',
+   "            'unreviewed supplied lane source')\n"))),
     'coverage_followup_contracts.py': (
         (3, 8,
          (),
@@ -3319,8 +3798,10 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
     ),
-    'coverage_loop_proofs.py': ((330,
-  409,
+    'coverage_loop_proofs.py': ((13, 14, (), ('import importlib.util\n',)),
+ (26, 28, (), ('\n', '_EXECUTED_MODULE_CODE = sys._getframe().f_code\n')),
+ (333,
+  412,
   (),
   ('\n',
    '\n',
@@ -3410,8 +3891,44 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            token.string for token in expected[0])[3:-1]:\n',
    '        return None\n',
    '    return new_rows[index][0]\n')),
- (984,
-  999,
+ (923,
+  924,
+  ('    if _operation is not None and include_roots != ():\n',
+   "        cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))\n"),
+  ('    cleanup._operation_include_context(_operation, root, include_roots)\n',)),
+ (977,
+  1002,
+  ('        if _operation is not None and include_roots != ():\n',
+   "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
+   "roots'))\n"),
+  ('        cleanup._operation_include_context(_operation, root, include_roots)\n',
+   '    # A partial producer may contain a local reviewed theorem without its\n',
+   '    # unrelated sibling prerequisites. Absence is established by the frozen\n',
+   '    # producer census before any read; consumed or current admission failures\n',
+   '    # are never downgraded to a missing proof.\n',
+   "    if (_operation is not None and _operation._kind == 'generated_receipt'\n",
+   "            and _operation._state == 'pending'\n",
+   '            and not bindings.keys() <= _operation._receipt_source_digests.keys()):\n',
+   '        from carla_lane_oracle import typed_boundary_contracts as typed\n',
+   '        try:\n',
+   '            typed.verify_authority()\n',
+   '        except (ValueError, TypeError, KeyError, AttributeError) as error:\n',
+   '            cleanup._operation_fail(_operation, error)\n',
+   '        captured = _operation._receipt_source_digests\n',
+   '        # Exact current and intermediate successor endpoints keep their\n',
+   '        # existing admission path. Only historical bytes (or the explicitly\n',
+   '        # paired density repair) can make an absent sibling inapplicable.\n',
+   '        current = any(name in typed.EDGES and captured.get(name) == '
+   "typed.EDGES[name]['after_sha256']\n",
+   '                      for name in bindings)\n',
+   '        historical = all(captured[name] == expected or (\n',
+   '            name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256\n',
+   '            and captured[name] == DENSITY_AFTER_SHA256)\n',
+   '            for name, expected in bindings.items() if name in captured)\n',
+   '        if not current and historical:\n',
+   '            return None\n')),
+ (1009,
+  1024,
   (),
   ('        physical_digest = digest\n',
    '        from carla_lane_oracle import typed_boundary_contracts as typed\n',
@@ -3428,29 +3945,29 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            # This exact inverse now supplies historical provenance only.\n',
    "            checked = typed.historical_source(name, raw.decode('utf-8'))\n",
    "            digest = sha256(checked.encode('utf-8'))\n")),
- (1005,
-  1006,
+ (1030,
+  1031,
   ('            actual[name] = digest\n',),
   ('            actual[name] = physical_digest\n',)),
- (1064,
-  1065,
+ (1089,
+  1090,
   ('                actual[name] = digest\n',),
   ('                actual[name] = physical_digest\n',)),
- (1069,
-  1073,
+ (1094,
+  1098,
   ('                actual.update(cleanup.proof_bindings(root, include_roots=include_roots))\n',
    '                if path.read_bytes() != raw:\n'),
   ('                actual.update(cleanup.proof_bindings(\n',
    '                    root, include_roots=include_roots, **operation_args))\n',
    '                if _coverage_observe_bytes(root, name, path.read_bytes(),\n',
    '                                           _operation=_operation) != raw:\n')),
- (1074,
-  1075,
+ (1099,
+  1100,
   ('                actual[name] = digest\n',),
   ('                actual[name] = physical_digest\n',)),
- (1093, 1094, ('        actual[name] = digest\n',), ('        actual[name] = physical_digest\n',)),
- (1095,
-  1109,
+ (1118, 1119, ('        actual[name] = digest\n',), ('        actual[name] = physical_digest\n',)),
+ (1120,
+  1134,
   (),
   ('\n',
    '\n',
@@ -3466,8 +3983,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        return False\n',
    '    return all(sha256(relative_source(root,name).read_bytes()) == digest\n',
    '               for name,digest in bindings.items())\n')),
- (1154,
-  1182,
+ (1146,
+  1147,
+  ('        if _operation is not None and include_roots != ():\n',
+   "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
+   "roots'))\n"),
+  ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
+ (1178,
+  1206,
   ('    return {line: {\n',
    "        'line': line, 'kind': kind, 'cardinality': minimum,\n",
    "        'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',\n",
@@ -3503,8 +4026,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        if _operation is not None and isinstance(error, (OSError, UnicodeError)):\n',
    '            cleanup._operation_fail(_operation, error)\n',
    '        return {}\n')),
- (1201,
-  1214,
+ (1214,
+  1215,
+  ('        if _operation is not None and include_roots != ():\n',
+   "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
+   "roots'))\n"),
+  ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
+ (1224,
+  1237,
   ("        if (module == 'extensions/carla/map'\n",),
   ('        from carla_lane_oracle import typed_boundary_contracts as typed\n',
    "        module_path = module + '.mojo'\n",
@@ -3519,38 +4048,38 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            if line is None:\n',
    '                return None\n',
    "        if (not typed_current and module == 'extensions/carla/map'\n")),
- (1233,
-  1234,
+ (1256,
+  1257,
   ('        if ((module, line) in _CLEANUP_LOOP_ROWS\n',),
   ('        if (not typed_current and (module, line) in _CLEANUP_LOOP_ROWS\n',)),
- (1242,
-  1247,
+ (1265,
+  1270,
   (),
   ('            paths = tuple(cache_key.input_paths(Path(root)))\n',
    '            if _operation is not None:\n',
    '                cleanup._operation_known_paths(root, frozenset(\n',
    "                    path.as_posix() for path in paths if path.suffix == '.mojo'),\n",
    '                    _operation=_operation)\n')),
- (1248,
-  1249,
+ (1271,
+  1272,
   ('                path.as_posix() for path in cache_key.input_paths(Path(root))\n',),
   ('                path.as_posix() for path in paths\n',)),
- (1250,
-  1253,
+ (1273,
+  1276,
   ('                and re.search(pattern,\n',
    '                              relative_source(root, path.as_posix()).read_text())\n'),
   ('                and re.search(pattern, _coverage_observe_text(root, path.as_posix(),\n',
    '                    relative_source(root, path.as_posix(), **operation_args).read_text(),\n',
    '                    _operation=_operation))\n')),
- (1272,
-  1276,
+ (1295,
+  1299,
   (),
   ('        if (typed_current and _operation is None\n',
    '                and not _final_unowned_typed_loop_bindings(\n',
    '                    root, actual_bindings, include_roots=include_roots)):\n',
    '            return None\n')),
- (1416,
-  1479,
+ (1439,
+  1502,
   (),
   ('def _typed_construction_boundary_loops(root, current, *, include_roots=(), _operation=None):\n',
    '    """Re-admit the nonempty-list theorem for the exact typed current graph.\n',
@@ -3616,8 +4145,14 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    }}\n',
    '\n',
    '\n')),
- (1489,
-  1497,
+ (1509,
+  1510,
+  ('        if _operation is not None and include_roots != ():\n',
+   "            cleanup._operation_fail(_operation, ValueError('Unowned coverage include "
+   "roots'))\n"),
+  ('        cleanup._operation_include_context(_operation, root, include_roots)\n',)),
+ (1511,
+  1519,
   (),
   ('        from carla_lane_oracle import typed_boundary_contracts as typed\n',
    "        name = 'extensions/carla/map.mojo'\n",
@@ -3626,27 +4161,211 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            _operation=_operation)\n',
    '        if typed.is_current(name, current):\n',
    '            return _typed_construction_boundary_loops(\n',
-   '                root, current, include_roots=include_roots, **operation_args)\n'))),
+   '                root, current, include_roots=include_roots, **operation_args)\n')),
+ (1548,
+  1552,
+  ('                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name])\n',),
+  ('                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name]) and not (\n',
+   '                name in cleanup.scaled_float32.SOURCE_PATHS\n',
+   '                and expected[name] == cleanup.scaled_float32.BEFORE_SHA256[name]\n',
+   '                and actual[name] == cleanup.scaled_float32.AFTER_SHA256[name])\n')),
+ (1568,
+  1575,
+  (),
+  ('        scaled_bindings = cleanup.scaled_float32_proof_bindings(\n',
+   '            root, include_roots=include_roots, **operation_args)\n',
+   '        for name in cleanup.scaled_float32.SOURCE_PATHS:\n',
+   '            if scaled_bindings.get(name) == cleanup.scaled_float32.AFTER_SHA256[name]:\n',
+   '                if expected.get(name) != cleanup.scaled_float32.BEFORE_SHA256[name]:\n',
+   '                    return {}\n',
+   '                expected[name] = cleanup.scaled_float32.AFTER_SHA256[name]\n')),
+ (1593, 1594, (), ('        actual.update(scaled_bindings)\n',)),
+ (1618,
+  1629,
+  ('def reviewed_nonempty_loops(root, module, *, include_roots=()):\n',),
+  ('def _receipt_reviewed_nonempty_loops(root, module, *, include_roots, _operation):\n',
+   '    """The direct generated receipt alone lends its immutable image to rows."""\n',
+   '    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+   '    cleanup._operation_include_context(_operation, root, include_roots)\n',
+   "    cleanup.require(_operation._kind == 'generated_receipt'\n",
+   '                    and sys._getframe(1) is _operation._owner_frame,\n',
+   "                    'generated row wrapper lacks its direct owner')\n",
+   '    return reviewed_nonempty_loops(root, module, include_roots=include_roots, '
+   '_operation=_operation)\n',
+   '\n',
+   '\n',
+   'def reviewed_nonempty_loops(root, module, *, include_roots=(), _operation=None):\n')),
+ (1630,
+  1631,
+  ('    _operation, owns_operation = None, False\n',),
+  ('    owns_operation = False\n',)),
+ (1633, 1634, ('    if bounded:\n',), ('    if bounded or _operation is not None:\n',)),
+ (1637,
+  1641,
+  ('        if bounded:\n',),
+  ('        if _operation is not None:\n',
+   '            cleanup._operation_include_context(_operation, root, include_roots)\n',
+   "            cleanup.require(_operation._kind == 'generated_receipt', 'foreign generated row "
+   "owner')\n",
+   '        elif bounded:\n')),
+ (1879,
+  1963,
+  ('    proofs = []\n',
+   '    for module in modules:\n',
+   "        name = module + '.mojo'\n",
+   '        original = relative_source(root, name)\n',
+   '        if name not in inputs:\n',
+   "            raise ValueError('Missing instrumented module: ' + module)\n",
+   "        candidates = constant_loops(original.read_text(encoding='utf-8'))\n",
+   '        reviewed = reviewed_nonempty_loops(root, module, include_roots=(build,))\n',
+   '        if candidates.keys() & reviewed.keys():\n',
+   "            raise ValueError('Conflicting reviewed loop proof: ' + module)\n",
+   '        candidates.update(reviewed)\n',
+   '        for line in sorted(candidates):\n',
+   '            if (module, line) not in branches:\n',
+   '                continue  # Existing exclusions cannot become new proofs.\n',
+   "            if any(record[0] in {'C', 'M'} and record[1] == module\n",
+   '                   and int(record[2]) == line for record in records):\n',
+   "                raise ValueError('Loop proof conflicts with compound decision: ' + module)\n",
+   "            proofs.append({'module': module, **candidates[line],\n",
+   "                           'source_sha256': inputs[name]['source']})\n",
+   '    counts = _counts(records)\n',
+   "    counts['proven_impossible'] = len(proofs)\n",
+   "    counts['required_total'] = counts['potential_total'] - len(proofs)\n",
+   "    return {'schema': SCHEMA, 'python': sys.version,\n",
+   "            'compiler': compiler, 'flags': flags,\n",
+   "            'manifest_sha256': sha256(raw), 'tools': tools,\n",
+   "            'root_inputs': root_inputs, 'inputs': inputs, 'generation': generation,\n",
+   "            'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
+   '                                            capture_cache=capture_cache, suites=suites),\n',
+   "            'proofs': proofs, 'denominator': counts}\n"),
+  ("    _receipt_seed = {'schema': SCHEMA, 'python': sys.version,\n",
+   "        'compiler': compiler, 'flags': flags, 'manifest_sha256': sha256(raw),\n",
+   "        'tools': tools, 'root_inputs': root_inputs, 'inputs': inputs, 'generation': "
+   'generation,\n',
+   "        'execution': execution_contract(root, build, inputs, mojo=mojo,\n",
+   '                                        capture_cache=capture_cache, suites=suites)}\n',
+   '    cleanup = None\n',
+   "    if importlib.util.find_spec('carla_lane_oracle') is None:\n",
+   '        # Standalone plain receipts need no CARLA semantic authority. A known\n',
+   '        # reviewed source may never silently become a plain-only receipt.\n',
+   '        reviewed_modules = (set(REVIEWED_LOOP_RULES)\n',
+   '                            | {row[0] for row in GUARDED_LOOP_RULES}\n',
+   "                            | {'renderers/renderer', 'extensions/carla/map',\n",
+   "                               DENSITY_SOURCE.removesuffix('.mojo')})\n",
+   "        if reviewed_modules & {name.removesuffix('.mojo') for name in "
+   "generation['modules']}:\n",
+   "            raise ValueError('Reviewed loop authority is unavailable')\n",
+   '    else:\n',
+   '        # A present but broken authority installation is an error, not fallback.\n',
+   '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+   '    _plain_seed = canonical(_receipt_seed) if cleanup is None else None\n',
+   '    _operation = (None if cleanup is None else\n',
+   '                  cleanup._receipt_operation_enter(root, build, _receipt_seed))\n',
+   '    try:\n',
+   '        if _operation is None:\n',
+   "            check_capture_inputs({'receipt': json.loads(_plain_seed)}, root, build)\n",
+   '            if not all(_density_stdlib_unshadowed(location) for location in (root, build)):\n',
+   "                raise ValueError('Plain receipt resolver surface changed')\n",
+   '        else:\n',
+   '            _operation._receipt_inputs_check()\n',
+   '        proofs = []\n',
+   '        for module in modules:\n',
+   "            name = module + '.mojo'\n",
+   '            original = relative_source(root, name)\n',
+   '            if name not in inputs:\n',
+   "                raise ValueError('Missing instrumented module: ' + module)\n",
+   "            text = original.read_text(encoding='utf-8')\n",
+   '            if _operation is None:\n',
+   '                source_raw = original.read_bytes()\n',
+   "                with io.TextIOWrapper(io.BytesIO(source_raw), encoding='utf-8', newline=None) "
+   'as reader:\n',
+   '                    observed_text = reader.read()\n',
+   "                if (sha256(source_raw) != json.loads(_plain_seed)['root_inputs'][name]\n",
+   '                        or text != observed_text):\n',
+   "                    raise ValueError('Plain receipt consumed source differs from generation: ' "
+   '+ name)\n',
+   '            else:\n',
+   '                text = cleanup._observe_text(root, name, text,\n',
+   "                                             _operation=_operation, mode='physical')\n",
+   '            candidates = constant_loops(text)\n',
+   '            reviewed = ({} if _operation is None else\n',
+   '                        _receipt_reviewed_nonempty_loops(root, module, '
+   'include_roots=(build,),\n',
+   '                                                         _operation=_operation))\n',
+   '            if _operation is not None:\n',
+   '                cleanup._operation_check(_operation, root)\n',
+   '            if candidates.keys() & reviewed.keys():\n',
+   "                raise ValueError('Conflicting reviewed loop proof: ' + module)\n",
+   '            candidates.update(reviewed)\n',
+   '            for line in sorted(candidates):\n',
+   '                if (module, line) not in branches:\n',
+   '                    continue  # Existing exclusions cannot become new proofs.\n',
+   "                if any(record[0] in {'C', 'M'} and record[1] == module\n",
+   '                       and int(record[2]) == line for record in records):\n',
+   "                    raise ValueError('Loop proof conflicts with compound decision: ' + "
+   'module)\n',
+   "                proofs.append({'module': module, **candidates[line],\n",
+   "                               'source_sha256': "
+   "(json.loads(_plain_seed)['root_inputs'][name]\n",
+   "                                   if _operation is None else inputs[name]['source'])})\n",
+   '        counts = _counts(records)\n',
+   "        counts['proven_impossible'] = len(proofs)\n",
+   "        counts['required_total'] = counts['potential_total'] - len(proofs)\n",
+   '        if _operation is None:\n',
+   '            if canonical(_receipt_seed) != _plain_seed:\n',
+   "                raise ValueError('Plain receipt seed changed after consumption')\n",
+   "            result = {**json.loads(_plain_seed), 'proofs': proofs, 'denominator': counts}\n",
+   "            check_capture_inputs({'receipt': result}, root, build)\n",
+   '            if not all(_density_stdlib_unshadowed(location) for location in (root, build)):\n',
+   "                raise ValueError('Plain receipt resolver surface changed')\n",
+   '        else:\n',
+   "            result = {**json.loads(_operation._receipt_seed), 'proofs': proofs, 'denominator': "
+   'counts}\n',
+   '            _operation.finish(root)\n',
+   '        return result\n',
+   '    except BaseException as error:\n',
+   '        if _operation is not None:\n',
+   '            _operation._invalidate(error)\n',
+   '        raise\n',
+   '    finally:\n',
+   '        if _operation is not None:\n',
+   '            _operation.close()\n'))),
     'full_audit_cleanup_contracts.py': ((50,
-  52,
+  53,
   (),
-  ('        from . import typed_boundary_contracts as typed_boundary\n',
+  ('        from . import scaled_float32_contracts as scaled_float32\n',
+   '        from . import typed_boundary_contracts as typed_boundary\n',
    '        from . import conditioned_cubic_contracts as conditioned_cubic\n')),
- (61,
-  63,
+ (62,
+  65,
   (),
-  ('        import typed_boundary_contracts as typed_boundary\n',
+  ('        import scaled_float32_contracts as scaled_float32\n',
+   '        import typed_boundary_contracts as typed_boundary\n',
    '        import conditioned_cubic_contracts as conditioned_cubic\n')),
- (143,
-  150,
+ (145,
+  146,
   ("DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/witness_format_contracts.py': "
    "'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',\n",
    " 'tools/carla_lane_oracle/runtime_view_contracts.py': "
-   "'0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',\n"),
-  ("DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': "
-   "'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',\n",
-   " 'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',\n",
-   " 'tools/carla_lane_oracle/conditioned_cubic_contracts.py': "
+   "'0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',\n",
+   " 'tools/carla_lane_oracle/shared_helper_contracts.py': "
+   "'70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',\n",
+   " 'tools/carla_lane_oracle/map_station_contracts.py': "
+   "'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',\n",
+   " 'tools/carla_lane_oracle/map_deviation_contracts.py': "
+   "'741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',\n",
+   " 'tools/carla_lane_oracle/consumer_successor_ledger.py': "
+   "'8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',\n"),
+  ("DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': "
+   "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n",)),
+ (148,
+  161,
+  (" 'tools/carla_lane_oracle/source_contracts.py': "
+   "'857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',\n",
+   " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
+   "'cf9bb32fd36fefb641e2c97210bfffe0fac00b5b773e87b5b19d46877afbf9a4'}\n"),
+  (" 'tools/carla_lane_oracle/conditioned_cubic_contracts.py': "
    "'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',\n",
    " 'tools/carla_lane_oracle/consumer_successor_ledger.py': "
    "'ce9a639084dfcc1442c6ac7535060cf5a123c2eb96683d2f35816ec26b0599ed',\n",
@@ -3655,65 +4374,96 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    " 'tools/carla_lane_oracle/map_station_contracts.py': "
    "'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',\n",
    " 'tools/carla_lane_oracle/runtime_view_contracts.py': "
-   "'67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',\n")),
- (151,
-  155,
-  (" 'tools/carla_lane_oracle/map_station_contracts.py': "
-   "'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',\n",
-   " 'tools/carla_lane_oracle/map_deviation_contracts.py': "
-   "'741a95b3fd3d0d51253dfef36327997c19ac90b9230a73942dd4697dcefffd39',\n",
-   " 'tools/carla_lane_oracle/consumer_successor_ledger.py': "
-   "'8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',\n",
-   " 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',\n",
-   " 'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',\n",
+   "'67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',\n",
+   " 'tools/carla_lane_oracle/shared_helper_contracts.py': "
+   "'70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',\n",
    " 'tools/carla_lane_oracle/source_contracts.py': "
-   "'857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',\n",
-   " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
-   "'cf9bb32fd36fefb641e2c97210bfffe0fac00b5b773e87b5b19d46877afbf9a4'}\n"),
-  (" 'tools/carla_lane_oracle/source_contracts.py': "
-   "'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',\n",
+   "'83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',\n",
    " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
    "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
    " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
-   "'a4b3d91ab83c3798ba98a4f0d5faf3f5ac1ac95bb73bb55b941ea78529c0018f',\n",
+   "'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',\n",
    " 'tools/carla_lane_oracle/witness_format_contracts.py': "
-   "'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}\n")),
- (223,
-  226,
+   "'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',\n",
+   " 'tools/carla_lane_oracle/cache_key_contracts.py': "
+   "'87233ebca3701e3a79b57b324afd48fcffb38b87cb3988859b6ae36bd63d919f',\n",
+   " 'tools/carla_lane_oracle/rounded_line_selector_contracts.py': "
+   "'e47ff613bc198bc5cb629940fc0bcbe3c9517a153cd8e799e65ff0215f7b12bb',\n",
+   " 'tools/carla_lane_oracle/seed_count_contracts.py': "
+   "'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345'}\n")),
+ (229,
+  233,
   ("                 'tools/carla_lane_oracle/witness_format_contracts.py')\n",),
   ("                 'tools/carla_lane_oracle/witness_format_contracts.py',\n",
    "                 'tools/carla_lane_oracle/typed_boundary_contracts.py',\n",
-   "                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py')\n")),
- (692,
-  693,
+   "                 'tools/carla_lane_oracle/conditioned_cubic_contracts.py',\n",
+   "                 'tools/carla_lane_oracle/scaled_float32_contracts.py')\n")),
+ (638,
+  642,
+  (),
+  ('    if type(value) is slice:\n',
+   '        # Python 3.14 folds constant slices such as `x[:2]` into co_consts.\n',
+   "        return ('slice', _code_constant(value.start), _code_constant(value.stop),\n",
+   '                _code_constant(value.step))\n')),
+ (703,
+  704,
   ("for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, "
    'station, shared_helpers, runtime_view, deviation, witness_format):\n',),
   ("for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, "
    'station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, '
-   'conditioned_cubic):\n',)),
- (730,
-  731,
+   'conditioned_cubic, scaled_float32):\n',)),
+ (724,
+  738,
+  (),
+  ('# Public scopes can be entered by a consumer imported later (or by an importlib\n',
+   '# alias). Bind its reviewed code now, without importing it through a cycle.\n',
+   'for _relative, _digest in DEPENDENCY_TOOL_SHA256.items():\n',
+   '    _path = Path(__file__).resolve().parents[2] / _relative\n',
+   '    _key = str(_path.resolve())\n',
+   '    if _key not in _IMPORT_IDENTITIES:\n',
+   '        _raw = _path.read_bytes()\n',
+   '        require(not _path.is_symlink() and sha(_raw) == _digest,\n',
+   "                'unreviewed public consumer checker bytes: ' + _relative)\n",
+   '        _IMPORT_IDENTITIES[_key] = _digest\n',
+   '        _IMPORT_CODE[_key] = _compiled_functions(_raw, str(_path))\n',
+   '        _IMPORT_DEFAULTS[_key] = _compiled_defaults(_raw)\n',
+   '\n',
+   '\n')),
+ (755,
+  757,
   ('               vars(deviation), vars(witness_format))\n',),
   ('               vars(deviation), vars(witness_format), vars(typed_boundary), '
-   'vars(conditioned_cubic))\n',)),
- (761,
-  763,
+   'vars(conditioned_cubic),\n',
+   '               vars(scaled_float32))\n')),
+ (787,
+  789,
   ('            supplied = Path(root) / relative\n',
    '            require(not supplied.is_symlink() and sha(supplied.read_bytes()) == captured,\n'),
   ('            supplied = _regular(root, relative)\n',
    '            require(sha(supplied.read_bytes()) == captured,\n')),
- (765,
-  767,
+ (791,
+  793,
   (),
   ('    typed_boundary.verify_authority()\n', '    conditioned_cubic.verify_authority()\n')),
- (877,
-  878,
+ (903,
+  905,
   ('def resolver_unshadowed(root, paths, *, render_entries=None):\n',),
-  ('def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None):\n',)),
- (900,
-  908,
+  ('def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,\n',
+   '                        math_entries=None):\n')),
+ (914,
+  916,
   (),
-  ('    if typed_entries is not None and (type(typed_entries) is not frozenset\n',
+  ('    A separate math scope is only for the exact supplemental native witness.\n',
+   "    It does not replace any production owner's existing resolver obligations.\n")),
+ (929,
+  941,
+  (),
+  ('    if math_entries is not None and (type(math_entries) is not frozenset\n',
+   "            or '.' not in math_entries or any(type(path) is not str or not path\n",
+   "            or Path(path).is_absolute() or '..' in Path(path).parts for path in "
+   'math_entries)):\n',
+   '        return False\n',
+   '    if typed_entries is not None and (type(typed_entries) is not frozenset\n',
    "            or '.' not in typed_entries or any(type(path) is not str or not path\n",
    "            or Path(path).is_absolute() or '..' in Path(path).parts for path in "
    'typed_entries)):\n',
@@ -3722,15 +4472,17 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    # lookup rule. Every pre-333 family keeps its historical refusal policy.\n',
    "    typed_families = ('animation', 'cameras', 'core', 'exporters', 'geometries',\n",
    "                      'lights', 'materials', 'objects', 'postprocessing', 'renderers')\n")),
- (952,
-  955,
+ (985,
+  990,
   ('                                     or relative_dir.casefold() in render_entries))\n',),
   ('                                     or relative_dir.casefold() in render_entries)\n',
+   "                                and (scoped_name != 'math' or math_entries is None\n",
+   '                                     or relative_dir.casefold() in math_entries)\n',
    '                                and (scoped_name not in typed_families or typed_entries is '
    'None\n',
    '                                     or relative_dir.casefold() in typed_entries))\n')),
- (976,
-  989,
+ (1011,
+  1023,
   ('    """Restrict only render\'s namespace clause with an established entry census."""\n',
    "    if not any(path.startswith('render/') for path in paths):\n"),
   ('    """Scope only reviewed new families with an established entry census.\n',
@@ -3738,16 +4490,15 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    Exact module and package prefixes never use this namespace-only exception.\n',
    '    The caller checks the complete physical source/entry inventory before and\n',
    '    after the operation; adding a new entry or import cannot reuse this scope.\n',
-   '    verify() also applies this census to coverage include roots: they mirror\n',
-   '    the source tree, so their compiled lookup directories are the same.\n',
+   '    Include-root callers first bind their physical source/entry census.\n',
    '    """\n',
    "    render = any(path.startswith('render/') for path in paths)\n",
    "    typed = any(path.split('/')[0] in ('animation', 'cameras', 'core', 'exporters',\n",
    "        'geometries', 'lights', 'materials', 'objects', 'postprocessing', 'renderers')\n",
    '        for path in paths)\n',
    '    if not render and not typed:\n')),
- (990,
-  997,
+ (1024,
+  1031,
   ("    require(type(entries) in (tuple, list), 'missing render entry census')\n",
    "    return {'render_entries': frozenset(('.', *(path.casefold() for path in entries),\n",
    '        *(str(Path(path).parent).casefold() for path in shared_helpers.TESTS)))}\n'),
@@ -3758,66 +4509,734 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '                                    for path in typed_boundary.TESTS)\n',
    "    return {**({'render_entries': roots} if render else {}),\n",
    "            **({'typed_entries': typed_roots} if typed else {})}\n")),
- (1258,
-  1259,
+ (1057,
+  1073,
+  (),
+  ('\n',
+   '\n',
+   'def _include_entry_context(location, source_image, *, _operation=None):\n',
+   '    """Bind an include surface to maintained source coordinates and entries.\n',
+   '\n',
+   '    The coverage generation owner authenticates origins and complete staged\n',
+   '    bytes before requesting proofs. This additional structural gate records\n',
+   '    every physical Mojo file and refuses unknown coordinates or changed entry\n',
+   '    contexts; callers retain and reread its image through finalization.\n',
+   '    """\n',
+   '    entries, image = _helper_entry_census(location, _operation=_operation)\n',
+   "    require(set(image) <= set(source_image), 'unmaintained include source coordinate')\n",
+   "    expected = _sibling('affected').entry_directories(\n",
+   '        {path: _physical_text(source_image[path]) for path in image})\n',
+   "    require(list(entries) == expected, 'include compiled entry directories changed')\n",
+   '    return entries, image\n')),
+ (1171,
+  1207,
+  (),
+  ('def _publish_input_image(view, snapshots, authority_raw, known, production,\n',
+   '                         entries, resolver_paths, executing):\n',
+   '    """Store an immutable image only after its concrete owner authenticated it."""\n',
+   '    caller = sys._getframe(1)\n',
+   '    require(caller.f_globals is globals()\n',
+   '            and caller.f_code in (_live_function_code(_CacheInputs._publish),\n',
+   '                                  _live_function_code(_PublicAdmission._publish))\n',
+   "            and caller.f_locals.get('self') is view,\n",
+   "            'input image publication requires its concrete publisher')\n",
+   '    require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,\n',
+   "            'invalid captured authority bytes')\n",
+   '    image = dict(snapshots)\n',
+   '    for path, raw in image.items():\n',
+   '        require(type(path) is str and Path(path).as_posix() == path\n',
+   '                and bool(Path(path).parts) and not Path(path).is_absolute()\n',
+   "                and '..' not in Path(path).parts and type(raw) is bytes,\n",
+   "                'invalid captured input bytes or path')\n",
+   '    require(set(known) <= image.keys() and set(production) <= image.keys()\n',
+   "            and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')\n",
+   '    require(not view._scaled_resolver_paths or\n',
+   '            (view._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE\n',
+   '             and view._scaled_resolver_paths <= image.keys()),\n',
+   "            'pending scaled native context differs from captured image')\n",
+   '    view._raw = types.MappingProxyType(image)\n',
+   '    view._record_raw = authority_raw\n',
+   '    view._known = frozenset(known)\n',
+   '    view._production = frozenset(production)\n',
+   '    view._entries = tuple(entries)\n',
+   '    view._native_contexts = tuple((path, (str(Path(path).parent),)) for path in '
+   'NATIVE_WITNESSES)\n',
+   '    view._resolver_paths = frozenset(resolver_paths)\n',
+   '    require(not view._executing or dict(view._executing) == executing,\n',
+   "            'pending checker image differs from captured execution')\n",
+   '    view._executing = types.MappingProxyType(dict(executing))\n',
+   "    view._state = 'active'\n",
+   '\n',
+   '\n')),
+ (1226, 1227, (), ('        self._scaled_resolver_paths = frozenset()\n',)),
+ (1268,
+  1270,
+  ('        require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,\n',
+   "                'invalid captured authority bytes')\n",
+   '        image = dict(snapshots)\n',
+   '        for path, raw in image.items():\n',
+   '            require(type(path) is str and Path(path).as_posix() == path\n',
+   '                    and bool(Path(path).parts) and not Path(path).is_absolute()\n',
+   "                    and '..' not in Path(path).parts and type(raw) is bytes,\n",
+   "                    'invalid captured input bytes or path')\n",
+   '        require(set(known) <= image.keys() and set(production) <= image.keys()\n',
+   "                and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')\n",
+   '        self._raw = types.MappingProxyType(image)\n',
+   '        self._record_raw = authority_raw\n',
+   '        self._known = frozenset(known)\n',
+   '        self._production = frozenset(production)\n',
+   '        self._entries = tuple(entries)\n',
+   '        self._native_contexts = tuple((path, (str(Path(path).parent),)) for path in '
+   'NATIVE_WITNESSES)\n',
+   '        self._resolver_paths = frozenset(resolver_paths)\n',
+   '        require(not self._executing or dict(self._executing) == executing,\n',
+   "                'pending checker image differs from captured execution')\n",
+   '        self._executing = types.MappingProxyType(dict(executing))\n',
+   "        self._state = 'active'\n"),
+  ('        _publish_input_image(self, snapshots, authority_raw, known, production,\n',
+   '                             entries, resolver_paths, executing)\n')),
+ (1326,
+  1327,
   ('            require(sha(self.raw(owner, root, path)) == AFTER_SHA256[path],\n',),
   ('            require(sha(_historical_typed_text(path, self.raw(owner, root, '
    "path).decode('utf-8'))) == AFTER_SHA256[path],\n",)),
- (1346,
-  1350,
+ (1353,
+  1358,
+  (),
+  ('            if self._scaled_resolver_paths:\n',
+   '                require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE\n',
+   '                        and resolver_unshadowed(root, self._scaled_resolver_paths,\n',
+   '                                                **_scaled_lookup_args()),\n',
+   "                        'scaled native resolver changed during owned verification')\n")),
+ (1379, 1380, (), ('        self._scaled_resolver_paths = frozenset()\n',)),
+ (1391,
+  1715,
+  (),
+  ('\n',
+   '\n',
+   '# Only these explicit public entries can own a short-lived typed admission.\n',
+   '# The existing dependency authority binds their complete executable sources.\n',
+   'def _public_admission_entries():\n',
+   "    return {'cache_key_contracts.py': ('verify',),\n",
+   "            'rounded_line_selector_contracts.py': ('verify_premises',),\n",
+   "            'seed_count_contracts.py': ('verify_score',)}\n",
+   '\n',
+   '\n',
+   '\n',
+   'def _public_admission_scope(root, frame):\n',
+   '    caller = sys._getframe(1)\n',
+   '    require(caller.f_globals is vars(source)\n',
+   '            and caller.f_code is _live_function_code(source.typed_admission_scope)\n',
+   '            and caller.f_back is frame,\n',
+   "            'public admission requires its direct source factory')\n",
+   '    return _PublicAdmission(root, frame)\n',
+   '\n',
+   '\n',
+   'class _PublicAdmission:\n',
+   '    """A live public call\'s fully admitted image, never an ambient PASS."""\n',
+   '\n',
+   '    def __init__(self, root, frame):\n',
+   '        caller = sys._getframe(1)\n',
+   '        require(caller.f_globals is globals()\n',
+   '                and caller.f_code is _public_admission_scope.__code__\n',
+   "                and caller.f_locals.get('frame') is frame,\n",
+   "                'public admission requires its direct factory')\n",
+   "        filename = frame.f_globals.get('__file__')\n",
+   '        require(type(filename) is str\n',
+   '                and Path(filename).absolute().parent == Path(__file__).absolute().parent\n',
+   '                and frame.f_code.co_name in '
+   '_public_admission_entries().get(Path(filename).name, ()),\n',
+   "                'unsupported public admission owner')\n",
+   '        self._owner_frame = frame\n',
+   '        self._owner = object()\n',
+   '        self._stamp = id(self)\n',
+   '        self._thread = threading.get_ident()\n',
+   '        self._root = _absolute_root_text(root)\n',
+   '        self._cwd = str(Path.cwd())\n',
+   '        self._include_roots = ()\n',
+   "        self._state = 'pending'\n",
+   '        self._failed = False\n',
+   '        self._raw = types.MappingProxyType({})\n',
+   '        self._record_raw = None\n',
+   '        self._known = self._production = frozenset()\n',
+   '        self._entries = self._native_contexts = ()\n',
+   '        self._resolver_paths = self._scaled_resolver_paths = frozenset()\n',
+   '        self._executing = types.MappingProxyType({})\n',
+   '        self._checker_raw = {}\n',
+   '        self._checker_codes = {}\n',
+   '        self._checker_frames = {}\n',
+   '        self._inventory_frame = None\n',
+   "        require(self._authenticate_frame(frame), 'unreviewed public admission owner code')\n",
+   '\n',
+   '    def _authenticate_frame(self, frame):\n',
+   '        namespace = frame.f_globals\n',
+   "        filename = namespace.get('__file__')\n",
+   '        if type(filename) is not str:\n',
+   '            return False\n',
+   '        physical = Path(filename).absolute()\n',
+   '        base = Path(__file__).absolute().parents[2]\n',
+   '        if not physical.is_relative_to(base):\n',
+   '            return False\n',
+   '        relative = physical.relative_to(base).as_posix()\n',
+   '        expected = _IMPORT_IDENTITIES.get(str(physical.resolve()))\n',
+   '        if expected is None:\n',
+   '            return False\n',
+   '        require(physical == _SELF_PATH or DEPENDENCY_TOOL_SHA256.get(relative) == expected,\n',
+   "                'public consumer checker authority changed: ' + relative)\n",
+   '        raw = _regular(base, relative).read_bytes()\n',
+   "        require(sha(raw) == expected, 'public admission checker changed: ' + relative)\n",
+   '        previous = self._checker_raw.setdefault(relative, raw)\n',
+   "        require(previous == raw, 'public admission checker changed during call: ' + "
+   'relative)\n',
+   '        if relative not in self._checker_codes:\n',
+   '            def nested(code):\n',
+   '                yield code\n',
+   '                for child in code.co_consts:\n',
+   '                    if type(child) is types.CodeType:\n',
+   '                        yield from nested(child)\n',
+   '            self._checker_codes[relative] = {\n',
+   '                code.co_qualname: code for code in nested(compile(\n',
+   "                    raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize))}\n",
+   '        expected_code = self._checker_codes[relative].get(frame.f_code.co_qualname)\n',
+   '        if expected_code is None or _code_identity(frame.f_code) != '
+   '_code_identity(expected_code):\n',
+   '            return False\n',
+   "        parts = frame.f_code.co_qualname.split('.')\n",
+   '        live = namespace.get(parts[0])\n',
+   '        if type(live) is type and len(parts) > 1:\n',
+   '            live = getattr(live, parts[1], None)\n',
+   '        code = _live_function_code(live)\n',
+   '        if code is frame.f_code:\n',
+   '            self._checker_frames[(id(namespace), frame.f_code)] = frame\n',
+   '            return True\n',
+   '        # Comprehensions retain the identity of their executing parent code.\n',
+   '        def contains(parent):\n',
+   '            return parent is frame.f_code or any(contains(child) for child in '
+   'parent.co_consts\n',
+   '                if type(child) is types.CodeType)\n',
+   '        return type(code) is types.CodeType and contains(code)\n',
+   '\n',
+   '    def __enter__(self):\n',
+   "        require(sys._getframe(1) is self._owner_frame and self._state == 'pending',\n",
+   "                'public admission entry requires its live owner')\n",
+   '        return self\n',
+   '\n',
+   '    def _check_context(self, root):\n',
+   '        require(_absolute_root_text(root) == self._root and str(Path.cwd()) == self._cwd\n',
+   '                and self._thread == threading.get_ident(),\n',
+   "                'public admission root, thread or working directory changed')\n",
+   '\n',
+   '    def _check(self, owner, root):\n',
+   '        try:\n',
+   '            require(type(self) is _PublicAdmission and self._stamp == id(self)\n',
+   '                    and owner is self._owner and not self._failed\n',
+   "                    and self._state in ('pending', 'active'), 'inactive public admission')\n",
+   '            self._check_context(root)\n',
+   '            methods = {code.co_name: code for code in\n',
+   "                _IMPORT_CODE[str(_SELF_PATH)]['_PublicAdmission'].co_consts\n",
+   '                if type(code) is types.CodeType}\n',
+   "            for name in ('_publish', 'raw', 'observe_bytes'):\n",
+   '                method = vars(_PublicAdmission).get(name)\n',
+   '                require(name not in self.__dict__ and type(method) is types.FunctionType\n',
+   '                        and method.__globals__ is globals()\n',
+   "                        and '__wrapped__' not in method.__dict__\n",
+   '                        and _code_identity(method.__code__) == '
+   '_code_identity(methods[name]),\n',
+   "                        'public admission image method changed: ' + name)\n",
+   '            shared = {code.co_name: code for code in\n',
+   "                _IMPORT_CODE[str(_SELF_PATH)]['_CacheInputs'].co_consts\n",
+   '                if type(code) is types.CodeType}\n',
+   "            for name in ('raw', 'observe_bytes', 'checkpoint'):\n",
+   '                method = vars(_CacheInputs).get(name)\n',
+   '                require(type(method) is types.FunctionType and method.__globals__ is '
+   'globals()\n',
+   "                        and '__wrapped__' not in method.__dict__\n",
+   '                        and _code_identity(method.__code__) == _code_identity(shared[name]),\n',
+   "                        'public admission shared method changed: ' + name)\n",
+   '            frame = sys._getframe(1)\n',
+   '            while frame is not None and frame is not self._owner_frame:\n',
+   '                frame = frame.f_back\n',
+   '            require(frame is self._owner_frame and frame is not None\n',
+   "                    and frame.f_locals.get('_typed_admission') is self,\n",
+   "                    'public admission owner is no longer active')\n",
+   "            require(self._authenticate_frame(frame), 'public admission owner code changed')\n",
+   '        except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):\n',
+   '            self.fail()\n',
+   '            raise\n',
+   '\n',
+   '    def _check_pending(self, root):\n',
+   '        self._check(self._owner, root)\n',
+   "        require(self._state == 'pending' and not self._raw and self._record_raw is None,\n",
+   "                'invalid pending public admission')\n",
+   '        publisher = sys._getframe(1)\n',
+   '        gate = publisher.f_back\n',
+   '        require(publisher.f_code is _live_function_code(_PublicAdmission._publish)\n',
+   '                and gate is not None and gate.f_globals is globals()\n',
+   '                and gate.f_code is _live_function_code(verify)\n',
+   "                and gate.f_locals.get('_public_admission') is self,\n",
+   "                'public admission publication requires its complete gate')\n",
+   '\n',
+   '    def _publish(self, root, snapshots, authority_raw, known, production,\n',
+   '                 entries, resolver_paths, executing):\n',
+   '        caller = sys._getframe(1)\n',
+   '        require(caller.f_globals is globals()\n',
+   '                and caller.f_code is _live_function_code(verify),\n',
+   "                'public input publication requires the full gate')\n",
+   '        self._check_pending(root)\n',
+   '        _publish_input_image(self, snapshots, authority_raw, known, production,\n',
+   '                             entries, resolver_paths, executing)\n',
+   '\n',
+   '    def raw(self, owner, root, path):\n',
+   '        return _CacheInputs.raw(self, owner, root, path)\n',
+   '\n',
+   '    def observe_bytes(self, owner, root, path):\n',
+   '        return _CacheInputs.observe_bytes(self, owner, root, path)\n',
+   '\n',
+   '\n',
+   '    def _check_consumer_bindings(self):\n',
+   '        for frame in tuple(self._checker_frames.values()):\n',
+   "            require(self._authenticate_frame(frame), 'public consumer frame changed')\n",
+   '            namespace = frame.f_globals\n',
+   "            path = Path(namespace['__file__']).resolve()\n",
+   '            relative = path.relative_to(_SELF_PATH.parents[2]).as_posix()\n',
+   '            if relative in CHECKER_PATHS:\n',
+   '                continue  # The complete gate/checkpoint checks these modules.\n',
+   '            key = str(path)\n',
+   '            for name, expected in _IMPORT_CODE[key].items():\n',
+   "                if name.startswith('<'):\n",
+   '                    continue\n',
+   '                live = namespace.get(name)\n',
+   '                members = ({child.co_name: child for child in expected.co_consts\n',
+   '                            if type(child) is types.CodeType}\n',
+   '                           if type(live) is type else {None: expected})\n',
+   '                for member, code in members.items():\n',
+   '                    value = getattr(live, member, None) if member else live\n',
+   "                    label = relative + ':' + name + ('.' + member if member else '')\n",
+   '                    _check_defaults(value, _IMPORT_DEFAULTS[key].get(\n',
+   "                        name + '.' + member if member else name), label)\n",
+   '                    actual = _live_function_code(value)\n',
+   '                    require(actual is not None and _code_identity(actual) == '
+   '_code_identity(code),\n',
+   "                            'public consumer binding changed: ' + label)\n",
+   '\n',
+   '    def _publication_inputs(self, root, snapshots):\n',
+   '        self._check(self._owner, root)\n',
+   '        self._check_consumer_bindings()\n',
+   '        image = dict(snapshots)\n',
+   '        for path, expected in self._checker_raw.items():\n',
+   '            raw = _regular(root, path).read_bytes()\n',
+   "            require(raw == expected, 'public checker differs from admitted root: ' + path)\n",
+   "            require(image.setdefault(path, raw) == raw, 'public checker observation changed: ' "
+   '+ path)\n',
+   "        if self._state == 'active':\n",
+   '            for path, raw in image.items():\n',
+   '                require(self._raw.get(path) == raw or\n',
+   '                        (path not in self._raw and self._checker_raw.get(path) == raw),\n',
+   "                        'public input changed between admissions: ' + path)\n",
+   '        return image\n',
+   '\n',
+   '    def project(self, root, path, raw):\n',
+   '        try:\n',
+   '            self._check(self._owner, root)\n',
+   '            caller = sys._getframe(1)\n',
+   '            require(caller.f_globals is globals()\n',
+   '                    and caller.f_code is _live_function_code(reviewed_typed_text),\n',
+   "                    'public projection requires its actual typed adapter')\n",
+   "            require(self._state == 'active' and self._raw.get(path) == raw,\n",
+   "                    'typed source differs from public admission: ' + path)\n",
+   '            # A semantic admission is not an exact endpoint admission by itself.\n',
+   '            for name in SOURCE_PATHS:\n',
+   "                require(sha(_historical_typed_text(name, self._raw[name].decode('utf-8')))\n",
+   "                        == AFTER_SHA256[name], 'unreviewed exact public endpoint: ' + name)\n",
+   '            typed_boundary.verify_authority()\n',
+   '            conditioned_cubic.verify_authority()\n',
+   '        except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):\n',
+   '            self.fail()\n',
+   '            raise\n',
+   '\n',
+   '    def fail(self):\n',
+   '        self._failed = True\n',
+   '\n',
+   '    def __exit__(self, kind, error, traceback):\n',
+   '        try:\n',
+   '            require(sys._getframe(1) is self._owner_frame,\n',
+   "                    'public admission exit requires its live owner')\n",
+   '            if error is not None:\n',
+   '                self.fail()\n',
+   '            if kind is None:\n',
+   '                self._check(self._owner, Path(self._root))\n',
+   "                if self._state == 'active':\n",
+   '                    self._check_consumer_bindings()\n',
+   '                    for frame in tuple(self._checker_frames.values()):\n',
+   '                        require(self._authenticate_frame(frame),\n',
+   "                                'public admission consumer code changed')\n",
+   '                    for path, raw in self._checker_raw.items():\n',
+   '                        require(_regular(Path(self._root), path).read_bytes() == raw,\n',
+   "                                'public consumer checker changed at exit: ' + path)\n",
+   '                    _CacheInputs.checkpoint(self, self._owner, Path(self._root))\n',
+   '                    self._check(self._owner, Path(self._root))\n',
+   '        finally:\n',
+   "            self._state = 'closed'\n",
+   '            self._raw = types.MappingProxyType({})\n',
+   '            self._record_raw = None\n',
+   '            self._checker_raw.clear()\n',
+   '            self._checker_codes.clear()\n',
+   '            self._checker_frames.clear()\n',
+   '            self._owner_frame = None\n',
+   '            self._inventory_frame = None\n',
+   '        return False\n',
+   '\n',
+   '    def __copy__(self):\n',
+   "        raise ContractError('full-audit cleanup successor: public admissions cannot be "
+   "copied')\n",
+   '\n',
+   '    def __deepcopy__(self, memo):\n',
+   '        return self.__copy__()\n',
+   '\n',
+   '    def __reduce_ex__(self, protocol):\n',
+   '        return self.__copy__()\n',
+   '\n',
+   '\n',
+   'def _cache_inventory_admission_frame(frame, scope):\n',
+   "    filename = frame.f_globals.get('__file__')\n",
+   '    valid = (type(filename) is str and Path(filename).absolute() ==\n',
+   "            Path(__file__).absolute().with_name('cache_key_contracts.py')\n",
+   "            and frame.f_code is _live_function_code(frame.f_globals.get('inventory'))\n",
+   "            and frame.f_locals.get('_admission') is scope\n",
+   '            and scope._authenticate_frame(frame))\n',
+   '    if valid:\n',
+   '        if scope._inventory_frame is None:\n',
+   '            scope._inventory_frame = frame\n',
+   '        elif scope._inventory_frame is not frame:\n',
+   '            scope.fail()\n',
+   "            raise ContractError('full-audit cleanup successor: public inventory invocation "
+   "changed')\n",
+   '    return valid\n',
+   '\n',
+   '\n',
+   'def _public_admission_for(root, *, publication=False):\n',
+   '    """Find an explicitly entered owner through authenticated callsites only."""\n',
+   '    frames = []\n',
+   '    frame = sys._getframe(1)\n',
+   '    while frame is not None:\n',
+   "        scope = frame.f_locals.get('_typed_admission')\n",
+   "        borrowed = frame.f_locals.get('_admission')\n",
+   '        bridge = (type(borrowed) is _PublicAdmission\n',
+   '                  and _cache_inventory_admission_frame(frame, borrowed))\n',
+   '        if bridge:\n',
+   '            scope = borrowed\n',
+   '        if type(scope) is _PublicAdmission and (scope._owner_frame is frame or bridge):\n',
+   '            try:\n',
+   '                wrappers = set()\n',
+   '                for call in frames:\n',
+   '                    if publication and call.f_code in wrappers:\n',
+   '                        wrappers.remove(call.f_code)\n',
+   '                        continue\n',
+   '                    if not scope._authenticate_frame(call):\n',
+   '                        return None\n',
+   '                    candidate = call.f_globals.get(call.f_code.co_name)\n',
+   '                    while type(candidate) is types.FunctionType and hasattr(candidate, '
+   "'__wrapped__'):\n",
+   '                        wrappers.add(candidate.__code__)\n',
+   '                        candidate = candidate.__wrapped__\n',
+   '                scope._check(scope._owner, root)\n',
+   '                return scope\n',
+   '            except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):\n',
+   '                scope.fail()\n',
+   '                raise\n',
+   '        frames.append(frame)\n',
+   '        frame = frame.f_back\n',
+   '    return None\n')),
+ (1744,
+  1748,
   (),
   ("        elif kind == 'runtime':\n",
    "            name = 'check_runtime_support'\n",
    "        elif kind == 'sampled':\n",
    "            name = 'check_sampled_values'\n")),
- (1355,
-  1357,
+ (1753,
+  1755,
   ("                'winner': 'winner_sign_contracts', 'border': "
    "'border_parser_contracts'}.get(kind)\n",),
   ("                'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts',\n",
    "                'runtime': 'check_runtime_support', 'sampled': "
    "'check_sampled_values'}.get(kind)\n")),
- (1410,
-  1412,
+ (1756,
+  1781,
+  (),
+  ('\n',
+   '\n',
+   'def _seed_frame_kind(frame, *, include_aliases=False):\n',
+   '    """Recognize only the canonical standalone seed wrapper; aliases block reuse."""\n',
+   '    namespace = frame.f_globals\n',
+   '    if type(namespace) is not dict:\n',
+   '        return None\n',
+   "    candidate = namespace.get('_verify_standalone')\n",
+   '    if type(candidate) is not types.FunctionType or frame.f_code is not candidate.__code__:\n',
+   '        return None\n',
+   "    filename = namespace.get('__file__')\n",
+   '    if type(filename) is not str:\n',
+   '        return None\n',
+   "    expected = Path(__file__).absolute().with_name('seed_count_contracts.py')\n",
+   '    if Path(filename).absolute() != expected:\n',
+   '        return None\n',
+   "    module_code = namespace.get('_EXECUTED_MODULE_CODE')\n",
+   '    if type(module_code) is types.CodeType:\n',
+   '        codes = [code for code in module_code.co_consts\n',
+   "                 if type(code) is types.CodeType and code.co_name == '_verify_standalone']\n",
+   "        module = sys.modules.get((__package__ + '.' if __package__ else '') + "
+   "'seed_count_contracts')\n",
+   '        if (len(codes) == 1 and codes[0] is frame.f_code and candidate.__globals__ is '
+   'namespace\n',
+   '                and type(module) is types.ModuleType and namespace is vars(module)):\n',
+   "            return 'seed'\n",
+   "    return 'alias_seed' if include_aliases else None\n")),
+ (1788,
+  1794,
+  (),
+  ('    receipt_kind = _receipt_frame_kind(frame, include_aliases=include_aliases)\n',
+   '    if receipt_kind is not None:\n',
+   '        return receipt_kind\n',
+   '    seed_kind = _seed_frame_kind(frame, include_aliases=include_aliases)\n',
+   '    if seed_kind is not None:\n',
+   '        return seed_kind\n')),
+ (1839,
+  1841,
   (),
   ("                            (prefix + 'check_runtime_support', 'verify'),\n",
    "                            (prefix + 'check_sampled_values', 'verify'),\n")),
- (1421,
-  1422,
+ (1850,
+  1851,
   ("    for kind in ('invariant', 'winner', 'border'):\n",),
   ("    for kind in ('invariant', 'winner', 'border', 'runtime', 'sampled'):\n",)),
- (1435,
-  1437,
+ (1864,
+  1866,
   ("                                         'border_parser_contracts.py', "
    "'coverage_loop_proofs.py')):\n",),
   ("                                         'border_parser_contracts.py', "
    "'check_runtime_support.py',\n",
    "                                         'check_sampled_values.py', "
    "'coverage_loop_proofs.py')):\n")),
- (1440,
-  1442,
+ (1869,
+  1871,
   ("                       ('border', 'border_parser_contracts.py')):\n",),
   ("                       ('border', 'border_parser_contracts.py'),\n",
    "                       ('runtime', 'check_runtime_support.py'), ('sampled', "
    "'check_sampled_values.py')):\n")),
- (1458,
-  1459,
+ (1880,
+  1933,
+  (),
+  ('def _receipt_frame_kind(frame, *, include_aliases=False):\n',
+   '    """Recognize the real maintained import or script; aliases only block reuse."""\n',
+   '    namespace = frame.f_globals\n',
+   '    if type(namespace) is not dict:\n',
+   '        return None\n',
+   "    candidate = namespace.get('build_receipt')\n",
+   '    if type(candidate) is not types.FunctionType or frame.f_code is not candidate.__code__:\n',
+   '        return None\n',
+   "    filename = namespace.get('__file__')\n",
+   '    if type(filename) is not str:\n',
+   '        return None\n',
+   "    expected = Path(__file__).absolute().parent.parent / 'coverage_loop_proofs.py'\n",
+   '    if Path(filename).absolute() != expected:\n',
+   '        return None\n',
+   "    module_code = namespace.get('_EXECUTED_MODULE_CODE')\n",
+   '    if type(module_code) is types.CodeType:\n',
+   '        codes = [code for code in module_code.co_consts\n',
+   "                 if type(code) is types.CodeType and code.co_name == 'build_receipt']\n",
+   '        if len(codes) == 1 and codes[0] is frame.f_code and candidate.__globals__ is '
+   'namespace:\n',
+   "            for name in ('coverage_loop_proofs', 'tools.coverage_loop_proofs', '__main__'):\n",
+   '                module = sys.modules.get(name)\n',
+   '                if type(module) is types.ModuleType and namespace is vars(module):\n',
+   "                    return 'generated_receipt'\n",
+   "    return 'alias_generated_receipt' if include_aliases else None\n",
+   '\n',
+   '\n',
+   'def _receipt_operation_enter(root, build, seed):\n',
+   '    """Create a lazy image only for one live maintained generated receipt."""\n',
+   '    frame = sys._getframe(1)\n',
+   "    require(_receipt_frame_kind(frame) == 'generated_receipt'\n",
+   "            and frame.f_locals.get('root') == root and frame.f_locals.get('build') == build\n",
+   "            and frame.f_locals.get('_receipt_seed') is seed,\n",
+   "            'generated receipt requires its direct producer frame')\n",
+   "    return _InvariantInputs(root, frame, 'generated_receipt')\n",
+   '\n',
+   '\n',
+   'def _operation_include_context(operation, root, include_roots):\n',
+   '    """Nonempty include ownership belongs only to the exact generated invocation."""\n',
+   '    try:\n',
+   '        _operation_check(operation, root)\n',
+   '        if operation is not None:\n',
+   '            expected = operation._include_roots\n',
+   '            supplied = tuple(_absolute_root_text(path) for path in include_roots)\n',
+   '            # A generated receipt also admits root-only historical inputs.\n',
+   '            require(supplied == expected or (supplied == ()\n',
+   "                                             and operation._kind == 'generated_receipt'),\n",
+   "                    'operation include root changed')\n",
+   "            require(not expected or operation._kind == 'generated_receipt',\n",
+   "                    'unowned coverage include roots')\n",
+   '    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:\n',
+   '        _operation_fail(operation, error)\n',
+   '\n',
+   '\n')),
+ (1940,
+  1958,
   ("    if kind not in ('invariant', 'border') or operation._kind != 'winner':\n",),
-  ("    if kind not in ('invariant', 'border') or operation._kind not in ('winner', 'runtime', "
-   "'sampled'):\n",)),
- (1506,
-  1507,
+  ("    if kind in ('map_loops', 'rtree_loops', 'other_loops', 'alias_loops') and operation._kind "
+   "== 'generated_receipt':\n",
+   '        caller = frame.f_back\n',
+   '        owner = operation._owner_frame\n',
+   '        namespace = owner.f_globals\n',
+   "        if (kind not in ('map_loops', 'rtree_loops', 'other_loops', 'alias_loops')\n",
+   '                or frame.f_globals is not namespace or caller is None\n',
+   '                or caller.f_globals is not namespace\n',
+   '                or caller.f_code is not '
+   "_live_function_code(namespace.get('_receipt_reviewed_nonempty_loops'))\n",
+   '                or caller.f_back is not owner):\n',
+   '            return None\n',
+   '        for local in (frame.f_locals, caller.f_locals):\n',
+   "            if (local.get('_operation') is not operation\n",
+   "                    or _absolute_root_text(local.get('root')) != operation._root\n",
+   "                    or tuple(_absolute_root_text(path) for path in local.get('include_roots', "
+   '()))\n',
+   '                    != operation._include_roots):\n',
+   '                return None\n',
+   '        return caller\n',
+   "    if kind not in ('invariant', 'border') or operation._kind not in ('winner', 'runtime', "
+   "'sampled'):\n")),
+ (2005,
+  2006,
   ("                and operation._kind == 'winner', 'invalid private operation wrapper')\n",),
   ("                and operation._kind in ('winner', 'runtime', 'sampled'), 'invalid private "
    "operation wrapper')\n",)),
- (1518,
-  1519,
+ (2017,
+  2018,
   ("        require(kind in ('invariant', 'winner', 'border', 'map_loops', 'rtree_loops'),\n",),
-  ("        require(kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'map_loops', "
-   "'rtree_loops'),\n",)),
- (1660, 1661, (), ('        self._checker_receipt = False\n',)),
- (1676,
-  1695,
+  ("        require(kind in ('invariant', 'winner', 'border', 'runtime', 'sampled', 'seed', "
+   "'map_loops', 'rtree_loops'),\n",)),
+ (2110,
+  2111,
+  ('def _operation_record(operation, root, *, exact=False, include_roots=(), '
+   'expected_lane_raw=None):\n',),
+  ('def _operation_record(operation, root, *, exact=False, include_roots=None, '
+   'expected_lane_raw=None):\n',)),
+ (2112,
+  2113,
+  ('        require(type(operation) is _InvariantInputs and include_roots == (),\n',),
+  ('        require(type(operation) is _InvariantInputs,\n',)),
+ (2114,
+  2119,
+  (),
+  ('        if include_roots is None:\n',
+   '            include_roots = tuple(Path(path) for path in operation._include_roots)\n',
+   '        _operation_include_context(operation, root, include_roots)\n',
+   '        require(_absolute_root_text(root) == operation._root,\n',
+   "                'generated input cannot supply source authority')\n")),
+ (2154,
+  2156,
+  ('                and caller.f_code in (_live_function_code(_invariant_operation), '
+   '_live_function_code(_operation_enter))\n',),
+  ('                and caller.f_code in (_live_function_code(_invariant_operation), '
+   '_live_function_code(_operation_enter),\n',
+   '                                      _live_function_code(_receipt_operation_enter))\n')),
+ (2165,
+  2251,
+  (),
+  ('        self._checker_receipt = False\n',
+   '        self._receipt_seed = None\n',
+   '        self._receipt_seed_token = None\n',
+   '        self._receipt_source_digests = types.MappingProxyType({})\n',
+   '        self._receipt_stage_digests = types.MappingProxyType({})\n',
+   '        self._receipt_production = types.MappingProxyType({})\n',
+   '        self._receipt_observations = []\n',
+   '        self._receipt_discoveries = []\n',
+   '        self._include_raw = types.MappingProxyType({})\n',
+   '        self._include_entries = ()\n',
+   '        self._include_production = frozenset()\n',
+   '        self._proof_bindings = types.MappingProxyType({})\n',
+   "        if kind == 'generated_receipt':\n",
+   "            build = owner_frame.f_locals['build']\n",
+   "            seed = owner_frame.f_locals['_receipt_seed']\n",
+   '            require(type(seed) is dict and _absolute_root_text(build) != self._root,\n',
+   "                    'invalid generated receipt coordinates')\n",
+   '            self._include_roots = (_absolute_root_text(build),)\n',
+   "            self._receipt_seed = _canonical(seed).encode('utf-8')\n",
+   '            self._receipt_seed_token = seed\n',
+   "            self._receipt_source_digests = types.MappingProxyType(dict(seed['root_inputs']))\n",
+   '            self._receipt_stage_digests = types.MappingProxyType(\n',
+   "                {path: item['instrumented'] for path, item in seed['inputs'].items()})\n",
+   '            production = {}\n',
+   '            for location, digests in ((self._root, self._receipt_source_digests),\n',
+   '                                      (self._include_roots[0], '
+   'self._receipt_stage_digests)):\n',
+   '                production[location] = self._receipt_production_paths(location)\n',
+   '                require(production[location] <= digests.keys(),\n',
+   "                        'production census differs from producer coordinates')\n",
+   '            self._receipt_production = types.MappingProxyType(production)\n',
+   '\n',
+   '    def _check_context(self, root):\n',
+   "        if self._kind != 'generated_receipt':\n",
+   '            return super()._check_context(root)\n',
+   '        frame = self._owner_frame\n',
+   '        require(frame is not None and str(Path.cwd()) == self._cwd\n',
+   '                and _absolute_root_text(root) in (self._root, *self._include_roots)\n',
+   "                and _absolute_root_text(frame.f_locals.get('root')) == self._root\n",
+   "                and (_absolute_root_text(frame.f_locals.get('build')), ) == "
+   'self._include_roots\n',
+   "                and frame.f_locals.get('_receipt_seed') is self._receipt_seed_token,\n",
+   "                'generated source/build context changed')\n",
+   '\n',
+   '    def _receipt_production_paths(self, location):\n',
+   '        build = Path(self._include_roots[0])\n',
+   '        return frozenset(path.relative_to(location).as_posix()\n',
+   '            for path in guard.production_mojo_paths(Path(location))\n',
+   '            if location != self._root or not path.absolute().is_relative_to(build))\n',
+   '\n',
+   '    def _receipt_inputs_check(self):\n',
+   '        self._check_owner(Path(self._root))\n',
+   "        require(self._kind == 'generated_receipt' and type(self._receipt_seed) is bytes,\n",
+   "                'invalid generated input boundary')\n",
+   "        require(_canonical(self._receipt_seed_token).encode('utf-8') == self._receipt_seed,\n",
+   "                'generated receipt seed changed after consumption')\n",
+   '        for location, expected in self._receipt_production.items():\n',
+   '            require(self._receipt_production_paths(location) == expected,\n',
+   "                'generated producer production census changed')\n",
+   '        seed = json.loads(self._receipt_seed, object_pairs_hook=source.unique_keys)\n',
+   "        self._owner_frame.f_globals['check_capture_inputs'](\n",
+   "            {'receipt': seed}, Path(self._root), Path(self._include_roots[0]))\n",
+   '\n',
+   '    def _receipt_bindings(self, root, include_roots):\n',
+   '        try:\n',
+   '            _operation_include_context(self, root, include_roots)\n',
+   "            require(self._kind == 'generated_receipt' and _absolute_root_text(root) == "
+   'self._root,\n',
+   "                    'invalid generated proof-binding request')\n",
+   '            self._admit(root, exact=True)\n',
+   '            # This authenticates live descriptor tables without replaying the\n',
+   '            # complete source graph. Rows still read their actual physical bytes.\n',
+   '            typed_boundary.verify_authority()\n',
+   '            return dict(self._proof_bindings)\n',
+   '        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
+   'AttributeError) as error:\n',
+   '            _operation_fail(self, error)\n',
+   '\n',
+   '    def _clear_receipt(self):\n',
+   '        self._receipt_seed = None\n',
+   '        self._receipt_seed_token = None\n',
+   '        self._receipt_source_digests = types.MappingProxyType({})\n',
+   '        self._receipt_stage_digests = types.MappingProxyType({})\n',
+   '        self._receipt_production = types.MappingProxyType({})\n',
+   '        self._receipt_observations.clear()\n',
+   '        self._receipt_discoveries.clear()\n',
+   '        self._include_raw = types.MappingProxyType({})\n',
+   '        self._include_entries = ()\n',
+   '        self._include_production = frozenset()\n',
+   '        self._proof_bindings = types.MappingProxyType({})\n')),
+ (2255, 2256, (), ('        self._clear_receipt()\n',)),
+ (2264, 2265, (), ('        self._scaled_resolver_paths = frozenset()\n',)),
+ (2268,
+  2287,
   (),
   ('        self._checker_receipt = False\n',
    '\n',
@@ -3839,37 +5258,284 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
    'AttributeError) as error:\n',
    '            _operation_fail(self, error)\n')),
- (1847,
-  1850,
+ (2333,
+  2335,
+  ('                 entries, resolver_paths, executing):\n',),
+  ('                 entries, resolver_paths, executing, *, receipt_bindings=None,\n',
+   '                 include_images=()):\n')),
+ (2352,
+  2356,
+  (),
+  ('        require(not self._scaled_resolver_paths or\n',
+   '                (self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE\n',
+   '                 and self._scaled_resolver_paths <= image.keys()),\n',
+   "                'pending scaled native context differs from captured image')\n")),
+ (2366,
+  2395,
+  (),
+  ("        if self._kind == 'generated_receipt':\n",
+   '            require(type(receipt_bindings) is dict and len(include_images) == 1,\n',
+   "                    'missing generated binding image')\n",
+   '            location, stage_image, stage_args = include_images[0]\n',
+   '            require(_absolute_root_text(location) == self._include_roots[0],\n',
+   "                    'captured generated root changed')\n",
+   '            seed = json.loads(self._receipt_seed, object_pairs_hook=source.unique_keys)\n',
+   "            require(all(seed['root_inputs'][path] == sha(raw) for path, raw in image.items()\n",
+   "                        if path in seed['root_inputs']),\n",
+   "                    'source differs from pre-admission producer observation')\n",
+   "            require(all(seed['inputs'].get(path, {}).get('instrumented') == sha(raw)\n",
+   '                        for path, raw in stage_image.items()),\n',
+   "                    'include differs from pre-admission producer observation')\n",
+   '            require(all(digest == (executing[path] if path in executing else\n',
+   '                        sha(authority_raw if path == MIGRATION else image[path]))\n',
+   '                        for path, digest in receipt_bindings.items()),\n',
+   "                    'generated binding map differs from captured physical domains')\n",
+   '            self._include_raw = types.MappingProxyType(dict(stage_image))\n',
+   "            self._include_entries = tuple(_sibling('affected').entry_directories(\n",
+   '                {path: _physical_text(raw) for path, raw in stage_image.items()}))\n',
+   '            require(stage_args == _render_lookup_args(resolver_paths, '
+   'self._include_entries),\n',
+   "                    'generated resolver entry context changed')\n",
+   '            self._include_production = frozenset(path.relative_to(location).as_posix()\n',
+   '                for path in guard.production_mojo_paths(Path(location)))\n',
+   '            self._proof_bindings = types.MappingProxyType(dict(receipt_bindings))\n',
+   '            self._checker_receipt = True\n',
+   '        else:\n',
+   '            require(receipt_bindings is None and include_images == (),\n',
+   "                    'non-generated owner received include admission')\n")),
+ (2396,
+  2402,
+  (),
+  ('        for location, path, value, mode in self._receipt_observations:\n',
+   '            self._match(Path(location), path, value, mode)\n',
+   '        self._receipt_observations.clear()\n',
+   '        for location, paths, kind in self._receipt_discoveries:\n',
+   '            self._discovery(Path(location), paths, kind)\n',
+   '        self._receipt_discoveries.clear()\n')),
+ (2414,
+  2424,
+  (),
+  ("            if self._kind == 'generated_receipt' and self._state == 'pending':\n",
+   '                location = _absolute_root_text(root)\n',
+   '                digests = (self._receipt_source_digests if location == self._root\n',
+   '                           else self._receipt_stage_digests)\n',
+   "                expected = (self._receipt_production[location] if kind == 'production'\n",
+   '                            else frozenset(path for path in digests if '
+   "path.endswith('.mojo')))\n",
+   '                require(frozenset(paths) == expected,\n',
+   "                        'consumed census differs from producer boundary: ' + kind)\n",
+   '                self._receipt_discoveries.append((location, frozenset(paths), kind))\n',
+   '                return\n')),
+ (2427,
+  2430,
+  ("                expected = self._production if kind == 'production' else self._known\n",),
+  ("                generated = self._kind == 'generated_receipt' and _absolute_root_text(root) != "
+   'self._root\n',
+   "                expected = ((self._include_production if kind == 'production' else "
+   'frozenset(self._include_raw))\n',
+   "                            if generated else (self._production if kind == 'production' else "
+   'self._known))\n')),
+ (2435,
+  2438,
+  ('        require(path in self._raw or path == MIGRATION,\n',),
+  ("        generated = self._kind == 'generated_receipt' and _absolute_root_text(root) != "
+   'self._root\n',
+   '        image = self._include_raw if generated else self._raw\n',
+   '        require(path in image or (not generated and path == MIGRATION),\n')),
+ (2440,
+  2441,
+  ('        raw = self._record_raw if path == MIGRATION else self._raw[path]\n',),
+  ('        raw = self._record_raw if not generated and path == MIGRATION else image[path]\n',)),
+ (2466,
+  2485,
+  ("            if self._state == 'pending':\n",),
+  ("            if self._kind == 'generated_receipt' and self._state == 'pending':\n",
+   '                # Join reads even when no current theorem will trigger capture.\n',
+   '                # A consumed transient value cannot disappear before lazy admission.\n',
+   '                generated = _absolute_root_text(root) != self._root\n',
+   '                digests = self._receipt_stage_digests if generated else '
+   'self._receipt_source_digests\n',
+   '                digest = digests.get(path)\n',
+   '                if digest is not None:\n',
+   "                    raw = value if mode == 'bytes' else _regular(root, path).read_bytes()\n",
+   '                    require(type(raw) is bytes and sha(raw) == digest,\n',
+   "                            'consumed input differs from generation boundary: ' + path)\n",
+   "                    if mode != 'bytes':\n",
+   '                        expected = _operation_text(raw, mode)\n',
+   '                        require((source.token_sha256(value) == '
+   'source.token_sha256(expected))\n',
+   "                                if mode.startswith('supplied_') else value == expected,\n",
+   "                                'consumed text differs from generation boundary: ' + path)\n",
+   '                else:\n',
+   "                    require(not generated, 'unknown generated input observation: ' + path)\n",
+   '                self._receipt_observations.append((_absolute_root_text(root), path, value, '
+   'mode))\n',
+   "            elif self._state == 'pending':\n")),
+ (2502,
+  2511,
+  ('                    verify(root, _expected_lane_raw=expected_lane_raw, _capture=self)\n',),
+  ("                    if self._kind == 'generated_receipt':\n",
+   '                        require(_absolute_root_text(root) == self._root,\n',
+   "                                'generated bytes cannot supply source admission')\n",
+   '                        self._receipt_inputs_check()\n',
+   '                    verify(root, _expected_lane_raw=expected_lane_raw, _capture=self,\n',
+   '                           include_roots=tuple(Path(path) for path in self._include_roots))\n',
+   "                    if self._kind == 'generated_receipt':\n",
+   '                        require(executing_checker_bindings(root) == dict(self._executing),\n',
+   "                                'generated receipt checker differs from executing image')\n")),
+ (2519,
+  2522,
   ('                    require(sha(self.raw(self._owner, root, path)) == AFTER_SHA256[path],\n',),
   ('                    raw = self.raw(self._owner, root, path)\n',
    '                    require(sha(raw) == AFTER_SHA256[path] or (typed_boundary.is_current(path, '
    'raw)\n',
    "                            and typed_boundary.edge(path)['before_sha256'] == "
    'AFTER_SHA256[path]),\n')),
- (1866,
-  1871,
+ (2532,
+  2568,
   (),
-  ('                    require(type(self._checker_receipt) is bool,\n',
+  ('    def _receipt_finish_inputs(self, root):\n',
+   '        """One terminal physical sweep, never another source semantic replay."""\n',
+   "        require(_absolute_root_text(root) == self._root, 'foreign generated finalizer root')\n",
+   '        for path in self._raw:\n',
+   '            self.observe_bytes(self._owner, root, path)\n',
+   "        require({p.as_posix() for p in _sibling('cache_key').input_paths(root)\n",
+   "                 if p.suffix == '.mojo'} == self._known,\n",
+   "                'source path inventory changed during generated verification')\n",
+   '        require({path.relative_to(root).as_posix() for path in '
+   'guard.production_mojo_paths(Path(root))}\n',
+   "                == self._production, 'production path inventory changed during generated "
+   "verification')\n",
+   '        require(_regular(root, MIGRATION).read_bytes() == self._record_raw,\n',
+   "                'record changed during generated verification')\n",
+   '        typed_boundary.verify_authority()\n',
+   '        location = Path(self._include_roots[0])\n',
+   '        _helper_entry_census_finish(location, self._include_raw, _operation=self)\n',
+   '        require({path.relative_to(location).as_posix() for path in '
+   'guard.production_mojo_paths(location)}\n',
+   "                == self._include_production, 'generated production path census changed')\n",
+   '        require(resolver_unshadowed(root, self._resolver_paths,\n',
+   '                    **_render_lookup_args(self._resolver_paths, self._entries))\n',
+   '                and resolver_unshadowed(location, self._resolver_paths | {path + '
+   "'.cov-origin'\n",
+   "                    for path in self._resolver_paths if path.endswith('.mojo')},\n",
+   '                    **_render_lookup_args(self._resolver_paths, self._include_entries)),\n',
+   "                'generated resolver surface changed during verification')\n",
+   '        if self._scaled_resolver_paths:\n',
+   '            require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE\n',
+   '                    and _scaled_known_paths(root, _operation=self) == self._known,\n',
+   "                    'generated scaled native context changed')\n",
+   '            scaled_include_paths = self._scaled_resolver_paths | {\n',
+   "                path + '.cov-origin' for path in self._scaled_resolver_paths}\n",
+   '            require(resolver_unshadowed(root, self._scaled_resolver_paths,\n',
+   '                                       **_scaled_lookup_args())\n',
+   '                    and resolver_unshadowed(location, scaled_include_paths,\n',
+   '                                            **_scaled_lookup_args()),\n',
+   "                    'generated scaled native resolver changed during finalization')\n",
+   '        self._receipt_inputs_check()\n',
+   '\n')),
+ (2573,
+  2621,
+  ('                    _CacheInputs.checkpoint(self, self._owner, root)\n',
+   '                elif self._resolver_paths:\n'),
+  ("                    if self._kind == 'generated_receipt':\n",
+   '                        self._receipt_finish_inputs(root)\n',
+   '                    else:\n',
+   '                        _CacheInputs.checkpoint(self, self._owner, root)\n',
+   '                    require(type(self._checker_receipt) is bool,\n',
    "                            'invalid consumed checker receipt state')\n",
    '                    if self._checker_receipt:\n',
    '                        require(executing_checker_bindings(root) == dict(self._executing),\n',
    "                                'consumed receipt checker changed during owned "
-   "verification')\n")),
- (1914, 1915, (), ('        self._checker_receipt = False\n',)),
- (2018,
-  2018,
+   "verification')\n",
+   "                elif self._kind == 'generated_receipt':\n",
+   '                    # No current theorem is needed, but every consumed read and\n',
+   '                    # census still belongs to this producer observation image.\n',
+   '                    for location, path, value, mode in tuple(self._receipt_observations):\n',
+   '                        raw = _regular(Path(location), path).read_bytes()\n',
+   "                        expected = raw if mode == 'bytes' else _operation_text(raw, mode)\n",
+   '                        require((source.token_sha256(value) == '
+   'source.token_sha256(expected))\n',
+   "                                if mode.startswith('supplied_') else value == expected,\n",
+   "                                'pending receipt input changed: ' + path)\n",
+   '                    for location, paths, kind in tuple(self._receipt_discoveries):\n',
+   '                        digests = (self._receipt_source_digests if location == self._root\n',
+   '                                   else self._receipt_stage_digests)\n',
+   '                        expected = (self._receipt_production[location] if kind == '
+   "'production'\n",
+   '                                    else frozenset(path for path in digests if '
+   "path.endswith('.mojo')))\n",
+   "                        require(paths == expected, 'pending receipt census changed')\n",
+   '                    location = self._include_roots[0]\n',
+   '                    stage_image = {path: raw for observed_root, path, raw, mode in\n',
+   '                        self._receipt_observations if observed_root == location\n',
+   "                        and mode == 'bytes' and path.endswith('.mojo')}\n",
+   "                    stage_entries = tuple(_sibling('affected').entry_directories(\n",
+   '                        {path: _physical_text(raw) for path, raw in stage_image.items()}))\n',
+   '                    stage_args = _render_lookup_args(self._resolver_paths, stage_entries)\n',
+   '                    require(not stage_args or set(stage_image) == {\n',
+   '                        path for path in self._receipt_stage_digests if '
+   "path.endswith('.mojo')},\n",
+   "                        'pending include entry context lacks complete observations')\n",
+   "                    include_paths = self._resolver_paths | {path + '.cov-origin'\n",
+   "                        for path in self._resolver_paths if path.endswith('.mojo')}\n",
+   '                    require(resolver_unshadowed(Path(location), include_paths, '
+   '**stage_args),\n',
+   "                            'pending generated resolver surface changed')\n",
+   '                    if self._scaled_resolver_paths:\n',
+   '                        require(self._scaled_resolver_paths == '
+   'scaled_float32.NATIVE_CLOSURE,\n',
+   "                                'pending generated scaled context changed')\n",
+   '                        scaled_paths = self._scaled_resolver_paths | {\n',
+   "                            path + '.cov-origin' for path in self._scaled_resolver_paths}\n",
+   '                        require(resolver_unshadowed(Path(location), scaled_paths,\n',
+   '                                                    **_scaled_lookup_args()),\n',
+   "                                'pending generated scaled resolver surface changed')\n",
+   '                    self._receipt_inputs_check()\n',
+   "                if self._state == 'pending' and (self._resolver_paths or "
+   'self._scaled_resolver_paths):\n')),
+ (2626,
+  2629,
+  (),
+  ('                                or (self._scaled_resolver_paths and\n',
+   '                                    (path in self._scaled_resolver_paths\n',
+   '                                     or path == scaled_float32.LEAF or path in '
+   'scaled_float32.TESTS))\n')),
+ (2643,
+  2654,
+  (),
+  ('                    if self._scaled_resolver_paths:\n',
+   '                        require(self._scaled_resolver_paths == '
+   'scaled_float32.NATIVE_CLOSURE,\n',
+   "                                'historical scaled native context changed')\n",
+   '                        current_known = _scaled_known_paths(root, _operation=self)\n',
+   '                        for paths, kind in self._discoveries:\n',
+   "                            if kind == 'known':\n",
+   '                                require(paths == current_known,\n',
+   "                                        'scaled source path census changed during historical "
+   "operation')\n",
+   '                        require(resolver_unshadowed(root, self._scaled_resolver_paths,\n',
+   '                                                    **_scaled_lookup_args()),\n',
+   "                                'scaled native resolver changed during historical "
+   "operation')\n")),
+ (2665, 2666, (), ('        self._clear_receipt()\n',)),
+ (2673, 2674, (), ('        self._scaled_resolver_paths = frozenset()\n',)),
+ (2679, 2680, (), ('        self._checker_receipt = False\n',)),
+ (2702, 2703, (), ('        self._scaled_resolver_paths = operation._scaled_resolver_paths\n',)),
+ (2766, 2767, (), ('        self._scaled_resolver_paths = frozenset()\n',)),
+ (2785,
+  2785,
   ('        require(digest == AFTER_TOKEN_SHA256[path],\n',
    "                'unreviewed supplied successor source: ' + path)\n"),
   ()),
- (2022,
-  2024,
+ (2789,
+  2791,
   (),
   ('        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, raw),\n',
    "                'unreviewed supplied successor source: ' + path)\n")),
- (2085, 2086, (), ('    typed_fixtures = {}\n',)),
- (2087,
-  2097,
+ (2852, 2853, (), ('    typed_fixtures = {}\n',)),
+ (2854,
+  2864,
   ("        require(sha(raw) == expected[path], 'shared-helper fixture changed: ' + path)\n",),
   ('        historical = raw\n',
    '        if path in tests and typed_boundary.is_current(path, raw):\n',
@@ -3883,75 +5549,323 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            typed_fixtures[path] = raw\n',
    "        require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + "
    'path)\n')),
- (2101,
-  2105,
+ (2868,
+  2872,
   (),
   ('    if typed_fixtures and _inputs is None and _operation is None:\n',
    '        # Owned views retain their complete final sweep. A standalone typed\n',
    '        # fixture must join the same physical image at the terminal root gate.\n',
    '        verify(root, exact=True, _expected_sources=typed_fixtures)\n')),
- (2107,
-  2108,
+ (2874,
+  2875,
   ('    return {**expected, **{path: sha(raw) for path, raw in sources.items()}}\n',),
   ('    return {path: sha(raw) for path, raw in {**sources, **bound}.items()}\n',)),
- (2188, 2188, ('    runtime_view.steps(root, _operation=_operation)\n',), ()),
- (2193, 2194, (), ('    runtime_view.checked_steps(record)\n',)),
- (2202,
-  2204,
+ (2882,
+  2885,
+  (),
+  ('        include_roots = tuple(include_roots)\n',
+   '        if _operation is not None:\n',
+   '            _operation_include_context(_operation, root, include_roots)\n')),
+ (2898, 2899, (), ('        include_images = []\n',)),
+ (2902,
+  2904,
+  ('                require(include_roots == () or (_operation is None and _inputs is None),\n',),
+  ('                require(include_roots == () or (_inputs is None and (_operation is None\n',
+   "                        or _operation._kind == 'generated_receipt')),\n")),
+ (2909,
+  2916,
+  (),
+  ('                for location in include_roots:\n',
+   '                    source_image = (fresh_image if fresh_image is not None else\n',
+   '                        {path: _operation._raw[path] for path in _operation._known})\n',
+   '                    stage_entries, stage_image = _include_entry_context(\n',
+   '                        location, source_image, _operation=_operation)\n',
+   '                    include_images.append((location, stage_image,\n',
+   '                        _render_lookup_args(resolver_paths, stage_entries)))\n')),
+ (2917,
+  2920,
+  ("                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for "
+   'path in resolver_paths})\n',
+   "                    for location in include_roots), 'shared-helper resolver surface "
+   "changed')\n"),
+  ("                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for "
+   'path in resolver_paths},\n',
+   '                        **(include_images[index][2] if include_images else {}))\n',
+   "                    for index, location in enumerate(include_roots)), 'shared-helper resolver "
+   "surface changed')\n")),
+ (2931,
+  2935,
+  ('                            {path for path, value, mode in owner._observations})\n',),
+  ('                    {path for location, path, value, mode in owner._receipt_observations\n',
+   '                     if location == owner._root}\n',
+   "                    if type(owner) is _InvariantInputs and owner._kind == 'generated_receipt' "
+   'else\n',
+   '                    {path for path, value, mode in owner._observations})\n')),
+ (2947,
+  2949,
+  ('            # Rendering callers have no include roots. Keep the historical\n',
+   '            # conservative rule for explicitly supplied stage contexts.\n'),
+  ('            for location, image, _ in include_images:\n',
+   '                _helper_entry_census_finish(location, image, _operation=_operation)\n')),
+ (2950,
+  2953,
+  ("                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for "
+   'path in resolver_paths})\n',
+   "                    for location in include_roots), 'shared-helper final resolver surface "
+   "changed')\n"),
+  ("                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for "
+   'path in resolver_paths},\n',
+   '                        **include_images[index][2])\n',
+   "                    for index, location in enumerate(include_roots)), 'shared-helper final "
+   "resolver surface changed')\n")),
+ (2970,
+  3135,
+  (),
+  ('def _scaled_known_paths(root, *, _operation=None):\n',
+   '    """Validate every discovered path before a set can hide a typed alias."""\n',
+   '    known = set()\n',
+   "    for path in _sibling('cache_key').input_paths(root):\n",
+   "        if path.suffix != '.mojo':\n",
+   '            continue\n',
+   '        name = path.as_posix()\n',
+   '        require(type(name) is str and _canonical_relative_text(name),\n',
+   "                'invalid scaled source path census item')\n",
+   '        known.add(name)\n',
+   '    _operation_known_paths(root, known, _operation=_operation)\n',
+   '    return known\n',
+   '\n',
+   '\n',
+   'def _scaled_lookup_args():\n',
+   '    """Only the pinned native witnesses establish this supplemental context."""\n',
+   "    return {'math_entries': frozenset(('.', *(str(Path(path).parent).casefold()\n",
+   '        for path in scaled_float32.NATIVE_TESTS)))}\n',
+   '\n',
+   '\n',
+   'def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,\n',
+   '                             _input_owner=None, _operation=None, _context=None):\n',
+   '    """Bind the exact math edge and its own native witness, not caller roots."""\n',
+   '    _operation_check(_operation, root)\n',
+   "    require((_inputs is None) == (_input_owner is None), 'incomplete scaled input "
+   "ownership')\n",
+   '    if _inputs is not None:\n',
+   "        require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid scaled input "
+   "view')\n",
+   '        _inputs._check(_input_owner, root)\n',
+   '        require(_operation is None or (type(_inputs) is _BorrowedCacheInputs\n',
+   "                and _operation is _inputs._operation), 'unjoined scaled input and operation "
+   "owners')\n",
+   '    observed = {}\n',
+   '\n',
+   '    def observe(path):\n',
+   '        raw = (_observe_bytes(root, path, _regular(root, path).read_bytes(), '
+   '_operation=_operation)\n',
+   '               if _inputs is None else _inputs.raw(_input_owner, root, path))\n',
+   "        require(type(raw) is bytes, 'scaled input is not physical bytes: ' + path)\n",
+   "        require(observed.setdefault(path, raw) == raw, 'scaled input changed after "
+   "consumption: ' + path)\n",
+   '        if _snapshots is not None:\n',
+   "            require(_snapshots.setdefault(path, raw) == raw, 'scaled captured input changed: ' "
+   '+ path)\n',
+   '        return raw\n',
+   '\n',
+   '    selected = scaled_float32.SOURCE_PATHS if paths is None else paths\n',
+   '    require(type(selected) is tuple and selected == scaled_float32.SOURCE_PATHS,\n',
+   "            'invalid scaled input scope')\n",
+   '    sources = {name: observe(name) for name in selected}\n',
+   "    active = scaled_float32.verify_sources({name: raw.decode('utf-8') for name, raw in "
+   'sources.items()})\n',
+   '    if not active:\n',
+   '        return {}\n',
+   '    expected = {scaled_float32.LEAF: DEPENDENCY_TOOL_SHA256[scaled_float32.LEAF],\n',
+   '                **scaled_float32.PACKAGE_INPUTS, **scaled_float32.PROVIDER_INPUTS,\n',
+   '                **scaled_float32.TESTS}\n',
+   '    for name, digest in expected.items():\n',
+   "        require(sha(observe(name)) == digest, 'scaled correctness input changed: ' + name)\n",
+   '    # Source identity and its actual main declaration jointly establish the\n',
+   '    # fixed witness entry context. No production entry census is inferred.\n',
+   "    affected = _sibling('affected')\n",
+   '    entries = tuple(affected.entry_directories({name: _physical_text(observe(name))\n',
+   '                                              for name in scaled_float32.NATIVE_TESTS}))\n',
+   '    require(entries == tuple(sorted({str(Path(name).parent)\n',
+   '                                     for name in scaled_float32.NATIVE_TESTS})),\n',
+   "            'scaled native entry context changed')\n",
+   '    known = _scaled_known_paths(root, _operation=_operation)\n',
+   '    if _inputs is not None:\n',
+   "        require(known == _inputs._known, 'scaled captured source path census changed')\n",
+   '    found, pending = set(), list(scaled_float32.NATIVE_TESTS)\n',
+   '    while pending:\n',
+   '        name = pending.pop()\n',
+   '        if name in found:\n',
+   '            continue\n',
+   "        require(name in known, 'scaled native dependency missing: ' + name)\n",
+   '        found.add(name)\n',
+   '        for imported in affected.imported_names(_physical_text(observe(name))):\n',
+   '            pending.extend(affected.resolve(imported, name, known, entries=entries))\n',
+   "    require(found == scaled_float32.NATIVE_CLOSURE, 'scaled native import closure changed')\n",
+   '    for name, raw in tuple(observed.items()):\n',
+   "        require(observe(name) == raw, 'scaled input changed during admission: ' + name)\n",
+   '    final_known = _scaled_known_paths(root, _operation=_operation)\n',
+   "    require(final_known == known, 'scaled source path census changed during admission')\n",
+   '    if _context is not None:\n',
+   "        require(type(_context) is dict and not _context, 'invalid scaled source context "
+   "output')\n",
+   "        _context['known'] = frozenset(known)\n",
+   '    return {name: sha(raw) for name, raw in observed.items()}\n',
+   '\n',
+   '\n',
+   'def scaled_float32_proof_bindings(root, *, paths=None, include_roots=(), _inputs=None,\n',
+   '                                   _input_owner=None, _operation=None):\n',
+   '    """Admit one source substitution and its fixed native context, never PASS."""\n',
+   '    failure_operation = _operation\n',
+   '    try:\n',
+   '        _operation_check(_operation, root)\n',
+   "        require((_inputs is None) == (_input_owner is None), 'incomplete scaled input "
+   "ownership')\n",
+   '        if _inputs is not None:\n',
+   "            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid scaled "
+   "input view')\n",
+   '            _inputs._check(_input_owner, root)\n',
+   '            if type(_inputs) is _BorrowedCacheInputs:\n',
+   '                # Only a validated real lease may identify its failure owner.\n',
+   '                failure_operation = _inputs._operation\n',
+   '            require(_operation is None or (type(_inputs) is _BorrowedCacheInputs\n',
+   "                    and _operation is _inputs._operation), 'unjoined scaled input and "
+   "operation owners')\n",
+   '        include_roots = tuple(include_roots)\n',
+   '        if _operation is not None:\n',
+   '            _operation_include_context(_operation, root, include_roots)\n',
+   '        require(include_roots == () or (_inputs is None and (_operation is None\n',
+   "                or _operation._kind == 'generated_receipt')),\n",
+   "                'unowned scaled include roots')\n",
+   '        standalone = _inputs is None and (_operation is None or _operation._state != '
+   "'active')\n",
+   '        executing = (executing_checker_bindings() if standalone else\n',
+   '                     (_inputs._executing if _inputs is not None else _operation._executing))\n',
+   '        context = {}\n',
+   '        result = _scaled_float32_bindings(root, paths=paths, _inputs=_inputs,\n',
+   '            _input_owner=_input_owner, _operation=_operation, _context=context)\n',
+   '        if result:\n',
+   '            require(result[scaled_float32.LEAF] == executing[scaled_float32.LEAF],\n',
+   "                    'scaled receipt lacks executing leaf')\n",
+   "            resolver_paths = {name for name in result if name.endswith('.mojo')}\n",
+   '            require(resolver_paths == scaled_float32.NATIVE_CLOSURE,\n',
+   "                    'scaled resolver scope differs from native closure')\n",
+   "            include_paths = resolver_paths | {name + '.cov-origin' for name in "
+   'resolver_paths}\n',
+   '            require(resolver_unshadowed(root, resolver_paths, **_scaled_lookup_args()) and '
+   'all(\n',
+   '                resolver_unshadowed(location, include_paths, **_scaled_lookup_args())\n',
+   "                for location in include_roots), 'scaled resolver surface changed')\n",
+   '            owners = (() if _inputs is None else (_inputs,))\n',
+   '            if _operation is not None:\n',
+   '                owners += (_operation,)\n',
+   '            if type(_inputs) is _BorrowedCacheInputs:\n',
+   '                owners += (_inputs._operation,)\n',
+   '            for owner in owners:\n',
+   "                observed = (owner._raw.keys() if owner._state == 'active' else\n",
+   '                    {path for location, path, value, mode in owner._receipt_observations\n',
+   '                     if location == owner._root}\n',
+   "                    if type(owner) is _InvariantInputs and owner._kind == 'generated_receipt' "
+   'else\n',
+   '                    {name for name, value, mode in owner._observations})\n',
+   "                require(result.keys() <= observed, 'scaled inputs were not observed by their "
+   "owner')\n",
+   '                # This native-only context must never narrow or replace the\n',
+   "                # owner's existing production/helper resolver obligations.\n",
+   '                owner._scaled_resolver_paths = frozenset(resolver_paths)\n',
+   "                if owner._state == 'pending':\n",
+   '                    require(not owner._executing or dict(owner._executing) == executing,\n',
+   "                            'pending scaled checker image changed')\n",
+   '                    owner._executing = types.MappingProxyType(dict(executing))\n',
+   '            for name, expected in result.items():\n',
+   '                raw = (_observe_bytes(root, name, _regular(root, name).read_bytes(), '
+   '_operation=_operation)\n',
+   '                       if _inputs is None else _inputs.raw(_input_owner, root, name))\n',
+   '                require(type(raw) is bytes and sha(raw) == expected,\n',
+   "                        'scaled input changed before receipt: ' + name)\n",
+   '            require(resolver_unshadowed(root, resolver_paths, **_scaled_lookup_args()) and '
+   'all(\n',
+   '                resolver_unshadowed(location, include_paths, **_scaled_lookup_args())\n',
+   "                for location in include_roots), 'scaled final resolver surface changed')\n",
+   '            final_known = _scaled_known_paths(root, _operation=_operation)\n',
+   "            require(final_known == context['known'], 'scaled source path census changed before "
+   "receipt')\n",
+   '        if standalone:\n',
+   "            require(executing_checker_bindings() == executing, 'scaled checker changed during "
+   "admission')\n",
+   '        return result\n',
+   '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
+   'AttributeError) as error:\n',
+   '        _operation_fail(failure_operation, error)\n',
+   '\n',
+   '\n',
+   'def scaled_float32_edges(root, *, paths=None, _inputs=None, _input_owner=None, '
+   '_operation=None):\n',
+   '    """Return only the live math edge admitted through the same physical owner."""\n',
+   '    bindings = scaled_float32_proof_bindings(root, paths=paths, _inputs=_inputs,\n',
+   '        _input_owner=_input_owner, _operation=_operation)\n',
+   '    return scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS\n',
+   '        if bindings.get(name) == scaled_float32.AFTER_SHA256[name]))\n',
+   '\n',
+   '\n')),
+ (3137, 3137, ('    runtime_view.steps(root, _operation=_operation)\n',), ()),
+ (3142, 3143, (), ('    runtime_view.checked_steps(record)\n',)),
+ (3151,
+  3153,
   ("        require(sha(value) == expected, 'runtime view bound input changed: ' + path)\n",),
   ("        require(sha(_historical_typed_text(path, value.decode('utf-8'))) == expected,\n",
    "                'runtime view bound input changed: ' + path)\n")),
- (2207, 2208, ('        result[path] = expected\n',), ('        result[path] = sha(value)\n',)),
- (2223,
-  2226,
+ (3156, 3157, ('        result[path] = expected\n',), ('        result[path] = sha(value)\n',)),
+ (3172,
+  3175,
   ('    if sha(raw) == station.BEFORE_SHA256:\n',
    '        require(source.token_sha256(_physical_text(raw)) == station.BEFORE_TOKEN_SHA256,\n'),
   ("    historical = _historical_typed_text(station.MODULE, raw.decode('utf-8'))\n",
    '    if sha(historical) == station.BEFORE_SHA256:\n',
    '        require(source.token_sha256(historical) == station.BEFORE_TOKEN_SHA256,\n')),
- (2228,
-  2229,
+ (3177,
+  3178,
   ('    require(sha(raw) in (station.AFTER_SHA256, deviation.AFTER_SHA256),\n',),
   ('    require(sha(historical) in (station.AFTER_SHA256, deviation.AFTER_SHA256),\n',)),
- (2230,
-  2231,
+ (3179,
+  3180,
   ("    station.predecessor_source(deviation.station_source(raw.decode('utf-8')))\n",),
   ('    station.predecessor_source(deviation.station_source(historical))\n',)),
- (2234,
-  2235,
+ (3183,
+  3184,
   ('    if sha(raw) == deviation.AFTER_SHA256:\n',),
   ('    if sha(historical) == deviation.AFTER_SHA256:\n',)),
- (2240,
-  2242,
+ (3189,
+  3191,
   ("        require(sha(value) == expected, 'station correctness fixture changed: ' + path)\n",),
   ("        require(sha(_historical_typed_text(path, value.decode('utf-8'))) == expected,\n",
    "                'station correctness fixture changed: ' + path)\n")),
- (2245, 2246, ('        result[path] = expected\n',), ('        result[path] = sha(value)\n',)),
- (2265,
-  2267,
+ (3194, 3195, ('        result[path] = expected\n',), ('        result[path] = sha(value)\n',)),
+ (3214,
+  3216,
   ('            digest = sha(raw)\n',),
   ("            historical = _historical_typed_text(path, raw.decode('utf-8'))\n",
    '            digest = sha(historical)\n')),
- (2268,
-  2269,
+ (3217,
+  3218,
   ("                require(source.token_sha256(raw.decode('utf-8')) ==\n",),
   ('                require(source.token_sha256(historical) ==\n',)),
- (2272,
-  2273,
+ (3221,
+  3222,
   ("                witness_format.predecessor_source(path, raw.decode('utf-8'))\n",),
   ('                witness_format.predecessor_source(path, historical)\n',)),
- (2274, 2275, ('            result[path] = digest\n',), ('            result[path] = sha(raw)\n',)),
- (2281,
-  2282,
+ (3223, 3224, ('            result[path] = digest\n',), ('            result[path] = sha(raw)\n',)),
+ (3230,
+  3231,
   ('                require(type(raw) is bytes and sha(raw) == expected,\n',),
   ('                require(type(raw) is bytes and sha(_historical_typed_text(path, '
    "raw.decode('utf-8'))) == expected,\n",)),
- (2287,
-  2288,
+ (3236,
+  3237,
   ('                result[path] = expected\n',),
   ('                result[path] = sha(raw)\n',)),
- (2298,
-  2405,
+ (3247,
+  3371,
   ('def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, '
    '_capture=None):\n',),
   ('def _historical_typed_text(path, text):\n',
@@ -3981,7 +5895,16 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '                root, path, _regular(root, path).read_bytes(), _operation=_operation)\n',
    "            require(type(raw) is bytes, 'typed source is not physical bytes: ' + path)\n",
    '            image[path] = raw\n',
-   "        typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in "
+   '        if (type(_operation) is _InvariantInputs\n',
+   "                and _operation._kind == 'generated_receipt'\n",
+   "                and _operation._state == 'active' and not _operation._capturing):\n",
+   '            # Initial publication admitted this entire immutable source image.\n',
+   '            # Every physical read above still joins it through _observe_bytes;\n',
+   '            # authenticate live authority without replaying source semantics.\n',
+   '            typed_boundary.verify_authority()\n',
+   '            conditioned_cubic.verify_authority()\n',
+   '        else:\n',
+   "            typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in "
    'image.items()})\n',
    "        leaves = ('tools/carla_lane_oracle/typed_boundary_contracts.py',\n",
    "                  'tools/carla_lane_oracle/conditioned_cubic_contracts.py')\n",
@@ -3991,7 +5914,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '                edge = typed_boundary.edge(path)\n',
    "                require(edge['before_sha256'] == historical_digest,\n",
    "                        'typed input misses fixed conditioned witness/provider: ' + path)\n",
-   '                # verify_sources above reconstructed this complete predecessor.\n',
+   '                # The semantic admission reconstructed this complete predecessor.\n',
    '                # Receipts bind current formatted bytes, not the old witness SHA.\n',
    "                conditioned_inputs[path] = edge['after_sha256']\n",
    '            else:\n',
@@ -4028,7 +5951,10 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    edge = typed_boundary.EDGES.get(path)\n',
    '    if edge is None:\n',
    '        return text\n',
+   '    _public_admission = None\n',
    '    try:\n',
+   '        if _inputs is None and _operation is None:\n',
+   '            _public_admission = _public_admission_for(root)\n',
    '        if _inputs is not None:\n',
    '            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs),\n',
    "                    'invalid typed source owner')\n",
@@ -4059,7 +5985,10 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    "            require(_inputs.raw(_input_owner, root, path) == raw, 'typed owner image changed: "
    "' + path)\n",
    '        elif _operation is None:\n',
-   '            verify(root, exact=True)\n',
+   "            if _public_admission is None or _public_admission._state == 'pending':\n",
+   '                verify(root, exact=True)\n',
+   '            if _public_admission is not None:\n',
+   '                _public_admission.project(root, path, raw)\n',
    '        else:\n',
    '            _operation_record(_operation, root, exact=True)\n',
    '        require(_observe_bytes(root, path, _regular(root, path).read_bytes(),\n',
@@ -4068,13 +5997,30 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        return _historical_typed_text(path, physical_text)\n',
    '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
    'AttributeError) as error:\n',
+   '        if _public_admission is not None:\n',
+   '            _public_admission.fail()\n',
    '        _operation_fail(_operation, error)\n',
    '\n',
    '\n',
    'def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None, '
    '_expected_sources=None):\n')),
- (2422,
-  2438,
+ (3373,
+  3374,
+  (),
+  ('    _public_admission = _public_admission_for(root, publication=True) if include_roots == () '
+   'else None\n',)),
+ (3376,
+  3380,
+  ('            require(type(_capture) in (_CacheInputs, _InvariantInputs) and not exact and '
+   'include_roots == (),\n',),
+  ('            generated = type(_capture) is _InvariantInputs and _capture._kind == '
+   "'generated_receipt'\n",
+   '            require(type(_capture) in (_CacheInputs, _InvariantInputs) and not exact\n',
+   '                    and (include_roots == () or (generated and tuple(\n',
+   '                        _absolute_root_text(path) for path in include_roots) == '
+   '_capture._include_roots)),\n')),
+ (3392,
+  3411,
   ('        for path, raw in snapshots.items():\n', '            text = _physical_text(raw)\n'),
   ('        if _expected_sources is not None:\n',
    '            require(_capture is None and type(_expected_sources) is dict,\n',
@@ -4092,54 +6038,67 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            _operation=_capture if type(_capture) is _InvariantInputs else None)\n',
    '        for path in SOURCE_PATHS:\n',
    '            raw = snapshots[path]\n',
-   '            text = _historical_typed_text(path, _physical_text(raw))\n')),
- (2439,
-  2440,
+   '            # Exact provenance retains physical line endings. Universal-newline\n',
+   '            # decoding belongs only to the separate semantic source view.\n',
+   "            exact_text = _historical_typed_text(path, raw.decode('utf-8'))\n",
+   "            text = _physical_text(exact_text.encode('utf-8'))\n")),
+ (3412,
+  3413,
   ('            require(source.token_sha256(supplied_view) == source.token_sha256(text),\n',),
   ('            require(source.token_sha256(supplied_view) == '
    'source.token_sha256(_physical_text(raw)),\n',)),
- (2442,
-  2444,
+ (3415,
+  3417,
   ('            require((not exact or sha(raw) == AFTER_SHA256[path])\n',
    '                    and source.token_sha256(_physical_text(raw)) == '
    "item['after_token_sha256']\n"),
-  ('            require((not exact or sha(text) == AFTER_SHA256[path])\n',
+  ('            require((not exact or sha(exact_text) == AFTER_SHA256[path])\n',
    "                    and source.token_sha256(text) == item['after_token_sha256']\n")),
- (2461,
-  2462,
+ (3426,
+  3429,
   (),
-  ('                          | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else '
-   'set())\n',)),
- (2466,
-  2468,
+  ('        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)\n',
+   '        scaled_edges = scaled_float32.edges(tuple(name for name in '
+   'scaled_float32.SOURCE_PATHS\n',
+   '            if scaled_bindings.get(name) == scaled_float32.AFTER_SHA256[name]))\n')),
+ (3437,
+  3439,
   (),
-  ('        # An include root mirrors the source tree, so its compiled lookup\n',
-   "        # directories are the root's census; nested leaves elsewhere are inert.\n")),
- (2470,
-  2471,
+  ("                          | {path for path in scaled_bindings if path.endswith('.mojo')}\n",
+   '                          | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else '
+   'set())\n')),
+ (3446,
+  3447,
+  ("                    **_render_lookup_args(resolver_paths, record['entry_directories']))\n",
+   '                and all(resolver_unshadowed(location, include_resolver_paths)\n',
+   '                        for location in include_roots),\n'),
+  ("                    **_render_lookup_args(resolver_paths, record['entry_directories'])),\n",)),
+ (3459,
+  3467,
   (),
-  ('        include_lookup = _render_lookup_args(include_resolver_paths, '
-   "record['entry_directories'])\n",)),
- (2473,
-  2474,
-  ('                and all(resolver_unshadowed(location, include_resolver_paths)\n',),
-  ('                and all(resolver_unshadowed(location, include_resolver_paths, '
-   '**include_lookup)\n',)),
- (2489,
-  2491,
+  ('        include_images = []\n',
+   '        for location in include_roots:\n',
+   '            stage_entries, stage_image = _include_entry_context(\n',
+   '                location, {path: snapshots[path] for path in known})\n',
+   '            stage_args = _render_lookup_args(resolver_paths, stage_entries)\n',
+   '            require(resolver_unshadowed(location, include_resolver_paths, **stage_args),\n',
+   "                    'unreviewed include resolver surface')\n",
+   '            include_images.append((location, stage_image, stage_args))\n')),
+ (3469,
+  3471,
   ("                == set(record['dependency_inventory']) | helper_closure, 'production import "
    "inventory changed')\n",),
   ('                == (set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings else\n',
    "                    set(record['dependency_inventory']) | helper_closure), 'production import "
    "inventory changed')\n")),
- (2493,
-  2495,
+ (3473,
+  3475,
   ("        require(native_found == set(record['native_dependency_inventory']) | "
    'helper_closure,\n',),
   ('        require(native_found == (set(typed_boundary.NATIVE_CLOSURE) if typed_bindings else\n',
    "                set(record['native_dependency_inventory']) | helper_closure),\n")),
- (2496,
-  2511,
+ (3476,
+  3491,
   (),
   ('        if typed_bindings:\n',
    '            current_native = set()\n',
@@ -4160,8 +6119,20 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '                entries=entries, _known=known, _snapshots=snapshots)\n',
    '            require(current_production == set(typed_boundary.TYPED_PRODUCTION_CLOSURE),\n',
    "                    'typed production import inventory changed')\n")),
- (2540,
-  2544,
+ (3494,
+  3495,
+  ('        _runtime_view_bindings(root, _snapshots=snapshots)\n',),
+  ('        runtime_bindings = _runtime_view_bindings(root, _snapshots=snapshots)\n',)),
+ (3514,
+  3519,
+  (),
+  ('                if path in scaled_edges:\n',
+   "                    require(group in ('unchanged_inputs', 'native_dependency_inputs')\n",
+   "                            and expected == scaled_edges[path]['before_sha256'],\n",
+   "                            'scaled edge does not extend immutable input: ' + path)\n",
+   "                    expected = scaled_edges[path]['after_sha256']\n")),
+ (3525,
+  3529,
   ("                require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' "
    '+ path)\n',),
   ("                historical = _historical_typed_text(path, raw.decode('utf-8')).encode('utf-8') "
@@ -4170,41 +6141,143 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '                    expected = sha(historical)\n',
    "                require(sha(historical) == expected, 'unchanged premise, record or fixture "
    "changed: ' + path)\n")),
- (2557,
-  2559,
+ (3531,
+  3533,
+  ('        production = set() if _capture is not None else None\n',
+   '        observed_inventory = (inventory(root, _snapshots=snapshots) if _capture is None '
+   'else\n'),
+  ('        production = set() if _capture is not None or _public_admission is not None else '
+   'None\n',
+   '        observed_inventory = (inventory(root, _snapshots=snapshots) if production is None '
+   'else\n')),
+ (3542,
+  3544,
   (),
   ('        if typed_bindings:\n', '            expected_inventory = typed_boundary.INVENTORY\n')),
- (2566,
-  2568,
+ (3549,
+  3551,
+  (),
+  ('        for location, image, _ in include_images:\n',
+   '            _helper_entry_census_finish(location, image)\n')),
+ (3553,
+  3555,
   ('                and all(resolver_unshadowed(location, include_resolver_paths) for location in '
    'include_roots),\n',),
-  ('                and all(resolver_unshadowed(location, include_resolver_paths, '
-   '**include_lookup)\n',
-   '                        for location in include_roots),\n')),
- (2600,
-  2603,
-  ("        text = _regular(root, path).read_text(encoding='utf-8')\n",),
-  ("        text = _observe_text(root, path, _regular(root, path).read_text(encoding='utf-8'),\n",
-   "                             _operation=_operation, mode='physical')\n",
-   '    text = reviewed_typed_text(root, path, text, _operation=_operation)\n')),
- (2606,
-  2606,
-  ('    if _operation is not None:\n',
+  ('                and all(resolver_unshadowed(location, include_resolver_paths, **stage_args)\n',
+   '                        for location, _, stage_args in include_images),\n')),
+ (3562,
+  3597,
+  ('            _capture._publish(root, snapshots, authority_raw, known, production, entries,\n',
+   '                              resolver_paths, executing)\n'),
+  ("            if type(_capture) is _InvariantInputs and _capture._kind == 'generated_receipt':\n",
+   '                receipt_bindings = {MIGRATION: MIGRATION_SHA256,\n',
+   '                                    CONSUMER_LEDGER: CONSUMER_LEDGER_SHA256, **executing}\n',
+   "                receipt_bindings.update({path: item['after_sha256'] for path, item in "
+   "record['sources'].items()})\n",
+   '                for group in BOUND_GROUPS:\n',
+   '                    receipt_bindings.update(record[group])\n',
+   '                for family in (station_bindings, scaled_bindings, typed_bindings,\n',
+   '                               witness_bindings, runtime_bindings, helper_bindings):\n',
+   '                    receipt_bindings.update(family)\n',
+   '                if scaled_bindings:\n',
+   '                    scaled_paths = frozenset(name for name in scaled_bindings if '
+   "name.endswith('.mojo'))\n",
+   '                    require(scaled_paths == scaled_float32.NATIVE_CLOSURE\n',
+   '                            and _scaled_known_paths(root) == known,\n',
+   "                            'generated scaled native context differs from source admission')\n",
+   "                    scaled_include_paths = scaled_paths | {name + '.cov-origin' for name in "
+   'scaled_paths}\n',
+   '                    require(resolver_unshadowed(root, scaled_paths, **_scaled_lookup_args())\n',
+   '                            and all(resolver_unshadowed(location, scaled_include_paths,\n',
+   '                                                       **_scaled_lookup_args())\n',
+   '                                    for location in include_roots),\n',
+   "                            'generated scaled native resolver changed during admission')\n",
+   '                    _capture._scaled_resolver_paths = scaled_paths\n',
+   '                _capture._publish(root, snapshots, authority_raw, known, production, '
+   'entries,\n',
+   '                    resolver_paths, executing, receipt_bindings=receipt_bindings,\n',
+   '                    include_images=tuple(include_images))\n',
+   '            else:\n',
+   '                _capture._publish(root, snapshots, authority_raw, known, production, '
+   'entries,\n',
+   '                                  resolver_paths, executing)\n',
+   '        if _public_admission is not None:\n',
+   '            public_image = _public_admission._publication_inputs(root, snapshots)\n',
+   "            if _public_admission._state == 'pending':\n",
+   '                if scaled_bindings:\n',
+   '                    _public_admission._scaled_resolver_paths = frozenset(\n',
+   "                        path for path in scaled_bindings if path.endswith('.mojo'))\n",
+   '                _public_admission._publish(root, public_image, authority_raw, known,\n',
+   '                    production, entries, resolver_paths, executing)\n')),
+ (3599,
+  3601,
+  (),
+  ('        if _public_admission is not None:\n', '            _public_admission.fail()\n')),
+ (3603,
+  3605,
+  (),
+  ('        if _public_admission is not None:\n', '            _public_admission.fail()\n')),
+ (3622,
+  3651,
+  ('    path = str(path)\n',
+   '    if text is None:\n',
+   "        text = _regular(root, path).read_text(encoding='utf-8')\n",
+   '    if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:\n',
+   '        return text\n',
+   "    require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied "
+   "successor source: ' + path)\n",
+   '    if _operation is not None:\n',
    "        _observe_text(root, path, text, _operation=_operation, mode='physical', "
-   'supplied=True)\n'),
-  ()),
- (2619,
-  2620,
+   'supplied=True)\n',
+   '    return predecessor_source(root, path, _operation=_operation)\n'),
+  ('    _public_admission = None\n',
+   '    try:\n',
+   '        if _operation is None:\n',
+   '            _public_admission = _public_admission_for(root)\n',
+   '        path = str(path)\n',
+   '        if text is None:\n',
+   '            text = _observe_text(root, path, _regular(root, '
+   "path).read_text(encoding='utf-8'),\n",
+   "                                 _operation=_operation, mode='physical')\n",
+   '        if path in SOURCE_PATHS and typed_boundary.is_current(path, text):\n',
+   '            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), '
+   '_operation=_operation)\n',
+   '            require(typed_boundary.is_current(path, raw)\n',
+   '                    and source.token_sha256(text) == '
+   'source.token_sha256(_physical_text(raw)),\n',
+   "                    'supplied typed successor differs from physical input: ' + path)\n",
+   '            record = (verify(root) if _operation is None else _operation_record(_operation, '
+   'root))\n',
+   '            require(_observe_bytes(root, path, _regular(root, path).read_bytes(),\n',
+   '                                   _operation=_operation) == raw,\n',
+   "                    'typed successor changed during admission: ' + path)\n",
+   "            item = record['sources'][path]\n",
+   "            return reverse_exact(path, item['after_source'], item)\n",
+   '        text = reviewed_typed_text(root, path, text, _operation=_operation)\n',
+   '        if path not in SOURCE_PATHS or source.token_sha256(text) == '
+   'BEFORE_TOKEN_SHA256[path]:\n',
+   '            return text\n',
+   "        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied "
+   "successor source: ' + path)\n",
+   '        return predecessor_source(root, path, _operation=_operation)\n',
+   '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
+   'AttributeError) as error:\n',
+   '        if _public_admission is not None:\n',
+   '            _public_admission.fail()\n',
+   '        _operation_fail(_operation, error)\n',
+   '\n')),
+ (3663,
+  3664,
   ('        require(digest == AFTER_TOKEN_SHA256[path],\n',),
   ('        require(digest == AFTER_TOKEN_SHA256[path] or typed_boundary.is_current(path, '
    'expected_raw),\n',)),
- (2628,
-  2629,
+ (3672,
+  3673,
   ("        require(sha(road_raw) == record['unchanged_inputs'][road],\n",),
   ("        require(sha(_historical_typed_text(road, road_raw.decode('utf-8'))) == "
    "record['unchanged_inputs'][road],\n",)),
- (2644,
-  2651,
+ (3688,
+  3695,
   ('    record = verify(root)\n',),
   ('    physical_inputs = {}\n',
    '    for path, text in texts.items():\n',
@@ -4213,8 +6286,8 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    "                'supplied successor source differs from physical input: ' + path)\n",
    '        physical_inputs[path] = raw\n',
    '    record = verify(root, _expected_sources=physical_inputs)\n')),
- (2655,
-  2663,
+ (3699,
+  3707,
   (),
   ('        physical = _regular(root, path).read_bytes()\n',
    '        require(physical == physical_inputs[path],\n',
@@ -4224,25 +6297,25 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        # Only canonical physical bytes enter the exact typed inverse; caller\n',
    '        # comments have already been compared by the public supplied-view rule.\n',
    '        text = _historical_typed_text(path, _physical_text(physical))\n')),
- (2670,
-  2671,
+ (3714,
+  3715,
   ('            require(source.token_sha256(text) == source.token_sha256(_physical_text(raw)),\n',),
   ('            require(raw == physical and source.token_sha256(text) == '
    'source.token_sha256(_historical_typed_text(path, _physical_text(raw))),\n',)),
- (2672, 2673, (), ('            result[path] = text\n',)),
- (2691,
-  2694,
+ (3716, 3717, (), ('            result[path] = text\n',)),
+ (3735,
+  3738,
   ('            changed = any(declaration_sha256(text, name) not in expected\n',),
   ('            typed_current = typed_boundary.is_current(path, text)\n',
    '            text = _historical_typed_text(path, text)\n',
    '            changed = typed_current or any(declaration_sha256(text, name) not in expected\n')),
- (2718,
-  2719,
+ (3762,
+  3763,
   ('def reviewed_lane_before_center_text(root, text=None):\n',),
   ('def reviewed_lane_before_center_text(root, text=None, *, _operation=None):\n',)),
- (2720, 2721, (), ('    supplied_raw = None\n',)),
- (2722,
-  2734,
+ (3764, 3765, (), ('    supplied_raw = None\n',)),
+ (3766,
+  3778,
   ("        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied "
    "center source')\n",
    "    item = verify(root)['sources'][path]\n"),
@@ -4261,8 +6334,8 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '        require(_observe_bytes(root, path, _regular(root, path).read_bytes(),\n',
    '                               _operation=_operation) == supplied_raw,\n',
    "                'supplied center physical input changed during admission')\n")),
- (2743,
-  2774,
+ (3787,
+  3818,
   (),
   ('\n',
    '\n',
@@ -4296,8 +6369,8 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
    'AttributeError) as error:\n',
    '        _operation_fail(_operation, error)\n')),
- (2792,
-  2800,
+ (3836,
+  3844,
   (),
   ('        if result.get(station.MODULE) == '
    "typed_boundary.EDGES[station.MODULE]['after_sha256']:\n",
@@ -4308,12 +6381,19 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    '            else:\n',
    '                _operation_record(_operation, root, exact=True)\n',
    '            result.update(_typed_boundary_bindings(root, _operation=_operation))\n')),
- (2827,
-  2828,
+ (3860,
+  3862,
   (),
-  ('        result.update(_typed_boundary_bindings(root, _operation=_operation))\n',)),
- (2832,
-  2834,
+  ("        if type(_operation) is _InvariantInputs and _operation._kind == 'generated_receipt':\n",
+   '            return _operation._receipt_bindings(root, include_roots)\n')),
+ (3873,
+  3876,
+  (),
+  ('        result.update(scaled_float32_proof_bindings(root, include_roots=include_roots,\n',
+   '                                                   _operation=_operation))\n',
+   '        result.update(_typed_boundary_bindings(root, _operation=_operation))\n')),
+ (3880,
+  3882,
   (),
   ('        if _operation is not None:\n',
    '            _operation._bind_checker_receipt(root, executing)\n'))),
@@ -4447,527 +6527,755 @@ _TYPED_CHECKER_SOURCE_EDITS = {
          ),
         ),
     ),
-    'seed_count_contracts.py': (
-        (10, 15,
-         (),
-         (
-          'if __package__:\n',
-          '    from . import source_contracts as _typed_source\n',
-          'else:\n',
-          '    import source_contracts as _typed_source\n',
-          '\n',
-         ),
-        ),
-        (16, 17,
-         (),
-         (
-          '# #333 explicit historical provenance views; current inputs remain operation-owned.\n',
-         ),
-        ),
-        (225, 227,
-         (
-          '    payload = ((Path(root)/MIGRATION).read_bytes() if _inputs is None else\n',
-          '               _inputs.raw(_input_owner, root, MIGRATION))\n',
-         ),
-         (
-          '    payload = (_typed_source.historical_bytes(root, Path(root)/MIGRATION, (Path(root)/MIGRATION).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _inputs is None else\n',
-          '               _typed_source.historical_bytes(root, MIGRATION, _inputs.raw(_input_owner, root, MIGRATION), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
-         ),
-        ),
-        (269, 270,
-         (
-          "    text = (Path(root)/MODULE).read_bytes().decode('utf-8')\n",
-         ),
-         (
-          "    text = _typed_source.historical_bytes(root, Path(root)/MODULE, (Path(root)/MODULE).read_bytes()).decode('utf-8')\n",
-         ),
-        ),
-        (373, 375,
-         (
-          "        text = (((root/name).read_bytes() if _operation is None else full_audit._observe_bytes(root, name, (root/name).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          '                _inputs.text_utf8(_input_owner, root, name))\n',
-         ),
-         (
-          "        text = ((_typed_source.historical_bytes(root, root/name, (root/name).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, name, full_audit._observe_bytes(root, name, (root/name).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
-          '                _typed_source.historical_text(root, name, _inputs.text_utf8(_input_owner, root, name), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
-         ),
-        ),
-        (436, 437,
-         (
-          'def verify_support(root):\n',
-         ),
-         (
-          'def verify_support(root, *, _expected_raw=None):\n',
-         ),
-        ),
-        (440, 445,
-         (
-          "    text = (root/MODULE).read_bytes().decode('utf-8')\n",
-         ),
-         (
-          '    current_raw = (root/MODULE).read_bytes()\n',
-          '    if _expected_raw is not None:\n',
-          '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
-          "                'Map observation changed before delegated verification')\n",
-          "    text = _typed_source.historical_bytes(root, MODULE, current_raw).decode('utf-8')\n",
-         ),
-        ),
-        (451, 452,
-         (
-          "    require((root/MODULE).read_bytes().decode('utf-8') == text,\n",
-         ),
-         (
-          '    require((root/MODULE).read_bytes() == current_raw,\n',
-         ),
-        ),
-        (496, 497,
-         (
-          'def verify_frontier(root):\n',
-         ),
-         (
-          'def verify_frontier(root, *, _expected_raw=None):\n',
-         ),
-        ),
-        (500, 505,
-         (
-          "    text = (root/MODULE).read_bytes().decode('utf-8')\n",
-         ),
-         (
-          '    current_raw = (root/MODULE).read_bytes()\n',
-          '    if _expected_raw is not None:\n',
-          '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
-          "                'Map observation changed before delegated verification')\n",
-          "    text = _typed_source.historical_bytes(root, MODULE, current_raw).decode('utf-8')\n",
-         ),
-        ),
-        (512, 513,
-         (
-          "    require((root/MODULE).read_bytes().decode('utf-8') == text,\n",
-         ),
-         (
-          '    require((root/MODULE).read_bytes() == current_raw,\n',
-         ),
-        ),
-        (567, 578,
-         (
-          '        text = ((path.read_text() if _operation is None else full_audit._observe_text(root, rel.as_posix(), path.read_text(), _operation=_operation)) if _inputs is None else\n',
-          '                _inputs.text_default(_input_owner, root, rel.as_posix()))\n',
-         ),
-         (
-          '        supplied_text = ((path.read_text() if _operation is None else\n',
-          '                          full_audit._observe_text(root, rel.as_posix(), path.read_text(), _operation=_operation)) if _inputs is None else\n',
-          '                         _inputs.text_default(_input_owner, root, rel.as_posix()))\n',
-          '        if rel.as_posix() == MODULE and station_edge is not None:\n',
-          '            physical = ((path.read_bytes() if _operation is None else\n',
-          '                         full_audit._observe_bytes(root, MODULE, path.read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                        _inputs.observe_bytes(_input_owner, root, MODULE))\n',
-          "            require(source.token_sha256(supplied_text) == source.token_sha256(physical.decode('utf-8')),\n",
-          "                    'station census supplied and physical Map views differ')\n",
-          '        text = _typed_source.historical_text(root, rel.as_posix(), supplied_text, _operation=_operation,\n',
-          '            _inputs=_inputs, _input_owner=_input_owner)\n',
-         ),
-        ),
-        (664, 665,
-         (
-          'def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):\n',
-         ),
-         (
-          'def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None, _expected_raw=None):\n',
-         ),
-        ),
-        (670, 678,
-         (
-          "    text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          "            _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))\n",
-         ),
-         (
-          '    current_raw = (((root/MODULE).read_bytes() if _operation is None else\n',
-          '                    full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                   _inputs.observe_bytes(_input_owner, root, MODULE))\n',
-          '    if _expected_raw is not None:\n',
-          '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
-          "                'Map observation changed before delegated verification')\n",
-          '    text = _typed_source.historical_bytes(root, MODULE, current_raw, _operation=_operation,\n',
-          "        _inputs=_inputs, _input_owner=_input_owner).decode('utf-8')\n",
-         ),
-        ),
-        (679, 681,
-         (
-          '        require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                               _inputs.raw(_input_owner, root, path)).hexdigest() == expected,\n',
-         ),
-         (
-          '        require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
-          '                               _typed_source.historical_bytes(root, path, _inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).hexdigest() == expected,\n',
-         ),
-        ),
-        (687, 689,
-         (
-          '            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                                   _inputs.raw(_input_owner, root, path)).hexdigest() == expected,\n',
-         ),
-         (
-          '            require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
-          '                                   _typed_source.historical_bytes(root, path, _inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).hexdigest() == expected,\n',
-         ),
-        ),
-        (692, 694,
-         (
-          '            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                                   _inputs.raw(_input_owner, root, path)).hexdigest() == expected,\n',
-         ),
-         (
-          '            require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
-          '                                   _typed_source.historical_bytes(root, path, _inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).hexdigest() == expected,\n',
-         ),
-        ),
-        (711, 715,
-         (
-          "    final_text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          "                  _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))\n",
-          '    require(final_text == text,\n',
-         ),
-         (
-          '    final_raw = (((root/MODULE).read_bytes() if _operation is None else\n',
-          '                  full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                 _inputs.observe_bytes(_input_owner, root, MODULE))\n',
-          '    require(final_raw == current_raw,\n',
-         ),
-        ),
-        (750, 752,
-         (
-          '           and hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                              _inputs.raw(_input_owner, root, path)).hexdigest() == full_audit.AFTER_SHA256[path]\n',
-         ),
-         (
-          '           and hashlib.sha256((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
-          '                              _typed_source.historical_bytes(root, path, _inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).hexdigest() == full_audit.AFTER_SHA256[path]\n',
-         ),
-        ),
-        (767, 769,
-         (
-          '            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else\n',
-          '                              _inputs.raw(_input_owner, root, path)).hexdigest() == expected,\n',
-         ),
-         (
-          '            require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
-          '                              _typed_source.historical_bytes(root, path, _inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).hexdigest() == expected,\n',
-         ),
-        ),
-        (772, 773,
-         (
-          'def verify_optional(root):\n',
-         ),
-         (
-          'def verify_optional(root, *, _expected_raw=None):\n',
-         ),
-        ),
-        (776, 781,
-         (
-          "    text = (root/MODULE).read_bytes().decode('utf-8')\n",
-         ),
-         (
-          '    current_raw = (root/MODULE).read_bytes()\n',
-          '    if _expected_raw is not None:\n',
-          '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
-          "                'Map observation changed before delegated verification')\n",
-          "    text = _typed_source.historical_bytes(root, MODULE, current_raw).decode('utf-8')\n",
-         ),
-        ),
-        (786, 787,
-         (
-          "    require((root/MODULE).read_bytes().decode('utf-8') == text,\n",
-         ),
-         (
-          '    require((root/MODULE).read_bytes() == current_raw,\n',
-         ),
-        ),
-        (814, 816,
-         (
-          "        text = (((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          '                    _inputs.text_utf8(_input_owner, root, path))\n',
-         ),
-         (
-          "        text = ((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
-          '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
-         ),
-        ),
-        (833, 835,
-         (
-          "            text = (((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          '                    _inputs.text_utf8(_input_owner, root, path))\n',
-         ),
-         (
-          "            text = ((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
-          '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
-         ),
-        ),
-        (852, 854,
-         (
-          "            actual = declaration((((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          '                    _inputs.text_utf8(_input_owner, root, path)), name, owner)\n',
-         ),
-         (
-          "            actual = declaration(((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
-          '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)), name, owner)\n',
-         ),
-        ),
-        (858, 860,
-         (
-          "            actual = declaration((((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          '                    _inputs.text_utf8(_input_owner, root, path)), name, owner)\n',
-         ),
-         (
-          "            actual = declaration(((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
-          '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)), name, owner)\n',
-         ),
-        ),
-        (863, 865,
-         (
-          "    text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else\n",
-          '            _inputs.text_utf8(_input_owner, root, MODULE))\n',
-         ),
-         (
-          "    text = ((_typed_source.historical_bytes(root, root/MODULE, (root/MODULE).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, MODULE, full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
-          '            _typed_source.historical_text(root, MODULE, _inputs.text_utf8(_input_owner, root, MODULE), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n',
-         ),
-        ),
-        (881, 882,
-         (
-          'def verify(root, *, _operation=None):\n',
-         ),
-         (
-          'def verify(root, *, _operation=None, _expected_raw=None):\n',
-         ),
-        ),
-        (885, 891,
-         (
-          "    text = ((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8')\n",
-         ),
-         (
-          '    current_raw = ((root/MODULE).read_bytes() if _operation is None else\n',
-          '                   full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation))\n',
-          '    if _expected_raw is not None:\n',
-          '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
-          "                'Map observation changed before delegated verification')\n",
-          "    text = _typed_source.historical_bytes(root, MODULE, current_raw, _operation=_operation).decode('utf-8')\n",
-         ),
-        ),
-        (892, 910,
-         (
-          "        return verify_score(root, **({} if _operation is None else {'_operation': _operation}))\n",
-          '    if sha(text) == FRONTIER_AFTER_SHA256:\n',
-          '        return verify_frontier(root)\n',
-          '    if sha(text) == SUPPORT_AFTER_SHA256:\n',
-          '        return verify_support(root)\n',
-          '    if sha(text) == OPTIONAL_AFTER_SHA256:\n',
-          '        return verify_optional(root)\n',
-          '    edge = verify_source(text, record)\n',
-          '    if edge is None:\n',
-          '        return None\n',
-          "    _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': _operation}))\n",
-          "    verify_premises(root, record, after=True, **({} if _operation is None else {'_operation': _operation}))\n",
-          '    # A caller must not project a source different from the one just verified.\n',
-          "    require(((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') == text, 'Map changed during verification')\n",
-         ),
-         (
-          "        edge = verify_score(root, **({'_expected_raw': current_raw} if _operation is None else {'_operation': _operation}))\n",
-          '    elif sha(text) == FRONTIER_AFTER_SHA256:\n',
-          '        edge = verify_frontier(root, _expected_raw=current_raw)\n',
-          '    elif sha(text) == SUPPORT_AFTER_SHA256:\n',
-          '        edge = verify_support(root, _expected_raw=current_raw)\n',
-          '    elif sha(text) == OPTIONAL_AFTER_SHA256:\n',
-          '        edge = verify_optional(root, _expected_raw=current_raw)\n',
-          '    else:\n',
-          '        edge = verify_source(text, record)\n',
-          '        if edge is None:\n',
-          '            return None\n',
-          "        _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': _operation}))\n",
-          "        verify_premises(root, record, after=True, **({} if _operation is None else {'_operation': _operation}))\n",
-          "    # Reconcile the dispatch observation as well as the delegated verifier's\n",
-          '    # own capture; an equal historical projection cannot hide a physical swap.\n',
-          '    final_raw = ((root/MODULE).read_bytes() if _operation is None else\n',
-          '                 full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation))\n',
-          "    require(final_raw == current_raw, 'Map changed during verification')\n",
-         ),
-        ),
-        (919, 921,
-         (
-          "    text = full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8')\n",
-         ),
-         (
-          '    current_raw = full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)\n',
-          "    text = _typed_source.historical_bytes(root, MODULE, current_raw, _operation=_operation).decode('utf-8')\n",
-         ),
-        ),
-        (926, 928,
-         (
-          "    require(verify(root, **operation_args) is not None, 'after Map did not activate its reviewed edge')\n",
-          "    require(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8') == text, 'Map changed during reconstruction')\n",
-         ),
-         (
-          "    require(verify(root, **({'_expected_raw': current_raw} if _operation is None else operation_args)) is not None, 'after Map did not activate its reviewed edge')\n",
-          "    require(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation) == current_raw, 'Map changed during reconstruction')\n",
-         ),
-        ),
-        (946, 953,
-         (
-          '    physical = ((Path(root)/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), _operation=_operation))\n',
-         ),
-         (
-          '    current_raw = (Path(root)/MODULE).read_bytes()\n',
-          '    if _operation is not None:\n',
-          '        current_raw = full_audit._observe_bytes(root, MODULE, current_raw, _operation=_operation)\n',
-          "    require(source.token_sha256(text) == source.token_sha256(current_raw.decode('utf-8')),\n",
-          "            'unreviewed supplied Map source')\n",
-          '    text = _typed_source.historical_text(root, MODULE, text, _operation=_operation)\n',
-          '    physical = _typed_source.historical_bytes(root, MODULE, current_raw, _operation=_operation)\n',
-         ),
-        ),
-        (966, 971,
-         (
-          "    require(verify(root, **({} if _operation is None else {'_operation': _operation})) is not None, 'after Map did not activate its reviewed edge')\n",
-          '    require(((Path(root)/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), _operation=_operation)) == physical,\n',
-          "            'Map changed during supplied-view verification')\n",
-         ),
-         (
-          "    require(verify(root, **({'_expected_raw': current_raw} if _operation is None else {'_operation': _operation})) is not None, 'after Map did not activate its reviewed edge')\n",
-          '    final_raw = (Path(root)/MODULE).read_bytes()\n',
-          '    if _operation is not None:\n',
-          '        final_raw = full_audit._observe_bytes(root, MODULE, final_raw, _operation=_operation)\n',
-          "    require(final_raw == current_raw, 'Map changed during supplied-view verification')\n",
-         ),
-        ),
-    ),
-    'source_contracts.py': (
-        (235, 236,
-         (
-          '        checked = text\n',
-         ),
-         (
-          '        checked = historical_text(root, path, text, **operation_args)\n',
-         ),
-        ),
-        (238, 239,
-         (
-          "                and token_sha256(text) != pins['groups'][group][path]):\n",
-         ),
-         (
-          "                and token_sha256(checked) != pins['groups'][group][path]):\n",
-         ),
-        ),
-        (248, 249,
-         (
-          "        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:\n",
-         ),
-         (
-          "        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(checked) != pins['groups'][group][path]:\n",
-         ),
-        ),
-        (258, 259,
-         (
-          "        elif path == PREFIX + 'map.mojo' and token_sha256(text) != pins['groups'][group][path]:\n",
-         ),
-         (
-          "        elif path == PREFIX + 'map.mojo' and token_sha256(checked) != pins['groups'][group][path]:\n",
-         ),
-        ),
-        (274, 276,
-         (
-          'def verify_qualifiers(root, filename, text):\n',
-          '    pins = read_pins(root)\n',
-         ),
-         (
-          'def verify_qualifiers(root, filename, text, *, _operation=None):\n',
-          '    pins = read_pins(root, _operation=_operation)\n',
-         ),
-        ),
-        (277, 278,
-         (
-          '    checked = text\n',
-         ),
-         (
-          '    checked = historical_text(root, PREFIX + filename, text, _operation=_operation)\n',
-         ),
-        ),
-        (279, 280,
-         (
-          "            and qualifier_sha256(text) != pins['qualifiers'][filename]):\n",
-         ),
-         (
-          "            and qualifier_sha256(checked) != pins['qualifiers'][filename]):\n",
-         ),
-        ),
-        (285, 286,
-         (
-          '            checked = full_audit.reviewed_text(root, PREFIX + filename, text)\n',
-         ),
-         (
-          '            checked = full_audit.reviewed_text(root, PREFIX + filename, text, _operation=_operation)\n',
-         ),
-        ),
-        (290, 346,
-         (),
-         (
-          '\n',
-          '\n',
-          'def _typed_path(root, path):\n',
-          '    relative = str(path)\n',
-          "    if not relative.endswith('.mojo'):\n",
-          '        return None\n',
-          '    if Path(relative).is_absolute():\n',
-          '        relative = Path(relative).relative_to(root).as_posix()\n',
-          '    elif isinstance(path, Path):\n',
-          '        # Callers passing root/path may use a non-dot relative checkout root.\n',
-          '        # Canonical module strings remain relative to root, never prefix-stripped.\n',
-          '        root_text = str(root)\n',
-          "        if (root_text not in ('', '.') and not Path(root_text).is_absolute()\n",
-          "                and '..' not in Path(root_text).parts and '..' not in path.parts\n",
-          "                and relative.startswith(root_text + '/')):\n",
-          '            relative = relative[len(root_text) + 1:]\n',
-          '    return relative\n',
-          '\n',
-          '\n',
-          'def historical_text(root, path, text, *, _operation=None, _inputs=None, _input_owner=None):\n',
-          '    """Expose a fixed historical view only after actual current admission.\n',
-          '\n',
-          '    Reads and owned observations stay physical. The conditioned semantic\n',
-          '    successor, rather than old byte-identity claims, binds the new graph.\n',
-          '    """\n',
-          '    relative = _typed_path(root, path)\n',
-          '    if relative is None:\n',
-          '        return text\n',
-          '    if __package__:\n',
-          '        from . import typed_boundary_contracts as typed\n',
-          '    else:\n',
-          '        import typed_boundary_contracts as typed\n',
-          '    if relative not in typed.EDGES:\n',
-          '        return text\n',
-          '    if __package__:\n',
-          '        from . import full_audit_cleanup_contracts as audit\n',
-          '    else:\n',
-          '        import full_audit_cleanup_contracts as audit\n',
-          '    return audit.reviewed_typed_text(root, relative, text, _operation=_operation,\n',
-          '                                     _inputs=_inputs, _input_owner=_input_owner)\n',
-          '\n',
-          '\n',
-          'def historical_bytes(root, path, raw, *, _operation=None, _inputs=None, _input_owner=None):\n',
-          '    """Preserve physical reads before one named historical-source projection."""\n',
-          '    relative = _typed_path(root, path)\n',
-          '    if relative is None:\n',
-          '        return raw\n',
-          '    if __package__:\n',
-          '        from . import typed_boundary_contracts as typed\n',
-          '    else:\n',
-          '        import typed_boundary_contracts as typed\n',
-          '    if relative not in typed.EDGES:\n',
-          '        return raw\n',
-          "    require(type(raw) is bytes, 'historical input is not physical bytes')\n",
-          "    return historical_text(root, relative, raw.decode('utf-8'), _operation=_operation,\n",
-          "                           _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')\n",
-         ),
-        ),
-    ),
+    'seed_count_contracts.py': ((10,
+  15,
+  (),
+  ('if __package__:\n',
+   '    from . import source_contracts as _typed_source\n',
+   'else:\n',
+   '    import source_contracts as _typed_source\n',
+   '\n')),
+ (16,
+  17,
+  (),
+  ('# #333 explicit historical provenance views; current inputs remain operation-owned.\n',)),
+ (20, 21, (), ('import sys\n',)),
+ (38, 41, (), ('\n', '_EXECUTED_MODULE_CODE = sys._getframe().f_code\n', '\n')),
+ (229,
+  231,
+  ('    payload = ((Path(root)/MIGRATION).read_bytes() if _inputs is None else\n',
+   '               _inputs.raw(_input_owner, root, MIGRATION))\n'),
+  ('    payload = (_typed_source.historical_bytes(root, Path(root)/MIGRATION, '
+   '(Path(root)/MIGRATION).read_bytes(), _operation=_operation, _inputs=_inputs, '
+   '_input_owner=_input_owner) if _inputs is None else\n',
+   '               _typed_source.historical_bytes(root, MIGRATION, _inputs.raw(_input_owner, root, '
+   'MIGRATION), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n')),
+ (273,
+  274,
+  ("    text = (Path(root)/MODULE).read_bytes().decode('utf-8')\n",),
+  ('    text = _typed_source.historical_bytes(root, Path(root)/MODULE, '
+   "(Path(root)/MODULE).read_bytes()).decode('utf-8')\n",)),
+ (377,
+  379,
+  ('        text = (((root/name).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, name, (root/name).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   '                _inputs.text_utf8(_input_owner, root, name))\n'),
+  ('        text = ((_typed_source.historical_bytes(root, root/name, (root/name).read_bytes(), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else '
+   '_typed_source.historical_bytes(root, name, full_audit._observe_bytes(root, name, '
+   '(root/name).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, '
+   "_input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
+   '                _typed_source.historical_text(root, name, _inputs.text_utf8(_input_owner, '
+   'root, name), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n')),
+ (440,
+  441,
+  ('def verify_support(root):\n',),
+  ('def verify_support(root, *, _expected_raw=None):\n',)),
+ (444,
+  449,
+  ("    text = (root/MODULE).read_bytes().decode('utf-8')\n",),
+  ('    current_raw = (root/MODULE).read_bytes()\n',
+   '    if _expected_raw is not None:\n',
+   '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
+   "                'Map observation changed before delegated verification')\n",
+   "    text = _typed_source.historical_bytes(root, MODULE, current_raw).decode('utf-8')\n")),
+ (455,
+  456,
+  ("    require((root/MODULE).read_bytes().decode('utf-8') == text,\n",),
+  ('    require((root/MODULE).read_bytes() == current_raw,\n',)),
+ (500,
+  501,
+  ('def verify_frontier(root):\n',),
+  ('def verify_frontier(root, *, _expected_raw=None):\n',)),
+ (504,
+  509,
+  ("    text = (root/MODULE).read_bytes().decode('utf-8')\n",),
+  ('    current_raw = (root/MODULE).read_bytes()\n',
+   '    if _expected_raw is not None:\n',
+   '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
+   "                'Map observation changed before delegated verification')\n",
+   "    text = _typed_source.historical_bytes(root, MODULE, current_raw).decode('utf-8')\n")),
+ (516,
+  517,
+  ("    require((root/MODULE).read_bytes().decode('utf-8') == text,\n",),
+  ('    require((root/MODULE).read_bytes() == current_raw,\n',)),
+ (571,
+  582,
+  ('        text = ((path.read_text() if _operation is None else full_audit._observe_text(root, '
+   'rel.as_posix(), path.read_text(), _operation=_operation)) if _inputs is None else\n',
+   '                _inputs.text_default(_input_owner, root, rel.as_posix()))\n'),
+  ('        supplied_text = ((path.read_text() if _operation is None else\n',
+   '                          full_audit._observe_text(root, rel.as_posix(), path.read_text(), '
+   '_operation=_operation)) if _inputs is None else\n',
+   '                         _inputs.text_default(_input_owner, root, rel.as_posix()))\n',
+   '        if rel.as_posix() == MODULE and station_edge is not None:\n',
+   '            physical = ((path.read_bytes() if _operation is None else\n',
+   '                         full_audit._observe_bytes(root, MODULE, path.read_bytes(), '
+   '_operation=_operation)) if _inputs is None else\n',
+   '                        _inputs.observe_bytes(_input_owner, root, MODULE))\n',
+   '            require(source.token_sha256(supplied_text) == '
+   "source.token_sha256(physical.decode('utf-8')),\n",
+   "                    'station census supplied and physical Map views differ')\n",
+   '        text = _typed_source.historical_text(root, rel.as_posix(), supplied_text, '
+   '_operation=_operation,\n',
+   '            _inputs=_inputs, _input_owner=_input_owner)\n')),
+ (668,
+  669,
+  ('def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):\n',),
+  ('def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None, '
+   '_expected_raw=None):\n',)),
+ (672, 673, (), ('    with _typed_source.typed_admission_scope(root) as _typed_admission:\n',)),
+ (673,
+  674,
+  ("    record = (read_record(root, **({} if _operation is None else {'_operation': _operation})) "
+   'if _inputs is None else\n',),
+  ("        record = (read_record(root, **({} if _operation is None else {'_operation': "
+   '_operation})) if _inputs is None else\n',)),
+ (674,
+  675,
+  ('              read_record(root, _inputs=_inputs, _input_owner=_input_owner, **({} if '
+   "_operation is None else {'_operation': _operation})))\n",),
+  ('                  read_record(root, _inputs=_inputs, _input_owner=_input_owner, **({} if '
+   "_operation is None else {'_operation': _operation})))\n",)),
+ (675,
+  683,
+  ('    text = (((root/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   "            _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))\n"),
+  ('        current_raw = (((root/MODULE).read_bytes() if _operation is None else\n',
+   '                        full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   '_operation=_operation)) if _inputs is None else\n',
+   '                       _inputs.observe_bytes(_input_owner, root, MODULE))\n',
+   '        if _expected_raw is not None:\n',
+   '            require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
+   "                    'Map observation changed before delegated verification')\n",
+   '        text = _typed_source.historical_bytes(root, MODULE, current_raw, '
+   '_operation=_operation,\n',
+   "            _inputs=_inputs, _input_owner=_input_owner).decode('utf-8')\n")),
+ (683,
+  684,
+  ('    for path, expected in SCORE_TESTS.items():\n',),
+  ('        for path, expected in SCORE_TESTS.items():\n',)),
+ (684,
+  686,
+  ('        require(hashlib.sha256(((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if '
+   '_inputs is None else\n',
+   '                               _inputs.raw(_input_owner, root, path)).hexdigest() == '
+   'expected,\n'),
+  ('            require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
+   '                                   _typed_source.historical_bytes(root, path, '
+   '_inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, '
+   '_input_owner=_input_owner)).hexdigest() == expected,\n')),
+ (686,
+  687,
+  ("                'score-helper numerical fixture changed: '+path)\n",),
+  ("                    'score-helper numerical fixture changed: '+path)\n",)),
+ (687,
+  688,
+  ('    deviation_edge = sha(text) == deviation.AFTER_SHA256\n',),
+  ('        deviation_edge = sha(text) == deviation.AFTER_SHA256\n',)),
+ (688,
+  689,
+  ('    station_edge = deviation_edge or sha(text) == station.AFTER_SHA256\n',),
+  ('        station_edge = deviation_edge or sha(text) == station.AFTER_SHA256\n',)),
+ (689,
+  690,
+  ('    score_text = station.predecessor_source(deviation.station_source(text)) if station_edge '
+   'else text\n',),
+  ('        score_text = station.predecessor_source(deviation.station_source(text)) if '
+   'station_edge else text\n',)),
+ (690, 691, ('    if deviation_edge:\n',), ('        if deviation_edge:\n',)),
+ (691,
+  692,
+  ('        for path, expected in deviation.TESTS.items():\n',),
+  ('            for path, expected in deviation.TESTS.items():\n',)),
+ (692,
+  694,
+  ('            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if '
+   '_inputs is None else\n',
+   '                                   _inputs.raw(_input_owner, root, path)).hexdigest() == '
+   'expected,\n'),
+  ('                require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
+   '                                       _typed_source.historical_bytes(root, path, '
+   '_inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, '
+   '_input_owner=_input_owner)).hexdigest() == expected,\n')),
+ (694,
+  695,
+  ("                    'deviation correctness fixture changed: '+path)\n",),
+  ("                        'deviation correctness fixture changed: '+path)\n",)),
+ (695, 696, ('    if station_edge:\n',), ('        if station_edge:\n',)),
+ (696,
+  697,
+  ('        for path, expected in station.TESTS.items():\n',),
+  ('            for path, expected in station.TESTS.items():\n',)),
+ (697,
+  699,
+  ('            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if '
+   '_inputs is None else\n',
+   '                                   _inputs.raw(_input_owner, root, path)).hexdigest() == '
+   'expected,\n'),
+  ('                require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
+   '                                       _typed_source.historical_bytes(root, path, '
+   '_inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, '
+   '_input_owner=_input_owner)).hexdigest() == expected,\n')),
+ (699,
+  700,
+  ("                    'station correctness fixture changed: '+path)\n",),
+  ("                        'station correctness fixture changed: '+path)\n",)),
+ (700,
+  701,
+  ('    frontier = score_predecessor_source(score_text)\n',),
+  ('        frontier = score_predecessor_source(score_text)\n',)),
+ (701,
+  702,
+  ('    support = frontier_predecessor_source(frontier)\n',),
+  ('        support = frontier_predecessor_source(frontier)\n',)),
+ (702,
+  703,
+  ('    optional = support_predecessor_source(support)\n',),
+  ('        optional = support_predecessor_source(support)\n',)),
+ (703,
+  704,
+  ('    middle = optional_predecessor_source(optional)\n',),
+  ('        middle = optional_predecessor_source(optional)\n',)),
+ (704,
+  705,
+  ('    prior_edge = verify_source(middle, record)\n',),
+  ('        prior_edge = verify_source(middle, record)\n',)),
+ (705,
+  706,
+  ("    require(prior_edge is not None, 'score edge must follow all preceding edges')\n",),
+  ("        require(prior_edge is not None, 'score edge must follow all preceding edges')\n",)),
+ (706, 707, ('    if _inputs is None:\n',), ('        if _inputs is None:\n',)),
+ (707,
+  708,
+  ("        _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': "
+   '_operation}))\n',),
+  ("            _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': "
+   '_operation}))\n',)),
+ (708,
+  709,
+  ('        verify_score_caller_inventory(root, station_edge=station_edge, **({} if _operation is '
+   "None else {'_operation': _operation}))\n",),
+  ('            verify_score_caller_inventory(root, station_edge=station_edge, **({} if _operation '
+   "is None else {'_operation': _operation}))\n",)),
+ (709,
+  710,
+  ('        verify_premises(root, record, after=True, optional=True, support=True,\n',),
+  ('            verify_premises(root, record, after=True, optional=True, support=True,\n',)),
+ (710,
+  711,
+  ('                        frontier=True, score=True, **({} if _operation is None else '
+   "{'_operation': _operation}))\n",),
+  ('                            frontier=True, score=True, **({} if _operation is None else '
+   "{'_operation': _operation}))\n",)),
+ (711, 712, ('    else:\n',), ('        else:\n',)),
+ (712,
+  713,
+  ('        _verify_bound_inputs(root, record, _inputs=_inputs, _input_owner=_input_owner, **({} '
+   "if _operation is None else {'_operation': _operation}))\n",),
+  ('            _verify_bound_inputs(root, record, _inputs=_inputs, _input_owner=_input_owner, '
+   "**({} if _operation is None else {'_operation': _operation}))\n",)),
+ (713,
+  714,
+  ('        verify_score_caller_inventory(root, station_edge=station_edge, _inputs=_inputs, '
+   "_input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))\n",),
+  ('            verify_score_caller_inventory(root, station_edge=station_edge, _inputs=_inputs, '
+   "_input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))\n",)),
+ (714,
+  715,
+  ('        verify_premises(root, record, after=True, optional=True, support=True,\n',),
+  ('            verify_premises(root, record, after=True, optional=True, support=True,\n',)),
+ (715,
+  716,
+  ('                        frontier=True, score=True, _inputs=_inputs, _input_owner=_input_owner, '
+   "**({} if _operation is None else {'_operation': _operation}))\n",),
+  ('                            frontier=True, score=True, _inputs=_inputs, '
+   "_input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))\n",)),
+ (716,
+  720,
+  ('    final_text = (((root/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   "                  _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))\n",
+   '    require(final_text == text,\n'),
+  ('        final_raw = (((root/MODULE).read_bytes() if _operation is None else\n',
+   '                      full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   '_operation=_operation)) if _inputs is None else\n',
+   '                     _inputs.observe_bytes(_input_owner, root, MODULE))\n',
+   '        require(final_raw == current_raw,\n')),
+ (720,
+  721,
+  ("            'Map changed during score-helper verification')\n",),
+  ("                'Map changed during score-helper verification')\n",)),
+ (721,
+  722,
+  ('    endpoints = ((AFTER_SHA256, AFTER_TOKEN_SHA256),\n',),
+  ('        endpoints = ((AFTER_SHA256, AFTER_TOKEN_SHA256),\n',)),
+ (722,
+  723,
+  ('                 (OPTIONAL_AFTER_SHA256, OPTIONAL_AFTER_TOKEN_SHA256),\n',),
+  ('                     (OPTIONAL_AFTER_SHA256, OPTIONAL_AFTER_TOKEN_SHA256),\n',)),
+ (723,
+  724,
+  ('                 (SUPPORT_AFTER_SHA256, SUPPORT_AFTER_TOKEN_SHA256),\n',),
+  ('                     (SUPPORT_AFTER_SHA256, SUPPORT_AFTER_TOKEN_SHA256),\n',)),
+ (724,
+  725,
+  ('                 (FRONTIER_AFTER_SHA256, FRONTIER_AFTER_TOKEN_SHA256),\n',),
+  ('                     (FRONTIER_AFTER_SHA256, FRONTIER_AFTER_TOKEN_SHA256),\n',)),
+ (725,
+  726,
+  ('                 (SCORE_AFTER_SHA256, SCORE_AFTER_TOKEN_SHA256))\n',),
+  ('                     (SCORE_AFTER_SHA256, SCORE_AFTER_TOKEN_SHA256))\n',)),
+ (726, 727, ('    edges = [prior_edge]\n',), ('        edges = [prior_edge]\n',)),
+ (727,
+  728,
+  ('    for before, after in zip(endpoints, endpoints[1:]):\n',),
+  ('        for before, after in zip(endpoints, endpoints[1:]):\n',)),
+ (728,
+  729,
+  ("        edges.append({'path': MODULE, 'before_sha256': before[0],\n",),
+  ("            edges.append({'path': MODULE, 'before_sha256': before[0],\n",)),
+ (729,
+  730,
+  ("                      'after_sha256': after[0], 'before_token_sha256': before[1],\n",),
+  ("                          'after_sha256': after[0], 'before_token_sha256': before[1],\n",)),
+ (730,
+  731,
+  ("                      'after_token_sha256': after[1]})\n",),
+  ("                          'after_token_sha256': after[1]})\n",)),
+ (731, 732, ('    if station_edge:\n',), ('        if station_edge:\n',)),
+ (732,
+  733,
+  ('        edges.append(station.edge())\n',),
+  ('            edges.append(station.edge())\n',)),
+ (733, 734, ('    if deviation_edge:\n',), ('        if deviation_edge:\n',)),
+ (734,
+  735,
+  ('        edges.append(deviation.edge())\n',),
+  ('            edges.append(deviation.edge())\n',)),
+ (735,
+  736,
+  ("    return {'path': MODULE, 'before_sha256': BEFORE_SHA256,\n",),
+  ("        return {'path': MODULE, 'before_sha256': BEFORE_SHA256,\n",)),
+ (736,
+  737,
+  ("            'after_sha256': edges[-1]['after_sha256'],\n",),
+  ("                'after_sha256': edges[-1]['after_sha256'],\n",)),
+ (737,
+  738,
+  ("            'before_token_sha256': BEFORE_TOKEN_SHA256,\n",),
+  ("                'before_token_sha256': BEFORE_TOKEN_SHA256,\n",)),
+ (738,
+  739,
+  ("            'after_token_sha256': edges[-1]['after_token_sha256'],\n",),
+  ("                'after_token_sha256': edges[-1]['after_token_sha256'],\n",)),
+ (739, 740, ("            'edges': edges}\n",), ("                'edges': edges}\n",)),
+ (749,
+  751,
+  (),
+  ('    scaled_edges = full_audit.scaled_float32_edges(root,\n',
+   '        _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)\n')),
+ (757,
+  759,
+  ('           and hashlib.sha256(((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if '
+   '_inputs is None else\n',
+   '                              _inputs.raw(_input_owner, root, path)).hexdigest() == '
+   'full_audit.AFTER_SHA256[path]\n'),
+  ('           and hashlib.sha256((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
+   '                              _typed_source.historical_bytes(root, path, '
+   '_inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, '
+   '_input_owner=_input_owner)).hexdigest() == full_audit.AFTER_SHA256[path]\n')),
+ (766,
+  770,
+  (),
+  ('    for path, edge in scaled_edges.items():\n',
+   "        require(path in record['unchanged_inputs'] and path not in cleanup_edges,\n",
+   "                'unexpected or duplicate scaled count input: ' + path)\n",
+   '        cleanup_edges[path] = edge\n')),
+ (778,
+  780,
+  ('            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if '
+   '_inputs is None else\n',
+   '                              _inputs.raw(_input_owner, root, path)).hexdigest() == '
+   'expected,\n'),
+  ('            require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else\n',
+   '                              _typed_source.historical_bytes(root, path, '
+   '_inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, '
+   '_input_owner=_input_owner)).hexdigest() == expected,\n')),
+ (783,
+  784,
+  ('def verify_optional(root):\n',),
+  ('def verify_optional(root, *, _expected_raw=None):\n',)),
+ (787,
+  792,
+  ("    text = (root/MODULE).read_bytes().decode('utf-8')\n",),
+  ('    current_raw = (root/MODULE).read_bytes()\n',
+   '    if _expected_raw is not None:\n',
+   '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
+   "                'Map observation changed before delegated verification')\n",
+   "    text = _typed_source.historical_bytes(root, MODULE, current_raw).decode('utf-8')\n")),
+ (797,
+  798,
+  ("    require((root/MODULE).read_bytes().decode('utf-8') == text,\n",),
+  ('    require((root/MODULE).read_bytes() == current_raw,\n',)),
+ (825,
+  827,
+  ('        text = (((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   '                    _inputs.text_utf8(_input_owner, root, path))\n'),
+  ('        text = ((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else '
+   '_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, '
+   '(root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, '
+   "_input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
+   '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, '
+   'root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n')),
+ (844,
+  846,
+  ('            text = (((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   '                    _inputs.text_utf8(_input_owner, root, path))\n'),
+  ('            text = ((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else '
+   '_typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, '
+   '(root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, '
+   "_input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
+   '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, '
+   'root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n')),
+ (863,
+  865,
+  ('            actual = declaration((((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   '                    _inputs.text_utf8(_input_owner, root, path)), name, owner)\n'),
+  ('            actual = declaration(((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   "_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs "
+   'is None else\n',
+   '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, '
+   'root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)), name, '
+   'owner)\n')),
+ (869,
+  871,
+  ('            actual = declaration((((root/path).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   '                    _inputs.text_utf8(_input_owner, root, path)), name, owner)\n'),
+  ('            actual = declaration(((_typed_source.historical_bytes(root, root/path, '
+   '(root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) '
+   'if _operation is None else _typed_source.historical_bytes(root, path, '
+   'full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), '
+   "_operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).decode('utf-8') if _inputs "
+   'is None else\n',
+   '                    _typed_source.historical_text(root, path, _inputs.text_utf8(_input_owner, '
+   'root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)), name, '
+   'owner)\n')),
+ (874,
+  876,
+  ('    text = (((root/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') if _inputs is None else\n",
+   '            _inputs.text_utf8(_input_owner, root, MODULE))\n'),
+  ('    text = ((_typed_source.historical_bytes(root, root/MODULE, (root/MODULE).read_bytes(), '
+   '_operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else '
+   '_typed_source.historical_bytes(root, MODULE, full_audit._observe_bytes(root, MODULE, '
+   '(root/MODULE).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, '
+   "_input_owner=_input_owner)).decode('utf-8') if _inputs is None else\n",
+   '            _typed_source.historical_text(root, MODULE, _inputs.text_utf8(_input_owner, root, '
+   'MODULE), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner))\n')),
+ (892,
+  893,
+  ('def verify(root, *, _operation=None):\n',),
+  ('def _verify_seed_body(root, *, _operation=None, _expected_raw=None):\n',)),
+ (896,
+  902,
+  ('    text = ((root/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation)).decode('utf-8')\n",),
+  ('    current_raw = ((root/MODULE).read_bytes() if _operation is None else\n',
+   '                   full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   '_operation=_operation))\n',
+   '    if _expected_raw is not None:\n',
+   '        require(type(_expected_raw) is bytes and current_raw == _expected_raw,\n',
+   "                'Map observation changed before delegated verification')\n",
+   '    text = _typed_source.historical_bytes(root, MODULE, current_raw, '
+   "_operation=_operation).decode('utf-8')\n")),
+ (903,
+  921,
+  ("        return verify_score(root, **({} if _operation is None else {'_operation': "
+   '_operation}))\n',
+   '    if sha(text) == FRONTIER_AFTER_SHA256:\n',
+   '        return verify_frontier(root)\n',
+   '    if sha(text) == SUPPORT_AFTER_SHA256:\n',
+   '        return verify_support(root)\n',
+   '    if sha(text) == OPTIONAL_AFTER_SHA256:\n',
+   '        return verify_optional(root)\n',
+   '    edge = verify_source(text, record)\n',
+   '    if edge is None:\n',
+   '        return None\n',
+   "    _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': "
+   '_operation}))\n',
+   "    verify_premises(root, record, after=True, **({} if _operation is None else {'_operation': "
+   '_operation}))\n',
+   '    # A caller must not project a source different from the one just verified.\n',
+   '    require(((root/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation)).decode('utf-8') == text, 'Map changed during verification')\n"),
+  ("        edge = verify_score(root, **({'_expected_raw': current_raw} if _operation is None else "
+   "{'_operation': _operation}))\n",
+   '    elif sha(text) == FRONTIER_AFTER_SHA256:\n',
+   '        edge = verify_frontier(root, _expected_raw=current_raw)\n',
+   '    elif sha(text) == SUPPORT_AFTER_SHA256:\n',
+   '        edge = verify_support(root, _expected_raw=current_raw)\n',
+   '    elif sha(text) == OPTIONAL_AFTER_SHA256:\n',
+   '        edge = verify_optional(root, _expected_raw=current_raw)\n',
+   '    else:\n',
+   '        edge = verify_source(text, record)\n',
+   '        if edge is None:\n',
+   '            return None\n',
+   "        _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': "
+   '_operation}))\n',
+   '        verify_premises(root, record, after=True, **({} if _operation is None else '
+   "{'_operation': _operation}))\n",
+   "    # Reconcile the dispatch observation as well as the delegated verifier's\n",
+   '    # own capture; an equal historical projection cannot hide a physical swap.\n',
+   '    final_raw = ((root/MODULE).read_bytes() if _operation is None else\n',
+   '                 full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   '_operation=_operation))\n',
+   "    require(final_raw == current_raw, 'Map changed during verification')\n")),
+ (922,
+  945,
+  (),
+  ('\n',
+   '\n',
+   '\n',
+   'def _verify_standalone(root, *, _expected_raw=None):\n',
+   '    """One fresh canonical invocation; historical inputs keep lazy admission."""\n',
+   "    _operation, owns = full_audit._operation_enter(root, 'seed')\n",
+   '    try:\n',
+   '        result = _verify_seed_body(root, _operation=_operation, _expected_raw=_expected_raw)\n',
+   '        if owns:\n',
+   '            _operation.finish(root)\n',
+   '        return result\n',
+   '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
+   'AttributeError) as error:\n',
+   '        full_audit._operation_fail(_operation, error)\n',
+   '    finally:\n',
+   '        if owns:\n',
+   '            _operation.close()\n',
+   '\n',
+   '\n',
+   'def verify(root, *, _operation=None, _expected_raw=None):\n',
+   '    """Verify the exact edge, live arithmetic dependencies and regression input."""\n',
+   '    if _operation is not None:\n',
+   '        return _verify_seed_body(root, _operation=_operation, _expected_raw=_expected_raw)\n',
+   '    return _verify_standalone(root, _expected_raw=_expected_raw)\n')),
+ (953,
+  955,
+  ('    text = full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation).decode('utf-8')\n",),
+  ('    current_raw = full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   '_operation=_operation)\n',
+   '    text = _typed_source.historical_bytes(root, MODULE, current_raw, '
+   "_operation=_operation).decode('utf-8')\n")),
+ (960,
+  962,
+  ("    require(verify(root, **operation_args) is not None, 'after Map did not activate its "
+   "reviewed edge')\n",
+   '    require(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation).decode('utf-8') == text, 'Map changed during reconstruction')\n"),
+  ("    require(verify(root, **({'_expected_raw': current_raw} if _operation is None else "
+   "operation_args)) is not None, 'after Map did not activate its reviewed edge')\n",
+   '    require(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), '
+   "_operation=_operation) == current_raw, 'Map changed during reconstruction')\n")),
+ (980,
+  987,
+  ('    physical = ((Path(root)/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), '
+   '_operation=_operation))\n',),
+  ('    current_raw = (Path(root)/MODULE).read_bytes()\n',
+   '    if _operation is not None:\n',
+   '        current_raw = full_audit._observe_bytes(root, MODULE, current_raw, '
+   '_operation=_operation)\n',
+   "    require(source.token_sha256(text) == source.token_sha256(current_raw.decode('utf-8')),\n",
+   "            'unreviewed supplied Map source')\n",
+   '    text = _typed_source.historical_text(root, MODULE, text, _operation=_operation)\n',
+   '    physical = _typed_source.historical_bytes(root, MODULE, current_raw, '
+   '_operation=_operation)\n')),
+ (1000,
+  1005,
+  ("    require(verify(root, **({} if _operation is None else {'_operation': _operation})) is not "
+   "None, 'after Map did not activate its reviewed edge')\n",
+   '    require(((Path(root)/MODULE).read_bytes() if _operation is None else '
+   'full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), '
+   '_operation=_operation)) == physical,\n',
+   "            'Map changed during supplied-view verification')\n"),
+  ("    require(verify(root, **({'_expected_raw': current_raw} if _operation is None else "
+   "{'_operation': _operation})) is not None, 'after Map did not activate its reviewed edge')\n",
+   '    final_raw = (Path(root)/MODULE).read_bytes()\n',
+   '    if _operation is not None:\n',
+   '        final_raw = full_audit._observe_bytes(root, MODULE, final_raw, '
+   '_operation=_operation)\n',
+   "    require(final_raw == current_raw, 'Map changed during supplied-view verification')\n"))),
+    'source_contracts.py': ((10,
+  11,
+  ('from contextlib import contextmanager\n',),
+  ('from contextlib import contextmanager, nullcontext\n',)),
+ (169, 170, ('@lru_cache(maxsize=128)\n',), ('@lru_cache(maxsize=1024)\n',)),
+ (235,
+  236,
+  ('        checked = text\n',),
+  ('        checked = historical_text(root, path, text, **operation_args)\n',)),
+ (238,
+  239,
+  ("                and token_sha256(text) != pins['groups'][group][path]):\n",),
+  ("                and token_sha256(checked) != pins['groups'][group][path]):\n",)),
+ (248,
+  249,
+  ("        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != "
+   "pins['groups'][group][path]:\n",),
+  ("        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(checked) != "
+   "pins['groups'][group][path]:\n",)),
+ (258,
+  259,
+  ("        elif path == PREFIX + 'map.mojo' and token_sha256(text) != "
+   "pins['groups'][group][path]:\n",),
+  ("        elif path == PREFIX + 'map.mojo' and token_sha256(checked) != "
+   "pins['groups'][group][path]:\n",)),
+ (274,
+  276,
+  ('def verify_qualifiers(root, filename, text):\n', '    pins = read_pins(root)\n'),
+  ('def verify_qualifiers(root, filename, text, *, _operation=None):\n',
+   '    pins = read_pins(root, _operation=_operation)\n')),
+ (277,
+  278,
+  ('    checked = text\n',),
+  ('    checked = historical_text(root, PREFIX + filename, text, _operation=_operation)\n',)),
+ (279,
+  280,
+  ("            and qualifier_sha256(text) != pins['qualifiers'][filename]):\n",),
+  ("            and qualifier_sha256(checked) != pins['qualifiers'][filename]):\n",)),
+ (285,
+  286,
+  ('            checked = full_audit.reviewed_text(root, PREFIX + filename, text)\n',),
+  ('            checked = full_audit.reviewed_text(root, PREFIX + filename, text, '
+   '_operation=_operation)\n',)),
+ (290,
+  369,
+  (),
+  ('\n',
+   '\n',
+   'def _typed_path(root, path):\n',
+   '    relative = str(path)\n',
+   "    if not relative.endswith('.mojo'):\n",
+   '        return None\n',
+   '    if Path(relative).is_absolute():\n',
+   '        relative = Path(relative).relative_to(root).as_posix()\n',
+   '    elif isinstance(path, Path):\n',
+   '        # Callers passing root/path may use a non-dot relative checkout root.\n',
+   '        # Canonical module strings remain relative to root, never prefix-stripped.\n',
+   '        root_text = str(root)\n',
+   "        if (root_text not in ('', '.') and not Path(root_text).is_absolute()\n",
+   "                and '..' not in Path(root_text).parts and '..' not in path.parts\n",
+   "                and relative.startswith(root_text + '/')):\n",
+   '            relative = relative[len(root_text) + 1:]\n',
+   '    return relative\n',
+   '\n',
+   '\n',
+   'def typed_admission_scope(root):\n',
+   '    """Create a synchronous, frame-owned admission scope for a public checker."""\n',
+   '    if __package__:\n',
+   '        from . import full_audit_cleanup_contracts as audit\n',
+   '    else:\n',
+   '        import full_audit_cleanup_contracts as audit\n',
+   '    frame = sys._getframe(1)\n',
+   "    if frame.f_locals.get('_operation') is not None or audit._cache_verify_frame(frame):\n",
+   '        return nullcontext()\n',
+   "    filename = frame.f_globals.get('__file__')\n",
+   '    if (type(filename) is not str\n',
+   '            or Path(filename).absolute().parent != Path(__file__).absolute().parent\n',
+   '            or frame.f_code.co_name not in '
+   'audit._public_admission_entries().get(Path(filename).name, ())):\n',
+   '        return nullcontext()\n',
+   "    if Path(filename).name == 'seed_count_contracts.py':\n",
+   "        if frame.f_locals.get('_inputs') is not None:\n",
+   '            return nullcontext()\n',
+   '        parent = audit._public_admission_for(root)\n',
+   "        if parent is not None and parent._state == 'active':\n",
+   '            return nullcontext()\n',
+   '    return audit._public_admission_scope(root, frame)\n',
+   '\n',
+   '\n',
+   'def historical_text(root, path, text, *, _operation=None, _inputs=None, _input_owner=None):\n',
+   '    """Expose a fixed historical view only after actual current admission.\n',
+   '\n',
+   '    Reads and owned observations stay physical. The conditioned semantic\n',
+   '    successor, rather than old byte-identity claims, binds the new graph.\n',
+   '    """\n',
+   '    relative = _typed_path(root, path)\n',
+   '    if relative is None:\n',
+   '        return text\n',
+   '    if __package__:\n',
+   '        from . import typed_boundary_contracts as typed\n',
+   '    else:\n',
+   '        import typed_boundary_contracts as typed\n',
+   '    if relative not in typed.EDGES:\n',
+   '        return text\n',
+   '    if __package__:\n',
+   '        from . import full_audit_cleanup_contracts as audit\n',
+   '    else:\n',
+   '        import full_audit_cleanup_contracts as audit\n',
+   '    return audit.reviewed_typed_text(root, relative, text, _operation=_operation,\n',
+   '                                     _inputs=_inputs, _input_owner=_input_owner)\n',
+   '\n',
+   '\n',
+   'def historical_bytes(root, path, raw, *, _operation=None, _inputs=None, _input_owner=None):\n',
+   '    """Preserve physical reads before one named historical-source projection."""\n',
+   '    relative = _typed_path(root, path)\n',
+   '    if relative is None:\n',
+   '        return raw\n',
+   '    if __package__:\n',
+   '        from . import typed_boundary_contracts as typed\n',
+   '    else:\n',
+   '        import typed_boundary_contracts as typed\n',
+   '    if relative not in typed.EDGES:\n',
+   '        return raw\n',
+   "    require(type(raw) is bytes, 'historical input is not physical bytes')\n",
+   "    return historical_text(root, relative, raw.decode('utf-8'), _operation=_operation,\n",
+   "                           _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')\n"))),
 }
 # END REVIEWED #333 CHECKER SOURCE INVERSE
 class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
@@ -5007,6 +7315,22 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                         and item.name == original.__name__)
             clause = _station_census_read_contract(node)
             first, last = clause.lineno, clause.end_lineno
+        elif line == 'typed-construction-discovery-catch':
+            # This exact current helper is an enumerated addition in the
+            # authenticated source inverse, so it has no predecessor line.
+            self.assertEqual((path.name, original.__name__, expression),
+                ('coverage_loop_proofs.py', '_typed_construction_boundary_loops',
+                 'cleanup._operation_fail(_operation, error)'))
+            node = next(item for item in tree.body if isinstance(item, ast.FunctionDef)
+                        and item.name == original.__name__)
+            handlers = [item for item in ast.walk(node) if isinstance(item, ast.ExceptHandler)
+                        and ast.unparse(item.type) == '(OSError, UnicodeError, ValueError)'
+                        and item.name == 'error']
+            self.assertEqual(len(handlers), 1)
+            calls = [item for item in ast.walk(handlers[0]) if isinstance(item, ast.Call)
+                     and ast.unparse(item) == expression]
+            self.assertEqual(len(calls), 1)
+            first, last = calls[0].lineno, calls[0].end_lineno
         else:
             old_bodies = [node for node in ast.walk(old_tree) if isinstance(node, ast.FunctionDef)
                           and node.name == original.__name__]
@@ -5627,7 +7951,8 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                                 'cache_key.input_paths(Path(root))')
         production_catch = self._site(core._operation_production_paths, 1541,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1349,
+        known_catch = self._site(loops._typed_construction_boundary_loops,
+                                 'typed-construction-discovery-catch',
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
@@ -5684,7 +8009,13 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                         self.assertIs(operation, selected[0])
                         self.assertTrue((production_catch if production else known_catch)(sys._getframe(1)))
                         caught.append(error)
-                    return original_fail(operation, error)
+                    try:
+                        return original_fail(operation, error)
+                    except core._OperationCoherenceError as refused:
+                        if error is failure:
+                            self.assertIs(type(refused), core._OperationCoherenceError)
+                            self.assertIs(refused.__cause__, failure)
+                        raise
                 with self.audit(core) as events, patch.object(module, name, discovered), \
                         patch.object(core._InvariantInputs, '_discovery', discovery), \
                         patch.object(core, '_operation_fail', fail):
@@ -5713,6 +8044,26 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                     self.assertEqual(comparisons, [(kind, frozenset(expected))])
                     reason = 'full-audit cleanup successor: consumed operation path census changed: ' + kind
                 self._assert_refused(events, operation, reason, core)
+                # Restoring the original discovery function cannot revive the
+                # same failed owner, including after its normal close path.
+                with self.assertRaises(core._OperationCoherenceError) as retry:
+                    core._operation_check(operation, self.root)
+                self.assertIs(type(retry.exception), core._OperationCoherenceError)
+                self.assertEqual(str(retry.exception), reason)
+                self.assertEqual(operation._failure_reason, reason)
+                # The rejected reuse re-invalidates the already-closed owner.
+                # It cannot recover its source image or become active again.
+                self.assertEqual(operation._state, 'invalid')
+                self.assertTrue(operation._failed)
+                self.assertFalse(operation._raw)
+                self.assertIsNone(operation._record_raw)
+                self.assertIsNone(operation._owner_frame)
+                self.assertEqual(operation._observations, [])
+                self.assertEqual(operation._discoveries, [])
+                operation.close()
+                self.assert_closed(operation, core)
+                self.assertTrue(operation._failed)
+                self.assertEqual(operation._failure_reason, reason)
                 self.assertFalse((self.root/added).exists())
 
     def test_distinct_late_map_finalizer_discards_every_real_completed_proof(self):
@@ -5813,6 +8164,211 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
                 sites.append(statement)
         return sites
 
+    # These are only the nineteen reviewed generated-receipt additions.  Keep
+    # the two original root-optimization sites visible to the module-wide check.
+    _GENERATED_ROOT_CALLS = (('_operation_include_context',
+      ('body', 1, 'body', 1, 'body', 1, 'value', 'args', 0, 'elt'),
+      '9dbdc0cf9877bde8fd710b1cfb4d7f14d49452c49a15d18026fb30810de6d995',
+      ('body', 1, 'body', 1, 'body', 1),
+      'f1c33b6980c708f8fbb31feaa61dbacd1f0dec125c9dadca859abfdc8d35bcd2'),
+     ('_private_operation_wrapper',
+      ('body', 1, 'body', 4, 'body', 0, 'test', 'values', 1, 'left'),
+      '753c654e9c3eb1ca6d5f73abe70ed43c502e8ed896a61c5ec4d18b7fcec974ca',
+      ('body', 1, 'body', 4, 'body', 0),
+      'b339e3eb471b1a87a51859609d94e34ad3daf0f9fa76c5146bf0f3ab2bd27ffc'),
+     ('_private_operation_wrapper',
+      ('body', 1, 'body', 4, 'body', 0, 'test', 'values', 2, 'left', 'args', 0, 'elt'),
+      '9dbdc0cf9877bde8fd710b1cfb4d7f14d49452c49a15d18026fb30810de6d995',
+      ('body', 1, 'body', 4, 'body', 0),
+      'b339e3eb471b1a87a51859609d94e34ad3daf0f9fa76c5146bf0f3ab2bd27ffc'),
+     ('_operation_record',
+      ('body', 0, 'body', 3, 'value', 'args', 0, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 3),
+      'ec3c9ca1f3090e9c3cfdd2e573531edc5f42c5f389919d1f491f47fc741ebc06'),
+     ('_InvariantInputs.__init__',
+      ('body', 21, 'body', 2, 'value', 'args', 0, 'values', 1, 'left'),
+      'd929019f11ecefc5ecff0fb8a5a5155dd621851816626f2046776d387d9f0a3f',
+      ('body', 21, 'body', 2),
+      'd60db09dfa0cc724bb80d2f15ea25f8074753d40b988500a0cb5240eaff36e05'),
+     ('_InvariantInputs.__init__',
+      ('body', 21, 'body', 3, 'value', 'elts', 0),
+      'd929019f11ecefc5ecff0fb8a5a5155dd621851816626f2046776d387d9f0a3f',
+      ('body', 21, 'body', 3),
+      'f048ad17dd52363c7cf03238370d223c3a9c899c6e8ad27cc706d920592e092c'),
+     ('_InvariantInputs._check_context',
+      ('body', 2, 'value', 'args', 0, 'values', 2, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 2),
+      '35999423469694c123a301b2c7d32e4bc8e375d46b0491998a5dd1a4720a2624'),
+     ('_InvariantInputs._check_context',
+      ('body', 2, 'value', 'args', 0, 'values', 3, 'left'),
+      'e9b68711c8da290ea0c2dc6a460886bfe6a92dbe6c8c501a2bdf746c89ac1863',
+      ('body', 2),
+      '35999423469694c123a301b2c7d32e4bc8e375d46b0491998a5dd1a4720a2624'),
+     ('_InvariantInputs._check_context',
+      ('body', 2, 'value', 'args', 0, 'values', 4, 'left', 'elts', 0),
+      'e546e19c1b0eac34949ba8d75208cd5c64039b7776fe0733e771523534bdd98e',
+      ('body', 2),
+      '35999423469694c123a301b2c7d32e4bc8e375d46b0491998a5dd1a4720a2624'),
+     ('_InvariantInputs._receipt_bindings',
+      ('body', 0, 'body', 1, 'value', 'args', 0, 'values', 1, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 1),
+      '4e449f2d3cb0cd2eca6f87cf47fee1239d4d3a3bd6fc6d5cc8e8dea870ae4294'),
+     ('_InvariantInputs._publish',
+      ('body', 17, 'body', 2, 'value', 'args', 0, 'left'),
+      'a9d80834554899bc92d337be6c7586da1c400e15c06a01715794aa6abe1922a8',
+      ('body', 17, 'body', 2),
+      '71356e8d45ab44056f004568b385f7e4016a5b14a43c05ac561b7c971056bf5b'),
+     ('_InvariantInputs._discovery',
+      ('body', 0, 'body', 3, 'body', 0, 'value'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 3, 'body', 0),
+      'b3f92f7cb7170a53f9df1b3de103b30b3273be0901b9e371c0db90c217a72aab'),
+     ('_InvariantInputs._discovery',
+      ('body', 0, 'body', 4, 'orelse', 0, 'value', 'values', 1, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 4, 'orelse', 0),
+      'ce8e13dc97ab93638a18c4d6122c56d2cd4b1a39d411d25d2e2020c3ba5dbbd5'),
+     ('_InvariantInputs._match',
+      ('body', 0, 'value', 'values', 1, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0),
+      'ce8e13dc97ab93638a18c4d6122c56d2cd4b1a39d411d25d2e2020c3ba5dbbd5'),
+     ('_InvariantInputs._observe',
+      ('body', 0, 'body', 5, 'body', 0, 'value', 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 5, 'body', 0),
+      'eefe3331a94be6967c4203ac0e0d034e8e2d3a578624763153d44e124193dc85'),
+     ('_InvariantInputs._observe',
+      ('body', 0, 'body', 5, 'body', 4, 'value', 'args', 0, 'elts', 0),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 5, 'body', 4),
+      '5e2756f23805ec7590f9c32815eaeaaee8acd82800ea94c7f1eabe9e3e2adf89'),
+     ('_InvariantInputs._admit',
+      ('body', 0, 'body', 3, 'body', 1, 'body', 0, 'body', 0, 'value', 'args', 0, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 0, 'body', 3, 'body', 1, 'body', 0, 'body', 0),
+      '3daa57c0f994355fba6e78ebb81398a11554a05d110f3a5cc1b68b1527ab500e'),
+     ('_InvariantInputs._receipt_finish_inputs',
+      ('body', 1, 'value', 'args', 0, 'left'),
+      'aa5f5604e860e89847b1c79d56c213702318635d8e91d438d297b22e53eafa91',
+      ('body', 1),
+      'bb8ebee85fefdc5f45426ff901645c8c25a3fde40daf830e8ecb63cceeeebbe5'),
+     ('verify',
+      ('body',
+       3,
+       'body',
+       0,
+       'body',
+       1,
+       'value',
+       'args',
+       0,
+       'values',
+       2,
+       'values',
+       1,
+       'values',
+       1,
+       'left',
+       'args',
+       0,
+       'elt'),
+      '9dbdc0cf9877bde8fd710b1cfb4d7f14d49452c49a15d18026fb30810de6d995',
+      ('body', 3, 'body', 0, 'body', 1),
+      '40e5b3ce8225fa8b3fa60ac8ab25b988f6bbd182921de010afd55672d6ac9daf'))
+
+    @staticmethod
+    def _root_projection_key(node):
+        # Stable across the supported Python AST dump presentation versions.
+        def encode(value):
+            if isinstance(value, ast.AST):
+                return [type(value).__name__, [[field, encode(getattr(value, field, None))]
+                                              for field in value._fields]]
+            if isinstance(value, list):
+                return [encode(item) for item in value]
+            return value
+        return hashlib.sha256(json.dumps(encode(node), separators=(',', ':'),
+                                         ensure_ascii=True).encode()).hexdigest()
+
+    def _project_generated_root_calls(self, tree):
+        projected = copy.deepcopy(tree)
+        pending = []
+        locations = set()
+        for qualified, path, call_sha, statement_path, statement_sha in self._GENERATED_ROOT_CALLS:
+            self.assertNotIn((qualified, path), locations)
+            locations.add((qualified, path))
+            declaration = projected
+            for name in qualified.split('.'):
+                declaration = self._one_definition(declaration.body, name)
+            def at(parts):
+                node = declaration
+                for part in parts:
+                    node = node[part] if isinstance(part, int) else getattr(node, part)
+                return node
+            call = at(path)
+            self.assertEqual(self._root_projection_key(call), call_sha,
+                             (qualified, path, 'generated root call drift'))
+            self.assertEqual(self._root_projection_key(at(statement_path)), statement_sha,
+                             (qualified, statement_path, 'generated root statement drift'))
+            self.assertIsInstance(call, ast.Call)
+            self.assertIsInstance(call.func, ast.Name)
+            self.assertEqual(call.func.id, '_absolute_root_text')
+            self.assertEqual(len(call.args), 1)
+            self.assertEqual(call.keywords, [])
+            pending.append((at(path[:-1]), path[-1], call))
+        self.assertEqual(len(pending), 19)
+        # Authenticate the complete inventory before changing any copied node.
+        for parent, field, call in pending:
+            value = copy.deepcopy(call.args[0])
+            if isinstance(field, int):
+                parent[field] = value
+            else:
+                setattr(parent, field, value)
+        return projected
+
+    def _project_public_admission_root_calls(self, tree):
+        """Project two root uses authenticated by the existing reviewed inverse."""
+        projected = copy.deepcopy(tree)
+        additions = [(start, stop, after) for start, stop, before, after in
+                     _TYPED_CHECKER_SOURCE_EDITS['full_audit_cleanup_contracts.py']
+                     if not before and 'class _PublicAdmission:\n' in after]
+        self.assertEqual([(start, stop) for start, stop, _ in additions], [(1391, 1715)])
+        reviewed = self._one_definition(ast.parse(''.join(additions[0][2])).body,
+                                        '_PublicAdmission')
+        public = self._one_definition(projected.body, '_PublicAdmission')
+        pending = []
+        for name, address in (
+                ('__init__', ('body', 8, 'value')),
+                ('_check_context', ('body', 0, 'value', 'args', 0, 'values', 0, 'left'))):
+            method = self._one_definition(public.body, name)
+            expected = self._one_definition(reviewed.body, name)
+            self.assertEqual(ast_key(method), ast_key(expected),
+                             (name, 'reviewed public root method drift'))
+            calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)
+                     and isinstance(node.func, ast.Name) and node.func.id == '_absolute_root_text']
+            self.assertEqual(len(calls), 1)
+            parent = method
+            for part in address[:-1]:
+                parent = parent[part] if isinstance(part, int) else getattr(parent, part)
+            field = address[-1]
+            call = parent[field] if isinstance(field, int) else getattr(parent, field)
+            self.assertIs(call, calls[0])
+            self.assertEqual(ast_key(call), ast_key(ast.parse(
+                '_absolute_root_text(root)', mode='eval').body))
+            pending.append((parent, field, call))
+        self.assertEqual(len(pending), 2)
+        # Authenticate both complete methods before changing either copied call.
+        for parent, field, call in pending:
+            value = copy.deepcopy(call.args[0])
+            if isinstance(field, int):
+                parent[field] = value
+            else:
+                setattr(parent, field, value)
+        return projected
+
     def _assert_root_projection(self, tree, source_tree):
         definitions = {name: self._one_definition(tree.body, name) for name in
                        ('_absolute_root_text', '_CacheInputs', '_private_operation_wrapper',
@@ -5835,7 +8391,8 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
                          'root-conversion owner class header AST drift')
         for name, node in (('_CacheInputs._check_context', context),
                            ('_private_operation_wrapper', definitions['_private_operation_wrapper'])):
-            checked = (owner_helpers.typed_owner_ast(node, 'private', reverse=True)
+            checked = (owner_helpers.typed_owner_ast(
+                _generated_owner_predecessor_ast(node), 'private', reverse=True)
                        if name == '_private_operation_wrapper' else node)
             original, count = self._reverse(checked)
             self.assertEqual(count, 1)
@@ -5844,7 +8401,9 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
         without_helper = copy.deepcopy(tree)
         without_helper.body = [node for node in without_helper.body
                                if not isinstance(node, ast.FunctionDef) or node.name != '_absolute_root_text']
-        _, count = self._reverse(without_helper)
+        without_generated = self._project_generated_root_calls(without_helper)
+        without_generated = self._project_public_admission_root_calls(without_generated)
+        _, count = self._reverse(without_generated)
         self.assertEqual(count, 2)
 
         for name, expected in (
@@ -5884,7 +8443,7 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
                          'root-conversion lexical scope identity AST drift')
         scope_bindings = self._binding_sites(source_tree.body, {'lexical_memo_scope', 'contextmanager'})
         self.assertEqual(len(scope_bindings), 2)
-        self.assertEqual(ast_key(scope_bindings[0]), ast_key(ast.parse('from contextlib import contextmanager').body[0]))
+        self.assertEqual(ast_key(scope_bindings[0]), ast_key(ast.parse('from contextlib import contextmanager, nullcontext').body[0]))
         self.assertIs(scope_bindings[1], scope)
 
     def _checked_functions(self):
@@ -6074,6 +8633,55 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
                 self._assert_root_projection(tree, source_tree)
 
+        # Each allowed addition is exact, while calls outside the inventory
+        # remain subject to the original complete-module two-site guard.
+        for mutation in ('generated_argument', 'generated_missing', 'generated_moved',
+                         'unexpected_root_call'):
+            tree, source_tree = copy.deepcopy(original), copy.deepcopy(original_source)
+            qualified, path, _, _, _ = self._GENERATED_ROOT_CALLS[0]
+            declaration = tree
+            for name in qualified.split('.'):
+                declaration = self._one_definition(declaration.body, name)
+            parent = declaration
+            for part in path[:-1]:
+                parent = parent[part] if isinstance(part, int) else getattr(parent, part)
+            call = parent[path[-1]] if isinstance(path[-1], int) else getattr(parent, path[-1])
+            unrelated = self._one_definition(tree.body, 'native_support_mapping')
+            if mutation == 'generated_argument':
+                call.args[0] = ast.Constant('/unreviewed')
+            elif mutation in ('generated_missing', 'generated_moved'):
+                if mutation == 'generated_moved':
+                    unrelated.body.insert(0, ast.Expr(value=copy.deepcopy(call)))
+                if isinstance(path[-1], int):
+                    parent[path[-1]] = copy.deepcopy(call.args[0])
+                else:
+                    setattr(parent, path[-1], copy.deepcopy(call.args[0]))
+            else:
+                unrelated.body.insert(0, ast.parse('_absolute_root_text(root)').body[0])
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
+                self._assert_root_projection(tree, source_tree)
+
+        # New public-scope additions cannot hide an extra root conversion.
+        for name in ('__init__', '_check_context'):
+            tree, source_tree = copy.deepcopy(original), copy.deepcopy(original_source)
+            public = self._one_definition(tree.body, '_PublicAdmission')
+            method = self._one_definition(public.body, name)
+            method.body.append(ast.parse('_absolute_root_text(root)').body[0])
+            with self.subTest(public_extra_root_call=name), self.assertRaises(AssertionError):
+                self._assert_root_projection(tree, source_tree)
+
+        # The reviewed nullcontext addition does not permit arbitrary siblings or aliases.
+        for mutation in ('scope_extra_import', 'scope_aliased_import'):
+            tree, source_tree = copy.deepcopy(original), copy.deepcopy(original_source)
+            scope_import = next(node for node in source_tree.body
+                                if isinstance(node, ast.ImportFrom) and node.module == 'contextlib')
+            if mutation == 'scope_extra_import':
+                scope_import.names.append(ast.alias(name='ExitStack'))
+            else:
+                scope_import.names[0].asname = 'unreviewed_contextmanager'
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
+                self._assert_root_projection(tree, source_tree)
+
     def test_fresh_values_callbacks_and_fallback_errors_match(self):
         from pathlib import PosixPath, PurePosixPath, PureWindowsPath
         import os
@@ -6256,7 +8864,7 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
         tree, helper = self._checked_functions()
         node = next(item for item in tree.body if isinstance(item, ast.FunctionDef)
                     and item.name == '_private_operation_wrapper')
-        reference, count = self._reverse(node)
+        reference, count = self._reverse(_generated_owner_predecessor_ast(node))
         self.assertEqual(count, 1)
         namespace = dict(vars(cleanup))
         exec(compile(ast.fix_missing_locations(ast.Module(body=[reference], type_ignores=[])),
@@ -6373,8 +8981,13 @@ class TypedCheckerSuccessorStaticControls(unittest.TestCase):
                 node = copy.deepcopy(original)
                 calls = [item for item in ast.walk(node) if isinstance(item, ast.Call)
                          and isinstance(item.func, ast.Attribute) and isinstance(item.func.value, ast.Name)
-                         and item.func.value.id == '_typed_source']
+                         and item.func.value.id == '_typed_source'
+                         and item.func.attr in ('historical_text', 'historical_bytes')]
+                self.assertTrue(calls, 'missing typed provenance adapter')
                 call = calls[0]
+                self.assertEqual(len(call.args), 3)
+                self.assertIsInstance(call.args[0], ast.Name)
+                self.assertEqual(call.args[0].id, 'root')
                 if fault == 'path': call.args[1] = ast.Constant('foreign.mojo')
                 elif fault == 'operation': call.keywords.append(ast.keyword(arg='_operation', value=ast.Constant(None)))
                 elif fault == 'missing': call.func.value.id = 'unreviewed_source'
@@ -6443,7 +9056,9 @@ class TypedCheckerSuccessorStaticControls(unittest.TestCase):
         import seed_count_contracts as seed
         raw = Path(seed.__file__).read_bytes()
         _checker_source_predecessor('seed_count_contracts.py', raw)
-        definition = function_ast(seed, 'verify')
+        definition = function_ast(seed, '_verify_seed_body')
+        _seed_dispatch_body_contract(definition)
+        definition.name = 'verify'
         compiled = compile(ast.Module(body=[definition], type_ignores=[]),
                            '<isolated-current-seed-dispatch-control>', 'exec')
         for route, digest in (('verify_score', seed.SCORE_AFTER_SHA256),
@@ -6905,6 +9520,419 @@ class TypedBorrowedProvenanceCurrentControls(unittest.TestCase):
                 self.assertTrue(any(error is caught[0] for error in chain))
                 self.assert_closed(operation)
                 self.assertEqual((self.root/path).read_bytes(), physical)
+
+
+
+class StandaloneSeedFrameControls(unittest.TestCase):
+    """Exact body extraction and canonical wrapper routing, without admission."""
+    def seed(self):
+        import importlib
+        return importlib.import_module((cleanup.__package__ + '.' if cleanup.__package__ else '')
+                                       + 'seed_count_contracts')
+
+    def test_complete_original_body_and_signature_are_retained(self):
+        seed = self.seed()
+        text = inspect.getsource(seed._verify_seed_body)
+        self.assertEqual(text.count('def _verify_seed_body('), 1)
+        original = text.replace('def _verify_seed_body(', 'def verify(', 1)
+        self.assertEqual(hashlib.sha256(original.encode()).hexdigest(),
+                         '6a8c6ca3784540187b5e658ebd1425d06cbf5a4698b69a14df18613befcb00dd')
+        self.assertEqual(inspect.signature(seed.verify), inspect.signature(seed._verify_seed_body))
+
+    def test_explicit_borrowed_dispatch_forwards_exact_objects_without_factory(self):
+        seed = self.seed()
+        root, operation, expected, result = object(), object(), object(), object()
+        def body(got_root, *, _operation=None, _expected_raw=None):
+            self.assertIs(got_root, root)
+            self.assertIs(_operation, operation)
+            self.assertIs(_expected_raw, expected)
+            return result
+        def forbidden(*args, **kwargs):
+            self.fail('Borrowed seed route attempted to enter a standalone owner')
+        with patch.object(seed, '_verify_seed_body', body), patch.object(cleanup, '_operation_enter', forbidden):
+            self.assertIs(seed.verify(root, _operation=operation, _expected_raw=expected), result)
+
+    def test_frame_registry_code_identity_and_public_transparency(self):
+        import types
+        seed = self.seed()
+        frame = types.SimpleNamespace(f_globals=vars(seed), f_code=seed._verify_standalone.__code__)
+        self.assertEqual(cleanup._seed_frame_kind(frame), 'seed')
+        public = types.SimpleNamespace(f_globals=vars(seed), f_code=seed.verify.__code__)
+        self.assertIsNone(cleanup._seed_frame_kind(public, include_aliases=True))
+        namespace = dict(vars(seed))
+        namespace['_verify_standalone'] = types.FunctionType(seed._verify_standalone.__code__, namespace)
+        alias = types.SimpleNamespace(f_globals=namespace, f_code=seed._verify_standalone.__code__)
+        self.assertIsNone(cleanup._seed_frame_kind(alias))
+        self.assertEqual(cleanup._seed_frame_kind(alias, include_aliases=True), 'alias_seed')
+        copied = seed._verify_standalone.__code__.replace()
+        self.assertEqual(copied, seed._verify_standalone.__code__)
+        self.assertIsNot(copied, seed._verify_standalone.__code__)
+        module = types.ModuleType(seed.__name__)
+        module.__dict__.update(namespace)
+        module._verify_standalone = types.FunctionType(copied, vars(module))
+        fake = types.SimpleNamespace(f_globals=vars(module), f_code=copied)
+        with patch.dict(sys.modules, {seed.__name__: module}):
+            self.assertIsNone(cleanup._seed_frame_kind(fake))
+
+    def test_actual_unregistered_and_registered_alias_wrappers_remain_unowned(self):
+        import importlib.util
+        seed = self.seed()
+        for registered in (False, True):
+            name = '_standalone_seed_alias_probe'
+            spec = importlib.util.spec_from_file_location(name, seed.__file__)
+            alias = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(alias)
+            seen = []
+            marker = object()
+            def body(root, *, _operation=None, _expected_raw=None):
+                seen.append(_operation)
+                self.assertIsNone(_operation)
+                return marker
+            # A routing sentinel only; no semantic verification is claimed.
+            with self.subTest(registered=registered), patch.object(alias, '_verify_seed_body', body):
+                if registered:
+                    with patch.dict(sys.modules, {name: alias}):
+                        self.assertIs(alias.verify(Path(seed.__file__).parents[2]), marker)
+                else:
+                    self.assertNotIn(name, sys.modules)
+                    self.assertIs(alias.verify(Path(seed.__file__).parents[2]), marker)
+            self.assertEqual(seen, [None])
+
+    def test_historical_before_endpoint_is_lazy_and_closed(self):
+        seed = self.seed()
+        source_root = Path(cleanup.__file__).resolve().parents[2]
+        typed = cleanup.typed_boundary
+        historical_map = typed.predecessor_source(
+            seed.MODULE, (source_root/seed.MODULE).read_text(encoding='utf-8'))
+        self.assertEqual(cleanup.sha(historical_map), typed.EDGES[seed.MODULE]['before_sha256'])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root/seed.MODULE).parent.mkdir(parents=True)
+            (root/seed.MODULE).write_text(historical_map)
+            (root/seed.MIGRATION).parent.mkdir(parents=True)
+            (root/seed.MIGRATION).write_bytes((source_root/seed.MIGRATION).read_bytes())
+            before = seed.predecessor_source(seed.successor_source(root), seed.read_record(root))
+            self.assertEqual(seed.sha(before), seed.BEFORE_SHA256)
+            (root/seed.MODULE).write_text(before)
+            owners, calls = [], []
+            def profile(frame, event, value):
+                if event == 'call' and frame.f_code is cleanup.verify.__code__:
+                    calls.append(True)
+                if event == 'return' and frame.f_code is cleanup._operation_enter.__code__:
+                    if isinstance(value, tuple) and value[1]:
+                        owners.append(value[0])
+            self.assertIsNone(sys.getprofile())
+            sys.setprofile(profile)
+            try:
+                self.assertIsNone(seed.verify(root))
+            finally:
+                sys.setprofile(None)
+            self.assertEqual(calls, [])
+            self.assertEqual(len(owners), 1)
+            self.assertEqual(owners[0]._kind, 'seed')
+            self.assertEqual(owners[0]._state, 'closed')
+            self.assertFalse(owners[0]._failed)
+            self.assertIsNone(owners[0]._owner_frame)
+
+
+class StandaloneSeedCurrentControls(unittest.TestCase):
+    """Whole real verifications on one independently copied physical fixture."""
+    @classmethod
+    def setUpClass(cls):
+        import importlib
+        import _full_audit_test_fixtures as fixtures
+        cls.seed = importlib.import_module((cleanup.__package__ + '.' if cleanup.__package__ else '')
+                                          + 'seed_count_contracts')
+        source_root = Path(cleanup.__file__).resolve().parents[2]
+        owner = type('CurrentSeedFixture', (), {'addCleanup': staticmethod(cls.addClassCleanup)})()
+        cls.root = fixtures.copy_current_root(owner, source_root)
+
+    @contextmanager
+    def traced(self, callback=None):
+        counts, owners, reads = Counter(), [], Counter()
+        self.assertIsNone(sys.getprofile())
+        def profile(frame, event, value):
+            if event == 'call':
+                if frame.f_code is cleanup.verify.__code__:
+                    counts['full'] += 1
+                elif frame.f_code is cleanup.typed_boundary.verify_sources.__code__:
+                    counts['typed'] += 1
+                elif frame.f_code is cleanup._InvariantInputs.finish.__code__:
+                    counts['finish'] += 1
+                elif frame.f_code is Path.read_bytes.__code__:
+                    path = frame.f_locals.get('self')
+                    if isinstance(path, Path) and path.is_relative_to(self.root):
+                        reads[path.relative_to(self.root).as_posix()] += 1
+            elif event == 'return' and frame.f_code is cleanup._operation_enter.__code__:
+                if isinstance(value, tuple) and value[1]:
+                    owners.append(value[0])
+            if callback is not None:
+                callback(frame, event, value, owners)
+        sys.setprofile(profile)
+        try:
+            yield counts, owners, reads
+        finally:
+            sys.setprofile(None)
+
+    def closed(self, owner, failed):
+        self.assertEqual(owner._kind, 'seed')
+        self.assertEqual(owner._state, 'closed')
+        self.assertEqual(owner._failed, failed)
+        self.assertFalse(owner._raw)
+        self.assertIsNone(owner._owner_frame)
+        with self.assertRaises(ValueError):
+            cleanup._operation_check(owner, self.root)
+
+    def test_two_current_calls_each_admit_once_read_and_finish(self):
+        results, previous = [], []
+        record = self.seed.read_record(self.root)
+        paths = {path for group in ('historical_records', 'unchanged_inputs',
+                 'unchanged_correctness_tests', 'after_correctness_tests') for path in record[group]
+                 if path in cleanup.typed_boundary.EDGES}
+        self.assertEqual(len(paths), 21)
+        for _ in range(2):
+            with self.traced() as (counts, owners, reads):
+                results.append(self.seed.verify(self.root))
+            self.assertEqual(counts, {'full': 1, 'typed': 1, 'finish': 1})
+            self.assertEqual(len(owners), 1)
+            self.closed(owners[0], False)
+            self.assertTrue(all(reads[path] >= 2 for path in paths))
+            previous.append(owners[0])
+        self.assertIsNot(previous[0], previous[1])
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0]['path'], self.seed.MODULE)
+        self.assertEqual(results[0]['edges'][-1], self.seed.deviation.edge())
+
+    def test_transient_consumed_bytes_remain_sticky_after_restore(self):
+        target = self.root/'extensions/carla/curve_bounds.mojo'
+        raw, fired = target.read_bytes(), []
+        def callback(frame, event, value, owners):
+            if (fired or event != 'return' or frame.f_code is not cleanup._InvariantInputs._admit.__code__
+                    or not owners or owners[0]._state != 'active'):
+                return
+            fired.append(True)
+            owner = owners[0]
+            target.write_bytes(raw+b'\n# consumed temporary mutation\n')
+            try:
+                with self.assertRaisesRegex(ValueError, 'consumed operation bytes changed'):
+                    cleanup._observe_bytes(self.root, target.relative_to(self.root).as_posix(),
+                                           target.read_bytes(), _operation=owner)
+            finally:
+                target.write_bytes(raw)
+            with self.assertRaises(ValueError):
+                cleanup._operation_check(owner, self.root)
+        with self.traced(callback) as (_, owners, _):
+            with self.assertRaises(ValueError):
+                self.seed.verify(self.root)
+        self.assertEqual(fired, [True])
+        self.assertEqual(target.read_bytes(), raw)
+        self.assertEqual(len(owners), 1)
+        self.closed(owners[0], True)
+
+    def test_late_source_checker_and_census_fail_before_publication(self):
+        for fault in ('source', 'checker', 'census'):
+            target = self.root/'extensions/carla/curve_bounds.mojo'
+            raw, fired, stop = target.read_bytes(), [], []
+            extra = self.root/'tests/seed_late_source.mojo'
+            self.assertFalse(extra.exists())
+            def callback(frame, event, value, owners):
+                if fired or event != 'call' or frame.f_code is not cleanup._InvariantInputs.finish.__code__:
+                    return
+                fired.append(True)
+                self.assertEqual(len(owners), 1)
+                self.assertEqual(owners[0]._state, 'active')
+                if fault == 'source':
+                    target.write_bytes(raw+b'\n# late source\n')
+                elif fault == 'census':
+                    extra.write_text('# late unrelated source\n')
+                else:
+                    checker = Path(cleanup.__file__).resolve()
+                    read = Path.read_bytes
+                    def changed(path, *args, **kwargs):
+                        value = read(path, *args, **kwargs)
+                        return value+b'\n# late executing checker read\n' if path.resolve() == checker else value
+                    manager = patch.object(Path, 'read_bytes', changed)
+                    manager.start()
+                    stop.append(manager.stop)
+            try:
+                with self.subTest(fault=fault), self.traced(callback) as (_, owners, _):
+                    with self.assertRaises(ValueError):
+                        self.seed.verify(self.root)
+                self.assertEqual(fired, [True])
+                self.closed(owners[0], True)
+            finally:
+                for restore in reversed(stop):
+                    restore()
+                target.write_bytes(raw)
+                extra.unlink(missing_ok=True)
+            self.assertEqual(target.read_bytes(), raw)
+            self.assertFalse(extra.exists())
+
+    def test_nested_standalone_is_independent_and_outer_borrow_is_refused(self):
+        target = self.root/'extensions/carla/curve_bounds.mojo'
+        read = Path.read_bytes
+        nested, blocked, result = [], [], []
+        with self.traced() as (counts, owners, _):
+            def bridge(path, *args, **kwargs):
+                if path == target and owners and owners[0]._state == 'active' and not nested:
+                    nested.append(True)
+                    result.append(self.seed.verify(self.root))
+                elif nested and len(owners) == 2 and not blocked:
+                    blocked.append(True)
+                    with self.assertRaisesRegex(ValueError, 'nearer independent operation blocks borrowing'):
+                        cleanup._operation_check(owners[0], self.root)
+                return read(path, *args, **kwargs)
+            with patch.object(Path, 'read_bytes', bridge), self.assertRaises(ValueError):
+                self.seed.verify(self.root)
+        self.assertEqual(nested, [True])
+        self.assertEqual(blocked, [True])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['path'], self.seed.MODULE)
+        self.assertEqual(len(owners), 2)
+        self.assertIsNot(owners[0], owners[1])
+        self.closed(owners[0], True)
+        self.closed(owners[1], False)
+        self.assertEqual(counts['full'], 2)
+        self.assertEqual(counts['typed'], 2)
+
+
+def check_generated_root_only_borrowing(root, stage, mojo, compiler, flags):
+    """Explicit real-stage controls, called by the owned mutation-fixture adapter.
+
+    This helper does not generate, copy, or rebind a stage. Its caller supplies
+    the independently writable stage after complete producer admission.
+    Source inputs remain read-only; only an independent staged file is changed.
+    Existing unittest discovery and its method inventory are unchanged.
+    """
+    import os
+    import coverage_loop_proofs as proofs
+    from carla_lane_oracle import full_audit_cleanup_contracts as audit
+    from carla_lane_oracle import seed_count_contracts as seed
+    root, stage = Path(root).resolve(), Path(stage).resolve()
+    sealed = Path(__file__).resolve().parents[2]
+    audit.require(stage != sealed and not stage.is_relative_to(sealed),
+                  'Root-only controls require an independent writable stage')
+    expected = proofs.read_receipt(stage/'loop-proofs.json')['receipt']
+    settings = {'mojo': [mojo], 'suites': expected['execution']['suites'],
+                'capture_cache': proofs._expand_path(expected['execution']['cache'], root, stage)}
+    helper_paths = ('extensions/carla/render_sky.mojo', 'extensions/carla/render_weather.mojo')
+    labels = ('root-only-seed-and-shared-positive', 'root-only-wrong-nonempty-root',
+              'root-only-stage-tamper-at-finish')
+    completed, retained_owners = [], []
+    for label in labels:
+        audit.require(proofs.maintained_inputs(root, exclude=stage) == expected['root_inputs'],
+                      'Root-only source fixture changed before control')
+        proofs.check_capture_inputs({'receipt': expected}, root, stage)
+        audit.require(sys.getprofile() is None, 'Root-only controls require an unprofiled thread')
+        owners, fired, caught, restores = [], [], [], []
+        def profile(frame, event, value):
+            if event == 'return' and frame.f_code is audit._receipt_operation_enter.__code__:
+                owners.append(value)
+            if (fired or event != 'return'
+                    or frame.f_code is not audit._InvariantInputs._receipt_bindings.__code__):
+                return
+            fired.append(True)
+            audit.require(len(owners) == 1 and type(value) is dict and value,
+                          'Root-only control missed the real receipt binding return')
+            owner = owners[0]
+            audit.require(owner._kind == 'generated_receipt' and owner._state == 'active'
+                          and owner._owner_frame.f_code is proofs.build_receipt.__code__
+                          and owner._owner_frame.f_locals.get('_operation') is owner,
+                          'Root-only control requires its actual active build_receipt frame')
+            include_context = owner._include_roots
+            audit.require(include_context == (str(stage),), 'Generated stage context changed')
+            if label == labels[0]:
+                result = seed.verify(root, _operation=owner)
+                audit.require(result['path'] == seed.MODULE
+                              and result['before_sha256'] == seed.BEFORE_SHA256
+                              and result['after_sha256'] == seed.deviation.AFTER_SHA256
+                              and result['edges'][-1] == seed.deviation.edge(),
+                              'Root-only seed borrow lost the exact current historical chain')
+            helpers = audit.shared_helper_proof_bindings(
+                root, paths=helper_paths, _operation=owner)
+            audit.require(helpers and set(helper_paths) <= helpers.keys()
+                          and any(path.startswith('render/') for path in helpers)
+                          and owner._state == 'active' and not owner._failed
+                          and owner._include_roots == include_context,
+                          'Root-only shared-helper borrow changed the generated context')
+            if label == labels[1]:
+                try:
+                    audit.shared_helper_proof_bindings(root, paths=helper_paths,
+                        include_roots=(stage/'foreign',), _operation=owner)
+                except ValueError as error:
+                    audit.require('operation include root changed' in str(error),
+                                  'Wrong include root did not reach the context comparison')
+                    caught.append(True)
+                else:
+                    raise AssertionError('Wrong nonempty generated include root was accepted')
+                audit.require(owner._include_roots == include_context and owner._failed,
+                              'Caught wrong-root failure lost context or sticky refusal')
+                try:
+                    audit._operation_check(owner, root)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError('Failed root-only owner was reusable')
+            elif label == labels[2]:
+                relative = 'extensions/animals/anatomy/render.mojo'
+                target = stage/relative
+                audit.require(target.is_file() and not target.is_symlink()
+                              and target.stat().st_nlink == 1,
+                              'Stage mutation requires an independent regular file')
+                for original in (root/relative, sealed/relative):
+                    if original.exists():
+                        audit.require((target.stat().st_dev, target.stat().st_ino)
+                                      != (original.stat().st_dev, original.stat().st_ino),
+                                      'Stage mutation aliases a source inode')
+                raw, mode = target.read_bytes(), target.stat().st_mode & 0o777
+                def restore():
+                    target.unlink()
+                    with target.open('xb') as stream:
+                        stream.write(raw)
+                    os.chmod(target, mode)
+                restores.append(restore)
+                target.unlink()
+                with target.open('xb') as stream:
+                    stream.write(raw + b'\n# root-only borrow must retain final stage checks\n')
+                os.chmod(target, mode)
+        print('Root-only START '+label, flush=True)
+        try:
+            sys.setprofile(profile)
+            try:
+                actual = proofs.build_receipt(root, stage, compiler, flags, **settings)
+            except ValueError as error:
+                audit.require(label != labels[0] and fired == [True],
+                              'Root-only control refused before its actual borrow')
+                if label == labels[2]:
+                    audit.require('consumed operation bytes changed: extensions/animals/anatomy/render.mojo' in str(error)
+                                  or 'consumed operation text changed: extensions/animals/anatomy/render.mojo' in str(error)
+                                  or 'render entry source changed: extensions/animals/anatomy/render.mojo' in str(error),
+                                  'Stage tamper did not reach a generated-input refusal')
+            else:
+                audit.require(label == labels[0]
+                              and proofs.canonical(actual) == proofs.canonical(expected),
+                              'Root-only negative escaped or positive receipt changed')
+            finally:
+                sys.setprofile(None)
+            audit.require(fired == [True] and len(owners) == 1
+                          and owners[0]._state == 'closed'
+                          and owners[0]._failed == (label != labels[0])
+                          and owners[0]._owner_frame is None
+                          and owners[0]._receipt_seed is None,
+                          'Root-only receipt did not close with the expected outcome')
+            audit.require(caught == ([True] if label == labels[1] else []),
+                          'Root-only caught-refusal observation changed')
+            retained_owners.append(owners[0])
+        finally:
+            for restore in reversed(restores):
+                restore()
+        proofs.check_capture_inputs({'receipt': expected}, root, stage)
+        completed.append(label)
+        print('Root-only DONE '+label, flush=True)
+    audit.require(len({id(owner) for owner in retained_owners}) == len(labels),
+                  'Root-only controls reused an owner across receipts')
+    audit.require(completed == list(labels), 'Root-only control census changed')
+    return {'completed': completed, 'fresh_receipts': len(labels)}
 
 
 if __name__ == '__main__':

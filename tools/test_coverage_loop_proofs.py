@@ -179,7 +179,7 @@ class ProofBindingTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='loop proof binding ')
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.build = self.root / 'build'
         self.build.mkdir()
         self.hits = self.build / 'hits'
@@ -264,10 +264,241 @@ class ProofBindingTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'unreviewed package or alternate source')
             self.assertNotIn(Path(relative), set(cache_key.input_paths(self.build)))
-            with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+            # The generated receipt's owner can refuse first, at its exit census.
+            with self.assertRaisesRegex(ValueError, 'pending generated resolver surface changed'):
                 self.verify()
             path.unlink()
             self.assertEqual(self.verify()['sha256'], envelope['sha256'])
+
+    def _replace_measured_module(self, name, text, line):
+        """A compiler-free modeled generation with one exact measured source."""
+        (self.build/'module.mojo.cov-origin').unlink()
+        self.source.unlink()
+        (self.build/'module.mojo').unlink()
+        self.source = self.root/name
+        self.source.parent.mkdir(parents=True, exist_ok=True)
+        self.source.write_text(text)
+        staged = self.build/name
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_text('modeled instrumented source\n')
+        module = name.removesuffix('.mojo')
+        (self.build/'manifest.txt').write_text(f'L {module} {line}\nB {module} {line}\n')
+        loops.begin_generation(self.root, self.build, 'Mojo fixture', '-Werror', sources=[name])
+        model_generation(self.root, self.build, names=(name,))
+
+    def test_plain_receipt_without_authority_retains_exact_source_bindings(self):
+        with patch.object(loops.importlib.util, 'find_spec', return_value=None):
+            actual = loops.build_receipt(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(actual, self.envelope['receipt'])
+        original = self.source.read_bytes()
+        try:
+            for ending in (b'\r\n', b'\r'):
+                raw = original.replace(b'\n', ending)
+                self.source.write_bytes(raw)
+                self.regenerate()
+                with patch.object(loops.importlib.util, 'find_spec', return_value=None):
+                    observed = loops.build_receipt(self.root, self.build, 'Mojo fixture', '-Werror')
+                self.assertEqual(observed['root_inputs']['module.mojo'], loops.sha256(raw))
+                self.assertEqual(observed['proofs'][0]['source_sha256'], loops.sha256(raw))
+                self.assertEqual({p['line'] for p in observed['proofs']}, {2})
+                self.assertEqual(observed['denominator'], actual['denominator'])
+        finally:
+            self.source.write_bytes(original)
+            self.regenerate()
+        recognize = loops.constant_loops
+        def mutate_after_read(text):
+            result = recognize(text)
+            self.source.write_bytes(original + b'# late plain source change\n')
+            return result
+        try:
+            with patch.object(loops.importlib.util, 'find_spec', return_value=None), \
+                    patch.object(loops, 'constant_loops', mutate_after_read):
+                with self.assertRaisesRegex(ValueError, 'Stale or modified capture input binding'):
+                    loops.build_receipt(self.root, self.build, 'Mojo fixture', '-Werror')
+        finally:
+            self.source.write_bytes(original)
+        self.assertEqual(self.verify()['sha256'], self.envelope['sha256'])
+
+    def test_missing_authority_cannot_withhold_a_reviewed_module(self):
+        repo = Path(__file__).resolve().parents[1]
+        self._replace_measured_module(loops.DENSITY_SOURCE,
+            loops.reviewed_density_source(repo, successor=True), 149)
+        prior = self.receipt.read_bytes()
+        with patch.object(loops.importlib.util, 'find_spec', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'Reviewed loop authority is unavailable'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(self.receipt.read_bytes(), prior)
+        # Excluded/header-only generated modules still require their authority.
+        (self.build/'manifest.txt').write_bytes(b'')
+        loops.begin_generation(self.root, self.build, 'Mojo fixture', '-Werror',
+                               sources=[loops.DENSITY_SOURCE])
+        model_generation(self.root, self.build, names=(loops.DENSITY_SOURCE,))
+        with patch.object(loops.importlib.util, 'find_spec', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'Reviewed loop authority is unavailable'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(self.receipt.read_bytes(), prior)
+
+    def test_missing_current_dependency_remains_a_real_owner_refusal(self):
+        repo = Path(__file__).resolve().parents[1]
+        name = 'extensions/carla/curve_rounded_line.mojo'
+        self._replace_measured_module(name, (repo/name).read_text(), 93)
+        self.assertFalse((self.root/full_audit.MIGRATION).exists())
+        calls = []
+        def profile(frame, event, value):
+            if event == 'call' and frame.f_code is full_audit.verify.__code__:
+                calls.append(True)
+        self.assertIsNone(sys.getprofile())
+        prior = self.receipt.read_bytes()
+        sys.setprofile(profile)
+        try:
+            with self.assertRaisesRegex(ValueError, 'unreadable or malformed record'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        finally:
+            sys.setprofile(None)
+        self.assertEqual(calls, [True])
+        self.assertEqual(self.receipt.read_bytes(), prior)
+        from carla_lane_oracle import typed_boundary_contracts as typed
+        changed = dict(typed.EDGES[name], after_sha256='0' * 64)
+        with patch.dict(typed.EDGES, {name: changed}):
+            with self.assertRaisesRegex(ValueError, 'executing current repair authority globals changed'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(self.receipt.read_bytes(), prior)
+
+    def test_caught_real_receipt_owner_failure_cannot_publish(self):
+        def caught_failure(root, module, *, include_roots, _operation):
+            self.assertEqual(_operation._kind, 'generated_receipt')
+            self.assertEqual(_operation._state, 'pending')
+            try:
+                full_audit._operation_include_context(_operation, root, (self.build/'foreign',))
+            except ValueError as error:
+                self.assertIn('operation include root changed', str(error))
+            else:
+                self.fail('Wrong generated root did not poison its real owner')
+            return {}
+        prior = self.receipt.read_bytes()
+        with patch.object(loops, '_receipt_reviewed_nonempty_loops', caught_failure):
+            with self.assertRaisesRegex(ValueError, 'operation include root changed'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(self.receipt.read_bytes(), prior)
+
+    def test_present_but_missing_pending_prerequisite_is_not_inapplicable(self):
+        repo = Path(__file__).resolve().parents[1]
+        name = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
+        path = self.root/name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        raw = (repo/name).read_bytes()
+        path.write_bytes(raw)
+        self._replace_measured_module(loops.DENSITY_SOURCE,
+            loops.reviewed_density_source(repo, successor=True), 149)
+        fired = []
+        def profile(frame, event, value):
+            if (not fired and event == 'return'
+                    and frame.f_code is full_audit._InvariantInputs._receipt_inputs_check.__code__):
+                owner = frame.f_locals['self']
+                self.assertEqual(owner._state, 'pending')
+                self.assertIn(name, owner._receipt_source_digests)
+                fired.append(True)
+                path.unlink()
+        self.assertIsNone(sys.getprofile())
+        prior = self.receipt.read_bytes()
+        sys.setprofile(profile)
+        try:
+            with self.assertRaisesRegex(ValueError, 'Missing or escaped coverage source: '+name):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        finally:
+            sys.setprofile(None)
+            path.write_bytes(raw)
+        self.assertEqual(fired, [True])
+        self.assertEqual(self.receipt.read_bytes(), prior)
+
+    def test_broken_present_authority_import_does_not_use_plain_fallback(self):
+        import builtins
+        original_import = builtins.__import__
+        def broken(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == 'carla_lane_oracle' and 'full_audit_cleanup_contracts' in fromlist:
+                raise ModuleNotFoundError('deliberately broken authority dependency',
+                                         name='carla_lane_oracle.full_audit_cleanup_contracts')
+            return original_import(name, globals, locals, fromlist, level)
+        prior = self.receipt.read_bytes()
+        with patch.object(loops.importlib.util, 'find_spec', return_value=object()), \
+                patch.object(builtins, '__import__', broken):
+            with self.assertRaisesRegex(ModuleNotFoundError, 'deliberately broken authority dependency'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(self.receipt.read_bytes(), prior)
+
+    def test_plain_late_source_and_stage_resolver_shadows_refuse(self):
+        recognize = loops.constant_loops
+        for target, directory in ((self.root/'std', True), (self.build/'std.mojopkg', False)):
+            self.assertFalse(target.exists())
+            def add_shadow(text):
+                result = recognize(text)
+                if directory:
+                    target.mkdir()
+                else:
+                    target.write_bytes(b'compiled lookup shadow')
+                return result
+            try:
+                with self.subTest(target=target), \
+                        patch.object(loops.importlib.util, 'find_spec', return_value=None), \
+                        patch.object(loops, 'constant_loops', add_shadow):
+                    with self.assertRaisesRegex(ValueError, 'Plain receipt resolver surface changed'):
+                        loops.build_receipt(self.root, self.build, 'Mojo fixture', '-Werror')
+            finally:
+                if directory:
+                    target.rmdir()
+                else:
+                    target.unlink()
+        self.assertEqual(self.verify()['sha256'], self.envelope['sha256'])
+
+    def test_plain_mutable_seed_cannot_change_published_receipt(self):
+        recognize = loops.constant_loops
+        def mutate_seed(text):
+            frame = sys._getframe(1)
+            self.assertIs(frame.f_code, loops.build_receipt.__code__)
+            self.assertIsNone(frame.f_locals['_operation'])
+            frame.f_locals['_receipt_seed']['flags'] += ' changed'
+            return recognize(text)
+        prior = self.receipt.read_bytes()
+        with patch.object(loops.importlib.util, 'find_spec', return_value=None), \
+                patch.object(loops, 'constant_loops', mutate_seed):
+            with self.assertRaisesRegex(ValueError, 'Plain receipt seed changed after consumption'):
+                loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual(self.receipt.read_bytes(), prior)
+
+        original = self.source.read_bytes()
+        altered = original.replace(b'range(3)', b'range(0)')
+        self.assertNotEqual(original, altered)
+        read_text = Path.read_text
+        consumed = []
+        seed = []
+        def transient_text(path, *args, **kwargs):
+            frame = sys._getframe(1)
+            if path == self.source and frame.f_code is loops.build_receipt.__code__:
+                self.assertIsNone(frame.f_locals['_operation'])
+                seed.append(frame.f_locals['_receipt_seed'])
+                consumed.append(True)
+                path.write_bytes(altered)
+                seed[0]['root_inputs']['module.mojo'] = loops.sha256(altered)
+                return altered.decode('utf-8')
+            return read_text(path, *args, **kwargs)
+        def restore_after_recognition(text):
+            result = recognize(text)
+            self.source.write_bytes(original)
+            seed[0]['root_inputs']['module.mojo'] = loops.sha256(original)
+            return result
+        try:
+            with patch.object(loops.importlib.util, 'find_spec', return_value=None), \
+                    patch.object(Path, 'read_text', transient_text), \
+                    patch.object(loops, 'constant_loops', restore_after_recognition):
+                with self.assertRaisesRegex(ValueError, 'Plain receipt consumed source differs from generation'):
+                    loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        finally:
+            self.source.write_bytes(original)
+            if seed:
+                seed[0]['root_inputs']['module.mojo'] = loops.sha256(original)
+        self.assertEqual(consumed, [True])
+        self.assertEqual(self.receipt.read_bytes(), prior)
+        self.assertEqual(self.verify()['sha256'], self.envelope['sha256'])
 
     def test_sealed_manifest_retains_potential_and_required_totals(self):
         actual = self.verify()
@@ -1803,6 +2034,11 @@ def _consumer_validation_timeout(consumer, *, internal_error=False, unknown=Fals
             and not internal_error and not unknown else 45)
 
 
+def _clean_import_validation_timeout(mode, *, internal_error=False, rejected=False):
+    """Bound valid CLI Map/R-tree proofs without extending other probes."""
+    return 60 if mode == 'cli' and not internal_error and not rejected else 30
+
+
 class ConsumerValidationBudgetTests(unittest.TestCase):
     def test_only_complete_winner_validation_gets_extended_outer_budget(self):
         self.assertEqual(_consumer_validation_timeout('winner_sign_contracts'), 180)
@@ -1814,6 +2050,16 @@ class ConsumerValidationBudgetTests(unittest.TestCase):
         for consumer in ('border_parser_contracts', 'unknown'):
             with self.subTest(consumer=consumer):
                 self.assertEqual(_consumer_validation_timeout(consumer), 45)
+
+
+    def test_only_valid_cli_map_and_rtree_proofs_get_extended_outer_budget(self):
+        for mode in ('cli', 'package', 'direct', 'unknown'):
+            for internal_error, rejected in ((False, False), (True, False),
+                                             (False, True), (True, True)):
+                with self.subTest(mode=mode, internal_error=internal_error, rejected=rejected):
+                    expected = 60 if (mode, internal_error, rejected) == ('cli', False, False) else 30
+                    self.assertEqual(_clean_import_validation_timeout(
+                        mode, internal_error=internal_error, rejected=rejected), expected)
 
 
 class MapSuccessorLoopTests(unittest.TestCase):
@@ -2427,10 +2673,13 @@ check(sys.path == original_path, 'verification changed sys.path')
             command.append('-O')
         command.extend([str(script), str(root or self.repo), mode, str(shadow),
                         str(internal_error), str(rejected)])
-        # Reviewed import/source-verification allowance, aligned with the
-        # 30-second proof-consumer probes; native test budgets are separate.
+        # Hosted macOS timed out at 30s while rederiving valid Map/R-tree proofs.
+        # Only that CLI workload gets 60s; inverse/import/refusal probes retain
+        # 30s, and every native test budget remains unchanged.
+        timeout = _clean_import_validation_timeout(
+            mode, internal_error=internal_error, rejected=rejected)
         result = subprocess.run(command, cwd=cwd, check=False, capture_output=True,
-                                text=True, timeout=30)
+                                text=True, timeout=timeout)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout
 
@@ -2493,6 +2742,7 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((self.repo/name).read_bytes())
 
+        audit_fixtures.copy_shared_helper_inputs(self.root, self.repo)
         audit_fixtures.write_predecessors(
             self.root, audit_fixtures.verified_predecessors(self.repo))
         (self.root/self.map).write_text((self.repo/self.map).read_text() if getattr(self, "deviation", False) else
@@ -2516,7 +2766,8 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
         for name, expected in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256.items():
             self.assertEqual(row['dependency_sha256'][name],
                              loops.file_sha256(self.root/name) if (self.score and name == self.map)
-                             or name in helpers.SOURCE_PATHS else expected)
+                             or name in helpers.SOURCE_PATHS
+                             or name in audit_fixtures.cleanup.scaled_float32.SOURCE_PATHS else expected)
         for name, expected in row['dependency_sha256'].items():
             self.assertEqual(loops.file_sha256(self.root/name), expected)
         self.assertEqual((self.root/self.map).read_text().splitlines()[self.line-1].strip(),

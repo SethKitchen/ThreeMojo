@@ -6,6 +6,8 @@
 """Shared wide fallback for small column-major Float32 matrix inverses."""
 
 from std.math import isfinite
+from std.memory import bitcast
+from std.sys.info import is_apple_gpu
 from math.matrix_determinant import _determinant_f32
 
 
@@ -101,6 +103,173 @@ def _inverse_nonfinite[
 
 
 def _inverse_wide[
+    size: Int
+](entries: Array[Float32, size * size]) -> Tuple[
+    Bool, Array[Float32, size * size]
+]:
+    """Invert a matrix whose entries are out of the fast path's range.
+
+    The host and CUDA use exact-sign cofactors in Float64. Apple GPUs have
+    no Float64, so a kernel for one uses `_inverse_scaled_float32`.
+    """
+    comptime chosen = _inverse_scaled_float32[
+        size
+    ] if is_apple_gpu() else _inverse_exact_cofactors[size]
+    return chosen(entries)
+
+
+def _power_of_two(exponent: Int) -> Float32:
+    """Return two to a power from -126 through 127, from its bits.
+
+    Every power in that range is a normal Float32. A smaller one would be
+    subnormal, which an Apple GPU flushes to zero, so callers never ask
+    for one; see `_times_power_of_two`.
+    """
+    return bitcast[DType.float32](UInt32(exponent + 127) << 23)
+
+
+def _times_power_of_two(value: Float32, exponent: Int) -> Float32:
+    """Return `value` times two to any power, in steps of normal powers.
+
+    Each factor is normal and each step moves in the same direction.
+    For a normal input and normal result, scaling is exact.
+    Subnormal products can round in more than one step or flush to zero;
+    overflow yields infinity.
+    """
+    var result = value
+    var left = exponent
+    while left > 127:
+        result *= _power_of_two(127)
+        left -= 127
+    while left < -126:
+        result *= _power_of_two(-126)
+        left += 126
+    return result * _power_of_two(left)
+
+
+def _binade(value: Float32) -> Int:
+    """Return floor(log2(abs(value))) for a nonzero value, or -126 for a
+    subnormal one, from the exponent bits."""
+    return max(-126, Int((bitcast[DType.uint32](value) >> 23) & 0xFF) - 127)
+
+
+def _inverse_scaled_float32[
+    size: Int
+](entries: Array[Float32, size * size]) -> Tuple[
+    Bool, Array[Float32, size * size]
+]:
+    """Invert with Float32 alone; return zeros if elimination finds the
+    matrix singular.
+
+    Each column, then each row, gets a power of two near its largest entry,
+    chosen from the entries' exponents before any entry changes. Each entry
+    is divided by its row's and its column's power once. The division is
+    exact unless the scaled entry falls below the normal range, which only
+    happens to an entry far smaller than both its row and its column.
+    Gauss-Jordan elimination with partial pivoting inverts the scaled
+    matrix, and the powers are multiplied back, exactly unless an inverse
+    entry itself leaves the normal range. A nonfinite entry skips the
+    scaling and propagates as elimination does.
+
+    Unlike the exact cofactors, this decides singularity by a zero pivot,
+    so a matrix within rounding of singular can go either way. Apple GPUs
+    use it because they have no Float64.
+
+    Parameters:
+        size: The matrix's side, two through four.
+
+    Args:
+        entries: The matrix, column-major.
+
+    Returns:
+        Whether it is invertible, and its inverse or zeros.
+    """
+    comptime assert 2 <= size <= 4
+    var matrix = entries.copy()
+    var inverse = Array[Float32, size * size](fill=0)
+    var result = Array[Float32, size * size](fill=0)
+    var row_shift = Array[Int, size](fill=0)
+    var column_shift = Array[Int, size](fill=0)
+    var finite = True
+    for index in range(size * size):  # pragma: no branch
+        finite = finite and isfinite(entries[index])
+    if finite:
+        # The exponents are chosen before any entry is scaled: each column
+        # by its largest entry, then each row by its largest entry over
+        # those. An entry is then scaled once. Scaling the rows first could
+        # leave a column of small entries subnormal, and an Apple GPU
+        # flushes them, which makes an invertible matrix singular.
+        for column in range(size):  # pragma: no branch
+            var largest = -1000
+            for row in range(size):  # pragma: no branch
+                var entry = entries[column * size + row]
+                if entry != 0:
+                    largest = max(largest, _binade(entry))
+            if largest == -1000:
+                return False, result^
+            column_shift[column] = largest
+        for row in range(size):  # pragma: no branch
+            var largest = -1000
+            for column in range(size):  # pragma: no branch
+                var entry = entries[column * size + row]
+                if entry != 0:
+                    largest = max(
+                        largest, _binade(entry) - column_shift[column]
+                    )
+            if largest == -1000:
+                return False, result^
+            row_shift[row] = largest
+        for column in range(size):  # pragma: no branch
+            for row in range(size):  # pragma: no branch
+                matrix[column * size + row] = _times_power_of_two(
+                    entries[column * size + row],
+                    -(row_shift[row] + column_shift[column]),
+                )
+    for index in range(size):  # pragma: no branch
+        inverse[index * size + index] = 1
+    for column in range(size):  # pragma: no branch
+        var pivot_row = column
+        var pivot_magnitude = abs(matrix[column * size + column])
+        for row in range(column + 1, size):
+            var magnitude = abs(matrix[column * size + row])
+            if magnitude > pivot_magnitude:
+                pivot_row = row
+                pivot_magnitude = magnitude
+        if pivot_magnitude == 0:
+            return False, result^
+        if pivot_row != column:
+            for at in range(size):  # pragma: no branch
+                var first = at * size + column
+                var second = at * size + pivot_row
+                var saved = matrix[first]
+                matrix[first] = matrix[second]
+                matrix[second] = saved
+                saved = inverse[first]
+                inverse[first] = inverse[second]
+                inverse[second] = saved
+        var pivot = matrix[column * size + column]
+        for row in range(size):  # pragma: no branch
+            if row == column:
+                continue
+            var factor = matrix[column * size + row] / pivot
+            for at in range(size):  # pragma: no branch
+                matrix[at * size + row] -= factor * matrix[at * size + column]
+                inverse[at * size + row] -= factor * inverse[at * size + column]
+        for at in range(size):  # pragma: no branch
+            matrix[at * size + column] /= pivot
+            inverse[at * size + column] /= pivot
+    # M = R M' C with R and C diagonal powers of two, so M's inverse is
+    # C^-1 M'^-1 R^-1: entry (i, j) is M'^-1 (i, j) over 2 ** (c_i + r_j).
+    for column in range(size):  # pragma: no branch
+        for row in range(size):  # pragma: no branch
+            result[column * size + row] = _times_power_of_two(
+                inverse[column * size + row],
+                -(column_shift[row] + row_shift[column]),
+            )
+    return True, result^
+
+
+def _inverse_exact_cofactors[
     size: Int
 ](entries: Array[Float32, size * size]) -> Tuple[
     Bool, Array[Float32, size * size]

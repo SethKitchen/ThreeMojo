@@ -253,6 +253,7 @@ class ScoreHelperCacheInventoryTests(unittest.TestCase):
                         consumer.inventory(ROOT)
 
     def test_unknown_physical_and_between_read_changes_still_reject(self):
+        from functools import wraps
         target = ROOT/seed.MODULE
         physical = target.read_bytes()
         if seed.sha(physical.decode('utf-8')) not in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256, seed.deviation.AFTER_SHA256}:
@@ -270,13 +271,14 @@ class ScoreHelperCacheInventoryTests(unittest.TestCase):
                         consumer.inventory(ROOT)
             changed = False
             real_verify = seed.verify_score
+            @wraps(real_verify)
             def verify_then_change(root):
                 nonlocal changed
                 result = real_verify(root)
                 changed = True
                 return result
             with self.subTest(consumer=consumer.__name__, phase='after verification'), \
-                 patch.object(seed, 'verify_score', side_effect=verify_then_change), \
+                 patch.object(seed, 'verify_score', verify_then_change), \
                  patch.object(Path, 'read_bytes', lambda path,*a,**k:
                               physical+b'\n# Changed during check.\n' if path == target and changed else read_bytes(path,*a,**k)):
                 with self.assertRaisesRegex((ValueError, RuntimeError), 'Map changed during score-helper'):

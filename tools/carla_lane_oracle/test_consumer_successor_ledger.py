@@ -569,6 +569,9 @@ class LedgerOperationControls(unittest.TestCase):
 
     def test_new_reads_bind_to_the_public_owner_before_admission(self):
         import sys
+        import _full_audit_test_fixtures as fixtures
+        # The pre-admission read order is a claim about the historical graph.
+        self.root = fixtures.copy_historical_boundary_root(self, _CURRENT_SOURCE_ROOT)
         for name in (ledger.LEDGER, reuse.MODULES[0], reuse.TESTS[0]):
             original = (self.root/name).read_bytes()
             read = Path.read_bytes

@@ -470,7 +470,9 @@ class TableTests(unittest.TestCase):
             ('missing start', original.replace(begin, 'def _different_expression[', 1), 'source-block start'),
             ('duplicate start', original + '\n# ' + begin + '\n', 'source-block start'),
             ('duplicate end', original + '\n# ' + end + '\n', 'source-block end'),
-            ('end before start', end + '\n' + original.replace(end, 'def _other_index(', 1), 'moved source-block boundary'),
+            # Move the sentinel without introducing an unmatched opening
+            # parenthesis that would fail lexical admission before this check.
+            ('end before start', '# ' + end + '\n' + original.replace(end, 'def _other_index(', 1), 'moved source-block boundary'),
             ('unbound decorator', original.replace(begin, '@no_inline\n' + begin, 1), 'unbound decorator'),
             ('indented start', original.replace(begin, '    ' + begin, 1), 'not top-level'),
         ]

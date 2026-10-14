@@ -36031,7 +36031,7 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/geometry.mojo': {'after_sha256
                                                        '                    var b = '
                                                        'road._lane_corners_si(sec, ln, stations[k '
                                                        '+ 1])\n']]]},
- 'extensions/carla/opendrive.mojo': {'after_sha256': 'd52196984072615a26914a45133a513d1ec6e4ba194f093d5335b2b1b7a92ce7',
+ 'extensions/carla/opendrive.mojo': {'after_sha256': 'e65a10e92e980304186755e08988a541c1069aef988d3ba45cf3cd3f1eb19a81',
                                      'after_token_sha256': 'f055b85ae58b2add489cb1fbc8d1d8952b74209838e7bab5b4c5dd4202c7965f',
                                      'before_sha256': '9ff9b750af2c1c1a92fe3f3dfe1e49566e9d6f8c39a3576e0d4cf542bc8cdc28',
                                      'before_token_sha256': '1d29eeea907706d3b63c0898f00490ffea8470cd061c7e3383ed907b26f809ce',
@@ -36104,19 +36104,12 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/geometry.mojo': {'after_sha256
                                                 ['                    CubicPolynomial(\n'],
                                                 ['                    '
                                                  'CubicPolynomial.from_coefficients(\n']),
-                                               (624,
-                                                627,
-                                                ['        # Finite, ordered bounds retain the '
-                                                 "section's start. A nonfinite\n",
-                                                 '        # endpoint can leave this list empty '
-                                                 'before builder validation.\n',
-                                                 '        for k in range(len(starts)):\n'],
-                                                ['        # Finite, ordered bounds retain the '
-                                                 "section's start, and the\n",
-                                                 '        # builder refuses a nonfinite section '
-                                                 'start or end before this.\n',
-                                                 '        for k in range(len(starts)):  # pragma: '
-                                                 'no branch\n']),
+                                               (625,
+                                                626,
+                                                ['        # endpoint can leave this list empty '
+                                                 'before builder validation.\n'],
+                                                ['        # endpoint can leave starts empty before '
+                                                 'builder validation.\n']),
                                                (664,
                                                 665,
                                                 ['        var lane = builder.lane(road_id, '
@@ -39348,6 +39341,101 @@ EDGES = {**HISTORICAL_EDGES, **{'extensions/carla/geometry.mojo': {'after_sha256
                                                   '        original + _Interval(-32.0, 32.0),\n',
                                                   '        point[2].error + 32.0,\n',
                                                   '        work,\n'])]},
+ 'tests/test_carla_opendrive.mojo': {'after_sha256': '69558fa1caf145758d361c94cb64287324d1345602975902d5af485228ac5371',
+                                     'after_token_sha256': '6b5c5293f7b04742b18eb634c0349ff4729cf445cb58b3d3739245939a4fa90d',
+                                     'before_sha256': 'ef144b6d4ea1f55bebf694e94600e74a376897a587edc9d48f05034c29f31d50',
+                                     'before_token_sha256': 'b119fcd2b2e75678482d1e8d04d7896619ac71f9c8452d3a5fadfebed679e6e4',
+                                     'edits': [(14,
+                                                16,
+                                                [],
+                                                ['    _Doc,\n', '    _border_widths,\n']),
+                                               (41,
+                                                43,
+                                                [],
+                                                ['from loaders.xml import parse_xml\n',
+                                                 'from std.math import nan\n']),
+                                               (194,
+                                                197,
+                                                ['    '
+                                                 'assert_almost_equal(curvy.elevations[1].polynomial.evaluate(40.0), '
+                                                 '1.7)\n'],
+                                                ['    assert_almost_equal(\n',
+                                                 '        '
+                                                 'curvy.elevations[1].polynomial.evaluate_meters(40.0), '
+                                                 '1.7\n',
+                                                 '    )\n']),
+                                               (198,
+                                                201,
+                                                ['    '
+                                                 'assert_almost_equal(curvy.lane_offsets[1].polynomial.evaluate(30.0), '
+                                                 '0.6)\n'],
+                                                ['    assert_almost_equal(\n',
+                                                 '        '
+                                                 'curvy.lane_offsets[1].polynomial.evaluate_meters(30.0), '
+                                                 '0.6\n',
+                                                 '    )\n']),
+                                               (207,
+                                                208,
+                                                ['    '
+                                                 'assert_equal(through.lane_offsets[0].polynomial.evaluate(12.0), '
+                                                 '0.0)\n'],
+                                                ['    '
+                                                 'assert_equal(through.lane_offsets[0].polynomial.evaluate_meters(12.0), '
+                                                 '0.0)\n']),
+                                               (218,
+                                                221,
+                                                ['    '
+                                                 'assert_almost_equal(right.info.widths[1].polynomial.evaluate(50.0), '
+                                                 '4.0)\n'],
+                                                ['    assert_almost_equal(\n',
+                                                 '        '
+                                                 'right.info.widths[1].polynomial.evaluate_meters(50.0), '
+                                                 '4.0\n',
+                                                 '    )\n']),
+                                               (249,
+                                                250,
+                                                ['    '
+                                                 'assert_equal(walk.info.borders[0].polynomial.evaluate(3.0), '
+                                                 '5.5)\n'],
+                                                ['    '
+                                                 'assert_equal(walk.info.borders[0].polynomial.evaluate_meters(3.0), '
+                                                 '5.5)\n']),
+                                               (265,
+                                                266,
+                                                ['    '
+                                                 'assert_equal(border.info.widths[0].polynomial.evaluate(3.0), '
+                                                 '0.0)\n'],
+                                                ['    '
+                                                 'assert_equal(border.info.widths[0].polynomial.evaluate_meters(3.0), '
+                                                 '0.0)\n']),
+                                               (432,
+                                                449,
+                                                [],
+                                                ['def '
+                                                 'test_border_derivation_preserves_empty_unordered_endpoint_result() '
+                                                 'raises:\n',
+                                                 '    # Exercise the retained internal derivation '
+                                                 'contract directly. Public XML\n',
+                                                 '    # construction can reject a nonfinite road '
+                                                 'endpoint before this helper.\n',
+                                                 '    var doc = _Doc(\n',
+                                                 '        parse_xml(\n',
+                                                 '            "<OpenDRIVE><right><lane '
+                                                 'id=\'-1\'><border sOffset=\'0\'"\n',
+                                                 '            + " a=\'-3\' b=\'0\' c=\'0\' '
+                                                 'd=\'0\'/></lane></right></OpenDRIVE>"\n',
+                                                 '        )\n',
+                                                 '    )\n',
+                                                 '    var group = doc.child(doc.top(), "right")\n',
+                                                 '    var ordinary = _border_widths(doc, group, 0, '
+                                                 '1, True)\n',
+                                                 '    assert_equal(len(ordinary), 1)\n',
+                                                 '    assert_equal(ordinary[0].a, Float64(3))\n',
+                                                 '    var unordered = _border_widths(doc, group, '
+                                                 '0, nan[DType.float64](), True)\n',
+                                                 '    assert_equal(len(unordered), 0)\n',
+                                                 '\n',
+                                                 '\n'])]},
  'tests/test_carla_road_fixed_s.mojo': {'after_sha256': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
                                         'after_token_sha256': '6cb2433e954186340ce29c655e7a4dbf20667e968cb8a4f86355addc2b14dfee',
                                         'before_sha256': '1a8cdb306c88b81647b90aea69d517562acb6decd5ad74b281eda2734e4f12a4',
@@ -39715,7 +39803,7 @@ EDGE_SHA256 = {**HISTORICAL_EDGE_SHA256, **{'extensions/carla/geometry.mojo': '8
  'extensions/carla/math.mojo': '9450ae752ff62ce1065111e591523a6a825772511f88e2222ddd982308f2b9d8',
  'extensions/carla/mesh_factory.mojo': '410ec85c278c743159b566666a4ec1eb1492abddd002edb725b621135e72b98a',
  'extensions/carla/navigation_mesh.mojo': 'de00b12408fba9b1d4036f42968307f17a2ee80c4381fe8123f253e48eb9e507',
- 'extensions/carla/opendrive.mojo': '4ef1af46cc94e0c1c4eaf6c5bf2edc9bf321e7cde84410d62fee7892229d896a',
+ 'extensions/carla/opendrive.mojo': 'f7079ac16181d9fea4ca51c64324192b41715e2fad8b43461ae89222e3dbc69d',
  'extensions/carla/replayer_helper.mojo': 'badce20743015c933af22e7278105eba34195311bd89538d7f4a330418d89041',
  'extensions/carla/road.mojo': '2380f5aeed1a8ff72f2e4e33582b6164a7edcf18dc0edd5540f0e3343381114c',
  'extensions/carla/traffic_manager_collision.mojo': '20c4418fb705485b786091a2348f0c4e4e84855319aa3d6a5d8b6a380feef991',
@@ -39724,35 +39812,45 @@ EDGE_SHA256 = {**HISTORICAL_EDGE_SHA256, **{'extensions/carla/geometry.mojo': '8
  'tests/test_carla_lane_borders.mojo': '9476014425ab1ed004137cb37799895b4a98be95cbd7631196e34d1a848d4118',
  'tests/test_carla_lane_search_positive_controls.mojo': '757f71f80395fd98a841a7485e9d9856f6100cbc23f8fcbd54f41f392665c52a',
  'tests/test_carla_map_budget.mojo': 'cab3d390752ff6c90e5d30fa0d0a8991b791f7b609d9bf347e22d68bfcf57561',
+ 'tests/test_carla_opendrive.mojo': '0c663a0d97f2da0494dd234054fb78606f70284322722dfa9443ede9c1f3df5b',
  'tests/test_carla_road_fixed_s.mojo': 'fae4516105e242229a63b5acae717fbc3c477d11c7a5c9b9e7e9fa00422b9adb',
  'tests/test_carla_support_dispatch_successor.mojo': '48ce2eccf2d16bc1baf69b1e147b942849d6637b7366ef415d4a4352270833c4'}}
 TESTS = {**HISTORICAL_TESTS, **{'tests/test_carla_junction_bounds.mojo': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
  'tests/test_carla_lane_borders.mojo': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
  'tests/test_carla_lane_search_positive_controls.mojo': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
  'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
+ 'tests/test_carla_opendrive.mojo': '69558fa1caf145758d361c94cb64287324d1345602975902d5af485228ac5371',
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
-COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/carla_lane_oracle/test_common758_current_successor.py': 'a9604922edb02d37abc4d71c081a2b2ad753870d89bf70b42bfa864438699510'}}
+COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/test_conditioned_coverage_loops.py': '633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',
+ 'tools/carla_lane_oracle/test_common758_current_successor.py': '010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',
+ 'tools/carla_lane_oracle/test_shared_helper_contracts.py': 'c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',
+ 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5'}}
 CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/geometry.mojo': '374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e',
  'extensions/carla/map.mojo': 'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df',
  'extensions/carla/map_builder.mojo': 'f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c',
  'extensions/carla/math.mojo': '9fa94b3bb8850c4f6d282ef70795004c2c1217f22fd1c1a6eee448c8ac62ee2e',
  'extensions/carla/mesh_factory.mojo': '291679187df49469796893a4885903f003253493d0a928e5b4fb33a2d970f7b6',
  'extensions/carla/navigation_mesh.mojo': '9e02190556addad6e00c58b4c2416b83f51e88eb6ec2051d69533db2c271724a',
- 'extensions/carla/opendrive.mojo': 'd52196984072615a26914a45133a513d1ec6e4ba194f093d5335b2b1b7a92ce7',
+ 'extensions/carla/opendrive.mojo': 'e65a10e92e980304186755e08988a541c1069aef988d3ba45cf3cd3f1eb19a81',
  'extensions/carla/replayer_helper.mojo': 'f9f625ec0f0500a80a2bb839cabe01311bb08c7e403d70198dae245f8477b1fa',
  'extensions/carla/road.mojo': 'a53c48d28b33fb4f5f26316be902e57607a56012edb5f0b025241df1c0092b04',
  'extensions/carla/traffic_manager_collision.mojo': 'b9ee47331258a1c06f47ff60fe56fcb848d7e3c5a7c7cca3ef53de636eddd1ee',
  'extensions/carla/traffic_manager_map.mojo': '620d3f33e995acbd5c37fcf3141022f3451b0e4413893739e4b7411d48a1acf8',
+ 'materials/nodes.mojo': '6f0e83a402cdb921eb76da0d7670d48c1d32fcc39c6138dc140c4259d388ded4',
+ 'math/matrix_inverse.mojo': '2c348411da34ea22b6888f96a22b34d8d416e2209ecd95d36d59cf6c698466b0',
+ 'math/scaled_products.mojo': '632438eb32acc53e5d4b10e8aa0ca9049a0fc2c5cd7e3d815039626ff3409c86',
+ 'render/texture.mojo': '5dd48cbc9a05835f0d7c63d45ec30f5079c683bfbbf5e5c1606fd29159ec38cf',
  'tests/test_carla_junction_bounds.mojo': 'bc5871a9d0da711feaca07c4df5da42f13585254d1464296300915dd7e23edbd',
  'tests/test_carla_lane_borders.mojo': 'c7b438bbe77841419d079aa88c4e0bcfe6ec0defc42e0552a178708e673ad0db',
  'tests/test_carla_lane_search_positive_controls.mojo': 'baa81dad7d34616953388581c12b550de1099474ae3074eb6c014dbb4e498be8',
  'tests/test_carla_map_budget.mojo': '7643407550cfe378ad70dcc5574f02991a7b949351d629c0406582a9391297e2',
+ 'tests/test_carla_opendrive.mojo': '69558fa1caf145758d361c94cb64287324d1345602975902d5af485228ac5371',
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
 INVENTORY = {**HISTORICAL_INVENTORY, **{'extensions/carla/map.mojo': {'tokens_sha256': '0263ba183b30437b826ada3ceedb3d2c5a3664dc95245743a17209f568607b79'},
  'extensions/carla/map_builder.mojo': {'tokens_sha256': '4d153beee1e83966264af944bf260597fbf727785eb193d3710a3b5a0c33a977'}}}
-EDGES_SHA256 = '00edb161fffd69cb1569e2d311f8ea6d51b8c1a3316f34c41107587c9f332168'
+EDGES_SHA256 = '1295951244421188500b05b80df16e2c8a7d03ffb4ad3ae20b36806e0a3e0bf7'
 
 # One exact branch-specific four-record diagnostic extension.
 EXPECTATION_SUCCESSOR = {'path': 'tools/compile_fail_expectations.json',
@@ -40337,7 +40435,7 @@ def verify_authority():
         'EDGES_SHA256': EDGES_SHA256,
     }
     require(sha(json.dumps(current_payload, sort_keys=True, separators=(',', ':'))) ==
-            '2c904391178d159981497ede78ae776f64bcc8325a0a0ebd24c501516e15777d', 'executing current repair authority globals changed')
+            'c09430dd64a1d3729151567342f35746d148d1893e20571b7492584b179fe46e', 'executing current repair authority globals changed')
     require(BINDING_INPUTS == {
         **COMMON_BINDING_INPUTS,
         EXPECTATION_SUCCESSOR['path']: EXPECTATION_SUCCESSOR['after_sha256'],
@@ -40346,4 +40444,4 @@ def verify_authority():
     extension = {'BINDING_INPUTS': BINDING_INPUTS,
                  'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
     require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
-            'f72275d5d512bf32efb6afe25e815169ba370d072ec3f26cf8f3b7edd38aa555', 'expectation successor authority changed')
+            '2097bb66bb40c060d5f7152e6b3251c907720d4b4fa163d015eb90fd7b5d9107', 'expectation successor authority changed')
