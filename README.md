@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 14</summary>
+<summary>Implemented: 15</summary>
+
+- [x] [PNG optimizer in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#recompress-a-png): lossless PNG and APNG recompression with no Python, part of porting the project tools [#762](https://github.com/SethKitchen/ThreeMojo/issues/762)
 
 - [x] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives, and a public download of all 47 is verified [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 

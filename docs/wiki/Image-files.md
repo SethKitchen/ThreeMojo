@@ -38,6 +38,20 @@ Path("out/turn.png").write_bytes(encode(frames, delay_ms=60))
 
 `frames` is a `List[Framebuffer]` of one size. The encoder raises for an empty list or a frame of a different size.
 
+## Recompress a PNG
+
+`tools/optimize_png.mojo` makes a PNG or APNG file smaller without a change to its pixels. Use it after you write an image.
+
+```sh
+mojo run -I . tools/optimize_png.mojo out/NAME.png
+```
+
+The tool decodes each image stream and encodes it again at DEFLATE level 9. A stream is a run of `IDAT` chunks, or a run of `fdAT` chunks after one `fcTL` chunk. The new stream goes into the first chunk of the run. The other chunks of the run become empty.
+
+The tool keeps the position of each chunk. The metadata, frame delays, blend and disposal operations, APNG sequence numbers and filtered scanlines do not change. The tool replaces the file only when the new file is smaller. It writes a temporary file, gives it the mode of the old file, and renames it over the old file.
+
+Each gallery recipe runs the tool after it renders. `make optimize-images` recompresses all tracked gallery images. The library half is `render/png_optimize.mojo`.
+
 ## Write a PPM
 
 ```mojo

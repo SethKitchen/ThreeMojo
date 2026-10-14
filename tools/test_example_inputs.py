@@ -26,6 +26,9 @@ class ExampleInputsTests(unittest.TestCase):
             'extensions/__init__.mojo': '',
             'extensions/person.mojo': 'from core.mesh import draw\n',
             'assets/brick/a.png': 'a', 'assets/unrelated.png': 'b',
+            # Every gallery recipe runs the optimizer after rendering.
+            example_inputs.OPTIMIZER: 'from render.optimize import run\n',
+            'render/__init__.mojo': '', 'render/optimize.mojo': '',
         }
         with tempfile.TemporaryDirectory() as temp:
             for name, text in files.items():
@@ -42,11 +45,15 @@ class ExampleInputsTests(unittest.TestCase):
         self.assertIn('extensions/person.mojo', result['person'])
         self.assertIn('core/mesh.mojo', result['person'])
         self.assertIn('Makefile', result['cube'])
+        for name in ('cube', 'person'):
+            self.assertIn(example_inputs.OPTIMIZER, result[name])
+            self.assertIn('render/optimize.mojo', result[name])
 
     def check_make_dependency_fixture(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             files = {p: '' for p in example_inputs.TOOLS}
+            files[example_inputs.OPTIMIZER] = ''
             files.update({
                 'examples/cube.mojo': 'from core import draw\n',
                 'examples/person.mojo': 'from extension import draw\n',
@@ -104,7 +111,7 @@ class ExampleInputsTests(unittest.TestCase):
             self.assertIn('credits --all --output $(@:.png=.credits.md)', recipe)
             self.assertIn('assets/carla/ATTRIBUTION.md', recipe)
         self.assertEqual(gallery.count('$(call run,'),
-                         gallery.count('tools/optimize_png.py $@'))
+                         gallery.count('tools/optimize_png.mojo $@'))
 
     def test_audio_game_face_has_a_binary_recipe_and_actual_inputs(self):
         root = Path(__file__).resolve().parent.parent

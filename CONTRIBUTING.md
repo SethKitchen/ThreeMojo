@@ -113,7 +113,7 @@ keeps the samples, frame timing and metadata. `make optimize-images` compresses
 all tracked gallery PNG files without rendering them again.
 
 New files in `out/` are ignored. To add a documentation image, review it,
-compress it with `python3 tools/optimize_png.py out/NAME.png`, then use
+compress it with `mojo run -I . tools/optimize_png.mojo out/NAME.png`, then use
 `git add -f out/NAME.png`. Existing tracked images still update normally.
 Compression does not remove old files from Git history.
 

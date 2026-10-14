@@ -16,7 +16,9 @@ import affected
 import suite_key
 
 TOOLS = ['Makefile', 'tools/example_inputs.py', 'tools/affected.py',
-         'tools/suite_key.py', 'tools/optimize_png.py']
+         'tools/suite_key.py']
+# Each gallery recipe compresses its image with this program after rendering.
+OPTIMIZER = 'tools/optimize_png.mojo'
 
 
 def dependencies():
@@ -25,11 +27,12 @@ def dependencies():
     imports = {}
     assets = suite_key.asset_files()
     result = {}
+    optimizer = suite_key.closure(OPTIMIZER, known, imports)
     for example in sorted(p for p in known if p.startswith('examples/')):
         files = suite_key.closure(example, known, imports)
         quoted = {prefix for path in files for prefix in imports[path][1]}
         used = [p for p in assets if any(p.startswith(q) for q in quoted)]
-        result[Path(example).stem] = sorted(set(TOOLS + files + used))
+        result[Path(example).stem] = sorted(set(TOOLS + optimizer + files + used))
     return result
 
 
