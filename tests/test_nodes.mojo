@@ -2224,7 +2224,7 @@ def near3(got: Lanes, x: Float64, y: Float64, z: Float64) raises:
 
 def test_the_other_materialx_noises_are_three_js_s() raises:
     # Values from three.js's `mx_noise.js`, transcribed in 32-bit floats
-    # by `assets/noise/mx_noise.py`.
+    # by `assets/noise/mx_noise.mojo`.
     near3(
         perlin_noise_vec3(Lanes(0.3, 0.7, 0, 0), 2),
         0.04074367880821228,

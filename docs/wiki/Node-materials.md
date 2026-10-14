@@ -410,7 +410,7 @@ The noise is MaterialX's gradient noise, with the same hash and the same order o
 - Cell noise gives one value from zero to one for each cell of whole numbers. The point is a `float` to a `vec4`.
 - Worley noise gives the squared distances to the nearest points that jitter each cell, nearest first. `MaterialXNodes` always asks for this metric, so the others are not ported.
 
-`assets/noise/mx_noise.py` transcribes three.js's functions in 32-bit floats and gives the values the tests check.
+`assets/noise/mx_noise.mojo` transcribes three.js's functions in 32-bit floats and gives the values the tests check.
 
 ## Control flow
 
