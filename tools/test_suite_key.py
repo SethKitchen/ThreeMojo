@@ -95,5 +95,47 @@ class SuiteKeyTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), "")
 
 
+class NestedHelperTests(unittest.TestCase):
+    """Helpers in tests/_*.mojo stay import dependencies of the suites."""
+
+    SOURCES = {
+        "math/measured.mojo": "def value() -> Int:\n    return 1\n",
+        "tests/_nested.mojo": "from math.measured import value\n",
+        "tests/_shared.mojo": "from tests._nested import value\n",
+        "tests/test_driver.mojo": "from tests._shared import value\n",
+        "tests/test_other.mojo": "from math.measured import value\n",
+    }
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = self.directory.name
+        for path, text in self.SOURCES.items():
+            full = os.path.join(self.root, path)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "w", encoding="utf-8") as handle:
+                handle.write(text)
+
+    def test_nested_helpers_remain_affected_and_suite_key_dependencies(self):
+        with patch.object(affected, "ROOT", self.root):
+            known = set(affected.mojo_files())
+            self.assertEqual(suite_key.closure("tests/test_driver.mojo", known, {}),
+                             ["math/measured.mojo", "tests/_nested.mojo",
+                              "tests/_shared.mojo", "tests/test_driver.mojo"])
+            selected = affected.affected_set({"tests/_nested.mojo": False})
+            self.assertNotEqual(selected, affected.ALL)
+            for path in ("math/measured.mojo", "tests/_nested.mojo",
+                         "tests/_shared.mojo", "tests/test_driver.mojo",
+                         "tests/test_other.mojo"):
+                self.assertIn(path, selected)
+            with patch.object(suite_key, "TOOLING", []):
+                before = suite_key.suite_key("tests/test_driver.mojo", [], known, {}, [], {})
+                with open(os.path.join(self.root, "tests/_nested.mojo"), "a",
+                          encoding="utf-8") as handle:
+                    handle.write("# changed control\n")
+                after = suite_key.suite_key("tests/test_driver.mojo", [], known, {}, [], {})
+            self.assertNotEqual(before, after)
+
+
 if __name__ == "__main__":
     unittest.main()

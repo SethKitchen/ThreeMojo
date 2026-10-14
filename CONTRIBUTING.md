@@ -29,6 +29,12 @@ for that change. Inspect the selection with `AFFECTED=<base-ref>` before a run.
 Shared imports can still select the full suite. Do not drop selected tests or
 weaken coverage checks to make a run smaller.
 
+Do not edit the root Makefile for routine work. The Makefile finds library
+modules, test suites and helper libraries from their names. A helper library
+is a file `tests/_NAME.mojo` or `tools/_NAME.mojo`. The gallery images are in
+`examples/gallery.mk`. When routine work needs a Makefile edit, refactor that
+part first, so that the next change of the same kind does not need one.
+
 Avoid changes to the root Makefile, CI workflows, and shared build or coverage
 tools for a feature correction. When a shared change is necessary, put it in a
 separate infrastructure pull request. Explain why it is needed and which checks
@@ -103,6 +109,11 @@ Write the first line as a statement of what the commit does, in fewer than 72 ch
 Your contribution is licensed on the same terms as the project, including the commercial licensing in [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
 
 ## Rendered gallery files
+
+To add an example's image to the gallery, add one line to
+`examples/gallery.mk`: `$(call gallery,IMAGE,EXAMPLE)`. Put a comment above it
+that says what the image shows. Name extra prerequisites, such as an asset, in
+a third argument.
 
 Run `make out/NAME.png` to render one example. Its prerequisites include its
 imports and quoted assets. An unrelated extension does not rebuild the image.
