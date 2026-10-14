@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `tools.sha256`.
+"""Tests for `tools._sha256`.
 
 The vectors are FIPS 180-4's examples and values from Python's `hashlib`
 over the pattern `i % 251`, at the lengths where the padding moves to a
@@ -12,7 +12,7 @@ second block.
 
 from std.testing import TestSuite, assert_equal
 
-from tools.sha256 import Sha256, sha256_hex
+from tools._sha256 import Sha256, sha256_hex
 
 
 def _bytes(text: String) -> List[UInt8]:

@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `tools.process`: status, output order, quoting and time limit."""
+"""Tests for `tools._process`: status, output order, quoting and time limit."""
 
 from std.testing import (
     TestSuite,
@@ -14,7 +14,7 @@ from std.testing import (
 )
 from std.time import perf_counter_ns
 
-from tools.process import run_program, shell_quote
+from tools._process import run_program, shell_quote
 
 
 def _sh(script: String) -> List[String]:

@@ -34,7 +34,7 @@ from tools.fixture_manifest import (
     repository_root,
     runtime_metadata_errors,
 )
-from tools.json_tools import (
+from tools._json_tools import (
     MISSING,
     JsonWriter,
     equal,
@@ -44,8 +44,8 @@ from tools.json_tools import (
     keys,
     python_text,
 )
-from tools.process import run_program, shell_quote
-from tools.sha256 import sha256_hex
+from tools._process import run_program, shell_quote
+from tools._sha256 import sha256_hex
 
 comptime PACKAGES = "tools/fixture-runtime"
 """The locked Node packages, relative to the repository root."""

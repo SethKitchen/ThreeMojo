@@ -10,7 +10,7 @@ field. The report writer must replace that specific placeholder with null
 and identify the authored support plane. Raw rows are not validity reports.
 """
 
-from tools.anatomy_pairs import _pair_probe, localize_pair
+from tools._anatomy_pairs import _pair_probe, localize_pair
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.sex import MALE, FEMALE
 from extensions.humanoid.side import RIGHT, LEFT

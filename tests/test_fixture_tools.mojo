@@ -39,8 +39,8 @@ from tools.fixture_runtime import (
     word_text,
     write_word_differences,
 )
-from tools.json_tools import JsonWriter
-from tools.process import run_program
+from tools._json_tools import JsonWriter
+from tools._process import run_program
 
 comptime _NODE = """#!/bin/sh
 dir=$(dirname "$0")

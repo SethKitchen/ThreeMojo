@@ -22,7 +22,7 @@ from std.reflection import source_location
 from std.sys import argv, exit, stderr
 
 from loaders.json import BOOLEAN, JsonDocument, parse_json
-from tools.json_tools import (
+from tools._json_tools import (
     MISSING,
     equal,
     equals_text,
@@ -34,7 +34,7 @@ from tools.json_tools import (
     python_text,
     truthy,
 )
-from tools.sha256 import sha256_hex
+from tools._sha256 import sha256_hex
 
 comptime MANIFEST = "assets/fixture-manifest.json"
 """The manifest, relative to the repository root."""

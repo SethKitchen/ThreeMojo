@@ -35,13 +35,13 @@ LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
-# Test modules prefixed with '_' are import-only helpers, not CLI entry points.
-# Keep the two older named fixtures in the same inventory. Lint their docs,
-# format them, and copy them unchanged beside instrumented test suites.
+# Modules prefixed with '_' in tests/ and tools/ are import-only helpers, not
+# CLI entry points, so a new helper needs no edit here. Keep the two older
+# named fixtures in the same inventory. Lint their docs, format them, and copy
+# them unchanged beside instrumented test suites.
 TEST_HELPER_LIBS := $(wildcard tests/_*.mojo) tests/carla_fixed_s_fixture.mojo \
                     tests/exact_predicates_oracle.mojo
-HELPER_LIBS  := tools/anatomy_pairs.mojo tools/json_tools.mojo tools/process.mojo \
-                tools/sha256.mojo $(TEST_HELPER_LIBS)
+HELPER_LIBS  := $(wildcard tools/_*.mojo) $(TEST_HELPER_LIBS)
 TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo)) $(HELPER_LIBS)
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,

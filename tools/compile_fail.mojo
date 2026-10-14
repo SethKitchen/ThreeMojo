@@ -29,8 +29,8 @@ from std.sys import argv, exit, stderr
 from std.tempfile import mkdtemp
 
 from loaders.json import OBJECT, JsonDocument, parse_json
-from tools.json_tools import JsonWriter, truthy
-from tools.process import run_program, shell_quote
+from tools._json_tools import JsonWriter, truthy
+from tools._process import run_program, shell_quote
 
 # The pinned compiler can emit this startup warning without failing to
 # compile. Only the entire line is removed, so real crashes, import errors

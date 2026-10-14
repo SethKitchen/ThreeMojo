@@ -33,10 +33,7 @@ class TestHelperInventoryTests(unittest.TestCase):
             'tests/test_other.mojo': 'from math.measured import value\n',
             'tests/carla_fixed_s_fixture.mojo': '# named fixture\n',
             'tests/exact_predicates_oracle.mojo': '# named oracle\n',
-            'tools/anatomy_pairs.mojo': '# diagnostic adapter\n',
-            'tools/json_tools.mojo': '# JSON helper\n',
-            'tools/process.mojo': '# process helper\n',
-            'tools/sha256.mojo': '# hash helper\n',
+            'tools/_helper.mojo': '# any tools/_*.mojo is a helper\n',
             'tools/driver.mojo': 'def main():\n    pass\n',
             'coverage/runtime.mojo': '# runtime\n',
             'coverage/build_cli.mojo': 'def main():\n    pass\n',
@@ -76,8 +73,7 @@ class TestHelperInventoryTests(unittest.TestCase):
                    'tests/carla_fixed_s_fixture.mojo', 'tests/exact_predicates_oracle.mojo']
         self.assertCountEqual(values['TEST_HELPER_LIBS'], helpers)
         self.assertCountEqual(values['HELPER_LIBS'],
-                              helpers + ['tools/anatomy_pairs.mojo', 'tools/json_tools.mojo',
-                                         'tools/process.mojo', 'tools/sha256.mojo'])
+                              helpers + ['tools/_helper.mojo'])
         for helper in values['HELPER_LIBS']:
             for name in ('TOOL_LIBS', 'DOC_SOURCES', 'FORMATTED'):
                 self.assertEqual(values[name].count(helper), 1, (name, helper))

@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `tools.json_tools`: Python meanings and `json.dumps` text.
+"""Tests for `tools._json_tools`: Python meanings and `json.dumps` text.
 
 The expected text comes from Python's `json.dumps(value, indent=2)`.
 """
@@ -17,7 +17,7 @@ from std.testing import (
 )
 
 from loaders.json import parse_json
-from tools.json_tools import (
+from tools._json_tools import (
     MISSING,
     JsonWriter,
     equal,

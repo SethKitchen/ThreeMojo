@@ -193,10 +193,9 @@ def previous_tests(base, changed, current):
 
 def inventories(sources):
     files = set(sources)
-    helpers = {name for name in files if name.startswith('tests/_')}
-    helpers |= {'tests/carla_fixed_s_fixture.mojo', 'tests/exact_predicates_oracle.mojo',
-                'tools/anatomy_pairs.mojo', 'tools/json_tools.mojo',
-                'tools/process.mojo', 'tools/sha256.mojo'} & files
+    helpers = {name for name in files if name.startswith('tests/_')
+               or (name.startswith('tools/_') and name.count('/') == 1)}
+    helpers |= {'tests/carla_fixed_s_fixture.mojo', 'tests/exact_predicates_oracle.mojo'} & files
     libs = {name for name in files if library(name) and not name.endswith('/__init__.mojo')}
     tool_libs = {name for name in files if name.startswith('coverage/')}
     tool_libs -= {'coverage/build_cli.mojo', 'coverage/report_cli.mojo'}
