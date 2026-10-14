@@ -759,11 +759,19 @@ class PairedPinRealControls(unittest.TestCase):
     def test_historical_matching_aliases_stay_accepted_current_root_alias_rejects(self):
         historical = fixtures.historical_root(self, ROOT)
         expected = tuple(accepted.predecessor_pins(historical, name) for name in NAMES)
+        regular = cleanup._regular
+        # Public admission authenticates the executing checker from the
+        # repository; the historical root itself still gets no regular read.
+        @wraps(regular)
+        def restricted(root, path):
+            if Path(root).absolute().is_relative_to(Path(historical).absolute()):
+                raise AssertionError('historical regular restriction')
+            return regular(root, path)
         for name in NAMES:
             for kind in ('leaf', 'ancestor', 'root'):
                 with self.subTest(name=name, kind=kind), alias(historical, PIN_DIR + '/' + name, kind), \
                         patch.object(cleanup, 'verify', side_effect=AssertionError('historical current gate')), \
-                        patch.object(cleanup, '_regular', side_effect=AssertionError('historical regular restriction')), \
+                        patch.object(cleanup, '_regular', restricted), \
                         patch.object(cleanup, 'executing_checker_bindings', side_effect=AssertionError('historical checker restriction')):
                     self.assertEqual(accepted.predecessor_pin_pair(historical), expected)
         with alias(self.root, PIN_DIR + '/' + NAMES[0], 'root'):
