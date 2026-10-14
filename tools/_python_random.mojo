@@ -168,6 +168,17 @@ struct PythonRandom(Movable):
         """
         return start + self.randbelow(stop - start)
 
+    def choice(mut self, count: Int) -> Int:
+        """Return the index `random.choice` picks from a sequence.
+
+        Args:
+            count: The length of the sequence, at least one.
+
+        Returns:
+            An index in [0, count).
+        """
+        return self.randbelow(BigInt(count)).to_int_unchecked()
+
     def random(mut self) -> Float64:
         """Return a random double in [0, 1), as `random()` does.
 
