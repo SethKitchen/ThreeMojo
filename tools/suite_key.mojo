@@ -45,8 +45,7 @@ from tools._sha256 import Sha256
 comptime TOOLING = [
     "Makefile",
     "tools/tool.sh",
-    "tools/run_suite.py",
-    "tools/test_environment.py",
+    "tools/run_suite.mojo",
     "tools/compiler_telemetry.py",
     "tools/native_test_support.py",
 ]

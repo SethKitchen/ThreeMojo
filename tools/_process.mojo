@@ -154,7 +154,8 @@ def run_program(
             # The timer must not hold the pipe that returns the status.
             + ") </dev/null >/dev/null 2>&1 &\n"
             + "w=$!\n"
-            + 'wait "$pid"; rc=$?\n'
+            # The shell reports a killed job on its own error output.
+            + 'wait "$pid" 2>/dev/null; rc=$?\n'
             + 'kill "$w" 2>/dev/null; wait "$w" 2>/dev/null\n'
             + "printf '%d' \"$rc\"\n"
         )

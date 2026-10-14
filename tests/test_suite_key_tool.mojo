@@ -33,8 +33,7 @@ from tools.suite_key import (
 comptime FILES = [
     ("Makefile", "all:\n"),
     ("tools/tool.sh", ""),
-    ("tools/run_suite.py", ""),
-    ("tools/test_environment.py", ""),
+    ("tools/run_suite.mojo", ""),
     ("tools/compiler_telemetry.py", ""),
     ("tools/native_test_support.py", ""),
     ("tools/suite_key.mojo", "from tools._helper import f\n"),
@@ -104,7 +103,7 @@ def test_reached_files_quoted_assets_tools_and_settings_change_the_key() raises:
         "assets/box/a.bin",
         "Makefile",
         "tools/tool.sh",
-        "tools/run_suite.py",
+        "tools/run_suite.mojo",
         "tools/compiler_telemetry.py",
         "tools/_helper.mojo",
     ]:

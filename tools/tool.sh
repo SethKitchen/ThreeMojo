@@ -7,9 +7,11 @@
 # Build a Mojo tool once, then run it:
 #
 #     tools/tool.sh MOJO NAME ARGUMENT...
+#     tools/tool.sh MOJO --build NAME
 #
 # runs tools/NAME.mojo with the arguments, and builds it with the compiler
-# MOJO. The Makefile reads the tools' output while it parses, many times in
+# MOJO. With --build, the script only builds the program, so that parallel
+# runs that follow do not all build it at once. The Makefile reads the tools' output while it parses, many times in
 # one run, and `mojo run` compiles the tool every time. So the program is
 # kept in .cache/tools/, under the toolchain's version, and built again only
 # when a `.mojo` file under tools/ or loaders/ is newer than it. A tool must
@@ -18,8 +20,14 @@
 # The script works from the repository root, where the Makefile runs.
 set -eu
 mojo=$1
-name=$2
-shift 2
+shift
+build_only=
+if [ "$1" = --build ]; then
+    build_only=1
+    shift
+fi
+name=$1
+shift
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 version=$($mojo --version 2>/dev/null | cksum | cut -d ' ' -f 1)
@@ -37,5 +45,8 @@ if [ ! -x "$program" ] ||
         exit 2
     fi
     mv -f "$partial" "$program"
+fi
+if [ -n "$build_only" ]; then
+    exit 0
 fi
 exec "$program" "$@"

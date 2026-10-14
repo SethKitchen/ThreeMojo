@@ -166,7 +166,7 @@ COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) $(HELPER_LIBS) \
 JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
           || nproc 2> /dev/null || echo 4)
 
-# The time limit for one test, in seconds. tools/run_suite.py fails a test
+# The time limit for one test, in seconds. tools/run_suite.mojo fails a test
 # that takes longer, and stops a suite that hangs. A test over the limit
 # means the code under test is slow: make the library faster, not the test
 # smaller. It is a performance gate, so do not raise it to get a test green.
@@ -380,6 +380,7 @@ $(TEST_CPU_STAMP):
 	    --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
 	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
+	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
@@ -394,8 +395,8 @@ $(TEST_CPU_STAMP):
 	                    2>&1; build_rc=$$?; \
 	                    progress "$$1" "build-end: exit=$$build_rc"; \
 	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \
-	                    progress "$$1" "run-start: python3 tools/run_suite.py --seconds $(TEST_TIMEOUT) --suite $$1 -- $$bin"; \
-	                    python3 tools/run_suite.py \
+	                    progress "$$1" "run-start: run_suite --seconds $(TEST_TIMEOUT) --suite $$1 -- $$bin"; \
+	                    sh tools/tool.sh $(TOOL_MOJO) run_suite \
 	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"; \
 	                    run_rc=$$?; \
 	                    progress "$$1" "run-end: exit=$$run_rc"; \
@@ -429,10 +430,11 @@ test-gpu: gpu-status test-gpu-host
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
 
 test-gpu-device:
+	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@printf '%s\n' $(filter-out $(GPU_HOST_TESTS),$(GPU_TESTS)) \
 	  | perl -e 'alarm shift; exec @ARGV' $(GPU_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	      sh -c 'out=$$(sh tools/tool.sh $(TOOL_MOJO) run_suite --results-only \
 	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { rc=$$?; \
@@ -450,9 +452,10 @@ test-gpu-device:
 # do depends on the hardware, so a stamp from another machine is as good.
 test-gpu-host: $(TEST_GPU_HOST_STAMP)
 $(TEST_GPU_HOST_STAMP):
+	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@printf '%s\n' $(GPU_HOST_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	      sh -c 'out=$$(sh tools/tool.sh $(TOOL_MOJO) run_suite --results-only \
 	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some GPU host suites FAILED."; exit 1; }

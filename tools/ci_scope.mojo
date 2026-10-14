@@ -109,16 +109,15 @@ comptime BUILD_TOOLS = [
     "tools/shard.mojo",
     "tools/coverage_shard.mojo",
     "tools/example_inputs.mojo",
+    "tools/run_suite.mojo",
 ]
-"""The Mojo tools the Makefile runs to select, split and key the checks. A
+"""The Mojo tools the Makefile runs to select, split, key and judge the checks. A
 change to one, or to any file it imports, changes the selection itself."""
 
 comptime GLOBAL_TOOLS = [
     "tools/cache_key.py",
     "tools/suite_key.py",
-    "tools/run_suite.py",
     "tools/native_test_support.py",
-    "tools/test_environment.py",
     "tools/fixture_runtime.mojo",
     "tools/compiler_telemetry.py",
 ]
