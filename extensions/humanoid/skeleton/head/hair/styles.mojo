@@ -33,7 +33,7 @@ Two are strands an artist groomed, kept in `assets/hair/`:
   copyright 2017 Advanced Micro Devices, a crest from the brow to the
   nape.
 
-`tools/hair_style.py` converts their TressFX files. A style keeps no
+`tools/hair_style.mojo` converts their TressFX files. A style keeps no
 head of its own: each strand's root is a point of the unit cranium,
 and its points are offsets in the cranium's frame at the root, in its
 mean radius. `HairStyleFile.strand` puts a strand on a person's
@@ -238,7 +238,7 @@ struct HairStyleFile(Movable):
     var offsets: List[Vector3]
 
     def __init__(out self, path: String) raises:
-        """Read a style that `tools/hair_style.py` wrote.
+        """Read a style that `tools/hair_style.mojo` wrote.
 
         Args:
             path: The style's file.

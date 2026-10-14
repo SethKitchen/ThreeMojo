@@ -20,7 +20,7 @@ face. The expressions follow Apple's ARKit blend shapes, with the left
 and the right side apart.
 
 The model is the ICT Face Model Light of USC's Institute for Creative
-Technologies, MIT license. `tools/ict_face_model.py` converts its OBJ
+Technologies, MIT license. `tools/ict_face_model.mojo` converts its OBJ
 files into `assets/face/ict_face.bin`, keeping the first sixty identity
 modes. Its frame: meters, plus y up, plus z out of the face. See
 THIRD-PARTY-NOTICES.md.
@@ -307,7 +307,7 @@ struct FaceModel(Movable):
         as is asked for, so a head at rest loads in a few milliseconds.
 
         Args:
-            path: The file `tools/ict_face_model.py` writes.
+            path: The file `tools/ict_face_model.mojo` writes.
             identities: How many identity modes to read. All of them by
                 default. More than the file holds reads all it holds.
             expressions: Whether to read the expressions. True by

@@ -106,7 +106,7 @@ The face is a scan. The skin of the head is the mean head of the ICT Face Model 
 
 The skin's mesh is the scan's own mesh, not a mesh extracted from the field. Each vertex that the field's surface does not pass through is walked onto it. The mouth's and the eyes' sockets are drawn inside. Below the seam on the neck, 56.5 cm on the template, the skin is meshed by narrow-band surface nets, in `extensions/humanoid/skeleton/surface_nets.mojo`. The two meshes lie on one surface and overlap by a few millimeters. `add_body` joins the body's skin to the scan at the same seam.
 
-`tools/ict_face_model.py` converts the model's OBJ files into `assets/face/ict_face.bin`. `FaceModel` reads it. The file keeps the mean head, its mesh, sixty identity modes and fifty-seven expressions, with the left and the right side apart. `FaceModel` reads only what you ask for, so a head that needs no expression loads in a few milliseconds.
+`tools/ict_face_model.mojo` converts the model's OBJ files into `assets/face/ict_face.bin`. `FaceModel` reads it. The file keeps the mean head, its mesh, sixty identity modes and fifty-seven expressions, with the left and the right side apart. `FaceModel` reads only what you ask for, so a head that needs no expression loads in a few milliseconds.
 
 | Function | Returns |
 |---|---|
@@ -247,7 +247,7 @@ A `HairStyle` says how the hair is cut and laid. Pass the same style to `add_gro
 | `BOB` | Parted down the middle and cut level at the jaw. |
 | `PIXIE` | Cropped short, 3 to 6.5 cm, and combed forward and down. |
 
-An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.py` converts their TressFX files into `assets/hair/`.
+An artist groomed `LAYERED` and `MOHAWK`. `tools/hair_style.mojo` converts their TressFX files into `assets/hair/`.
 
 The groom designs the other ten on its own guides. Each guide grows from a root on the scalp's hair:
 

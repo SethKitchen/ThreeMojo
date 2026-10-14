@@ -3,8 +3,8 @@
   "status": "production-regeneration-verified",
   "notes": [
     "The pinned upstream inputs and converter recipes reproduce all three unchanged production output hashes. This proves a reproducible recipe, not the original historical command log.",
-    "The reference verification used CPython 3.12.14 on Linux x86-64 on 2026-10-05. The standard library is the only Python dependency. Every reproduction must match the exact recorded output hashes.",
-    "THRS fitting uses explicit left-to-right binary64 addition. Built-in sum changed in Python 3.12 and otherwise changes four quantized Sintel offset components.",
+    "The Mojo converters tools/hair_style.mojo and tools/ict_face_model.mojo reproduced all three production outputs and the three synthetic outputs exactly from the pinned sources on 2026-10-14. The original reference verification used the Python converters on CPython 3.12.14 on Linux x86-64 on 2026-10-05. Every reproduction must match the exact recorded output hashes.",
+    "THRS fitting uses explicit left-to-right binary64 addition. Built-in sum changed in Python 3.12 and otherwise changes four quantized Sintel offset components. The Mojo converters round each product on its own and never fuse it into a sum, in any build mode.",
     "Input files are listed individually. License and context files are verified too, but are not converter inputs. Extra cache files are never staged for conversion.",
     "The default check is offline and regenerates only small synthetic fixtures. Full production reproduction requires an explicit source cache; downloads require a separate flag.",
     "Synthetic sources are original test data, licensed PolyForm-Noncommercial-1.0.0."
@@ -19,13 +19,13 @@
     "assets/face/ict_face.bin": "a1e9423fdbd88363e3ab9582e395720003d1459c8ed8ea5d55214b0148163271",
     "assets/hair/layered.bin": "1b28e421245802d24d408884e0949388f40d25d5f3e43228d75453858ecc5230",
     "assets/hair/mohawk.bin": "a23fb2b8170e9b9b2968339b1c797f0cdb96d1d837a4412a5559cc827a817ff4",
-    "tools/hair_style.py": "984fe7d2c3d5231b0233dac8e31238ae39f5fb91d019de323bb5184f6e7a443f",
-    "tools/ict_face_model.py": "0796033cf514d1668c40c5fb673be4c7e1d4bc02266aa805a3ff5f6352f2e27b"
+    "tools/hair_style.mojo": "e473199690cb9e8eb4ec314d194563f16c08c99775f17a6ba7ddb34aeb200bbb",
+    "tools/ict_face_model.mojo": "233a83d21b0f8ab3c3d927b48dca27ae49eddc6c592df90b04269619e5510dda"
   },
   "production_assets": [
     {
       "path": "assets/face/ict_face.bin",
-      "converter": "tools/ict_face_model.py",
+      "converter": "tools/ict_face_model.mojo",
       "format_version": 6,
       "output_size_bytes": 9177816,
       "source": {
@@ -55,7 +55,7 @@
     },
     {
       "path": "assets/hair/layered.bin",
-      "converter": "tools/hair_style.py",
+      "converter": "tools/hair_style.mojo",
       "format_version": 1,
       "output_size_bytes": 1162820,
       "source": {
@@ -84,7 +84,7 @@
     },
     {
       "path": "assets/hair/mohawk.bin",
-      "converter": "tools/hair_style.py",
+      "converter": "tools/hair_style.mojo",
       "format_version": 1,
       "output_size_bytes": 89272,
       "source": {

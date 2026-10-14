@@ -199,7 +199,7 @@ permits use, modification and distribution with its notice.
 
 The bundled `ict_face.bin` SHA-256 is
 `a1e9423fdbd88363e3ab9582e395720003d1459c8ed8ea5d55214b0148163271`.
-The converter is `tools/ict_face_model.py`; its output format is ICTF v6.
+The converter is `tools/ict_face_model.mojo`; its output format is ICTF v6.
 The source pin and bundled asset above match the production reproduction
 tracked in [issue #303](https://github.com/SethKitchen/ThreeMojo/issues/303).
 [Converted assets](Converted-assets) describes input validation and converter use.
