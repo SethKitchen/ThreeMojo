@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 16</summary>
+<summary>Implemented: 17</summary>
+
+- [x] [Fixture verifiers in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#verify-generated-fixtures): the fixture manifest check and the pinned Node runtime verifier run as Mojo with shared helpers [#764](https://github.com/SethKitchen/ThreeMojo/issues/764)
 
 - [x] [Negative-fixture checker in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#regenerate-negative-diagnostics): `tools/compile_fail.mojo` with a Mojo process helper replaces the Python checker; the manifest output is byte-identical [#763](https://github.com/SethKitchen/ThreeMojo/issues/763)
 

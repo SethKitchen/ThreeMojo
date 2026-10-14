@@ -33,7 +33,7 @@ GPU = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo',
 GPU_TESTS = {name for name in GPU if name.startswith('tests/')}
 GLOBAL_TOOLS = {'tools/cache_key.py', 'tools/suite_key.py', 'tools/run_suite.py',
                 'tools/shard.py', 'tools/native_test_support.py', 'tools/test_environment.py',
-                'tools/fixture_runtime.py', 'tools/compiler_telemetry.py'}
+                'tools/fixture_runtime.mojo', 'tools/compiler_telemetry.py'}
 ROUTING = {'tools/ci_scope.py', '.github/workflows/ci.yml'}
 SAFE_PATH = re.compile(r'[A-Za-z0-9_./-]+\Z')
 LISTS = ('formatted', 'cpu_entries', 'cpu_docs', 'cpu_tests', 'compile_fail',
