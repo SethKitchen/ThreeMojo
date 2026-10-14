@@ -169,17 +169,27 @@ class SharedHelperIntegrationControls(unittest.TestCase):
             for path, raw in originals.items(): (self.root/path).write_bytes(raw)
 
     def test_mixed_old_xml_does_not_require_its_unimported_utf8_provider(self):
-        old_xml = helpers.predecessor_source(XML, (self.root/XML).read_text()).encode()
-        with self.changed(XML, old_xml):
-            utf8 = self.root/UTF8
-            raw = utf8.read_bytes(); utf8.unlink()
-            try:
-                bound = cleanup.shared_helper_proof_bindings(self.root)
-                self.assertIn(DISTANCE, bound)
-                self.assertEqual(bound[XML], helpers.BEFORE_SHA256[XML])
-                self.assertNotIn(UTF8, bound)
-                cleanup.verify(self.root, exact=True)
-            finally: utf8.write_bytes(raw)
+        # The current typed graph independently binds this provider. The old
+        # XML's local import closure does not relax that full-graph authority.
+        historical = fixtures.copy_historical_boundary_root(self, ROOT)
+        for root, typed in ((self.root, True), (historical, False)):
+            old_xml = helpers.predecessor_source(XML, (root/XML).read_text()).encode()
+            with self.subTest(typed=typed), patch.object(self, 'root', root), self.changed(XML, old_xml):
+                utf8 = root/UTF8
+                raw = utf8.read_bytes(); utf8.unlink()
+                try:
+                    bound = cleanup.shared_helper_proof_bindings(root)
+                    self.assertIn(DISTANCE, bound)
+                    self.assertEqual(bound[XML], helpers.BEFORE_SHA256[XML])
+                    self.assertNotIn(UTF8, bound)
+                    if typed:
+                        with self.assertRaises(cleanup.ContractError) as caught:
+                            cleanup.verify(root, exact=True)
+                        self.assertIsInstance(caught.exception.__cause__, FileNotFoundError)
+                        self.assertEqual(caught.exception.__cause__.filename, str(utf8))
+                    else:
+                        cleanup.verify(root, exact=True)
+                finally: utf8.write_bytes(raw)
 
     def test_fabricated_or_incomplete_owned_view_cannot_admit_sources(self):
         class Fake:
@@ -289,7 +299,7 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         entry = self.root/'extensions/animals/anatomy/helper_scope_entry.mojo'
         entry.write_text('def main():\n    pass\n')
         try:
-            with self.assertRaisesRegex(ValueError, 'entry directories changed'):
+            with self.assertRaisesRegex(ValueError, 'entrypoint directories changed'):
                 cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
         finally: entry.unlink()
 
@@ -319,7 +329,8 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         visits = []
         def changed(path, *args, **kwargs):
             raw = read(path, *args, **kwargs)
-            if path == source:
+            if path == source and sys._getframe(1).f_code in (
+                    cleanup._helper_entry_census.__code__, cleanup._helper_entry_census_finish.__code__):
                 visits.append(True)
                 if len(visits) == 2: return raw + b'\ndef main():\n    pass\n'
             return raw
@@ -335,7 +346,8 @@ class SharedHelperIntegrationControls(unittest.TestCase):
             visits.clear()
             def created(path, *args, **kwargs):
                 raw = read(path, *args, **kwargs)
-                if path == source:
+                if path == source and sys._getframe(1).f_code in (
+                        cleanup._helper_entry_census.__code__, cleanup._helper_entry_census_finish.__code__):
                     visits.append(True)
                     if len(visits) == 2:
                         late.parent.mkdir(parents=True, exist_ok=True)
@@ -360,7 +372,8 @@ class SharedHelperIntegrationControls(unittest.TestCase):
             visits = []
             def changed(path, *args, **kwargs):
                 raw = read(path, *args, **kwargs)
-                if path == source:
+                if path == source and sys._getframe(1).f_code in (
+                        cleanup._helper_entry_census.__code__, cleanup._helper_entry_census_finish.__code__):
                     visits.append(True)
                     if len(visits) == target_visit:
                         return AlwaysEqual(raw + b'\ndef main():\n    pass\n')
@@ -374,7 +387,7 @@ class SharedHelperIntegrationControls(unittest.TestCase):
     def test_pending_entry_census_failure_stays_poisoned_after_catch_and_restore(self):
         from functools import wraps
         import winner_sign_contracts as winner
-        fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
+        self.root = fixtures.historical_root(self, ROOT)
         source = self.root/'extensions/animals/anatomy/render.mojo'
         read, original = Path.read_bytes, cleanup.shared_helper_edges
         injected, caught = [], []
@@ -403,7 +416,7 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         import winner_sign_contracts as winner
         class AlwaysEqual(bytes):
             def __eq__(self, other): return True
-        fixtures.write_predecessors(self.root, fixtures.verified_predecessors(self.root))
+        self.root = fixtures.historical_root(self, ROOT)
         source = self.root/'extensions/animals/anatomy/render.mojo'
         read, injected = Path.read_bytes, []
         def changed(path, *args, **kwargs):
@@ -438,27 +451,39 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         self.assertNotIn('paths', {keyword.arg for keyword in calls[0].keywords})
 
     def test_consumed_helper_failure_stays_sticky_after_catch_and_restore(self):
-        import seed_count_contracts as seed
+        from functools import wraps
         import winner_sign_contracts as winner
-        read, original = Path.read_bytes, seed._verify_bound_inputs
-        target = self.root/UTF8
+        read, original = Path.read_bytes, cleanup.shared_helper_edges
+        target = self.root/'render/color_math.mojo'
         injected, caught = [], []
         def transient(path, *args, **kwargs):
             raw = read(path, *args, **kwargs)
             caller = sys._getframe(1)
-            if path == target and caller.f_globals is vars(cleanup) and caller.f_code.co_name == 'observe' and not injected:
+            operation = caller.f_locals.get('_operation')
+            if (path == target and caller.f_globals is vars(cleanup)
+                    and caller.f_code.co_name == 'observe' and operation is not None
+                    and operation._state == 'active' and not injected):
                 injected.append(True)
                 return raw + b'\n# transient consumed helper\n'
             return raw
-        def retry(root, record, **kwargs):
-            try: return original(root, record, **kwargs)
+        @wraps(original)
+        def retry(root, **kwargs):
+            try: return original(root, **kwargs)
             except ValueError as error:
-                caught.append(str(error))
-                return original(root, record, **kwargs)
-        with patch.object(Path, 'read_bytes', transient), patch.object(seed, '_verify_bound_inputs', retry):
-            with self.assertRaises(cleanup._OperationCoherenceError): winner.verify(self.root)
+                caught.append(error)
+                return original(root, **kwargs)
+        with patch.object(Path, 'read_bytes', transient), patch.object(cleanup, 'shared_helper_edges', retry):
+            with self.assertRaises(cleanup._OperationCoherenceError) as final:
+                winner.verify(self.root)
         self.assertEqual(injected, [True])
-        self.assertTrue(caught)
+        expected = ('full-audit cleanup successor: consumed operation bytes changed: '
+                    'render/color_math.mojo')
+        self.assertEqual(len(caught), 1)
+        self.assertIsInstance(caught[0], cleanup._OperationCoherenceError)
+        self.assertEqual(str(caught[0]), expected)
+        self.assertIsInstance(caught[0].__cause__, cleanup.ContractError)
+        self.assertEqual(str(caught[0].__cause__), expected)
+        self.assertEqual(str(final.exception), expected)
 
 
 if __name__ == '__main__':
