@@ -261,7 +261,7 @@ behavior limits, including the pre-existing focal-distance scale discrepancy.
 Run the inventory check after source edits:
 
 ```sh
-python3 tools/check_carla_quantity_inventory_333.py
+mojo run -I . tools/check_carla_quantity_inventory.mojo
 ```
 
 The checker independently scans declarations and compares their multiset
