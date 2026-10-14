@@ -118,6 +118,7 @@ comptime GLOBAL_TOOLS = [
     "tools/cache_key.py",
     "tools/suite_key.py",
     "tools/native_test_support.py",
+    "tools/test_environment.py",
     "tools/fixture_runtime.mojo",
     "tools/compiler_telemetry.py",
 ]
