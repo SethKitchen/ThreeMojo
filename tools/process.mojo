@@ -64,20 +64,31 @@ struct ProcessResult(Movable):
     var status: Int
     """The exit status. A program killed by signal N has status 128 + N."""
     var output: String
-    """The standard output and standard error, in the order written."""
+    """The standard output, and the standard error when it is merged, in
+    the order written."""
+    var errors: String
+    """The standard error when it is kept apart, otherwise empty."""
     var timed_out: Bool
     """True when the time limit stopped the program."""
 
-    def __init__(out self, status: Int, var output: String, timed_out: Bool):
+    def __init__(
+        out self,
+        status: Int,
+        var output: String,
+        var errors: String,
+        timed_out: Bool,
+    ):
         """Make a result.
 
         Args:
             status: The exit status.
-            output: The combined output.
+            output: The output.
+            errors: The separate standard error.
             timed_out: True when the time limit stopped the program.
         """
         self.status = status
         self.output = output^
+        self.errors = errors^
         self.timed_out = timed_out
 
 
@@ -89,7 +100,10 @@ def _remove_tree(directory: String) raises:
 
 
 def run_program(
-    arguments: List[String], timeout: Float64
+    arguments: List[String],
+    timeout: Float64,
+    merge_errors: Bool = True,
+    directory: String = "",
 ) raises -> ProcessResult:
     """Run a program to its end or to its time limit.
 
@@ -97,10 +111,13 @@ def run_program(
         arguments: The program and its arguments. The first is found on
             `PATH` when it has no slash.
         timeout: The time limit in seconds.
+        merge_errors: True to put the standard error into `output` in the
+            order written. False to keep it apart in `errors`.
+        directory: The working directory, or empty for the current one.
 
     Returns:
-        The exit status, the combined output, and whether the time limit
-        stopped the program.
+        The exit status, the output, and whether the time limit stopped the
+        program.
 
     Raises:
         Error: If `arguments` is empty, the time limit is not positive, or
@@ -110,18 +127,23 @@ def run_program(
         raise Error("run_program needs a program")
     if not timeout > 0:
         raise Error("run_program needs a positive time limit")
-    var directory = mkdtemp(prefix="threemojo-process-")
+    var scratch = mkdtemp(prefix="threemojo-process-")
     try:
-        var output = directory + "/output"
+        var output = scratch + "/output"
         var command = String("exec")
         for argument in arguments:
             command += " " + shell_quote(argument)
+        if directory.byte_length() > 0:
+            command = "cd -- " + shell_quote(directory) + " && " + command
+        var errors = " 2>&1" if merge_errors else ' 2>"$out.err"'
         var script = (
             "out="
             + shell_quote(output)
             + "\n( "
             + command
-            + ' ) </dev/null >"$out" 2>&1 &\n'
+            + ' ) </dev/null >"$out"'
+            + errors
+            + " &\n"
             + "pid=$!\n"
             + "( trap 'kill \"$s\" 2>/dev/null; exit 0' TERM\n"
             + "  sleep "
@@ -139,7 +161,14 @@ def run_program(
         var reported = run("sh -c " + shell_quote(script))
         var status = Int(reported)
         var bytes = Path(output).read_bytes()
+        var error_text = String()
+        if not merge_errors:
+            error_text = String(
+                from_utf8_lossy=Path(output + ".err").read_bytes()
+            )
         var timed_out = Path(output + ".timeout").exists()
-        return ProcessResult(status, String(from_utf8_lossy=bytes), timed_out)
+        return ProcessResult(
+            status, String(from_utf8_lossy=bytes), error_text^, timed_out
+        )
     finally:
-        _remove_tree(directory)
+        _remove_tree(scratch)

@@ -82,6 +82,26 @@ def test_invalid_utf8_output_is_replaced() raises:
     assert_equal(result.output, "a�b")
 
 
+def test_errors_can_stay_apart_from_the_output() raises:
+    var result = run_program(
+        _sh("echo out; echo err 1>&2; exit 4"), 10, merge_errors=False
+    )
+    assert_equal(result.status, 4)
+    assert_equal(result.output, "out\n")
+    assert_equal(result.errors, "err\n")
+    var merged = run_program(_sh("echo err 1>&2"), 10)
+    assert_equal(merged.errors, "")
+
+
+def test_a_working_directory_is_used() raises:
+    var result = run_program(_sh("pwd -P"), 10, directory="/")
+    assert_equal(result.output, "/\n")
+    var missing = run_program(
+        _sh("true"), 10, directory="/nonexistent/threemojo-directory"
+    )
+    assert_true(missing.status != 0)
+
+
 def test_bad_requests_are_refused() raises:
     with assert_raises(contains="needs a program"):
         _ = run_program(List[String](), 10)
