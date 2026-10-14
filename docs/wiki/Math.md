@@ -605,8 +605,8 @@ It tests both signs in nine exponent bands, from 13 through 126.
 Each target has two adjacent Float32 values below it and two above it.
 The 72 targets give 288 positive cases and 576 signed sine checks.
 
-`tools/reference_sine_phases.py` constructs the targets with Python Decimal.
-It computes pi with Machin's convergent arctangent series.
+`tools/reference_sine_phases.mojo` constructs the targets in exact binary
+fixed point. It computes pi with Machin's convergent arctangent series.
 An integer binary search selects the neighbors from exact Float32 values.
 A full-turn reduction and Taylor series compute each reference sine.
 
@@ -614,7 +614,7 @@ The generator rounds references directly to Float32 with ties-to-even.
 It checks that 140-digit and 200-digit calculations give the same fixtures.
 It does not import the shared sine or its reduction constants.
 
-Run `python3 tools/reference_sine_phases.py --check` to check the saved fixtures.
+Run `mojo run -I . tools/reference_sine_phases.mojo --check` to check the saved fixtures.
 Use `--write` to replace the generated block after an intentional fixture change.
 
 The CPU test checks the nearest quadrant, the reduced remainder, and the sine.
