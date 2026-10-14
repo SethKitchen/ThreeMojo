@@ -8,7 +8,7 @@ They do not prove helper mathematics, runtime execution, termination or cost.
 No checker updates pins automatically. Repository-controlled pins are reviewed
 inputs, never an independent proof when changed together with production.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from functools import lru_cache
 import hashlib
@@ -167,7 +167,7 @@ def tokens(text):
     return list(_token_snapshot(text))
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=1024)
 def token_sha256(text):
     # Retain INDENT/DEDENT, statement boundaries, every qualifier, string,
     # operator and literal. Ignore comments and continuation/blank lines.
@@ -305,6 +305,29 @@ def _typed_path(root, path):
                 and relative.startswith(root_text + '/')):
             relative = relative[len(root_text) + 1:]
     return relative
+
+
+def typed_admission_scope(root):
+    """Create a synchronous, frame-owned admission scope for a public checker."""
+    if __package__:
+        from . import full_audit_cleanup_contracts as audit
+    else:
+        import full_audit_cleanup_contracts as audit
+    frame = sys._getframe(1)
+    if frame.f_locals.get('_operation') is not None or audit._cache_verify_frame(frame):
+        return nullcontext()
+    filename = frame.f_globals.get('__file__')
+    if (type(filename) is not str
+            or Path(filename).absolute().parent != Path(__file__).absolute().parent
+            or frame.f_code.co_name not in audit._public_admission_entries().get(Path(filename).name, ())):
+        return nullcontext()
+    if Path(filename).name == 'seed_count_contracts.py':
+        if frame.f_locals.get('_inputs') is not None:
+            return nullcontext()
+        parent = audit._public_admission_for(root)
+        if parent is not None and parent._state == 'active':
+            return nullcontext()
+    return audit._public_admission_scope(root, frame)
 
 
 def historical_text(root, path, text, *, _operation=None, _inputs=None, _input_owner=None):
