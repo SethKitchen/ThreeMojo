@@ -152,8 +152,10 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
             for name, raw in original.items(): (self.root/name).write_bytes(raw)
 
     def test_constructor_theorem_retains_its_historical_table_and_live_receipt(self):
-        with patch.object(sys, 'path', [str(ROOT/'tools'), *sys.path]):
-            import coverage_loop_proofs as loops
+        # Proof derivation imports its package namespace lazily, after import
+        # of the coverage module itself, so retain that namespace for the test.
+        self.enterContext(patch.object(sys, 'path', [str(ROOT/'tools'), *sys.path]))
+        import coverage_loop_proofs as loops
         expected = dict(loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256)
         for historical in (False, True):
             with self.subTest(endpoint='historical' if historical else 'current'):
@@ -489,6 +491,28 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
             scaled.NATIVE_CLOSURE,
         )
 
+    def _existing_case_alias(self, root, relative):
+        """Recognize an actual case-folded lookup, never a second entry."""
+        target = root / relative
+        if not (target.exists() or target.is_symlink()):
+            return None
+        self.assertEqual(root, self.root)
+        names = [name for name in self.paths
+                 if name.casefold() == relative.casefold()]
+        self.assertEqual(len(names), 1)
+        name = names[0]
+        self.assertNotEqual(relative, name)
+        canonical = root / name
+        self.assertFalse(target.is_symlink())
+        self.assertTrue(target.samefile(canonical))
+        self.assertEqual(
+            {path.relative_to(root).as_posix()
+             for path in root.rglob('*') if path.is_file()},
+            set(self.paths),
+        )
+        self.assertEqual(target.read_bytes(), self.original[name])
+        return name
+
     @contextmanager
     def _temporary_path(self, root, relative, *, make_parents=True):
         """Reserve a nonexistent path and remove only directories we created."""
@@ -585,8 +609,8 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
                     self.root, scaled.NATIVE_CLOSURE, math_entries=scope))
 
     def test_root_tests_and_include_namespace_alternatives_refuse(self):
-        # Existing root math/ is canonical; its differently cased package and
-        # every entry-local math package remain separate competitors.
+        # Distinct directory entries compete. On a case-insensitive directory,
+        # a spelling of the existing canonical inode does not add a competitor.
         root_variants = (
             'math.mojo', 'Math.mojo', 'math.MOJO', 'math.mojopkg',
             'math.mojoc', 'math.so', 'math.py', 'math.🔥',
@@ -606,9 +630,14 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
                   for relative in entry_variants]
         for location, relative, include_roots in cases:
             with self.subTest(location=location.name, path=relative):
-                with self._extra_file(location, relative):
-                    with self.assertRaises(ValueError):
-                        self._proof(include_roots=include_roots)
+                alias = self._existing_case_alias(location, relative)
+                if alias is not None:
+                    self._assert_exact_bindings(self._proof(include_roots=include_roots))
+                    self.assertEqual((location / relative).read_bytes(), self.original[alias])
+                else:
+                    with self._extra_file(location, relative):
+                        with self.assertRaises(ValueError):
+                            self._proof(include_roots=include_roots)
 
     def test_exact_provider_and_package_coordinates_stay_protected(self):
         variants = (
@@ -622,9 +651,14 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
                                         (self.include, (self.include,))):
             for relative in variants:
                 with self.subTest(location=location.name, path=relative):
-                    with self._extra_file(location, relative):
-                        with self.assertRaises(ValueError):
-                            self._proof(include_roots=include_roots)
+                    alias = self._existing_case_alias(location, relative)
+                    if alias is not None:
+                        self._assert_exact_bindings(self._proof(include_roots=include_roots))
+                        self.assertEqual((location / relative).read_bytes(), self.original[alias])
+                    else:
+                        with self._extra_file(location, relative):
+                            with self.assertRaises(ValueError):
+                                self._proof(include_roots=include_roots)
 
     def test_math_scope_does_not_relax_std_or_other_protected_namespaces(self):
         for location, include_roots in ((self.root, ()),
@@ -771,6 +805,30 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
                                    'tests/math/__init__.mojo')]
         for location, relative, includes in cases:
             with self.subTest(location=location.name, path=relative):
+                alias = self._existing_case_alias(location, relative)
+                if alias is not None:
+                    target = location / relative
+                    canonical = location / alias
+                    original = self.original[alias]
+                    try:
+                        def change_canonical_input():
+                            self.assertTrue(target.samefile(canonical))
+                            target.write_bytes(b'# changed through a case alias during final read\n')
+                        with self._at_final_physical_read(change_canonical_input) as fired:
+                            with self.assertRaises(cleanup.ContractError) as raised:
+                                self._proof(include_roots=includes)
+                        self.assertIs(type(raised.exception), cleanup.ContractError)
+                        self.assertEqual(str(raised.exception),
+                            'full-audit cleanup successor: scaled input changed before receipt: ' + alias)
+                        self.assertEqual(len(fired), 1)
+                    finally:
+                        # The alternate spelling is the canonical file itself;
+                        # never send it through the new-path unlink cleanup.
+                        canonical.write_bytes(original)
+                    self.assertTrue(target.samefile(canonical))
+                    self.assertEqual(target.read_bytes(), original)
+                    self._assert_exact_bindings(self._proof(include_roots=includes))
+                    continue
                 with self._temporary_path(location, relative, make_parents=False) as target:
                     def create_shadow():
                         target.parent.mkdir(parents=True, exist_ok=True)
