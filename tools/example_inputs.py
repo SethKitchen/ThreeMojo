@@ -15,8 +15,8 @@ import tempfile
 import affected
 import suite_key
 
-TOOLS = ['Makefile', 'tools/example_inputs.py', 'tools/affected.py',
-         'tools/suite_key.py']
+TOOLS = ['Makefile', 'examples/gallery.mk', 'tools/example_inputs.py',
+         'tools/affected.py', 'tools/suite_key.py']
 # Each gallery recipe compresses its image with this program after rendering.
 OPTIMIZER = 'tools/optimize_png.mojo'
 

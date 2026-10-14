@@ -53,6 +53,12 @@ class RoutingTests(unittest.TestCase):
         # Other validation documents stay documentation.
         self.assertEqual(ci_scope.kind('docs/validation/water-gpu-300.md'), 'docs')
 
+    def test_gallery_table_selects_the_python_tool_checks(self):
+        self.assertEqual(ci_scope.kind('examples/gallery.mk'), 'tools')
+        value = selected({'examples/gallery.mk': False})
+        self.assertFalse(value['full'])
+        self.assertTrue(value['flags']['tools'])
+
     def test_carla_asset_packaging_tools_select_python_and_documentation_checks(self):
         paths = {'assets/carla/tools/carla_assets.py': False,
                  'assets/carla/tools/test_carla_assets.py': False}

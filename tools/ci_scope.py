@@ -64,6 +64,10 @@ def kind(path):
         return 'docs'
     if path in ROUTING or path.startswith('tools/test_') and path.endswith('.py'):
         return 'tools'
+    # The gallery table is checked by tools/test_example_inputs.py; CI does not
+    # render the gallery.
+    if path == 'examples/gallery.mk':
+        return 'tools'
     if (path.startswith(('coverage/', 'tools/coverage_', 'tools/check_coverage_',
                          'tools/fixtures/coverage_', 'tools/carla_lane_oracle/'))):
         return 'coverage_tools'

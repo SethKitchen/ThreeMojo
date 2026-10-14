@@ -3,6 +3,7 @@
 """Example dependency selection does not drag in unrelated extensions."""
 
 from pathlib import Path
+import re
 import tempfile
 import os
 import subprocess
@@ -99,19 +100,29 @@ class ExampleInputsTests(unittest.TestCase):
     def test_repository_recipes_cover_every_example_and_compress(self):
         root = Path(__file__).resolve().parent.parent
         makefile = (root / 'Makefile').read_text()
+        table = (root / 'examples/gallery.mk').read_text()
+        entries = re.findall(r'^\$\(call gallery,([\w-]+),(\w+)(?:,([^)]*))?\)$', table, re.M)
+        lines = [line for line in table.splitlines() if line and not line.startswith('#')]
+        self.assertEqual(len(entries), len(lines))
+        for _, example, _ in entries:
+            self.assertTrue((root / 'examples' / (example + '.mojo')).is_file(), example)
+        tabled = {example for _, example, _ in entries}
         for example in (root / 'examples').glob('*.mojo'):
             if example.stem == 'viewer':  # Interactive terminal, no gallery image.
                 continue
-            self.assertIn('$(EXAMPLE_INPUTS_' + example.stem + ')', makefile)
-        gallery = makefile.split('animation: ', 1)[1].split(
+            self.assertTrue(example.stem in tabled
+                            or '$(EXAMPLE_INPUTS_' + example.stem + ')' in makefile,
+                            example.stem)
+        gallery = makefile.split('define GALLERY_RULE', 1)[1].split(
             '# Deliberately leaves', 1)[0]
-        self.assertNotIn('$(LIB_SOURCES)', gallery)
+        self.assertNotIn('$(LIB_SOURCES)', gallery + table)
         for name in ('carla', 'carla_town', 'carla_towns'):
             recipe = gallery.split('$(OUT_DIR)/' + name + '.png:', 1)[1].split('\n\n', 1)[0]
             self.assertIn('credits --all --output $(@:.png=.credits.md)', recipe)
             self.assertIn('assets/carla/ATTRIBUTION.md', recipe)
-        self.assertEqual(gallery.count('$(call run,'),
-                         gallery.count('tools/optimize_png.mojo $@'))
+        self.assertEqual(gallery.count('call run,'),
+                         gallery.count('tools/optimize_png.mojo $'))
+        self.assertIn('include examples/gallery.mk', makefile)
 
     def test_audio_game_face_has_a_binary_recipe_and_actual_inputs(self):
         root = Path(__file__).resolve().parent.parent
