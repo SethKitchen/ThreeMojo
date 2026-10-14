@@ -1289,7 +1289,7 @@ The loader also refuses these, which three.js reads in a way that the port does 
 
 ### Example
 
-`assets/lwo/make_lwo.mojo` writes the files. `scene.lwo` is LWO2, with three layers, three surfaces, UV and morph maps. `standard.lwo`, `phong.lwo` and `physical.lwo` are LWO3, with node materials, image nodes, image maps and an environment. `kitchen.lwo` and `kitchen3.lwo` hold every chunk and form that three.js reads. `broken/` holds 32 files that the loader refuses.
+`tools/make_lwo.mojo` writes the files. `scene.lwo` is LWO2, with three layers, three surfaces, UV and morph maps. `standard.lwo`, `phong.lwo` and `physical.lwo` are LWO3, with node materials, image nodes, image maps and an environment. `kitchen.lwo` and `kitchen3.lwo` hold every chunk and form that three.js reads. `broken/` holds 32 files that the loader refuses.
 
 `assets/lwo/lwo.json` has what three.js 0.180 gives for each. `tests/test_lwo.mojo` compares each material, mesh, attribute, group and morph target.
 

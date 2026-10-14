@@ -5,7 +5,7 @@
 
 """Construct DWA stream variants, then require the pinned native decoder.
 
-    mojo run -I . assets/exr_codecs/variants.mojo PATH/TO/reference PATH/TO/libOpenEXR-3_1.so DIR
+    mojo run -I . tools/exr_variants.mojo PATH/TO/reference PATH/TO/libOpenEXR-3_1.so DIR
 
 The input files in DIR come from reference.cpp. Only trusted local fixtures
 are passed to the native Huffman API. No variant uses the Mojo decoder.

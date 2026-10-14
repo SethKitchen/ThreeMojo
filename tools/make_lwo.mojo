@@ -6,7 +6,8 @@
 """Write the LightWave objects the tests read, by hand, from the LWO2
 layout and from what three.js's LWO3 parser reads.
 
-Run it in this folder: `mojo run make_lwo.mojo`.
+Run it from the repository root: `mojo run -I . tools/make_lwo.mojo`.
+It writes into `assets/lwo/`.
 """
 
 from std.memory import bitcast
@@ -1287,9 +1288,9 @@ def write_all(root: String) raises:
 
 
 def main() raises:
-    """Write every file into this folder.
+    """Write every file into `assets/lwo/`.
 
     Raises:
         Error: If a file cannot be written.
     """
-    write_all(".")
+    write_all("assets/lwo")

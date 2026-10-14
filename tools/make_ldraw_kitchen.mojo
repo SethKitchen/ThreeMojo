@@ -5,7 +5,8 @@
 
 """Write the LDraw files that reach the corners of three.js's loader:
 `kitchen.mpd`, the parts it needs in `library/`, and the files the loader
-refuses in `broken/`. Run it in this folder: `mojo run make_kitchen.mojo`.
+refuses in `broken/`, all in `assets/ldraw/`. Run it from the repository
+root: `mojo run -I . tools/make_ldraw_kitchen.mojo`.
 """
 
 from std.os import makedirs
@@ -240,5 +241,5 @@ def write_all(root: String) raises:
 
 
 def main() raises:
-    write_all(".")
+    write_all("assets/ldraw")
     print("written")

@@ -37,7 +37,7 @@ g++ -std=c++14 -O2 -fPIC -shared -DASTCENC_ISA_NONE \
   -DASTCENC_SSE=0 -DASTCENC_AVX=0 -DASTCENC_NEON=0 -I"$src" \
   tools/references/astc_reference.cpp "$src"/astcenc_*.cpp \
   -o "$work/libastc_reference.so"
-mojo run -I . tools/references/generate_astc.mojo "$work/libastc_reference.so" \
+mojo run -I . tools/generate_astc.mojo "$work/libastc_reference.so" \
   "$work/raw_astc_reference.txt"
 cmp "$work/raw_astc_reference.txt" assets/ktx2/raw_astc_reference.txt
 cmp "$work/raw_astc_reference.json" assets/ktx2/raw_astc_reference.json

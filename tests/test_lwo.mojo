@@ -7,7 +7,7 @@
 
 `assets/lwo/lwo.json` holds what three.js 0.180's `LWOLoader.parse` makes
 of each file beside it, written by `three_lwo.mjs`: the materials, and
-each mesh with its geometry. `make_lwo.mojo` wrote the files: an LWO2 scene
+each mesh with its geometry. `tools/make_lwo.mojo` wrote the files: an LWO2 scene
 of three layers and three surfaces, and LWO3 standard, Phong and physical
 surfaces of node attributes, image nodes and image maps.
 """

@@ -13,7 +13,7 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_raises
 
-from assets.exr_codecs.check_dct_precision import (
+from tools.exr_dct_precision import (
     half_bits,
     half_value,
     lookup,

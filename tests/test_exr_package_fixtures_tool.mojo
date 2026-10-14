@@ -14,7 +14,7 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_true
 
-from assets.exr_codecs.package_fixtures import hex_lines, package
+from tools.exr_package_fixtures import hex_lines, package
 from tools._json_tools import json_tokens
 
 comptime FOLDER = "assets/exr_codecs"

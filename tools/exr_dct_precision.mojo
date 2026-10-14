@@ -5,7 +5,7 @@
 
 """Compare official DCT helpers, not Mojo, on deterministic half coefficients.
 
-    mojo run -I . assets/exr_codecs/check_dct_precision.mojo HELPER_SO OPENEXR_SOURCE OUTPUT_JSON
+    mojo run -I . tools/exr_dct_precision.mojo HELPER_SO OPENEXR_SOURCE OUTPUT_JSON
 
 Requires an x86-64 CPU with AVX, and the pinned OpenEXR 3.1.5 helper build.
 This experiment does not set or adjust the Mojo fixture tolerance.

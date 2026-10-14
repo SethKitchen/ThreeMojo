@@ -8,7 +8,7 @@
 three.js writes these noises in TSL, `src/nodes/materialx/lib/mx_noise.js`,
 which runs only on a GPU. This file transcribes the functions the tests
 check, line by line, in 32-bit floats and 32-bit unsigned integers, in the
-same order of operations. Run it: `mojo run -I . assets/noise/mx_noise.mojo`.
+same order of operations. Run it: `mojo run -I . tools/mx_noise_reference.mojo`.
 
 Each product is formed in Float64, where two Float32 values multiply
 exactly, and then rounded to Float32 with integer operations. A plain

@@ -5,7 +5,7 @@
 
 """Generate raw ASTC reference texels with pinned Arm astcenc 5.3.0.
 
-    mojo run -I . tools/references/generate_astc.mojo LIBRARY OUTPUT
+    mojo run -I . tools/generate_astc.mojo LIBRARY OUTPUT
 
 Build the adapter as documented in docs/validation/raw-astc.md. This tool
 never calls ThreeMojo. Seeded random blocks and every 11-bit block mode are

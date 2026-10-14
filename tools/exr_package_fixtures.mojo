@@ -5,7 +5,7 @@
 
 """Package verified native files as reviewable UTF-8 hex and audit metadata.
 
-    mojo run -I . assets/exr_codecs/package_fixtures.mojo FIXTURES [DESTINATION]
+    mojo run -I . tools/exr_package_fixtures.mojo FIXTURES [DESTINATION]
 
 Run it from the repository root. DESTINATION is `assets/exr_codecs` unless
 it is given. For each `*.exr` file in FIXTURES, the tool writes the file and

@@ -13,7 +13,7 @@ tokens under zlib.
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_true
 
-from assets.exr_codecs.variants import (
+from tools.exr_variants import (
     Block,
     ac_stream,
     file_bytes,

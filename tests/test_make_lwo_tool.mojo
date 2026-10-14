@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal, assert_true
 
-from assets.lwo.make_lwo import files, write_all
+from tools.make_lwo import files, write_all
 
 
 def test_the_generator_writes_the_saved_files() raises:

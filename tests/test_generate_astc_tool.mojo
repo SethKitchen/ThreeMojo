@@ -13,7 +13,7 @@ from std.testing import TestSuite, assert_equal
 
 from tools._bigint import BigInt
 from tools._python_random import PythonRandom
-from tools.references.generate_astc import SEED, block_bytes, hex_text
+from tools.generate_astc import SEED, block_bytes, hex_text
 
 
 def test_hex_text_matches_bytes_hex() raises:

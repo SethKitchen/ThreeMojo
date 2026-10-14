@@ -9,7 +9,7 @@ from std.pathlib import Path
 from std.tempfile import mkdtemp
 from std.testing import TestSuite, assert_equal
 
-from assets.ldraw.make_kitchen import files, write_all
+from tools.make_ldraw_kitchen import files, write_all
 
 
 def test_the_generator_writes_the_saved_files() raises:
