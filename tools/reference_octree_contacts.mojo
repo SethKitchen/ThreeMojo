@@ -22,10 +22,11 @@ replaces. Three things make it so:
   adds an int item without compensation.
 """
 
-from std.math import isinf, isnan, sqrt
+from std.math import sqrt
 from std.testing import assert_true
 
 from tools._json_tools import JsonWriter
+from tools._python_math import py_sum
 
 
 @fieldwise_init
@@ -147,51 +148,6 @@ def mul(a: Vec, t: Float64, t_int: Bool = False) -> Vec:
         a.iy and t_int,
         a.iz and t_int,
     )
-
-
-def py_sum(values: List[Float64], kinds: List[Bool]) -> Tuple[Float64, Bool]:
-    """Sum as CPython 3.12's `sum` does from its start of int zero.
-
-    Ints add exactly until the first float. Then each float item is added
-    with Neumaier's compensation, an int item is added plainly, and the
-    compensation is added once at the end when it is finite and not zero.
-
-    Args:
-        values: The items.
-        kinds: True for each item that is an int.
-
-    Returns:
-        The sum, and whether it is an int.
-    """
-    var total = 0.0
-    var index = 0
-    while index < len(values) and kinds[index]:
-        total += values[index]
-        index += 1
-    if index == len(values):
-        return (total + 0.0, True)
-    total = total + values[index]
-    var compensation = 0.0
-    index += 1
-    while index < len(values):
-        var x = values[index]
-        if kinds[index]:
-            total += x
-        else:
-            var t = total + x
-            if abs(total) >= abs(x):
-                compensation += (total - t) + x
-            else:
-                compensation += (x - t) + total
-            total = t
-        index += 1
-    if (
-        compensation != 0
-        and not isinf(compensation)
-        and not isnan(compensation)
-    ):
-        total += compensation
-    return (total, False)
 
 
 def dot_kind(a: Vec, b: Vec) -> Tuple[Float64, Bool]:

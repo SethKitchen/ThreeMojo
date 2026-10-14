@@ -10,9 +10,9 @@ The expected sums are what CPython 3.12.14 printed for the same lists.
 
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
+from tools._python_math import py_sum
 from tools.reference_octree_contacts import (
     clamp,
-    py_sum,
     report,
     self_check,
     whole,

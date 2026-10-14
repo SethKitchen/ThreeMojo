@@ -804,7 +804,7 @@ def test_stability_settings_reject_invalid_limits() raises:
 
 
 def test_planar_wall_python_reference() raises:
-    # tools/reference_geotech_wall.py independently integrates pressure
+    # tools/reference_geotech_wall.mojo independently integrates pressure
     # diagrams and assembles rectangular weights in four dry-wall cases.
     # h, live height, Strength I V/H/e/sliding, Service I peak pressure.
     var cases: List[
