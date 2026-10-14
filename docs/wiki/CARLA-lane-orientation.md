@@ -134,8 +134,10 @@ stay at least 0.000112 radians from the subdivision threshold.
 The map tests retain their
 original tolerances and workloads.
 
-`bench/carla_lane_orientation_bench.mojo` compares the complete old and new
-methods in one build. It alternates timing order for each geometry and
-checks that all sampled center positions remain exactly equal. It reports
-the measured cost of correcting the orientation. It is not a historical
-binary benchmark.
+`bench/carla_lane_orientation_bench.mojo` compares the old and corrected
+orientation calculations in one build. Both use the current canonical
+lane-center calculation. The baseline retains the slope-as-angle formula
+from `0f58bc1`; it does not retain that revision's Float32 center arithmetic.
+The benchmark alternates timing order for each geometry and checks that
+all sampled center positions remain exactly equal. It measures orientation
+cost on shared centers, not the performance of a historical binary.
