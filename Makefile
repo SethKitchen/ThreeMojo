@@ -915,13 +915,15 @@ test-tools:
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
 
 # The negative-fixture manifest names exactly tests/compile_fail, no job
-# regenerates it, the recorded three.js fixture hashes match, and the gallery
-# draws every example. These read repository files that the Mojo suite cache
-# does not track, so they run here.
+# regenerates it, the recorded three.js fixture hashes match, the gallery
+# draws every example, and CI guards each job with its planner flag. These
+# read repository files that the Mojo suite cache does not track, so they run
+# here.
 repository-check:
 	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --check-repository
 	@$(MOJO) run $(MOJOFLAGS) tools/fixture_manifest.mojo
 	@$(TOOL) example_inputs --check-repository
+	@$(TOOL) ci_scope check-workflow
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.

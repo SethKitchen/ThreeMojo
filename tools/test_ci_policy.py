@@ -56,7 +56,7 @@ class CiPolicyTests(unittest.TestCase):
             for flag, target in [('coverage_tools', 'test-coverage-tool'),
                                  ('portability', 'test-portability'), ('docs', 'docs-check')]:
                 self.assertRegex(job, "if: needs.scope.outputs.run_" + flag +
-                                 " == 'true'\n        run: python3 tools/ci_scope.py run -- " + target)
+                                 " == 'true'\n        run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- " + target)
             self.assertIn("if: needs.scope.outputs.run_native == 'true'", job)
             self.assertNotIn('Install Xvfb', job)
         self.assertIn('run -- fmt-check', self.jobs['lint'])
@@ -72,8 +72,8 @@ class CiPolicyTests(unittest.TestCase):
             self.assertIsNotNone(groups)
             count = len(groups.group(1).split(','))
             self.assertEqual(groups.group(1), ', '.join(str(i) for i in range(1, count + 1)))
-            commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
-            self.assertEqual(commands, ['python3 tools/ci_scope.py run -- test-tools '
+            commands = re.findall(r'^        run: (sh tools/tool.sh .venv/bin/mojo ci_scope run -- .+)$', job, re.MULTILINE)
+            self.assertEqual(commands, ['sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools '
                                         'TOOLS_SHARD=${{ matrix.shard }}/' + str(count)])
             self.assertIn('fail-fast: false', job)
         self.assertRegex(self.jobs['tools'], r'(?m)^    runs-on: ubuntu-latest$')
@@ -91,9 +91,9 @@ class CiPolicyTests(unittest.TestCase):
         job = self.jobs['cpu-macos']
         self.assertRegex(job, r'(?m)^    runs-on: macos-latest$')
         self.assertRegex(job, r'(?m)^    timeout-minutes: 150$')
-        commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
+        commands = re.findall(r'^        run: (sh tools/tool.sh .venv/bin/mojo ci_scope run -- .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
-            'python3 tools/ci_scope.py run -- ${{ matrix.target }} JOBS=1',
+            'sh tools/tool.sh .venv/bin/mojo ci_scope run -- ${{ matrix.target }} JOBS=1',
         ])
         # The GPU compile job has its own existing JOBS=1 contract.
         for name in ('lint', 'cpu', 'coverage-capture', 'coverage'):
@@ -104,9 +104,9 @@ class CiPolicyTests(unittest.TestCase):
         job = self.jobs['cpu']
         self.assertRegex(job, r'(?m)^    timeout-minutes: 120$')
         self.assertIn('shard: [1, 2, 3]', job)
-        commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
+        commands = re.findall(r'^        run: (sh tools/tool.sh .venv/bin/mojo ci_scope run -- .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
-            'python3 tools/ci_scope.py run -- test-cpu SHARD=${{ matrix.shard }}/3 '
+            'sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-cpu SHARD=${{ matrix.shard }}/3 '
             'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
             '--target-cpu=x86-64-v3"',
         ])
@@ -143,7 +143,7 @@ class CiPolicyTests(unittest.TestCase):
             if name != 'cpu':
                 self.assertNotIn('compiler_metadata.py', other)
         # The existing exact-command test also pins original flags/shards.
-        self.assertIn('run: python3 tools/ci_scope.py run -- test-cpu SHARD=${{ matrix.shard }}/3 '
+        self.assertIn('run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-cpu SHARD=${{ matrix.shard }}/3 '
                       'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
                       '--target-cpu=x86-64-v3"', job)
 
@@ -173,21 +173,20 @@ class CiPolicyTests(unittest.TestCase):
             self.assertTrue(allows(guard, event, draft))
         self.assertEqual(guard_of(self.jobs['required']), 'always() && (' + GUARD + ')')
 
-    def test_every_work_job_requires_successful_planning_and_an_applicability_flag(self):
-        from ci_scope import JOBS
-        self.assertEqual(set(JOBS), CHECK_JOBS)
+    # tests/test_ci_scope_tool.mojo checks each job's guard against the
+    # planner's JOBS table.
+    def test_every_work_job_requires_successful_planning(self):
         self.assertEqual(set(self.jobs), CHECK_JOBS | {'scope', 'required', 'wiki'})
-        for name, flag in JOBS.items():
-            self.assertEqual(guard_of(self.jobs[name]), "needs.scope.outputs.run_" + flag + " == 'true'")
+        for name in CHECK_JOBS:
             self.assertRegex(self.jobs[name], r'(?m)^    needs: (scope|\[scope, coverage-capture\])$')
 
     def test_scope_uses_immutable_baselines_and_manual_full_audit(self):
         job = self.jobs['scope']
         self.assertIn('PR_BASE: ${{ github.event.pull_request.base.sha }}', job)
         self.assertIn('PUSH_BASE: ${{ github.event.before }}', job)
-        self.assertIn('python3 tools/ci_scope.py plan --base "$PR_BASE"', job)
-        self.assertIn('python3 tools/ci_scope.py plan --base "$PUSH_BASE"', job)
-        self.assertIn('python3 tools/ci_scope.py plan --full', job)
+        self.assertIn('sh tools/tool.sh .venv/bin/mojo ci_scope plan --base "$PR_BASE"', job)
+        self.assertIn('sh tools/tool.sh .venv/bin/mojo ci_scope plan --base "$PUSH_BASE"', job)
+        self.assertIn('sh tools/tool.sh .venv/bin/mojo ci_scope plan --full', job)
         self.assertNotIn('origin/main', self.text)
 
     def test_full_inventory_uses_hash_bound_artifact_not_large_environment_value(self):
@@ -206,7 +205,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertIn('needs: [scope, lint, tools, cpu, lint-macos, tools-macos, cpu-macos, '
                       'coverage-capture, coverage, gpu-host]', job)
         self.assertIn('CI_NEEDS: ${{ toJSON(needs) }}', job)
-        self.assertIn('run: python3 tools/ci_scope.py aggregate', job)
+        self.assertIn('run: sh tools/tool.sh .venv/bin/mojo ci_scope aggregate', job)
         self.assertNotIn('continue-on-error:', self.text)
 
     def test_newer_runs_cancel_only_same_pr_or_ref(self):
@@ -235,12 +234,12 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_gpu_job_compiles_before_running_only_host_suites(self):
         job = self.jobs['gpu-host']
-        commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
+        commands = re.findall(r'^        run: (sh tools/tool.sh .venv/bin/mojo ci_scope run -- .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
-            'python3 tools/ci_scope.py run -- compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
-            'python3 tools/ci_scope.py run -- test-gpu-host',
+            'sh tools/tool.sh .venv/bin/mojo ci_scope run -- compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
+            'sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-gpu-host',
             # Metal kernel AIR, checked without a GPU (modular/modular#7238).
-            'python3 tools/ci_scope.py run -- check-gpu-air',
+            'sh tools/tool.sh .venv/bin/mojo ci_scope run -- check-gpu-air',
         ])
         self.assertNotIn('continue-on-error:', job)
         self.assertNotRegex(job, r'(?m)^      -?\s*if:')
@@ -261,7 +260,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertIn('shard: [1, 2, 3, 4, 5, 6, 7, 8]', self.jobs['coverage-capture'])
         # The group count in the command matches the matrix.
         self.assertIn('SHARD=${{ matrix.shard }}/8 ', self.jobs['coverage-capture'])
-        self.assertIn('python3 tools/ci_scope.py run -- coverage-report', self.jobs['coverage'])
+        self.assertIn('sh tools/tool.sh .venv/bin/mojo ci_scope run -- coverage-report', self.jobs['coverage'])
 
 
 if __name__ == '__main__':

@@ -94,7 +94,7 @@ class CarlaOracleWiringTests(unittest.TestCase):
             job = re.split(r'\n  [a-z][\w-]*:\n', job, maxsplit=1)[0]
             commands = re.findall(r'^\s+run: (.+)$', job, re.MULTILINE)
             count = len(re.search(r'shard: \[([0-9, ]+)\]', job).group(1).split(','))
-            self.assertIn('python3 tools/ci_scope.py run -- test-tools '
+            self.assertIn('sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-tools '
                           'TOOLS_SHARD=${{ matrix.shard }}/' + str(count), commands)
             self.assertIn("if: needs.scope.outputs.run_tools == 'true'", job)
 

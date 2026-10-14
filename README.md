@@ -129,7 +129,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 18</summary>
+<summary>Implemented: 19</summary>
+
+- [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
 
 - [x] [Build tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): the Makefile selects, splits and keys the checks with Mojo programs that it builds once [#767](https://github.com/SethKitchen/ThreeMojo/issues/767)
 

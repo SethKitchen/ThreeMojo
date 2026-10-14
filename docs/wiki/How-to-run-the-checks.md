@@ -178,6 +178,12 @@ make check-cpu TOOL_MOJO=/path/to/mojo
 
 A change to a tool, or to a file that a tool imports, selects the full CI audit. The first `make` on a new machine builds the tools, which takes about ten seconds.
 
+Each CI job runs the planner, `tools/ci_scope.mojo`, through `tools/tool.sh` too. The planner selects the checks, runs each `make` target with the selected file lists, and checks the job results at the end. To see what CI selects for your branch, run:
+
+```bash
+sh tools/tool.sh .venv/bin/mojo ci_scope plan --base origin/main
+```
+
 ## Measure the examples
 
 ```bash
