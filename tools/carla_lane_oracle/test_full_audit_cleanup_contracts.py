@@ -29,6 +29,20 @@ import source_contracts as source
 import sum2_guard_contracts as guard
 from test_optional_runtime_contracts import replace_token_fragment
 
+# Complete consumer-first commands measured approximately 392/429/281/596
+# seconds on the reviewed current graph. Keep all faster routes at 120 seconds.
+_CONSUMER_FIRST_SLOW_TIMEOUTS = {
+    'sum2_guard_contracts': 600,
+    'sampled-spec': 600,
+    'test_accepted_successor_contracts': 600,
+    'test_production_inventory_paths': 900,
+}
+
+
+def _consumer_first_timeout(route):
+    return _CONSUMER_FIRST_SLOW_TIMEOUTS.get(route, 120)
+
+
 ROOT = Path(__file__).resolve().parents[2]
 LANE = 'extensions/carla/lane_refinement.mojo'
 CURVE = 'extensions/carla/curve_bounds.mojo'
@@ -412,6 +426,79 @@ class NativeDependencyInventoryBatching(unittest.TestCase):
             traversal.assert_not_called()
 
 
+class StandaloneTypedAdmissionControls(unittest.TestCase):
+    def setUp(self):
+        self.root = fixtures.copy_current_root(self, ROOT)
+        self.path = 'extensions/carla/polynomial.mojo'
+        self.raw = (self.root / self.path).read_bytes()
+        self.text = self.raw.decode('utf-8')
+        self.assertTrue(cleanup.typed_boundary.is_current(self.path, self.raw))
+        self.expected = cleanup.typed_boundary.historical_source(self.path, self.text)
+        self.assertNotEqual(self.text, self.expected)
+
+    def calls(self):
+        return (
+            ('historical_text', lambda: source.historical_text(self.root, self.path, self.text), self.expected),
+            ('historical_bytes', lambda: source.historical_bytes(self.root, self.path, self.raw), self.expected.encode('utf-8')),
+        )
+
+    def assert_fresh_success(self):
+        self.assertEqual((self.root / self.path).read_bytes(), self.raw)
+        for name, call, expected in self.calls():
+            with self.subTest(adapter=name):
+                self.assertEqual(call(), expected)
+
+    def test_standalone_adapters_reject_changed_cleanup_record_then_recover(self):
+        self.assert_fresh_success()
+        record = self.root / cleanup.MIGRATION
+        original = record.read_bytes()
+        changed = original + b'\n'
+        self.assertEqual(json.loads(original), json.loads(changed))
+        self.assertEqual(record.stat().st_nlink, 1)
+        try:
+            record.write_bytes(changed)
+            self.assertNotEqual(cleanup.sha(record.read_bytes()), cleanup.MIGRATION_SHA256)
+            for name, call, _ in self.calls():
+                with self.subTest(adapter=name), self.assertRaisesRegex(
+                        cleanup.ContractError, '^full-audit cleanup successor: immutable successor record changed$'):
+                    call()
+        finally:
+            record.write_bytes(original)
+        self.assertEqual(record.read_bytes(), original)
+        self.assert_fresh_success()
+
+    def test_standalone_adapters_reject_native_closure_competitor_then_recover(self):
+        self.assert_fresh_success()
+        competitor = self.root / 'std.mojo'
+        self.assertFalse(competitor.exists())
+        try:
+            competitor.write_text('def main():\n    pass\n', encoding='utf-8')
+            for name, call, _ in self.calls():
+                with self.subTest(adapter=name), self.assertRaisesRegex(
+                        cleanup.ContractError, '^full-audit cleanup successor: scaled native import closure changed$'):
+                    call()
+        finally:
+            competitor.unlink(missing_ok=True)
+        self.assertFalse(competitor.exists())
+        self.assert_fresh_success()
+
+    def test_standalone_adapters_reject_resolver_competitor_then_recover(self):
+        self.assert_fresh_success()
+        competitor = self.root / 'std.mojopkg'
+        self.assertFalse(competitor.exists())
+        try:
+            competitor.write_bytes(b'local compiled namespace competitor\n')
+            for name, call, _ in self.calls():
+                with self.subTest(adapter=name), self.assertRaisesRegex(
+                        cleanup.ContractError, '^full-audit cleanup successor: unreviewed alternate, compiled, package, symlink or std resolver surface$'):
+                    call()
+        finally:
+            competitor.unlink(missing_ok=True)
+        self.assertFalse(competitor.exists())
+        self.assert_fresh_success()
+
+
+
 class FullAuditCleanupContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -723,17 +810,19 @@ class FullAuditCleanupContracts(unittest.TestCase):
             self.assertGreaterEqual(len(observed), flip_at)
             self.assertEqual(path.read_bytes(), original)
             cleanup.verify(self.root, exact=True)
-        # The original provider mutation now meets its mandatory helper gate
-        # first. A consumed, unchanged non-helper still reaches the bound-group
+        # The provider mutation meets its mandatory typed gate first. A
+        # consumed unchanged non-typed input still reaches the bound-group
         # checkpoint, so neither refusal layer is lost to the composition.
         helper_inputs = (set(cleanup.shared_helpers.SOURCE_PATHS)
                          | set(cleanup.shared_helpers.PROVIDERS)
                          | set(cleanup.shared_helpers.TESTS))
         self.assertIn(name, helper_inputs)
-        self.assertNotIn('extensions/carla/road.mojo', helper_inputs)
+        bound_only = 'extensions/carla/curve_objective_model.mojo'
+        self.assertNotIn(bound_only, helper_inputs)
+        self.assertNotIn(bound_only, cleanup.typed_boundary.EDGES)
         for name, refusal, last in (
-                (name, 'shared-helper fixture changed', 'B'),
-                ('extensions/carla/road.mojo', 'bound input changed after consumption', 'A')):
+                (name, 'typed boundary bound input changed', 'B'),
+                (bound_only, 'bound input changed after consumption', 'A')):
             path = self.root/name
             original = path.read_bytes()
             self.assertIn(name, self.record['dependency_inventory'])
@@ -757,7 +846,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
             self.assertIn('B', observed)
             self.assertEqual(observed[-1], last)
             if last == 'B':
-                self.assertNotIn('A', observed, 'helper refusal must precede the bound group')
+                self.assertNotIn('A', observed, 'typed refusal must precede the bound group')
             self.assertEqual(path.read_bytes(), original)
             cleanup.verify(self.root, exact=True)
         broken = self.current.replace('if center_work >= 0:', 'if center_work > 0:', 1)
@@ -892,8 +981,10 @@ class FullAuditCleanupContracts(unittest.TestCase):
             with patch.object(Path, 'read_text', lambda p, *a, **k:
                               supplied if p == path else read(p, *a, **k)):
                 self.reject_current()
-                for contract in (selector, singleton):
-                    with self.assertRaisesRegex(ValueError, 'text/bytes disagree'):
+                for contract, diagnostic in (
+                        (selector, '^rounded LINE selector contract: consumer lane source text/bytes disagree$'),
+                        (singleton, 'supplied and physical source views differ')):
+                    with self.assertRaisesRegex(ValueError, diagnostic):
                         contract.verify_premises(self.root)
         cleanup.verify(self.root, exact=True)
 
@@ -995,8 +1086,16 @@ class FullAuditCleanupContracts(unittest.TestCase):
             for root in (self.root, include):
                 for name in ('unconsumed_namespace/utils.mojo',
                              'unconsumed_namespace/geometry.mojo'):
-                    with self.subTest(root=str(root), positive=name), physical_change(root, name, b'# unrelated qualified leaf\n'):
+                    # Staged Mojo files must retain a maintained source
+                    # coordinate even when their qualified leaf is unrelated.
+                    original = (physical_change(self.root, name, b'# maintained unrelated leaf\n')
+                                if root == include else nullcontext())
+                    with self.subTest(root=str(root), positive=name), original, physical_change(root, name, b'# unrelated qualified leaf\n'):
                         cleanup.verify(self.root, include_roots=(include,))
+                    if root == include:
+                        with physical_change(include, name, b'# absent source coordinate\n'):
+                            with self.assertRaisesRegex(cleanup.ContractError, 'unmaintained include source coordinate'):
+                                cleanup.verify(self.root, include_roots=(include,))
                 for name in ('tests/math.mojo', 'bench/extensions.mojopkg',
                              'math.mojoc', 'math.mojopkg', 'tests/math.mojoc',
                              'tests/math.mojopkg', 'bench/extensions.mojoc',
@@ -1527,7 +1626,8 @@ print('consumer-first accepted: ' + route)
                 with self.subTest(mode=mode, first_consumer=route):
                     result = subprocess.run([sys.executable, *mode, '-B', '-c', command,
                                              str(self.root), route], cwd=self.root,
-                                            capture_output=True, text=True, timeout=120)
+                                            capture_output=True, text=True,
+                                            timeout=_consumer_first_timeout(route))
                     self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
                     self.assertIn('consumer-first accepted: ' + route, result.stdout)
 
@@ -1562,9 +1662,11 @@ print('consumer-first accepted: ' + route)
             if sys._getframe(1).f_code is selector.verify_premises.__code__:
                 declarations.append((name, text))
             return declaration(text, name, owner)
+        @wraps(require)
         def checked(value, message):
             checks.append(message)
             return require(value, message)
+        @wraps(observe)
         def observed(root):
             observations.append(root)
             return observe(root)
@@ -1582,7 +1684,7 @@ print('consumer-first accepted: ' + route)
         self.assertEqual(sum(name == '_refine_lane_certificate' for name, _ in declarations), 3)
         for root, kwargs in admissions:
             self.assertEqual(root, self.root)
-            self.assertEqual(kwargs, {'_expected_lane_raw': self.current.encode()})
+            self.assertEqual(kwargs, {'_expected_lane_raw': (self.root/LANE).read_bytes()})
 
     def test_selector_projection_expected_bytes_constraint_and_initial_aba(self):
         from functools import wraps
@@ -1605,8 +1707,11 @@ print('consumer-first accepted: ' + route)
         def changed(path, *args, **kwargs):
             result = read(path, *args, **kwargs)
             caller = sys._getframe(1)
-            if path == self.root/LANE and (caller.f_code is cleanup.verify.__code__
-                    or caller.f_code.co_name == '<dictcomp>' and caller.f_back.f_code is cleanup.verify.__code__):
+            gate = (caller if caller.f_code is cleanup.verify.__code__ else caller.f_back
+                    if caller.f_code.co_name == '<dictcomp>' else None)
+            if (path == self.root/LANE and gate is not None
+                    and gate.f_code is cleanup.verify.__code__
+                    and gate.f_locals.get('_expected_lane_raw') is not None):
                 consumed.append('B')
                 return changed_raw
             return result
@@ -1668,12 +1773,19 @@ print('consumer-first accepted: ' + route)
         before = self.item['before_source']
         for broken in (False, True):
             observations, admissions = [], []
-            def observed(root):
-                observations.append(root)
-                if len(observations) == 1:
-                    # A historical first read can precede a fresh current read.
-                    return before, before.encode()
-                return observe(root)
+            read_text, read_bytes = Path.read_text, Path.read_bytes
+            def observed_text(path, *args, **kwargs):
+                if path == self.root/LANE and sys._getframe(1).f_code is observe.__code__:
+                    observations.append(self.root)
+                    if len(observations) == 1:
+                        # A historical first read can precede a fresh current read.
+                        return before
+                return read_text(path, *args, **kwargs)
+            def observed_bytes(path, *args, **kwargs):
+                if (path == self.root/LANE and sys._getframe(1).f_code is observe.__code__
+                        and len(observations) == 1):
+                    return before.encode()
+                return read_bytes(path, *args, **kwargs)
             @wraps(project)
             def projected(*args, **kwargs):
                 text, road = project(*args, **kwargs)
@@ -1681,7 +1793,8 @@ print('consumer-first accepted: ' + route)
                 if broken:
                     text = text.replace('from extensions.carla.curve_sum2 import', 'from unreviewed_sum2 import', 1)
                 return text, road
-            with self.subTest(broken_scope=broken), patch.object(selector, '_lane_observation', observed), \
+            with self.subTest(broken_scope=broken), patch.object(Path, 'read_text', observed_text), \
+                    patch.object(Path, 'read_bytes', observed_bytes), \
                     patch.object(cleanup, '_reviewed_lane_observation', projected):
                 if broken:
                     with self.assertRaisesRegex(ValueError, 'consumer import scope changed'):
@@ -1826,9 +1939,10 @@ print('consumer-first accepted: ' + route)
                 def changed(path, *args, **kwargs):
                     text = read(path, *args, **kwargs)
                     if path == self.root/name and sys._getframe(1).f_code is selector.verify_premises.__code__:
-                        # Road import scope precedes projection and stays unchanged.
+                        # Target the retained declaration read, after its physical raw read.
                         caller = sys._getframe(1)
-                        if caller.f_locals.get('lane_predecessor') is not None:
+                        if (caller.f_locals.get('lane_predecessor') is not None
+                                and caller.f_locals.get('physical') == path):
                             supplied.append(text)
                             return text + ('\ndef unreviewed_view():\n    pass\n' if disagree else '\n# Supplied-only view.\n')
                     return text
@@ -1846,7 +1960,8 @@ print('consumer-first accepted: ' + route)
                     else:
                         selector.verify_premises(self.root)
                 self.assertEqual(supplied, [physical_text])
-                self.assertEqual(parsed, [] if disagree else [physical_text])
+                expected = cleanup.typed_boundary.historical_source(name, physical_text)
+                self.assertEqual(parsed, [] if disagree else [expected])
 
     def test_selector_projection_error_families_for_capture_retained_and_final_reads(self):
         from functools import wraps
@@ -1970,6 +2085,7 @@ print('consumer-first accepted: ' + route)
             with physical_change(self.root, LANE, changed), self.assertRaises(ValueError):
                 selector.verify_premises(self.root)
         observe, calls = selector._lane_observation, []
+        @wraps(observe)
         def observed(root):
             calls.append(root)
             if len(calls) == 2:
@@ -2001,9 +2117,14 @@ print('consumer-first accepted: ' + route)
             selector.verify_premises(self.root)
             with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as directory:
                 include = Path(directory)
-                (include/'std.mojo').write_text('# Resolver competitor.\n')
-                with self.assertRaisesRegex(cleanup.ContractError, 'resolver surface'):
+                # A compiled competitor reaches the resolver check without
+                # first inventing an unmaintained staged Mojo coordinate.
+                (include/'std.mojopkg').write_text('# Resolver competitor.\n')
+                with self.assertRaises(cleanup.ContractError) as caught:
                     cleanup.verify(self.root, include_roots=(include,))
+                self.assertIs(type(caught.exception), cleanup.ContractError)
+                self.assertEqual(str(caught.exception),
+                                 'full-audit cleanup successor: unreviewed include resolver surface')
             self.assertEqual(cleanup.verify(self.root, exact=True), self.record)
             self.assertIn(cleanup.MIGRATION, cleanup.proof_bindings(self.root))
         self.assertEqual([root for root, _ in admissions[:4]], [self.root, other, other, self.root])
@@ -2020,6 +2141,7 @@ print('consumer-first accepted: ' + route)
         from concurrent.futures import ThreadPoolExecutor
         from functools import wraps
         other = fixtures.copy_current_root(self, ROOT)
+        original_raw = (self.root/LANE).read_bytes()
         original, admissions, nested = cleanup.verify, [], []
         @wraps(original)
         def admitted(root, **kwargs):
@@ -2031,11 +2153,26 @@ print('consumer-first accepted: ' + route)
             self.assertEqual(selector.verify_premises(self.root), selector.read_record(self.root))
         self.assertEqual(admissions, [other, self.root])
         self.assertEqual(nested, [selector.read_record(other)])
-        changed = (other/LANE).read_bytes() + b'\n# This root owns distinct stable bytes.\n'
-        with physical_change(other, LANE, changed), ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(selector.verify_premises, (self.root, other)))
         self.assertEqual(results, [selector.read_record(self.root), selector.read_record(other)])
-        self.assertEqual((self.root/LANE).read_bytes(), self.current.encode())
+        # A current typed endpoint is exact even for a stable comment-only
+        # change. Its refusal must not poison the independent concurrent root.
+        changed = (other/LANE).read_bytes() + b'\n# This root owns distinct stable bytes.\n'
+        with physical_change(other, LANE, changed), ThreadPoolExecutor(max_workers=2) as pool:
+            accepted = pool.submit(selector.verify_premises, self.root)
+            refused = pool.submit(selector.verify_premises, other)
+            self.assertEqual(accepted.result(), selector.read_record(self.root))
+            with self.assertRaises(ValueError) as caught:
+                refused.result()
+            failure = caught.exception
+            while failure.__cause__ is not None:
+                failure = failure.__cause__
+            self.assertIs(type(failure), cleanup.ContractError)
+            self.assertEqual(str(failure),
+                             'full-audit cleanup successor: unreviewed supplied successor source: ' + LANE)
+            self.assertIsNone(failure.__cause__)
+        self.assertEqual((self.root/LANE).read_bytes(), original_raw)
 
     def test_selector_projection_direct_import_forms(self):
         command = '''import importlib, sys
@@ -2435,6 +2572,7 @@ class CacheInputViewPreflight(unittest.TestCase):
     def test_preflight_registered_and_unregistered_alias_frames_block_outer_borrow(self):
         from contextlib import ExitStack
         import importlib.util
+        from types import SimpleNamespace
         def consume(view, owner):
             for registered in (False, True):
                 name = '_cache_input_fake_nested_alias_' + str(registered)
@@ -2451,6 +2589,10 @@ class CacheInputViewPreflight(unittest.TestCase):
                 with self.subTest(registered=registered), ExitStack() as stack:
                     if registered:
                         stack.enter_context(patch.dict(sys.modules, {name: alias}))
+                    # This synthetic fixture fakes qualification. Stub only the
+                    # alias scope transport, keeping its real verify owner frame.
+                    stack.enter_context(patch.object(alias, '_typed_source',
+                        SimpleNamespace(typed_admission_scope=lambda root: nullcontext())))
                     stack.enter_context(patch.object(alias, 'read_record', return_value=self.cache_record))
                     stack.enter_context(patch.object(alias, 'reverse_exact', return_value='fake historical inverse'))
                     stack.enter_context(patch.object(alias, 'inventory', nested_inventory))
@@ -2550,10 +2692,12 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                          | set(cleanup.shared_helpers.PROVIDERS)
                          | set(cleanup.shared_helpers.TESTS))
         self.assertIn(name, helper_inputs)
-        self.assertNotIn('extensions/carla/road.mojo', helper_inputs)
+        bound_only = 'extensions/carla/curve_objective_model.mojo'
+        self.assertNotIn(bound_only, helper_inputs)
+        self.assertNotIn(bound_only, cleanup.typed_boundary.EDGES)
         for name, refusal, last in (
-                (name, 'shared-helper fixture changed', 'B'),
-                ('extensions/carla/road.mojo', 'bound input changed after consumption', 'A')):
+                (name, 'typed boundary bound input changed', 'B'),
+                (bound_only, 'bound input changed after consumption', 'A')):
             path = self.root/name
             original = path.read_bytes()
             self.assertIn(name, self.record['dependency_inventory'])
@@ -2578,7 +2722,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
             self.assertIn('B', seen)
             self.assertEqual(seen[-1], last)
             if last == 'B':
-                self.assertNotIn('A', seen, 'helper refusal must precede the bound group')
+                self.assertNotIn('A', seen, 'typed refusal must precede the bound group')
             self.assertEqual(path.read_bytes(), original)
         self.assertEqual(cache.verify(self.root), self.cache_record)
 
@@ -2586,7 +2730,8 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        prior = seed.score_family_predecessor_source(original.decode('utf-8')).encode('utf-8')
+        historical = cleanup.typed_boundary.historical_source(seed.MODULE, original.decode('utf-8'))
+        prior = seed.score_family_predecessor_source(historical).encode('utf-8')
         mutants = (('prior', prior), ('comment', original + b'\n# Retained B.\n'),
                    ('crlf', original.replace(b'\n', b'\r\n')))
         observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_family_predecessor_source
@@ -2850,7 +2995,8 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                          cleanup.shared_helpers.AFTER_SHA256[xml])
         expected_paths = {seed.MODULE, *self.seed_record['unchanged_inputs'], utf8}
         self.assertNotIn(utf8, self.seed_record['unchanged_inputs'])
-        expected_texts = [(self.root/name).read_bytes().decode('utf-8')
+        expected_texts = [cleanup.typed_boundary.historical_source(
+                              name, (self.root/name).read_bytes().decode('utf-8'))
                           for name in sorted(expected_paths)]
         self.assertCountEqual(texts, expected_texts)
         self.assertIn((self.root/utf8).read_bytes().decode('utf-8'), texts)
@@ -3104,8 +3250,10 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 initialize(view, *args, **kwargs)
                 created.append(view)
             @wraps(resolver)
-            def checked(root, paths):
-                result = resolver(root, paths)
+            def checked(root, paths, *, render_entries=None, typed_entries=None,
+                        math_entries=None):
+                result = resolver(root, paths, render_entries=render_entries,
+                                  typed_entries=typed_entries, math_entries=math_entries)
                 frame = sys._getframe(1)
                 if (root == self.root and frame.f_globals is vars(cleanup)
                         and frame.f_code.co_name == 'verify'):
@@ -3166,6 +3314,175 @@ class CacheInputViewCurrentControls(unittest.TestCase):
             self.assertEqual(alias.verify(self.root), self.cache_record)
         self.assertEqual(calls, [(False, None), (True, None)])
         self.assertEqual(len(inventories), 1)
+
+    def public_alias(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('_public_admission_lifetime_control', cache.__file__)
+        alias = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(alias)
+        return alias
+
+    def test_public_admission_factories_and_image_methods_are_closed(self):
+        with self.assertRaises(cleanup.ContractError):
+            cleanup._PublicAdmission(self.root, sys._getframe())
+        with source.typed_admission_scope(self.root) as scope:
+            self.assertIsNone(scope)
+        for name in ('_publish', 'raw', 'observe_bytes'):
+            with self.subTest(method=name), patch.object(cleanup._PublicAdmission, name, lambda *a: None):
+                with self.assertRaises(cleanup.ContractError):
+                    cleanup.executing_checker_bindings()
+        with patch.object(cleanup, '_public_admission_entries', lambda: {}):
+            with self.assertRaises(cleanup.ContractError):
+                cleanup.executing_checker_bindings()
+
+    def test_public_alias_unknown_and_wrapped_callbacks_admit_fresh(self):
+        alias = self.public_alias()
+        other = fixtures.copy_current_root(self, ROOT)
+        original, binding = alias.inventory, cleanup.executing_checker_bindings
+        calls, scopes = [], []
+        path = 'extensions/carla/polynomial.mojo'
+        text = (self.root/path).read_text(encoding='utf-8')
+        expected = cleanup.typed_boundary.historical_source(path, text)
+        @wraps(binding)
+        def admitted(*args, **kwargs):
+            frame = sys._getframe(1)
+            if frame.f_globals is vars(cleanup) and frame.f_code.co_name == 'verify' and 'executing' not in frame.f_locals:
+                calls.append(frame.f_locals['exact'])
+            return binding(*args, **kwargs)
+        @wraps(source.historical_text)
+        def decorated_callback():
+            return source.historical_text(self.root, path, text)
+        adapter = source.historical_text
+        @wraps(adapter)
+        def installed_adapter(*args, **kwargs):
+            return adapter(*args, **kwargs)
+        @wraps(original)
+        def observed(*args, **kwargs):
+            scopes.append(kwargs['_admission'])
+            result = original(*args, **kwargs)
+            self.assertEqual(source.historical_text(self.root, path, text), expected)
+            self.assertEqual(decorated_callback(), expected)
+            with patch.object(source, 'historical_text', installed_adapter):
+                self.assertEqual(source.historical_text(self.root, path, text), expected)
+            self.assertEqual(cleanup.verify(other, exact=True), cleanup.read_record(other))
+            return result
+        with patch.object(alias, 'inventory', observed), patch.object(cleanup, 'executing_checker_bindings', admitted):
+            self.assertEqual(alias.verify(self.root), self.cache_record)
+        self.assertEqual(calls, [False, True, True, True, True, True])
+        self.assertEqual(len(scopes), 1)
+        scope = scopes[0]
+        self.assertEqual(scope._state, 'closed')
+        self.assertFalse(scope._raw)
+        self.assertIsNone(scope._owner_frame)
+        for call in (lambda: copy.copy(scope), lambda: copy.deepcopy(scope),
+                     lambda: scope.raw(scope._owner, self.root, path)):
+            with self.assertRaises(cleanup.ContractError):
+                call()
+
+    def test_public_alias_rejects_late_wrapped_shared_checkpoint(self):
+        alias = self.public_alias()
+        original, checkpoint = alias.inventory, cleanup._CacheInputs.checkpoint
+        replacement = None
+        @wraps(checkpoint)
+        def omitted(*args, **kwargs):
+            return None
+        @wraps(original)
+        def observed(*args, **kwargs):
+            nonlocal replacement
+            result = original(*args, **kwargs)
+            replacement = patch.object(cleanup._CacheInputs, 'checkpoint', omitted)
+            replacement.start()
+            return result
+        try:
+            with patch.object(alias, 'inventory', observed), self.assertRaisesRegex(
+                    cleanup.ContractError, 'public admission shared method changed: checkpoint'):
+                alias.verify(self.root)
+        finally:
+            if replacement is not None:
+                replacement.stop()
+        self.assertEqual(alias.verify(self.root), self.cache_record)
+
+    def test_public_alias_inventory_bridge_is_single_invocation(self):
+        alias = self.public_alias()
+        original = alias.inventory
+        @wraps(original)
+        def replayed(*args, **kwargs):
+            original(*args, **kwargs)
+            return original(*args, **kwargs)
+        with patch.object(alias, 'inventory', replayed), self.assertRaisesRegex(
+                cleanup.ContractError, 'public inventory invocation changed'):
+            alias.verify(self.root)
+        self.assertEqual(alias.verify(self.root), self.cache_record)
+
+    def test_public_alias_caught_scope_failure_stays_failed(self):
+        alias = self.public_alias()
+        original = alias.inventory
+        @wraps(original)
+        def observed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            scope = kwargs['_admission']
+            with self.assertRaisesRegex(cleanup.ContractError, 'actual typed adapter'):
+                scope.project(self.root, 'extensions/carla/polynomial.mojo', b'')
+            return result
+        with patch.object(alias, 'inventory', observed), self.assertRaisesRegex(cleanup.ContractError, 'inactive public admission'):
+            alias.verify(self.root)
+        self.assertEqual(alias.verify(self.root), self.cache_record)
+
+    def test_public_alias_post_gate_reread_failure_poisoned_before_propagation(self):
+        alias = self.public_alias()
+        original_read, original_fail = Path.read_bytes, cleanup._operation_fail
+        observations, poisoned = [], []
+        @wraps(original_read)
+        def changed_reread(path):
+            raw = original_read(path)
+            frame = sys._getframe(1)
+            if (path == self.root/LANE and frame.f_globals is vars(cleanup)
+                    and frame.f_code.co_name == 'reviewed_text'):
+                observations.append(frame.f_locals.get('_public_admission'))
+                if len(observations) == 2:
+                    path.write_bytes(raw + b'\n')
+                    try:
+                        return original_read(path)
+                    finally:
+                        path.write_bytes(raw)
+            return raw
+        @wraps(original_fail)
+        def checked_failure(operation, error):
+            frame = sys._getframe(1)
+            if frame.f_globals is vars(cleanup) and frame.f_code.co_name == 'reviewed_text':
+                scope = frame.f_locals['_public_admission']
+                self.assertIsNotNone(scope)
+                self.assertTrue(scope._failed)
+                poisoned.append(scope)
+            return original_fail(operation, error)
+        with patch.object(Path, 'read_bytes', changed_reread), patch.object(
+                cleanup, '_operation_fail', checked_failure):
+            with self.assertRaisesRegex(alias.ContractError, 'typed successor changed during admission') as caught:
+                alias.verify(self.root)
+        self.assertIs(type(caught.exception.__cause__), cleanup.ContractError)
+        self.assertEqual(str(caught.exception.__cause__),
+                         'full-audit cleanup successor: typed successor changed during admission: ' + LANE)
+        self.assertEqual(len(observations), 2)
+        self.assertEqual(len(poisoned), 1)
+        self.assertEqual(poisoned[0]._state, 'closed')
+        self.assertEqual(alias.verify(self.root), self.cache_record)
+
+    def test_public_alias_cross_thread_use_invalidates_live_scope(self):
+        import concurrent.futures
+        alias = self.public_alias()
+        original = alias.inventory
+        @wraps(original)
+        def observed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            scope = kwargs['_admission']
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(scope.raw, scope._owner, self.root, LANE)
+                with self.assertRaisesRegex(cleanup.ContractError, 'thread or working directory changed'):
+                    future.result()
+            return result
+        with patch.object(alias, 'inventory', observed), self.assertRaisesRegex(cleanup.ContractError, 'inactive public admission'):
+            alias.verify(self.root)
+        self.assertEqual(alias.verify(self.root), self.cache_record)
 
     def test_current_image_covers_all_104_fixed_paths_and_complete_lookup_context(self):
         seed = self.seed
@@ -3281,6 +3598,249 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                 self.assertEqual(len(injected), 1)
                 self.assertEqual(injected[0], (site, len(parsed)))
                 self.assertEqual(path.read_bytes(), original)
+
+
+class PublicSeedScoreAdmissionControls(unittest.TestCase):
+    """The direct score boundary owns only its current invocation's admission."""
+
+    def setUp(self):
+        import seed_count_contracts as seed
+        self.seed = seed
+        self.root = fixtures.copy_current_root(self, ROOT)
+
+    @contextmanager
+    def admissions(self, callback=None):
+        binding = cleanup.executing_checker_bindings
+        calls, scopes = [], []
+        @wraps(binding)
+        def observed(*args, **kwargs):
+            frame = sys._getframe(1)
+            if (frame.f_globals is vars(cleanup) and frame.f_code is cleanup.verify.__code__
+                    and 'executing' not in frame.f_locals):
+                calls.append((frame.f_locals['root'], frame.f_locals['exact'],
+                              frame.f_locals['_capture']))
+                scope = frame.f_locals['_public_admission']
+                scopes.append(scope)
+                if callback is not None:
+                    callback(frame, scope, len(calls))
+            return binding(*args, **kwargs)
+        with patch.object(cleanup, 'executing_checker_bindings', observed):
+            yield calls, scopes
+
+    def test_direct_score_two_gates_are_fresh_and_closed(self):
+        with self.admissions() as (calls, scopes):
+            first = self.seed.verify_score(self.root)
+            self.assertEqual(self.seed.verify_score(self.root), first)
+        self.assertEqual(calls, [(self.root, True, None)] * 4)
+        self.assertIs(scopes[0], scopes[1])
+        self.assertIs(scopes[2], scopes[3])
+        self.assertIsNot(scopes[0], scopes[2])
+        for scope in (scopes[0], scopes[2]):
+            self.assertEqual(scope._state, 'closed')
+            self.assertFalse(scope._failed)
+            self.assertFalse(scope._raw)
+            self.assertIsNone(scope._owner_frame)
+            for action in (lambda: copy.copy(scope), lambda: copy.deepcopy(scope),
+                           lambda: scope.raw(scope._owner, self.root, self.seed.MODULE)):
+                with self.assertRaises(cleanup.ContractError):
+                    action()
+
+    def test_direct_score_malformed_ownership_refuses_before_scope(self):
+        def forbidden(*args, **kwargs):
+            self.fail('malformed ownership must refuse before scope creation')
+        cases = ({'_inputs': False}, {'_inputs': 0}, {'_inputs': ()},
+                 {'_input_owner': object()}, {'_operation': False},
+                 {'_operation': 0}, {'_operation': ()})
+        with patch.object(source, 'typed_admission_scope', forbidden):
+            for kwargs in cases:
+                with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                    self.seed.verify_score(self.root, **kwargs)
+
+    def test_direct_score_unknown_wrapped_callbacks_and_other_threads_admit_fresh(self):
+        import concurrent.futures
+        other = fixtures.copy_current_root(self, ROOT)
+        original = self.seed.verify_source
+        adapter = source.historical_text
+        path = 'extensions/carla/polynomial.mojo'
+        text = (self.root/path).read_text(encoding='utf-8')
+        expected = cleanup.typed_boundary.historical_source(path, text)
+        active = False
+        @wraps(adapter)
+        def installed_adapter(*args, **kwargs):
+            return adapter(*args, **kwargs)
+        @wraps(original)
+        def observed(*args, **kwargs):
+            nonlocal active
+            result = original(*args, **kwargs)
+            if not active:
+                active = True
+                self.assertEqual(source.historical_text(self.root, path, text), expected)
+                with patch.object(source, 'historical_text', installed_adapter):
+                    self.assertEqual(source.historical_text(self.root, path, text), expected)
+                nested = self.seed.verify_score(other)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    self.assertEqual(pool.submit(self.seed.verify_score, other).result(), nested)
+            return result
+        with patch.object(self.seed, 'verify_source', observed), self.admissions() as (calls, scopes):
+            self.seed.verify_score(self.root)
+        self.assertEqual(calls, [(root, True, None) for root in
+            (self.root, self.root, self.root, other, other, other, other, self.root)])
+        self.assertIsNone(scopes[1])
+        self.assertIsNone(scopes[2])
+        self.assertIs(scopes[0], scopes[-1])
+        self.assertIs(scopes[3], scopes[4])
+        self.assertIs(scopes[5], scopes[6])
+        self.assertEqual(len({id(scopes[index]) for index in (0, 3, 5)}), 3)
+        self.assertTrue(all(scope._state == 'closed' and not scope._failed
+                            for scope in (scopes[0], scopes[3], scopes[5])))
+
+    def test_direct_score_post_gate_restore_is_sticky(self):
+        read, fail = Path.read_bytes, cleanup._operation_fail
+        seen, poisoned = [], []
+        @wraps(read)
+        def changed(path, *args, **kwargs):
+            raw = read(path, *args, **kwargs)
+            frame = sys._getframe(1)
+            if (path == self.root/self.seed.MODULE and frame.f_globals is vars(cleanup)
+                    and frame.f_code is cleanup.reviewed_typed_text.__code__):
+                seen.append(path)
+                if len(seen) == 2:
+                    path.write_bytes(raw + b'\n')
+                    try:
+                        return read(path)
+                    finally:
+                        path.write_bytes(raw)
+            return raw
+        @wraps(fail)
+        def failed(operation, error):
+            frame = sys._getframe(1)
+            if frame.f_code is cleanup.reviewed_typed_text.__code__:
+                scope = frame.f_locals['_public_admission']
+                self.assertTrue(scope._failed)
+                poisoned.append(scope)
+            return fail(operation, error)
+        with patch.object(Path, 'read_bytes', changed), patch.object(
+                cleanup, '_operation_fail', failed), self.assertRaisesRegex(
+                    cleanup.ContractError, 'typed source changed during provenance reconstruction'):
+            self.seed.verify_score(self.root)
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(len(poisoned), 1)
+        self.assertEqual(poisoned[0]._state, 'closed')
+        self.assertTrue(poisoned[0]._failed)
+        self.assertFalse(poisoned[0]._raw)
+        self.seed.verify_score(self.root)
+
+    def test_direct_score_second_gate_keeps_first_image_and_failure(self):
+        target = self.root/cleanup.MIGRATION
+        raw = target.read_bytes()
+        map_raw = (self.root/self.seed.MODULE).read_bytes()
+        captured = []
+        def change(frame, scope, number):
+            captured.append(scope)
+            if number == 2:
+                self.assertIs(scope, captured[0])
+                self.assertEqual(scope._state, 'active')
+                self.assertEqual(scope._record_raw, raw)
+                self.assertEqual(scope._raw[self.seed.MODULE], map_raw)
+                target.write_bytes(raw + b'\n')
+        try:
+            with self.admissions(change) as (calls, scopes), self.assertRaisesRegex(
+                    cleanup.ContractError, '^full-audit cleanup successor: immutable successor record changed$'):
+                self.seed.verify_score(self.root)
+        finally:
+            target.write_bytes(raw)
+        self.assertEqual(calls, [(self.root, True, None)] * 2)
+        self.assertIs(scopes[0], scopes[1])
+        self.assertTrue(scopes[0]._failed)
+        self.assertEqual(scopes[0]._state, 'closed')
+        self.assertFalse(scopes[0]._raw)
+        self.seed.verify_score(self.root)
+
+    def test_direct_score_final_join_rechecks_source_checker_and_census(self):
+        read = Path.read_bytes
+        for relative, message in (
+                ('extensions/carla/polynomial.mojo', 'owned input changed'),
+                ('tools/carla_lane_oracle/seed_count_contracts.py', 'public consumer checker changed'),
+                ('seed_scope_late_census.mojo', 'source path inventory changed during owned verification')):
+            target = self.root/relative
+            original = read(target) if target.exists() else None
+            injected = []
+            @wraps(read)
+            def changed(path, *args, **kwargs):
+                raw = read(path, *args, **kwargs)
+                frame = sys._getframe(1)
+                if (not injected and path == self.root/self.seed.MODULE
+                        and frame.f_globals is vars(self.seed)
+                        and frame.f_code is self.seed.verify_score.__code__
+                        and 'current_raw' in frame.f_locals):
+                    target.write_bytes((original or b'') + b'\n')
+                    injected.append(True)
+                return raw
+            try:
+                with self.subTest(path=relative), patch.object(Path, 'read_bytes', changed), self.assertRaisesRegex(
+                        cleanup.ContractError, message):
+                    self.seed.verify_score(self.root)
+            finally:
+                if original is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    target.write_bytes(original)
+            self.assertEqual(injected, [True])
+        self.seed.verify_score(self.root)
+
+    def test_direct_score_caught_thread_failure_cannot_be_republished(self):
+        import concurrent.futures
+        original = self.seed.verify_source
+        captured = []
+        def capture(frame, scope, number):
+            if number == 1:
+                captured.append(scope)
+        @wraps(original)
+        def observed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            scope = captured[0]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(scope.raw, scope._owner, self.root, self.seed.MODULE)
+                with self.assertRaisesRegex(cleanup.ContractError, 'thread or working directory changed'):
+                    future.result()
+            self.assertTrue(scope._failed)
+            return result
+        with self.admissions(capture), patch.object(self.seed, 'verify_source', observed), self.assertRaisesRegex(
+                cleanup.ContractError, 'inactive public admission'):
+            self.seed.verify_score(self.root)
+        self.assertEqual(captured[0]._state, 'closed')
+        self.assertTrue(captured[0]._failed)
+        self.seed.verify_score(self.root)
+
+
+class ConsumerFirstTimeoutControls(unittest.TestCase):
+    """Only the four measured whole-consumer routes receive larger budgets."""
+
+    def test_exact_route_budgets_and_default_remain_bounded(self):
+        slow = {'sum2_guard_contracts': 600, 'sampled-spec': 600,
+                'test_accepted_successor_contracts': 600,
+                'test_production_inventory_paths': 900}
+        self.assertEqual(_CONSUMER_FIRST_SLOW_TIMEOUTS, slow)
+        routes = ('sum2_guard_contracts', 'cache_key_contracts',
+                  'seed_count_contracts', 'source_contracts', 'sampled-spec',
+                  'test_accepted_successor_contracts', 'test_production_inventory_paths')
+        for route in ('cache_key_contracts', 'seed_count_contracts', 'source_contracts',
+                      '', 'unrelated_contracts', 'sum2_guard_contracts_extra'):
+            with self.subTest(default_route=route):
+                self.assertEqual(_consumer_first_timeout(route), 120)
+        calls = []
+        def observed(command, **kwargs):
+            route = command[-1]
+            self.assertIs(type(kwargs['timeout']), int)
+            calls.append(('-O' in command, route, kwargs['timeout']))
+            return subprocess.CompletedProcess(command, 0,
+                stdout='consumer-first accepted: ' + route, stderr='')
+        case = FullAuditCleanupContracts('test_consumer_first_import_orders_normal_and_optimized')
+        case.root = ROOT
+        with patch.object(subprocess, 'run', observed):
+            case.test_consumer_first_import_orders_normal_and_optimized()
+        self.assertEqual(calls, [(optimized, route, slow.get(route, 120))
+                                for optimized in (False, True) for route in routes])
 
 if __name__ == '__main__':
     unittest.main()
