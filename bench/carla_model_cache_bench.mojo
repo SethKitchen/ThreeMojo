@@ -5,7 +5,7 @@
 
 """Compare cached vehicle spawn costs against the same source on the base.
 
-Generate the synthetic asset with `carla_model_cache_fixture.py`. Pass its
+Generate the synthetic asset with `carla_model_cache_fixture.mojo`. Pass its
 folder, an instance count, and `batch` or `incremental`. Timing covers
 ActorVisuals.sync only. Byte counts cover geometry attributes and indices,
 and decoded texture pixels including mipmaps. They exclude object overhead.

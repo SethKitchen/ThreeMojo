@@ -139,7 +139,7 @@ add unused actor nodes or paint and lamp materials.
 Generate a synthetic load-size fixture:
 
 ```sh
-python3 bench/carla_model_cache_fixture.py /tmp/carla-model-bench
+mojo run -I . bench/carla_model_cache_fixture.mojo /tmp/carla-model-bench
 .venv/bin/mojo build --Werror -I . bench/carla_model_cache_bench.mojo -o /tmp/carla-model-bench-run
 /tmp/carla-model-bench-run /tmp/carla-model-bench 32 batch
 /tmp/carla-model-bench-run /tmp/carla-model-bench 32 incremental
