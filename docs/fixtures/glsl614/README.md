@@ -29,10 +29,10 @@ The source contract is the [GLSL ES 3.00 specification](https://registry.khronos
 
 ## Footprint correction controls
 
-`footprint_axes.json` records 55 singular-value controls for exact Float32 inputs. A separate 100-digit Decimal calculation gives each major and minor axis. Verify the captured values with:
+`footprint_axes.json` records 55 singular-value controls for exact Float32 inputs. A separate calculation that rounds each step to 100 decimal digits gives each major and minor axis. Verify the captured values with:
 
 ```sh
-python3 tools/reference_texture_axes.py docs/fixtures/glsl614/footprint_axes.json
+mojo run -I . tools/reference_texture_axes.mojo docs/fixtures/glsl614/footprint_axes.json
 ```
 
 The native `test_texture_axes` suite also checks round footprints. Equal axes must keep one tap, including after axis swaps and extreme scaling.
