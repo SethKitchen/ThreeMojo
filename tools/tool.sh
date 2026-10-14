@@ -9,11 +9,11 @@
 #     tools/tool.sh MOJO NAME ARGUMENT...
 #
 # runs tools/NAME.mojo with the arguments, and builds it with the compiler
-# MOJO. The Makefile reads the tools'
-# output while it parses, many times in one run, and `mojo run` compiles
-# the tool every time. So the program is kept in .cache/tools/, under the
-# toolchain's version, and built again only when a `.mojo` file under
-# tools/ or loaders/ is newer than it. A tool must import nothing else.
+# MOJO. The Makefile reads the tools' output while it parses, many times in
+# one run, and `mojo run` compiles the tool every time. So the program is
+# kept in .cache/tools/, under the toolchain's version, and built again only
+# when a `.mojo` file under tools/ or loaders/ is newer than it. A tool must
+# import nothing else but the standard library.
 #
 # The script works from the repository root, where the Makefile runs.
 set -eu
