@@ -39823,7 +39823,9 @@ TESTS = {**HISTORICAL_TESTS, **{'tests/test_carla_junction_bounds.mojo': 'bc5871
  'tests/test_carla_road_fixed_s.mojo': '39b18125709aad7af4965198646ead78f66099f6865ccfadab897e6e5f268205',
  'tests/test_carla_support_dispatch_successor.mojo': '10a04696cef0b0f7eb3bae571ee70081b845b628c1103c645f33e1855982b1c3'}}
 COMMON_BINDING_INPUTS = {**HISTORICAL_BINDING_INPUTS, **{'tools/test_conditioned_coverage_loops.py': '633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',
- 'tools/carla_lane_oracle/test_common758_current_successor.py': '010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f'}}
+ 'tools/carla_lane_oracle/test_common758_current_successor.py': '010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',
+ 'tools/carla_lane_oracle/test_shared_helper_contracts.py': 'c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',
+ 'tools/carla_lane_oracle/test_typed_boundary_contracts.py': '7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5'}}
 CURRENT_DEPENDENCIES = {**HISTORICAL_CURRENT_DEPENDENCIES, **{'extensions/carla/geometry.mojo': '374fd1621142ec8354a29b24357503db7f45ce419cb39089b913b5c39b4e983e',
  'extensions/carla/map.mojo': 'b3862a55a54927b2a1e50186af82f64bdf145adbef5cef9f31ab19d9585749df',
  'extensions/carla/map_builder.mojo': 'f5e28830bb017e42b61d3a40f7e96711ad7aa893d121472f311e36b9a9572d0c',
@@ -40433,7 +40435,7 @@ def verify_authority():
         'EDGES_SHA256': EDGES_SHA256,
     }
     require(sha(json.dumps(current_payload, sort_keys=True, separators=(',', ':'))) ==
-            '297b55dfe6867bcc35b1dd252515446e1e7338fd233cf362cc6f0e20ce72cf30', 'executing current repair authority globals changed')
+            'c09430dd64a1d3729151567342f35746d148d1893e20571b7492584b179fe46e', 'executing current repair authority globals changed')
     require(BINDING_INPUTS == {
         **COMMON_BINDING_INPUTS,
         EXPECTATION_SUCCESSOR['path']: EXPECTATION_SUCCESSOR['after_sha256'],
@@ -40442,4 +40444,4 @@ def verify_authority():
     extension = {'BINDING_INPUTS': BINDING_INPUTS,
                  'EXPECTATION_SUCCESSOR': EXPECTATION_SUCCESSOR}
     require(sha(json.dumps(extension, sort_keys=True, separators=(',', ':'))) ==
-            'fc50877794cecf9681e424aaf17f50b3f5c46e5dc7819a5e9408547d93aef178', 'expectation successor authority changed')
+            '2097bb66bb40c060d5f7152e6b3251c907720d4b4fa163d015eb90fd7b5d9107', 'expectation successor authority changed')
