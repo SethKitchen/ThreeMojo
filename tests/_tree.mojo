@@ -6,6 +6,7 @@
 """A file tree in a temporary directory, for the tests of the project tools."""
 
 from std.collections import Set
+from std.os.path import isfile, realpath
 from std.pathlib import Path
 from std.tempfile import mkdtemp
 
@@ -80,3 +81,47 @@ struct Tree(Movable):
         """Remove the tree. A test calls it last, which also keeps the tree
         alive until the test ends."""
         _ = run_program(["rm", "-rf", self.root], 10)
+
+
+def tool_mojo() raises -> String:
+    """Return the compiler that builds the project tools, as the Makefile's
+    `TOOL_MOJO` chooses it, with an absolute path."""
+    if isfile(".venv/bin/mojo"):
+        return realpath(".venv/bin/mojo")
+    return "mojo"
+
+
+def copy_suite_runner(
+    tree: Tree, var extra: List[String] = List[String]()
+) raises:
+    """Give a project the built suite runner and the files it runs.
+
+    The runner is built once in the repository. The project gets it and its
+    sources with their times, so `tools/tool.sh` there does not build again.
+
+    Args:
+        tree: The project.
+        extra: More repository files to copy into the project's `tools/`.
+    """
+    var built = run_program(
+        ["sh", "tools/tool.sh", tool_mojo(), "--build", "run_suite"], 120
+    )
+    if built.status != 0:
+        raise Error("cannot build the suite runner: " + built.output)
+    var copy: List[String] = [
+        "cp",
+        "-p",
+        "tools/tool.sh",
+        "tools/run_suite.mojo",
+        "tools/_process.mojo",
+        "tools/_text.mojo",
+    ]
+    copy.extend(extra^)
+    _ = run_program(
+        ["mkdir", "-p", tree.root + "/tools", tree.root + "/.cache"], 10
+    )
+    copy.append(tree.root + "/tools/")
+    var copied = run_program(copy, 10)
+    if copied.status != 0:
+        raise Error("cannot copy the suite runner: " + copied.output)
+    _ = run_program(["cp", "-Rp", ".cache/tools", tree.root + "/.cache/"], 10)
