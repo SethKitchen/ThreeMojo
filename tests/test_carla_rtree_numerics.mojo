@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Finite-extreme regression cases from tools/reference_segment_geometry.py.
+"""Finite-extreme regression cases from tools/reference_segment_geometry.mojo.
 
 Expected distances use exact rational projection, independently of the
 production cross-product and expansion implementation. Inputs retain their

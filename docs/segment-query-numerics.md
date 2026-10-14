@@ -166,7 +166,7 @@ closed-interval classification for the stated finite-coordinate domain.
 
 ## Validation boundaries
 
-`tools/reference_segment_geometry.py` uses stdlib Fraction. It computes exact
+`tools/reference_segment_geometry.mojo` uses exact fractions. It computes exact
 clamped projection and exact slab intervals. It does not use the production
 cross-product formula. The native fixtures retain the Float32 input words.
 They cover finite limits, subnormals, endpoint interiors, exact boundaries,
