@@ -385,10 +385,15 @@ Those hashes identify the original files; the compact packet does not reproduce 
 - [Complete CSV summaries](image-decode-505-summary.csv): the same distributions in flat columns
 - [Normalized trials](image-decode-505-trials.csv): all 1,152 native rows, pair/order keys, output hashes, and measurement diagnostics
 - [Provenance](image-decode-505-provenance.json): input hashes, complete source inventories, generic build commands, artifact hashes, and sanitized focused logs
-- [Independent recomputation](image-decode-505-recompute.py): standard-library Python; no compiler, decoder, or native child execution
+- [Independent recomputation](../../tools/image_decode_505_recompute.mojo): a Mojo tool; no decoder or native child execution
+
+The recomputation tool replaces the original `image-decode-505-recompute.py`.
+The checksum file lists the SHA-256 of each packet file as it is now.
+The original script's SHA-256 was `471c8d6c9452966c21da15bfe75b519079dc3c4636993e47ccb8ac2e8654c70b`.
+The tool gives the same output as that script on the checked-in data, and writes byte-identical JSON and CSV with `--write`.
 
 The provenance record expands each source inventory from a baseline map plus variant-specific changes.
-The recomputation script verifies each expanded tree digest, every trial's output oracle, complete matrix coverage, and balanced variant order.
+The recomputation tool verifies each expanded tree digest, every trial's output oracle, complete matrix coverage, and balanced variant order.
 It independently recomputes every summary and checks the checked-in JSON and CSV.
 The recomputed original distributions match both original `summary.json` files exactly.
 
@@ -415,6 +420,11 @@ Ensure the commands resolve to the pinned toolchain versions.
 Disable telemetry for these checks with `export MODULAR_TELEMETRY_ENABLED=false`.
 Run from the candidate repository root.
 
+Mojo tools replace the Python scripts that made the recorded evidence.
+They write the same fixture files, PNG bytes, and record formats.
+The fixture generator records the hash of its own source, so `generator_sha256` differs from the recorded value.
+The host record names the runner in `runner_language`, where the Python runner wrote `python`.
+
 ```sh
 SOURCE="$PWD"
 BASE=51b4424ceef57fef1f8a5e787c583126f999baf5
@@ -423,12 +433,15 @@ MOJO=$(command -v mojo)
 CC=$(command -v cc)
 mkdir -p "$WORK"
 git worktree add --detach "$WORK/baseline" "$BASE"
-python3 bench/image_decode_fixture.py "$WORK/fixtures" --count 16 --alignment 4
-python3 bench/image_decode_bench.py stride   --source "$SOURCE" --destination "$WORK/stride"
-python3 bench/image_decode_bench.py build   --mojo "$MOJO" --cc "$CC" --flag=-O3   --source "baseline=$WORK/baseline" --source "dynamic=$SOURCE"   --source "stride=$WORK/stride" --revision "baseline=$BASE"   --destination "$WORK/build"
-THREEMOJO_RUSAGE_HELPER="$WORK/build/image_decode_rusage"   python3 bench/test_image_decode_bench.py
-python3 bench/image_decode_bench.py run   --build "$WORK/build/build.json" --fixtures "$WORK/fixtures"   --destination "$WORK/initial" --repetitions 3 --seed 505   --workers 1 2 4 17 --apis gltf registry
-python3 bench/image_decode_bench.py run   --build "$WORK/build/build.json" --fixtures "$WORK/fixtures"   --destination "$WORK/confirmation" --repetitions 9 --seed 1505   --workers 1 2 4 17 --apis gltf registry
+"$MOJO" build --Werror -I "$SOURCE" bench/image_decode_fixture.mojo -o "$WORK/image_decode_fixture"
+"$MOJO" build --Werror -I "$SOURCE" bench/image_decode_bench.mojo -o "$WORK/image_decode_bench"
+"$WORK/image_decode_fixture" "$WORK/fixtures" --count 16 --alignment 4
+"$WORK/image_decode_bench" stride   --source "$SOURCE" --destination "$WORK/stride"
+"$WORK/image_decode_bench" build   --mojo "$MOJO" --cc "$CC" --flag=-O3   --source "baseline=$WORK/baseline" --source "dynamic=$SOURCE"   --source "stride=$WORK/stride" --revision "baseline=$BASE"   --destination "$WORK/build"
+"$MOJO" build --Werror -I "$SOURCE" tests/test_image_decode_bench_tool.mojo -o "$WORK/test_image_decode_bench_tool"
+THREEMOJO_RUSAGE_HELPER="$WORK/build/image_decode_rusage"   "$WORK/test_image_decode_bench_tool"
+"$WORK/image_decode_bench" run   --build "$WORK/build/build.json" --fixtures "$WORK/fixtures"   --destination "$WORK/initial" --repetitions 3 --seed 505   --workers 1 2 4 17 --apis gltf registry
+"$WORK/image_decode_bench" run   --build "$WORK/build/build.json" --fixtures "$WORK/fixtures"   --destination "$WORK/confirmation" --repetitions 9 --seed 1505   --workers 1 2 4 17 --apis gltf registry
 ```
 
 Run the recorded full matrix without simultaneous native benchmarks or compilers.
@@ -439,11 +452,12 @@ Keep run order, worker counts, and both uniform controls unchanged when comparin
 Use the following command to verify the checked-in data without rerunning native code.
 
 ```sh
-python3 docs/validation/image-decode-505-recompute.py
+mojo run -I . tools/image_decode_505_recompute.mojo
 ```
 
-The script reports 1,152 trials and 64 summaries after successful verification.
+The tool reports 1,152 trials and 64 summaries after successful verification.
 Use `--write` only to regenerate the JSON and CSV from the retained normalized trials.
+Use `--directory DIR` to check a copy of the packet in another folder.
 This operation verifies data consistency; it does not rerun loaders or establish a new performance result.
 
 The following example rebuilds and runs the focused native suites with the unchanged five-second per-test gate.
