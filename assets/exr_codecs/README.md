@@ -107,7 +107,7 @@ The repeated-rule variant verifies that all CSC assignments survive subsequent m
 
 ## Regeneration
 
-Use Linux, a C++14 compiler, CMake, zlib development files, Python 3 and Node.js.
+Use Linux, a C++14 compiler, CMake, zlib development files, Mojo and Node.js.
 Run these commands from the repository root.
 Use a temporary directory outside the checkout for all downloaded and binary files.
 
@@ -174,7 +174,7 @@ g++ -std=c++14 -O3 -DNDEBUG -fPIC -shared \
   -I"$REF/openexr-build/src/lib/OpenEXR" -I"$REF/openexr-build/cmake" \
   -I"$REF/install/include/OpenEXR" -I"$REF/install/include/Imath" \
   -L"$REF/install/lib" -lImath-3_1 -Wl,-rpath,"$REF/install/lib"
-python3 assets/exr_codecs/check_dct_precision.py "$REF/dct_helpers.so" \
+mojo run -I . assets/exr_codecs/check_dct_precision.mojo "$REF/dct_helpers.so" \
   "$REF/openexr-3.1.5" assets/exr_codecs/dct-precision.json
 ```
 
