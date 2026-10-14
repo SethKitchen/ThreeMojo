@@ -21,7 +21,7 @@ Mojo fuses `a + b * c` into one rounding by default.
 """
 
 from std.ffi import external_call
-from std.math import isinf, isnan, pi
+from std.math import fma, frexp, isinf, isnan, ldexp, pi, sqrt
 
 
 def exp(x: Float64) -> Float64:
@@ -109,6 +109,118 @@ def power(x: Float64, y: Float64) -> Float64:
         The result of the C library's `pow`.
     """
     return external_call["pow", Float64](x, y)
+
+
+def log2(x: Float64) -> Float64:
+    """Return the base-2 logarithm, as the C library computes it, which is
+    what CPython's `math.log2` calls.
+
+    Args:
+        x: A positive number.
+
+    Returns:
+        The result of the C library's `log2`.
+    """
+    return external_call["log2", Float64](x)
+
+
+@no_inline
+def product(a: Float64, b: Float64) -> Float64:
+    """Return `a * b` with one rounding that never fuses with an add.
+
+    The function is not inlined, so the compiler cannot contract the
+    product and a later sum into one fused multiply-add. The result is the
+    same with and without `--fp-mode contract=off`.
+
+    Args:
+        a: The first factor.
+        b: The second factor.
+
+    Returns:
+        The rounded product.
+    """
+    return a * b
+
+
+def _power_of_two(exponent: Int) -> Float64:
+    """Return 2 to an integer power from -1074 to 1023, exactly."""
+    var result = 1.0
+    var remaining = exponent
+    while remaining > 500:
+        result *= ldexp(Float64(1), 500)
+        remaining -= 500
+    while remaining < -500:
+        result *= ldexp(Float64(1), -500)
+        remaining += 500
+    return result * ldexp(Float64(1), Int32(remaining))
+
+
+def _exponent(value: Float64) -> Int:
+    """Return the `frexp` exponent of a positive finite number."""
+    if value < ldexp(Float64(1), -1000):
+        # Mojo 1.1 frexp does not normalize a subnormal significand.
+        return Int(frexp(value * _power_of_two(512))[1]) - 512
+    return Int(frexp(value)[1])
+
+
+def hypot(x: Float64, y: Float64) -> Float64:
+    """Return the length of (x, y), as CPython 3.12 and 3.13 compute it.
+
+    CPython's `math.hypot` does not call the C library. It scales by a
+    power of two, sums the exact squares in double length, and corrects the
+    square root once. This is CPython's `vector_norm` for two coordinates.
+
+    Args:
+        x: The first coordinate.
+        y: The second coordinate.
+
+    Returns:
+        The length, with CPython's digits.
+    """
+    var coordinates: List[Float64] = [abs(x), abs(y)]
+    var largest = 0.0
+    for coordinate in coordinates:
+        if coordinate > largest:
+            largest = coordinate
+    if isinf(largest):
+        return largest
+    if isnan(x) or isnan(y):
+        return x + y
+    if largest == 0.0:
+        return largest
+    var largest_exponent = _exponent(largest)
+    if largest_exponent < -1023:
+        var smallest_normal = _power_of_two(-1022)
+        return product(
+            smallest_normal,
+            hypot(
+                coordinates[0] / smallest_normal,
+                coordinates[1] / smallest_normal,
+            ),
+        )
+    var scale = _power_of_two(-largest_exponent)
+    var csum = 1.0
+    var frac1 = 0.0
+    var frac2 = 0.0
+    for coordinate in coordinates:
+        var value = product(coordinate, scale)
+        var high = product(value, value)
+        var low = fma(value, value, -high)
+        var total = csum + high
+        var low_sum = high - (total - csum)
+        csum = total
+        frac1 += low
+        frac2 += low_sum
+    var h = sqrt(csum - 1.0 + (frac1 + frac2))
+    var high = product(-h, h)
+    var low = fma(-h, h, -high)
+    var total = csum + high
+    frac2 += high - (total - csum)
+    csum = total
+    frac1 += low
+    var correction = csum - 1.0 + (frac1 + frac2)
+    h += correction / product(2.0, h)
+    return h / scale
 
 
 def radians(degrees: Float64) -> Float64:

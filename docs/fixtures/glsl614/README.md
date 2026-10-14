@@ -4,18 +4,22 @@ These fixtures contain 150 independent Mesa GLES3 results. There are 87 unsigned
 
 ## Reproduce
 
-Use Python 3 and a system `libEGL.so.1` with software GLES3 support. No Python package is required. Run from the repository root:
+Use the pinned Mojo toolchain and the system `libEGL.so.1` and `libGLESv2.so.2` with software GLES3 support. Run from the repository root:
 
 ```sh
-python3 tools/reference_glsl614.py --verify docs/fixtures/glsl614/fixtures.json
-python3 tools/reference_glsl614.py --output out/glsl614-reference
+mojo run -I . tools/reference_glsl614.mojo --verify docs/fixtures/glsl614/fixtures.json
+mojo run -I . tools/reference_glsl614.mojo --output out/glsl614-reference
 ```
+
+`--verify` renders each recorded case again and prints `PASS` or `FAIL` for it. It changes no file. Add `--case ID` to run one case. `--output` writes the full catalog: `fixtures.json`, `shaders/`, `expected_uint32.tsv` and `expected_float32.tsv`. The tool loads the libraries through Mojo FFI. If a library is missing, the tool stops with an error that names it.
 
 The process requests a surfaceless software context. The capture used Mesa 25.0.7, llvmpipe LLVM 19.1.7, an OpenGL ES 3.2 context and shaders with `#version 300 es`. The JSON stores the complete source, uniforms, texture recipe, analytical expectations, observed values and provenance.
 
-Unsigned results are read through an RGBA32UI framebuffer as four exact UInt32 values. Python uses arbitrary-precision integers and explicit modulo 2 ** 32 arithmetic for the independent expectations. No unsigned answer passes through a float. The TSV files also record the exact little-endian output bytes.
+Unsigned results are read through an RGBA32UI framebuffer as four exact UInt32 values. The generator computes the independent expectations in 64-bit integers and reduces them modulo 2 ** 32. No unsigned answer passes through a float. The TSV files also record the exact little-endian output bytes.
 
 Gradient shaders sample an authored 16-by-8 RGBA16F texture with five mip levels. Texel `(x, y)` at level `l` is `((l + 1) / 8, x / 16, y / 8, 1)`. The reference records the filter and wrap modes for each case. Analytical sampling uses the supplied float32 gradients.
+
+An earlier Python generator recorded the committed capture, so its provenance names Python ctypes. The Mojo tool builds the same catalog. Its cases and both TSV files are identical, byte for byte. Analytical sampling calls the C library for `log2` and uses CPython's algorithm for `hypot`, so the digits agree.
 
 The fixed absolute tolerance is 0.000002. The captured maximum error is 3.86e-9. Other conforming drivers can differ in permitted LOD and filter precision.
 
@@ -42,7 +46,7 @@ The native `test_texture_axes` suite also checks round footprints. Equal axes mu
 `short_circuit.json` adds 19 exact GLES3 controls for calls in logical and conditional expressions. They cover constants, runtime flags, unsigned wrap and final loop conditions through 256 bodies. Verify them with:
 
 ```sh
-python3 tools/reference_glsl614.py --verify docs/fixtures/glsl614/short_circuit.json
+mojo run -I . tools/reference_glsl614.mojo --verify docs/fixtures/glsl614/short_circuit.json
 ```
 
 The native `test_glsl_short_circuit` suite compares 18 outputs and checks one explicit resource refusal. Its last `do` case takes 257 bodies to reach counter value 256. The controls include the final-condition case that previously incremented a counter from 65 to 66.
