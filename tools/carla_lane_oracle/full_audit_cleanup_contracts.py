@@ -143,7 +143,7 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': '99c6bc76b583780dce74ecd28a804da26c0ad4029e8b3a029c1ca2bb186dd5b1',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/conditioned_cubic_contracts.py': 'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',
@@ -152,10 +152,13 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py':
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
- 'tools/carla_lane_oracle/source_contracts.py': 'f3e419be69aed14ab6eb4af13ec50927c58b41b3081cd973f948f958eb1d471a',
+ 'tools/carla_lane_oracle/source_contracts.py': '83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
- 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'f9861f1957ecf883d625afb41acb6a4d4ac97ccc9664fb05fb0e14cea54f1327',
- 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3'}
+ 'tools/carla_lane_oracle/typed_boundary_contracts.py': 'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',
+ 'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',
+ 'tools/carla_lane_oracle/cache_key_contracts.py': '87233ebca3701e3a79b57b324afd48fcffb38b87cb3988859b6ae36bd63d919f',
+ 'tools/carla_lane_oracle/rounded_line_selector_contracts.py': 'e47ff613bc198bc5cb629940fc0bcbe3c9517a153cd8e799e65ff0215f7b12bb',
+ 'tools/carla_lane_oracle/seed_count_contracts.py': 'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -719,6 +722,20 @@ for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), cons
     _IMPORT_DEFAULTS[str(_path)] = _compiled_defaults(_raw)
 
 
+# Public scopes can be entered by a consumer imported later (or by an importlib
+# alias). Bind its reviewed code now, without importing it through a cycle.
+for _relative, _digest in DEPENDENCY_TOOL_SHA256.items():
+    _path = Path(__file__).resolve().parents[2] / _relative
+    _key = str(_path.resolve())
+    if _key not in _IMPORT_IDENTITIES:
+        _raw = _path.read_bytes()
+        require(not _path.is_symlink() and sha(_raw) == _digest,
+                'unreviewed public consumer checker bytes: ' + _relative)
+        _IMPORT_IDENTITIES[_key] = _digest
+        _IMPORT_CODE[_key] = _compiled_functions(_raw, str(_path))
+        _IMPORT_DEFAULTS[_key] = _compiled_defaults(_raw)
+
+
 def _live_function_code(value):
     seen = set()
     while hasattr(value, '__wrapped__'):
@@ -1152,6 +1169,42 @@ def _nearest_cache_verify():
     return None
 
 
+def _publish_input_image(view, snapshots, authority_raw, known, production,
+                         entries, resolver_paths, executing):
+    """Store an immutable image only after its concrete owner authenticated it."""
+    caller = sys._getframe(1)
+    require(caller.f_globals is globals()
+            and caller.f_code in (_live_function_code(_CacheInputs._publish),
+                                  _live_function_code(_PublicAdmission._publish))
+            and caller.f_locals.get('self') is view,
+            'input image publication requires its concrete publisher')
+    require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,
+            'invalid captured authority bytes')
+    image = dict(snapshots)
+    for path, raw in image.items():
+        require(type(path) is str and Path(path).as_posix() == path
+                and bool(Path(path).parts) and not Path(path).is_absolute()
+                and '..' not in Path(path).parts and type(raw) is bytes,
+                'invalid captured input bytes or path')
+    require(set(known) <= image.keys() and set(production) <= image.keys()
+            and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
+    require(not view._scaled_resolver_paths or
+            (view._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
+             and view._scaled_resolver_paths <= image.keys()),
+            'pending scaled native context differs from captured image')
+    view._raw = types.MappingProxyType(image)
+    view._record_raw = authority_raw
+    view._known = frozenset(known)
+    view._production = frozenset(production)
+    view._entries = tuple(entries)
+    view._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
+    view._resolver_paths = frozenset(resolver_paths)
+    require(not view._executing or dict(view._executing) == executing,
+            'pending checker image differs from captured execution')
+    view._executing = types.MappingProxyType(dict(executing))
+    view._state = 'active'
+
+
 class _CacheInputs:
     """One synchronous cache.verify's immutable input image, never a receipt."""
 
@@ -1213,31 +1266,8 @@ class _CacheInputs:
                 and caller.f_code is _live_function_code(verify),
                 'cache input publication requires the full gate')
         self._check_pending(root)
-        require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,
-                'invalid captured authority bytes')
-        image = dict(snapshots)
-        for path, raw in image.items():
-            require(type(path) is str and Path(path).as_posix() == path
-                    and bool(Path(path).parts) and not Path(path).is_absolute()
-                    and '..' not in Path(path).parts and type(raw) is bytes,
-                    'invalid captured input bytes or path')
-        require(set(known) <= image.keys() and set(production) <= image.keys()
-                and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
-        require(not self._scaled_resolver_paths or
-                (self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
-                 and self._scaled_resolver_paths <= image.keys()),
-                'pending scaled native context differs from captured image')
-        self._raw = types.MappingProxyType(image)
-        self._record_raw = authority_raw
-        self._known = frozenset(known)
-        self._production = frozenset(production)
-        self._entries = tuple(entries)
-        self._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
-        self._resolver_paths = frozenset(resolver_paths)
-        require(not self._executing or dict(self._executing) == executing,
-                'pending checker image differs from captured execution')
-        self._executing = types.MappingProxyType(dict(executing))
-        self._state = 'active'
+        _publish_input_image(self, snapshots, authority_raw, known, production,
+                             entries, resolver_paths, executing)
 
     def _check(self, owner, root):
         require(type(self) is _CacheInputs and self._stamp == id(self)
@@ -1359,6 +1389,330 @@ class _CacheInputs:
 
     def __reduce_ex__(self, protocol):
         raise ContractError('full-audit cleanup successor: cache input views cannot be serialized')
+
+
+# Only these explicit public entries can own a short-lived typed admission.
+# The existing dependency authority binds their complete executable sources.
+def _public_admission_entries():
+    return {'cache_key_contracts.py': ('verify',),
+            'rounded_line_selector_contracts.py': ('verify_premises',),
+            'seed_count_contracts.py': ('verify_score',)}
+
+
+
+def _public_admission_scope(root, frame):
+    caller = sys._getframe(1)
+    require(caller.f_globals is vars(source)
+            and caller.f_code is _live_function_code(source.typed_admission_scope)
+            and caller.f_back is frame,
+            'public admission requires its direct source factory')
+    return _PublicAdmission(root, frame)
+
+
+class _PublicAdmission:
+    """A live public call's fully admitted image, never an ambient PASS."""
+
+    def __init__(self, root, frame):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code is _public_admission_scope.__code__
+                and caller.f_locals.get('frame') is frame,
+                'public admission requires its direct factory')
+        filename = frame.f_globals.get('__file__')
+        require(type(filename) is str
+                and Path(filename).absolute().parent == Path(__file__).absolute().parent
+                and frame.f_code.co_name in _public_admission_entries().get(Path(filename).name, ()),
+                'unsupported public admission owner')
+        self._owner_frame = frame
+        self._owner = object()
+        self._stamp = id(self)
+        self._thread = threading.get_ident()
+        self._root = _absolute_root_text(root)
+        self._cwd = str(Path.cwd())
+        self._include_roots = ()
+        self._state = 'pending'
+        self._failed = False
+        self._raw = types.MappingProxyType({})
+        self._record_raw = None
+        self._known = self._production = frozenset()
+        self._entries = self._native_contexts = ()
+        self._resolver_paths = self._scaled_resolver_paths = frozenset()
+        self._executing = types.MappingProxyType({})
+        self._checker_raw = {}
+        self._checker_codes = {}
+        self._checker_frames = {}
+        self._inventory_frame = None
+        require(self._authenticate_frame(frame), 'unreviewed public admission owner code')
+
+    def _authenticate_frame(self, frame):
+        namespace = frame.f_globals
+        filename = namespace.get('__file__')
+        if type(filename) is not str:
+            return False
+        physical = Path(filename).absolute()
+        base = Path(__file__).absolute().parents[2]
+        if not physical.is_relative_to(base):
+            return False
+        relative = physical.relative_to(base).as_posix()
+        expected = _IMPORT_IDENTITIES.get(str(physical.resolve()))
+        if expected is None:
+            return False
+        require(physical == _SELF_PATH or DEPENDENCY_TOOL_SHA256.get(relative) == expected,
+                'public consumer checker authority changed: ' + relative)
+        raw = _regular(base, relative).read_bytes()
+        require(sha(raw) == expected, 'public admission checker changed: ' + relative)
+        previous = self._checker_raw.setdefault(relative, raw)
+        require(previous == raw, 'public admission checker changed during call: ' + relative)
+        if relative not in self._checker_codes:
+            def nested(code):
+                yield code
+                for child in code.co_consts:
+                    if type(child) is types.CodeType:
+                        yield from nested(child)
+            self._checker_codes[relative] = {
+                code.co_qualname: code for code in nested(compile(
+                    raw, filename, 'exec', dont_inherit=True, optimize=sys.flags.optimize))}
+        expected_code = self._checker_codes[relative].get(frame.f_code.co_qualname)
+        if expected_code is None or _code_identity(frame.f_code) != _code_identity(expected_code):
+            return False
+        parts = frame.f_code.co_qualname.split('.')
+        live = namespace.get(parts[0])
+        if type(live) is type and len(parts) > 1:
+            live = getattr(live, parts[1], None)
+        code = _live_function_code(live)
+        if code is frame.f_code:
+            self._checker_frames[(id(namespace), frame.f_code)] = frame
+            return True
+        # Comprehensions retain the identity of their executing parent code.
+        def contains(parent):
+            return parent is frame.f_code or any(contains(child) for child in parent.co_consts
+                if type(child) is types.CodeType)
+        return type(code) is types.CodeType and contains(code)
+
+    def __enter__(self):
+        require(sys._getframe(1) is self._owner_frame and self._state == 'pending',
+                'public admission entry requires its live owner')
+        return self
+
+    def _check_context(self, root):
+        require(_absolute_root_text(root) == self._root and str(Path.cwd()) == self._cwd
+                and self._thread == threading.get_ident(),
+                'public admission root, thread or working directory changed')
+
+    def _check(self, owner, root):
+        try:
+            require(type(self) is _PublicAdmission and self._stamp == id(self)
+                    and owner is self._owner and not self._failed
+                    and self._state in ('pending', 'active'), 'inactive public admission')
+            self._check_context(root)
+            methods = {code.co_name: code for code in
+                _IMPORT_CODE[str(_SELF_PATH)]['_PublicAdmission'].co_consts
+                if type(code) is types.CodeType}
+            for name in ('_publish', 'raw', 'observe_bytes'):
+                method = vars(_PublicAdmission).get(name)
+                require(name not in self.__dict__ and type(method) is types.FunctionType
+                        and method.__globals__ is globals()
+                        and '__wrapped__' not in method.__dict__
+                        and _code_identity(method.__code__) == _code_identity(methods[name]),
+                        'public admission image method changed: ' + name)
+            shared = {code.co_name: code for code in
+                _IMPORT_CODE[str(_SELF_PATH)]['_CacheInputs'].co_consts
+                if type(code) is types.CodeType}
+            for name in ('raw', 'observe_bytes', 'checkpoint'):
+                method = vars(_CacheInputs).get(name)
+                require(type(method) is types.FunctionType and method.__globals__ is globals()
+                        and '__wrapped__' not in method.__dict__
+                        and _code_identity(method.__code__) == _code_identity(shared[name]),
+                        'public admission shared method changed: ' + name)
+            frame = sys._getframe(1)
+            while frame is not None and frame is not self._owner_frame:
+                frame = frame.f_back
+            require(frame is self._owner_frame and frame is not None
+                    and frame.f_locals.get('_typed_admission') is self,
+                    'public admission owner is no longer active')
+            require(self._authenticate_frame(frame), 'public admission owner code changed')
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+            self.fail()
+            raise
+
+    def _check_pending(self, root):
+        self._check(self._owner, root)
+        require(self._state == 'pending' and not self._raw and self._record_raw is None,
+                'invalid pending public admission')
+        publisher = sys._getframe(1)
+        gate = publisher.f_back
+        require(publisher.f_code is _live_function_code(_PublicAdmission._publish)
+                and gate is not None and gate.f_globals is globals()
+                and gate.f_code is _live_function_code(verify)
+                and gate.f_locals.get('_public_admission') is self,
+                'public admission publication requires its complete gate')
+
+    def _publish(self, root, snapshots, authority_raw, known, production,
+                 entries, resolver_paths, executing):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code is _live_function_code(verify),
+                'public input publication requires the full gate')
+        self._check_pending(root)
+        _publish_input_image(self, snapshots, authority_raw, known, production,
+                             entries, resolver_paths, executing)
+
+    def raw(self, owner, root, path):
+        return _CacheInputs.raw(self, owner, root, path)
+
+    def observe_bytes(self, owner, root, path):
+        return _CacheInputs.observe_bytes(self, owner, root, path)
+
+
+    def _check_consumer_bindings(self):
+        for frame in tuple(self._checker_frames.values()):
+            require(self._authenticate_frame(frame), 'public consumer frame changed')
+            namespace = frame.f_globals
+            path = Path(namespace['__file__']).resolve()
+            relative = path.relative_to(_SELF_PATH.parents[2]).as_posix()
+            if relative in CHECKER_PATHS:
+                continue  # The complete gate/checkpoint checks these modules.
+            key = str(path)
+            for name, expected in _IMPORT_CODE[key].items():
+                if name.startswith('<'):
+                    continue
+                live = namespace.get(name)
+                members = ({child.co_name: child for child in expected.co_consts
+                            if type(child) is types.CodeType}
+                           if type(live) is type else {None: expected})
+                for member, code in members.items():
+                    value = getattr(live, member, None) if member else live
+                    label = relative + ':' + name + ('.' + member if member else '')
+                    _check_defaults(value, _IMPORT_DEFAULTS[key].get(
+                        name + '.' + member if member else name), label)
+                    actual = _live_function_code(value)
+                    require(actual is not None and _code_identity(actual) == _code_identity(code),
+                            'public consumer binding changed: ' + label)
+
+    def _publication_inputs(self, root, snapshots):
+        self._check(self._owner, root)
+        self._check_consumer_bindings()
+        image = dict(snapshots)
+        for path, expected in self._checker_raw.items():
+            raw = _regular(root, path).read_bytes()
+            require(raw == expected, 'public checker differs from admitted root: ' + path)
+            require(image.setdefault(path, raw) == raw, 'public checker observation changed: ' + path)
+        if self._state == 'active':
+            for path, raw in image.items():
+                require(self._raw.get(path) == raw or
+                        (path not in self._raw and self._checker_raw.get(path) == raw),
+                        'public input changed between admissions: ' + path)
+        return image
+
+    def project(self, root, path, raw):
+        try:
+            self._check(self._owner, root)
+            caller = sys._getframe(1)
+            require(caller.f_globals is globals()
+                    and caller.f_code is _live_function_code(reviewed_typed_text),
+                    'public projection requires its actual typed adapter')
+            require(self._state == 'active' and self._raw.get(path) == raw,
+                    'typed source differs from public admission: ' + path)
+            # A semantic admission is not an exact endpoint admission by itself.
+            for name in SOURCE_PATHS:
+                require(sha(_historical_typed_text(name, self._raw[name].decode('utf-8')))
+                        == AFTER_SHA256[name], 'unreviewed exact public endpoint: ' + name)
+            typed_boundary.verify_authority()
+            conditioned_cubic.verify_authority()
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+            self.fail()
+            raise
+
+    def fail(self):
+        self._failed = True
+
+    def __exit__(self, kind, error, traceback):
+        try:
+            require(sys._getframe(1) is self._owner_frame,
+                    'public admission exit requires its live owner')
+            if error is not None:
+                self.fail()
+            if kind is None:
+                self._check(self._owner, Path(self._root))
+                if self._state == 'active':
+                    self._check_consumer_bindings()
+                    for frame in tuple(self._checker_frames.values()):
+                        require(self._authenticate_frame(frame),
+                                'public admission consumer code changed')
+                    for path, raw in self._checker_raw.items():
+                        require(_regular(Path(self._root), path).read_bytes() == raw,
+                                'public consumer checker changed at exit: ' + path)
+                    _CacheInputs.checkpoint(self, self._owner, Path(self._root))
+                    self._check(self._owner, Path(self._root))
+        finally:
+            self._state = 'closed'
+            self._raw = types.MappingProxyType({})
+            self._record_raw = None
+            self._checker_raw.clear()
+            self._checker_codes.clear()
+            self._checker_frames.clear()
+            self._owner_frame = None
+            self._inventory_frame = None
+        return False
+
+    def __copy__(self):
+        raise ContractError('full-audit cleanup successor: public admissions cannot be copied')
+
+    def __deepcopy__(self, memo):
+        return self.__copy__()
+
+    def __reduce_ex__(self, protocol):
+        return self.__copy__()
+
+
+def _cache_inventory_admission_frame(frame, scope):
+    filename = frame.f_globals.get('__file__')
+    valid = (type(filename) is str and Path(filename).absolute() ==
+            Path(__file__).absolute().with_name('cache_key_contracts.py')
+            and frame.f_code is _live_function_code(frame.f_globals.get('inventory'))
+            and frame.f_locals.get('_admission') is scope
+            and scope._authenticate_frame(frame))
+    if valid:
+        if scope._inventory_frame is None:
+            scope._inventory_frame = frame
+        elif scope._inventory_frame is not frame:
+            scope.fail()
+            raise ContractError('full-audit cleanup successor: public inventory invocation changed')
+    return valid
+
+
+def _public_admission_for(root, *, publication=False):
+    """Find an explicitly entered owner through authenticated callsites only."""
+    frames = []
+    frame = sys._getframe(1)
+    while frame is not None:
+        scope = frame.f_locals.get('_typed_admission')
+        borrowed = frame.f_locals.get('_admission')
+        bridge = (type(borrowed) is _PublicAdmission
+                  and _cache_inventory_admission_frame(frame, borrowed))
+        if bridge:
+            scope = borrowed
+        if type(scope) is _PublicAdmission and (scope._owner_frame is frame or bridge):
+            try:
+                wrappers = set()
+                for call in frames:
+                    if publication and call.f_code in wrappers:
+                        wrappers.remove(call.f_code)
+                        continue
+                    if not scope._authenticate_frame(call):
+                        return None
+                    candidate = call.f_globals.get(call.f_code.co_name)
+                    while type(candidate) is types.FunctionType and hasattr(candidate, '__wrapped__'):
+                        wrappers.add(candidate.__code__)
+                        candidate = candidate.__wrapped__
+                scope._check(scope._owner, root)
+                return scope
+            except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+                scope.fail()
+                raise
+        frames.append(frame)
+        frame = frame.f_back
+    return None
 
 
 class _OperationCoherenceError(ContractError):
@@ -2918,7 +3272,16 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
                 root, path, _regular(root, path).read_bytes(), _operation=_operation)
             require(type(raw) is bytes, 'typed source is not physical bytes: ' + path)
             image[path] = raw
-        typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
+        if (type(_operation) is _InvariantInputs
+                and _operation._kind == 'generated_receipt'
+                and _operation._state == 'active' and not _operation._capturing):
+            # Initial publication admitted this entire immutable source image.
+            # Every physical read above still joins it through _observe_bytes;
+            # authenticate live authority without replaying source semantics.
+            typed_boundary.verify_authority()
+            conditioned_cubic.verify_authority()
+        else:
+            typed_boundary.verify_sources({path: raw.decode('utf-8') for path, raw in image.items()})
         leaves = ('tools/carla_lane_oracle/typed_boundary_contracts.py',
                   'tools/carla_lane_oracle/conditioned_cubic_contracts.py')
         conditioned_inputs = {}
@@ -2927,7 +3290,7 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
                 edge = typed_boundary.edge(path)
                 require(edge['before_sha256'] == historical_digest,
                         'typed input misses fixed conditioned witness/provider: ' + path)
-                # verify_sources above reconstructed this complete predecessor.
+                # The semantic admission reconstructed this complete predecessor.
                 # Receipts bind current formatted bytes, not the old witness SHA.
                 conditioned_inputs[path] = edge['after_sha256']
             else:
@@ -2958,7 +3321,10 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
     edge = typed_boundary.EDGES.get(path)
     if edge is None:
         return text
+    _public_admission = None
     try:
+        if _inputs is None and _operation is None:
+            _public_admission = _public_admission_for(root)
         if _inputs is not None:
             require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs),
                     'invalid typed source owner')
@@ -2986,7 +3352,10 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
         if _inputs is not None:
             require(_inputs.raw(_input_owner, root, path) == raw, 'typed owner image changed: ' + path)
         elif _operation is None:
-            verify(root, exact=True)
+            if _public_admission is None or _public_admission._state == 'pending':
+                verify(root, exact=True)
+            if _public_admission is not None:
+                _public_admission.project(root, path, raw)
         else:
             _operation_record(_operation, root, exact=True)
         require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
@@ -2994,12 +3363,15 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 'typed source changed during provenance reconstruction: ' + path)
         return _historical_typed_text(path, physical_text)
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        if _public_admission is not None:
+            _public_admission.fail()
         _operation_fail(_operation, error)
 
 
 def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None, _expected_sources=None):
     """Check actual complete current endpoints and all premises without caches."""
     root = Path(root)
+    _public_admission = _public_admission_for(root, publication=True) if include_roots == () else None
     try:
         if _capture is not None:
             generated = type(_capture) is _InvariantInputs and _capture._kind == 'generated_receipt'
@@ -3033,12 +3405,15 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             _operation=_capture if type(_capture) is _InvariantInputs else None)
         for path in SOURCE_PATHS:
             raw = snapshots[path]
-            text = _historical_typed_text(path, _physical_text(raw))
+            # Exact provenance retains physical line endings. Universal-newline
+            # decoding belongs only to the separate semantic source view.
+            exact_text = _historical_typed_text(path, raw.decode('utf-8'))
+            text = _physical_text(exact_text.encode('utf-8'))
             supplied_view = (root / path).read_text(encoding='utf-8')
             require(source.token_sha256(supplied_view) == source.token_sha256(_physical_text(raw)),
                     'supplied and physical source views differ: ' + path)
             item = record['sources'][path]
-            require((not exact or sha(text) == AFTER_SHA256[path])
+            require((not exact or sha(exact_text) == AFTER_SHA256[path])
                     and source.token_sha256(text) == item['after_token_sha256']
                     and source.token_sha256(text) == item['after_token_sha256'],
                     'unreviewed complete live endpoint: ' + path)
@@ -3154,8 +3529,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                 require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
-        production = set() if _capture is not None else None
-        observed_inventory = (inventory(root, _snapshots=snapshots) if _capture is None else
+        production = set() if _capture is not None or _public_admission is not None else None
+        observed_inventory = (inventory(root, _snapshots=snapshots) if production is None else
                               inventory(root, _snapshots=snapshots, _production=production))
         expected_inventory = dict(record['inventory'])
         if station_bindings:
@@ -3212,10 +3587,22 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             else:
                 _capture._publish(root, snapshots, authority_raw, known, production, entries,
                                   resolver_paths, executing)
+        if _public_admission is not None:
+            public_image = _public_admission._publication_inputs(root, snapshots)
+            if _public_admission._state == 'pending':
+                if scaled_bindings:
+                    _public_admission._scaled_resolver_paths = frozenset(
+                        path for path in scaled_bindings if path.endswith('.mojo'))
+                _public_admission._publish(root, public_image, authority_raw, known,
+                    production, entries, resolver_paths, executing)
         return record
     except ContractError:
+        if _public_admission is not None:
+            _public_admission.fail()
         raise
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, SyntaxError) as error:
+        if _public_admission is not None:
+            _public_admission.fail()
         raise ContractError('full-audit cleanup successor: malformed or unreadable live input') from error
 
 
@@ -3233,15 +3620,35 @@ def reviewed_text(root, path, text=None, *, _operation=None):
     Historical composed fixtures still face their original consumer checks.
     Only a successor projection requires and grants complete live admission.
     """
-    path = str(path)
-    if text is None:
-        text = _observe_text(root, path, _regular(root, path).read_text(encoding='utf-8'),
-                             _operation=_operation, mode='physical')
-    text = reviewed_typed_text(root, path, text, _operation=_operation)
-    if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
-        return text
-    require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied successor source: ' + path)
-    return predecessor_source(root, path, _operation=_operation)
+    _public_admission = None
+    try:
+        if _operation is None:
+            _public_admission = _public_admission_for(root)
+        path = str(path)
+        if text is None:
+            text = _observe_text(root, path, _regular(root, path).read_text(encoding='utf-8'),
+                                 _operation=_operation, mode='physical')
+        if path in SOURCE_PATHS and typed_boundary.is_current(path, text):
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+            require(typed_boundary.is_current(path, raw)
+                    and source.token_sha256(text) == source.token_sha256(_physical_text(raw)),
+                    'supplied typed successor differs from physical input: ' + path)
+            record = (verify(root) if _operation is None else _operation_record(_operation, root))
+            require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                   _operation=_operation) == raw,
+                    'typed successor changed during admission: ' + path)
+            item = record['sources'][path]
+            return reverse_exact(path, item['after_source'], item)
+        text = reviewed_typed_text(root, path, text, _operation=_operation)
+        if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
+            return text
+        require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied successor source: ' + path)
+        return predecessor_source(root, path, _operation=_operation)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        if _public_admission is not None:
+            _public_admission.fail()
+        _operation_fail(_operation, error)
+
 
 
 def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
