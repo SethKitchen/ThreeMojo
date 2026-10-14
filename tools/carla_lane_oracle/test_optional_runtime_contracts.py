@@ -484,15 +484,26 @@ class OptionalRuntimeContracts(unittest.TestCase):
                 self.assertEqual(helper(prefix + original), helper(original))
         with patch.object(Path, 'read_text',
                 lambda p, *a, **k: prefix + original if p == path else read(p, *a, **k)):
-            self.assertEqual(optional.verify(ROOT)['status'], 'PASS')
-            with self.assertRaises(cleanup._OperationCoherenceError) as raised:
-                guards.verify(ROOT)
+            self.assertEqual(optional.verify_semantics(ROOT)['status'], 'PASS')
             message = ('full-audit cleanup successor: consumed operation text changed: '
                        'extensions/carla/lane_refinement.mojo')
-            self.assertIs(type(raised.exception), cleanup._OperationCoherenceError)
-            self.assertEqual(str(raised.exception), message)
-            self.assertIs(type(raised.exception.__cause__), cleanup.ContractError)
-            self.assertEqual(str(raised.exception.__cause__), message)
+            # The current Map source gate consumes the complete lane image.
+            # Both public wrappers must preserve that exact coherence cause.
+            for verifier, wrapped in (
+                    (optional.verify, 'runtime source dependency changed [optional_runtime]: '
+                     'extensions/carla/map.mojo (' + message + ')'),
+                    (guards.verify, 'Sum2 complete guarded caller changed or routing changed: '
+                     'map (' + message + ')')):
+                with self.subTest(verifier=verifier.__module__):
+                    with self.assertRaises(ValueError) as raised:
+                        verifier(ROOT)
+                    self.assertIs(type(raised.exception), ValueError)
+                    self.assertEqual(str(raised.exception), wrapped)
+                    cause = raised.exception.__cause__
+                    self.assertIs(type(cause), cleanup._OperationCoherenceError)
+                    self.assertEqual(str(cause), message)
+                    self.assertIs(type(cause.__cause__), cleanup.ContractError)
+                    self.assertEqual(str(cause.__cause__), message)
 
     def test_physical_inert_comment_preserves_semantics_but_not_exact_admission(self):
         root = physical_cleanup_fixture(self, self.cleanup_record)
