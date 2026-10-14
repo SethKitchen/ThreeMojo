@@ -87,11 +87,13 @@ def units(directory, name, python=sys.executable):
 
 
 def shard(text):
-    """Parse I/N with 1 <= I <= N."""
+    """Parse canonical I/N with 1 <= I <= N."""
     try:
         index, count = (int(part) for part in text.split('/'))
     except ValueError:
         raise argparse.ArgumentTypeError('--shard must be I/N') from None
+    if text != f'{index}/{count}':
+        raise argparse.ArgumentTypeError('--shard must be canonical I/N')
     if not 1 <= index <= count:
         raise argparse.ArgumentTypeError('--shard must be I/N with 1 <= I <= N')
     return index, count
