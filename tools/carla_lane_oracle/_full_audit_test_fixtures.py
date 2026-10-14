@@ -66,7 +66,8 @@ def copy_current_root(case, source, *, destination=None):
         case.addCleanup(directory.cleanup)
         destination = Path(directory.name)
     destination = Path(destination)
-    paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
+    paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.DEPENDENCY_TOOL_SHA256,
+             *cleanup.SOURCE_PATHS}
     # The accepted-successor consumer also binds this proof document.
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
     # Supplemental witness-format proof inputs are physically copied too.
