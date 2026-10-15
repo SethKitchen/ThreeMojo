@@ -150,6 +150,9 @@ def run_program(
             + String(timeout)
             + " & s=$!\n"
             + '  wait "$s"\n'
+            # Once the limit is reached, the timer must finish its kill and
+            # its marker even when the main shell sees the kill and stops it.
+            + "  trap '' TERM\n"
             + '  kill -KILL "$pid" 2>/dev/null && : >"$out.timeout"\n'
             # The timer must not hold the pipe that returns the status.
             + ") </dev/null >/dev/null 2>&1 &\n"
