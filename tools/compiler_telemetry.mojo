@@ -22,7 +22,7 @@ group, and the tool exits with the compiler's shell status.
 
 from std.ffi import c_int, external_call
 from std.memory import Pointer
-from std.os import getenv, listdir
+from std.os import getenv
 from std.os.path import realpath
 from std.sys import CompilationTarget, argv, exit, stderr
 
@@ -839,47 +839,46 @@ struct ProcReader(Movable):
             self.unavailable += 1
             return List[Int]()
         var names = List[String]()
-        comptime if CompilationTarget.is_linux():
-            var stream = external_call[
-                "fdopendir", OpaquePointer[MutAnyOrigin]
-            ](c_int(copy))
-            if Int(stream) == 0:
-                close_fd(copy)
-                self.unavailable += 1
-                return List[Int]()
-            while len(names) < limit + 1:
-                var address = Int(
+        var stream = external_call["fdopendir", OpaquePointer[MutAnyOrigin]](
+            c_int(copy)
+        )
+        if Int(stream) == 0:
+            close_fd(copy)
+            self.unavailable += 1
+            return List[Int]()
+        while len(names) < limit + 1:
+            var address: Int
+            # Linux's `dirent64` holds its name at byte 19. The 64-bit inode
+            # `dirent` of macOS holds it at byte 21.
+            comptime if CompilationTarget.is_linux():
+                address = Int(
                     external_call["readdir64", OpaquePointer[MutAnyOrigin]](
                         stream
                     )
                 )
-                if address == 0:
+            else:
+                address = Int(
+                    external_call["readdir", OpaquePointer[MutAnyOrigin]](
+                        stream
+                    )
+                )
+            if address == 0:
+                break
+            var bytes = List[UInt8]()
+            var at = address + (19 if CompilationTarget.is_linux() else 21)
+            while True:
+                var byte = Pointer[UInt8, MutAnyOrigin](
+                    unsafe_from_address=at
+                )[]
+                if byte == 0:
                     break
-                # A `dirent64` holds its name at byte 19.
-                var bytes = List[UInt8]()
-                var at = address + 19
-                while True:
-                    var byte = Pointer[UInt8, MutAnyOrigin](
-                        unsafe_from_address=at
-                    )[]
-                    if byte == 0:
-                        break
-                    bytes.append(byte)
-                    at += 1
-                var name = String(from_utf8_lossy=bytes)
-                if name == "." or name == "..":
-                    continue
-                names.append(name)
-            _ = external_call["closedir", c_int](stream)
-        else:
-            # Sampling runs on Linux only; this keeps other builds whole.
-            try:
-                for name in listdir("/dev/fd/" + String(copy)):
-                    if len(names) < limit + 1:
-                        names.append(name)
-            except:
-                self.unavailable += 1
-            close_fd(copy)
+                bytes.append(byte)
+                at += 1
+            var name = String(from_utf8_lossy=bytes)
+            if name == "." or name == "..":
+                continue
+            names.append(name)
+        _ = external_call["closedir", c_int](stream)
         if len(names) > limit:
             self.truncated = True
         var out = List[Int]()
