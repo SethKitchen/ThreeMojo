@@ -43,9 +43,17 @@ def _environment(settings: List[Setting]) raises -> List[String]:
     var result = run_program(child_command(settings, ["env"]), 10)
     assert_equal(result.status, 0)
     var lines = List[String]()
+    # Only the variables the test controls: CI sets other THREEMOJO_ ones.
+    var names: List[String] = [
+        "THREEMOJO_ASSET_ROOT=",
+        "THREEMOJO_TEST_TMPDIR=",
+        "THREEMOJO_PORTABILITY_FAIL=",
+        "PORTABILITY_KEEP=",
+    ]
     for line in split_lines(result.output):
-        if line.startswith("THREEMOJO_") or line.startswith("PORTABILITY_KEEP"):
-            lines.append(line)
+        for name in names:
+            if line.startswith(name):
+                lines.append(line)
     sort(lines)
     return lines^
 
