@@ -15,7 +15,7 @@ from std.ffi import OwnedDLHandle
 from std.sys import CompilationTarget
 
 comptime Z_OK = 0
-"""zlib's success code."""
+"""The success code of zlib."""
 
 
 def _library() raises -> OwnedDLHandle:
