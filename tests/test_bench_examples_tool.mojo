@@ -620,9 +620,11 @@ def test_help_and_errors_match_argparse() raises:
 def test_gnu_time_lines_give_the_peak_and_status() raises:
     var folder = mkdtemp(prefix="bench-time-")
     var stub = folder + "/time"
+    # The tool calls BSD `time -l` on macOS and GNU `time -f FMT --` elsewhere.
+    # The stub prints GNU lines for both, which the tool reads on both.
     Path(stub).write_text(
-        '#!/bin/sh\nshift 3\n"$@"\nrc=$?\necho "TIME_RSS 0.01 4321.7'
-        ' $rc" >&2\nexit $rc\n'
+        '#!/bin/sh\nif [ "$1" = -l ]; then shift; else shift 3; fi\n"$@"\n'
+        'rc=$?\necho "TIME_RSS 0.01 4321.7 $rc" >&2\nexit $rc\n'
     )
     var child = folder + "/child"
     Path(child).write_text(

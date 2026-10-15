@@ -2000,7 +2000,14 @@ def run_checked(
             + String(timeout)
             + " seconds"
         )
-    if result.status == 127 and result.output.byte_length() == 0:
+    # The shell reports a missing path as 127, but macOS's bash 3.2 reports
+    # an `exec` of a missing path with a slash as 126, as for no permission.
+    var missing = result.status == 127 or (
+        result.status == 126
+        and command[0].find("/") >= 0
+        and not exists(command[0])
+    )
+    if missing and result.output.byte_length() == 0:
         raise Error(
             "[Errno 2] No such file or directory: " + py_repr(command[0])
         )
