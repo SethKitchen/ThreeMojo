@@ -412,8 +412,10 @@ struct _Owned:
             return
         if not CompilationTarget.is_macos() or failure != EPERM:
             raise Error("PermissionError: [Errno ", failure, "] kill denied")
-        # EPERM alone cannot tell a zombie-only group from a denial.
-        if not self.wait(0, budget, True):
+        # EPERM alone cannot tell a zombie-only group from a denial. Darwin
+        # also answers EPERM while the leader is still exiting, so give it a
+        # moment to become a zombie before calling the kill denied.
+        if not self.wait(0.5, budget, True):
             raise Error("PermissionError: [Errno ", failure, "] kill denied")
         if signal_group(self.pid, 0) == ESRCH:
             return
