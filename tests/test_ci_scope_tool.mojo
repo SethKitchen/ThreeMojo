@@ -394,7 +394,7 @@ def test_tool_tests_and_the_workflow_only_run_tools() raises:
             [
                 "tools/test_build_tools.py",
                 "tools/test_coverage_lifecycle.py",
-                "tools/test_ci_policy.py",
+                "tools/test_parallel_unittest.py",
                 ".github/workflows/ci.yml",
             ]
         )
@@ -402,6 +402,29 @@ def test_tool_tests_and_the_workflow_only_run_tools() raises:
     assert_false(value.full)
     assert_equal(_on(value), "lint tools")
     assert_true(_no_files(value))
+
+
+def test_the_workflow_runs_the_suites_that_quote_it() raises:
+    # The workflow suites read the workflow text. They are Mojo suites, so
+    # a workflow change runs them beside the tool checks.
+    var sources = _sources()
+    sources[
+        "tests/test_ci_policy_tool.mojo"
+    ] = 'comptime WORKFLOW = ".github/workflows/ci.yml"\n'
+    sources[
+        "tests/test_policy_user.mojo"
+    ] = "from tests.test_ci_policy_tool import WORKFLOW\n"
+    var value = _plan(_change([".github/workflows/ci.yml"]), sources)
+    assert_false(value.full)
+    assert_equal(_on(value), "cpu lint native tools")
+    assert_equal(
+        _files(value, "cpu_tests"),
+        "tests/test_ci_policy_tool.mojo tests/test_policy_user.mojo",
+    )
+    assert_equal(_files(value, "covered"), "")
+    # A change to the Makefile, which the recipe suites copy, is the full
+    # audit, so it runs every suite.
+    assert_true(_plan(_change(["Makefile"]), sources).full)
 
 
 def test_the_planner_runs_its_own_suite() raises:

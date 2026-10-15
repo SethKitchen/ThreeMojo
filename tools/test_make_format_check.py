@@ -1,18 +1,20 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Exercise bounded formatting recipes without the Mojo compiler."""
+"""Exercise the formatting recipe on 1789 paths without the Mojo compiler.
+
+tests/test_make_format_check_tool.mojo has the other formatting checks. This
+one stays here because the recipe copies and compares one file per process:
+it needs more than the five-second limit of a Mojo suite test.
+"""
 
 import errno
 import json
 import os
-import signal
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
-from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -111,21 +113,6 @@ class FormatRecipeTests(unittest.TestCase):
             self.assertNotIn('Crashpad', result.stdout + result.stderr)
             return result, selected, calls, (root / 'cache/fmt-fixture').exists()
 
-    def test_empty_selection_does_not_invoke_formatter(self):
-        result, selected, calls, stamped = self.run_recipe([])
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(calls, [])
-        self.assertTrue(stamped)
-
-    def test_small_selection_keeps_order_duplicates_and_scratch_spaces(self):
-        paths = ['src/z.mojo', "src/quote's.mojo", 'src/a.mojo', 'src/z.mojo']
-        result, selected, calls, stamped = self.run_recipe(paths)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(selected, paths)
-        self.assertEqual(len(calls), 1)
-        self.assertTrue(stamped)
-        self.assertIn('scratch files ', calls[0][0])
-
     def test_1789_paths_exceed_old_shell_argument_but_all_are_checked(self):
         paths = [f'src/{index:04d}_' + 'x' * 67 + '.mojo' for index in range(1789)]
         # The former copy and diff loops expanded the complete list twice
@@ -144,162 +131,6 @@ class FormatRecipeTests(unittest.TestCase):
         self.assertTrue(all(len(call) <= 64 for call in calls))
         self.assertTrue(all(sum(len(os.fsencode(path)) + 1 for path in call) <= 8192
                             for call in calls))
-        self.assertTrue(stamped)
-
-    def test_byte_budget_splits_before_file_count_limit(self):
-        paths = [f'src/{index:03d}.mojo' for index in range(70)]
-        result, selected, calls, stamped = self.run_recipe(paths, scratch_padding='x' * 180)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(selected, paths)
-        self.assertLess(len(calls[0]), 64)
-        self.assertTrue(all(sum(len(os.fsencode(path)) + 1 for path in call) <= 8192
-                            for call in calls))
-        self.assertTrue(stamped)
-
-    def test_scratch_path_survives_subprocess_tmpdir_reset(self):
-        run = subprocess.run
-
-        def reset_tmpdir(*args, **kwargs):
-            environment = kwargs['env'].copy()
-            environment['TMPDIR'] = tempfile.gettempdir()
-            return run(*args, **dict(kwargs, env=environment))
-
-        paths = [f'src/{index:03d}.mojo' for index in range(70)]
-        with patch.object(subprocess, 'run', side_effect=reset_tmpdir):
-            result, selected, calls, stamped = self.run_recipe(
-                paths, scratch_padding='x' * 180)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(selected, paths)
-        self.assertIn('scratch files ', calls[0][0])
-        self.assertLess(len(calls[0]), 64)
-        self.assertTrue(all(sum(len(os.fsencode(path)) + 1 for path in call) <= 8192
-                            for call in calls))
-        self.assertTrue(stamped)
-
-    def test_formatter_failure_stops_next_batch_and_is_not_stamped(self):
-        paths = [f'src/{index:03d}.mojo' for index in range(140)]
-        result, selected, calls, stamped = self.run_recipe(paths, fail_batch=2)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('formatter failed', result.stdout)
-        self.assertIn('Error 7', result.stderr)
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(selected, paths[:len(selected)])
-        self.assertLess(len(selected), len(paths))
-        self.assertFalse(stamped)
-
-    def test_all_differences_are_reported_without_changing_sources(self):
-        paths = [f'src/{index:03d}.mojo' for index in range(140)]
-        changed = (paths[0], paths[70], paths[-1])
-        result, selected, calls, stamped = self.run_recipe(paths, changed=changed)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(selected, paths)
-        for name in changed:
-            self.assertIn('needs formatting: ' + name, result.stdout)
-        self.assertIn("Run 'make fmt'.", result.stdout)
-        self.assertFalse(stamped)
-
-    def test_missing_input_fails_without_stamp(self):
-        paths = ['src/present.mojo', 'src/missing.mojo']
-        result, selected, calls, stamped = self.run_recipe(paths, missing=paths[1:])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(calls, [])
-        self.assertFalse(stamped)
-
-    def test_missing_or_truncated_manifest_fails_at_both_read_loops(self):
-        for stage in ('copy', 'diff', 'truncate-copy', 'truncate-diff'):
-            with self.subTest(stage=stage):
-                result, selected, calls, stamped = self.run_recipe(
-                    ['src/a.mojo'], delete_manifest_stage=stage)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertNotIn('All files formatted.', result.stdout)
-                self.assertFalse(stamped)
-                self.assertEqual(len(calls), 0 if stage.endswith('copy') else 1)
-
-    def test_long_paths_cannot_overflow_manifest_recipe_arguments(self):
-        # These are readable where PATH_MAX permits, but 64 quoted copies
-        # exceed Linux's single-argument limit. Four per recipe stay bounded.
-        prefix = 'src/' + ('d' * 180 + '/') * 12
-        paths = [prefix + f'{index:03d}.mojo' for index in range(64)]
-        if os.pathconf(tempfile.gettempdir(), 'PC_PATH_MAX') < 3000:
-            self.skipTest('platform path limit is below the long-path fixture')
-        result, selected, calls, stamped = self.run_recipe(
-            paths, check_manifest_commands=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(selected, paths)
-        self.assertTrue(stamped)
-
-    def test_concurrent_checks_keep_private_manifests_and_detect_changes(self):
-        source = (ROOT / 'Makefile').read_text()
-        start = source.index('# mojo format has no --check flag')
-        end = source.index('\n# Instrument the library', start)
-        for same_hash in (False, True):
-            with self.subTest(same_hash=same_hash), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                (root / 'src').mkdir()
-                for name in ('a', 'b'):
-                    (root / f'src/{name}.mojo').write_text('original\n')
-                os.mkfifo(root / 'release')
-                (root / 'formatter.py').write_text(
-                    'from pathlib import Path\nimport sys\n'
-                    'for path in map(Path, sys.argv[3:]):\n'
-                    '    if path.name == "b.mojo":\n'
-                    '        Path("ready").touch()\n'
-                    '        with open("release") as gate: gate.read(1)\n'
-                    '        path.write_text("formatted\\n")\n')
-                (root / 'Makefile').write_text(
-                    'CACHE_DIR := cache\nHASH ?= fixture\n'
-                    'FMT_STAMP := cache/fmt-$(HASH)\n'
-                    'MOJO := python3 formatter.py\n'
-                    'quote = \'$(subst \',\'"\'"\',$(1))\'\n' +
-                    definition(source, 'run') + '\n' +
-                    definition(source, 'stamp') + '\n' + source[start:end] + '\n')
-                environment = {key: value for key, value in os.environ.items()
-                               if key not in MAKE_ENVIRONMENT}
-                b_hash = 'same' if same_hash else 'b'
-                process = subprocess.Popen(
-                    ['make', '-s', 'fmt-check', 'HASH=' + b_hash,
-                     'FORMATTED=src/b.mojo'], cwd=root, env=environment,
-                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    start_new_session=True)
-                try:
-                    deadline = time.monotonic() + 10
-                    while not (root / 'ready').exists():
-                        if process.poll() is not None or time.monotonic() >= deadline:
-                            self.fail('blocked formatting fixture did not start')
-                        time.sleep(0.01)
-                    manifests = list((root / 'cache').glob('*inputs-*'))
-                    result = subprocess.run(
-                        ['make', '-s', 'fmt-check',
-                         'HASH=' + ('same' if same_hash else 'a'),
-                         'FORMATTED=src/a.mojo'], cwd=root, env=environment,
-                        text=True, capture_output=True, timeout=10)
-                    with (root / 'release').open('w') as gate:
-                        gate.write('x')
-                    stdout, stderr = process.communicate(timeout=10)
-                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    self.assertNotEqual(process.returncode, 0, stdout + stderr)
-                    self.assertIn('needs formatting: src/b.mojo', stdout)
-                    self.assertNotIn('All files formatted.', stdout)
-                    self.assertEqual(len(manifests), 1)
-                    self.assertEqual(list((root / 'cache').glob('*inputs-*')), [])
-                    if not same_hash:
-                        self.assertFalse((root / 'cache/fmt-b').exists())
-                    self.assertEqual((root / 'src/b.mojo').read_text(), 'original\n')
-                finally:
-                    if process.poll() is None:
-                        os.killpg(process.pid, signal.SIGKILL)
-                        process.communicate()
-
-    def test_outer_make_overrides_cannot_replace_fixture_formatter(self):
-        with patch.dict(os.environ, {
-            'MAKEFLAGS': '-- MOJO=nonexistent-outer-compiler',
-            'MAKEOVERRIDES': 'MOJO=nonexistent-outer-compiler',
-            'MFLAGS': '-e', 'GNUMAKEFLAGS': '-e',
-            'MAKEFILES': 'nonexistent-outer-include', 'MAKELEVEL': '7',
-        }):
-            result, selected, calls, stamped = self.run_recipe(['src/a.mojo'])
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(selected, ['src/a.mojo'])
         self.assertTrue(stamped)
 
 

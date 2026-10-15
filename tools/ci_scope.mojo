@@ -142,7 +142,8 @@ comptime BOUND_EVIDENCE = [
 source that quotes the path, with its importers."""
 
 comptime ROUTING = [".github/workflows/ci.yml"]
-"""The CI workflow, which the tool checks test."""
+"""The CI workflow, which the tool checks test. A change also runs each Mojo
+source that quotes the path, with its importers, as the workflow suites do."""
 
 comptime LISTS = [
     "formatted",
@@ -903,7 +904,9 @@ def plan(
         for entry in change.items():
             if entry.key in sources:
                 seeds.add(entry.key)
-            if _contains(materialize[BOUND_EVIDENCE](), entry.key):
+            if _contains(materialize[BOUND_EVIDENCE](), entry.key) or _contains(
+                materialize[ROUTING](), entry.key
+            ):
                 evidence.append(entry.key)
             if entry.key.startswith("assets/") and kind(entry.key) == "native":
                 assets.append(entry.key)
