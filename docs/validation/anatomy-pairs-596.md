@@ -3,7 +3,7 @@
 This historical example is pinned to source commit `2c91d60c660d05cf5e0fa093e6774558ba14332f`.
 It illustrates the representative report schema and its recorded measurements.
 It is not a report of the current checkout.
-`test_anatomy_pair_example.py` checks its exact bytes, historical source binding, probe fingerprint and representative counts.
+`tests/test_anatomy_report_binding_tool.mojo` checks its exact bytes, historical source binding, probe fingerprint and representative counts.
 
 The current full report is `anatomy-template-report.json`.
 Its separate binding check requires the current source.
@@ -54,13 +54,13 @@ Checkout the captured source commit to reproduce that revision's measurements.
 Run from the repository root with pinned Mojo 1.1.0:
 
 ```sh
-python3 -m unittest discover -s tools -p 'test_anatomy_validity.py'
-python3 -m unittest discover -s tools -p 'test_anatomy_pair_inventory.py'
+mojo run -I . tests/test_anatomy_validity_tool.mojo
+mojo run -I . tests/test_anatomy_pair_inventory_tool.mojo
 mojo build --Werror --num-threads 1 -I . tests/test_anatomy_diagnostics.mojo -o .cache/test_anatomy_diagnostics
 python3 tools/run_suite.py --seconds 5 --suite tests/test_anatomy_diagnostics.mojo -- .cache/test_anatomy_diagnostics
 mojo build --Werror --num-threads 1 -I . tests/test_anatomy_pair_catalog.mojo -o .cache/test_anatomy_pair_catalog
 python3 tools/run_suite.py --seconds 5 --suite tests/test_anatomy_pair_catalog.mojo -- .cache/test_anatomy_pair_catalog
-python3 tools/anatomy_validity.py --build --pair-scope representative --output .cache/anatomy-pair-example-current.json
+mojo run -I . tools/anatomy_validity.mojo --build --pair-scope representative --output .cache/anatomy-pair-example-current.json
 ```
 
 For full integrated pair evidence, omit `--pair-scope representative`. Regenerate `anatomy-template-report.json` on the final integrated source. This historical example does not establish current coverage or CI status.

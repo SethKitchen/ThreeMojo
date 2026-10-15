@@ -13,7 +13,7 @@ The spec is the canonical male, 1.8288 m, right side, untoned, template genome. 
   - Source SHA-256: `d984741bb8496a606e68649a5f6428107baa195e0aaca99ddf470985fdf06529`
   - File SHA-256: `fd1f2d1de0c62b4a8a78a69cf0ec8a099da542c6958441c71f68fcb5a1aeb03e`
   - That commit changes no anatomy. Its template-report measurements equal those of `058cbbc`.
-- Repaired evidence: `anatomy-overlaps-595.json` and `anatomy-template-report.json`. Both record the current source digest. `tools/test_anatomy_overlaps.py` refuses a stale binding.
+- Repaired evidence: `anatomy-overlaps-595.json` and `anatomy-template-report.json`. Both record the source digest of the Python tools that produced them. `tests/test_anatomy_overlaps_tool.mojo` checks the evidence record and the binding rule.
 
 A probe digest identifies one build. Another machine can produce different binary bytes.
 
@@ -22,12 +22,12 @@ A probe digest identifies one build. Another machine can produce different binar
 Run from the repository root with pinned Mojo 1.1.0:
 
 ```sh
-python3 tools/anatomy_validity.py --build --output .cache/anatomy-report.json
-python3 tools/anatomy_overlaps.py --output .cache/anatomy-overlaps.json
-python3 -m unittest discover -s tools -p 'test_anatomy_*.py'
+mojo run -I . tools/anatomy_validity.mojo --build --output .cache/anatomy-report.json
+mojo run -I . tools/anatomy_overlaps.mojo --output .cache/anatomy-overlaps.json
+mojo run -I . tests/test_anatomy_overlaps_tool.mojo
 ```
 
-The second command reuses the probe that the first command built. To reproduce the unrepaired localization, check out `58b181c` and run the same commands.
+The second command reuses the probe that the first command built. To reproduce the unrepaired localization, check out `58b181c` and run the Python tools of that revision.
 
 ## What the localization records
 

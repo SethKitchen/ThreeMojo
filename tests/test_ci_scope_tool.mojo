@@ -140,18 +140,90 @@ def _same(left: Plan, right: Plan) -> Bool:
 # --- routing -------------------------------------------------------------------
 
 
-def test_anatomy_evidence_runs_the_tools_binding_test() raises:
-    # The report and its inventory are bound evidence, not documents.
-    for path in [
-        "docs/validation/anatomy-template-report.json",
-        "docs/validation/anatomy-provenance.json",
-    ]:
-        assert_equal(kind(path), "tools")
-        var value = _plan(_change([path]))
-        assert_false(value.full)
-        assert_true(value.flag("tools"))
+def _with_anatomy_tools() -> Dict[String, String]:
+    """Return the fixture tree with the anatomy tools and their suites."""
+    var sources = _sources()
+    sources["tools/_imports.mojo"] = "def resolve():\n    pass\n"
+    sources["tools/anatomy_validity.mojo"] = (
+        "from tools._imports import resolve\n"
+        'comptime INVENTORY = "docs/validation/anatomy-provenance.json"\n'
+        "def main():\n    pass\n"
+    )
+    sources["tools/anatomy_overlaps.mojo"] = (
+        "from tools.anatomy_validity import prepare_probe\n"
+        "def main():\n    pass\n"
+    )
+    sources[
+        "tests/test_anatomy_validity_tool.mojo"
+    ] = "from tools.anatomy_validity import report\n"
+    sources[
+        "tests/test_anatomy_overlaps_tool.mojo"
+    ] = "from tools.anatomy_overlaps import build\n"
+    sources["tests/test_anatomy_report_binding_tool.mojo"] = (
+        "from tools.anatomy_validity import bound_paths\n"
+        'comptime REPORT = "docs/validation/anatomy-template-report.json"\n'
+    )
+    return sources^
+
+
+def test_anatomy_evidence_runs_the_suites_that_bind_it() raises:
+    # The report and its inventory are bound evidence, not documents. A
+    # change runs each Mojo source that quotes the path, and its importers.
+    var sources = _with_anatomy_tools()
+    var inventory = _plan(
+        _change(["docs/validation/anatomy-provenance.json"]), sources
+    )
+    assert_equal(kind("docs/validation/anatomy-provenance.json"), "native")
+    assert_false(inventory.full)
+    assert_true(inventory.flag("tools"))
+    assert_equal(
+        _files(inventory, "cpu_tests"),
+        (
+            "tests/test_anatomy_overlaps_tool.mojo"
+            " tests/test_anatomy_report_binding_tool.mojo"
+            " tests/test_anatomy_validity_tool.mojo"
+        ),
+    )
+    assert_equal(_files(inventory, "covered"), "")
+    var report = _plan(
+        _change(["docs/validation/anatomy-template-report.json"]), sources
+    )
+    assert_equal(kind("docs/validation/anatomy-template-report.json"), "native")
+    assert_false(report.full)
+    assert_true(report.flag("tools"))
+    assert_equal(
+        _files(report, "cpu_tests"),
+        "tests/test_anatomy_report_binding_tool.mojo",
+    )
     # Other validation documents stay documentation.
     assert_equal(kind("docs/validation/water-gpu-300.md"), "docs")
+    assert_equal(kind("docs/validation/anatomy-overlaps-595.json"), "docs")
+
+
+def test_anatomy_tools_select_their_suites() raises:
+    # The anatomy tools are Mojo tools: a change runs the suites that import
+    # them. It measures no library.
+    var sources = _with_anatomy_tools()
+    var value = _plan(_change(["tools/anatomy_overlaps.mojo"]), sources)
+    assert_false(value.full)
+    assert_equal(_on(value), "cpu lint native tools")
+    assert_equal(
+        _files(value, "cpu_tests"), "tests/test_anatomy_overlaps_tool.mojo"
+    )
+    assert_equal(_files(value, "covered"), "")
+    value = _plan(_change(["tools/anatomy_validity.mojo"]), sources)
+    assert_false(value.full)
+    assert_equal(
+        _files(value, "cpu_tests"),
+        (
+            "tests/test_anatomy_overlaps_tool.mojo"
+            " tests/test_anatomy_report_binding_tool.mojo"
+            " tests/test_anatomy_validity_tool.mojo"
+        ),
+    )
+    # The removed Python tools are not exempt.
+    for path in ["tools/anatomy_validity.py", "tools/anatomy_overlaps.py"]:
+        assert_true(_plan(_change([path]), sources).full, path)
 
 
 def test_gallery_table_selects_the_tool_checks() raises:

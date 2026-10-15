@@ -124,6 +124,13 @@ comptime GLOBAL_TOOLS = [
 ]
 """Other tools whose change selects the full audit."""
 
+comptime BOUND_EVIDENCE = [
+    "docs/validation/anatomy-template-report.json",
+    "docs/validation/anatomy-provenance.json",
+]
+"""Evidence that Mojo sources read and bind (#702). A change runs each
+source that quotes the path, with its importers."""
+
 comptime ROUTING = [".github/workflows/ci.yml"]
 """The CI workflow, which the tool checks test."""
 
@@ -229,12 +236,9 @@ def kind(path: String) -> String:
     if path == "bench/results-linux.json":
         return "tools"
     # The anatomy report and its inventory are evidence, not documentation:
-    # their binding test runs with the tools (#702).
-    if (
-        path == "docs/validation/anatomy-template-report.json"
-        or path == "docs/validation/anatomy-provenance.json"
-    ):
-        return "tools"
+    # the Mojo suites that quote them check their binding (#702).
+    if _contains(materialize[BOUND_EVIDENCE](), path):
+        return "native"
     if is_documentation(path):
         return "docs"
     if _contains(materialize[ROUTING](), path) or (
@@ -897,10 +901,13 @@ def plan(
         var change = changed.value().copy()
         var seeds = Set[String]()
         var assets = List[String]()
+        var evidence = List[String]()
         var deleted = False
         for entry in change.items():
             if entry.key in sources:
                 seeds.add(entry.key)
+            if _contains(materialize[BOUND_EVIDENCE](), entry.key):
+                evidence.append(entry.key)
             if entry.key.startswith("assets/") and kind(entry.key) == "native":
                 assets.append(entry.key)
             if entry.key.endswith(".mojo"):
@@ -912,6 +919,9 @@ def plan(
                 for asset in assets:
                     if asset.startswith(quoted):
                         seeds.add(entry.key)
+            for path in evidence:
+                if entry.value.find('"' + path + '"') >= 0:
+                    seeds.add(entry.key)
         # Deleted modules remain reverse-graph targets during resolution.
         if deleted:
             var graph_sources = sources.copy()
