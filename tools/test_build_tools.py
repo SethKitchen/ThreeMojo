@@ -120,36 +120,6 @@ class MaterialStateTests(unittest.TestCase):
 
 
 
-class GpuStatusTests(unittest.TestCase):
-    def test_physical_virtual_absent_and_detection_error(self):
-        import contextlib
-        import io
-        import sys
-        import types
-        import gpu_status
-
-        driver = types.ModuleType('max.driver')
-        driver.accelerator_count = lambda: 1
-        driver.is_virtual_device_mode = lambda: False
-        with patch.dict(sys.modules, {'max': types.ModuleType('max'), 'max.driver': driver}):
-            with patch.object(sys, 'argv', ['gpu_status.py', '--available']):
-                self.assertEqual(gpu_status.main(), 0)
-                driver.is_virtual_device_mode = lambda: True
-                self.assertEqual(gpu_status.main(), 1)
-                driver.is_virtual_device_mode = lambda: False
-                driver.accelerator_count = lambda: 0
-                self.assertEqual(gpu_status.main(), 1)
-            with patch.object(sys, 'argv', ['gpu_status.py']), contextlib.redirect_stdout(io.StringIO()) as output:
-                self.assertEqual(gpu_status.main(), 0)
-                self.assertIn('SKIP', output.getvalue())
-                driver.accelerator_count = lambda: 1
-                self.assertEqual(gpu_status.main(), 0)
-                self.assertIn('present', output.getvalue())
-            with patch.object(sys, 'argv', ['gpu_status.py']), contextlib.redirect_stderr(io.StringIO()):
-                del driver.accelerator_count
-                self.assertEqual(gpu_status.main(), 2)
-
-
 class MakeCacheTests(unittest.TestCase):
     def test_explicit_partial_checks_have_distinct_keys(self):
         import subprocess

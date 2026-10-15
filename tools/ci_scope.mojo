@@ -99,6 +99,7 @@ comptime GPU = [
     "bench/raster_bench.mojo",
     "bench/water_gpu_bench.mojo",
     "bench/hair_frame_bench.mojo",
+    "tools/gpu_status.mojo",
 ]
 """The files that need MAX."""
 
@@ -259,7 +260,7 @@ def kind(path: String) -> String:
     ]:
         if path.startswith(prefix):
             return "coverage_tools"
-    if path == "tools/check_portability.py":
+    if path == "tools/check_portability.mojo":
         return "portability"
     if (
         path == "assets/carla/tools/carla_assets.py"
@@ -986,11 +987,13 @@ def plan(
     var gpu = False
     var portability = False
     for name in execution:
-        if is_gpu(name):
+        # `make check-gpu-air` runs the AIR checker in the GPU job.
+        if is_gpu(name) or name == "tools/check_air_calls.mojo":
             gpu = True
         if (
             name == "tests/portability_probe.mojo"
             or name == "tests/test_scratch.mojo"
+            or name == "tools/check_portability.mojo"
         ):
             portability = True
     var tasks = False

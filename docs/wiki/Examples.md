@@ -154,5 +154,5 @@ The refresh command is in [How to measure examples](How-to-measure-examples).
 
 | Program | Shows |
 |---|---|
-| `tools/gpu_status.py` | Whether an accelerator is present. |
+| `tools/gpu_status.mojo` | Whether an accelerator is present. It needs MAX. |
 | `tools/doc_lint.mojo` | Whether the documentation follows the writing rules. |
