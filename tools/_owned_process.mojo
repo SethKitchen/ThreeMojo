@@ -270,44 +270,28 @@ def set_cloexec(fd: Int):
     Args:
         fd: The descriptor.
     """
-    _ = external_call["fcntl", c_int](c_int(fd), c_int(2), c_int(1))
+    _ = external_call["ioctl", c_int](c_int(fd), UInt64(_fioclex()))
 
 
-def set_nonblocking(fd: Int):
-    """Make reads of a descriptor return at once when no data is ready.
+def _fioclex() -> Int:
+    """Return the `ioctl` request that sets close-on-exec.
 
-    Args:
-        fd: The descriptor.
-    """
-    var flags = external_call["fcntl", c_int](c_int(fd), c_int(3), c_int(0))
-    if flags >= 0:
-        _ = external_call["fcntl", c_int](
-            c_int(fd), c_int(4), flags | c_int(o_nonblock())
-        )
-
-
-def o_nonblock() -> Int:
-    """Return `O_NONBLOCK` for this platform.
-
-    Returns:
-        The flag.
+    `fcntl` takes its third argument through `...`, which Apple Silicon
+    passes on the stack, so a plain call there sets garbage flags. `FIOCLEX`
+    takes no argument.
     """
     comptime if CompilationTarget.is_linux():
-        return 0o4000
+        return 0x5451
     else:
-        return 4
+        return 0x20006601
 
 
-def eagain() -> Int:
-    """Return `EAGAIN` for this platform.
-
-    Returns:
-        The error number.
-    """
+def _fionclex() -> Int:
+    """Return the `ioctl` request that clears close-on-exec."""
     comptime if CompilationTarget.is_linux():
-        return 11
+        return 0x5450
     else:
-        return 35
+        return 0x20006602
 
 
 def make_pipe() raises -> Tuple[Int, Int]:
@@ -700,7 +684,7 @@ def spawn(
         _ = external_call["setsid", c_int]()
         if stdout_fd >= 0:
             if stdout_fd == 1:
-                _ = external_call["fcntl", c_int](c_int(1), c_int(2), c_int(0))
+                _ = external_call["ioctl", c_int](c_int(1), UInt64(_fionclex()))
             else:
                 _ = external_call["dup2", c_int](c_int(stdout_fd), c_int(1))
         if null_fd >= 0:

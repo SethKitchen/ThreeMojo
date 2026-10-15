@@ -9,6 +9,7 @@ No compiler work runs: the commands are small shell programs. Two tests run
 the built tool through `tools/tool.sh`, as the CI workflow does.
 """
 
+from std.ffi import c_int, external_call
 from std.os import setenv, unsetenv
 from std.pathlib import Path
 from std.sys import CompilationTarget
@@ -21,7 +22,7 @@ from std.testing import (
 )
 
 from tests._tree import tool_mojo
-from tools._owned_process import monotonic_seconds, nap
+from tools._owned_process import close_fd, make_pipe, monotonic_seconds, nap
 from tools._process import run_program, shell_quote
 from tools._python_json import PyJson, dumps_canonical
 from tools._sha256 import sha256_hex
@@ -266,6 +267,17 @@ def test_stderr_is_never_captured_or_emitted() raises:
     var failed = read_command(["sh", "-c", "echo out; exit 3"], Budget())
     assert_false(failed.text)
     assert_equal(failed.status, "failed")
+
+
+def test_both_pipe_ends_close_on_exec() raises:
+    # A write end left open in a child would hold the exec report open until
+    # the child exits, so a spawn would wait for the whole command.
+    var pipe = make_pipe()
+    for fd in [pipe[0], pipe[1]]:
+        var flags = external_call["fcntl", c_int](c_int(fd), c_int(1))
+        assert_equal(Int(flags) & 1, 1)
+    close_fd(pipe[0])
+    close_fd(pipe[1])
 
 
 def test_output_and_elapsed_time_have_small_bounds() raises:

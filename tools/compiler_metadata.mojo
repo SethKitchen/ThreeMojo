@@ -42,13 +42,11 @@ from tools._owned_process import (
     SIGTERM,
     SignalHold,
     close_fd,
-    eagain,
     errno,
     hold_signals,
     make_pipe,
     monotonic_seconds,
     nap,
-    set_nonblocking,
     signal_group,
     spawn,
     take_signal,
@@ -461,9 +459,6 @@ def read_command(
             return CommandResult(None, "unavailable")
         close_fd(pipe[1])
         owned.can_signal = True
-        # A read must never wait past the deadline, even when `poll` reports
-        # a pipe ready that has no data, as it can on macOS.
-        set_nonblocking(read_end)
         var data = List[UInt8]()
         var deadline = monotonic_seconds() + timeout
         var open = True
@@ -500,11 +495,7 @@ def read_command(
                 min(4096, limit + 1 - len(data)),
             )
             if count < 0:
-                var number = errno()
-                if number == 4:
-                    continue
-                if number == eagain():
-                    nap(0.001)
+                if errno() == 4:
                     continue
                 raise Error("OSError: read failed")
             if count == 0:
