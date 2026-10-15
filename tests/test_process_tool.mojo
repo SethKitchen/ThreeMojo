@@ -72,7 +72,8 @@ def test_a_missing_program_reports_a_failure() raises:
     var arguments = List[String]()
     arguments.append("/nonexistent/threemojo-no-such-program")
     var result = run_program(arguments, 10)
-    assert_equal(result.status, 127)
+    # The shell cannot run it: Linux's sh exits 127, macOS's exits 126.
+    assert_true(result.status == 127 or result.status == 126)
     assert_true(result.output.byte_length() > 0)
     assert_false(result.timed_out)
 
