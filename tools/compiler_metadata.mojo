@@ -373,6 +373,10 @@ struct _Owned:
         Raises:
             Error: For a failed `waitpid`, a signal, or the run's deadline.
         """
+        # A reaped child keeps its code, as Python's `Popen.wait` does. On
+        # Darwin, `kill_group` can reap the leader before the caller waits.
+        if self.reaped:
+            return True
         var deadline = monotonic_seconds() + seconds
         while True:
             var was_owned = self.can_signal

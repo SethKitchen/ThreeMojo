@@ -381,7 +381,9 @@ def test_cancellation_stops_the_command_group_and_prints_nothing() raises:
         + "/bin/started ] && [ $n -lt 500 ]; do sleep 0.01; n=$((n+1)); done\n"
         + "kill -TERM $t; wait $t; echo $?\n"
     )
-    var result = run_program(["sh", "-c", script], 30)
+    # The shell may report the stopped job on its standard error, as the
+    # shell of macOS does, so only the standard output is compared.
+    var result = run_program(["sh", "-c", script], 30, merge_errors=False)
     assert_equal(result.output, "143\n")
     assert_equal(Path(root + "/out").read_text(), "")
     comptime if CompilationTarget.is_linux():

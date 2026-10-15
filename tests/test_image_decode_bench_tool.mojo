@@ -457,13 +457,13 @@ def test_true_rss_independent_of_runner_heap() raises:
     var tree = JsonTree()
     var before = List[Int]()
     for _ in range(3):
-        before.append(measure(tree, [String("/bin/true")], 10, ".", helper))
+        before.append(measure(tree, [String("/usr/bin/true")], 10, ".", helper))
     var memory = List[UInt8](length=128 * 1024 * 1024, fill=0)
     for i in range(0, len(memory), 4096):
         memory[i] = 120
     var after = List[Int]()
     for _ in range(3):
-        after.append(measure(tree, [String("/bin/true")], 10, ".", helper))
+        after.append(measure(tree, [String("/usr/bin/true")], 10, ".", helper))
     # Keep the enlarged heap live through all launches.
     assert_equal(memory[0], 120)
     var most_before = 0

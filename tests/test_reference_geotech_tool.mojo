@@ -10,6 +10,7 @@ The reference prints its exact digits only when built with
 compare within the native tests' tolerances, and check the C library math.
 """
 
+from std.sys import CompilationTarget
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 from tests._tree import Tree
@@ -22,7 +23,12 @@ def test_the_c_library_math_matches_python() raises:
     # repr(math.exp(0.7)) and repr(math.log(0.7)) from CPython 3.12.14.
     assert_equal(String(radians(30)), "0.5235987755982988")
     assert_equal(String(sin(radians(30))), "0.49999999999999994")
-    assert_equal(String(tan(radians(30))), "0.5773502691896257")
+    # The C library of macOS rounds this tangent one ulp lower, and CPython
+    # there prints the same digits, since it calls the same library.
+    comptime if CompilationTarget.is_macos():
+        assert_equal(String(tan(radians(30))), "0.5773502691896256")
+    else:
+        assert_equal(String(tan(radians(30))), "0.5773502691896257")
     assert_equal(String(exp(0.7)), "2.0137527074704766")
     assert_equal(String(log(0.7)), "-0.35667494393873245")
     assert_equal(float_sum([1e16, 1.0, -1e16]), 1.0)
