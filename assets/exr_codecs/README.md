@@ -8,8 +8,8 @@ These tools are only for fixture generation and independent checks.
 ## Contents
 
 - `reference.cpp` generates 45 scanline images and decodes their RGBA samples with OpenEXR.
-- `variants.py` constructs 20 DWA variants and requires the native OpenEXR decoder to accept each one.
-- `package_fixtures.py` converts the native files and decoded samples to UTF-8 hex.
+- `tools/exr_variants.mojo` constructs 20 DWA variants and requires the native OpenEXR decoder to accept each one.
+- `tools/exr_package_fixtures.mojo` converts the native files and decoded samples to UTF-8 hex.
 - `manifest.json` records dimensions, channels, `pLinear`, chunk sizes, raw fallbacks, hashes and compression loss.
 - Each `.exr.hex` is one complete file. Its `.exr.rgba.hex` contains little-endian Float32 RGBA samples, from the top row.
 - `compare_three.mjs` runs the unmodified loader and records both successful results and upstream counterexamples.
@@ -107,7 +107,7 @@ The repeated-rule variant verifies that all CSC assignments survive subsequent m
 
 ## Regeneration
 
-Use Linux, a C++14 compiler, CMake, zlib development files, Python 3 and Node.js.
+Use Linux, a C++14 compiler, CMake, zlib development files, Mojo and Node.js.
 Run these commands from the repository root.
 Use a temporary directory outside the checkout for all downloaded and binary files.
 
@@ -139,9 +139,9 @@ g++ -std=c++14 -O2 -include cstdint \
 mkdir -p "$REF/fixtures"
 export LD_LIBRARY_PATH="$REF/install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$REF/reference" generate "$REF/fixtures"
-python3 assets/exr_codecs/variants.py "$REF/reference" \
+mojo run -I . tools/exr_variants.mojo "$REF/reference" \
   "$REF/install/lib/libOpenEXR-3_1.so" "$REF/fixtures"
-python3 assets/exr_codecs/package_fixtures.py "$REF/fixtures"
+mojo run -I . tools/exr_package_fixtures.mojo "$REF/fixtures"
 npm install --prefix "$REF/js180" --save-exact three@0.180.0
 npm install --prefix "$REF/js186" --save-exact three@0.186.0
 node assets/exr_codecs/compare_three.mjs "$REF/js180/node_modules/three" \
@@ -174,7 +174,7 @@ g++ -std=c++14 -O3 -DNDEBUG -fPIC -shared \
   -I"$REF/openexr-build/src/lib/OpenEXR" -I"$REF/openexr-build/cmake" \
   -I"$REF/install/include/OpenEXR" -I"$REF/install/include/Imath" \
   -L"$REF/install/lib" -lImath-3_1 -Wl,-rpath,"$REF/install/lib"
-python3 assets/exr_codecs/check_dct_precision.py "$REF/dct_helpers.so" \
+mojo run -I . tools/exr_dct_precision.mojo "$REF/dct_helpers.so" \
   "$REF/openexr-3.1.5" assets/exr_codecs/dct-precision.json
 ```
 

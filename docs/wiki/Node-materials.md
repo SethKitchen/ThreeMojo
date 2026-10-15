@@ -256,6 +256,10 @@ rendered r186 parity. This port retains one minus transmittance plus
 `EMISSIVE_NODE`; r186 separately accumulates outgoing ray light and supports
 ray emission. Those differences remain outside this feature.
 
+`tools/reference_volume_lighting.mojo` writes the fixture
+`assets/volume_lighting/r186.json` with `--write` and verifies it with
+`--check`.
+
 
 ## Outputs
 
@@ -406,7 +410,7 @@ The noise is MaterialX's gradient noise, with the same hash and the same order o
 - Cell noise gives one value from zero to one for each cell of whole numbers. The point is a `float` to a `vec4`.
 - Worley noise gives the squared distances to the nearest points that jitter each cell, nearest first. `MaterialXNodes` always asks for this metric, so the others are not ported.
 
-`assets/noise/mx_noise.py` transcribes three.js's functions in 32-bit floats and gives the values the tests check.
+`tools/mx_noise_reference.mojo` transcribes three.js's functions in 32-bit floats and gives the values the tests check.
 
 ## Control flow
 

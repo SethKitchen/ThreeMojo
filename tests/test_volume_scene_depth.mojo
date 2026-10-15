@@ -17,7 +17,7 @@ Source blobs inspected for the gate and depth conversion:
 `VolumetricLightingModel.js`: d37d3a6c2362170e043b8624958afbe16ae87137.
 `ViewportDepthNode.js`: 7e96a52c22bbc0bc356a241b38c2e409da0740fc.
 Both are under https://github.com/mrdoob/three.js/tree/r186/src/nodes/.
-`tools/reference_volume_lighting.py` also records these analytic scenes in
+`tools/reference_volume_lighting.mojo` also records these analytic scenes in
 `assets/volume_lighting/r186.json`, independently of the native marcher.
 """
 

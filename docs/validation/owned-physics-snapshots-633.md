@@ -145,19 +145,19 @@ MODULAR_TELEMETRY_ENABLED=false \
   LD_PRELOAD="$PWD/.cache/snapshot-633/allocations.so" \
   .cache/snapshot-633/bench "$PWD/.cache/snapshot-633/allocations.so" \
   > .cache/snapshot-633/allocations.csv
-python3 bench/physics_snapshot_report.py \
+.venv/bin/mojo run -I . bench/physics_snapshot_report.mojo \
   .cache/snapshot-633/native.csv .cache/snapshot-633/allocations.csv \
   .cache/snapshot-633/report.json
 ```
 
-The report generator refuses missing cases, repeated sample ids, inconsistent counters and query checksum differences. To reproduce the separate small-world confirmation and include its retained samples, use:
+The report generator refuses missing cases, repeated sample ids, inconsistent counters and query checksum differences. A Python generator wrote the retained report. The Mojo generator replaced it and reproduces that report from the retained CSV files. Only `analysis_source_sha256` differs, because it hashes the generator's own source. To reproduce the separate small-world confirmation and include its retained samples, use:
 
 ```sh
 MODULAR_TELEMETRY_ENABLED=false .venv/bin/mojo build --Werror -I . \
   bench/physics_snapshot_small_bench.mojo -o .cache/snapshot-633/small-recheck
 MODULAR_TELEMETRY_ENABLED=false .cache/snapshot-633/small-recheck \
   > .cache/snapshot-633/small-recheck.csv
-python3 bench/physics_snapshot_report.py \
+.venv/bin/mojo run -I . bench/physics_snapshot_report.mojo \
   .cache/snapshot-633/native.csv .cache/snapshot-633/allocations.csv \
   .cache/snapshot-633/report.json \
   --small-recheck .cache/snapshot-633/small-recheck.csv

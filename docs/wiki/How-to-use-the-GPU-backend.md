@@ -21,10 +21,10 @@ The same message also comes when Apple's Metal linker, `air-lld`, crashes. Mojo 
 ## Check that a GPU is visible
 
 ```bash
-.venv/bin/python tools/gpu_status.py
+make gpu-status
 ```
 
-The status command checks physical devices through MAX. A compiler target alone does not establish device availability.
+The status command runs `tools/gpu_status.mojo`. It checks physical devices through MAX. A compiler target alone does not establish device availability.
 
 ## Run the GPU checks
 

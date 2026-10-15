@@ -588,8 +588,8 @@ It also differs from three.js r180 when JavaScript Number cannot hold the
 exact whole count. For a clip of 1.5 seconds, one advance of 2**25
 seconds now stores phase 0.5 and loop count 22,369,621. The old native result
 was phase -1 and count 22,369,622. Existing ordinary three.js controls remain.
-`python3 tools/reference_animation_loops.py --check` verifies independent Fraction
-controls for the stored-operation contract and the range rules.
+`tests/test_reference_animation_loops_tool.mojo` verifies independent exact
+fraction controls for the stored-operation contract and the range rules.
 
 ## Events
 

@@ -146,7 +146,7 @@ Animated outputs are APNG files. A browser or VS Code plays them. A viewer that 
 
 ## Benchmarks
 
-`tools/bench_examples.py` times the catalog against three.js and, when installed, Mojo 1.0.
+`tools/bench_examples.mojo` times the catalog against three.js and, when installed, Mojo 1.0.
 [Benchmarks](Benchmarks) names every other CPU bench and records who wins.
 The refresh command is in [How to measure examples](How-to-measure-examples).
 
@@ -154,5 +154,5 @@ The refresh command is in [How to measure examples](How-to-measure-examples).
 
 | Program | Shows |
 |---|---|
-| `tools/gpu_status.py` | Whether an accelerator is present. |
+| `tools/gpu_status.mojo` | Whether an accelerator is present. It needs MAX. |
 | `tools/doc_lint.mojo` | Whether the documentation follows the writing rules. |

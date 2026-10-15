@@ -31,9 +31,6 @@ import unittest
 from unittest.mock import patch
 
 import affected
-import ci_scope
-import shard
-import suite_key
 
 PROBE = 'from pkg.one import value\n\n\ndef main():\n    print(value())\n'
 VALUE = 'def value() -> Int:\n    return 1\n'
@@ -143,74 +140,6 @@ class TreeTests(unittest.TestCase):
         # whose build uses the root helper; selection can only grow.
         self.assertIn('tests/test_probe.mojo', selected)
 
-    def test_ci_scope_graph_uses_entry_directories(self):
-        sources = {name: (self.root / name).read_text()
-                   for name in affected.mojo_files()}
-        imports, users = ci_scope.graph(sources)
-        self.assertEqual(imports['pkg/one.mojo'], {'helper.mojo'})
-        self.assertNotIn('pkg/helper.mojo', users)
-
-    def test_prefix_module_change_and_removal_select_the_importer(self):
-        self.write('tools/pkg.mojo', 'def main():\n    pass\n')
-        for deleted in (False, True):
-            with self.subTest(deleted=deleted):
-                if deleted:
-                    (self.root / 'tools/pkg.mojo').unlink()
-                changed = {'tools/pkg.mojo': deleted}
-                with self.subTest(tool='affected'):
-                    self.assertIn('tools/probe.mojo', affected.affected_set(changed))
-                sources = {name: (self.root / name).read_text()
-                           for name in affected.mojo_files()}
-                with patch.object(ci_scope, 'source_tree', return_value=sources):
-                    plan = ci_scope.plan(changed, old={})
-                with self.subTest(tool='ci_scope'):
-                    self.assertFalse(plan['full'])
-                    self.assertIn('tools/probe.mojo', plan['files']['cpu_entries'])
-                    self.assertIn('tests/test_probe.mojo', plan['files']['cpu_tests'])
-                    self.assertEqual('tools/pkg.mojo' in plan['files']['cpu_entries'],
-                                     not deleted)
-
-    def test_ci_scope_graph_keeps_prefix_module_and_hidden_target(self):
-        self.write('tools/pkg.mojo', 'def main():\n    pass\n')
-        sources = {name: (self.root / name).read_text()
-                   for name in affected.mojo_files()}
-        imports, users = ci_scope.graph(sources)
-        self.assertEqual(imports['tools/probe.mojo'],
-                         {'tools/pkg.mojo', 'pkg/one.mojo'})
-        self.assertIn('tools/probe.mojo', users['tools/pkg.mojo'])
-
-    def test_removed_import_keeps_historical_prefix_module_dependencies(self):
-        self.write('tools/pkg.mojo', 'from core.hidden import value\n')
-        self.write('core/hidden.mojo', VALUE)
-        self.write('tests/test_hidden.mojo',
-                   'from core.hidden import value\n\ndef main():\n    print(value())\n')
-        old = {name: (self.root / name).read_text()
-               for name in affected.mojo_files()}
-        sources = dict(old)
-        sources['tests/test_probe.mojo'] = 'def main():\n    pass\n'
-        # Only the old test import can retain this unchanged dependency.
-        changed = {'tests/test_probe.mojo': False}
-        with patch.object(ci_scope, 'source_tree', return_value=sources):
-            plan = ci_scope.plan(changed, old=old)
-        self.assertFalse(plan['full'])
-        self.assertEqual(plan['files']['covered'], ['core/hidden.mojo'])
-        self.assertIn('tests/test_hidden.mojo', plan['files']['coverage_tests'])
-        self.assertNotIn('tests/test_hidden.mojo', plan['files']['cpu_tests'])
-
-    def test_suite_closure_and_weight_use_the_suite_directory(self):
-        self.write('tests/helper.mojo', VALUE)
-        known = set(affected.mojo_files())
-        imports = {}
-        self.assertEqual(suite_key.closure('tests/test_probe.mojo', known, imports),
-                         ['helper.mojo', 'pkg/one.mojo', 'tests/helper.mojo',
-                          'tests/test_probe.mojo'])
-        # The same cache serves a suite in another directory correctly.
-        self.assertEqual(suite_key.closure('tools/probe.mojo', known, imports),
-                         ['helper.mojo', 'pkg/one.mojo', 'tools/probe.mojo'])
-        sizes = {name: (self.root / name).stat().st_size for name in known}
-        self.assertEqual(shard.weight('tools/probe.mojo', known, sizes, {}),
-                         sizes['helper.mojo'] + sizes['pkg/one.mojo']
-                         + sizes['tools/probe.mojo'])
 
 
 if __name__ == '__main__':

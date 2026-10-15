@@ -129,7 +129,17 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Project tools
 
 <details>
-<summary>Implemented: 14</summary>
+<summary>Implemented: 19</summary>
+
+- [x] [CI planner in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): `tools/ci_scope.mojo` selects, runs and checks the hosted CI jobs with byte-identical plans [#769](https://github.com/SethKitchen/ThreeMojo/issues/769)
+
+- [x] [Build tools in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#rebuild-the-project-tools): the Makefile selects, splits and keys the checks with Mojo programs that it builds once [#767](https://github.com/SethKitchen/ThreeMojo/issues/767)
+
+- [x] [Fixture verifiers in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#verify-generated-fixtures): the fixture manifest check and the pinned Node runtime verifier run as Mojo with shared helpers [#764](https://github.com/SethKitchen/ThreeMojo/issues/764)
+
+- [x] [Negative-fixture checker in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#regenerate-negative-diagnostics): `tools/compile_fail.mojo` with a Mojo process helper replaces the Python checker; the manifest output is byte-identical [#763](https://github.com/SethKitchen/ThreeMojo/issues/763)
+
+- [x] [PNG optimizer in Mojo](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#recompress-a-png): lossless PNG and APNG recompression with no Python, part of porting the project tools [#762](https://github.com/SethKitchen/ThreeMojo/issues/762)
 
 - [x] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives, and a public download of all 47 is verified [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 

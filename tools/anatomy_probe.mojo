@@ -3,14 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Emit intermediate canonical records for anatomy_validity.py.
+"""Emit intermediate canonical records for tools/anatomy_validity.mojo.
 
 The Float32-only spine protocol uses zero for the unmeasured sacral-body
 field. The report writer must replace that specific placeholder with null
 and identify the authored support plane. Raw rows are not validity reports.
 """
 
-from tools.anatomy_pairs import _pair_probe, localize_pair
+from tools._anatomy_pairs import _pair_probe, localize_pair
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.sex import MALE, FEMALE
 from extensions.humanoid.side import RIGHT, LEFT

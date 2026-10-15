@@ -26,7 +26,7 @@ Native five-second test limits and fifteen-second outer controls, numerical
 work budgets, proof predicates, coverage denominators and all other maintained
 individual child timeouts remain unchanged. This includes the 120-second
 authority children and the separate 1,800-second AIR-emission child in
-`tools/check_air_calls.py`. Full source-bound, adversarial, native, coverage and
+`tools/check_air_calls.mojo`. Full source-bound, adversarial, native, coverage and
 exact-head CI qualification is still required. This addendum claims no passing
 gate.
 

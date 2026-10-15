@@ -1,25 +1,27 @@
 # CARLA assets
 
-The CARLA town can use real assets in place of its procedural ones: photoscanned road textures, sky panoramas and CARLA's own vehicle models. The manifest, `assets/carla/manifest.json`, lists each asset. The tool `assets/carla/tools/carla_assets.py` downloads the assets into `.cache/carla-assets/` and checks the SHA-256 sum of each file. Git ignores the cache. A build or a test does not need the assets: when an asset is not in the cache, the renderer uses its procedural asset.
+The CARLA town can use real assets in place of its procedural ones: photoscanned road textures, sky panoramas and CARLA's own vehicle models. The manifest, `assets/carla/manifest.json`, lists each asset. The tool `tools/carla_assets.mojo` downloads the assets into `.cache/carla-assets/` with `curl` and checks the SHA-256 sum of each file. Git ignores the cache. A build or a test does not need the assets: when an asset is not in the cache, the renderer uses its procedural asset.
 
 ## Fetch the assets
+
+Run the commands from the repository root. `tools/tool.sh` builds the tool once and then runs it.
 
 1. Check the manifest:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py check
+   sh tools/tool.sh .venv/bin/mojo carla_assets check
    ```
 
 2. Download each asset that has a URL and a sum:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py fetch
+   sh tools/tool.sh .venv/bin/mojo carla_assets fetch
    ```
 
 3. See which entries the cache holds:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py status
+   sh tools/tool.sh .venv/bin/mojo carla_assets status
    ```
 
 To fetch one entry, give its id, for example `fetch carla.vehicle.audi.a2`. The tool writes a file only after its sum matches. It never writes over a file that is already verified.
@@ -42,13 +44,13 @@ It never changes the manifest or replaces a mismatched file.
 3. Verify the archive and extract missing members without downloading:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py fetch --offline carla.vehicle.audi.a2
+   sh tools/tool.sh .venv/bin/mojo carla_assets fetch --offline carla.vehicle.audi.a2
    ```
 
 4. Check that the selected archive and every named member are present and correct:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py verify --strict carla.vehicle.audi.a2
+   sh tools/tool.sh .venv/bin/mojo carla_assets verify --strict carla.vehicle.audi.a2
    ```
 
 Both commands return a nonzero exit code for missing, unpinned or mismatched
@@ -139,7 +141,7 @@ add unused actor nodes or paint and lamp materials.
 Generate a synthetic load-size fixture:
 
 ```sh
-python3 bench/carla_model_cache_fixture.py /tmp/carla-model-bench
+mojo run -I . bench/carla_model_cache_fixture.mojo /tmp/carla-model-bench
 .venv/bin/mojo build --Werror -I . bench/carla_model_cache_bench.mojo -o /tmp/carla-model-bench-run
 /tmp/carla-model-bench-run /tmp/carla-model-bench 32 batch
 /tmp/carla-model-bench-run /tmp/carla-model-bench 32 incremental
@@ -173,16 +175,16 @@ output. Keep it with the gallery and its component images when sharing them.
 For a direct example run, generate that file yourself:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py credits --all --output out/carla.credits.md
+sh tools/tool.sh .venv/bin/mojo carla_assets credits --all --output out/carla.credits.md
 ```
 
 After editing the manifest, update the committed catalog:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/ATTRIBUTION.md
+sh tools/tool.sh .venv/bin/mojo carla_assets credits --all --output assets/carla/ATTRIBUTION.md
 ```
 
-`make test-tools` checks that the catalog still matches the manifest.
+`tests/test_carla_assets_tool.mojo` checks that the catalog still matches the manifest.
 Google Drive hosts the archives. See "Publish the converted archives".
 
 ## Stage renders for sharing
@@ -190,7 +192,7 @@ Google Drive hosts the archives. See "Publish the converted archives".
 Use `stage-render` to copy named render files into a new distribution directory:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py stage-render --output /tmp/carla-distribution out/carla.png out/carla_rgb.png
+sh tools/tool.sh .venv/bin/mojo carla_assets stage-render --output /tmp/carla-distribution out/carla.png out/carla_rgb.png
 ```
 
 The directory contains only the named files, copied by basename,
@@ -202,7 +204,7 @@ This catalog does not prove which assets appear in an image.
 For historical renders, select the manifest that corresponds to those renders:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py --manifest /path/to/historical-manifest.json stage-render --output /tmp/historical-distribution /path/to/render.png
+sh tools/tool.sh .venv/bin/mojo carla_assets --manifest /path/to/historical-manifest.json stage-render --output /tmp/historical-distribution /path/to/render.png
 ```
 
 Keep the source files unchanged while the command runs.
@@ -231,7 +233,7 @@ The existing `credits` command is unchanged.
 Use `stage-archive` to package the pinned archives of named entries with their metadata:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2 carla.vehicle.tesla.model3
+sh tools/tool.sh .venv/bin/mojo carla_assets stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2 carla.vehicle.tesla.model3
 ```
 
 The new directory contains these files:
@@ -255,7 +257,7 @@ A recipient can use the directory as a cache root.
 This command verifies the archives and extracts their members without a download:
 
 ```sh
-python3 assets/carla/tools/carla_assets.py --manifest /tmp/carla-archives/manifest.json --cache /tmp/carla-archives fetch --offline carla.vehicle.audi.a2 carla.vehicle.tesla.model3
+sh tools/tool.sh .venv/bin/mojo carla_assets --manifest /tmp/carla-archives/manifest.json --cache /tmp/carla-archives fetch --offline carla.vehicle.audi.a2 carla.vehicle.tesla.model3
 ```
 
 The rules of `stage-render` also apply:
@@ -295,7 +297,7 @@ To publish an archive, the publisher does these steps:
    For a distribution with one archive:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2
+   sh tools/tool.sh .venv/bin/mojo carla_assets stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2
    ```
 
    The command fails when the archive bytes do not match the pinned sum.
@@ -306,7 +308,7 @@ To publish an archive, the publisher does these steps:
    Do not replace the folder's attribution with credits for only one of its archives.
 4. Set the link sharing of every archive and both companion files to "Anyone with the link" and the role to "Viewer".
 5. Put the share link in the manifest. For a vehicle, use
-   `manifest_vehicles.py --urls`. For a town, use `manifest_towns.py --urls`.
+   `carla_export_manifest_vehicles --urls`. For a town, use `carla_export_manifest_towns --urls`.
    See "Host the vehicle zips". Do not change the sum.
    After URL edits, generate the attribution and stage the complete distribution again in a new output directory.
    Replace the published companion files with `manifest.json` and `ATTRIBUTION.md` from that new package.
@@ -315,8 +317,8 @@ To publish an archive, the publisher does these steps:
    For the one-archive example:
 
    ```sh
-   python3 assets/carla/tools/carla_assets.py --cache /tmp/carla-check fetch carla.vehicle.audi.a2
-   python3 assets/carla/tools/carla_assets.py --cache /tmp/carla-check verify --strict carla.vehicle.audi.a2
+   sh tools/tool.sh .venv/bin/mojo carla_assets --cache /tmp/carla-check fetch carla.vehicle.audi.a2
+   sh tools/tool.sh .venv/bin/mojo carla_assets --cache /tmp/carla-check verify --strict carla.vehicle.audi.a2
    ```
 
    Both commands must return 0. The `/tmp/carla-check` directory must not exist before step 6.
@@ -387,24 +389,29 @@ To add the URLs after you rebuild the zips:
 3. Write the URLs into the manifest:
 
    ```sh
-   python3 assets/carla/tools/export/manifest_vehicles.py --urls urls.json
+   sh tools/tool.sh .venv/bin/mojo carla_export_manifest_vehicles --urls urls.json
    ```
 
 The fetch tool changes a Google Drive share link into Drive's download link. When a host sends a web page in place of the file, the tool stops with an error. Drive does this for a file that is not shared, and for a file whose download quota is used up.
 
 ## Rebuild the vehicle zips
 
-CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/tools/export/` change them to glTF. They run on Windows, because UE Viewer (UModel) is a Windows program.
+CARLA's vehicles are Unreal Engine 4.26 assets. The scripts in `assets/carla/tools/export/` change them to glTF. They run on Windows, because UE Viewer (UModel) is a Windows program. The zip and manifest tools are Mojo programs in `tools/`. Run them in the Linux environment, for example WSL, from the repository root.
 
 1. Make a work folder. Set `CARLA_EXPORT_DIR` to it.
 2. Put UModel build 1590 at `umodel/umodel_64.exe`.
 3. Extract `CarlaUE4/Content/` from `CARLA_0.9.16.zip` into `cooked/`. You need `Carla/Static/Car`, `Carla/Static/Vehicles`, `Carla/Static/GenericMaterials`, `Carla/Static/Dynamic` and `Carla/Blueprints/Vehicles`.
-4. Run the export, the zip and the manifest scripts:
+4. Run the export script on Windows:
 
    ```sh
    python export_vehicles.py
-   python zip_packages.py
-   python manifest_vehicles.py
+   ```
+
+5. Zip the packages and write the manifest. Set `CARLA_EXPORT_DIR` to the absolute path of the same work folder:
+
+   ```sh
+   sh tools/tool.sh .venv/bin/mojo carla_export_zip_packages
+   sh tools/tool.sh .venv/bin/mojo carla_export_manifest_vehicles
    ```
 
 `export_vehicles.py` reads each vehicle blueprint for the meshes it names. It exports the skeletal body and the static glass and lights, then merges them into one glTF file. `carla_gltf_fix.py` then does these steps:
@@ -447,7 +454,7 @@ A package names no engine and no engine path. `build_towns.py` stops with an err
 
 ## Rebuild the town packages
 
-The towns are made in three steps. They run on Windows, like the vehicle scripts.
+The towns are made in three steps. The scripts run on Windows, like the vehicle scripts. The zip and manifest tools run in the Linux environment, from the repository root.
 
 1. Dump each town's layout from a running server:
 
@@ -471,11 +478,16 @@ The towns are made in three steps. They run on Windows, like the vehicle scripts
 
    ```sh
    python build_towns.py [--top 20]
-   python zip_packages.py --packages town_packages --index towns.json
-   python manifest_towns.py [--urls urls.json]
    ```
 
-   `manifest_towns.py` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'.
+   Then, with `CARLA_EXPORT_DIR` set to the absolute path of the work folder:
+
+   ```sh
+   sh tools/tool.sh .venv/bin/mojo carla_export_zip_packages --packages town_packages --index towns.json
+   sh tools/tool.sh .venv/bin/mojo carla_export_manifest_towns [--urls urls.json]
+   ```
+
+   `carla_export_manifest_towns` writes each town's entry and its binding, `town.<town>`. The URLs file is the same form as the vehicles'.
 
    `--top` lists the meshes that add the most triangles to each town.
 
@@ -520,7 +532,7 @@ Poly Haven has no CARLA vehicles or towns. CARLA's own models are in the CARLA r
 
 ## Verify extracted files
 
-Run `python3 assets/carla/tools/carla_assets.py verify` to check the cache.
+Run `sh tools/tool.sh .venv/bin/mojo carla_assets verify` to check the cache.
 For each verified archive, the tool also compares its extracted files with
 its members. A changed extracted file is reported as a mismatch. `fetch`
 refuses to overwrite it. Remove that file explicitly, then run `fetch` to

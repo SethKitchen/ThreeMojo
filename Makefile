@@ -26,6 +26,18 @@ define run
 out=$$($(1) 2>&1); rc=$$?; echo "$$out" | sed '/Crashpad/d'
 endef
 
+# Shell quoting also protects flags that contain spaces or shell punctuation.
+quote = '$(subst ','"'"',$(1))'
+# The project tools are Mojo programs. `$(TOOL) NAME ARGUMENT...` runs
+# tools/NAME.mojo. tools/tool.sh builds each program once, into .cache/tools/,
+# because this Makefile runs some of them many times while it parses. The
+# tools have their own compiler, so a test can give MOJO a stand-in. The
+# command must not start with an assignment such as `MOJO=...`: then make
+# passes it to the shell as one argument, and the cache key's argument
+# lists are longer than one argument can be.
+TOOL_MOJO := $(if $(wildcard .venv/bin/mojo),.venv/bin/mojo,mojo)
+TOOL = sh tools/tool.sh $(call quote,$(TOOL_MOJO))
+
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
@@ -35,12 +47,13 @@ LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
-# Test modules prefixed with '_' are import-only helpers, not CLI entry points.
-# Keep the two older named fixtures in the same inventory. Lint their docs,
-# format them, and copy them unchanged beside instrumented test suites.
+# Modules prefixed with '_' in tests/ and tools/ are import-only helpers, not
+# CLI entry points, so a new helper needs no edit here. Keep the two older
+# named fixtures in the same inventory. Lint their docs, format them, and copy
+# them unchanged beside instrumented test suites.
 TEST_HELPER_LIBS := $(wildcard tests/_*.mojo) tests/carla_fixed_s_fixture.mojo \
                     tests/exact_predicates_oracle.mojo
-HELPER_LIBS  := tools/anatomy_pairs.mojo $(TEST_HELPER_LIBS)
+HELPER_LIBS  := $(wildcard tools/_*.mojo) $(TEST_HELPER_LIBS)
 TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo)) $(HELPER_LIBS)
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
@@ -75,7 +88,8 @@ GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo extensions/water/gpu.mo
 GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
                     tests/test_gpu_volume_packing.mojo
 GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS)
-GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo
+GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo \
+                    tools/gpu_status.mojo
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
 CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
@@ -107,7 +121,7 @@ OUT_DIR := out
 
 # --- affected ---------------------------------------------------------------
 # `make check-cpu AFFECTED=origin/main` checks only what the change since that
-# ref can reach, as nx's "affected" does. tools/affected.py walks the import
+# ref can reach, as nx's "affected" does. tools/affected.mojo walks the import
 # graph: a suite, an example or a module is checked when it imports a changed
 # module, directly or through others, or quotes a changed asset's path.
 # Formatting reads each file alone, so it checks the changed files only. A
@@ -123,9 +137,9 @@ OUT_DIR := out
 AFFECTED :=
 COMPILE_FAIL_RUN := $(COMPILE_FAIL)
 ifneq ($(strip $(AFFECTED)),)
-affected = $(shell python3 tools/affected.py --base $(AFFECTED) $(1))
-AFFECTED_CHANGE  := $(shell python3 tools/affected.py --base $(AFFECTED) --list)
-FORMATTED        := $(shell python3 tools/affected.py --base $(AFFECTED) \
+affected = $(shell $(TOOL) affected --base $(AFFECTED) $(1))
+AFFECTED_CHANGE  := $(shell $(TOOL) affected --base $(AFFECTED) --list)
+FORMATTED        := $(shell $(TOOL) affected --base $(AFFECTED) \
                       --changed $(FORMATTED))
 CPU_ENTRY_POINTS := $(call affected,$(CPU_ENTRY_POINTS))
 CPU_DOC_SOURCES  := $(call affected,$(CPU_DOC_SOURCES))
@@ -153,7 +167,7 @@ COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) $(HELPER_LIBS) \
 JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
           || nproc 2> /dev/null || echo 4)
 
-# The time limit for one test, in seconds. tools/run_suite.py fails a test
+# The time limit for one test, in seconds. tools/run_suite.mojo fails a test
 # that takes longer, and stops a suite that hangs. A test over the limit
 # means the code under test is slow: make the library faster, not the test
 # smaller. It is a performance gate, so do not raise it to get a test green.
@@ -182,17 +196,17 @@ COVERAGE_TESTS := $(CPU_TESTS)
 
 # CI splits the suites over runners that work at once: `SHARD=i/n` keeps
 # group i of n, balanced by the source each suite imports, since a suite's
-# CPU time is mostly compilation. See tools/shard.py. Only the suites split:
+# CPU time is mostly compilation. See tools/shard.mojo. Only the suites split:
 # formatting, lint, the docs and the compile-fail cases run whole, on one
 # runner. `coverage-report` reads the captures of every group, so it checks
 # that each suite of the whole list left one.
 SHARD ?=
 TEST_SUITES := $(CPU_TESTS)
 ifneq ($(strip $(SHARD)),)
-TEST_SUITES := $(shell python3 tools/shard.py $(SHARD) $(CPU_TESTS) \
+TEST_SUITES := $(shell $(TOOL) shard $(SHARD) $(CPU_TESTS) \
                  || echo SHARD_ERROR)
 ifneq ($(filter SHARD_ERROR,$(TEST_SUITES)),)
-$(error tools/shard.py could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
+$(error tools/shard.mojo could not split the suites for SHARD=$(SHARD): it takes I/N with 1 <= I <= N and readable suites)
 endif
 endif
 # Instrumented runtime can outweigh compilation by minutes. Keep CPU
@@ -201,10 +215,10 @@ endif
 COVERAGE_SUITES := $(COVERAGE_TESTS)
 ifneq ($(strip $(SHARD)),)
 ifneq ($(filter coverage coverage-capture,$(MAKECMDGOALS)),)
-COVERAGE_SUITES := $(shell python3 tools/coverage_shard.py $(SHARD) $(COVERAGE_TESTS) \
+COVERAGE_SUITES := $(shell $(TOOL) coverage_shard $(SHARD) $(COVERAGE_TESTS) \
                        || echo SHARD_ERROR)
 ifneq ($(filter SHARD_ERROR,$(COVERAGE_SUITES)),)
-$(error tools/coverage_shard.py could not split coverage suites for SHARD=$(SHARD))
+$(error tools/coverage_shard.mojo could not split coverage suites for SHARD=$(SHARD))
 endif
 endif
 endif
@@ -228,15 +242,13 @@ COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root
 endif
 
 CACHE_DIR := .cache
-# Shell quoting also protects flags that contain spaces or shell punctuation.
-quote = '$(subst ','"'"',$(1))'
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 # Native test fixtures are test-only. Their compiler identity also invalidates
 # suite stamps; a missing compiler is a build failure, never a skipped suite.
 export CC
 NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
                        --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
-HASH := $(shell python3 tools/cache_key.py \
+HASH := $(shell $(TOOL) cache_key \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
           --setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS)) \
@@ -286,7 +298,8 @@ endef
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
-        clean clean-images optimize-images draco-export-check audio-game-humanoid
+        clean clean-images optimize-images draco-export-check audio-game-humanoid \
+        repository-check
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -331,7 +344,7 @@ check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-c
 # comes first so a suite that skipped every hardware test cannot be mistaken
 # for one that ran them. Use compile-gpu for a build-only check without a GPU.
 check-gpu: gpu-status test-gpu-host check-gpu-air
-	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
+	@$(TOOL) gpu_status --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) lint-gpu test-gpu-device; \
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
 
@@ -345,7 +358,7 @@ test: test-cpu test-gpu
 
 # Each suite also has its own stamp, in $(SUITE_STAMPS), named by a key
 # over the files the suite imports and the assets it quotes: see
-# tools/suite_key.py. A change to one module builds and runs only the
+# tools/suite_key.mojo. A change to one module builds and runs only the
 # suites that reach it, and `make -B` drops every stamp. CI starts with no
 # cache, so this is for local runs; CI narrows the suites with AFFECTED.
 SUITE_STAMPS := $(CACHE_DIR)/suites
@@ -361,13 +374,15 @@ test-cpu: $(TEST_CPU_STAMP)
 $(TEST_CPU_STAMP):
 	@mkdir -p $(BIN_DIR) $(SUITE_STAMPS)
 	@$(if $(FORCED),rm -f $(SUITE_STAMPS)/*)
-	@python3 tools/suite_key.py --stamps $(SUITE_STAMPS) \
+	@$(TOOL) suite_key --stamps $(SUITE_STAMPS) \
 	    --setting=$(call quote,$(MOJO)) \
 	    --setting=$(call quote,$(MOJOFLAGS)) \
 	    --setting=$(call quote,$(TOOLCHAIN)) \
 	    --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
 	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
+	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
+	@sh tools/tool.sh $(TOOL_MOJO) --build compiler_telemetry
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
@@ -375,15 +390,15 @@ $(TEST_CPU_STAMP):
 	             progress() { printf "%s suite=%s %s\n" \
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
-	             out=$$(python3 tools/compiler_telemetry.py --suite "$$1" --log-fd 3 -- \
+	             out=$$(sh tools/tool.sh $(TOOL_MOJO) compiler_telemetry --suite "$$1" --log-fd 3 -- \
 	                    python3 tools/native_test_support.py run --root . \
 	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
 	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \
 	                    progress "$$1" "build-end: exit=$$build_rc"; \
 	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \
-	                    progress "$$1" "run-start: python3 tools/run_suite.py --seconds $(TEST_TIMEOUT) --suite $$1 -- $$bin"; \
-	                    python3 tools/run_suite.py \
+	                    progress "$$1" "run-start: run_suite --seconds $(TEST_TIMEOUT) --suite $$1 -- $$bin"; \
+	                    sh tools/tool.sh $(TOOL_MOJO) run_suite \
 	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"; \
 	                    run_rc=$$?; \
 	                    progress "$$1" "run-end: exit=$$run_rc"; \
@@ -412,15 +427,16 @@ $(TEST_CPU_STAMP):
 # GPU_BUDGET=600` on a machine whose first kernel compile is genuinely slow.
 GPU_BUDGET := 300
 test-gpu: gpu-status test-gpu-host
-	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
+	@$(TOOL) gpu_status --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) test-gpu-device; \
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
 
 test-gpu-device:
+	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@printf '%s\n' $(filter-out $(GPU_HOST_TESTS),$(GPU_TESTS)) \
 	  | perl -e 'alarm shift; exec @ARGV' $(GPU_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	      sh -c 'out=$$(sh tools/tool.sh $(TOOL_MOJO) run_suite --results-only \
 	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { rc=$$?; \
@@ -438,9 +454,10 @@ test-gpu-device:
 # do depends on the hardware, so a stamp from another machine is as good.
 test-gpu-host: $(TEST_GPU_HOST_STAMP)
 $(TEST_GPU_HOST_STAMP):
+	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
 	@printf '%s\n' $(GPU_HOST_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$(python3 tools/run_suite.py --results-only \
+	      sh -c 'out=$$(sh tools/tool.sh $(TOOL_MOJO) run_suite --results-only \
 	               --suite "$$1" -- $(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some GPU host suites FAILED."; exit 1; }
@@ -448,7 +465,7 @@ $(TEST_GPU_HOST_STAMP):
 	@$(call stamp,test-gpu-host)
 
 gpu-status:
-	@.venv/bin/python tools/gpu_status.py
+	@$(TOOL) gpu_status
 
 lint: lint-cpu lint-gpu
 
@@ -694,7 +711,7 @@ endif
 # valid control and distinguishes source rejections from infrastructure errors.
 compile-fail: $(NEG_STAMP)
 $(NEG_STAMP):
-	@python3 tools/compile_fail.py --compiler=$(call quote,$(MOJO)) \
+	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --compiler=$(call quote,$(MOJO)) \
 	  --flags=$(call quote,$(MOJOFLAGS)) $(COMPILE_FAIL_RUN)
 	@$(call stamp,compile-fail)
 
@@ -765,7 +782,7 @@ bench-scene:
 # bench/results-<linux|macos>.json and fills its tables on
 # docs/wiki/Benchmarks.md.
 bench-examples:
-	@python3 tools/bench_examples.py
+	@$(TOOL) bench_examples
 
 example: $(OUT_DIR)/triangle.png
 
@@ -781,7 +798,7 @@ draco-export-check:
 # Reuse the import graph used by the suite cache. Keep extensions in the
 # lint/coverage lists, but do not rebuild a cube for an unrelated anatomy edit.
 # The writer uses atomic replacement, so concurrent make processes are safe.
-EXAMPLE_INPUTS_STATUS := $(shell python3 tools/example_inputs.py \
+EXAMPLE_INPUTS_STATUS := $(shell $(TOOL) example_inputs \
                           --output $(CACHE_DIR)/example-inputs.mk || echo failed)
 ifneq ($(strip $(EXAMPLE_INPUTS_STATUS)),)
 $(error Cannot read example prerequisites)
@@ -796,421 +813,53 @@ $(OUT_DIR)/audio-character.glb: $(EXAMPLE_INPUTS_audio_game_humanoid)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/audio_game_humanoid.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
-animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
-           $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
-           $(OUT_DIR)/floor.png $(OUT_DIR)/photo.png \
-           $(OUT_DIR)/lamps.png $(OUT_DIR)/first_scene.png \
-           $(OUT_DIR)/lit_scene.png $(OUT_DIR)/rotations.png \
-           $(OUT_DIR)/cameras.png $(OUT_DIR)/geometry.png \
-           $(OUT_DIR)/instances.png $(OUT_DIR)/raycast.png \
-           $(OUT_DIR)/curves.png $(OUT_DIR)/keyframes.png \
-           $(OUT_DIR)/skinning.png $(OUT_DIR)/phong.png \
-           $(OUT_DIR)/fog.png $(OUT_DIR)/culling.png \
-           $(OUT_DIR)/clipping.png $(OUT_DIR)/gpu_backend.png \
-           $(OUT_DIR)/exposure.png $(OUT_DIR)/model.png \
-           $(OUT_DIR)/math.png $(OUT_DIR)/units.png \
-           $(OUT_DIR)/chain.png $(OUT_DIR)/additive.png \
-           $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
-           $(OUT_DIR)/coverage.png $(OUT_DIR)/lines.png \
-           $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png \
-           $(OUT_DIR)/mirror.png $(OUT_DIR)/physical.png \
-           $(OUT_DIR)/sprites.png $(OUT_DIR)/stereo.png \
-           $(OUT_DIR)/television.png $(OUT_DIR)/shadows.png \
-           $(OUT_DIR)/wide.png $(OUT_DIR)/postprocessing.png \
-           $(OUT_DIR)/controls.png $(OUT_DIR)/scenejson.png \
-           $(OUT_DIR)/exporters.png $(OUT_DIR)/transmission.png \
-           $(OUT_DIR)/distance.png $(OUT_DIR)/unfogged.png \
-           $(OUT_DIR)/targets.png $(OUT_DIR)/layers.png \
-           $(OUT_DIR)/nodes.png $(OUT_DIR)/ktx2.png \
-           $(OUT_DIR)/coats.png $(OUT_DIR)/environment.png \
-           $(OUT_DIR)/sky.png $(OUT_DIR)/faces.png \
-           $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png \
-           $(OUT_DIR)/animated.png $(OUT_DIR)/computation.png \
-           $(OUT_DIR)/lightmap.png $(OUT_DIR)/svg.png \
-           $(OUT_DIR)/models.png $(OUT_DIR)/mathaddons.png \
-           $(OUT_DIR)/hooks.png $(OUT_DIR)/sculptor.png \
-           $(OUT_DIR)/tslfunctions.png $(OUT_DIR)/gaussian.png \
-           $(OUT_DIR)/vxgi.png $(OUT_DIR)/lighting.png \
-           $(OUT_DIR)/lofts.png $(OUT_DIR)/generators.png \
-           $(OUT_DIR)/computenodes.png \
-           $(OUT_DIR)/building-model.png \
-           $(OUT_DIR)/building-topology.png \
-           $(OUT_DIR)/ifc-exchange.png \
-           $(OUT_DIR)/procedural-towers.png \
-           $(OUT_DIR)/floor-plans-and-interiors.png \
-           $(OUT_DIR)/frame-analysis.png \
-           $(OUT_DIR)/shell-analysis.png \
-           $(OUT_DIR)/building-energy.png \
-           $(OUT_DIR)/numerics.png \
-           $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
-           $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
-           $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
-           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png \
-           $(OUT_DIR)/foot.png $(OUT_DIR)/limb.png \
-           $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
-           $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
-           $(OUT_DIR)/pelvis.png $(OUT_DIR)/torso.png \
-           $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
-           $(OUT_DIR)/head.png \
-           $(OUT_DIR)/water.png \
-           $(OUT_DIR)/animals.png \
-           $(OUT_DIR)/walk.png \
-           $(OUT_DIR)/animal_anatomy.png \
+# Every gallery image renders and compresses the same way, so one template
+# writes each rule. examples/gallery.mk lists the images.
+define GALLERY_RULE
+GALLERY_IMAGES += $$(OUT_DIR)/$(1).png
+$$(OUT_DIR)/$(1).png: $$(EXAMPLE_INPUTS_$(2)) $(3)
+	@mkdir -p $$(OUT_DIR)
+	@$$(call run,$$(MOJO) run $$(MOJOFLAGS) examples/$(2).mojo $$@); \
+	[ $$$$rc -eq 0 ] || exit 1
+	@$$(MOJO) run $$(MOJOFLAGS) tools/optimize_png.mojo $$@
+endef
+gallery = $(eval $(call GALLERY_RULE,$(strip $(1)),$(strip $(2)),$(strip $(3))))
+GALLERY_IMAGES :=
+include examples/gallery.mk
+
+animation: $(GALLERY_IMAGES) \
+           $(OUT_DIR)/photo.png \
+           $(OUT_DIR)/first_scene.png \
+           $(OUT_DIR)/lit_scene.png \
+           $(OUT_DIR)/ktx2.png \
            $(OUT_DIR)/carla_towns.png \
-           $(OUT_DIR)/game_humanoid.png \
-           $(OUT_DIR)/hairstyles.png \
-           $(OUT_DIR)/genomes.png \
-           $(OUT_DIR)/family.png \
-           $(OUT_DIR)/talking.png \
            $(OUT_DIR)/carla.png \
-           $(OUT_DIR)/carla_town.png \
-           $(OUT_DIR)/expressions.png
-
-# A chrome ball under a sky, reflecting a cube camera's view of two boxes.
-$(OUT_DIR)/mirror.png: $(EXAMPLE_INPUTS_mirror)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/mirror.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A split screen: two viewports and two scissors drawing into one target.
-$(OUT_DIR)/split.png: $(EXAMPLE_INPUTS_split)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/split.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A grid, the axes, a box around a cube and a second camera's frustum.
-$(OUT_DIR)/helpers.png: $(EXAMPLE_INPUTS_outlines)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/outlines.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/lines.png: $(EXAMPLE_INPUTS_lines)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lines.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/cube.png: $(EXAMPLE_INPUTS_cube)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cube.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/cubes.png: $(EXAMPLE_INPUTS_cubes)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cubes.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Translucent panes over a solid cube: blending, sorting and linear light.
-$(OUT_DIR)/glass.png: $(EXAMPLE_INPUTS_glass)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/glass.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Three colored lamps on a coarse sphere: many lights, and per-fragment shading.
-$(OUT_DIR)/lamps.png: $(EXAMPLE_INPUTS_lamps)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lamps.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+           $(OUT_DIR)/carla_town.png
 
 # A cube wearing a PNG somebody else's encoder wrote: the decoder end to end.
 $(OUT_DIR)/photo.png: $(EXAMPLE_INPUTS_photo) assets/brick.png
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/photo.mojo assets/brick.png $@); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A receding floor, half mipmapped and half not: minification and aliasing.
-$(OUT_DIR)/floor.png: $(EXAMPLE_INPUTS_floor)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/floor.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A checkerboard cube: scene graph, culling, depth, uv and sampling together.
-$(OUT_DIR)/textured.png: $(EXAMPLE_INPUTS_textured)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/textured.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Two frames, perspective-correct and affine, of the same prepared triangles.
-$(OUT_DIR)/uv.png: $(EXAMPLE_INPUTS_uv)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/uv.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/spin.png: $(EXAMPLE_INPUTS_spin)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/spin.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
 $(OUT_DIR)/triangle.png: $(EXAMPLE_INPUTS_triangle)
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/triangle.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
 $(OUT_DIR)/first_scene.png: $(EXAMPLE_INPUTS_first_scene)
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/first_scene.mojo); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
 $(OUT_DIR)/lit_scene.png: $(EXAMPLE_INPUTS_lit_scene)
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lit_scene.mojo); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/rotations.png: $(EXAMPLE_INPUTS_rotations)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/rotations.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/cameras.png: $(EXAMPLE_INPUTS_ortho)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/ortho.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/geometry.png: $(EXAMPLE_INPUTS_geometry)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/geometry.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/instances.png: $(EXAMPLE_INPUTS_instances)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/instances.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/raycast.png: $(EXAMPLE_INPUTS_raycast)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/raycast.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/curves.png: $(EXAMPLE_INPUTS_curves)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/curves.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/keyframes.png: $(EXAMPLE_INPUTS_keyframes)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/keyframes.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/skinning.png: $(EXAMPLE_INPUTS_skinning)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/skinning.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Ten spheres from chalk to mirror and from dielectric to metal, under a sky.
-$(OUT_DIR)/physical.png: $(EXAMPLE_INPUTS_physical)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/physical.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/phong.png: $(EXAMPLE_INPUTS_phong)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/phong.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/fog.png: $(EXAMPLE_INPUTS_fog)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fog.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/culling.png: $(EXAMPLE_INPUTS_culling)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/culling.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/clipping.png: $(EXAMPLE_INPUTS_clipping)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/clipping.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/gpu_backend.png: $(EXAMPLE_INPUTS_gpu_backend)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/gpu_backend.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/exposure.png: $(EXAMPLE_INPUTS_exposure)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/exposure.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/model.png: $(EXAMPLE_INPUTS_model) assets/cube.obj
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/model.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/math.png: $(EXAMPLE_INPUTS_orbit)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/orbit.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/units.png: $(EXAMPLE_INPUTS_clock)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/clock.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/chain.png: $(EXAMPLE_INPUTS_chain)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/chain.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/additive.png: $(EXAMPLE_INPUTS_additive)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/additive.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/normals.png: $(EXAMPLE_INPUTS_normals)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/normals.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/fragments.png: $(EXAMPLE_INPUTS_fragments)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fragments.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/coverage.png: $(EXAMPLE_INPUTS_edges)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/edges.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/sprites.png: $(EXAMPLE_INPUTS_sprites)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/sprites.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/stereo.png: $(EXAMPLE_INPUTS_stereo)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/stereo.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/television.png: $(EXAMPLE_INPUTS_television)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/television.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A cube's shadow swings across a floor as a directional lamp orbits.
-$(OUT_DIR)/shadows.png: $(EXAMPLE_INPUTS_shadows)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/shadows.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A ribbon eight pixels wide, drawn as triangles, turns with a box.
-$(OUT_DIR)/wide.png: $(EXAMPLE_INPUTS_wide)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/wide.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Bloom and a vignette over a dark knot and two emissive spheres.
-$(OUT_DIR)/postprocessing.png: $(EXAMPLE_INPUTS_bloom)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/bloom.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Translate handles on a cube, redrawn as the camera orbits.
-$(OUT_DIR)/controls.png: $(EXAMPLE_INPUTS_gizmo)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/gizmo.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A scene written as three.js JSON and read back before it is drawn.
-$(OUT_DIR)/scenejson.png: $(EXAMPLE_INPUTS_json_scene)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/json_scene.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A knot written to glTF and read back before it is drawn.
-$(OUT_DIR)/exporters.png: $(EXAMPLE_INPUTS_reloaded)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/reloaded.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A glass sphere refracts three colored boxes.
-$(OUT_DIR)/transmission.png: $(EXAMPLE_INPUTS_gem)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/gem.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Distance from a point, packed into the color of a sphere.
-$(OUT_DIR)/distance.png: $(EXAMPLE_INPUTS_distance)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/distance.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Three cubes in fog. The middle material has fog turned off.
-$(OUT_DIR)/unfogged.png: $(EXAMPLE_INPUTS_unfogged)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/unfogged.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A float color attachment above a normal attachment.
-$(OUT_DIR)/targets.png: $(EXAMPLE_INPUTS_targets)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/targets.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Sheen, iridescence and anisotropy on three spheres.
-$(OUT_DIR)/layers.png: $(EXAMPLE_INPUTS_layers)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/layers.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A node graph tints a sphere and pushes its vertices.
-$(OUT_DIR)/nodes.png: $(EXAMPLE_INPUTS_graph)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/graph.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
 # UASTC and ETC1S images decoded from KTX2 files.
 $(OUT_DIR)/ktx2.png: $(EXAMPLE_INPUTS_basis) assets/ktx2/uastc_rgb_zstd_mips.ktx2 \
@@ -1218,425 +867,33 @@ $(OUT_DIR)/ktx2.png: $(EXAMPLE_INPUTS_basis) assets/ktx2/uastc_rgb_zstd_mips.ktx
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/basis.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
-# Clearcoat bands and a specular color map on two spheres.
-$(OUT_DIR)/coats.png: $(EXAMPLE_INPUTS_coats)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/coats.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A metal ball whose sky was written as scene JSON and read back.
-$(OUT_DIR)/environment.png: $(EXAMPLE_INPUTS_skyjson)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/skyjson.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Preetham's daylight sky, with the sun crossing above a sphere.
-$(OUT_DIR)/sky.png: $(EXAMPLE_INPUTS_daylight)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/daylight.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# One box, a different material on each face.
-$(OUT_DIR)/faces.png: $(EXAMPLE_INPUTS_faces)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/faces.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# The Utah teapot, from the geometry addons.
-$(OUT_DIR)/teapot.png: $(EXAMPLE_INPUTS_utah)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/utah.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Two metaballs joined by marching cubes.
-$(OUT_DIR)/blobs.png: $(EXAMPLE_INPUTS_blobs)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/blobs.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A morph flip-book beside a gyroscope.
-$(OUT_DIR)/animated.png: $(EXAMPLE_INPUTS_flipbook)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/flipbook.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A ripple field computed one step a frame.
-$(OUT_DIR)/computation.png: $(EXAMPLE_INPUTS_ripples)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/ripples.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A light map that gathers a walking lamp.
-$(OUT_DIR)/lightmap.png: $(EXAMPLE_INPUTS_baked)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/baked.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# An SVG drawing of an icosahedron and a box, filled into a PNG.
-$(OUT_DIR)/svg.png: $(EXAMPLE_INPUTS_diagram)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/diagram.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# An LDraw model loaded from the parts library.
-$(OUT_DIR)/models.png: $(EXAMPLE_INPUTS_bricks) assets/ldraw/scene.mpd
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/bricks.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A height field from simplex noise.
-$(OUT_DIR)/mathaddons.png: $(EXAMPLE_INPUTS_terrain)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/terrain.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# An override material, refused by the middle sphere.
-$(OUT_DIR)/hooks.png: $(EXAMPLE_INPUTS_override)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/override.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# An inflated knob on a turning sphere.
-$(OUT_DIR)/sculptor.png: $(EXAMPLE_INPUTS_clay)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/clay.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Voronoi cells on a turning sphere.
-$(OUT_DIR)/tslfunctions.png: $(EXAMPLE_INPUTS_cells)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cells.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A cloud of Gaussian splats.
-$(OUT_DIR)/gaussian.png: $(EXAMPLE_INPUTS_cloud)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cloud.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Bounced light in a colored corner.
-$(OUT_DIR)/vxgi.png: $(EXAMPLE_INPUTS_bounce)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/bounce.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A low sun and its two shadow cascades.
-$(OUT_DIR)/lighting.png: $(EXAMPLE_INPUTS_sunlight)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/sunlight.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A vase skinned through loft sections.
-$(OUT_DIR)/lofts.png: $(EXAMPLE_INPUTS_vase)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vase.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A small building model, cut away above its ground floor.
-$(OUT_DIR)/building-model.png: $(EXAMPLE_INPUTS_building_model)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/building_model.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# The cells of a cell complex, pulled apart.
-$(OUT_DIR)/building-topology.png: $(EXAMPLE_INPUTS_room_cells)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/room_cells.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A tower read back from its IFC file.
-$(OUT_DIR)/ifc-exchange.png: $(EXAMPLE_INPUTS_exchange)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/exchange.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A seeded tower as a building model.
-$(OUT_DIR)/procedural-towers.png: $(EXAMPLE_INPUTS_towers)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/towers.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A furnished floor of homes, cut away.
-$(OUT_DIR)/floor-plans-and-interiors.png: $(EXAMPLE_INPUTS_interiors)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/interiors.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A tower frame swaying in its first mode.
-$(OUT_DIR)/frame-analysis.png: $(EXAMPLE_INPUTS_frame_modes)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/frame_modes.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A plate bending under a pressure.
-$(OUT_DIR)/shell-analysis.png: $(EXAMPLE_INPUTS_plate)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/plate.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Rooms through a summer day, by temperature.
-$(OUT_DIR)/building-energy.png: $(EXAMPLE_INPUTS_heat)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/heat.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# The lowest modes of a chain of springs.
-$(OUT_DIR)/numerics.png: $(EXAMPLE_INPUTS_spring_modes)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/spring_modes.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A tree grown from a seed.
-$(OUT_DIR)/generators.png: $(EXAMPLE_INPUTS_sapling)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/sapling.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Points stepped by a compute kernel.
-$(OUT_DIR)/computenodes.png: $(EXAMPLE_INPUTS_particles)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/particles.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/femur.png: $(EXAMPLE_INPUTS_femur)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/femur.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/tibia.png: $(EXAMPLE_INPUTS_tibia)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/tibia.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/fibula.png: $(EXAMPLE_INPUTS_fibula)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fibula.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/patella.png: $(EXAMPLE_INPUTS_patella)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/patella.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/knee.png: $(EXAMPLE_INPUTS_knee)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/knee.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/muscles.png: $(EXAMPLE_INPUTS_muscles)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/muscles.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/leg.png: $(EXAMPLE_INPUTS_leg)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/leg.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/legs.png: $(EXAMPLE_INPUTS_legs)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/legs.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/foot.png: $(EXAMPLE_INPUTS_foot)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/foot.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/limb.png: $(EXAMPLE_INPUTS_limb)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/limb.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# The lower body: the pelvis, both legs and both feet, with skin and without.
-$(OUT_DIR)/pelvis.png: $(EXAMPLE_INPUTS_pelvis)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/pelvis.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A body below the neck, arms included, with skin and without.
-$(OUT_DIR)/torso.png: $(EXAMPLE_INPUTS_torso)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/torso.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# An arm and its hand, with skin and without.
-$(OUT_DIR)/arm.png: $(EXAMPLE_INPUTS_arm)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/arm.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A hand and its fingers, with skin and without.
-$(OUT_DIR)/hand.png: $(EXAMPLE_INPUTS_hand)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/hand.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A neck and a head, with skin and without.
-$(OUT_DIR)/head.png: $(EXAMPLE_INPUTS_head)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/head.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/vessels.png: $(EXAMPLE_INPUTS_vessels)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vessels.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/lymph.png: $(EXAMPLE_INPUTS_lymph)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lymph.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/nerves.png: $(EXAMPLE_INPUTS_nerves)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/nerves.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/integument.png: $(EXAMPLE_INPUTS_integument)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/integument.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/water.png: $(EXAMPLE_INPUTS_water) assets/pebbles.jpg
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Every procedural animal, one to a tile, turning.
-$(OUT_DIR)/animals.png: $(EXAMPLE_INPUTS_animals)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animals.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# A wolf walks one stride, re-meshed in each pose.
-$(OUT_DIR)/walk.png: $(EXAMPLE_INPUTS_walk)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/walk.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-# Game mode beside engineering mode, at real size and walking speed.
-$(OUT_DIR)/animal_anatomy.png: $(EXAMPLE_INPUTS_animal_anatomy)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animal_anatomy.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/carla_towns.png: $(EXAMPLE_INPUTS_carla_towns) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
+$(OUT_DIR)/carla_towns.png: $(EXAMPLE_INPUTS_carla_towns) assets/carla/ATTRIBUTION.md tools/carla_assets.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla_towns.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@ $(patsubst %.png,%_*.png,$@)
-	@python3 assets/carla/tools/carla_assets.py credits --all --output $(@:.png=.credits.md)
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
+	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
 
-$(OUT_DIR)/game_humanoid.png: $(EXAMPLE_INPUTS_game_humanoid)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/game_humanoid.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/hairstyles.png: $(EXAMPLE_INPUTS_hairstyles)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/hairstyles.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/genomes.png: $(EXAMPLE_INPUTS_genomes)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/genomes.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/family.png: $(EXAMPLE_INPUTS_family)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/family.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/talking.png: $(EXAMPLE_INPUTS_talking)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/talking.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
-
-$(OUT_DIR)/carla.png: $(EXAMPLE_INPUTS_carla) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
+$(OUT_DIR)/carla.png: $(EXAMPLE_INPUTS_carla) assets/carla/ATTRIBUTION.md tools/carla_assets.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@ $(patsubst %.png,%_*.png,$@)
-	@python3 assets/carla/tools/carla_assets.py credits --all --output $(@:.png=.credits.md)
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
+	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
 
-$(OUT_DIR)/carla_town.png: $(EXAMPLE_INPUTS_carla_town) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
+$(OUT_DIR)/carla_town.png: $(EXAMPLE_INPUTS_carla_town) assets/carla/ATTRIBUTION.md tools/carla_assets.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla_town.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@ $(patsubst %.png,%_*.png,$@)
-	@python3 assets/carla/tools/carla_assets.py credits --all --output $(@:.png=.credits.md)
-
-$(OUT_DIR)/expressions.png: $(EXAMPLE_INPUTS_expressions)
-	@mkdir -p $(OUT_DIR)
-	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/expressions.mojo $@); \
-	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/optimize_png.py $@
+	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
+	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
 
 # Existing tracked gallery files keep their identity and history. New renders
 # are ignored; use an explicit git add -f only for a reviewed documentation image.
 optimize-images:
-	@git ls-files -z -- 'out/*.png' | xargs -0 python3 tools/optimize_png.py
+	@git ls-files -z -- 'out/*.png' | xargs -0 $(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be
 # looked at, and a folder that keeps emptying itself is no use to watch.
@@ -1660,14 +917,26 @@ test-tools:
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 -m unittest discover -s assets/carla/tools -p 'test_*.py')
 	@python3 tools/parallel_unittest.py --jobs $(JOBS) $(if $(TOOLS_SHARD),--shard $(TOOLS_SHARD)) tools/carla_lane_oracle
 	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,python3 tools/carla_lane_oracle/spiral_moments.py --check)
+	@$(if $(filter-out 1/%,$(TOOLS_SHARD)),:,$(MAKE) --no-print-directory repository-check)
+
+# The negative-fixture manifest names exactly tests/compile_fail, no job
+# regenerates it, the recorded three.js fixture hashes match, the gallery
+# draws every example, and CI guards each job with its planner flag. These
+# read repository files that the Mojo suite cache does not track, so they run
+# here.
+repository-check:
+	@$(MOJO) run $(MOJOFLAGS) tools/compile_fail.mojo --check-repository
+	@$(MOJO) run $(MOJOFLAGS) tools/fixture_manifest.mojo
+	@$(TOOL) example_inputs --check-repository
+	@$(TOOL) ci_scope check-workflow
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.
 test-coverage-tool:
 	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
-	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
-	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_sources --mojo $(MOJO)
+	@$(TOOL) check_coverage_loops --mojo $(MOJO)
 	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
 	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
 
@@ -1676,7 +945,7 @@ test-coverage-tool:
 # toolchain. A call whose types differ from its callee's crashes Apple's
 # linker with only "failed to compile metallib" (modular/modular#7238).
 check-gpu-air:
-	@python3 tools/check_air_calls.py --mojo $(MOJO)
+	@$(TOOL) check_air_calls --mojo $(MOJO)
 
 test-portability:
-	@python3 tools/check_portability.py --mojo $(MOJO)
+	@$(TOOL) check_portability --mojo $(MOJO)

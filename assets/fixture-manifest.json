@@ -294,7 +294,7 @@
       "cwd": ".",
       "commands": [
         "npm ci --ignore-scripts --prefix tools/fixture-runtime",
-        "python3 tools/fixture_runtime.py js_number"
+        "mojo run -I . tools/fixture_runtime.mojo js_number"
       ],
       "notes": [
         "The verified runtime reproduces the accepted baseline. It does not identify the original generation environment.",
@@ -862,7 +862,7 @@
       "cwd": ".",
       "commands": [
         "npm ci --ignore-scripts --prefix tools/fixture-runtime",
-        "python3 tools/fixture_runtime.py vtk"
+        "mojo run -I . tools/fixture_runtime.mojo vtk"
       ],
       "notes": [
         "The verified runtime reproduces the accepted baseline. It does not identify the original generation environment.",

@@ -91,9 +91,13 @@ bundled production assets byte for byte. It records each upstream filename,
 immutable commit, Git blob checksum, SHA-256 and byte count. It also records
 the converter source hashes, format versions, transformation parameters and
 license evidence. This proves an exact recipe. It does not establish the
-original historical command log. The
+original historical command log.
+
+The
 [verification record](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/converted-assets-303.json)
-records output hashes, source counts and focused checks.
+records output hashes, source counts and focused checks. It is a historical
+record of the run with the Python converters, which the Mojo converters
+replace. Use the Mojo commands below.
 
 The production inputs are:
 
@@ -114,8 +118,10 @@ See `THIRD-PARTY-NOTICES.md` for attribution and source links.
 
 ### Run the small offline check
 
+Run the checker from the repository root:
+
 ```sh
-python3 tools/check_converted_asset_manifest.py
+mojo run -I . tools/check_converted_asset_manifest.mojo
 ```
 
 This checks local hashes and the complete provenance metadata. It also
@@ -127,18 +133,19 @@ complete source pins are now required in the default check too.
 ### Reproduce all production outputs
 
 Choose a cache directory outside the repository. The first command downloads
-only missing pinned files. The input data uses about 306 MB of storage.
-The scratch copy needs at least that much additional space. Conversion can
-take several minutes. Ordinary tests do not perform this download or run.
+only missing pinned files with `curl`. The input data uses about 306 MB of
+storage. The scratch copy needs at least that much additional space. The
+conversion takes less than a minute. Ordinary tests do not perform this
+download or run.
 
 ```sh
-python3 tools/check_converted_asset_manifest.py --source-cache /path/to/converted-sources --fetch-sources
+mojo run -I . tools/check_converted_asset_manifest.mojo --source-cache /path/to/converted-sources --fetch-sources
 ```
 
 To reuse an existing cache without network access, omit `--fetch-sources`:
 
 ```sh
-python3 tools/check_converted_asset_manifest.py --source-cache /path/to/converted-sources
+mojo run -I . tools/check_converted_asset_manifest.mojo --source-cache /path/to/converted-sources
 ```
 
 You can also populate the cache from your own upstream checkouts. Use
@@ -156,9 +163,25 @@ updates accepted assets or their expected hashes.
 
 ### Arithmetic and verification limits
 
-The reference run used CPython 3.12.14 on Linux x86-64, with only the Python
-standard library. The output comparison is exact; another runtime must pass
-the same hashes before its result is accepted.
+The Mojo converters `tools/hair_style.mojo` and `tools/ict_face_model.mojo`
+reproduce all three production outputs and the three synthetic outputs byte
+for byte. This was verified from a pinned source cache on 2026-10-14. The
+original reference run used the Python converters on CPython 3.12.14 on Linux
+x86-64 on 2026-10-05. The output comparison is exact. Another runtime or
+converter must pass the same hashes before its result is accepted.
+
+The Mojo converters do the same floating-point operations in the same order
+as the Python converters did:
+
+- Each product that feeds a sum is rounded on its own. A default Mojo build
+  fuses `a * b + c` into one rounding, so the converters call `product`,
+  which the compiler cannot fuse. No special `--fp-mode` flag is necessary.
+- `atan2`, `sin`, `cos` and `x ** y` come from the C library, as in CPython.
+- `math.dist` is computed with CPython 3.12's scaled, compensated algorithm.
+- Where the Python face converter called `sum`, the Mojo converter uses
+  CPython 3.12's compensated addition.
+- Each decimal in an OBJ file is read to the nearest double, as `float()`
+  reads it.
 
 THRS fitting adds floating-point values explicitly from left to right. This
 keeps one binary64 rounding per addition. Python 3.12 changed built-in `sum`

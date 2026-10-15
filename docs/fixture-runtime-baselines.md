@@ -36,9 +36,9 @@ package version.
 
 ```sh
 npm ci --ignore-scripts --prefix tools/fixture-runtime
-python3 tools/fixture_manifest.py
-python3 tools/fixture_runtime.py vtk
-python3 tools/fixture_runtime.py js_number
+mojo run -I . tools/fixture_manifest.mojo
+mojo run -I . tools/fixture_runtime.mojo vtk
+mojo run -I . tools/fixture_runtime.mojo js_number
 ```
 
 `tools/fixture-runtime/package-lock.json` pins the package versions and npm
@@ -89,7 +89,7 @@ establish equal text output or equal downstream Float64 calculations.
 To repeat the diagnostic without accepting a new table:
 
 ```sh
-python3 tools/fixture_runtime.py js_number --diagnose-default-pow
+mojo run -I . tools/fixture_runtime.mojo js_number --diagnose-default-pow
 ```
 
 This command reports `mode: diagnostic_only` and exits with status 1. It cannot

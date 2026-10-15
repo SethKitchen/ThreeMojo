@@ -11,7 +11,7 @@ The default geometry pass checks all 8,911 distinct pairs among 134 named lower-
 Use the pinned Mojo 1.1.0 compiler. Run this command from the repository root:
 
 ```sh
-python3 tools/anatomy_validity.py --build --output anatomy-report.json
+mojo run -I . tools/anatomy_validity.mojo --build --output anatomy-report.json
 ```
 
 The default spec is a 1.8288 m male, untoned, right-side template. The three maximum grid widths are 20, 10 and 5 mm. Each probe execution has a five-second limit. The probe has no GPU dependency.
@@ -26,15 +26,15 @@ This rule is reproducible. It does not identify the worst anatomical overlap. Th
 
 Omit `--build` to reuse the probe. Its sidecar must match the source digest and binary digest. Rebuild after a source change. Reports record both digests, the exact compiler version and `--Werror`.
 
-The source digest binds what can change the measured anatomy. It covers the import closure of `tools/anatomy_probe.mojo`, found as the pinned compiler finds modules: from the probe's directory and the repository root. It also covers every source file the provenance inventory cites, the inventory itself, and the code that computes the binding (`tools/anatomy_validity.py` and `tools/affected.py`). It covers the pinned compiler version and build flags too.
+The source digest binds what can change the measured anatomy. It covers the import closure of `tools/anatomy_probe.mojo`, found as the pinned compiler finds modules: from the probe's directory and the repository root. It also covers every source file the provenance inventory cites, the inventory itself, and the code that computes the binding (`tools/anatomy_validity.mojo` and `tools/_imports.mojo`). It covers the pinned compiler version and build flags too. The binding version is `anatomy-binding-v4`.
 
 The closure is computed again from the imports for every snapshot. A new import, a new module in the closure, or a module that shadows one from the probe's directory changes the digest. A change to a Mojo file outside the closure does not. The binding refuses a missing probe, a missing cited input, a relative import, and a local import that resolves to no file.
 
 The binding reads each import as the compiler does. Comments and string literals, docstrings among them, hold no imports. An alias can follow a tab or a space. Each imported module must resolve to its own file. A package or module above it does not satisfy the name.
 
-The binding refuses an import statement that it cannot read, a string literal that does not end, and a bracket that does not close. The closure edges come from `tools/affected.py`. That code also keeps the ancestor packages and the shadowing candidates. So the closure can only be larger than what the compiler reads.
+The binding refuses an import statement that it cannot read, a string literal that does not end, and a bracket that does not close. The closure edges come from `tools/_imports.mojo`. That code also keeps the ancestor packages and the shadowing candidates. So the closure can only be larger than what the compiler reads.
 
-The committed report is a reference for its recorded source revision. It does not describe a later combined revision. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
+The committed report is a reference for its recorded source revision. It does not describe a later combined revision. The Python tool produced it with the version 3 binding, so its digests do not match the Mojo binding. Regenerate it to bind it to the current source. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
 
 The report uses an initial source and inventory snapshot. It rechecks source, probe and metadata before return. An observed change fails the report. These checks do not provide an atomic filesystem transaction.
 
@@ -45,7 +45,7 @@ The report uses an initial source and inventory snapshot. It rechecks source, pr
 Run this command from the repository root to localize the bone, knee and neighboring-spine overlaps:
 
 ```sh
-python3 tools/anatomy_overlaps.py --build --output anatomy-overlaps.json
+mojo run -I . tools/anatomy_overlaps.mojo --build --output anatomy-overlaps.json
 ```
 
 The tool checks all 532 legacy pairs at 5, 3 and 2 mm. It localizes each pair that #595 lists and each pair with a sampled common interior. For each grid it records the witness point and the box of common-interior cell centers. Two local cubes around the witness then search at one sixteenth and one 256th of the grid width. The output records the same source digest and probe digest as the report. Omit `--build` to reuse a current probe.

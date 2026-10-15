@@ -84,7 +84,7 @@ make -B check
 make check-cpu coverage AFFECTED=origin/main
 ```
 
-This checks only what the change since the merge base with `origin/main` can reach, as nx's "affected" does. The change includes the files you have not committed. `tools/affected.py` reads the import graph. A suite, an example or a module is checked when it imports a changed module, directly or through other modules. A test that quotes the path of a changed asset is checked too. The format check reads the changed files only.
+This checks only what the change since the merge base with `origin/main` can reach, as nx's "affected" does. The change includes the files you have not committed. `tools/affected.mojo` reads the import graph. A suite, an example or a module is checked when it imports a changed module, directly or through other modules. A test that quotes the path of a changed asset is checked too. The format check reads the changed files only.
 
 A change to one leaf module, for example a loader, checks one suite in about a minute. A change to a module that most of the library imports, for example `core/scene.mojo`, still checks about half the suites. A documentation change checks no suite. A change to the Makefile, the CI workflow, the coverage tool or a file that the script cannot place checks everything.
 
@@ -94,11 +94,11 @@ The CI workflow checks a pull request with `AFFECTED` set to its base branch. It
 
 ## Verify generated fixtures
 
-`python3 tools/fixture_manifest.py` checks the accepted hashes. It does not regenerate fixtures.
+`mojo run -I . tools/fixture_manifest.mojo` checks the accepted hashes. It does not regenerate fixtures. `make repository-check` runs this check. It also checks that the negative-fixture manifest names each file in `tests/compile_fail` and that no job regenerates the manifest. It also checks that the gallery table in `examples/gallery.mk` draws every example and compresses every image. `make test-tools` runs `make repository-check` once.
 
 The VTK and sRGB generators have a verified runtime: Node 24.19.0, V8 13.6.233.17-node.51, Linux x64 and three 0.180.0. VTK also needs @xmldom/xmldom 0.9.12. The sRGB verifier supplies `--no-use-std-math-pow`; the default flag changes 30 Float64 words.
 
-Install the locked dependencies with `npm ci --ignore-scripts --prefix tools/fixture-runtime`. Then run `python3 tools/fixture_runtime.py vtk` and `python3 tools/fixture_runtime.py js_number`. Both commands use temporary output directories and compare against accepted results. They do not replace the fixtures.
+Install the locked dependencies with `npm ci --ignore-scripts --prefix tools/fixture-runtime`. Then run `mojo run -I . tools/fixture_runtime.mojo vtk` and `mojo run -I . tools/fixture_runtime.mojo js_number`. Both commands use temporary output directories and compare against accepted results. They do not replace the fixtures.
 
 These pins reproduce the current baseline. They do not identify the original generation environment. The separate `assets/js_number/v8.json` snapshot remains unreproduced. See the [runtime evidence and limits](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/fixture-runtime-baselines.md).
 
@@ -114,7 +114,8 @@ CI never regenerates expectations.
 
 ```bash
 .venv/bin/mojo --version
-python3 tools/compile_fail.py --compiler=.venv/bin/mojo --flags='-I . --Werror' \
+.venv/bin/mojo run -I . tools/compile_fail.mojo --compiler=.venv/bin/mojo \
+  --flags='-I . --Werror' \
   --update-expectations \
   tests/compile_fail/raw_float_is_not_an_angle.mojo \
   tests/compile_fail/sqrt_of_volume.mojo
@@ -143,7 +144,8 @@ Fix unintended changes before you repeat the command.
 Run the selected fixtures again without the update flag:
 
 ```bash
-python3 tools/compile_fail.py --compiler=.venv/bin/mojo --flags='-I . --Werror' \
+.venv/bin/mojo run -I . tools/compile_fail.mojo --compiler=.venv/bin/mojo \
+  --flags='-I . --Werror' \
   tests/compile_fail/raw_float_is_not_an_angle.mojo \
   tests/compile_fail/sqrt_of_volume.mojo
 make -B compile-fail
@@ -160,9 +162,27 @@ A suite's time is almost all compilation. So CI splits the suites over runners t
 make test-cpu SHARD=2/3
 ```
 
-`tools/shard.py` makes the groups. It weighs each suite by the source that the suite imports, and it gives the heaviest suite to the lightest group first. Every machine computes the same groups. `SHARD` splits the suites only. The format check, lint, the compile-fail cases and the documentation check run whole, in one job.
+`tools/shard.mojo` makes the groups. It weighs each suite by the source that the suite imports, and it gives the heaviest suite to the lightest group first. Every machine computes the same groups. `SHARD` splits the suites only. The format check, lint, the compile-fail cases and the documentation check run whole, in one job.
 
 Coverage splits into three steps. Each CI runner runs `coverage-instrument` and then `coverage-capture` for its group. One more runner runs `coverage-instrument`, collects the captures of every group in `coverage/build/hits/`, and runs `coverage-report`. The report fails if a suite of the whole list left no capture.
+
+## Rebuild the project tools
+
+The `Makefile` runs Mojo tools while it reads itself. They select the affected files, split the suites, key the stamps and list the prerequisites of each example. `tools/tool.sh` builds each tool once into `.cache/tools/` and then runs the program. It builds a tool again when a `.mojo` file in `tools/` or `loaders/` is newer than the program. A tool must import nothing outside these two directories, apart from the standard library.
+
+The tools use their own compiler, `TOOL_MOJO`. It is `.venv/bin/mojo` when that file exists, and `mojo` otherwise. So a test can give `MOJO` a stand-in compiler. To build the tools with a different compiler, set `TOOL_MOJO`:
+
+```bash
+make check-cpu TOOL_MOJO=/path/to/mojo
+```
+
+A change to a tool, or to a file that a tool imports, selects the full CI audit. The first `make` on a new machine builds the tools, which takes about ten seconds.
+
+Each CI job runs the planner, `tools/ci_scope.mojo`, through `tools/tool.sh` too. The planner selects the checks, runs each `make` target with the selected file lists, and checks the job results at the end. A change to `.github/workflows/ci.yml` runs the tool checks. It also runs each Mojo suite that quotes the workflow path. To see what CI selects for your branch, run:
+
+```bash
+sh tools/tool.sh .venv/bin/mojo ci_scope plan --base origin/main
+```
 
 ## Measure the examples
 

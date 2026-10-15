@@ -22,7 +22,7 @@ from extensions.humanoid.skeleton.leg.nerves.dimensions import NerveField
 from extensions.humanoid.skeleton.foot.nerves.dimensions import FootNerveField
 from extensions.humanoid.skeleton.leg.lymph.dimensions import LymphField
 from extensions.humanoid.skeleton.foot.lymph.dimensions import FootLymphField
-from tools.anatomy_pairs import _components, _Component, _batch, _work, _refine
+from tools._anatomy_pairs import _components, _Component, _batch, _work, _refine
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, LEFT
 from extensions.humanoid.spec import HumanoidSpec

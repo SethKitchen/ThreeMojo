@@ -228,12 +228,14 @@ Keep the output directory outside both source roots.
 
 ```sh
 export MODULAR_TELEMETRY_ENABLED=false
-python3 CANDIDATE/bench/run_ray_query_bench.py \
+mojo run -I CANDIDATE CANDIDATE/bench/run_ray_query_bench.mojo \
   --baseline BASELINE --candidate CANDIDATE --output RESULTS \
   --mojo mojo --cpu CPU --pairs 8 --samples 5 --repeats 4000
 ```
 
 Repeat with `--repeats 36000` and a new output directory for the longer matrix.
+A Python runner measured the retained trials.
+The Mojo runner replaced it and reproduces both published summaries from the retained trial files.
 Use the pinned MAX environment for compilation-only checks:
 
 ```sh
@@ -255,5 +257,5 @@ The executable emits compiled PTX; it does not launch a device kernel.
 - [Static native loop profile](ray-query-550-profile.json)
 - [Query driver](../../bench/ray_query_bench.mojo)
 - [Consumer driver](../../bench/ray_query_consumers.mojo)
-- [Paired runner](../../bench/run_ray_query_bench.py)
+- [Paired runner](../../bench/run_ray_query_bench.mojo)
 - [GPU compilation driver](ray-query-550-gpu.mojo)

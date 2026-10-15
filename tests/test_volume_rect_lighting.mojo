@@ -308,7 +308,7 @@ def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 
 
-# This fixture is checked by tools/reference_volume_lighting.py --check.
+# This fixture is checked by tools/reference_volume_lighting.mojo --check.
 # Native tests consume its inputs and results, not recomputed native oracles.
 
 

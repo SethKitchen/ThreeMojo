@@ -117,7 +117,7 @@ If Drive sends a web page, the tool stops and keeps no bytes.
 
 ## Offline tests
 
-`assets/carla/tools/test_carla_assets.py` tests these responses without a network:
+`tests/test_carla_assets_tool.mojo` tests these responses without a network. It gives each response from a stub `curl`:
 
 - HTTP `403`, `404` and `429`: the fetch fails after one request and keeps no file.
 - A web page with the content type `text/html`: the fetch fails and keeps no file.
@@ -129,8 +129,13 @@ If Drive sends a web page, the tool stops and keeps no bytes.
 Run the tests:
 
 ```sh
-python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
+.venv/bin/mojo run -I . tests/test_carla_assets_tool.mojo
 ```
+
+The commands in this record ran `assets/carla/tools/carla_assets.py`.
+`tools/carla_assets.mojo` replaces it, with the same command line:
+`sh tools/tool.sh .venv/bin/mojo carla_assets` in place of
+`python3 assets/carla/tools/carla_assets.py`.
 
 ## Public download by the owner
 

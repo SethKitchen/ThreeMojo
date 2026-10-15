@@ -735,8 +735,8 @@ from its guide that widens toward the tip. The Mojo implementation is original
 work. TressFX is distributed under the MIT License, reproduced below.
 
 `assets/hair/mohawk.bin` is the crest of Ratboy's mohawk, TressFX's sample
-hair `Ratboy_mohawk.tfx`, as `tools/hair_style.py` converts it: the strands from
-the brow to the nape, narrowed and laid on a human cranium. The sample is
+hair `Ratboy_mohawk.tfx`, as `tools/hair_style.mojo` converts it: the strands
+from the brow to the nape, narrowed and laid on a human cranium. The sample is
 distributed under the same MIT License. The pinned TressFX 4.1
 [license file](https://github.com/GPUOpen-Effects/TressFX/blob/6957058e29dceb25a0c2a82849bb892f3d9fbce5/license.txt)
 states copyright 2020 Advanced Micro Devices, Inc.
@@ -812,7 +812,7 @@ SOFTWARE.
 
 `assets/hair/layered.bin` is Sintel's hair from Sintel Lite 2.57b by
 BenDansie, as frostbitten-hair-webgpu exports it
-(`SintelHairOriginal-sintel_hair.16points.tfx`) and `tools/hair_style.py`
+(`SintelHairOriginal-sintel_hair.16points.tfx`) and `tools/hair_style.mojo`
 converts it: each strand kept as offsets from its root on a fitted cranium, so
 it can be laid on any head. The character Sintel is (c) copyright Blender
 Foundation | durian.blender.org, licensed under the Creative Commons
@@ -831,7 +831,7 @@ does not replace this model license.
 <https://github.com/USC-ICT/ICT-FaceKit>
 
 `assets/face/ict_face.bin` is the ICT Face Model Light of USC's Institute for
-Creative Technologies, converted by `tools/ict_face_model.py`: its generic
+Creative Technologies, converted by `tools/ict_face_model.mojo`: its generic
 neutral mesh, its texture coordinates, its first sixty identity modes and its
 expression shapes, with the skin's triangles, edges and holes worked out from
 the mesh. `extensions/humanoid/skeleton/head/face_model.mojo` reads

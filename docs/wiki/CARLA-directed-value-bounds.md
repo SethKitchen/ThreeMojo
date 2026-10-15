@@ -60,5 +60,6 @@ It now resolves with the same work and accuracy limits.
 Building-lot construction for the ordinary town also completes.
 
 Exact Fraction controls check the directed arithmetic independently.
+`tools/generate_carla_directed_controls.mojo` writes them, and `--check` replays them.
 The unchanged interval, trigonometric, and certificate controls remain required.
 Cross-candidate selection, strict classification, index admission, full coverage, and consumer performance are separate gates.

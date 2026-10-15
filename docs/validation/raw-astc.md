@@ -37,16 +37,22 @@ g++ -std=c++14 -O2 -fPIC -shared -DASTCENC_ISA_NONE \
   -DASTCENC_SSE=0 -DASTCENC_AVX=0 -DASTCENC_NEON=0 -I"$src" \
   tools/references/astc_reference.cpp "$src"/astcenc_*.cpp \
   -o "$work/libastc_reference.so"
-python3 tools/references/generate_astc.py "$work/libastc_reference.so" \
+mojo run -I . tools/generate_astc.mojo "$work/libastc_reference.so" \
   "$work/raw_astc_reference.txt"
 cmp "$work/raw_astc_reference.txt" assets/ktx2/raw_astc_reference.txt
 cmp "$work/raw_astc_reference.json" assets/ktx2/raw_astc_reference.json
 cmp "$work/raw_astc_invalid.txt" assets/ktx2/raw_astc_invalid.txt
 ```
 
-Validation used Python 3.12.14 and GCC 14.2.0. The generator uses a fixed
-seed, 617180, and integer random bit streams. The reference source and
-adapter determine the expected decoded texels.
+The fixtures were first validated with a Python generator, Python 3.12.14
+and GCC 14.2.0. The Mojo generator replaced it and writes the same three
+files byte for byte. The generator uses a fixed seed, 617180, and the
+integer random bit streams of Python's `random.Random`. The reference
+source and adapter determine the expected decoded texels.
+
+If a proxy refuses the archive download, clone the pinned commit:
+`git clone --depth 1 --branch 5.3.0 https://github.com/ARM-software/astc-encoder`.
+Then check that `git rev-parse HEAD` prints the commit above.
 
 ## Coverage and tolerances
 

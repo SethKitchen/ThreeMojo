@@ -35,7 +35,7 @@ class CoverageInputTests(unittest.TestCase):
                        'coverage/runtime.mojo', 'tests/test_driver.mojo',
                        'tests/_shared.mojo', 'tests/_nested.mojo',
                        'examples/unrelated.mojo',
-                       'tools/doc_lint.mojo', 'tools/anatomy_pairs.mojo',
+                       'tools/doc_lint.mojo', 'tools/_anatomy_pairs.mojo',
                        'tools/anatomy_probe.mojo',
                        'tools/capture_carla_fixed_s_controls.mojo',
                        'tools/draco_export_check.mojo',
@@ -76,7 +76,7 @@ class CoverageInputTests(unittest.TestCase):
         (self.root / 'Makefile').write_text(
             'MOJO := python3 compiler.py\nMOJOFLAGS :=\nCOV_DIR := build\n' + quote + '\n' +
             'LIB_SOURCES := math/measured.mojo math/unmeasured.mojo\n'
-            'HELPER_LIBS := tests/_shared.mojo tests/_nested.mojo tools/anatomy_pairs.mojo\n'
+            'HELPER_LIBS := tests/_shared.mojo tests/_nested.mojo tools/_anatomy_pairs.mojo\n'
             'ENTRY_POINTS := bench/helper.mojo bench/nested/driver.mojo '
             'tests/test_driver.mojo examples/unrelated.mojo '
             'tools/doc_lint.mojo tools/anatomy_probe.mojo '
