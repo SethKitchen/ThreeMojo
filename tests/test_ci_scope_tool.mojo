@@ -361,7 +361,6 @@ def test_tool_tests_and_the_workflow_only_run_tools() raises:
         _change(
             [
                 "tools/test_build_tools.py",
-                "tools/test_compiler_metadata.py",
                 "tools/test_coverage_lifecycle.py",
                 "tools/test_ci_policy.py",
                 ".github/workflows/ci.yml",

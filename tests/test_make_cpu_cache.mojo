@@ -7,7 +7,8 @@
 
 Each test copies the recipe from the Makefile into a small project, with a
 stand-in compiler that writes a program printing one passing test. No Mojo
-compiler runs; the suite runner is the one `tools/tool.sh` already built.
+compiler runs; the suite runner and the compiler telemetry wrapper are the
+ones `tools/tool.sh` already built.
 """
 
 from std.os import getenv, setenv, unsetenv
@@ -53,10 +54,24 @@ struct Recipe(Movable):
             self.tree.write(
                 "tests/" + name + ".mojo", "def test_stub():\n    pass\n"
             )
+        # The recipe wraps each build in the telemetry tool, which must be
+        # built before the project gets a copy of the built tools.
+        var built = run_program(
+            [
+                "sh",
+                "tools/tool.sh",
+                tool_mojo(),
+                "--build",
+                "compiler_telemetry",
+            ],
+            120,
+        )
+        if built.status != 0:
+            raise Error("cannot build the telemetry tool: " + built.output)
         copy_suite_runner(
             self.tree,
             [
-                "tools/compiler_telemetry.py",
+                "tools/compiler_telemetry.mojo",
                 "tools/native_test_support.py",
                 "tools/affected.py",
                 "tools/suite_key.py",

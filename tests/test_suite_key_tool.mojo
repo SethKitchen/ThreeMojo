@@ -34,7 +34,7 @@ comptime FILES = [
     ("Makefile", "all:\n"),
     ("tools/tool.sh", ""),
     ("tools/run_suite.mojo", ""),
-    ("tools/compiler_telemetry.py", ""),
+    ("tools/compiler_telemetry.mojo", ""),
     ("tools/native_test_support.py", ""),
     ("tools/suite_key.mojo", "from tools._helper import f\n"),
     ("tools/_helper.mojo", "def f():\n    pass\n"),
@@ -104,7 +104,7 @@ def test_reached_files_quoted_assets_tools_and_settings_change_the_key() raises:
         "Makefile",
         "tools/tool.sh",
         "tools/run_suite.mojo",
-        "tools/compiler_telemetry.py",
+        "tools/compiler_telemetry.mojo",
         "tools/_helper.mojo",
     ]:
         tree.write(path, "changed")

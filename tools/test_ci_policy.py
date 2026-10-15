@@ -134,14 +134,14 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_compiler_metadata_is_a_separate_linux_cpu_diagnostic(self):
         job = self.jobs['cpu']
-        command = ('run: .venv/bin/python tools/compiler_metadata.py '
+        command = ('run: sh tools/tool.sh .venv/bin/mojo compiler_metadata '
                    '> compiler-metadata.json')
         self.assertEqual(job.count(command), 1)
         self.assertLess(job.index(command), job.index('- name: test-cpu'))
         self.assertNotIn('continue-on-error:', job)
         for name, other in self.jobs.items():
             if name != 'cpu':
-                self.assertNotIn('compiler_metadata.py', other)
+                self.assertNotIn('compiler_metadata', other)
         # The existing exact-command test also pins original flags/shards.
         self.assertIn('run: sh tools/tool.sh .venv/bin/mojo ci_scope run -- test-cpu SHARD=${{ matrix.shard }}/3 '
                       'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '

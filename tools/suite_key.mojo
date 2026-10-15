@@ -46,7 +46,7 @@ comptime TOOLING = [
     "Makefile",
     "tools/tool.sh",
     "tools/run_suite.mojo",
-    "tools/compiler_telemetry.py",
+    "tools/compiler_telemetry.mojo",
     "tools/native_test_support.py",
 ]
 """The files besides this tool's own sources that decide how a suite is

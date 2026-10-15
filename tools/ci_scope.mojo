@@ -121,7 +121,7 @@ comptime GLOBAL_TOOLS = [
     "tools/native_test_support.py",
     "tools/test_environment.py",
     "tools/fixture_runtime.mojo",
-    "tools/compiler_telemetry.py",
+    "tools/compiler_telemetry.mojo",
 ]
 """Other tools whose change selects the full audit."""
 
@@ -271,7 +271,6 @@ def kind(path: String) -> String:
     # These generators have exact compiler-free replay gates in test-tools.
     for generator in [
         "tools/bench_examples.py",
-        "tools/compiler_metadata.py",
     ]:
         if path == generator:
             return "tools"

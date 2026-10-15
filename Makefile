@@ -381,6 +381,7 @@ $(TEST_CPU_STAMP):
 	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
 	@sh tools/tool.sh $(TOOL_MOJO) --build run_suite
+	@sh tools/tool.sh $(TOOL_MOJO) --build compiler_telemetry
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
@@ -388,7 +389,7 @@ $(TEST_CPU_STAMP):
 	             progress() { printf "%s suite=%s %s\n" \
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
-	             out=$$(python3 tools/compiler_telemetry.py --suite "$$1" --log-fd 3 -- \
+	             out=$$(sh tools/tool.sh $(TOOL_MOJO) compiler_telemetry --suite "$$1" --log-fd 3 -- \
 	                    python3 tools/native_test_support.py run --root . \
 	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
 	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
