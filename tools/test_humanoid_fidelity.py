@@ -58,7 +58,7 @@ class CurrentAnatomyReportTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Use the actual producer artifact, not a synthetic v1 report relabeled
-        # as v2. test_anatomy_report_binding checks its current source binding.
+        # as v2. tests/test_anatomy_report_binding_tool.mojo checks the binding rule.
         path = Path(__file__).resolve().parents[1]/'docs/validation/anatomy-template-report.json'
         cls.evidence = json.loads(path.read_text())
 

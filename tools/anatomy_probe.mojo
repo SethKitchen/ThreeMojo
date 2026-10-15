@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Emit intermediate canonical records for anatomy_validity.py.
+"""Emit intermediate canonical records for tools/anatomy_validity.mojo.
 
 The Float32-only spine protocol uses zero for the unmeasured sacral-body
 field. The report writer must replace that specific placeholder with null
