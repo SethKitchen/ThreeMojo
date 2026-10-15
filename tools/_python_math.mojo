@@ -22,8 +22,9 @@ the same bytes in a default build, as the converters and their tests do,
 rounds each product that feeds a sum with `product` instead.
 """
 
+from std.benchmark import black_box
 from std.ffi import c_int, external_call
-from std.math import fma, frexp, isinf, isnan, ldexp, pi, sqrt
+from std.math import fma, frexp, inf, isinf, isnan, ldexp, nan, pi, sqrt
 from std.memory import bitcast
 
 # The smallest positive normal double, `DBL_MIN` in C.
@@ -101,6 +102,18 @@ def atan2(y: Float64, x: Float64) -> Float64:
         The result of the C library's `atan2`.
     """
     return external_call["atan2", Float64](y, x)
+
+
+def acos(x: Float64) -> Float64:
+    """Return the arc cosine, as the C library computes it.
+
+    Args:
+        x: A value from -1 to 1.
+
+    Returns:
+        The result of the C library's `acos`.
+    """
+    return external_call["acos", Float64](x)
 
 
 def power(x: Float64, y: Float64) -> Float64:

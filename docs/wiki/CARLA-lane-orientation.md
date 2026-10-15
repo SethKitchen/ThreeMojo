@@ -126,13 +126,19 @@ lane signs, lane 0, inner widths, positive and negative slopes, RHT and LHT,
 and all five geometries. It checks record boundaries, sample knots, partition
 switches, stationary and vertical centers, winding, and numerical failures.
 
-`tools/generate_carla_lane_orientation_controls.py` independently reads the
+`tools/generate_carla_lane_orientation_controls.mojo` independently reads the
 hand-authored town XML. It reconstructs the polynomial samples and analytic
 geometry tangents without reading Mojo output. It derives the corrected
 map fixture angles and the 230-segment count. Its 292 heading decisions
 stay at least 0.000112 radians from the subdivision threshold.
 The map tests retain their
 original tolerances and workloads.
+
+The tool imports no CARLA module of the port. It rounds each product
+separately. It uses the C library's trigonometry and CPython's
+`math.hypot`. Its report thus matches the replaced Python script digit
+for digit. `tests/test_carla_control_replay_tool.mojo` compares the full
+report.
 
 `bench/carla_lane_orientation_bench.mojo` compares the old and corrected
 orientation calculations in one build. Both use the current canonical
