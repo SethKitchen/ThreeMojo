@@ -273,6 +273,43 @@ def set_cloexec(fd: Int):
     _ = external_call["fcntl", c_int](c_int(fd), c_int(2), c_int(1))
 
 
+def set_nonblocking(fd: Int):
+    """Make reads of a descriptor return at once when no data is ready.
+
+    Args:
+        fd: The descriptor.
+    """
+    var flags = external_call["fcntl", c_int](c_int(fd), c_int(3), c_int(0))
+    if flags >= 0:
+        _ = external_call["fcntl", c_int](
+            c_int(fd), c_int(4), flags | c_int(o_nonblock())
+        )
+
+
+def o_nonblock() -> Int:
+    """Return `O_NONBLOCK` for this platform.
+
+    Returns:
+        The flag.
+    """
+    comptime if CompilationTarget.is_linux():
+        return 0o4000
+    else:
+        return 4
+
+
+def eagain() -> Int:
+    """Return `EAGAIN` for this platform.
+
+    Returns:
+        The error number.
+    """
+    comptime if CompilationTarget.is_linux():
+        return 11
+    else:
+        return 35
+
+
 def make_pipe() raises -> Tuple[Int, Int]:
     """Make a pipe whose ends close on `exec`.
 

@@ -424,4 +424,11 @@ def test_options_follow_argparse() raises:
 
 
 def main() raises:
+    # Build the tool once before the tests, so that no test pays for it.
+    var built = run_program(
+        ["sh", "tools/tool.sh", tool_mojo(), "--build", "compiler_metadata"],
+        300,
+    )
+    if built.status != 0:
+        raise Error("cannot build compiler_metadata: " + built.output)
     TestSuite.discover_tests[__functions_in_module()]().run()

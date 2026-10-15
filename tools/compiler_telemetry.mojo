@@ -20,7 +20,7 @@ the build. SIGINT, SIGTERM and SIGHUP go to the compiler's private process
 group, and the tool exits with the compiler's shell status.
 """
 
-from std.ffi import c_int, external_call
+from std.ffi import OwnedDLHandle, c_int, external_call
 from std.memory import Pointer
 from std.os import getenv
 from std.os.path import realpath
@@ -846,6 +846,16 @@ struct ProcReader(Movable):
             close_fd(copy)
             self.unavailable += 1
             return List[Int]()
+        # The standard library declares `readdir` with another signature, so
+        # on macOS it is found through the C library instead.
+        var library = Optional[OwnedDLHandle](None)
+        comptime if not CompilationTarget.is_linux():
+            try:
+                library = OwnedDLHandle("libSystem.B.dylib")
+            except:
+                _ = external_call["closedir", c_int](stream)
+                self.unavailable += 1
+                return List[Int]()
         while len(names) < limit + 1:
             var address: Int
             # Linux's `dirent64` holds its name at byte 19. The 64-bit inode
@@ -858,9 +868,9 @@ struct ProcReader(Movable):
                 )
             else:
                 address = Int(
-                    external_call["readdir", OpaquePointer[MutAnyOrigin]](
-                        stream
-                    )
+                    library.value().call[
+                        "readdir", OpaquePointer[MutAnyOrigin]
+                    ](stream)
                 )
             if address == 0:
                 break
