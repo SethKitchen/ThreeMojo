@@ -209,7 +209,7 @@ geometry digest checks the loaded geometry.
 
 ## Independent canonical snapshots
 
-`tools/humanoid_fidelity.py` packages explicit canonical part meshes and
+`tools/humanoid_fidelity.mojo` packages explicit canonical part meshes and
 properties supplied by a caller. The native generator is in
 [Canonical parts](#canonical-parts). It never derives physical properties from
 a visual mesh. Each part has a stable ID, a tissue label, meter vertices
@@ -231,6 +231,16 @@ and unsupported uses. The reader
 checks its typed envelope, axis directions and exact tensor convention. A
 supplied part mesh is not automatically a mesh of a report's sampled region.
 The caller must establish that correspondence separately.
+
+To verify a snapshot file against its SHA-256, run this command from the
+repository root:
+
+```sh
+mojo run -I . tools/humanoid_fidelity.mojo canonical.json --sha256 DIGEST
+```
+
+The command does not change the file. It prints the same text and exits
+with the same status as the Python tool that it replaces.
 
 Snapshots have canonical JSON bytes and SHA-256 content identities. A
 snapshot write refuses to replace different bytes at an existing path.
