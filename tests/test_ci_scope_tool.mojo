@@ -253,58 +253,90 @@ def test_the_build_tools_and_their_imports_select_the_full_audit() raises:
     assert_false(_plan(_change(["loaders/other.mojo"]), sources).full)
 
 
-def test_carla_asset_packaging_tools_select_tools_and_documentation() raises:
-    var paths: List[String] = [
-        "assets/carla/tools/carla_assets.py",
-        "assets/carla/tools/test_carla_assets.py",
-    ]
-    var value = _plan(_change(paths))
+def _with_carla_tools() -> Dict[String, String]:
+    """Return the fixture tree with the CARLA asset tools, their helpers and
+    their suites."""
+    var sources = _sources()
+    sources["tools/_carla_files.mojo"] = "def files():\n    pass\n"
+    sources[
+        "tools/_carla_assets.mojo"
+    ] = "from tools._carla_files import files\n"
+    sources[
+        "tools/carla_assets.mojo"
+    ] = "from tools._carla_assets import load\ndef main():\n    pass\n"
+    sources[
+        "tools/carla_export_zip_packages.mojo"
+    ] = "from tools._carla_assets import load\ndef main():\n    pass\n"
+    sources[
+        "tests/test_carla_assets_tool.mojo"
+    ] = "from tools.carla_assets import run\n"
+    sources[
+        "tests/test_carla_export_tool.mojo"
+    ] = "from tools.carla_export_zip_packages import zip_packages\n"
+    return sources^
+
+
+def test_carla_asset_tools_run_their_suites_and_documentation() raises:
+    # The asset manager is a Mojo tool: a change runs the suite that
+    # imports it, and the documentation checks with its page.
+    var sources = _with_carla_tools()
+    var value = _plan(_change(["tools/carla_assets.mojo"]), sources)
     assert_false(value.full)
-    assert_equal(_on(value), "lint tools")
-    assert_true(_no_files(value))
-    paths.append("docs/wiki/CARLA-assets.md")
-    value = _plan(_change(paths))
-    assert_equal(_on(value), "docs lint tools")
-    assert_true(_no_files(value))
-
-
-def test_carla_packaging_exceptions_keep_native_export_and_unknown_routing() raises:
-    var known: List[String] = [
-        "assets/carla/tools/carla_assets.py",
-        "assets/carla/tools/test_carla_assets.py",
+    assert_equal(_on(value), "cpu lint native tools")
+    assert_equal(
+        _files(value, "cpu_tests"), "tests/test_carla_assets_tool.mojo"
+    )
+    assert_equal(_files(value, "covered"), "")
+    var paths: List[String] = [
+        "tools/carla_assets.mojo",
+        "docs/wiki/CARLA-assets.md",
     ]
+    value = _plan(_change(paths), sources)
+    assert_equal(_on(value), "cpu docs lint native tools")
+    # The shared helper reaches both suites.
+    var shared = _plan(_change(["tools/_carla_assets.mojo"]), sources)
+    assert_true(_has(shared, "cpu_tests", "tests/test_carla_assets_tool.mojo"))
+    assert_true(_has(shared, "cpu_tests", "tests/test_carla_export_tool.mojo"))
+
+
+def test_carla_packaging_keeps_native_export_and_unknown_routing() raises:
     var sources = _sources()
     sources["core/asset_user.mojo"] = '# "assets/carla/"\n'
     sources[
         "tests/test_assets.mojo"
     ] = "from core.asset_user import something\n"
+    # The removed Python tools have no exemption: under assets/ they are
+    # assets, as any new file there is.
     for path in [
         "assets/carla/manifest.json",
         "assets/carla/fixture.bin",
         "assets/carla/tools/new_tool.py",
-        "assets/carla/tools/carla_assets.py.extra",
+        "assets/carla/tools/carla_assets.py",
+        "assets/carla/tools/test_carla_assets.py",
     ]:
         assert_equal(kind(path), "native", path)
         var single = _plan(_change([path]), sources)
-        var paths = known.copy()
-        paths.append(path)
-        var mixed = _plan(_change(paths), sources)
         assert_true(
-            mixed.flag("native")
-            and mixed.flag("cpu")
-            and mixed.flag("coverage")
+            single.flag("native")
+            and single.flag("cpu")
+            and single.flag("coverage"),
+            path,
         )
-        assert_true(_same(single, mixed), path)
-    var export = known.copy()
-    export.append("assets/carla/tools/export/build_towns.py")
+    var export: List[String] = ["assets/carla/tools/export/build_towns.py"]
     assert_true(_plan(_change(export)).flag("export"))
+    # The ported export scripts are not exempt either.
+    for path in [
+        "assets/carla/tools/export/zip_packages.py",
+        "assets/carla/tools/export/manifest_towns.py",
+    ]:
+        assert_equal(kind(path), "export", path)
     for path in ["Makefile", "tools/unknown.py"]:
-        var paths = known.copy()
+        var paths = export.copy()
         paths.append(path)
         assert_true(_plan(_change(paths)).full, path)
-    var used = known.copy()
+    var used = export.copy()
     used.append("core/used.mojo")
-    assert_true(_same(_plan(_change(["core/used.mojo"])), _plan(_change(used))))
+    assert_true(_plan(_change(used)).flag("export"))
 
 
 def _with_fidelity_suite() -> Dict[String, String]:
