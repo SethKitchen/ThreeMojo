@@ -126,6 +126,14 @@ comptime GLOBAL_TOOLS = [
 ]
 """Other tools whose change selects the full audit."""
 
+comptime COVERAGE_TOOLS = [
+    "tools/check_coverage_sources.mojo",
+    "tools/check_coverage_loops.mojo",
+    "tools/coverage_hit_faults.mojo",
+]
+"""The Mojo programs that `make test-coverage-tool` runs. A change to one, or
+to any file it imports, runs the coverage tool check."""
+
 comptime BOUND_EVIDENCE = [
     "docs/validation/anatomy-template-report.json",
     "docs/validation/anatomy-provenance.json",
@@ -986,7 +994,10 @@ def plan(
     other.discard("docs")
     var gpu = False
     var portability = False
+    var coverage_tools = False
     for name in execution:
+        if _contains(materialize[COVERAGE_TOOLS](), name):
+            coverage_tools = True
         # `make check-gpu-air` runs the AIR checker in the GPU job.
         if is_gpu(name) or name == "tools/check_air_calls.mojo":
             gpu = True
@@ -1010,7 +1021,9 @@ def plan(
     result.flags["coverage"] = full or len(result.files["covered"]) > 0
     result.flags["gpu"] = full or gpu
     result.flags["docs"] = full or "docs" in types
-    result.flags["coverage_tools"] = full or "coverage_tools" in types or tasks
+    result.flags["coverage_tools"] = (
+        full or "coverage_tools" in types or tasks or coverage_tools
+    )
     result.flags["portability"] = full or "portability" in types or portability
     result.flags["export"] = full or "export" in types
     var lint = False

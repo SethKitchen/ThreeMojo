@@ -467,7 +467,7 @@ def test_coverage_transport_and_proofs_run_the_coverage_tools() raises:
     for path in [
         "tools/coverage_hit_cache.c",
         "tools/fixtures/coverage_hit_transport_faults.c",
-        "tools/coverage_hit_faults.py",
+        "tools/coverage_hit_faults.mojo",
         "tools/check_coverage_loop_proofs.py",
         "tools/coverage_loop_proofs.py",
         "tools/carla_lane_oracle/source_contracts.py",
@@ -475,6 +475,72 @@ def test_coverage_transport_and_proofs_run_the_coverage_tools() raises:
         var value = _plan(_change([path]))
         assert_true(value.flag("coverage_tools"), path)
         assert_false(value.flag("coverage") or value.flag("cpu"), path)
+
+
+def _with_coverage_tools() -> Dict[String, String]:
+    """Return the fixture tree with the Mojo coverage tool checks, their
+    helpers and their suites."""
+    var sources = _sources()
+    sources["tools/_process.mojo"] = "def run_program():\n    pass\n"
+    sources[
+        "tools/check_coverage_sources.mojo"
+    ] = "from tools._process import run_program\ndef main():\n    pass\n"
+    sources["tools/check_coverage_loops.mojo"] = (
+        "from tools.check_coverage_sources import run_program\ndef main():\n   "
+        " pass\n"
+    )
+    sources[
+        "tools/coverage_hit_faults.mojo"
+    ] = "from tools._process import run_program\ndef main():\n    pass\n"
+    sources[
+        "tests/test_check_coverage_sources_tool.mojo"
+    ] = "from tools.check_coverage_sources import main\n"
+    sources[
+        "tests/test_check_coverage_loops_tool.mojo"
+    ] = "from tools.check_coverage_loops import main\n"
+    sources[
+        "tests/test_coverage_hit_faults_tool.mojo"
+    ] = "from tools.coverage_hit_faults import main\n"
+    return sources^
+
+
+def test_coverage_tool_checks_follow_their_imports() raises:
+    var sources = _with_coverage_tools()
+    # A changed check runs its suite, its importers' suites and the check.
+    var checks = _plan(_change(["tools/check_coverage_sources.mojo"]), sources)
+    assert_false(checks.full)
+    assert_true(checks.flag("coverage_tools") and checks.flag("cpu"))
+    assert_equal(
+        _files(checks, "cpu_tests"),
+        (
+            "tests/test_check_coverage_loops_tool.mojo"
+            " tests/test_check_coverage_sources_tool.mojo"
+        ),
+    )
+    assert_false(checks.flag("coverage"))
+    var faults = _plan(_change(["tools/coverage_hit_faults.mojo"]), sources)
+    assert_true(faults.flag("coverage_tools"))
+    assert_equal(
+        _files(faults, "cpu_tests"), "tests/test_coverage_hit_faults_tool.mojo"
+    )
+    # A shared helper reaches the checks through the import graph.
+    var helper = _plan(_change(["tools/_process.mojo"]), sources)
+    assert_false(helper.full)
+    assert_true(helper.flag("coverage_tools"))
+    # A suite alone does not run the coverage tool check.
+    var suite = _plan(
+        _change(["tests/test_check_coverage_loops_tool.mojo"]), sources
+    )
+    assert_false(suite.flag("coverage_tools"))
+    # The removed Python tools still select the coverage tool check.
+    for path in [
+        "tools/check_coverage_sources.py",
+        "tools/check_coverage_loops.py",
+        "tools/coverage_hit_faults.py",
+    ]:
+        var value = _plan(_change([path]), sources)
+        assert_false(value.full, path)
+        assert_true(value.flag("coverage_tools"), path)
 
 
 # --- selection -----------------------------------------------------------------

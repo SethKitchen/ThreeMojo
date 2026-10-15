@@ -935,8 +935,8 @@ repository-check:
 test-coverage-tool:
 	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
-	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
-	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+	@$(TOOL) check_coverage_sources --mojo $(MOJO)
+	@$(TOOL) check_coverage_loops --mojo $(MOJO)
 	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
 	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
 

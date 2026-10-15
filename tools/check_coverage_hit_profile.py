@@ -185,8 +185,11 @@ def check(mojo):
         validate_streams(streams, profiles, identity_outputs,
                          (str(identity), identity.name))
         if platform.system() == 'Linux':
-            subprocess.run([sys.executable, str(ROOT/'tools/coverage_hit_faults.py'),
-                            '--compile-run'], check=True, timeout=60)
+            # Build the Mojo tool first, so that its time limit covers the run only.
+            tool = ['sh', str(ROOT/'tools/tool.sh'), mojo]
+            subprocess.run([*tool, '--build', 'coverage_hit_faults'], check=True)
+            subprocess.run([*tool, 'coverage_hit_faults', '--compile-run'],
+                           check=True, timeout=60)
     print('PASS: cold/warm phase records, every complete vector, ordinary diagnostics, '
           'absolute/relative source argv0, spaced paths/arguments and compiled profiles')
 
