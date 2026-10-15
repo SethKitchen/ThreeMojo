@@ -13,7 +13,7 @@ The command writes the results for this kind of host and updates that host's tab
 To rebuild the tables of one host from its results file, give the host:
 
 ```bash
-python3 tools/bench_examples.py --from-results --platform macos
+sh tools/tool.sh .venv/bin/mojo bench_examples --from-results --platform macos
 ```
 
 ## What you need
@@ -34,10 +34,10 @@ Or set `MOJO_1_0` to the Mojo 1.0 binary.
 ## Measure one example
 
 ```bash
-python3 tools/bench_examples.py --only cube --merge
+sh tools/tool.sh .venv/bin/mojo bench_examples --only cube --merge
 ```
 
-Use `--merge` to keep the other recorded rows. The host and toolchain metadata must match the previous file. The runner refuses a mismatch before it measures or writes results.
+Use `--merge` to keep the other recorded rows. The host and toolchain metadata must match the previous file. The runner refuses a mismatch before it measures or writes results. The metadata records the version that `python3 --version` prints. It is empty when the host has no `python3`.
 
 Without `--merge`, the command replaces that platform's results with the selected examples. Save the old file first if you need to keep it.
 

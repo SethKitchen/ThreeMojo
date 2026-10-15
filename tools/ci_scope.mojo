@@ -268,13 +268,9 @@ def kind(path: String) -> String:
         return "tools"
     if path.startswith("assets/carla/tools/export/"):
         return "export"
-    # These generators have exact compiler-free replay gates in test-tools.
-    for generator in [
-        "tools/bench_examples.py",
-        "tools/compiler_metadata.py",
-    ]:
-        if path == generator:
-            return "tools"
+    # This generator has an exact compiler-free replay gate in test-tools.
+    if path == "tools/compiler_metadata.py":
+        return "tools"
     if path.startswith("assets/"):
         return "native"
     var top = _first_part(path)
