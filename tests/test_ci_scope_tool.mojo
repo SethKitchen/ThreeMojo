@@ -508,7 +508,7 @@ def test_examples_and_benchmark_results_do_not_gate_library_coverage() raises:
         _change(
             [
                 "examples/used.mojo",
-                "tools/bench_examples.py",
+                "tools/bench_examples.mojo",
                 "bench/results-linux.json",
                 "docs/wiki/Examples.md",
             ]
@@ -517,6 +517,37 @@ def test_examples_and_benchmark_results_do_not_gate_library_coverage() raises:
     assert_equal(_files(value, "cpu_entries"), "examples/used.mojo")
     assert_false(value.flag("cpu") or value.flag("coverage"))
     assert_true(value.flag("native") and value.flag("docs"))
+
+
+def _with_bench_examples() -> Dict[String, String]:
+    """Return the fixture tree with the example benchmark and its suite."""
+    var sources = _sources()
+    sources["tools/_json_tree.mojo"] = "def parse():\n    pass\n"
+    sources[
+        "tools/bench_examples.mojo"
+    ] = "from tools._json_tree import parse\ndef main():\n    pass\n"
+    sources[
+        "tests/test_bench_examples_tool.mojo"
+    ] = "from tools.bench_examples import run\n"
+    return sources^
+
+
+def test_the_example_benchmark_runs_its_suite() raises:
+    # The example benchmark is a Mojo tool: a change runs the suite that
+    # imports it. It measures no library.
+    var value = _plan(
+        _change(["tools/bench_examples.mojo"]), _with_bench_examples()
+    )
+    assert_false(value.full)
+    assert_equal(_on(value), "cpu lint native tools")
+    assert_equal(
+        _files(value, "cpu_tests"), "tests/test_bench_examples_tool.mojo"
+    )
+    assert_equal(_files(value, "covered"), "")
+    # The results file stays a tool input.
+    assert_equal(kind("bench/results-linux.json"), "tools")
+    # The removed Python tool is not exempt.
+    assert_true(_plan(_change(["tools/bench_examples.py"])).full)
 
 
 def test_a_removed_import_keeps_its_former_coverage() raises:

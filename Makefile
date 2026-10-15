@@ -781,7 +781,7 @@ bench-scene:
 # bench/results-<linux|macos>.json and fills its tables on
 # docs/wiki/Benchmarks.md.
 bench-examples:
-	@python3 tools/bench_examples.py
+	@$(TOOL) bench_examples
 
 example: $(OUT_DIR)/triangle.png
 

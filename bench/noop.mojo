@@ -7,7 +7,7 @@
 
     mojo build -o bench/build/noop bench/noop.mojo
 
-`tools/bench_examples.py` times this beside `node -e ""` so the benchmark
+`tools/bench_examples.mojo` times this beside `node -e ""` so the benchmark
 page can show how much of each example's run is the process starting rather
 than the frames being drawn. It imports nothing from ThreeMojo.
 """
