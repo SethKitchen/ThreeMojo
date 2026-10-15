@@ -7,7 +7,7 @@
 particles and the GGX sampling helpers.
 
 Each expected value is worked out from three.js's formula, the GGX ones
-in `assets/tsl/tsl_reference.py`, and read back through the compiled
+in `tools/tsl_reference.mojo`, and read back through the compiled
 program.
 """
 
