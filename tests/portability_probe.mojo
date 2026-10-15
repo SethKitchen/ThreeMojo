@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Subprocess entry points for tools/check_portability.py."""
+"""Subprocess entry points for tools/check_portability.mojo."""
 
 from extensions.humanoid.skeleton.head.face_model import FaceModel
 from extensions.humanoid.skeleton.head.hair.styles import (

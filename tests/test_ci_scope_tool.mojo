@@ -636,6 +636,68 @@ def test_portability_embedded_protocol_and_export_dependencies() raises:
     )
 
 
+def _with_device_tools() -> Dict[String, String]:
+    """Return the fixture tree with the GPU status, AIR and portability
+    tools, their helpers and their suites."""
+    var sources = _sources()
+    sources["tools/_cli.mojo"] = "def parse():\n    pass\n"
+    sources["tools/_gpu_status.mojo"] = "from tools._cli import parse\n"
+    sources[
+        "tools/gpu_status.mojo"
+    ] = "from tools._gpu_status import parse\ndef main():\n    pass\n"
+    sources[
+        "tools/check_air_calls.mojo"
+    ] = "from tools._cli import parse\ndef main():\n    pass\n"
+    sources[
+        "tools/check_portability.mojo"
+    ] = "from tools._cli import parse\ndef main():\n    pass\n"
+    sources[
+        "tests/test_gpu_status_tool.mojo"
+    ] = "from tools._gpu_status import parse\n"
+    sources[
+        "tests/test_check_air_calls_tool.mojo"
+    ] = "from tools.check_air_calls import main\n"
+    sources[
+        "tests/test_check_portability_tool.mojo"
+    ] = "from tools.check_portability import main\n"
+    return sources^
+
+
+def test_device_tools_select_their_jobs() raises:
+    var sources = _with_device_tools()
+    # The status tool needs MAX: CPU lint leaves it to the GPU job.
+    var status = _plan(_change(["tools/gpu_status.mojo"]), sources)
+    assert_false(status.full)
+    assert_equal(_on(status), "gpu lint native tools")
+    assert_equal(_files(status, "cpu_entries"), "")
+    var report = _plan(_change(["tools/_gpu_status.mojo"]), sources)
+    assert_equal(_on(report), "cpu gpu lint native tools")
+    assert_equal(_files(report, "cpu_tests"), "tests/test_gpu_status_tool.mojo")
+    # The AIR checker runs in the GPU job, and its suite on the CPU.
+    var air = _plan(_change(["tools/check_air_calls.mojo"]), sources)
+    assert_equal(_on(air), "cpu gpu lint native tools")
+    assert_equal(
+        _files(air, "cpu_tests"), "tests/test_check_air_calls_tool.mojo"
+    )
+    assert_equal(_files(air, "covered"), "")
+    # The portability checker selects its own check.
+    var port = _plan(_change(["tools/check_portability.mojo"]), sources)
+    assert_equal(_on(port), "cpu lint native portability tools")
+    assert_equal(
+        _files(port, "cpu_tests"), "tests/test_check_portability_tool.mojo"
+    )
+    # The shared command-line helper reaches all three.
+    var shared = _plan(_change(["tools/_cli.mojo"]), sources)
+    assert_equal(_on(shared), "cpu gpu lint native portability tools")
+    # The removed Python tools select the full audit.
+    for path in [
+        "tools/gpu_status.py",
+        "tools/check_air_calls.py",
+        "tools/check_portability.py",
+    ]:
+        assert_true(_plan(_change([path]), sources).full, path)
+
+
 def test_unavailable_test_history_is_the_full_audit() raises:
     var tree = Tree()
     var value = plan(

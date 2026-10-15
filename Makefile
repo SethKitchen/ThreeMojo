@@ -88,7 +88,8 @@ GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo extensions/water/gpu.mo
 GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
                     tests/test_gpu_volume_packing.mojo
 GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS)
-GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo
+GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo \
+                    tools/gpu_status.mojo
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
 CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
@@ -343,7 +344,7 @@ check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-c
 # comes first so a suite that skipped every hardware test cannot be mistaken
 # for one that ran them. Use compile-gpu for a build-only check without a GPU.
 check-gpu: gpu-status test-gpu-host check-gpu-air
-	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
+	@$(TOOL) gpu_status --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) lint-gpu test-gpu-device; \
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
 
@@ -425,7 +426,7 @@ $(TEST_CPU_STAMP):
 # GPU_BUDGET=600` on a machine whose first kernel compile is genuinely slow.
 GPU_BUDGET := 300
 test-gpu: gpu-status test-gpu-host
-	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
+	@$(TOOL) gpu_status --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) test-gpu-device; \
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
 
@@ -463,7 +464,7 @@ $(TEST_GPU_HOST_STAMP):
 	@$(call stamp,test-gpu-host)
 
 gpu-status:
-	@.venv/bin/python tools/gpu_status.py
+	@$(TOOL) gpu_status
 
 lint: lint-cpu lint-gpu
 
@@ -943,7 +944,7 @@ test-coverage-tool:
 # toolchain. A call whose types differ from its callee's crashes Apple's
 # linker with only "failed to compile metallib" (modular/modular#7238).
 check-gpu-air:
-	@python3 tools/check_air_calls.py --mojo $(MOJO)
+	@$(TOOL) check_air_calls --mojo $(MOJO)
 
 test-portability:
-	@python3 tools/check_portability.py --mojo $(MOJO)
+	@$(TOOL) check_portability --mojo $(MOJO)
