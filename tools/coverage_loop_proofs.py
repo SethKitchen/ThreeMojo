@@ -45,7 +45,7 @@ TOOL_INPUTS = (
     'tools/coverage_toolchain_identity.py', 'tools/coverage_process_group.py',
     'tools/coverage_hit_aot.py', 'tools/coverage_hit_cache.c',
     'tools/coverage_write_interposer.c', 'tools/test_environment.py',
-    'tools/run_suite.mojo', 'Makefile',
+    'tools/run_suite.py', 'Makefile',
 )
 
 
