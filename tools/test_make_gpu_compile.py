@@ -18,6 +18,7 @@ GPU_ENTRIES = (
     'tests/test_gpu.mojo', 'tests/test_gpu_water.mojo', 'tests/test_gpu_layout.mojo',
     'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo',
     'bench/water_gpu_bench.mojo', 'bench/hair_frame_bench.mojo',
+    'tools/gpu_status.mojo',
 )
 GPU_LIBRARIES = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo'}
 
