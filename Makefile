@@ -869,26 +869,26 @@ $(OUT_DIR)/ktx2.png: $(EXAMPLE_INPUTS_basis) assets/ktx2/uastc_rgb_zstd_mips.ktx
 	[ $$rc -eq 0 ] || exit 1
 	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@
 
-$(OUT_DIR)/carla_towns.png: $(EXAMPLE_INPUTS_carla_towns) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
+$(OUT_DIR)/carla_towns.png: $(EXAMPLE_INPUTS_carla_towns) assets/carla/ATTRIBUTION.md tools/carla_assets.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla_towns.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
-	@python3 assets/carla/tools/carla_assets.py credits --all --output $(@:.png=.credits.md)
+	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
 
-$(OUT_DIR)/carla.png: $(EXAMPLE_INPUTS_carla) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
+$(OUT_DIR)/carla.png: $(EXAMPLE_INPUTS_carla) assets/carla/ATTRIBUTION.md tools/carla_assets.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
-	@python3 assets/carla/tools/carla_assets.py credits --all --output $(@:.png=.credits.md)
+	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
 
-$(OUT_DIR)/carla_town.png: $(EXAMPLE_INPUTS_carla_town) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
+$(OUT_DIR)/carla_town.png: $(EXAMPLE_INPUTS_carla_town) assets/carla/ATTRIBUTION.md tools/carla_assets.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla_town.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@$(MOJO) run $(MOJOFLAGS) tools/optimize_png.mojo $@ $(patsubst %.png,%_*.png,$@)
-	@python3 assets/carla/tools/carla_assets.py credits --all --output $(@:.png=.credits.md)
+	@$(TOOL) carla_assets credits --all --output $(@:.png=.credits.md)
 
 # Existing tracked gallery files keep their identity and history. New renders
 # are ignored; use an explicit git add -f only for a reviewed documentation image.

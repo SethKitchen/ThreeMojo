@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "about": "The photoscanned assets the CARLA town can wear. `assets/carla/tools/carla_assets.py` fetches them into .cache/carla-assets/ and checks each sha256; `extensions/carla/assets.mojo` reads them and falls back to the procedural asset for an entry the cache lacks. A binding maps a CARLA blueprint id or a surface key to an entry id, or to null for the procedural asset.",
+  "about": "The photoscanned assets the CARLA town can wear. `tools/carla_assets.mojo` fetches them into .cache/carla-assets/ and checks each sha256; `extensions/carla/assets.mojo` reads them and falls back to the procedural asset for an entry the cache lacks. A binding maps a CARLA blueprint id or a surface key to an entry id, or to null for the procedural asset.",
   "entries": [
     {
       "id": "asphalt_02",

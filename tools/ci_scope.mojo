@@ -270,11 +270,6 @@ def kind(path: String) -> String:
             return "coverage_tools"
     if path == "tools/check_portability.mojo":
         return "portability"
-    if (
-        path == "assets/carla/tools/carla_assets.py"
-        or path == "assets/carla/tools/test_carla_assets.py"
-    ):
-        return "tools"
     if path.startswith("assets/carla/tools/export/"):
         return "export"
     if path.startswith("assets/"):
