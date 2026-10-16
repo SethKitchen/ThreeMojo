@@ -23,7 +23,7 @@ has them.
 port seeds it from `math.utils.SeededRandom`; see `postprocessing.gtao`.
 """
 
-from math.vector3 import Vector3
+from math.vector3 import Vector3, reciprocal_unit
 from postprocessing.display_nodes import luminance_of
 from postprocessing.gtao import denoise_disk, denoise_noise
 from postprocessing.sampling import LightView, u_of, v_of
@@ -167,11 +167,7 @@ def _normal(normals: LightView, u: Float32, v: Float32) -> Vector3:
     """Return the normal at a texture coordinate, bilinear, made unit
     length: `normalNode.sample( uv ).rgb.normalize()`."""
     var tap = normals.sample(u, v)
-    var n = Vector3(tap.r, tap.g, tap.b)
-    var size = n.length()
-    if size == 0:
-        return n
-    return n * (1 / size)
+    return reciprocal_unit(Vector3(tap.r, tap.g, tap.b))
 
 
 def denoise_light(

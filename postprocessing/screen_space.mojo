@@ -51,7 +51,7 @@ from core.layers import Layers
 from math.matrix4 import Matrix4
 from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
-from math.vector3 import Vector3
+from math.vector3 import Vector3, reciprocal_unit
 from postprocessing.sampling import sample, u_of, v_of
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.raster_state import (
@@ -693,7 +693,7 @@ def _ssao_pixel(
     # nothing.
     if not length > 0:
         return 1
-    tangent = tangent * (1 / length)
+    tangent = reciprocal_unit(tangent)
     var bitangent = normal
     bitangent.cross(tangent)
     var occluded = 0

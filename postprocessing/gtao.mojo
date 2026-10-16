@@ -30,7 +30,7 @@ from math.norm import squared_length2
 from math.noise import SimplexNoise
 from math.utils import SeededRandom, clamp
 from math.cross import cross_vectors
-from math.vector3 import Vector3
+from math.vector3 import Vector3, reciprocal_unit
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import (
     BEAUTY_OUTPUT,
@@ -303,14 +303,6 @@ def denoise_disk(
     return disk^
 
 
-def _unit(v: Vector3) -> Vector3:
-    """Return `v` at a length of one, or zero for zero."""
-    var size = v.length()
-    if size == 0:
-        return v
-    return v * (1 / size)
-
-
 def _row_up(y: Int, height: Int) -> Int:
     """Return a row counted up from the bottom."""
     return height - 1 - y
@@ -341,7 +333,7 @@ def _horizon(
     var delta = seen - center
     if abs(delta.z) >= thickness or delta.length() == 0:
         return horizon
-    var cosine = view_dir.dot(_unit(delta))
+    var cosine = view_dir.dot(reciprocal_unit(delta))
     return horizon + max(Float32(0), (cosine - horizon) * weight)
 
 
@@ -383,22 +375,26 @@ def gtao_occlusion(
         ).x
     var side = Int(sqrt(Float32(len(noise))))
     var texel = noise[(_row_up(y, view.height) % side) * side + (x % side)]
-    var tangent = _unit(Vector3(texel.r * 2 - 1, texel.g * 2 - 1, 0))
+    var tangent = reciprocal_unit(Vector3(texel.r * 2 - 1, texel.g * 2 - 1, 0))
     var bitangent = Vector3(-tangent.y, tangent.x, 0)
     var reach = 0.5 + 0.5 * texel.a
     var directions = 3
     if settings.samples >= 30:
         directions = 5
     var steps = (settings.samples + directions - 1) // directions
-    var view_dir = _unit(-center)
+    var view_dir = reciprocal_unit(-center)
     var thickness = settings.thickness.value
     var ao = Float32(0)
     for i in range(directions):  # pragma: no branch
         var angle = Float32(i) / Float32(directions) * Float32(pi)
-        var direction = _unit(tangent * cos(angle) + bitangent * sin(angle))
-        var slice_bitangent = _unit(cross_vectors(direction, view_dir))
+        var direction = reciprocal_unit(
+            tangent * cos(angle) + bitangent * sin(angle)
+        )
+        var slice_bitangent = reciprocal_unit(
+            cross_vectors(direction, view_dir)
+        )
         var slice_tangent = cross_vectors(slice_bitangent, view_dir)
-        var in_slice = _unit(
+        var in_slice = reciprocal_unit(
             normal - slice_bitangent * normal.dot(slice_bitangent)
         )
         var toward = cross_vectors(in_slice, slice_bitangent)

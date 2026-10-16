@@ -37,6 +37,7 @@ from math.norm import (
     dot3,
     length3,
     normalized3,
+    reciprocal_normalized3,
     _ordinary_squared,
 )
 from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
@@ -702,6 +703,21 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         return Vector3(
             Float32(c * cos(theta)), Float32(u), Float32(c * sin(theta))
         )
+
+
+def reciprocal_unit(value: Vector3) -> Vector3:
+    """Return `value` at unit length with ordinary reciprocal rounding.
+
+    Args:
+        value: The vector.
+
+    Returns:
+        The unit direction. A zero vector stays zero. An ordinary
+        nonzero vector is scaled by `1 / length`. A finite vector whose
+        squared length is not ordinary uses the scale-safe direction.
+    """
+    var unit = reciprocal_normalized3[DType.float32](value.x, value.y, value.z)
+    return Vector3(unit[0], unit[1], unit[2])
 
 
 def _ordinary_transform[
