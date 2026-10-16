@@ -12,13 +12,16 @@ slowly moving triangle would swim. These pixels stay put until the edge
 crosses them.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import (
+    example_destination,
+    point_on_circle,
+    write_third_turn,
+)
 
-from core.clock import Clock
 from math.vector2 import Vector2
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle, rasterize
-from std.math import cos, pi, sin
+from std.math import pi
 
 comptime DEFAULT_OUTPUT = "out/coverage.png"
 comptime WIDTH = 240
@@ -26,13 +29,6 @@ comptime HEIGHT = 180
 comptime FRAMES = 48
 comptime DELAY_MS = 50
 comptime RADIUS = Float32(78)
-
-
-def rotated(center: Vector2, radius: Float32, angle: Float32) -> Vector2:
-    """Return the point `radius` from `center` at `angle` radians."""
-    return Vector2(
-        center.x + radius * cos(angle), center.y + radius * sin(angle)
-    )
 
 
 def frame_at(angle: Float32) raises -> Framebuffer:
@@ -50,9 +46,9 @@ def frame_at(angle: Float32) raises -> Framebuffer:
     var center = Vector2(Float32(WIDTH) / 2, Float32(HEIGHT) / 2)
     var step = Float32(2) * Float32(pi) / Float32(3)
     var triangle = Triangle(
-        rotated(center, RADIUS, angle),
-        rotated(center, RADIUS, angle + step),
-        rotated(center, RADIUS, angle + step + step),
+        point_on_circle(center, RADIUS, angle),
+        point_on_circle(center, RADIUS, angle + step),
+        point_on_circle(center, RADIUS, angle + step + step),
     )
     var target = Framebuffer(WIDTH, HEIGHT, Color(18, 20, 28))
     rasterize(triangle, target, Color(70, 200, 255))
@@ -60,14 +56,6 @@ def frame_at(angle: Float32) raises -> Framebuffer:
 
 
 def main() raises:
-    var destination = example_destination(String(DEFAULT_OUTPUT))
-
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for index in range(FRAMES):
-        var angle = Float32(2) * Float32(pi) * Float32(index)
-        angle = angle / (Float32(3) * Float32(FRAMES))
-        frames.append(frame_at(angle))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    write_third_turn[frame_at](
+        FRAMES, DELAY_MS, example_destination(String(DEFAULT_OUTPUT))
+    )
