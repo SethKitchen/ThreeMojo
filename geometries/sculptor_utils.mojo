@@ -27,6 +27,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.cross import cross_components
 from math.norm import length3
 from std.math import isnan, sqrt
 
@@ -137,9 +138,8 @@ def _sub(a: Point3, b: Point3) -> Point3:
 
 def _cross(a: Point3, b: Point3) -> Point3:
     """Return `a x b`, in three.js's order of operations."""
-    return Point3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
+    var x, y, z = cross_components[DType.float64](a.x, a.y, a.z, b.x, b.y, b.z)
+    return Point3(x, y, z)
 
 
 def _dot(a: Point3, b: Point3) -> Float64:
@@ -276,11 +276,7 @@ def distance_sq_to_triangle(
     var ab = _sub(v2, v1)
     var ac = _sub(v3, v1)
     var bc = _sub(v3, v2)
-    var normal = Point3(
-        ab.y * ac.z - ab.z * ac.y,
-        ab.z * ac.x - ab.x * ac.z,
-        ab.x * ac.y - ab.y * ac.x,
-    )
+    var normal = _cross(ab, ac)
     var area_squared = _dot(normal, normal)
     var max_edge_squared = max(max(_dot(ab, ab), _dot(ac, ac)), _dot(bc, bc))
     if area_squared <= DOUBLE_EPSILON * max_edge_squared * max_edge_squared:

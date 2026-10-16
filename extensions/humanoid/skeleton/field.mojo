@@ -13,6 +13,7 @@ This file holds the arithmetic those solids share.
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from std.math import isfinite, max, min, pi, sqrt
 from units.si import Angle, Length
@@ -311,9 +312,7 @@ def reject(vector: Vector3, unit: Vector3) -> Vector3:
 
 def cross(a: Vector3, b: Vector3) -> Vector3:
     """Return the cross product of `a` and `b` without mutating them."""
-    var out = a
-    out.cross(b)
-    return out
+    return cross_vectors(a, b)
 
 
 def sd_ellipse_segment(
