@@ -59,6 +59,7 @@ keeps and draws from undefined positions.
 from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
+from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
     is_js_space,
     js_part,
@@ -168,15 +169,7 @@ def _decoded(bytes: Span[UInt8, _]) raises -> String:
     Raises:
         Error: If the bytes are not UTF-8.
     """
-    var start = 0
-    var marked = (
-        len(bytes) >= 3
-        and bytes[0] == 0xEF
-        and bytes[1] == 0xBB
-        and bytes[2] == 0xBF
-    )
-    if marked:
-        start = 3
+    var start = leading_utf8_bom(bytes)
     try:
         return String(from_utf8=bytes[start:])
     except:
