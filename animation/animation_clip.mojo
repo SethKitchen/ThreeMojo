@@ -44,6 +44,7 @@ neither of the two.
 """
 
 from loaders.bytes import ascii_digit, ascii_letter
+from core.order import stable_rising_order
 from core.ordinal import ordinal_valid
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
@@ -228,14 +229,7 @@ def get_keyframe_order(times: List[Float32]) -> List[Int]:
         The key places, earliest first. Keys at one time keep the order
         they had, as JavaScript's sort keeps them.
     """
-    var order = List[Int]()
-    for index in range(len(times)):
-        # Insertion sort: stable, and a sequence has three keys.
-        var at = len(order)
-        while at > 0 and times[order[at - 1]] > times[index]:
-            at -= 1
-        order.insert(at, index)
-    return order^
+    return stable_rising_order(times)
 
 
 def sorted_array(
