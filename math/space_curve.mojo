@@ -47,6 +47,7 @@ as three.js does for its `CatmullRomCurve3` and the two Bezier curves.
 """
 
 from math.curve_checks import check_curve_parameter, curve_sample_count
+from math.utils import clamp
 from math.curve3 import Curve3, FrenetFrames
 from math.vector3 import Vector3
 from math.norm import (
@@ -538,7 +539,7 @@ def _rotated(v: Point3, axis: Point3, angle: Float64) -> Point3:
 
 def _clamp_unit(value: Float64) -> Float64:
     """Return `value` held to minus one through one, for `acos`."""
-    return max(-1.0, min(1.0, value))
+    return clamp(value, -1.0, 1.0)
 
 
 def frames3_of[

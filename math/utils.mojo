@@ -44,6 +44,20 @@ def clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     return max(low, min(high, value))
 
 
+def clamp(value: Float64, low: Float64, high: Float64) -> Float64:
+    """Return `value` limited to the range from `low` to `high`.
+
+    Args:
+        value: The value.
+        low: The smallest answer.
+        high: The largest answer.
+
+    Returns:
+        The value within the range.
+    """
+    return max(low, min(high, value))
+
+
 def lerp(x: Float32, y: Float32, t: Float32) -> Float32:
     """Return the value a fraction `t` of the way from `x` to `y`.
 

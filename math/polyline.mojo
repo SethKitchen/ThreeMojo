@@ -11,6 +11,7 @@ can hold its length between two bounds.
 """
 
 from math.norm import _ordinary_squared
+from math.utils import clamp
 from std.math import acos, max, min, pi, sqrt
 from units.si import Angle, RADIAN
 
@@ -228,7 +229,7 @@ def angle_between[T: PolylineVertex](start: T, end: T) -> Angle:
         if first.length_sq() == 0 or second.length_sq() == 0:
             return Angle(Float32(pi / 2), RADIAN)
         theta = first.dot(second)
-    return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
+    return Angle(acos(clamp(theta, -1, 1)), RADIAN)
 
 
 def lerp_in_place[T: PolylineVertex](mut value: T, other: T, alpha: Float32):
