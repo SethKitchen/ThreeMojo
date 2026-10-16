@@ -168,7 +168,7 @@ limits, and explicit zero and nonfinite rules.
 
 from core.ordinal import ordinal_valid
 
-from core.binary import little_endian_u32
+from core.binary import little_endian_u16, little_endian_u32
 from math.norm import length3, normalized3, _ordinary_squared
 
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -3647,9 +3647,9 @@ def _read_component[
         if raw >= 128:
             raw -= 256
     elif component == COMPONENT_UNSIGNED_SHORT:
-        raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+        raw = little_endian_u16(bytes, at)
     elif component == COMPONENT_SHORT:
-        raw = Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
+        raw = little_endian_u16(bytes, at)
         if raw >= 32768:
             raw -= 65536
     else:

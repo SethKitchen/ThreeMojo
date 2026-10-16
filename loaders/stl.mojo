@@ -41,6 +41,7 @@ and three corners, and a keyword out of place are refused, naming the
 face or the line.
 """
 
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     COLOR,
@@ -123,17 +124,6 @@ struct StlModel(Movable):
         return taken^
 
 
-def _u32(bytes: List[UInt8], at: Int) -> UInt32:
-    """Return the little-endian 32-bit word at `at`, which the caller has
-    checked is in the file."""
-    return (
-        UInt32(bytes[at])
-        | (UInt32(bytes[at + 1]) << 8)
-        | (UInt32(bytes[at + 2]) << 16)
-        | (UInt32(bytes[at + 3]) << 24)
-    )
-
-
 def _holds(bytes: List[UInt8], at: Int, word: String) -> Bool:
     """Return True if the file holds `word` at byte `at`.
 
@@ -171,7 +161,7 @@ def is_binary_stl(bytes: List[UInt8]) -> Bool:
         Whether to read it as binary.
     """
     if len(bytes) >= _PREAMBLE:
-        var faces = Int(_u32(bytes, _HEADER))
+        var faces = little_endian_u32(bytes, _HEADER)
         if _PREAMBLE + faces * _FACE == len(bytes):
             return True
     # Five offsets: the loop always runs.
@@ -195,7 +185,7 @@ def _float(bytes: List[UInt8], at: Int, face: Int) raises -> Float32:
     Raises:
         Error: If it is not finite.
     """
-    var value = bitcast[DType.float32](_u32(bytes, at))
+    var value = bitcast[DType.float32](UInt32(little_endian_u32(bytes, at)))
     if not isfinite(value):
         raise Error(
             "STL face "
@@ -239,7 +229,7 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
             + " bytes of header and face count, and this one has only "
             + String(len(bytes))
         )
-    var faces = Int(_u32(bytes, _HEADER))
+    var faces = little_endian_u32(bytes, _HEADER)
     var needed = _PREAMBLE + faces * _FACE
     if len(bytes) < needed:
         raise Error(

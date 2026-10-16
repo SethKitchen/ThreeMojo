@@ -47,6 +47,7 @@ zero-height rectangle has zero area and returns zero before edge evaluation.
 This avoids backend-dependent cancellation residue without a near-zero cutoff.
 """
 
+from core.binary import little_endian_u32
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import sqrt
@@ -141,13 +142,7 @@ def load_ltc_tables(path: String = LTC_PATH) raises -> LtcTables:
     var first = List[Float32]()
     var second = List[Float32]()
     for index in range(2 * LTC_FLOATS):  # pragma: no branch
-        var at = index * 4
-        var bits = (
-            UInt32(bytes[at])
-            | (UInt32(bytes[at + 1]) << 8)
-            | (UInt32(bytes[at + 2]) << 16)
-            | (UInt32(bytes[at + 3]) << 24)
-        )
+        var bits = UInt32(little_endian_u32(bytes, index * 4))
         var value = bitcast[DType.float32](bits)
         if index < LTC_FLOATS:
             first.append(value)

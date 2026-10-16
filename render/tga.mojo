@@ -27,6 +27,7 @@ TGA carries no color space of its own. What a paint program writes is
 sRGB, and so does this reader assume: a decoded TGA is `SRGB`.
 """
 
+from core.binary import little_endian_u16
 from render.framebuffer import Color
 from render.png import MAX_PIXELS, DecodedImage
 from render.srgb import SRGB
@@ -106,12 +107,6 @@ comptime GRAYSCALE = TgaImageType(3)
 comptime RLE_COLOR_MAPPED = TgaImageType(9)
 comptime RLE_TRUE_COLOR = TgaImageType(10)
 comptime RLE_GRAYSCALE = TgaImageType(11)
-
-
-def _le16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian sixteen-bit number at `at`, which the
-    header's length check has already found in the file."""
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
 
 
 def unpack_pixels(
@@ -208,11 +203,11 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var id_length = Int(bytes[0])
     var map_type = Int(bytes[1])
     var kind = TgaImageType(Int(bytes[2]))
-    var map_first = _le16(bytes, 3)
-    var map_length = _le16(bytes, 5)
+    var map_first = little_endian_u16(bytes, 3)
+    var map_length = little_endian_u16(bytes, 5)
     var map_bits = Int(bytes[7])
-    var width = _le16(bytes, 12)
-    var height = _le16(bytes, 14)
+    var width = little_endian_u16(bytes, 12)
+    var height = little_endian_u16(bytes, 14)
     var pixel_bits = Int(bytes[16])
     var descriptor = Int(bytes[17])
     if not kind.is_valid():

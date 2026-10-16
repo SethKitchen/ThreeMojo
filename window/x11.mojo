@@ -22,6 +22,7 @@ or motion event holds its position at 64 and 68, its modifier state at
 visual on a little-endian machine takes; any other visual is refused.
 """
 
+from core.binary import little_endian_i32
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -83,19 +84,6 @@ comptime ZPIXMAP = 2
 comptime POLLIN = 1
 
 
-def _int32(bytes: List[UInt8], offset: Int) -> Int:
-    """Return the little-endian signed 32-bit integer at an offset."""
-    var value = (
-        Int(bytes[offset])
-        | (Int(bytes[offset + 1]) << 8)
-        | (Int(bytes[offset + 2]) << 16)
-        | (Int(bytes[offset + 3]) << 24)
-    )
-    if value >= 1 << 31:
-        value -= 1 << 32
-    return value
-
-
 def _uint64(bytes: List[UInt8], offset: Int) -> Int:
     """Return the little-endian 64-bit integer at an offset."""
     var value = 0
@@ -155,9 +143,13 @@ def event_of(bytes: List[UInt8], symbol: Int) -> Optional[InputEvent]:
         port has no kind for: a button beyond the wheel, and every other
         type.
     """
-    var kind = _int32(bytes, 0)
+    var kind = little_endian_i32(bytes, 0)
     if kind == CONFIGURE_NOTIFY:
-        return InputEvent(RESIZE, x=_int32(bytes, 56), y=_int32(bytes, 60))
+        return InputEvent(
+            RESIZE,
+            x=little_endian_i32(bytes, 56),
+            y=little_endian_i32(bytes, 60),
+        )
     var pointer = (
         kind == KEY_PRESS
         or kind == KEY_RELEASE
@@ -167,10 +159,10 @@ def event_of(bytes: List[UInt8], symbol: Int) -> Optional[InputEvent]:
     )
     if not pointer:
         return None
-    var x = _int32(bytes, 64)
-    var y = _int32(bytes, 68)
-    var state = _int32(bytes, 80)
-    var detail = _int32(bytes, 84)
+    var x = little_endian_i32(bytes, 64)
+    var y = little_endian_i32(bytes, 68)
+    var state = little_endian_i32(bytes, 80)
+    var detail = little_endian_i32(bytes, 84)
     var shift = (state & SHIFT_MASK) != 0
     var control = (state & CONTROL_MASK) != 0
     var alt = (state & ALT_MASK) != 0
@@ -508,7 +500,7 @@ struct X11Window(Movable):
             _ = self._lib.call["XNextEvent", c_int](
                 self._display, Int(self._event.unsafe_ptr())
             )
-            var kind = _int32(self._event, 0)
+            var kind = little_endian_i32(self._event, 0)
             if kind == CLIENT_MESSAGE:
                 if _uint64(self._event, 56) == self._delete:
                     self.close_requested = True

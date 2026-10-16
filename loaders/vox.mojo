@@ -37,6 +37,7 @@ writes past its volume.
 """
 
 from core.assets import Assets
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -349,10 +350,7 @@ def _u32(bytes: List[UInt8], at: Int) raises -> Int:
     """
     if at + 4 > len(bytes):
         raise Error("VOX: the file ends inside a chunk, at byte " + String(at))
-    var value = 0
-    for k in range(4):  # pragma: no branch
-        value |= Int(bytes[at + k]) << (8 * k)
-    return value
+    return little_endian_u32(bytes, at)
 
 
 def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
