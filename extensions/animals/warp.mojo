@@ -33,6 +33,7 @@ from extensions.sdf.vector import (
     dot,
     frame_zy,
     length,
+    mix,
     smoothstep,
 )
 from std.math import cbrt
@@ -219,7 +220,7 @@ def apply_warp(w: Warp, p: V3) -> V3:
             1.0 - smoothstep(w.b - fade, w.b + fade, p.z)
         )
         var f = 1.0 + (w.k - 1.0) * band * smoothstep(cy * 0.35, cy * 0.7, p.y)
-        return V3(p.x * f, cy + (p.y - cy) * f, p.z)
+        return V3(p.x * f, mix(cy, p.y, f), p.z)
     # SHIFT: `c` to `d` is the ramp and `m` is the move.
     var ab = w.d - w.c
     var f = smoothstep(0.0, 1.0, dot(p - w.c, ab) / dot(ab, ab))

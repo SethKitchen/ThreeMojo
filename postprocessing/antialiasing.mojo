@@ -40,6 +40,7 @@ from core.extent import positive_extent
 from core.layers import Layers
 from core.scene import Scene
 from math.matrix4 import Matrix4, translation
+from math.utils import mix_delta
 from math.projection import view_to_screen
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -681,18 +682,15 @@ def smaa_blend(
                 var there = colors[_clamped(x + ox, y + oy, width, height)]
                 out[y * width + x] = FloatColor(
                     _degamma(
-                        _gamma(here.r)
-                        + (_gamma(there.r) - _gamma(here.r)) * amount
+                        mix_delta(_gamma(here.r), _gamma(there.r), amount)
                     ),
                     _degamma(
-                        _gamma(here.g)
-                        + (_gamma(there.g) - _gamma(here.g)) * amount
+                        mix_delta(_gamma(here.g), _gamma(there.g), amount)
                     ),
                     _degamma(
-                        _gamma(here.b)
-                        + (_gamma(there.b) - _gamma(here.b)) * amount
+                        mix_delta(_gamma(here.b), _gamma(there.b), amount)
                     ),
-                    here.a + (there.a - here.a) * amount,
+                    mix_delta(here.a, there.a, amount),
                 )
             x += 1
         y += 1

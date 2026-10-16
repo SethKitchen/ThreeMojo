@@ -1049,8 +1049,8 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
         )
         var dx = px - ax - bx * f
         var dy = py - ay - by * f
-        var d = sqrt(squared_length2[DType.float64](dx, dy)) - (
-            w[i] + (w[i + 1] - w[i]) * f
+        var d = sqrt(squared_length2[DType.float64](dx, dy)) - mix(
+            w[i], w[i + 1], f
         )
         best = min(best, d)
     return best

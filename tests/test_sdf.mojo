@@ -112,6 +112,7 @@ from extensions.sdf.vector import (
     clamp,
     on_side,
     cross,
+    catmull_rom,
     cubic_bezier,
     distance,
     dot,
@@ -186,6 +187,13 @@ def test_vector_arithmetic() raises:
     _near(cubic_bezier(start, first, second, end, 0.0), start)
     _near(cubic_bezier(start, first, second, end, 1.0), end)
     _near(cubic_bezier(start, first, second, end, 0.5), V3(0.5, 0.75, 0))
+    # A uniform Catmull-Rom span starts on its second point and ends on
+    # its third. Halfway from the origin to one on x, with matching
+    # neighbors, is the midpoint.
+    var after = V3(1, 0, 0)
+    _near(catmull_rom(start, start, after, after, 0.0), start)
+    _near(catmull_rom(start, start, after, after, 1.0), after)
+    _near(catmull_rom(start, start, after, after, 0.5), V3(0.5, 0, 0))
     _near(mirror(a), V3(-1, 2, 3))
 
 

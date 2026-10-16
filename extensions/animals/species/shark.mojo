@@ -1212,8 +1212,8 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             var fr = fraction(f)
             var pa = g.d1_poly[j * 2]
             var pb = g.d1_poly[j * 2 + 1]
-            var a = pa + (g.d1_poly[j * 2 + 2] - pa) * fr
-            var b = (pb + (g.d1_poly[j * 2 + 3] - pb) * fr) * g.dorsal_k
+            var a = mix(pa, g.d1_poly[j * 2 + 2], fr)
+            var b = mix(pb, g.d1_poly[j * 2 + 3], fr) * g.dorsal_k
             var uu = g.d1_u + a
             var y = g.top(min(uu, g.pc)) - 0.004 * tl + b * tl
             _ = m.sphere(
@@ -1427,7 +1427,7 @@ def _lerp_table(tbl: List[Float64], u: Float64) -> Float64:
         if u <= tbl[i * 2]:
             var t = (u - tbl[i * 2 - 2]) / (tbl[i * 2] - tbl[i * 2 - 2])
             var s = hermite_fade(t)
-            return tbl[i * 2 - 1] + (tbl[i * 2 + 1] - tbl[i * 2 - 1]) * s
+            return mix(tbl[i * 2 - 1], tbl[i * 2 + 1], s)
     return tbl[n * 2 - 1]
 
 
@@ -1477,7 +1477,7 @@ def _line_dist(
         var r = _seg_dist(
             px, py, pts[i * 2], pts[i * 2 + 1], pts[i * 2 + 2], pts[i * 2 + 3]
         )
-        best = min(best, r[0] - (w[i] + (w[i + 1] - w[i]) * r[1]))
+        best = min(best, r[0] - mix(w[i], w[i + 1], r[1]))
     return best
 
 

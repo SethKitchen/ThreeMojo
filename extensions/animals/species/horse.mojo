@@ -827,7 +827,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             var th = 0.0085
             # The hair leaves the crest over its top: the sheet starts on
             # the crest's far edge.
-            var depths: List[Float64] = [0.02, 0.02 + (ln - 0.02) * 0.5, ln]
+            var depths: List[Float64] = [0.02, mix(0.02, ln, 0.5), ln]
             var sk = List[V3]()
             for d in depths:  # pragma: no branch
                 sk.append(_skin_x(m, neck_ids, mane_side, p + down * d))
