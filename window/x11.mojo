@@ -49,6 +49,7 @@ from std.ffi import OwnedDLHandle, c_int, external_call
 from std.os.path import exists
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
+from window.present import require_presented_frame
 
 # Linux finds Xlib by its soname.
 comptime LIBRARY = "libX11.so.6"
@@ -395,19 +396,7 @@ struct X11Window(Movable):
         Raises:
             Error: If the window is closed or the frame is another size.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
-        if frame.width != self.width or frame.height != self.height:
-            raise Error(
-                "A frame of ",
-                frame.width,
-                "x",
-                frame.height,
-                " does not fit a window of ",
-                self.width,
-                "x",
-                self.height,
-            )
+        require_presented_frame(self.is_open, frame, self.width, self.height)
         # RGBA to the visual's order: blue, green, red, then a byte the
         # server ignores.
         for pixel in range(self.width * self.height):  # pragma: no branch
