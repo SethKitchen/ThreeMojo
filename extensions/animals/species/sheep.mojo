@@ -37,6 +37,7 @@ from extensions.animals.parts import (
 from extensions.sdf.sculpt import ell_y, cone_or_ball
 from extensions.animals.kit import (
     side_sign,
+    ear_ends,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -1001,10 +1002,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.024 if ear == EAR_SMALL else 0.028
     )
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = side_sign(side)
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var ln = length(tip - base)
         var facing = _ear_facing(ear, up, s)
         var lat = normalize(cross(up, facing))

@@ -39,6 +39,7 @@ from extensions.animals.parts import (
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     side_sign,
+    ear_ends,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -755,10 +756,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: erect, pointed and hairy, the cup open forward and out.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = side_sign(side)
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var ear_len = length(tip - base)
         var facing = normalize(HZ * 0.9 + V3(0.32 * s, -0.2, 0))
         var lat = normalize(cross(up, facing))

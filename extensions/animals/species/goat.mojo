@@ -34,6 +34,7 @@ from extensions.animals.parts import (
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     side_sign,
+    ear_ends,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -1089,10 +1090,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # broad drape with a rolled rim (lop).
     var lop = t.get("lop", 0.0) > 0.5
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = side_sign(side)
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var ln = length(tip - base)
         var facing = _ear_facing(lop, s)
         var lat = normalize(cross(up, facing))
