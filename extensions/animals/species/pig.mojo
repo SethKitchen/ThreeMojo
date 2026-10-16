@@ -81,6 +81,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from math.norm import squared_length2
+from math.utils import nearest_distance
 from std.math import asin, atan2, cos, exp, floor, pi, pow, sin, sqrt
 from extensions.sdf.distance import segment_distance
 
@@ -2006,7 +2007,7 @@ def pig_paint(
                 1.0 - clamp(dot(p - nb, ax) / dot(ax, ax), 0.0, 1.0)
             ) * length(ax)
             var ph = (sn + 0.012 * (fbm3(p * 25.0 + off, 2) - 0.5)) / 0.03
-            var fr = abs(ph - floor(ph + 0.5))
+            var fr = nearest_distance(ph)
             crease = (
                 exp(-(((fr * 0.03) / 0.0045) ** 2))
                 * smoothstep(0.015, 0.035, sn)
@@ -2019,7 +2020,7 @@ def pig_paint(
         if snout_top:
             var ddz = dz - h.z + 6.0 * h.x * h.x
             var ph = (ddz + 0.003 * (fbm3(p * 40.0 + off, 2) - 0.5)) / 0.0095
-            var fr = abs(ph - floor(ph + 0.5))
+            var fr = nearest_distance(ph)
             crease = (
                 exp(-(((fr * 0.0095) / 0.0018) ** 2))
                 * smoothstep(0.015, 0.025, ddz)
