@@ -83,10 +83,7 @@ def _number(
 ) raises -> Float64:
     """Return a number under `key`, or `default`. `parse_json` refuses a
     number beyond a double, so it is finite."""
-    var found = doc.get(item, key)
-    if found == NO_NODE:
-        return default
-    return doc.number(found)
+    return doc.optional_number(item, key, default)
 
 
 def _meters(
