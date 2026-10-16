@@ -491,11 +491,6 @@ def _ease_out(k: Float32) -> Float32:
     return -exp2(-10 * k) + 1
 
 
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return three.js's `MathUtils.clamp`."""
-    return clamp(value, low, high)
-
-
 struct MD2CharacterComplex(Movable):
     """A character that walks, crouches, jumps and attacks, blending one
     animation into the next, three.js's `MD2CharacterComplex`."""
@@ -866,22 +861,22 @@ struct MD2CharacterComplex(Movable):
         var turn = self.angular_speed.to(RADIAN_PER_SECOND)
         var facing = self.body_orientation.to(RADIAN)
         if controls.move_forward:
-            speed = _clamp(speed + dt * front, -top, top)
+            speed = clamp(speed + dt * front, -top, top)
         if controls.move_backward:
-            speed = _clamp(speed - dt * back, -top, top)
+            speed = clamp(speed - dt * back, -top, top)
         if controls.move_left:
             facing += dt * turn
-            speed = _clamp(speed + dt * front, -top, top)
+            speed = clamp(speed + dt * front, -top, top)
         if controls.move_right:
             facing -= dt * turn
-            speed = _clamp(speed + dt * front, -top, top)
+            speed = clamp(speed + dt * front, -top, top)
         if not (controls.move_forward or controls.move_backward):
             if speed > 0:
                 var k = _ease_out(speed / top)
-                speed = _clamp(speed - k * dt * slow, 0, top)
+                speed = clamp(speed - k * dt * slow, 0, top)
             else:
                 var k = _ease_out(speed / -top)
-                speed = _clamp(speed + k * dt * back, -top, 0)
+                speed = clamp(speed + k * dt * back, -top, 0)
         self.speed = Velocity(speed, METER_PER_SECOND)
         self.body_orientation = Angle(facing, RADIAN)
         var forward = speed * dt

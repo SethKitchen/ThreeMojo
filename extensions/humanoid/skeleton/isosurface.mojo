@@ -161,7 +161,7 @@ def mesh_samples(
         var u = atan2(px, pz) / two_pi
         if u < 0:
             u = u + Float32(1)
-        var v = _clamp01((py - low.y) / grid.span_y)
+        var v = clamp((py - low.y) / grid.span_y, 0, 1)
         uvs.append(u)
         uvs.append(v)
     var geometry = BufferGeometry()
@@ -216,11 +216,6 @@ def mesh_checked[
     """
     check_detail(detail, bone)
     return mesh_field(field, low, high, detail, bone)
-
-
-def _clamp01(value: Float32) -> Float32:
-    """Return `value` held to 0 through 1."""
-    return clamp(value, 0, 1)
 
 
 def _long_cells(detail: Int) -> Int:

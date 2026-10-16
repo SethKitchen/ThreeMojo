@@ -43,24 +43,9 @@ comptime MIN_MAP = 8
 comptime MAX_MAP = 512
 
 
-def _lerp(a: Float32, b: Float32, t: Float32) -> Float32:
-    """Return `a` moved toward `b` by `t`."""
-    return mix_delta(a, b, t)
-
-
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return `value` held to `low` through `high`."""
-    return clamp(value, low, high)
-
-
-def _smooth(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return the Hermite step from `edge0` to `edge1`."""
-    return clamped_smoothstep(edge0, edge1, x)
-
-
 def _byte(value: Float32) -> UInt8:
     """Return `value` rounded and held to one byte."""
-    return UInt8(Int(_clamp(value, 0, 255) + Float32(0.5)))
+    return UInt8(Int(clamp(value, 0, 255) + Float32(0.5)))
 
 
 @fieldwise_init
@@ -82,9 +67,9 @@ struct Tone(ImplicitlyCopyable):
             The mixed tone.
         """
         return Tone(
-            _lerp(self.r, other.r, t),
-            _lerp(self.g, other.g, t),
-            _lerp(self.b, other.b, t),
+            mix_delta(self.r, other.r, t),
+            mix_delta(self.g, other.g, t),
+            mix_delta(self.b, other.b, t),
         )
 
     def color(self) -> Color:
@@ -99,7 +84,7 @@ struct Tone(ImplicitlyCopyable):
 def _ramp(stops: List[Tone], t: Float32) -> Tone:
     """Return the tone at `t`, 0 through 1, along evenly spaced stops."""
     var span = Float32(len(stops) - 1)
-    var at = _clamp(t, 0, 1) * span
+    var at = clamp(t, 0, 1) * span
     var index = min(Int(at), len(stops) - 2)
     return stops[index].mix(stops[index + 1], at - Float32(index))
 
@@ -340,7 +325,7 @@ def _spots(
             var ex = x - px
             var ey = y - py
             var d = sqrt(squared_length2[DType.float32](ex, ey)) / radius
-            best = max(best, 1 - _smooth(0.55, 1.0, d))
+            best = max(best, 1 - clamped_smoothstep(0.55, 1.0, d))
     return best
 
 
@@ -386,7 +371,7 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
     # Freckles only where the gene asks for them, and fewer on darker
     # skin, which is already dark.
     var freckle = max(Float32(0), genome.get(FRECKLES))
-    var fair = 1 - _clamp(melanin + Float32(0.2), 0, 1)
+    var fair = 1 - clamp(melanin + Float32(0.2), 0, 1)
     var freckle_chance = (
         freckle * Float32(0.6) * (Float32(0.3) + Float32(0.7) * fair)
     )
@@ -416,13 +401,13 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
                 var spot = _spots(
                     fx, fy, size, freckle_cell, freckle_chance, 53
                 )
-                r = _lerp(r, r * Float32(0.86), spot)
-                g = _lerp(g, g * Float32(0.74), spot)
-                b = _lerp(b, b * Float32(0.64), spot)
+                r = mix_delta(r, r * Float32(0.86), spot)
+                g = mix_delta(g, g * Float32(0.74), spot)
+                b = mix_delta(b, b * Float32(0.64), spot)
             var mole = _spots(fx, fy, size, mole_cell, 0.02, 67)
-            r = _lerp(r, r * Float32(0.55), mole)
-            g = _lerp(g, g * Float32(0.45), mole)
-            b = _lerp(b, b * Float32(0.42), mole)
+            r = mix_delta(r, r * Float32(0.55), mole)
+            g = mix_delta(g, g * Float32(0.45), mole)
+            b = mix_delta(b, b * Float32(0.42), mole)
             pixels.append(_byte(r))
             pixels.append(_byte(g))
             pixels.append(_byte(b))
@@ -542,23 +527,25 @@ def iris_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
                 var shade = (
                     1
                     + Float32(0.9) * fibers
-                    - Float32(0.25) * (1 - _smooth(0.0, 0.25, t))
-                    - Float32(0.55) * _smooth(0.78, 1.0, t)
+                    - Float32(0.25) * (1 - clamped_smoothstep(0.0, 0.25, t))
+                    - Float32(0.55) * clamped_smoothstep(0.78, 1.0, t)
                 )
-                var collarette = 1 - _smooth(0.0, 0.08, abs(t - 0.32))
+                var collarette = 1 - clamped_smoothstep(
+                    0.0, 0.08, abs(t - 0.32)
+                )
                 shade += Float32(0.18) * collarette
                 tone = Tone(base.r * shade, base.g * shade, base.b * shade)
             else:
-                var t = _smooth(EYE_IRIS, EYE_IRIS + 0.04, v)
-                var vein = _smooth(
+                var t = clamped_smoothstep(EYE_IRIS, EYE_IRIS + 0.04, v)
+                var vein = clamped_smoothstep(
                     0.35, 0.5, _fbm(fx, Float32(y), size, 12, 3, 101)
                 )
-                var back = _smooth(0.3, 0.9, v)
+                var back = clamped_smoothstep(0.3, 0.9, v)
                 tone = sclera.mix(Tone(200, 120, 110), vein * back * 0.5)
                 tone = Tone(
-                    _lerp(base.r * 0.4, tone.r, t),
-                    _lerp(base.g * 0.4, tone.g, t),
-                    _lerp(base.b * 0.4, tone.b, t),
+                    mix_delta(base.r * 0.4, tone.r, t),
+                    mix_delta(base.g * 0.4, tone.g, t),
+                    mix_delta(base.b * 0.4, tone.b, t),
                 )
             pixels.append(_byte(tone.r))
             pixels.append(_byte(tone.g))

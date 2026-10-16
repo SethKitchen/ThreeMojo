@@ -19,7 +19,6 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.isosurface import (
     _axis_cells,
-    _clamp01,
     _clip_tetrahedron,
     _emit_triangle,
     _lerp_zero,
@@ -321,12 +320,6 @@ def test_lerp_zero_covers_midpoint_and_clamps() raises:
     assert_equal(lo.x, Float32(0))
     var hi = _lerp_zero(a, b, 2, 1)
     assert_equal(hi.x, Float32(1))
-
-
-def test_clamp01_holds_the_unit_interval() raises:
-    assert_equal(_clamp01(Float32(-0.2)), Float32(0))
-    assert_equal(_clamp01(Float32(1.2)), Float32(1))
-    assert_equal(_clamp01(Float32(0.4)), Float32(0.4))
 
 
 def test_grid_counts_honor_the_floor() raises:

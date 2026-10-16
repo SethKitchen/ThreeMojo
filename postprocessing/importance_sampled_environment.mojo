@@ -35,7 +35,7 @@ environment mode, which `postprocessing.ssr_node` does not port.
 from core.extent import positive_extent
 from lights.ggx import ggx_base, ggx_smith_root
 from math.matrix4 import Matrix4
-from math.utils import mix_delta, rec709_luminance
+from math.utils import mix_bilinear, mix_delta, rec709_luminance
 from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -224,12 +224,7 @@ struct EquirectEnvironment(Copyable, Movable):
         var b = self._at(x0 + 1, y0)
         var c = self._at(x0, y1)
         var d = self._at(x0 + 1, y1)
-        return FloatColor(
-            _lerp(_lerp(a.r, b.r, fx), _lerp(c.r, d.r, fx), fy),
-            _lerp(_lerp(a.g, b.g, fx), _lerp(c.g, d.g, fx), fy),
-            _lerp(_lerp(a.b, b.b, fx), _lerp(c.b, d.b, fx), fy),
-            _lerp(_lerp(a.a, b.a, fx), _lerp(c.a, d.a, fx), fy),
-        )
+        return a.mix(b, fx).mix(c.mix(d, fx), fy)
 
     def _at(self, x: Int, y: Int) -> FloatColor:
         """Return a texel, its column wrapped."""
@@ -252,12 +247,7 @@ struct EquirectEnvironment(Copyable, Movable):
         var i = Int(p)
         var f = p - Float32(i)
         var j = min(i + 1, count - 1)
-        return _lerp(values[i], values[j], f)
-
-
-def _lerp(a: Float32, b: Float32, t: Float32) -> Float32:
-    """Return GLSL's `mix` of two numbers."""
-    return mix_delta(a, b, t)
+        return mix_delta(values[i], values[j], f)
 
 
 # --- SpecularHelpers ---------------------------------------------------------
@@ -588,10 +578,11 @@ def conditional_at(env: EquirectEnvironment, u: Float32, v: Float32) -> Float32:
     var fy = py - Float32(y0)
     var x1 = min(x0 + 1, w - 1)
     var y1 = min(y0 + 1, h - 1)
-    var top = _lerp(
-        env.conditional[y0 * w + x0], env.conditional[y0 * w + x1], fx
+    return mix_bilinear(
+        env.conditional[y0 * w + x0],
+        env.conditional[y0 * w + x1],
+        env.conditional[y1 * w + x0],
+        env.conditional[y1 * w + x1],
+        fx,
+        fy,
     )
-    var bottom = _lerp(
-        env.conditional[y1 * w + x0], env.conditional[y1 * w + x1], fx
-    )
-    return _lerp(top, bottom, fy)
