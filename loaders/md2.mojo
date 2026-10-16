@@ -42,6 +42,7 @@ its vertices, its texture coordinates or the normal table.
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import KeyframeTrack, MeshIndex, morph_target
+from core.binary import little_endian_uint
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     NORMAL,
@@ -647,10 +648,7 @@ struct _Reader:
             raise Error(
                 "MD2: the file ends inside a value, at byte " + String(at)
             )
-        var value = 0
-        for k in range(size):  # pragma: no branch
-            value |= Int(self.bytes[at + k]) << (8 * k)
-        return value
+        return little_endian_uint(self.bytes, at, size)
 
     def signed(self, at: Int, size: Int) raises -> Int:
         """Return a two's complement value of `size` bytes."""

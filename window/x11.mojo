@@ -23,7 +23,7 @@ visual on a little-endian machine takes; any other visual is refused.
 """
 
 from loaders.bytes import ascii_letter
-from core.binary import little_endian_i32
+from core.binary import little_endian_i32, little_endian_uint
 from core.extent import positive_extent
 from controls.input import (
     ARROW_DOWN,
@@ -85,14 +85,6 @@ comptime XK_RIGHT = 0xFF53
 comptime XK_DOWN = 0xFF54
 comptime ZPIXMAP = 2
 comptime POLLIN = 1
-
-
-def _uint64(bytes: List[UInt8], offset: Int) -> Int:
-    """Return the little-endian 64-bit integer at an offset."""
-    var value = 0
-    for index in range(8):  # pragma: no branch
-        value |= Int(bytes[offset + index]) << (8 * index)
-    return value
 
 
 def key_of(symbol: Int, control: Bool) -> Key:
@@ -492,7 +484,7 @@ struct X11Window(Movable):
             )
             var kind = little_endian_i32(self._event, 0)
             if kind == CLIENT_MESSAGE:
-                if _uint64(self._event, 56) == self._delete:
+                if little_endian_uint(self._event, 56, 8) == self._delete:
                     self.close_requested = True
                 continue
             var symbol = 0

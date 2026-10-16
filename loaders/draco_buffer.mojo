@@ -29,6 +29,7 @@ when the bytes do not suffice or do not make sense. Each reader here
 raises an `Error` in the same places.
 """
 
+from core.binary import little_endian_uint
 from std.memory import bitcast
 
 # The low 32 bits of an `Int`.
@@ -217,9 +218,7 @@ struct DracoBuffer(Copyable, Movable):
             Error: If fewer bytes are left.
         """
         self.need(size)
-        var value = 0
-        for k in range(size):
-            value |= Int(self.data[self.pos + k]) << (8 * k)
+        var value = little_endian_uint(self.data, self.pos, size)
         self.pos += size
         return value
 
@@ -522,9 +521,7 @@ struct RAnsSymbolDecoder(Copyable, Movable):
         var l_base = self.precision * 4
         draco_require(size > kind, "a rANS stream is too short")
         self.offset = size - 1 - kind
-        var state = 0
-        for k in range(kind + 1):  # pragma: no branch
-            state |= Int(self.coded[self.offset + k]) << (8 * k)
+        var state = little_endian_uint(self.coded, self.offset, kind + 1)
         var masks: List[Int] = [0x3F, 0x3FFF, 0x3FFFFF, 0x3FFFFFFF]
         self.state = (state & masks[kind]) + l_base
         draco_require(
@@ -665,9 +662,7 @@ struct RAnsBitDecoder(Copyable, Movable):
         var kind = last >> 6
         draco_require(kind < 3 and size > kind, "a bit stream is too short")
         self.offset = size - 1 - kind
-        var state = 0
-        for k in range(kind + 1):  # pragma: no branch
-            state |= Int(self.coded[self.offset + k]) << (8 * k)
+        var state = little_endian_uint(self.coded, self.offset, kind + 1)
         var masks: List[Int] = [0x3F, 0x3FFF, 0x3FFFFF]
         self.state = (state & masks[kind]) + _L_BASE
         draco_require(
