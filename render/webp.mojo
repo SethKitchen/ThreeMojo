@@ -34,7 +34,7 @@ WebP carries no color space here, so the samples are sRGB, as a browser
 takes them.
 """
 
-from core.binary import little_endian_uint
+from core.binary import copy_bytes, little_endian_uint
 from render.png import DecodedImage
 from render.srgb import SRGB
 from render.webp_lossless import decode_lossless, decode_lossless_stream
@@ -72,10 +72,7 @@ def _le(bytes: List[UInt8], at: Int, count: Int) -> Int:
 
 def _slice(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
     """Return a copy of bytes `start` to `end`."""
-    var out = List[UInt8](capacity=end - start)
-    for i in range(start, end):
-        out.append(bytes[i])
-    return out^
+    return copy_bytes(bytes, start, end - start)
 
 
 def unfilter_alpha(

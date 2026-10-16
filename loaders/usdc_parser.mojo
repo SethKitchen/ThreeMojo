@@ -54,7 +54,7 @@ empty array when it is not. A file of a version before 0.4.0 has path
 headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
-from core.binary import little_endian_uint
+from core.binary import copy_bytes, little_endian_uint
 from core.ordinal import ordinal_valid
 from core.search import last_match
 
@@ -460,9 +460,7 @@ def _decode(data: List[UInt8], start: Int, end: Int) -> String:
     Returns:
         The text.
     """
-    var part = List[UInt8](capacity=end - start)
-    for k in range(start, end):
-        part.append(data[k])
+    var part = copy_bytes(data, start, end - start)
     return String(from_utf8_lossy=Span(part))
 
 
@@ -694,9 +692,7 @@ struct _Crate(Movable):
             Error: If they pass the end.
         """
         self.need(count)
-        var out = List[UInt8](capacity=count)
-        for k in range(count):
-            out.append(self.bytes[self.at + k])
+        var out = copy_bytes(self.bytes, self.at, count)
         self.at += count
         return out^
 

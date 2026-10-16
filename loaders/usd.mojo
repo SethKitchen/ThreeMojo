@@ -32,6 +32,7 @@ refuse. A file that cannot be read is refused too.
 """
 
 from core.assets import Assets
+from core.binary import copy_bytes
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from loaders.utf8 import leading_utf8_bom
@@ -76,9 +77,7 @@ def decode_text(bytes: List[UInt8]) -> String:
         The text.
     """
     var start = leading_utf8_bom(Span(bytes))
-    var rest = List[UInt8](capacity=len(bytes) - start)
-    for k in range(start, len(bytes)):
-        rest.append(bytes[k])
+    var rest = copy_bytes(bytes, start, len(bytes) - start)
     return String(from_utf8_lossy=Span(rest))
 
 

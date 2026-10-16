@@ -3,11 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Little-endian integers shared by the file readers.
+"""Little-endian integers and byte copies shared by the file readers.
 
-The caller checks that `at` lies inside the buffer. These functions do
-not allocate and do not raise. `little_endian_u16` and `little_endian_u32`
-read a fixed width. `little_endian_uint` reads one through eight bytes.
+The caller checks that the read lies inside the buffer. The integer
+readers do not allocate and do not raise. `little_endian_u16` and
+`little_endian_u32` read a fixed width. `little_endian_uint` reads zero
+through eight bytes. `copy_bytes` returns a new list and does not raise.
 """
 
 
@@ -92,3 +93,18 @@ def little_endian_uint(bytes: List[UInt8], at: Int, width: Int) -> Int:
     for index in range(width):
         value |= Int(bytes[at + index]) << (8 * index)
     return value
+
+
+def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:
+    """Return `count` bytes beginning at `start`.
+
+    Args:
+        bytes: The buffer.
+        start: The index of the first byte.
+        count: How many bytes. Zero returns an empty list. The caller
+            has checked that a positive count lies inside `bytes`.
+
+    Returns:
+        A copy of those bytes.
+    """
+    return List[UInt8](bytes[start : start + count])

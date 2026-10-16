@@ -42,6 +42,7 @@ whose table or streams are past its end, or whose streams do not hold
 what the header says, is refused too.
 """
 
+from core.binary import copy_bytes
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
     SH_C0,
@@ -281,10 +282,7 @@ def _cut(bytes: List[UInt8], start: Int, length: Int) -> List[UInt8]:
     Returns:
         A copy of the run.
     """
-    var out = List[UInt8](capacity=length)
-    for at in range(start, start + length):
-        out.append(bytes[at])
-    return out^
+    return copy_bytes(bytes, start, length)
 
 
 def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:

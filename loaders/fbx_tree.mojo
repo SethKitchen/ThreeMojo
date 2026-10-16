@@ -36,7 +36,7 @@ expands to the wrong length; an ASCII node without `:`, an unbalanced
 other than the one its `*count` declares.
 """
 
-from core.binary import little_endian_uint
+from core.binary import copy_bytes, little_endian_uint
 from core.ordinal import ordinal_valid
 
 from loaders.js_text import is_js_word
@@ -818,9 +818,7 @@ struct _BinaryReader(Movable):
     def take(mut self, count: Int) raises -> List[UInt8]:
         """Read `count` raw bytes."""
         self.need(count)
-        var out = List[UInt8](capacity=count)
-        for index in range(self.at, self.at + count):
-            out.append(self.bytes[index])
+        var out = copy_bytes(self.bytes, self.at, count)
         self.at += count
         return out^
 
