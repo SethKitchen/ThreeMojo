@@ -34,12 +34,18 @@ larger image out of the zoomed box, as `updateProjectionMatrix` cuts it.
 """
 
 from std.math import isfinite
-from cameras.camera import Camera, ViewOffset, node_view_matrix, view_offset
+from cameras.camera import (
+    Camera,
+    ViewOffset,
+    placed_view_matrix,
+    scene_view_matrix,
+    view_offset,
+)
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.projection import look_at, orthographic, viewport
+from math.projection import orthographic, viewport
 from math.vector3 import Vector3
 from units.si import Length, METER
 
@@ -252,12 +258,9 @@ struct OrthographicCamera(Camera):
                 the view direction, or the camera rides a node -- ask
                 `view_matrix_in`.
         """
-        if self.node != NO_PARENT:
-            raise Error(
-                "An attached camera's view comes from its node; call"
-                " view_matrix_in(scene)"
-            )
-        return look_at(self.position, self.target, self.up)
+        return placed_view_matrix(
+            self.node, self.position, self.target, self.up
+        )
 
     def view_matrix_in(self, scene: Scene) raises -> Matrix4:
         """Return the matrix taking world space to camera space.
@@ -273,9 +276,9 @@ struct OrthographicCamera(Camera):
             Error: If the placement is degenerate, the node is not in the
                 scene, or the scene is stale.
         """
-        if self.node == NO_PARENT:
-            return self.view_matrix()
-        return node_view_matrix(scene, self.node)
+        return scene_view_matrix(
+            scene, self.node, self.position, self.target, self.up
+        )
 
     def view_to_screen_matrix(self, width: Int, height: Int) raises -> Matrix4:
         """Return the transform from camera space to pixels.
