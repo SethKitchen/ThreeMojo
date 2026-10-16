@@ -20,6 +20,7 @@ level below it. The default is `xhigh`.
 """
 
 from examples.output import example_destination, spin_pair
+from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -74,7 +75,6 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
@@ -86,21 +86,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DEFAULT_QUALITY = "xhigh"
 comptime SPACING = Float32(0.16)
-
-
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def _hang(
@@ -274,10 +259,13 @@ def main() raises:
         turned += step.value
         var lights = List[HairLight]()
         lights.append(
-            HairLight(_turned(toward, -turned), Vector3(2.2, 1.97, 1.72))
+            HairLight(
+                turn_about_vertical(toward, -turned), Vector3(2.2, 1.97, 1.72)
+            )
         )
         var camera_at = (
-            _turned(eye - Vector3(SPACING, height, 0), -turned) + center
+            turn_about_vertical(eye - Vector3(SPACING, height, 0), -turned)
+            + center
         )
         hair.shade(assets, lights, camera_at, Vector3(0.11, 0.11, 0.12))
         frames.append(

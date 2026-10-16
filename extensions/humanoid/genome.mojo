@@ -291,6 +291,24 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
         return self.expressions == other.expressions
 
 
+def genome_from_values(values: List[Float32]) raises -> Genome:
+    """Return a genome whose genes 0, 1, 2, ... take `values` in order.
+
+    Args:
+        values: One expression per gene, from `MELANIN` on.
+
+    Returns:
+        The genome.
+
+    Raises:
+        Error: If a value lies outside -1 through 1, or past the last gene.
+    """
+    var genome = Genome()
+    for index in range(len(values)):
+        genome = genome.with_gene(Gene(index), Expression(values[index]))
+    return genome
+
+
 def check_genome(genome: Genome, part: String) raises:
     """Refuse a genome a body part cannot read.
 

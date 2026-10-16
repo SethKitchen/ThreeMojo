@@ -19,6 +19,7 @@ speech, twenty frames a second.
 """
 
 from examples.output import example_destination
+from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -65,7 +66,7 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
+from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
@@ -136,21 +137,6 @@ def _speaker() raises -> HumanoidSpec:
     for index in range(len(values)):
         genome = genome.with_gene(Gene(index), Expression(values[index]))
     return HumanoidSpec(Length(5.6, FOOT), FEMALE, UNTONED, genome)
-
-
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
 
 
 def main() raises:
@@ -292,9 +278,15 @@ def main() raises:
         scene.node(pivot_id).rotate_y(Angle(angle - previous, RADIAN))
         previous = angle
         var lights = List[HairLight]()
-        lights.append(HairLight(_turned(key_toward, -angle), KEY_RADIANCE))
-        lights.append(HairLight(_turned(rim_toward, -angle), RIM_RADIANCE))
-        hair.shade(assets, lights, _turned(eye, -angle) + center, AMBIENT)
+        lights.append(
+            HairLight(turn_about_vertical(key_toward, -angle), KEY_RADIANCE)
+        )
+        lights.append(
+            HairLight(turn_about_vertical(rim_toward, -angle), RIM_RADIANCE)
+        )
+        hair.shade(
+            assets, lights, turn_about_vertical(eye, -angle) + center, AMBIENT
+        )
         scene.update()
         frames.append(renderer.render(scene, assets, camera))
     Path(destination).write_bytes(encode(frames, delay_ms=1000 // FPS))
