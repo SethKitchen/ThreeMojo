@@ -6,7 +6,8 @@
 """Read an example's output path, turn one node, and write its PNG.
 
 Each example builds its own scene. This file reads the path from the
-first argument, turns one node for a frame, and stores the frames.
+first argument, turns one node, and stores the frames. A full circle is
+one turn divided across the frames.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -19,7 +20,7 @@ from render.framebuffer import Framebuffer
 from renderers.renderer import Renderer
 from std.pathlib import Path
 from std.sys import argv, stderr
-from units.si import MILLISECOND, Angle
+from units.si import MILLISECOND, Angle, DEGREE
 
 
 def example_destination(default_name: String) -> String:
@@ -64,6 +65,40 @@ def spin_frame(
     scene.node(node).rotate_y(step)
     scene.update()
     return renderer.render(scene, assets, camera)
+
+
+def spin_clip(
+    renderer: Renderer,
+    camera: PerspectiveCamera,
+    assets: Assets,
+    mut scene: Scene,
+    node: NodeId,
+    frame_count: Int,
+    delay_ms: Int,
+    destination: String,
+) raises:
+    """Turn `node` through one circle and write the frames.
+
+    Args:
+        renderer: The renderer to draw with.
+        camera: The camera to view through.
+        assets: The geometry, materials and textures.
+        scene: The persistent scene, edited in place.
+        node: The node to turn about y.
+        frame_count: How many frames cover the circle.
+        delay_ms: How long each frame is shown, in milliseconds.
+        destination: The path of the animated PNG.
+
+    Raises:
+        Error: If the scene, the render, or the write is invalid.
+    """
+    var step = Angle(Float32(360) / Float32(frame_count), DEGREE)
+    var frame_clock = Clock()
+    frame_clock.start()
+    var frames = List[Framebuffer]()
+    for _ in range(frame_count):
+        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
+    write_example(frames, destination, delay_ms, frame_count, frame_clock)
 
 
 def write_example(

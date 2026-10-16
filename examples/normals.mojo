@@ -12,17 +12,16 @@ Turning the camera turns the colors. That is why a normal is not a color
 that lighting can mix.
 """
 
-from examples.output import example_destination, spin_frame, write_example
+from examples.output import example_destination, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
 from materials.material import normal_material
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
@@ -59,11 +58,6 @@ def main() raises:
     )
     camera.attach(eye_node)
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    spin_clip(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
+    )

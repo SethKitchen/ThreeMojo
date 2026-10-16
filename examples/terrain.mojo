@@ -12,13 +12,12 @@ the height sets the vertex color. The ground turns one whole turn. The
 field itself stays put, so the loop has no jump.
 """
 
-from examples.output import example_destination, spin_frame, write_example
+from examples.output import example_destination, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
-from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
@@ -27,7 +26,7 @@ from math.noise import SimplexNoise
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 
@@ -146,11 +145,6 @@ def main() raises:
     )
     camera.place(Vector3(1.7, 1.25, 2.15), Vector3(0, 0, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, ground, step))
-
-    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
+    spin_clip(
+        renderer, camera, assets, scene, ground, FRAMES, DELAY_MS, destination
+    )
