@@ -28,6 +28,7 @@ from cameras.stereo_camera import StereoCamera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix3 import Matrix3
+from math.utils import clamp
 from postprocessing.composer import draw_scene
 from render.framebuffer import FloatColor, Framebuffer
 from render.rect import Rect
@@ -80,11 +81,6 @@ def dubois_right() -> Matrix3:
     return m
 
 
-def _clamp01(value: Float32) -> Float32:
-    """Return a value clamped to zero through one."""
-    return min(max(value, Float32(0)), Float32(1))
-
-
 def anaglyph_pixel(
     left: FloatColor,
     right: FloatColor,
@@ -117,7 +113,10 @@ def anaglyph_pixel(
         b[2] * r.r + b[5] * r.g + b[8] * r.b
     )
     return FloatColor(
-        _clamp01(red), _clamp01(green), _clamp01(blue), max(l.a, r.a)
+        clamp(red, 0, 1),
+        clamp(green, 0, 1),
+        clamp(blue, 0, 1),
+        max(l.a, r.a),
     ).premultiplied()
 
 

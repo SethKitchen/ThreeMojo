@@ -65,6 +65,7 @@ from math.curve_checks import (
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, arc_samples, u_to_t
 from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import acos, floor
 from units.si import Angle, Length, METER, RADIAN
@@ -620,11 +621,6 @@ struct FrenetFrames(Copyable, Movable):
         return len(self.tangents)
 
 
-def _clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`."""
-    return max(Float32(-1), min(Float32(1), value))
-
-
 def _turned(v: Vector3, axis: Vector3, angle: Float32) -> Vector3:
     """Return `v` turned about the unit `axis` by `angle` radians."""
     return Quaternion.from_axis_angle(axis, Angle(angle, RADIAN)).rotate(v)
@@ -698,7 +694,7 @@ def transport_frames(
         if axis.length() > STRAIGHT:
             axis.normalize()
             var angle = acos(
-                _clamp_unit(tangents[ring - 1].dot(tangents[ring]))
+                clamp(tangents[ring - 1].dot(tangents[ring]), -1, 1)
             )
             normal = _turned(normal, axis, angle)
         elif tangents[ring - 1].dot(tangents[ring]) < 0:
@@ -710,7 +706,7 @@ def transport_frames(
 
     if closed:
         var twist = acos(
-            _clamp_unit(frames.normals[0].dot(frames.normals[last]))
+            clamp(frames.normals[0].dot(frames.normals[last]), -1, 1)
         )
         twist /= Float32(last)
         var handed = frames.normals[0]

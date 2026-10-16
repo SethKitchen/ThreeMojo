@@ -16,6 +16,7 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
+from math.utils import clamp
 from math.norm import squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3
@@ -57,11 +58,7 @@ def clamp01(value: Float32) -> Float32:
     Returns:
         `value` limited to 0 and 1.
     """
-    if value <= 0.0:
-        return 0.0
-    if value >= 1.0:
-        return 1.0
-    return value
+    return clamp(value, 0, 1)
 
 
 def smoothstep(edge0: Float32, edge1: Float32, value: Float32) -> Float32:
