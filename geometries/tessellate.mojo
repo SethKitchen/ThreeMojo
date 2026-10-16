@@ -31,6 +31,7 @@ from core.buffer_geometry import (
     UV1,
 )
 from math.norm import squared_length3
+from math.utils import mix_delta
 from std.math import isfinite
 from units.si import Length, METER
 
@@ -58,7 +59,7 @@ def _lerped(data: List[Float64], size: Int, a: Int, b: Int) -> List[Float64]:
     for axis in range(size):  # pragma: no branch
         # An item size is two or three, so this runs.
         var start = data[a * size + axis]
-        out.append(start + (data[b * size + axis] - start) * 0.5)
+        out.append(mix_delta(start, data[b * size + axis], 0.5))
     return out^
 
 

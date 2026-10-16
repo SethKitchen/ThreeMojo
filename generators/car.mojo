@@ -44,6 +44,7 @@ from geometries.loft import loft
 from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from render.color_spaces import srgb_to_linear_three
 from std.math import cos, pi, sqrt
@@ -285,13 +286,9 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     var t = (z - spec.at(index, 0)) / (
         spec.at(index + 1, 0) - spec.at(index, 0)
     )
-    var w = spec.at(index, 1) + (spec.at(index + 1, 1) - spec.at(index, 1)) * t
-    var shoulder = (
-        spec.at(index, 2) + (spec.at(index + 1, 2) - spec.at(index, 2)) * t
-    )
-    var deck = (
-        spec.at(index, 3) + (spec.at(index + 1, 3) - spec.at(index, 3)) * t
-    )
+    var w = mix_delta(spec.at(index, 1), spec.at(index + 1, 1), t)
+    var shoulder = mix_delta(spec.at(index, 2), spec.at(index + 1, 2), t)
+    var deck = mix_delta(spec.at(index, 3), spec.at(index + 1, 3), t)
     var distance = abs(abs(z) - spec.wheel_z)
     var sill = (
         spec.wheel_radius
@@ -300,7 +297,7 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     )
     var right: List[Vec3d] = [
         Vec3d(w * 0.82, sill, z),
-        Vec3d(w * 0.97, sill + (shoulder - sill) * 0.12, z),
+        Vec3d(w * 0.97, mix_delta(sill, shoulder, 0.12), z),
         Vec3d(w, shoulder, z),
         Vec3d(w * 0.91, deck - 0.025, z),
         Vec3d(w * 0.52, deck, z),
@@ -476,11 +473,11 @@ def _rails(spec: CarSpec, side: Float64) raises -> BufferGeometry:
     var stops: List[Float64] = [0.06, 0.13, 0.87, 0.94]
     for i in range(4):  # pragma: no branch
         var t = stops[i]
-        var z = tfr.z + (trr.z - tfr.z) * t
-        var roof_width = tfr.x + (trr.x - tfr.x) * t
+        var z = mix_delta(tfr.z, trr.z, t)
+        var roof_width = mix_delta(tfr.x, trr.x, t)
         var bow = 1 - (0.63 / roof_width) * (0.63 / roof_width)
         var rise = 0.005 if i == 0 or i == 3 else 0.05
-        var y = tfr.y + (trr.y - tfr.y) * t + bow * 0.035 + rise
+        var y = mix_delta(tfr.y, trr.y, t) + bow * 0.035 + rise
         var x = side * 0.63
         var row: List[Vector3] = [
             _v(x - 0.022, y + 0.018, z),

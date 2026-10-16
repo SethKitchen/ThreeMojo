@@ -30,7 +30,7 @@ from generators.utils import (
     meters,
     radians,
 )
-from math.utils import SeededRandom, js_round
+from math.utils import SeededRandom, js_round, mix_delta
 from std.math import atan2, cos, floor, pi, pow, sin
 from units.si import (
     Angle,
@@ -267,7 +267,7 @@ def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
         a.position.lerp(b.position, frac),
         _direction(a.tangent.lerp(b.tangent, frac)),
         _direction(a.normal.lerp(b.normal, frac)),
-        a.radius + (b.radius - a.radius) * frac,
+        mix_delta(a.radius, b.radius, frac),
     )
 
 

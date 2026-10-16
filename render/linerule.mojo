@@ -66,6 +66,7 @@ feature: `objects.line_segments2`, drawn as quads, and quads are
 triangles, which `fillrule` already covers.
 """
 
+from math.utils import mix_delta
 from math.vector2 import Vector2
 from std.math import floor
 
@@ -178,8 +179,8 @@ def minor_at(a: Vector2, b: Vector2, major: Int) -> Float32:
     """
     var share = share_at(a, b, major)
     if major_is_x(a, b):
-        return a.y + (b.y - a.y) * share
-    return a.x + (b.x - a.x) * share
+        return mix_delta(a.y, b.y, share)
+    return mix_delta(a.x, b.x, share)
 
 
 def other_at(a: Vector2, b: Vector2, major: Int) -> Int:
