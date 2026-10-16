@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     palette_of,
     srgb,
@@ -1309,14 +1310,6 @@ def _spot(p: V3, cell: Float64, radius: Float64, seed: Int) -> Float64:
     return c.nearest * cell - r
 
 
-def _tweak(c: V3, shade: Float64, k: Float64) -> V3:
-    return V3(
-        c.x * (1.0 + shade * 0.12 * k),
-        c.y * (1.0 + shade * 0.08 * k),
-        c.z * (1.0 + shade * 0.04 * k),
-    )
-
-
 def fish_paint(
     pal: Palette, t: Traits, tag: String, bone: String, s: CoatSample
 ) raises -> Paint:
@@ -1498,7 +1491,7 @@ def fish_paint(
         )
     c = c * (1.0 - 0.15 * edge_line)
     c = mix3(c, c * 0.8, 0.25 * (noise + 0.5))
-    c = _tweak(c, shade, 1.0)
+    c = channel_gain(c, 1.0, shade * 0.12, shade * 0.08, shade * 0.04)
     # Spots and patches.
     if key == TROUT:
         var spotted = k == 0 or k == 1 or k == 5
@@ -1620,6 +1613,9 @@ def _paint_fin(
             c = mix3(c, srgb(0x1E1E18), 0.9 * smoothstep(0.01, -0.01, d))
         if tag == "pelvic" or tag == "anal":
             c = mix3(c, srgb(0x3C3A2C), 0.5)
-    c = _tweak(c, t.get("coatShade", 0.0), 0.5)
+    var coat_shade = t.get("coatShade", 0.0)
+    c = channel_gain(
+        c, 0.5, coat_shade * 0.12, coat_shade * 0.08, coat_shade * 0.04
+    )
     c = c * (0.94 + 0.12 * noise)
     return Paint(c, SCALES)

@@ -26,6 +26,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     srgb,
 )
@@ -748,20 +749,19 @@ def crow_paint(
     var n = s.n
     var h = p - HEAD_O
     var cv = fbm3(p * 40.0, 3) - 0.5
-    var vary = V3(1.0 + 0.1 * cv, 1.0 + 0.1 * cv, 1.0 + 0.08 * cv)
     var cond1 = tag == "bill" or tag == "mandible" or tag == "gonys"
     if cond1:
         var gape = tag != "bill" and h.z > 0.02 and abs(h.y + 0.006) < 0.0012
         if gape:
             return Paint(pal.get("gape"), SKIN)
-        return Paint(_tint(pal.get("bill"), vary), KERATIN)
+        return Paint(channel_gain(pal.get("bill"), cv, 0.1, 0.1, 0.08), KERATIN)
     if tag == "claw":
         return Paint(pal.get("claw"), KERATIN)
     var bare_leg = (
         tag == "tarsus" or tag == "toe" or tag == "pad" or tag == "shank"
     )
     if bare_leg:
-        return Paint(_tint(pal.get("leg"), vary), SCALES)
+        return Paint(channel_gain(pal.get("leg"), cv, 0.1, 0.1, 0.08), SCALES)
     var cond2 = tag == "eyelid" or tag == "eyesocket"
     if cond2:
         return Paint(pal.get("ring"), SKIN)
@@ -785,7 +785,7 @@ def crow_paint(
         c = c * k
         shine = (0.7 if covert else 0.5) if top else 0.0
         c = _sheen(pal, c, shine * 1.6, n)
-        return Paint(_tint(c, vary), FEATHER)
+        return Paint(channel_gain(c, cv, 0.1, 0.1, 0.08), FEATHER)
     var cond4 = (
         bone.startswith("humerus")
         or bone.startswith("ulna")
@@ -821,8 +821,4 @@ def crow_paint(
             shine = mix(shine, 0.05, gw)
     c = c * _shingle(p, 260.0)
     c = _sheen(pal, c, shine, n)
-    return Paint(_tint(c, vary), FEATHER)
-
-
-def _tint(c: V3, k: V3) -> V3:
-    return V3(c.x * k.x, c.y * k.y, c.z * k.z)
+    return Paint(channel_gain(c, cv, 0.1, 0.1, 0.08), FEATHER)

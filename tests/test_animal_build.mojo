@@ -7,6 +7,7 @@
 registry and the pipeline from a seed to a painted mesh."""
 
 from core.buffer_geometry import COLOR, NORMAL, POSITION
+from std.benchmark import black_box
 from extensions.animals.build import (
     Animal,
     _geometry,
@@ -30,6 +31,7 @@ from extensions.animals.coat import (
     SurfaceClass,
     band,
     channel_gain,
+    channel_pair,
     grizzle,
     mix3,
     paint_eye,
@@ -166,6 +168,20 @@ def test_surface_classes_and_palettes() raises:
     assert_equal(gained.x, 2.0 * (1.0 + 0.14 * 0.5))
     assert_equal(gained.y, 3.0 * (1.0 + 0.12 * 0.5))
     assert_equal(gained.z, 4.0 * (1.0 + 0.1 * 0.5))
+    var amount = black_box(0.5)
+    var shade = black_box(0.25)
+    var paired = channel_pair(
+        V3(2, 3, 4), amount, shade, 0.08, 0.07, 0.06, 0.14, 0.14, 0.1
+    )
+    assert_equal(paired.x, 2.0 * (1.0 + 0.08 * amount + 0.14 * shade))
+    assert_equal(paired.y, 3.0 * (1.0 + 0.07 * amount + 0.14 * shade))
+    assert_equal(paired.z, 4.0 * (1.0 + 0.06 * amount + 0.1 * shade))
+    var fish = channel_gain(
+        V3(2, 3, 4), amount, shade * 0.12, shade * 0.08, shade * 0.04
+    )
+    assert_equal(fish.x, 2.0 * (1.0 + shade * 0.12 * amount))
+    assert_equal(fish.y, 3.0 * (1.0 + shade * 0.08 * amount))
+    assert_equal(fish.z, 4.0 * (1.0 + shade * 0.04 * amount))
     assert_almost_equal(Palette().get("any").y, 0.18)
 
 
