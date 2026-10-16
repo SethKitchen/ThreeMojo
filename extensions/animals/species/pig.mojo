@@ -67,6 +67,7 @@ from extensions.sdf.vector import (
     V3,
     clamp,
     cross,
+    cubic_bezier,
     dot,
     length,
     lerp,
@@ -718,8 +719,8 @@ def _tusk_cones(t: Traits, s: Float64) -> List[V3]:
     for i in range(8):  # pragma: no branch
         var t0 = Float64(i) / 8.0
         var t1 = Float64(i + 1) / 8.0
-        out.append(_bezier(p0, p1, p2, p3, t0))
-        out.append(_bezier(p0, p1, p2, p3, t1))
+        out.append(cubic_bezier(p0, p1, p2, p3, t0))
+        out.append(cubic_bezier(p0, p1, p2, p3, t1))
         out.append(
             V3(
                 r1 + (r0 - r1) * (1.0 - pow(t0, 1.3)),
@@ -728,16 +729,6 @@ def _tusk_cones(t: Traits, s: Float64) -> List[V3]:
             )
         )
     return out^
-
-
-def _bezier(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
-    var u = 1.0 - t
-    return (
-        p0 * (u * u * u)
-        + p1 * (3.0 * u * u * t)
-        + p2 * (3.0 * u * t * t)
-        + p3 * (t * t * t)
-    )
 
 
 def _pig_eye(mut m: SdfModel, h: BoneId, e: EyeSpec, s: Float64) raises:
