@@ -831,7 +831,7 @@ struct Building(Movable):
         self.check_storey(storey)
         self.check_material(material)
         section.check()
-        if not (isfinite(at.x) and isfinite(at.y)):
+        if not at.is_finite():
             raise Error("A column position must be finite")
         ref s = self.storeys[storey.value]
         var z0 = s.elevation.to(METER)
@@ -881,12 +881,7 @@ struct Building(Movable):
         self.check_storey(storey)
         self.check_material(material)
         section.check()
-        if not (
-            isfinite(start.x)
-            and isfinite(start.y)
-            and isfinite(end.x)
-            and isfinite(end.y)
-        ):
+        if not (start.is_finite() and end.is_finite()):
             raise Error("A beam's ends must be finite")
         var d = end - start
         if d.dot(d) <= 1e-12:
@@ -1084,11 +1079,7 @@ struct Building(Movable):
         for i in range(3):  # pragma: no branch
             if not (sizes[i] > 0 and isfinite(sizes[i])):
                 raise Error("A furnishing's size must be positive and finite")
-        if not (
-            isfinite(center.x)
-            and isfinite(center.y)
-            and isfinite(rotation.to(RADIAN))
-        ):
+        if not (center.is_finite() and isfinite(rotation.to(RADIAN))):
             raise Error("A furnishing's place must be finite")
         var item = Furnishing(
             String(kind.name(), " ", len(self.furnishings)),
@@ -1364,7 +1355,7 @@ struct Building(Movable):
             # The outline's minimum of three corners was checked above.
             for k in range(len(space.outline)):  # pragma: no branch
                 var point = space.outline[k]
-                if not (isfinite(point.x) and isfinite(point.y)):
+                if not point.is_finite():
                     raise Error("A space outline must have finite coordinates")
             _check_region(Region(0, RegionId(0), space.outline.copy()), 1, tol)
             var boundaries = complex.faces_of(space.cell)
@@ -1446,14 +1437,7 @@ struct Building(Movable):
                 element.section.value().check()
                 var a = element.start
                 var b = element.end
-                if not (
-                    isfinite(a.x)
-                    and isfinite(a.y)
-                    and isfinite(a.z)
-                    and isfinite(b.x)
-                    and isfinite(b.y)
-                    and isfinite(b.z)
-                ):
+                if not (a.is_finite() and b.is_finite()):
                     raise Error("A member axis must be finite")
                 var length = a.distance_to(b)
                 if not (length > 0 and isfinite(length)):
@@ -1530,11 +1514,7 @@ struct Building(Movable):
                     raise Error(
                         "A furnishing's size must be positive and finite"
                     )
-            if not (
-                isfinite(item.center.x)
-                and isfinite(item.center.y)
-                and isfinite(item.rotation.value)
-            ):
+            if not (item.center.is_finite() and isfinite(item.rotation.value)):
                 raise Error("A furnishing's place must be finite")
             var corners = item.corners()
             var space = item.space.value

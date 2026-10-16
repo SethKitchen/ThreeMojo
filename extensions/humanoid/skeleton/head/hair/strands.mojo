@@ -189,7 +189,7 @@ struct HairStrands(Movable):
             self._optical_depths = List[Float32](length=depth_count, fill=0)
         for light in range(len(lights)):
             var d = lights[light].direction
-            if not isfinite(d.x) or not isfinite(d.y) or not isfinite(d.z):
+            if not d.is_finite():
                 raise Error("Hair optical depth needs a finite light direction")
             if light == 0:
                 self.density.validate()

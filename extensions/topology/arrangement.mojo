@@ -117,6 +117,14 @@ struct Point2(ImplicitlyCopyable, Writable):
         """
         return self.x * other.x + self.y * other.y
 
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x` and `y` are both finite.
+        """
+        return isfinite(self.x) and isfinite(self.y)
+
 
 struct Region(Copyable, Movable):
     """One input polygon: its layer, its caller-chosen id and its corners."""
@@ -328,7 +336,7 @@ def _check_region(region: Region, layers: Int, tolerance: Float64) raises:
         raise Error("A region needs three corners or more")
     for i in range(n):  # pragma: no branch
         var p = region.points[i]
-        if not (isfinite(p.x) and isfinite(p.y)):
+        if not p.is_finite():
             raise Error("A region corner must have finite coordinates")
     for i in range(n):  # pragma: no branch
         var a = region.points[i]

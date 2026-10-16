@@ -768,7 +768,7 @@ struct LayerFactors(ImplicitlyCopyable):
         if not isfinite(tint.dot(tint)) or faintest < 0:
             raise Error("A triangle's specular color cannot be negative")
         var scale = self.clearcoat_normal_scale
-        if not isfinite(scale.x) or not isfinite(scale.y):
+        if not scale.is_finite():
             raise Error("A triangle's clearcoat normal scale must be finite")
         var coat_lowest = min(
             min(
@@ -2819,7 +2819,7 @@ def check_triangle_state(
         raise Error(
             "A triangle's clearcoat roughness must be between zero and one"
         )
-    if not isfinite(a.normal_scale.x) or not isfinite(a.normal_scale.y):
+    if not a.normal_scale.is_finite():
         raise Error("A triangle's normal scale must be finite")
     if not isfinite(a.bump_scale):
         raise Error("A triangle's bump scale must be finite")
