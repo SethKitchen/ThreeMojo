@@ -58,6 +58,7 @@ from math.bounds import Box3, Sphere
 from math.capsule import Capsule
 from math.ray import Ray, _RayProducts
 from math.triangle import Triangle, _segment_closest_points
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import inf, max, min, sqrt
 
@@ -170,7 +171,7 @@ def _unit(value: Float32) -> Float32:
     Returns:
         The limited number.
     """
-    return max(Float32(0), min(Float32(1), value))
+    return clamp(value, 0, 1)
 
 
 @fieldwise_init

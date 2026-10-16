@@ -57,6 +57,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, isfinite, log2, max, min
@@ -130,7 +131,7 @@ def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
 
 def _saturate(value: Float32) -> Float32:
     """Return `value` clamped to zero to one, GLSL's `saturate`."""
-    return max(Float32(0), min(Float32(1), value))
+    return clamp(value, 0, 1)
 
 
 def _pow(base: Float32, exponent: Float32) -> Float32:

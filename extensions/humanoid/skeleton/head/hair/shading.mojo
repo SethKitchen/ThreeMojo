@@ -36,6 +36,7 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.math import exp, isfinite, log, max, min, pi, sqrt
@@ -104,7 +105,7 @@ def _times(a: Vector3, b: Vector3) -> Vector3:
 
 def _saturate(x: Float32) -> Float32:
     """Return `x` held to zero through one."""
-    return min(max(x, Float32(0)), Float32(1))
+    return clamp(x, 0, 1)
 
 
 def _cos_half(cos_angle: Float32) -> Float32:
