@@ -43,7 +43,7 @@ from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
 from math.smoothstep import clamped_smoothstep
-from math.utils import SeededRandom, clamp, glsl_mod
+from math.utils import SeededRandom, clamp, glsl_mod, lerp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -1125,7 +1125,7 @@ def halftone_blend(
         their combination at one, as three.js's do.
     """
     if mode == HALFTONE_LINEAR:
-        return a * t + b * (1 - t)
+        return lerp(b, a, t)
     var other: Float32
     if mode == HALFTONE_ADD:
         other = min(Float32(1), a + b)
@@ -1136,7 +1136,7 @@ def halftone_blend(
     else:
         # `HALFTONE_DARKER`, the only mode left once it is checked.
         other = min(a, b)
-    return a * (1 - t) + other * t
+    return lerp(a, other, t)
 
 
 def halftone_pixel(
