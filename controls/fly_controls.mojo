@@ -27,6 +27,7 @@ Differences from three.js: Shift does not set a speed multiplier, which
 three.js sets and never reads. A terminal sends no key for Shift alone.
 """
 
+from core.extent import positive_extent
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
@@ -81,7 +82,7 @@ def _check_size(width: Int, height: Int) raises:
     Raises:
         Error: If a size is not positive.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error(
             "A viewport's size must be positive, got ", width, "x", height
         )

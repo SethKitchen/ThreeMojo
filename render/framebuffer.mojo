@@ -49,6 +49,7 @@ in any order: without it, correctness depends on the draw order or on the
 scene happening to be convex.
 """
 
+from core.extent import positive_extent
 from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
@@ -785,7 +786,7 @@ struct Framebuffer(Movable):
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a buffer of the given size, filled with `clear`."""
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Framebuffer dimensions must be positive")
         self.width = width
         self.height = height
@@ -819,7 +820,7 @@ struct Framebuffer(Movable):
             Error: If the dimensions are not positive, or the buffer length
                 disagrees with them.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Framebuffer dimensions must be positive")
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Pixel buffer length does not match the dimensions")
@@ -856,7 +857,7 @@ struct Framebuffer(Movable):
             Error: If the dimensions are not positive, or either buffer's
                 length disagrees with them.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Framebuffer dimensions must be positive")
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Pixel buffer length does not match the dimensions")

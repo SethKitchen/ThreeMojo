@@ -49,6 +49,7 @@ from controls.input import (
     POINTER_UP,
     PRIMARY,
 )
+from core.extent import positive_extent
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.scene import Scene
@@ -165,7 +166,7 @@ struct SelectionBox(Copyable, Movable):
             raise Error("Invalid input kind: ", event.kind.value)
         if not event.button.is_valid():
             raise Error("Invalid pointer button: ", event.button.value)
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("A view must have a positive width and height")
         var corner = Vector3(
             (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,

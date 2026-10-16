@@ -51,6 +51,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from math.norm import length2
@@ -1153,7 +1154,7 @@ struct ArcballControls(Copyable, Movable):
                 is refused, or a size is not positive.
         """
         require_input(event)
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("A viewport's size must be positive")
         self.check()
         self._width = width

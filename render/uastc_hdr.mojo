@@ -53,6 +53,7 @@ This does not promise identical texels from every hardware decode mode.
 when one block does not unpack, and three.js throws. Here the decode
 raises.
 """
+from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from render.compressed_texture import check_decoded_size
@@ -1180,7 +1181,7 @@ def _astc_image[
         raise Error("ASTC: invalid profile")
     if block_size != 4 and block_size != 6:
         raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("ASTC: dimensions must be positive")
     check_decoded_size(width, height, profile == ASTC_HDR)
     var across = (width + block_size - 1) // block_size

@@ -44,6 +44,7 @@ world space and the vertex shader multiplies it by the world position.
 
 from cameras.camera import Camera
 from core.assets import Assets
+from core.extent import positive_extent
 from core.geometry_store import GeometryId
 from core.layers import Layers
 from core.object3d import NodeId
@@ -563,7 +564,7 @@ def check_texture_size(width: Int, height: Int) raises:
     Raises:
         Error: If either is not positive.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("A render target size must be positive")
 
 

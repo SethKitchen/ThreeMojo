@@ -25,6 +25,7 @@ than zero, a depth, or an array is refused. The image's color space is
 `SRGB` when the internal format is an sRGB one, and `LINEAR` otherwise.
 """
 
+from core.extent import positive_extent
 from render.compressed_texture import (
     R11_EAC_FORMAT,
     RED_GREEN_RGTC2_FORMAT,
@@ -208,7 +209,7 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     var named = format_of_gl(_word(bytes, 28, big_endian))
     var width = _word(bytes, 36, big_endian)
     var height = _word(bytes, 40, big_endian)
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error(
             "KTX: only 2D textures are ported; the size must be positive"
         )

@@ -23,6 +23,7 @@ visual on a little-endian machine takes; any other visual is refused.
 """
 
 from core.binary import little_endian_i32
+from core.extent import positive_extent
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -296,7 +297,7 @@ struct X11Window(Movable):
             Error: If the size is not positive, Xlib cannot be loaded, the display cannot be opened, or its visual is not
                 24-bit TrueColor.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error(
                 "A window's size must be positive, got ", width, "x", height
             )
@@ -458,7 +459,7 @@ struct X11Window(Movable):
         """
         if not self.is_open:
             raise Error("The window is closed")
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error(
                 "A window's size must be positive, got ", width, "x", height
             )

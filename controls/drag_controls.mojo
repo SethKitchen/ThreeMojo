@@ -35,6 +35,7 @@ brings it up to date in three.js.
 Differences from three.js: touch input and the cursor style are not
 ported.
 """
+from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from cameras.camera import Camera
@@ -272,7 +273,7 @@ struct DragControls(Copyable, Movable):
         var events = List[DragEvent]()
         if not self.enabled:
             return events^
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("A view must have a positive width and height")
         scene.update()
         for node in self.objects:

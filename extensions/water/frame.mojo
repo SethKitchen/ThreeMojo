@@ -64,6 +64,7 @@ from extensions.water.view import (
     require_view,
 )
 from cameras.camera import Camera
+from core.extent import positive_extent
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -1636,7 +1637,7 @@ struct WaterScene(Movable):
         Raises:
             Error: If a size or the view is not valid.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Water image dimensions must be positive")
         require_view(view)
         var clock = self.clock
@@ -1790,7 +1791,7 @@ def render_water(
     Raises:
         Error: If a size or the view is not valid, or `clock` is not finite.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Water image dimensions must be positive")
     require_view(view)
     var scene = WaterScene(

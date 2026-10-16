@@ -128,6 +128,7 @@ from core.deform import (
     skin_pose,
     sphere_of,
 )
+from core.extent import positive_extent
 from core.layers import Layers
 from core.buffer_geometry import (
     BufferGeometry,
@@ -606,7 +607,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If either dimension is not positive, or the camera's
                 view cannot be read.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("An image has a positive width and height")
         self.set_from_camera(
             Vector2(
@@ -1392,7 +1393,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         """
         if index < 0 or index >= len(scene.wide_lines):
             raise Error("No wide line has that index")
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("An image has a positive width and height")
         var hits = List[Hit]()
         ref line = scene.wide_lines[index]

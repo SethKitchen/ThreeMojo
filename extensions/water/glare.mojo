@@ -13,6 +13,7 @@ smaller than the page's 512, scratch widths scale with the grid so they
 stay hairlines.
 """
 
+from core.extent import positive_extent
 from extensions.water.field import ComplexField, complex_mul, fft2
 from extensions.water.random import Mulberry32
 from extensions.water.resolution import require_resolution, SpectrumResolution
@@ -309,7 +310,7 @@ def apply_glare(
         Error: If a dimension is not positive, or the image size does not
             match `bright`.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Glare image dimensions must be positive")
     if len(bright) != width * height * 3:
         raise Error("Glare image length does not match its dimensions")
