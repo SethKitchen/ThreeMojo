@@ -12,7 +12,7 @@ model from the skyscraper's seed: storeys, rooms, doors, windows, a frame
 and furniture. The render view draws its outside.
 """
 
-from examples.output import example_destination, spin_daylight
+from examples.output import build_and_spin, example_destination
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -77,19 +77,12 @@ def _camera() raises -> PerspectiveCamera:
 
 
 def main() raises:
-    var assets = Assets()
-    var scene = Scene()
-    var root = _build(scene, assets)
-    spin_daylight(
+    build_and_spin[_build, _camera](
         WIDTH,
         HEIGHT,
         Color(150, 182, 214),
         0.5,
         1.6,
-        scene,
-        assets,
-        root,
-        _camera(),
         FRAMES,
         DELAY_MS,
         example_destination(String(DEFAULT_OUTPUT)),
