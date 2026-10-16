@@ -18,7 +18,11 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `xhigh`.
 """
 
-from examples.output import example_destination, spin_pair_gallery
+from examples.output import (
+    example_destination,
+    hang_centered,
+    spin_pair_gallery,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -84,34 +88,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DEFAULT_QUALITY = "xhigh"
 comptime SPACING = Float32(0.09)
-
-
-def _hang(
-    mut scene: Scene, x: Float32, height: Float32, center: Vector3
-) raises -> Tuple[NodeId, NodeId]:
-    """Return a turning node at `x` and the node a hand hangs from.
-
-    The hand hangs so that its middle, `center` in the pelvis frame,
-    sits on the turning node's axis.
-
-    Args:
-        scene: The scene that receives the nodes.
-        x: Position along the row, in meters.
-        height: Height of the hand's middle above the floor.
-        center: The hand's middle in the pelvis frame, in meters.
-
-    Returns:
-        The turning node, then the node to hang the hand from.
-
-    Raises:
-        Error: If the scene refuses a node.
-    """
-    var pivot = Object3D()
-    pivot.set_position(x, height, 0)
-    var pivot_id = scene.add(pivot^)
-    var holder = Object3D()
-    holder.set_position(-center.x, -center.y, -center.z)
-    return (pivot_id, scene.attach(holder^, pivot_id))
 
 
 def main() raises:
@@ -188,7 +164,7 @@ def main() raises:
     var center = f.hand(0.4, -10, 0.8)
     var height = Float32(0.9)
     var first = len(scene.meshes)
-    var anatomy = _hang(scene, -SPACING, height, center)
+    var anatomy = hang_centered(scene, -SPACING, height, center)
     _ = add_hand(
         scene,
         assets,
@@ -205,7 +181,7 @@ def main() raises:
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
     first = len(scene.meshes)
-    var covered = _hang(scene, SPACING, height, center)
+    var covered = hang_centered(scene, SPACING, height, center)
     _ = add_hand(
         scene,
         assets,
