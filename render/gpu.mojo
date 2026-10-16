@@ -293,6 +293,7 @@ from render.tonemap import (
 )
 from render.screen_coord import (
     pixel_frag_coord,
+    sample_pixel,
     sampled_point_coord,
     screen_size_coord,
 )
@@ -5845,6 +5846,7 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         """Return each end's perspective-correct weight at this pixel, or
         at the pixel to its right or above it, from `toward_at`."""
         var far = self.base + FLOATS_PER_VERTEX
+        var x, y = sample_pixel(self.x, self.y, context)
         var toward = toward_at(
             Vector2(
                 self.segments[unsafe_offset=self.base + LANE_X],
@@ -5856,8 +5858,8 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
             ),
             self.segments[unsafe_offset=self.base + LANE_INV_W],
             self.segments[unsafe_offset=far + LANE_INV_W],
-            self.x + (1 if context == AT_RIGHT else 0),
-            self.y - (1 if context == AT_UP else 0),
+            x,
+            y,
         )
         return SIMD[DType.float32, 4](1 - toward, toward, 0, 0)
 
