@@ -14,6 +14,8 @@ reflects; the sky's faces carry a mip chain, which is what a rough
 sphere reads. The last sphere of each row has a clear coat over it.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
@@ -37,7 +39,7 @@ from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv, stderr
+from std.sys import stderr
 from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/physical.png"
@@ -94,10 +96,7 @@ def sky_face(face: Int) raises -> Texture:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     var assets = Assets()

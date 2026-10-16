@@ -16,6 +16,8 @@ The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. The default is `high`.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -127,9 +129,7 @@ def _model() raises -> HumanoidSpec:
 
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var level = quality_named(String(DEFAULT_QUALITY))
     if len(args) > 2:
         level = quality_named(String(args[2]))

@@ -12,7 +12,7 @@ and a normal attachment. The top band is that light through ACES, so a
 bright lamp keeps its color. The bottom band is the view-space normal.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -36,7 +36,6 @@ from render.target import (
 )
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, tone_map
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/targets.png"
@@ -98,10 +97,7 @@ def show(light: FloatImage, normals: FloatImage) raises -> Framebuffer:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HALF, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))

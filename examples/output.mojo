@@ -3,18 +3,33 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Write the animated PNG an example has just rendered.
+"""Read an example's output path and write its animated PNG.
 
-Each example builds its own scene. This file records how long that
-render took and stores the frames.
+Each example builds its own scene. This file reads the path from the
+first argument and stores the frames.
 """
 
 from core.clock import Clock
 from render.apng import encode
 from render.framebuffer import Framebuffer
 from std.pathlib import Path
-from std.sys import stderr
+from std.sys import argv, stderr
 from units.si import MILLISECOND
+
+
+def example_destination(default_name: String) -> String:
+    """Return the first program argument, or `default_name`.
+
+    Args:
+        default_name: The path used when the program has no argument.
+
+    Returns:
+        The output path.
+    """
+    var args = argv()
+    if len(args) > 1:
+        return String(args[1])
+    return default_name
 
 
 def write_example(

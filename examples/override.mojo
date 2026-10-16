@@ -13,7 +13,7 @@ sphere sets `allow_override` off and keeps its own color. The camera
 rides a pivot one whole turn, and the normals shift with it.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -26,7 +26,6 @@ from materials.material import Material, normal_material
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/hooks.png"
@@ -66,10 +65,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))

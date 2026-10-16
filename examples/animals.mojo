@@ -15,6 +15,8 @@ mid-stride and the snake and the swimmers bend in an S. Each animal
 turns a whole turn.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -45,7 +47,6 @@ from render.apng import encode
 from renderers.renderer import Renderer, available_workers
 from std.math import max
 from std.pathlib import Path
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/animals.png"
@@ -169,10 +170,7 @@ def blit(mut sheet: Framebuffer, piece: Framebuffer, x0: Int, y0: Int):
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var rows = (SPECIES_COUNT + COLUMNS - 1) // COLUMNS
     var renderer = Renderer(TILE_W, TILE_H, workers=available_workers())
     renderer.set_background(Color(170, 190, 215))

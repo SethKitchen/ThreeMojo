@@ -12,7 +12,7 @@ This program fills those paths into a frame so the figure can be a PNG.
 The pair turns one whole turn.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -30,7 +30,6 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.svg_renderer import SVGRenderer, SvgImage
 from std.math import abs, ceil, floor
-from std.sys import argv
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/svg.png"
@@ -305,10 +304,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var svg = SVGRenderer(WIDTH, HEIGHT)
     svg.set_clear_color(Color(16, 18, 26))

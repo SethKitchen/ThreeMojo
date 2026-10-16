@@ -15,7 +15,7 @@ reflects that one, so the boxes go round in its surface as they go round
 the scene. The floor reflects the sky a little, mixed into its own gray.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from cameras.cube_camera import CubeCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -47,7 +47,6 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/mirror.png"
@@ -107,10 +106,7 @@ def sky_face(face: Int) raises -> Texture:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     var assets = Assets()

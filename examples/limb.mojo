@@ -14,6 +14,8 @@ and the foot. The surfaces are physically based, lit by a room
 environment and a lamp that casts soft shadows, and tone mapped.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
@@ -49,7 +51,6 @@ from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/limb.png"
@@ -115,10 +116,7 @@ def _stand(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())

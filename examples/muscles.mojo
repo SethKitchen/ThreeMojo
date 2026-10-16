@@ -11,6 +11,8 @@ The page is Muscles. A six-foot male right leg is drawn three times:
 bones only, untoned muscles, and toned muscles.
 """
 
+from examples.output import example_destination
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
@@ -41,7 +43,6 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/muscles.png"
@@ -146,10 +147,7 @@ def _add(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var bones = HumanoidSpec(Length(6.0, FOOT), MALE, UNTONED)
     var untoned = HumanoidSpec(Length(6.0, FOOT), MALE, UNTONED)

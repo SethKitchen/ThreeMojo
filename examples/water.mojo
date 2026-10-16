@@ -11,6 +11,8 @@ The clock is fixed, so the camera does not bob. The ocean, the frame
 and the pebble photograph match the page. The page is Water.
 """
 
+from examples.output import example_destination
+
 from extensions.water.frame import render_water
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution
@@ -18,7 +20,6 @@ from extensions.water.view import FRAME
 from render.jpeg import decode
 from render.png import encode as encode_png
 from std.pathlib import Path
-from std.sys import argv
 from units.si import RADIAN, SECOND, Angle, Duration
 
 comptime DEFAULT_OUTPUT = "out/water.png"
@@ -28,10 +29,7 @@ comptime HEIGHT = 720
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var bed = pebble_bed(decode(Path(PEBBLES).read_bytes()))
     var image = render_water(
         WIDTH,

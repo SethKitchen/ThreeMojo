@@ -11,7 +11,7 @@ A clip holds a position track and a rotation track. The mixer writes the
 pose each frame from the clock's delta.
 """
 
-from examples.output import write_example
+from examples.output import example_destination, write_example
 
 from animation.animation_clip import AnimationClip
 from animation.animation_mixer import AnimationAction, AnimationMixer
@@ -29,7 +29,6 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.sys import argv
 from units.si import Angle, DEGREE, Duration, Length, METER, SECOND
 
 comptime DEFAULT_OUTPUT = "out/keyframes.png"
@@ -78,10 +77,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))
