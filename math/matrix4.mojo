@@ -31,7 +31,12 @@ passed where radians are meant.
 """
 
 from math.euler import Euler
-from math.square_matrix import _post_multiply, _transpose_square
+from math.square_matrix import (
+    _elements_equal,
+    _post_multiply,
+    _scale_elements,
+    _transpose_square,
+)
 from math.matrix3 import Matrix3
 from math.norm import length3, normalized3, _ordinary_squared
 from math.quaternion import Quaternion
@@ -754,10 +759,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         Returns:
             Whether the sixteen elements match.
         """
-        for index in range(16):  # pragma: no branch
-            if self.elements[index] != other.elements[index]:
-                return False
-        return True
+        return _elements_equal[4](self.elements, other.elements)
 
     def __ne__(self, other: Self) -> Bool:
         """Return True if any element differs.
@@ -789,8 +791,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         Args:
             factor: The number.
         """
-        for index in range(16):  # pragma: no branch
-            self.elements[index] *= factor
+        _scale_elements[4](self.elements, factor)
 
     def scale(mut self, factors: Vector3):
         """Scale the first three columns by the three factors, three.js's
