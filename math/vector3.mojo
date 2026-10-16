@@ -17,6 +17,7 @@ from math.matrix_determinant import _sum_products
 from math.polyline import (
     PolylineVertex,
     add_scaled,
+    angle_between,
     clamp_to_length,
     distance_between,
     distance_between_squared,
@@ -32,7 +33,7 @@ from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.utils import SeededRandom
 from math.norm import _ordinary_product, length3, normalized3, _ordinary_squared
-from std.math import acos, ceil, cos, floor, pi, sin, sqrt, trunc
+from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
 
@@ -297,27 +298,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             From zero to a half turn. A right angle if either vector is
             zero, as in three.js: a zero vector has no direction.
         """
-        var first_squared = self.length_sq()
-        var second_squared = other.length_sq()
-        var product = first_squared * second_squared
-        var theta: Float32
-        if (
-            _ordinary_squared(first_squared)
-            and _ordinary_squared(second_squared)
-            and _ordinary_squared(product)
-        ):
-            theta = self.dot(other) / sqrt(product)
-        else:
-            var first = self
-            var second = other
-            first.normalize()
-            second.normalize()
-            if (first.x == 0 and first.y == 0 and first.z == 0) or (
-                second.x == 0 and second.y == 0 and second.z == 0
-            ):
-                return Angle(Float32(pi / 2), RADIAN)
-            theta = first.dot(second)
-        return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
+        return angle_between(self, other)
 
     def lerp(mut self, other: Self, alpha: Float32):
         """Move this vector toward `other` by `alpha`, three.js's `lerp`.

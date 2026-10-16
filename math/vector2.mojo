@@ -9,6 +9,7 @@ from math.matrix3 import Matrix3
 from math.polyline import (
     PolylineVertex,
     add_scaled,
+    angle_between,
     clamp_to_length,
     distance_between,
     distance_between_squared,
@@ -18,9 +19,8 @@ from math.polyline import (
 )
 from math.utils import SeededRandom
 from math.vector3 import _js_round
-from math.norm import length2, normalized2, _ordinary_squared
+from math.norm import length2, normalized2
 from std.math import (
-    acos,
     atan2,
     ceil,
     copysign,
@@ -28,7 +28,6 @@ from std.math import (
     floor,
     pi,
     sin,
-    sqrt,
     trunc,
 )
 from units.si import Angle, RADIAN
@@ -250,27 +249,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
             From zero to a half turn. A right angle if either vector is
             zero, as in three.js.
         """
-        var first_squared = self.length_sq()
-        var second_squared = other.length_sq()
-        var product = first_squared * second_squared
-        var theta: Float32
-        if (
-            _ordinary_squared(first_squared)
-            and _ordinary_squared(second_squared)
-            and _ordinary_squared(product)
-        ):
-            theta = self.dot(other) / sqrt(product)
-        else:
-            var first = self
-            var second = other
-            first.normalize()
-            second.normalize()
-            if (first.x == 0 and first.y == 0) or (
-                second.x == 0 and second.y == 0
-            ):
-                return Angle(Float32(pi / 2), RADIAN)
-            theta = first.dot(second)
-        return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
+        return angle_between(self, other)
 
     def distance_to(self, other: Self) -> Float32:
         """Return the distance between two points, three.js's `distanceTo`.
