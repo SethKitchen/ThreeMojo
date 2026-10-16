@@ -16,14 +16,12 @@ Porosity is applied once through apparent density.
 
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.occupancy import (
-    CORTICAL_FILL,
     DEFAULT_STEP,
-    EMPTY,
-    TRABECULAR_FILL,
     BoneMass,
     BoneOccupancy,
     sample_bone_mass,
 )
+from extensions.humanoid.skeleton.shell_sample import fill_at
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisBone,
     PelvisBoneField,
@@ -77,12 +75,7 @@ def pelvis_bone_field_occupancy(
         `EMPTY` outside, `CORTICAL_FILL` in the shell, or
         `TRABECULAR_FILL` inside it.
     """
-    var d = field.distance(point)
-    if d >= 0:
-        return EMPTY
-    if d > -field.shell:
-        return CORTICAL_FILL
-    return TRABECULAR_FILL
+    return fill_at(field.distance(point), field.shell)
 
 
 def pelvis_bone_mass(

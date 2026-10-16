@@ -23,14 +23,12 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
     foot_dimensions,
 )
 from extensions.humanoid.skeleton.occupancy import (
-    CORTICAL_FILL,
     DEFAULT_STEP,
-    EMPTY,
-    TRABECULAR_FILL,
     BoneMass,
     BoneOccupancy,
     sample_bone_mass,
 )
+from extensions.humanoid.skeleton.shell_sample import fill_at
 from extensions.anatomy.tissue import (
     BoneTissue,
     cortical_tissue,
@@ -58,7 +56,8 @@ def foot_bone_occupancy(
         Error: If `dimensions.validate` refuses the copy, or `part` is
             not named.
     """
-    return _occupancy(FootBoneField(dimensions, part), point)
+    var field = FootBoneField(dimensions, part)
+    return fill_at(field.distance(point), field.shell)
 
 
 def foot_bone_mass(
@@ -141,14 +140,4 @@ def foot_bone_field_occupancy(
         `EMPTY` outside, `CORTICAL_FILL` in the shell, or
         `TRABECULAR_FILL` inside it.
     """
-    return _occupancy(field, point)
-
-
-def _occupancy(field: FootBoneField, point: Vector3) -> BoneOccupancy:
-    """Return what fills `point` in `field`. There is no marrow."""
-    var d = field.distance(point)
-    if d >= 0:
-        return EMPTY
-    if d > -field.shell:
-        return CORTICAL_FILL
-    return TRABECULAR_FILL
+    return fill_at(field.distance(point), field.shell)
