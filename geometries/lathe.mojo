@@ -104,11 +104,7 @@ def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
                 normals.append(_wide_unit(points[0], points[1]))
         else:
             var summed = Vector2(ahead.x + previous.x, ahead.y + previous.y)
-            if (
-                not isfinite(summed.x)
-                or not isfinite(summed.y)
-                or (summed.x == 0 and summed.y == 0)
-            ):
+            if not summed.is_finite() or (summed.x == 0 and summed.y == 0):
                 # The two raw segment directions telescope to the outer
                 # endpoint difference. This also distinguishes an exact
                 # return from cancellation in rounded segment differences.
@@ -164,7 +160,7 @@ def lathe(
     if len(points) < 2:
         raise Error("A lathe needs a profile of at least two points")
     for index in range(len(points)):  # pragma: no branch
-        if not isfinite(points[index].x) or not isfinite(points[index].y):
+        if not points[index].is_finite():
             raise Error("A lathe's profile points must be finite")
         if points[index].x < 0:
             raise Error("A lathe's profile lies on one side of the axis")

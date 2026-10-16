@@ -48,7 +48,7 @@ from math.sine import fraction
 from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
-from math.utils import mix_delta
+from math.utils import glsl_sign, mix_delta
 from math.vector3 import Vector3, reciprocal_unit
 from postprocessing.display_nodes import luminance_of
 from postprocessing.filter_nodes import interleaved_gradient_noise
@@ -265,22 +265,6 @@ def gtao_fast_acos(value: Float32) -> Float32:
     if value >= 0:
         return angle
     return Float32(pi) - angle
-
-
-def glsl_sign(x: Float32) -> Float32:
-    """Return GLSL's `sign`.
-
-    Args:
-        x: The number.
-
-    Returns:
-        One, minus one, or zero for zero.
-    """
-    if x > 0:
-        return 1
-    if x < 0:
-        return -1
-    return 0
 
 
 def occluded_sectors(start: Float32, span: Float32) -> UInt32:

@@ -424,6 +424,40 @@ def glsl_mod(x: Float32, y: Float32) -> Float32:
     return x - y * floor(x / y)
 
 
+def glsl_sign(x: Float32) -> Float32:
+    """Return GLSL's `sign`.
+
+    Args:
+        x: The number.
+
+    Returns:
+        One when `x` is positive, minus one when it is negative, and zero
+        for zero and NaN.
+    """
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
+
+
+def glsl_sign(x: Float64) -> Float64:
+    """Return GLSL's `sign`.
+
+    Args:
+        x: The number.
+
+    Returns:
+        One when `x` is positive, minus one when it is negative, and zero
+        for zero and NaN.
+    """
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
+
+
 def inverse_lerp(x: Float32, y: Float32, value: Float32) -> Float32:
     """Return the fraction of the way `value` lies from `x` to `y`.
 

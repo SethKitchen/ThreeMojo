@@ -85,6 +85,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.utils import glsl_sign
 from math.vector3 import Vector3
 from std.math import sqrt
 
@@ -315,15 +316,6 @@ def _unit(v: SIMD[DType.float32, 2]) -> SIMD[DType.float32, 2]:
     return SIMD[DType.float32, 2](unit[0], unit[1])
 
 
-def _sign(x: Float32) -> Float32:
-    """Return GLSL's `sign`, and zero for NaN."""
-    if x > 0:
-        return 1
-    if x < 0:
-        return -1
-    return 0
-
-
 def conditional_discard(
     mvp: Matrix4,
     position: Vector3,
@@ -358,7 +350,7 @@ def conditional_discard(
     var c1 = _unit(_on_screen(mvp, control1) - p1)
     var d0 = norm[0] * c0[0] + norm[1] * c0[1]
     var d1 = norm[0] * c1[0] + norm[1] * c1[1]
-    return 1.0 if _sign(d0) != _sign(d1) else 0.0
+    return 1.0 if glsl_sign(d0) != glsl_sign(d1) else 0.0
 
 
 def line_distances(

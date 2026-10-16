@@ -78,7 +78,7 @@ from lights.vxgi_scene_collector import (
 from math.bounds import Box3
 from math.finite import positive_finite
 from math.smoothstep import smoothstep
-from math.utils import max3
+from math.utils import glsl_sign, max3
 from math.vector3 import Vector3
 from std.math import ceil, cos, floor, isfinite, log2, pi, tan
 from units.si import Angle, DEGREE, Length, METER
@@ -233,15 +233,6 @@ def _swizzled(
     return (y, z, x)
 
 
-def _sign(value: Float32) -> Float32:
-    """Return minus one, zero or one: WGSL's `sign`."""
-    if value > 0:
-        return 1
-    if value < 0:
-        return -1
-    return 0
-
-
 struct VoxelTriangle(ImplicitlyCopyable):
     """One triangle record set up for conservative voxelization, in
     sub-voxel space and turned so its dominant axis is `k`: the first half
@@ -345,7 +336,7 @@ struct VoxelTriangle(ImplicitlyCopyable):
         self.j0 = max(Int(floor(min_j)), 0)
         self.j1 = min(Int(floor(max_j)), Int(sd[1]) - 1)
         self.top_k = Int(sd[2]) - 1
-        var area_sign = _sign(n[2])
+        var area_sign = glsl_sign(n[2])
         self.e0 = _edge(q0[0], q0[1], q1[0], q1[1], area_sign)
         self.e1 = _edge(q1[0], q1[1], q2[0], q2[1], area_sign)
         self.e2 = _edge(q2[0], q2[1], q0[0], q0[1], area_sign)

@@ -29,7 +29,7 @@ limits, and explicit zero and nonfinite rules.
 
 from math.cross import cross_components
 from math.norm import dot3, length3, squared_length3
-from std.math import isnan, sqrt
+from std.math import isfinite, isnan, sqrt
 
 # The tag three.js writes in the fourth slot of a face. Kept for the
 # record; a face here is three corners.
@@ -106,6 +106,14 @@ struct Point3(ImplicitlyCopyable, Writable):
             The sum of the component products.
         """
         return self.x * other.x + self.y * other.y + self.z * other.z
+
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x`, `y`, and `z` are all finite.
+        """
+        return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
 
 
 def point_of(values: List[Float32], vertex: Int) -> Point3:

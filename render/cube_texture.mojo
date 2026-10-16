@@ -460,9 +460,11 @@ def check_rotation(euler: Euler, what: String) raises:
     Raises:
         Error: If an angle is not finite, or the order is none of the six.
     """
-    if not isfinite(euler.x.value) or not isfinite(euler.y.value):
-        raise Error(what + "'s angles must be finite")
-    if not isfinite(euler.z.value):
+    if (
+        not isfinite(euler.x.value)
+        or not isfinite(euler.y.value)
+        or not isfinite(euler.z.value)
+    ):
         raise Error(what + "'s angles must be finite")
     if not euler.order.is_valid():
         raise Error(what + "'s order must be one of the six")

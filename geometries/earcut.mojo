@@ -28,6 +28,7 @@ judges it.
 """
 
 from math.rounded_product import rounded_product
+from math.utils import glsl_sign
 from std.math import isfinite, trunc
 
 
@@ -330,11 +331,6 @@ def _is_ear_hashed(
     return True
 
 
-def _sign(value: Float64) -> Int:
-    """Return earcut's `sign`."""
-    return 1 if value > 0 else (-1 if value < 0 else 0)
-
-
 def _on_segment(nodes: List[_EarNode], p: Int, q: Int, r: Int) -> Bool:
     """Return True if collinear `q` lies on the segment from `p` to `r`."""
     ref a = nodes[p]
@@ -352,10 +348,10 @@ def _intersects(
     nodes: List[_EarNode], p1: Int, q1: Int, p2: Int, q2: Int
 ) -> Bool:
     """Return True if two segments meet, earcut's `intersects`."""
-    var o1 = _sign(_area(nodes, p1, q1, p2))
-    var o2 = _sign(_area(nodes, p1, q1, q2))
-    var o3 = _sign(_area(nodes, p2, q2, p1))
-    var o4 = _sign(_area(nodes, p2, q2, q1))
+    var o1 = Int(glsl_sign(_area(nodes, p1, q1, p2)))
+    var o2 = Int(glsl_sign(_area(nodes, p1, q1, q2)))
+    var o3 = Int(glsl_sign(_area(nodes, p2, q2, p1)))
+    var o4 = Int(glsl_sign(_area(nodes, p2, q2, q1)))
     return (
         (o1 != o2 and o3 != o4)
         or (o1 == 0 and _on_segment(nodes, p1, p2, q1))

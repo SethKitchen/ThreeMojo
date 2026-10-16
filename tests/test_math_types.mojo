@@ -19,6 +19,7 @@ from math.utils import (
     floor_power_of_two,
     inverse_lerp,
     is_power_of_two,
+    glsl_sign,
     lerp,
     map_linear,
     mix_bilinear,
@@ -29,7 +30,7 @@ from math.utils import (
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import pi, sqrt
+from std.math import nan, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -266,6 +267,14 @@ def test_scalar_helpers() raises:
     assert_equal(smootherstep(2, 0, 1), Float32(1))
     assert_equal(smootherstep(0.5, 0, 1), Float32(0.5))
     assert_equal(smooth_step(0.5, 0, 1), Float32(0.5))
+    assert_equal(glsl_sign(Float32(2)), Float32(1))
+    assert_equal(glsl_sign(Float32(-2)), Float32(-1))
+    assert_equal(glsl_sign(Float32(0)), Float32(0))
+    assert_equal(glsl_sign(nan[DType.float32]()), Float32(0))
+    assert_equal(glsl_sign(Float64(2)), Float64(1))
+    assert_equal(glsl_sign(Float64(-2)), Float64(-1))
+    assert_equal(glsl_sign(Float64(0)), Float64(0))
+    assert_equal(glsl_sign(nan[DType.float64]()), Float64(0))
     assert_true(is_power_of_two(8))
     assert_false(is_power_of_two(6))
     assert_false(is_power_of_two(0))
