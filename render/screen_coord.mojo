@@ -14,6 +14,27 @@ from math.vector2 import Vector2
 from render.pointrule import gl_point_coord
 
 
+def sample_step(
+    x: Int, y: Int, context: NodeContext, step: Int
+) -> Tuple[Int, Int]:
+    """Return the place a derivative sample reads, in steps of `step`.
+
+    Args:
+        x: The column, in the same units as `step`.
+        y: The row, counted down from the top.
+        context: Which sample. `AT_RIGHT` adds `step` to the column.
+            `AT_UP` subtracts `step` from the row.
+        step: One pixel, or one subpixel when the row is stored scaled.
+
+    Returns:
+        The column and the row.
+    """
+    return (
+        x + (step if context == AT_RIGHT else 0),
+        y - (step if context == AT_UP else 0),
+    )
+
+
 def sample_pixel(x: Int, y: Int, context: NodeContext) -> Tuple[Int, Int]:
     """Return the pixel a derivative sample reads.
 
@@ -26,10 +47,7 @@ def sample_pixel(x: Int, y: Int, context: NodeContext) -> Tuple[Int, Int]:
     Returns:
         The column and the row.
     """
-    return (
-        x + (1 if context == AT_RIGHT else 0),
-        y - (1 if context == AT_UP else 0),
-    )
+    return sample_step(x, y, context, 1)
 
 
 def pixel_frag_coord(

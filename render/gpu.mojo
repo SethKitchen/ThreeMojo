@@ -294,6 +294,7 @@ from render.tonemap import (
 from render.screen_coord import (
     pixel_frag_coord,
     sample_pixel,
+    sample_step,
     sampled_point_coord,
     screen_size_coord,
 )
@@ -5475,8 +5476,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
         """Return each corner's perspective-correct weight at this pixel,
         or at the pixel to its right or above it, from the triangle's own
         edge functions, as `_uv_at` reads the pixels either side."""
-        var px = self.px + (SUBPIXEL if context == AT_RIGHT else 0)
-        var py = self.py - (SUBPIXEL if context == AT_UP else 0)
+        var px, py = sample_step(self.px, self.py, context, SUBPIXEL)
         var e_ab = edge_at(self.ax, self.ay, self.bx, self.by, px, py)
         var e_bc = edge_at(self.bx, self.by, self.cx, self.cy, px, py)
         var e_ca = edge_at(self.cx, self.cy, self.ax, self.ay, px, py)
@@ -5510,8 +5510,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
         Returns:
             The four numbers.
         """
-        var px = self.px + (SUBPIXEL if context == AT_RIGHT else 0)
-        var py = self.py - (SUBPIXEL if context == AT_UP else 0)
+        var px, py = sample_step(self.px, self.py, context, SUBPIXEL)
         return SIMD[DType.float32, 4](
             Float32(px) / Float32(SUBPIXEL),
             Float32(self.height) - Float32(py) / Float32(SUBPIXEL),
