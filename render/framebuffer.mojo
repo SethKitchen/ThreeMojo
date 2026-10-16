@@ -580,6 +580,37 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         """Return True if any channel differs."""
         return not self == other
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum of every channel, alpha included.
+
+        `add` keeps alpha and changes this color.
+
+        Args:
+            other: The color to add.
+
+        Returns:
+            The sum.
+        """
+        return FloatColor(
+            self.r + other.r,
+            self.g + other.g,
+            self.b + other.b,
+            self.a + other.a,
+        )
+
+    def __mul__(self, factor: Float32) -> Self:
+        """Return every channel scaled by `factor`, alpha included.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            The scaled color.
+        """
+        return FloatColor(
+            self.r * factor, self.g * factor, self.b * factor, self.a * factor
+        )
+
     def premultiplied(self) -> Self:
         """Return this color with its channels scaled by its own alpha.
 

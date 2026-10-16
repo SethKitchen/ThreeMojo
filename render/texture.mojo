@@ -1469,21 +1469,11 @@ struct Texture(Movable):
                             # changes nothing and the color averages as it
                             # is; the level then stores an opaque alpha.
                             var texel = self._texel_at(at).premultiplied()
-                            total = FloatColor(
-                                total.r + texel.r * weight,
-                                total.g + texel.g * weight,
-                                total.b + texel.b * weight,
-                                total.a + texel.a * weight,
-                            )
+                            total = total + texel * weight
                             sx += 1
                         sy += 1
                     var share = 1 / Float32(wide * tall)
-                    var mixed = FloatColor(
-                        total.r * share,
-                        total.g * share,
-                        total.b * share,
-                        total.a * share,
-                    ).unpremultiplied()
+                    var mixed = (total * share).unpremultiplied()
                     self._store(mixed)
             level += 1
             self.levels = level + 1
@@ -1891,16 +1881,9 @@ struct Texture(Movable):
             var sampled = self.sample_level(
                 tap_u, tap_v, footprint.level
             ).premultiplied()
-            total = FloatColor(
-                total.r + sampled.r,
-                total.g + sampled.g,
-                total.b + sampled.b,
-                total.a + sampled.a,
-            )
+            total = total + sampled
         var share = 1 / Float32(footprint.taps)
-        return FloatColor(
-            total.r * share, total.g * share, total.b * share, total.a * share
-        ).unpremultiplied()
+        return (total * share).unpremultiplied()
 
     def sample(self, u: Float32, v: Float32) -> FloatColor:
         """Return the color at a texture coordinate, from the full-size

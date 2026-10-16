@@ -122,25 +122,11 @@ def downsample(
                     var sampled = FloatColor(
                         srgb=image.get_pixel(sx, sy)
                     ).premultiplied()
-                    total = FloatColor(
-                        total.r + sampled.r,
-                        total.g + sampled.g,
-                        total.b + sampled.b,
-                        total.a + sampled.a,
-                    )
+                    total = total + sampled
                     var z = image.depth_at(sx, sy)
                     if is_nearer(depth_mode, z, nearest):
                         nearest = z
-            var shown = (
-                FloatColor(
-                    total.r * share,
-                    total.g * share,
-                    total.b * share,
-                    total.a * share,
-                )
-                .unpremultiplied()
-                .encode()
-            )
+            var shown = (total * share).unpremultiplied().encode()
             pixels.append(shown.r)
             pixels.append(shown.g)
             pixels.append(shown.b)

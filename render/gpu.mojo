@@ -5081,16 +5081,9 @@ def _sample_footprint(
         var sampled = _sample_level(
             texels, ramp, image, tap_u, tap_v, footprint.level
         ).premultiplied()
-        total = FloatColor(
-            total.r + sampled.r,
-            total.g + sampled.g,
-            total.b + sampled.b,
-            total.a + sampled.a,
-        )
+        total = total + sampled
     var share = 1 / Float32(footprint.taps)
-    return FloatColor(
-        total.r * share, total.g * share, total.b * share, total.a * share
-    ).unpremultiplied()
+    return (total * share).unpremultiplied()
 
 
 def _placed_steps(
