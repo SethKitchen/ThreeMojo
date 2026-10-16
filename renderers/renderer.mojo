@@ -915,6 +915,81 @@ def _in_view(
     return frustum.intersects_sphere(bound)
 
 
+def _object_place(
+    scene: Scene,
+    assets: Assets,
+    node: NodeId,
+    material: MaterialId,
+    geometry: GeometryId,
+    frustum_culled: Bool,
+    cast_shadow: Bool,
+    receive_shadow: Bool,
+    casters_only: Bool,
+    receivers_cast: Bool,
+    layers: Layers,
+    view: Matrix4,
+    frustum: Frustum,
+    slack: Float32,
+    mut bounds: List[Sphere],
+    mut known: List[Bool],
+) raises -> Tuple[Bool, Matrix4, Float32]:
+    """Return whether the camera keeps one line or one points object, and
+    where it sits.
+
+    A light's view keeps only what casts. A hidden node is left out. A
+    position node moves the object past the bound of its geometry, so
+    that object is not culled by the bound. The depth is the node's
+    origin in view space.
+
+    Args:
+        scene: The transform hierarchy.
+        assets: The geometries and materials.
+        node: The object's node.
+        material: The object's own material, before any override.
+        geometry: The object's geometry.
+        frustum_culled: Whether the bound may leave the object out.
+        cast_shadow: Whether the object casts.
+        receive_shadow: Whether the object receives.
+        casters_only: Whether this is a light's view.
+        receivers_cast: Whether that view also holds receivers.
+        layers: The camera's visible layers.
+        view: The world-to-camera transform.
+        frustum: The camera's frustum, in world space.
+        slack: How far past a plane the bound may lie and still count.
+        bounds: One local bound per geometry, filled in as met.
+        known: Which entries of `bounds` have been filled in.
+
+    Returns:
+        Whether the object is kept, its world matrix, and its view depth.
+        The matrix and the depth are unused when it is not kept.
+
+    Raises:
+        Error: If the material or the geometry is not there, or the
+            geometry has no positions.
+    """
+    if casters_only and not _casts(cast_shadow, receive_shadow, receivers_cast):
+        return (False, Matrix4(), 0)
+    if not scene.shows(node, layers):
+        return (False, Matrix4(), 0)
+    var world = scene.world_matrix(node)
+    var nodes = assets.materials.get(material).nodes
+    var moved = (
+        nodes != NO_NODES
+        and _checked_nodes(assets, nodes) != NO_NODES
+        and assets.programs.get(nodes).has(POSITION_NODE)
+    )
+    if (
+        frustum_culled
+        and not moved
+        and not _in_view(assets, geometry, world, frustum, slack, bounds, known)
+    ):
+        return (False, Matrix4(), 0)
+    var depth = view.transform_point(
+        Vector3(world.elements[12], world.elements[13], world.elements[14])
+    ).z
+    return (True, world^, depth)
+
+
 @fieldwise_init
 struct _Draw(ImplicitlyCopyable):
     """One geometry drawn with one material at one world transform.
@@ -7461,40 +7536,26 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.lines)):
             ref line = scene.lines[index]
-            if casters_only and not _casts(
-                line.cast_shadow, line.receive_shadow, receivers_cast
-            ):
-                continue
-            if not scene.shows(line.node, camera.visible_layers()):
-                continue
-            var world = scene.world_matrix(line.node)
-            # A position node moves the line past the bound of its
-            # geometry, so such a line is not culled by it.
-            var line_nodes = assets.materials.get(line.material).nodes
-            var line_moved = (
-                line_nodes != NO_NODES
-                and _checked_nodes(assets, line_nodes) != NO_NODES
-                and assets.programs.get(line_nodes).has(POSITION_NODE)
+            var kept, world, depth = _object_place(
+                scene,
+                assets,
+                line.node,
+                line.material,
+                line.geometry,
+                line.frustum_culled,
+                line.cast_shadow,
+                line.receive_shadow,
+                casters_only,
+                receivers_cast,
+                camera.visible_layers(),
+                view,
+                frustum,
+                slack,
+                bounds,
+                known,
             )
-            if (
-                line.frustum_culled
-                and not line_moved
-                and not _in_view(
-                    assets,
-                    line.geometry,
-                    world,
-                    frustum,
-                    slack,
-                    bounds,
-                    known,
-                )
-            ):
+            if not kept:
                 continue
-            var depth = view.transform_point(
-                Vector3(
-                    world.elements[12], world.elements[13], world.elements[14]
-                )
-            ).z
             var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
             # The line's own material says whether it is drawn and which
@@ -7966,41 +8027,26 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.points)):
             ref points = scene.points[index]
-            if casters_only and not _casts(
-                points.cast_shadow, points.receive_shadow, receivers_cast
-            ):
-                continue
-            if not scene.shows(points.node, camera.visible_layers()):
-                continue
-            var world = scene.world_matrix(points.node)
-            # A position node moves the points past the bound of their
-            # geometry, so such points are not culled by it, as a mesh's
-            # are not.
-            var own_nodes = assets.materials.get(points.material).nodes
-            var moved = (
-                own_nodes != NO_NODES
-                and _checked_nodes(assets, own_nodes) != NO_NODES
-                and assets.programs.get(own_nodes).has(POSITION_NODE)
+            var kept, world, depth = _object_place(
+                scene,
+                assets,
+                points.node,
+                points.material,
+                points.geometry,
+                points.frustum_culled,
+                points.cast_shadow,
+                points.receive_shadow,
+                casters_only,
+                receivers_cast,
+                camera.visible_layers(),
+                view,
+                frustum,
+                slack,
+                bounds,
+                known,
             )
-            if (
-                points.frustum_culled
-                and not moved
-                and not _in_view(
-                    assets,
-                    points.geometry,
-                    world,
-                    frustum,
-                    slack,
-                    bounds,
-                    known,
-                )
-            ):
+            if not kept:
                 continue
-            var depth = view.transform_point(
-                Vector3(
-                    world.elements[12], world.elements[13], world.elements[14]
-                )
-            ).z
             var begin = len(corners)
             ref geometry = assets.geometries.get(points.geometry)
             var own = assets.materials.get(points.material)
