@@ -51,7 +51,7 @@ from core.layers import Layers
 from math.matrix4 import Matrix4
 from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
-from math.vector3 import Vector3, reciprocal_unit
+from math.vector3 import Vector3, reciprocal_unit, reflect_vector
 from postprocessing.sampling import sample, u_of, v_of
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.raster_state import (
@@ -1319,7 +1319,7 @@ def _ssr_pixel(
     if view.perspective:
         incident = origin
         incident.normalize()
-    var reflected = incident - normal * (2 * normal.dot(incident))
+    var reflected = reflect_vector(incident, normal)
     var facing = -incident.dot(normal)
     # A surface seen edge on, or from behind, reflects nothing: three.js
     # divides by this and walks a ray of no finite end.

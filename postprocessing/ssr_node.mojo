@@ -40,7 +40,7 @@ off.
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.cross import cross_vectors
-from math.vector3 import Vector3, reciprocal_unit
+from math.vector3 import Vector3, reciprocal_unit, reflect_vector
 from postprocessing.display_nodes import luminance_of, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
@@ -224,7 +224,7 @@ def ssr_node_pixel(
     if not settings.reflect_non_metals and metalness <= 0:
         return TRANSPARENT_BLACK
     # GLSL's `reflect`, made unit length.
-    var reflected = incident - normal * (2 * normal.dot(incident))
+    var reflected = reflect_vector(incident, normal)
     reflected = reflected * (1 / reflected.length())
     var reach = settings.max_distance.value / (-incident).dot(normal)
     var far_end = here + reflected * reach

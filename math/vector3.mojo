@@ -326,7 +326,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             normal: The plane's normal. It must be unit length, as in
                 three.js; it is used as given.
         """
-        self = self - normal * (2 * self.dot(normal))
+        self = reflect_vector(self, normal)
 
     def apply_matrix4(mut self, matrix: Matrix4):
         """Transform this point by `matrix` with `w = 1`, and divide by the
@@ -692,6 +692,22 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         return Vector3(
             Float32(c * cos(theta)), Float32(u), Float32(c * sin(theta))
         )
+
+
+def reflect_vector(incident: Vector3, normal: Vector3) -> Vector3:
+    """Return `incident` reflected by a unit `normal`.
+
+    GLSL's `reflect`: `incident - 2 * dot(incident, normal) * normal`.
+    `Vector3.reflect` calls it.
+
+    Args:
+        incident: The vector to reflect.
+        normal: The plane's unit normal, used as given.
+
+    Returns:
+        The reflected vector.
+    """
+    return incident - normal * (2 * incident.dot(normal))
 
 
 def reciprocal_unit(value: Vector3) -> Vector3:
