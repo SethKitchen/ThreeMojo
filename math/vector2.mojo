@@ -448,3 +448,29 @@ def component_max(a: Vector2, b: Vector2) -> Vector2:
         The larger components.
     """
     return Vector2(max(a.x, b.x), max(a.y, b.y))
+
+
+def weighted_sum2(
+    a: Vector2,
+    b: Vector2,
+    c: Vector2,
+    weight_a: Float32,
+    weight_b: Float32,
+    weight_c: Float32,
+) -> Vector2:
+    """Return three pairs mixed by their weights.
+
+    Each product is formed, then added, in `a`, `b`, `c` order.
+
+    Args:
+        a: The first pair.
+        b: The second pair.
+        c: The third pair.
+        weight_a: The first weight.
+        weight_b: The second weight.
+        weight_c: The third weight.
+
+    Returns:
+        `a * weight_a + b * weight_b + c * weight_c`.
+    """
+    return a * weight_a + b * weight_b + c * weight_c

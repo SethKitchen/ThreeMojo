@@ -143,7 +143,7 @@ from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.norm import squared_length3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, weighted_sum3
 from math.vector4 import Vector4
 from render.framebuffer import Color, FloatColor, OPAQUE_WHITE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
@@ -7299,23 +7299,9 @@ def node_attributes[
     return NodeInputs(
         a.u * s[0] + b.u * s[1] + c.u * s[2],
         a.v * s[0] + b.v * s[1] + c.v * s[2],
-        Vector3(
-            a.position.x * s[0] + b.position.x * s[1] + c.position.x * s[2],
-            a.position.y * s[0] + b.position.y * s[1] + c.position.y * s[2],
-            a.position.z * s[0] + b.position.z * s[1] + c.position.z * s[2],
-        ),
-        _unit(
-            Vector3(
-                a.normal.x * s[0] + b.normal.x * s[1] + c.normal.x * s[2],
-                a.normal.y * s[0] + b.normal.y * s[1] + c.normal.y * s[2],
-                a.normal.z * s[0] + b.normal.z * s[1] + c.normal.z * s[2],
-            )
-        ),
-        Vector3(
-            a.color.x * s[0] + b.color.x * s[1] + c.color.x * s[2],
-            a.color.y * s[0] + b.color.y * s[1] + c.color.y * s[2],
-            a.color.z * s[0] + b.color.z * s[1] + c.color.z * s[2],
-        ),
+        weighted_sum3(a.position, b.position, c.position, s[0], s[1], s[2]),
+        _unit(weighted_sum3(a.normal, b.normal, c.normal, s[0], s[1], s[2])),
+        weighted_sum3(a.color, b.color, c.color, s[0], s[1], s[2]),
         none,
         textured,
         a.custom * s[0] + b.custom * s[1] + c.custom * s[2],
