@@ -28,6 +28,7 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from math.box_extent import box_exterior
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import max, min, pi, sqrt
 
@@ -123,9 +124,7 @@ struct Sweep(Copyable, Movable):
                 var span = b.p.y - a.p.y
                 if span == 0:
                     continue
-                var t = max(
-                    Float32(0), min(Float32(1), (point.y - a.p.y) / span)
-                )
+                var t = clamp((point.y - a.p.y) / span, 0, 1)
                 var center = a.p + (b.p - a.p) * t
                 var ml = a.ml + (b.ml - a.ml) * t
                 var ap = a.ap + (b.ap - a.ap) * t

@@ -33,6 +33,7 @@ from core.buffer_geometry import BufferGeometry, POSITION, UV
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.isosurface import check_detail
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.collections import Dict
@@ -651,7 +652,7 @@ def finish_surface(
     for index in range(count):  # pragma: no branch
         var p = _vertex(positions, index)
         uvs.append(_u_of(p))
-        uvs.append(max(Float32(0), min(Float32(1), (p.y - base) / span)))
+        uvs.append(clamp((p.y - base) / span, 0, 1))
     # A triangle across the seam gets copies of its corners on the low
     # side, moved past one.
     var copies = Dict[Int, Int]()
@@ -706,5 +707,5 @@ def share_height(
     for index in range(positions.count()):  # pragma: no branch
         shared.append(uvs.component(index, 0))
         var v = (positions.vector3(index).y - low) / span
-        shared.append(max(Float32(0), min(Float32(1), v)))
+        shared.append(clamp(v, 0, 1))
     geometry.set_attribute(String(UV), BufferAttribute(shared^, 2))

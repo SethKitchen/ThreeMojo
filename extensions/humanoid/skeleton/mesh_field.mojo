@@ -70,7 +70,7 @@ def _closest_on_flat_triangle(
     if max(ab2, max(ac2, bc2)) == 0:
         return (a, Float32(0), Float32(0), ON_A)
     if ab2 >= ac2 and ab2 >= bc2:
-        var t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / ab2))
+        var t = clamp((p - a).dot(ab) / ab2, 0, 1)
         var part = ON_AB
         if t == 0:
             part = ON_A
@@ -78,14 +78,14 @@ def _closest_on_flat_triangle(
             part = ON_B
         return (a + ab * t, t, Float32(0), part)
     if ac2 >= bc2:
-        var t = min(Float32(1), max(Float32(0), (p - a).dot(ac) / ac2))
+        var t = clamp((p - a).dot(ac) / ac2, 0, 1)
         var part = ON_CA
         if t == 0:
             part = ON_A
         elif t == 1:
             part = ON_C
         return (a + ac * t, Float32(0), t, part)
-    var t = min(Float32(1), max(Float32(0), (p - b).dot(bc) / bc2))
+    var t = clamp((p - b).dot(bc) / bc2, 0, 1)
     var part = ON_BC
     if t == 0:
         part = ON_B
@@ -142,13 +142,11 @@ def closest_on_triangle(
     # Past the tests above, d2 >= 0 here, and on the BC test below both
     # edge terms are too; the weights are clamped against rounding.
     if vb <= 0 and d6 <= 0:
-        var w = min(Float32(1), max(Float32(0), d2 / (d2 - d6)))
+        var w = clamp(d2 / (d2 - d6), 0, 1)
         return (a + ac * w, Float32(0), w, ON_CA)
     var va = d3 * d6 - d5 * d4
     if va <= 0:
-        var w = min(
-            Float32(1), max(Float32(0), (d4 - d3) / ((d4 - d3) + (d5 - d6)))
-        )
+        var w = clamp((d4 - d3) / ((d4 - d3) + (d5 - d6)), 0, 1)
         return (b + (c - b) * w, 1 - w, w, ON_BC)
     var denom = 1 / (va + vb + vc)
     var v = vb * denom
