@@ -20,6 +20,8 @@ from math.polyline import (
     clamp_to_length,
     distance_between,
     distance_between_squared,
+    lerp_between,
+    lerp_in_place,
     scale_to_length,
 )
 
@@ -324,9 +326,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             other: The vector to move toward.
             alpha: Zero stays, one arrives. Values outside run on.
         """
-        self.x += (other.x - self.x) * alpha
-        self.y += (other.y - self.y) * alpha
-        self.z += (other.z - self.z) * alpha
+        lerp_in_place(self, other, alpha)
 
     def lerp_vectors(mut self, start: Self, end: Self, alpha: Float32):
         """Set this vector a fraction of the way from `start` to `end`,
@@ -337,11 +337,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
             end: The vector at an `alpha` of one.
             alpha: How far along.
         """
-        self = Vector3(
-            start.x + (end.x - start.x) * alpha,
-            start.y + (end.y - start.y) * alpha,
-            start.z + (end.z - start.z) * alpha,
-        )
+        lerp_between(self, start, end, alpha)
 
     def reflect(mut self, normal: Self):
         """Reflect this vector off a plane with the given normal, three.js's
