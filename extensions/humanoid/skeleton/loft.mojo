@@ -26,6 +26,7 @@ can both use.
 """
 
 from extensions.humanoid.skeleton.field import Bounds, empty_bounds
+from math.box_extent import box_exterior
 from math.vector3 import Vector3
 from std.math import atan2, cos, max, min, pi, sin, sqrt
 
@@ -465,12 +466,7 @@ def _column(loft: Loft, index: Int, ray: Int) -> SIMD[DType.float32, 4]:
 
 def _box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
     """Return how far `point` lies outside the box, or zero inside it."""
-    var out = Vector3(
-        max(max(low.x - point.x, point.x - high.x), Float32(0)),
-        max(max(low.y - point.y, point.y - high.y), Float32(0)),
-        max(max(low.z - point.z, point.z - high.z), Float32(0)),
-    )
-    return out.length()
+    return box_exterior(low, high, point).length()
 
 
 def _reaches(

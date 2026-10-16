@@ -26,6 +26,7 @@ from extensions.humanoid.skeleton.field import (
     smax,
     smin,
 )
+from math.box_extent import box_exterior
 from math.cross import cross_vectors
 from math.vector3 import Vector3
 from std.math import max, min, sqrt
@@ -116,10 +117,8 @@ def box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
     Returns:
         The distance in meters, zero inside the box.
     """
-    var dx = max(max(low.x - point.x, point.x - high.x), 0)
-    var dy = max(max(low.y - point.y, point.y - high.y), 0)
-    var dz = max(max(low.z - point.z, point.z - high.z), 0)
-    return sqrt(dx * dx + dy * dy + dz * dz)
+    var outside = box_exterior(low, high, point)
+    return sqrt(outside.length_sq())
 
 
 struct Sculpt(Copyable, DistanceField, Movable):

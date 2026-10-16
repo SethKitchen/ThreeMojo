@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.field import (
     smax,
     smin,
 )
+from math.box_extent import box_exterior
 from math.vector3 import Vector3
 from std.math import max, min, pi, sqrt
 
@@ -172,10 +173,8 @@ struct Sweep(Copyable, Movable):
         Returns:
             Zero inside the box, else the distance to it, in meters.
         """
-        var dx = max(max(self.low.x - point.x, point.x - self.high.x), 0)
-        var dy = max(max(self.low.y - point.y, point.y - self.high.y), 0)
-        var dz = max(max(self.low.z - point.z, point.z - self.high.z), 0)
-        return sqrt(dx * dx + dy * dy + dz * dz)
+        var outside = box_exterior(self.low, self.high, point)
+        return sqrt(outside.length_sq())
 
     def volume(self) -> Float32:
         """Return the sweep's analytic volume, in cubic meters.

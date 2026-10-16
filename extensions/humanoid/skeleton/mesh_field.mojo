@@ -26,6 +26,7 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.humanoid.skeleton.field import DistanceField, cross
+from math.box_extent import box_exterior
 from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.collections import Dict
@@ -156,10 +157,8 @@ def closest_on_triangle(
 
 def _box_gap(low: Vector3, high: Vector3, p: Vector3) -> Float32:
     """Return the squared distance from `p` to a box, zero inside."""
-    var dx = max(max(low.x - p.x, p.x - high.x), 0)
-    var dy = max(max(low.y - p.y, p.y - high.y), 0)
-    var dz = max(max(low.z - p.z, p.z - high.z), 0)
-    return dx * dx + dy * dy + dz * dz
+    var outside = box_exterior(low, high, p)
+    return outside.length_sq()
 
 
 @fieldwise_init
