@@ -811,6 +811,38 @@ def enlarge_tube_chain(chain: TubeChain, least: Float32) -> TubeChain:
     return out
 
 
+def display_tube_chain(
+    mut chain: TubeChain,
+    mut blend: Float32,
+    mut epsilon: Float32,
+    mut low: Vector3,
+    mut high: Vector3,
+    least: Float32,
+    stature: Float32,
+):
+    """Hold a tube's radii up so a mesh can show it.
+
+    The blend becomes `0.0008` of `stature`. The gradient step becomes
+    `0.25` of `least`. The box is the tube's box plus `0.008` and the
+    middle radius.
+
+    Args:
+        chain: The stations.
+        blend: The blend distance, the field's `k`.
+        epsilon: The gradient step.
+        low: The box's low corner.
+        high: The box's high corner.
+        least: The smallest radius to keep, in meters.
+        stature: Standing height, in meters.
+    """
+    chain = enlarge_tube_chain(chain, least)
+    blend = 0.0008 * stature
+    epsilon = Float32(0.25) * least
+    var box = tube_chain_bounds(chain, 0.008 + chain.r2)
+    low = box.low
+    high = box.high
+
+
 def widen_for_display(
     mut chain: TubeChain,
     mut blend: Float32,

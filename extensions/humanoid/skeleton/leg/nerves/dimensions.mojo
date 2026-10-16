@@ -22,7 +22,7 @@ from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
-    enlarge_tube_chain,
+    display_tube_chain,
     field_gradient,
     mix_point,
     tube_chain_bounds,
@@ -122,12 +122,15 @@ def _display_nerve_field(
     """Return a nerve with a diagrammatic minimum mesh radius."""
     var field = NerveField(dimensions, part)
     var least = 0.0015 * dimensions.stature.value
-    field.chain = enlarge_tube_chain(field.chain, least)
-    field.k = 0.0008 * dimensions.stature.value
-    field.epsilon = Float32(0.25) * least
-    var box = tube_chain_bounds(field.chain, 0.008 + field.chain.r2)
-    field.low = box.low
-    field.high = box.high
+    display_tube_chain(
+        field.chain,
+        field.k,
+        field.epsilon,
+        field.low,
+        field.high,
+        least,
+        dimensions.stature.value,
+    )
     return field
 
 
