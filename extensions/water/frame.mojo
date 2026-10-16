@@ -16,7 +16,11 @@ from extensions.water.caustics import (
     render_caustics,
 )
 from extensions.water.field import ComplexField, fft2
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import (
+    anisotropic_step,
+    lod_blend,
+    major_axis_offset,
+)
 from extensions.water.glare import GlareKernels, apply_glare, glare_kernels
 from extensions.water.pebbles import PebbleBed, PebbleTexels
 from extensions.water.optics import (
@@ -1030,7 +1034,7 @@ def _caustic_grad[
     var acc = Vector3(0.0, 0.0, 0.0)
     var count = step.taps
     for i in range(count):  # pragma: no branch
-        var o = (Float32(i) + 0.5) / Float32(count) - 0.5
+        var o = major_axis_offset(i, count)
         var sample = _caustic_lod(
             field, u + step.du * o, v + step.dv * o, step.lod
         )
@@ -1043,11 +1047,7 @@ def _caustic_lod[
     C: CausticTexels
 ](field: C, u: Float32, v: Float32, lod: Float32) -> Vector3:
     var levels = field.caustic_levels()
-    var i0 = Int(floor_f(lod))
-    var i1 = i0 + 1
-    if i1 > levels:
-        i1 = levels
-    var frac = lod - Float32(i0)
+    var i0, i1, frac = lod_blend(lod, levels)
     var a = _caustic_level(field, i0, u, v)
     var b = _caustic_level(field, i1, u, v)
     return _mix3(a, b, frac)

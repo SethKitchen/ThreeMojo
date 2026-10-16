@@ -13,7 +13,11 @@ texels through `PebbleTexels`, so the same arithmetic runs on a
 `PebbleBed` and on a copy in device memory.
 """
 
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import (
+    anisotropic_step,
+    lod_blend,
+    major_axis_offset,
+)
 from render.png import DecodedImage
 from render.srgb import srgb_to_linear
 from std.math import floor
@@ -304,7 +308,7 @@ def sample_pebble_grad[
     var acc = PebbleSample(0.0, 0.0, 0.0)
     var count = step.taps
     for i in range(count):  # pragma: no branch
-        var o = (Float32(i) + 0.5) / Float32(count) - 0.5
+        var o = major_axis_offset(i, count)
         var sample = _trilinear(bed, u + step.du * o, v + step.dv * o, step.lod)
         acc = _mix_add(acc, sample)
     var inv = 1.0 / Float32(count)
@@ -319,11 +323,7 @@ def _trilinear[
     B: PebbleTexels
 ](bed: B, u: Float32, v: Float32, lod: Float32) -> PebbleSample:
     var levels = bed.pebble_levels()
-    var i0 = Int(floor(lod))
-    var i1 = i0 + 1
-    if i1 > levels:
-        i1 = levels
-    var frac = lod - Float32(i0)
+    var i0, i1, frac = lod_blend(lod, levels)
     var a = _sample_level(bed, i0, u, v)
     var b = _sample_level(bed, i1, u, v)
     return a.mix(b, frac)
