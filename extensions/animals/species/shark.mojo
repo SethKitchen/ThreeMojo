@@ -39,7 +39,7 @@ from extensions.animals.parts import (
     JAW,
     TEETH,
 )
-from extensions.animals.kit import EyeSpec
+from extensions.animals.kit import EyeSpec, side_sign
 from extensions.animals.noise import cells3, fbm3
 from extensions.animals.options import (
     ADULT,
@@ -1054,7 +1054,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # PAIRED FINS: stiff hydrofoils, and the claspers of males.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var b = rig.j("pecBase" + side)
         var pd = _pec_dir(g.p_abduct, g.p_droop)
         var sp = V3(pd.x * s, pd.y, pd.z)

@@ -39,6 +39,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -705,7 +706,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: thin, rounded and nearly bare, the cup facing forward and out.
     var ew = t.get("earWidth")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var f = _ear_frame(t, s)
@@ -761,7 +762,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         [40, 0.0086, 0.00086],
     ]
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )

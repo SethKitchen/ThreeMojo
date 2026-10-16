@@ -32,6 +32,7 @@ from extensions.animals.coat import (
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -554,7 +555,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: long, spoon-shaped and thin, the cup facing out and forward.
     var w = t.get("earWidth")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var f = _ear_frame(t, s)
@@ -600,7 +601,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: short slim forelegs; long hind legs with a big haunch, a slim
     # shank and a long flat foot.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, wr, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )

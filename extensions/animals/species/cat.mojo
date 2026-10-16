@@ -28,6 +28,7 @@ from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -770,7 +771,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: tall triangular pinnae, thin, cupped forward.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var e = _ear_frame(rig.j("earBase" + side), rig.j("earTip" + side), s)
         var eb = rig.bone("ear" + side)
         var hk = e.h
@@ -829,7 +830,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: thick and short, on round paws.
     var lt = t.get("limb")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _fore_leg(m, rig, side, s, lt)
         _hind_leg(m, rig, side, s, lt, lh)
 

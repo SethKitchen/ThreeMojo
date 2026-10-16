@@ -27,6 +27,7 @@ from extensions.animals.coat import (
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -500,7 +501,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: small and round, set low and wide.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var up = normalize(tip - base)
@@ -560,7 +561,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
     var toe_x: List[Float64] = [-0.019, -0.0065, 0.0065, 0.019]
     var toe_z: List[Float64] = [-0.009, 0, 0, -0.009]
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )

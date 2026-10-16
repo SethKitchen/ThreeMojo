@@ -30,6 +30,7 @@ from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
     digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
@@ -815,7 +816,7 @@ def _sculpt_ears(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # Small, round, furred ears, set wide on the top corners of the head.
     var ek = t.get("ear")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var up = normalize(tip - base)
@@ -881,7 +882,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
     var hx = _hind_x()
     var hz = _hind_z()
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
             digitigrade_fore(rig, side, s)
         )
@@ -1133,7 +1134,7 @@ def _sculpt_claws(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var hind_len: List[Float64] = [0.8, 0.95, 1.0, 0.97, 0.85]
     var segs = 8
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         for fore in [True, False]:  # pragma: no branch
             var dx = _fore_x() if fore else _hind_x()
             var dz = _fore_z() if fore else _hind_z()

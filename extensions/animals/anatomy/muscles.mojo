@@ -90,6 +90,7 @@ The fish, shark, snake and spider muscles are in
 `extensions/animals/anatomy/axial.mojo`.
 """
 
+from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
     FROM_TEXT,
@@ -814,7 +815,7 @@ def spans_of(
 def _point(rig: Rig, at: Attachment, side: String, scale: Float64) raises -> V3:
     var a = rig.j(_sided(at.a, side))
     var b = rig.j(_sided(at.b, side))
-    var mirror = 1.0 if side == "L" else -1.0
+    var mirror = side_sign(side)
     var o = at.offset
     # The rig's +x is the animal's left, so lateral is +x on the left.
     var lateral = V3(o.x * mirror, o.y, o.z)
@@ -876,7 +877,7 @@ def _build(
                 var name = _sided(j, side)
                 joints.append(rig.find_joint(name))
                 joint_bones.append(_head_bone(rig, name))
-            var mirror = 1.0 if side == "L" else -1.0
+            var mirror = side_sign(side)
             # A mirrored axis keeps the right-hand rule's sense per side.
             var axis = V3(
                 spec.axis.x, spec.axis.y * mirror, spec.axis.z * mirror
