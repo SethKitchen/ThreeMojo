@@ -348,7 +348,7 @@ def sd_ellipse_segment(
     var tangent = Vector3(0, 1, 0)
     if span > 0:
         var inv = Float32(1) / sqrt(span)
-        tangent = Vector3(along.x * inv, along.y * inv, along.z * inv)
+        tangent = along * inv
     var ml_axis = reject(ml_hint, tangent)
     if ml_axis.length() < Float32(0.000001):
         ml_axis = reject(Vector3(0, 0, 1), tangent)

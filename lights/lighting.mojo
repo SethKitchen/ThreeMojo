@@ -422,7 +422,7 @@ def blinn_phong(
     # three.js's D_BlinnPhong, without its reciprocal pi.
     var lobe = (shininess * 0.5 + 1) * exp2(shininess * log2(facing))
     var scale = BLINN_PHONG_G * lobe
-    return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)
+    return fresnel * scale
 
 
 def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
@@ -536,7 +536,7 @@ def ggx(
     var denominator = ggx_base(dot_nh, a2)
     var lobe = a2 / (denominator * denominator)
     var scale = visibility * lobe
-    return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)
+    return fresnel * scale
 
 
 def dfg_approx(dot_nv: Float32, roughness: Float32) -> Vector2:
@@ -653,7 +653,7 @@ def physical_surface(
     var keep = 1 - metalness
     var f90 = specular_intensity + (1 - specular_intensity) * metalness
     return Reflected(
-        Vector3(base.x * keep, base.y * keep, base.z * keep),
+        base * keep,
         mix_delta3(f0, base, metalness),
         Vector3(f90, 0, 0),
     )
@@ -1174,9 +1174,7 @@ def physical_light(
     var coat = sum.clearcoat
     var sheen = sum.sheen
     if lambert > 0:
-        var irradiance = Vector3(
-            light.x * lambert, light.y * lambert, light.z * lambert
-        )
+        var irradiance = light * lambert
         if layers.sheen:
             var cloth = charlie_sheen(
                 toward_light,

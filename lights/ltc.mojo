@@ -553,7 +553,5 @@ def rect_area_light(
         (specular_color.z * fresnel[0] + (1 - specular_color.z) * fresnel[1])
         * lobe,
     )
-    var diffuse = Vector3(
-        diffuse_color.x * flat, diffuse_color.y * flat, diffuse_color.z * flat
-    )
+    var diffuse = diffuse_color * flat
     return RectLight(diffuse, specular)
