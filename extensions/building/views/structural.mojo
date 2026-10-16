@@ -29,6 +29,7 @@ code and occupancy.
 """
 
 from math.norm import squared_length2
+from math.polygon_hit import ray_crosses
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.ids import ElementId
@@ -220,10 +221,8 @@ def _inside(polygon: List[Vec3d], p: Vec3d) -> Bool:
     for i in range(len(polygon)):  # pragma: no branch
         var a = polygon[i]
         var b = polygon[j]
-        if (a.y > p.y) != (b.y > p.y):
-            var x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
-            if p.x < x:
-                inside = not inside
+        if ray_crosses(a.x, a.y, b.x, b.y, p.x, p.y):
+            inside = not inside
         j = i
     return inside
 
