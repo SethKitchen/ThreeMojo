@@ -2170,32 +2170,7 @@ struct PhysicsWorld(Movable):
         )
 
     def _shape_hit(self, ray: Ray, i: Int) -> Optional[RaycastHit]:
-        var shape = self._shape(i)
-        var material = self.bodies[i].material
-        if not shape.is_round():
-            return _polyhedron_hit(ray, shape.polyhedron, i, material)
-        var best = _sphere_hit(ray, shape.start, shape.radius)
-        var other = _sphere_hit(ray, shape.end, shape.radius)
-        if other < best:
-            best = other
-        other = _cylinder_hit(ray, shape.start, shape.end, shape.radius)
-        if other < best:
-            best = other
-        if best == inf[DType.float32]():
-            return None
-        var point = ray.at(best)
-        var on = Vector3(0, 0, 0)
-        var on_ray = Vector3(0, 0, 0)
-        _ = Line3(shape.start, shape.end).closest_points_to_line(
-            Line3(point, point), on, on_ray
-        )
-        return RaycastHit(
-            BodyId(i),
-            point,
-            unit_or(point - on, -ray.direction),
-            best,
-            material,
-        )
+        return _shape_ray_hit(ray, self._shape(i), i, self.bodies[i].material)
 
 
 def _box_of(shape: WorldShape) -> Box3:
@@ -2237,6 +2212,49 @@ def _triangle_ray_hit(
         met.value(),
         unit_or(cross(b - a, c - a), Vector3(0, 0, 1)),
         distance,
+        material,
+    )
+
+
+def _shape_ray_hit(
+    ray: Ray, shape: WorldShape, body: Int, material: PhysicsMaterial
+) -> Optional[RaycastHit]:
+    """Return where a ray enters one placed shape.
+
+    A round shape is the nearest of its two end spheres and its side.
+    A box or a hull is the convex clip.
+
+    Args:
+        ray: The ray, in world space.
+        shape: The shape, already placed.
+        body: The body that owns the shape.
+        material: The body's material.
+
+    Returns:
+        The hit, or none when the ray misses.
+    """
+    if not shape.is_round():
+        return _polyhedron_hit(ray, shape.polyhedron, body, material)
+    var best = _sphere_hit(ray, shape.start, shape.radius)
+    var other = _sphere_hit(ray, shape.end, shape.radius)
+    if other < best:
+        best = other
+    other = _cylinder_hit(ray, shape.start, shape.end, shape.radius)
+    if other < best:
+        best = other
+    if best == inf[DType.float32]():
+        return None
+    var point = ray.at(best)
+    var on = Vector3(0, 0, 0)
+    var on_ray = Vector3(0, 0, 0)
+    _ = Line3(shape.start, shape.end).closest_points_to_line(
+        Line3(point, point), on, on_ray
+    )
+    return RaycastHit(
+        BodyId(body),
+        point,
+        unit_or(point - on, -ray.direction),
+        best,
         material,
     )
 

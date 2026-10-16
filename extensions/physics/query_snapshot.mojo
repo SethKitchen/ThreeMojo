@@ -33,15 +33,12 @@ from extensions.physics.shape import (
     Polyhedron,
     _finite_vector,
     component,
-    unit_or,
 )
 from extensions.physics.world import (
     PhysicsWorld,
     RaycastHit,
     _box_of,
-    _cylinder_hit,
-    _polyhedron_hit,
-    _sphere_hit,
+    _shape_ray_hit,
     _triangle_ray_hit,
 )
 from math.bounds import Box3
@@ -50,9 +47,9 @@ from math.quaternion import Quaternion
 from math.ray import Ray
 from math.sort_utils import stable_sort
 from extensions.physics.primitive_index import _PrimitiveIndex
-from math.triangle import Line3, Triangle
+from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import inf, isfinite, isnan
+from std.math import isfinite, isnan
 from std.memory import ArcPointer, bitcast
 from units.si import Length
 
@@ -434,32 +431,9 @@ struct PhysicsQuerySnapshot(Movable):
             raise Error("The historical owner belongs to another capture")
 
     def _shape_hit(self, ray: Ray, entry: Int) -> Optional[RaycastHit]:
-        ref shape = self._shapes[entry]
         var i = self._owners[entry]
-        var material = self._materials[i]
-        if not shape.is_round():
-            return _polyhedron_hit(ray, shape.polyhedron, i, material)
-        var best = _sphere_hit(ray, shape.start, shape.radius)
-        var other = _sphere_hit(ray, shape.end, shape.radius)
-        if other < best:
-            best = other
-        other = _cylinder_hit(ray, shape.start, shape.end, shape.radius)
-        if other < best:
-            best = other
-        if best == inf[DType.float32]():
-            return None
-        var point = ray.at(best)
-        var on = Vector3(0, 0, 0)
-        var on_ray = Vector3(0, 0, 0)
-        _ = Line3(shape.start, shape.end).closest_points_to_line(
-            Line3(point, point), on, on_ray
-        )
-        return RaycastHit(
-            BodyId(i),
-            point,
-            unit_or(point - on, -ray.direction),
-            best,
-            material,
+        return _shape_ray_hit(
+            ray, self._shapes[entry].copy(), i, self._materials[i]
         )
 
     def _triangle_hit(
