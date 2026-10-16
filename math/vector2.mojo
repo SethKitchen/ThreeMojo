@@ -6,7 +6,14 @@
 """A 2D vector, ported from three.js `src/math/Vector2.js`."""
 
 from math.matrix3 import Matrix3
-from math.polyline import PolylineVertex, clamp_to_length
+from math.polyline import (
+    PolylineVertex,
+    add_scaled,
+    clamp_to_length,
+    distance_between,
+    distance_between_squared,
+    scale_to_length,
+)
 from math.utils import SeededRandom
 from math.vector3 import _js_round
 from math.norm import length2, normalized2, _ordinary_squared
@@ -169,7 +176,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
             other: The vector to add.
             factor: What to scale it by first.
         """
-        self = self + other * factor
+        add_scaled(self, other, factor)
 
     def add_scalar(mut self, value: Float32):
         """Add one number to both components, three.js's `addScalar`.
@@ -212,8 +219,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
         Args:
             length: The new length.
         """
-        self.normalize()
-        self = self * length
+        scale_to_length(self, length)
 
     def angle(self) -> Angle:
         """Return the angle this vector makes with +x, three.js's `angle`.
@@ -273,7 +279,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
         Returns:
             The Euclidean distance.
         """
-        return (self - other).length()
+        return distance_between(self, other)
 
     def distance_to_squared(self, other: Self) -> Float32:
         """Return the squared distance between two points, three.js's
@@ -285,7 +291,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
         Returns:
             The squared Euclidean distance.
         """
-        return (self - other).length_sq()
+        return distance_between_squared(self, other)
 
     def manhattan_distance_to(self, other: Self) -> Float32:
         """Return the distance between two points along the axes,
