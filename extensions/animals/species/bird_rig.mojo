@@ -47,6 +47,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.noise import ihash
+from math.smoothstep import hermite_fade
 from std.math import cos, floor, pi, sin, sqrt
 
 # Radians in one degree.
@@ -185,7 +186,7 @@ def extension(
     """
     var t = (fold_flex - flex) / (fold_flex - spread_flex)
     var c = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-    return c * c * (3.0 - 2.0 * c)
+    return hermite_fade(c)
 
 
 @fieldwise_init

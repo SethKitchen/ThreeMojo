@@ -16,6 +16,7 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
+from math.smoothstep import clamped_smoothstep, hermite_fade
 from math.sine import fraction
 from math.utils import clamp, mix_bilinear, mix_delta
 from math.norm import squared_length2, squared_length3
@@ -73,8 +74,7 @@ def smoothstep(edge0: Float32, edge1: Float32, value: Float32) -> Float32:
     Returns:
         The smoothed step.
     """
-    var t = clamp01((value - edge0) / (edge1 - edge0))
-    return t * t * (3.0 - 2.0 * t)
+    return clamped_smoothstep(edge0, edge1, value)
 
 
 def hash12(x: Float32, y: Float32) -> Float32:
@@ -139,8 +139,8 @@ def value_noise(x: Float32, y: Float32) -> Float32:
     var iy = floor(y)
     var fx = x - ix
     var fy = y - iy
-    var ux = fx * fx * (3.0 - 2.0 * fx)
-    var uy = fy * fy * (3.0 - 2.0 * fy)
+    var ux = hermite_fade(fx)
+    var uy = hermite_fade(fy)
     return mix_bilinear(
         hash12(ix, iy),
         hash12(ix + 1.0, iy),

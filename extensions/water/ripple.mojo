@@ -14,6 +14,7 @@ same arithmetic runs on a `RippleField` and on a copy in device memory.
 
 from extensions.water.resolution import require_resolution, SpectrumResolution
 from math.norm import squared_length2
+from math.smoothstep import hermite_fade
 from math.utils import mix_bilinear
 from std.math import cos, floor, sqrt
 from units.si import Length
@@ -291,7 +292,7 @@ def _smooth_border(edge: Float32) -> Float32:
     var t = edge / 0.06
     if t >= 1.0:
         return 1.0
-    t = t * t * (3.0 - 2.0 * t)
+    t = hermite_fade(t)
     return 0.9 + 0.1 * t
 
 

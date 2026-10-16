@@ -12,6 +12,7 @@ mark rides the skin as the animal moves.
 """
 
 from math.norm import squared_length3
+from math.smoothstep import hermite_fade
 from math.utils import mix_trilinear
 from extensions.sdf.vector import V3
 from std.math import floor, sqrt
@@ -57,9 +58,9 @@ def vnoise3(p: V3) -> Float64:
     var xf = p.x - fx
     var yf = p.y - fy
     var zf = p.z - fz
-    var u = xf * xf * (3.0 - 2.0 * xf)
-    var v = yf * yf * (3.0 - 2.0 * yf)
-    var w = zf * zf * (3.0 - 2.0 * zf)
+    var u = hermite_fade(xf)
+    var v = hermite_fade(yf)
+    var w = hermite_fade(zf)
     var c000 = ihash(xi, yi, zi)
     var c100 = ihash(xi + 1, yi, zi)
     var c010 = ihash(xi, yi + 1, zi)
