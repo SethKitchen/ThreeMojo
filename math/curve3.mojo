@@ -62,6 +62,12 @@ from math.curve_checks import (
     curve_count_product,
     parameter_samples,
 )
+from math.bezier import (
+    cubic_bezier_slope,
+    cubic_bezier_weights,
+    quadratic_bezier_slope,
+    quadratic_bezier_weights,
+)
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, arc_samples, u_to_t
 from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
@@ -385,19 +391,18 @@ struct Curve3(Copyable, Movable):
             if t == 1:
                 return self.points[1]
             return (self.points[1] - self.points[0]) * t + self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC3:
+            var w0, w1, w2 = quadratic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest)
-                + self.points[1] * (2 * rest * t)
-                + self.points[2] * (t * t)
+                self.points[0] * w0 + self.points[1] * w1 + self.points[2] * w2
             )
         if self.kind == CUBIC3:
+            var w0, w1, w2, w3 = cubic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest * rest)
-                + self.points[1] * (3 * rest * rest * t)
-                + self.points[2] * (3 * rest * t * t)
-                + self.points[3] * (t * t * t)
+                self.points[0] * w0
+                + self.points[1] * w1
+                + self.points[2] * w2
+                + self.points[3] * w3
             )
         return self._cubic(t).point()
 
@@ -406,16 +411,17 @@ struct Curve3(Copyable, Movable):
         is made unit length. The caller has checked `t` is on the curve."""
         if self.kind == LINE3:
             return self.points[1] - self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC3:
-            return (self.points[1] - self.points[0]) * (2 * rest) + (
+            var s0, s1 = quadratic_bezier_slope(t)
+            return (self.points[1] - self.points[0]) * s0 + (
                 self.points[2] - self.points[1]
-            ) * (2 * t)
+            ) * s1
         if self.kind == CUBIC3:
+            var s0, s1, s2 = cubic_bezier_slope(t)
             return (
-                (self.points[1] - self.points[0]) * (3 * rest * rest)
-                + (self.points[2] - self.points[1]) * (6 * rest * t)
-                + (self.points[3] - self.points[2]) * (3 * t * t)
+                (self.points[1] - self.points[0]) * s0
+                + (self.points[2] - self.points[1]) * s1
+                + (self.points[3] - self.points[2]) * s2
             )
         return self._cubic(t).slope()
 
