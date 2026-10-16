@@ -32,6 +32,7 @@ from extensions.animals.coat import (
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
     eye_frame_of,
@@ -600,21 +601,13 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # shank and a long flat foot.
     for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var lat, sc, sh, e, wr, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.5) + on_side(V3(0.004, 0, 0), s),
             sh - sc,
             V3(0.012, 0.038, 0.026),

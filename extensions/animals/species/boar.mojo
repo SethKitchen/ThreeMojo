@@ -38,8 +38,8 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_fore,
     digitigrade_hind,
-    fore_reach,
     EyeSpec,
     sculpt_eye_socket,
     is_limb,
@@ -804,16 +804,14 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var lk = 1.0 + 0.1 * shield
     for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
-        var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         var cf = rig.j("fcoffin" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.45) + on_side(V3(0.035, 0, -0.01), s),
             sh - sc,
             V3(0.03 * lk, 0.11, 0.075),
@@ -899,7 +897,6 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var fpaw = rig.bone("fpaw" + side)
         _dewclaws(m, fpaw, mc, s)
         _ = m.cone("pastern", fpaw, mc, cf, 0.017, 0.017, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 1.0)

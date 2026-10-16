@@ -36,8 +36,8 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y, cone_or_ball
 from extensions.animals.kit import (
+    digitigrade_fore,
     digitigrade_hind,
-    fore_reach,
     EyeSpec,
     eye_frame_of,
     aperture_tilt_along,
@@ -1083,13 +1083,10 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var lk = 1.0 + 0.1 * heavy
     for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
-        var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         var cf = rig.j("fcoffin" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
         _ = ell_y(
             m,
             "scapmuscle",
@@ -1175,7 +1172,6 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var fpaw = rig.bone("fpaw" + side)
         dewclaw_balls(m, fpaw, mc, s, -0.02, 0.0052)
         _ = m.cone("pastern", fpaw, mc, cf, 0.0148, 0.0158, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 0.97)

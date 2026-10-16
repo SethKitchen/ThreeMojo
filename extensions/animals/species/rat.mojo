@@ -39,8 +39,8 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_fore,
     digitigrade_hind,
-    fore_reach,
     EyeSpec,
     sculpt_eye_socket,
     is_limb,
@@ -762,15 +762,13 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     ]
     for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
-        var lat, sc, sh, e, w, mc = fore_reach(rig, side, s)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.5) + on_side(V3(0.002, 0, 0), s),
             sh - sc,
             V3(0.0065, 0.016, 0.012),
@@ -811,7 +809,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.0015,
         )
-        _toes(m, rig.bone("fpaw" + side), mc, toe, s, fspec, 0.0017)
+        _toes(m, fpaw, mc, toe, s, fspec, 0.0017)
         _ = m.sphere(
             "toe",
             meta,
