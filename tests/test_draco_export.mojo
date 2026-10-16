@@ -45,7 +45,7 @@ from exporters.draco import (
 )
 from exporters.draco_connectivity import build_corner_table
 from exporters.draco_log2 import musl_log2
-from exporters.draco_predict import _abs_sum, wasm_i32
+from exporters.draco_predict import wasm_i32
 from exporters.draco_writer import (
     DRACO_RAW_SYMBOLS,
     DRACO_TAGGED_SYMBOLS,
@@ -68,6 +68,7 @@ from loaders.draco_attributes import (
     DRACO_TEX_COORD,
     DRACO_TEX_COORDS_PORTABLE,
     DracoAttributeType,
+    _abs_sum,
     _int_sqrt,
 )
 from loaders.draco_buffer import DracoBuffer, decode_symbols
