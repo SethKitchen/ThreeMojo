@@ -781,6 +781,35 @@ def enlarge_tube_chain(chain: TubeChain, least: Float32) -> TubeChain:
     return out
 
 
+def widen_for_display(
+    mut chain: TubeChain,
+    mut blend: Float32,
+    mut epsilon: Float32,
+    mut low: Vector3,
+    mut high: Vector3,
+    least: Float32,
+):
+    """Widen a tube so a mesh can show it.
+
+    Each radius becomes at least `least`. The blend becomes `0.4` of
+    `least` and the gradient step `0.25` of it. The box grows by `least`
+    on every side.
+
+    Args:
+        chain: The stations.
+        blend: The blend distance, the field's `k`.
+        epsilon: The gradient step.
+        low: The box's low corner.
+        high: The box's high corner.
+        least: The smallest radius a mesh shows, in meters.
+    """
+    chain = enlarge_tube_chain(chain, least)
+    blend = Float32(0.4) * least
+    epsilon = Float32(0.25) * least
+    low = low - Vector3(least, least, least)
+    high = high + Vector3(least, least, least)
+
+
 def _frustum_volume(
     a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
 ) -> Float32:

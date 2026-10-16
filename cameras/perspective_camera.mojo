@@ -39,6 +39,7 @@ the projection.
 from cameras.camera import (
     Camera,
     ViewOffset,
+    disable_view_offset,
     placed_view_matrix,
     scene_view_matrix,
     view_offset,
@@ -242,8 +243,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
 
         The tile is kept, disabled, as three.js keeps it.
         """
-        if Bool(self.view):
-            self.view.value().enabled = False
+        disable_view_offset(self.view)
 
     def get_film_width(self) -> Length:
         """Return how wide the film's image is, three.js's `getFilmWidth`.
