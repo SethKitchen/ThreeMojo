@@ -43,7 +43,13 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.binary import little_endian_u32
-from math.norm import normalized4, _ordinary_squared
+from math.norm import (
+    dot3,
+    dot4,
+    normalized4,
+    squared_length3,
+    _ordinary_squared,
+)
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.utils import FLOAT32_COMPONENT, UINT32_COMPONENT, UINT8_COMPONENT
@@ -203,12 +209,13 @@ def write_covariance(
         qz: The rotation's z.
         qw: The rotation's w.
     """
-    var length = sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+    var squared = dot4[DType.float64](qx, qy, qz, qw, qx, qy, qz, qw)
+    var length = sqrt(squared)
     var x = Float64(0)
     var y = Float64(0)
     var z = Float64(0)
     var w = Float64(1)
-    if _ordinary_squared(qx * qx + qy * qy + qz * qz + qw * qw):
+    if _ordinary_squared(squared):
         var inverse = 1 / length
         x = qx * inverse
         y = qy * inverse
@@ -242,12 +249,18 @@ def write_covariance(
     var m02 = (xz + wy) * sz
     var m12 = (yz - wx) * sz
     var m22 = (1 - (xx + yy)) * sz
-    target[offset] = Float32(m00 * m00 + m01 * m01 + m02 * m02)
-    target[offset + 1] = Float32(m00 * m10 + m01 * m11 + m02 * m12)
-    target[offset + 2] = Float32(m00 * m20 + m01 * m21 + m02 * m22)
-    target[offset + 3] = Float32(m10 * m10 + m11 * m11 + m12 * m12)
-    target[offset + 4] = Float32(m10 * m20 + m11 * m21 + m12 * m22)
-    target[offset + 5] = Float32(m20 * m20 + m21 * m21 + m22 * m22)
+    target[offset] = Float32(squared_length3[DType.float64](m00, m01, m02))
+    target[offset + 1] = Float32(
+        dot3[DType.float64](m00, m01, m02, m10, m11, m12)
+    )
+    target[offset + 2] = Float32(
+        dot3[DType.float64](m00, m01, m02, m20, m21, m22)
+    )
+    target[offset + 3] = Float32(squared_length3[DType.float64](m10, m11, m12))
+    target[offset + 4] = Float32(
+        dot3[DType.float64](m10, m11, m12, m20, m21, m22)
+    )
+    target[offset + 5] = Float32(squared_length3[DType.float64](m20, m21, m22))
 
 
 def write_color_bytes(
