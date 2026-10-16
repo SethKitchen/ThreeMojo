@@ -69,6 +69,7 @@ from extensions.sdf.vector import (
 )
 from extensions.animals.warp import scale_about_warp
 from math.norm import squared_length2
+from math.sine import fraction
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The shark's head origin moves with the variant, so the eye is placed
@@ -1207,7 +1208,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             var i1 = len(g.d1_poly) // 2 - 2
             var f = Float64(i1 - i0) * nt
             var j = min(i1 - 1, i0 + Int(floor(f)))
-            var fr = f - floor(f)
+            var fr = fraction(f)
             var pa = g.d1_poly[j * 2]
             var pb = g.d1_poly[j * 2 + 1]
             var a = pa + (g.d1_poly[j * 2 + 2] - pa) * fr

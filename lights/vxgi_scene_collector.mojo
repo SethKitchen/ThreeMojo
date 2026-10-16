@@ -164,7 +164,7 @@ def _wrapped(coordinate: Float32, mode: Wrap) -> Float32:
     var tile = Int(floor(coordinate))
     if abs(tile) % 2 == 1:
         return ceil(coordinate) - coordinate
-    return coordinate - floor(coordinate)
+    return fraction(coordinate)
 
 
 def sample_texture(texture: Texture, u: Float32, v: Float32) -> FloatColor:

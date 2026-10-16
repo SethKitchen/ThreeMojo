@@ -1998,7 +1998,7 @@ def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
         return Float32(0) if value < 0 else Float32(1)
     if mode == MIRROR:
         var half = value * Float32(0.5)
-        return (half - floor(half)) * 2
+        return fraction(half) * 2
     return fraction(value)
 
 
