@@ -69,7 +69,7 @@ from geometries.sphere import sphere
 from geometries.torus import torus, torus_knot
 from geometries.tube import tube
 from loaders.curve_json import read_curve3, read_curve_path3
-from loaders.json import ARRAY, JsonDocument, NO_NODE, OBJECT
+from loaders.json import ARRAY, JsonDocument, NO_NODE, OBJECT, present
 from math.curve3 import quadratic_bezier3
 from math.path import Shape
 from math.vector2 import Vector2
@@ -145,9 +145,10 @@ def _shapes_of(
     doc: JsonDocument, item: Int, library: Dict[String, Shape]
 ) raises -> List[Shape]:
     """Return the shapes a geometry names, from the `shapes` library."""
-    var list = _list(doc, item, "shapes")
-    if list == NO_NODE:
-        raise Error("Geometry JSON: a shape geometry names no shapes")
+    var list = present(
+        _list(doc, item, "shapes"),
+        "Geometry JSON: a shape geometry names no shapes",
+    )
     var out = List[Shape]()
     for at in range(doc.length(list)):  # pragma: no branch
         var uuid = doc.string(doc.at(list, at))

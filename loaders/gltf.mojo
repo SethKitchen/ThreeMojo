@@ -236,6 +236,7 @@ from loaders.json import (
     STRING,
     JsonDocument,
     parse_json,
+    present,
 )
 from materials.material import (
     BASIC,
@@ -1255,9 +1256,9 @@ struct _Loader(Movable):
 
     def required_integer(self, node: Int, key: String) raises -> Int:
         """Return an object's whole number under `key`, which must be there."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            raise Error("glTF: " + key + " is required")
+        var found = self.document.required(
+            node, key, "glTF: " + key + " is required"
+        )
         return self.document.integer(found)
 
     def number(
@@ -1268,8 +1269,7 @@ struct _Loader(Movable):
 
     def required_number(self, node: Int, key: String) raises -> Float32:
         """Return an object's number under `key`, which must be there."""
-        if not self.document.has(node, key):
-            raise Error("glTF: " + key + " is required")
+        _ = self.document.required(node, key, "glTF: " + key + " is required")
         return self.number(node, key, 0)
 
     def number_list(self, node: Int, key: String) raises -> List[Float32]:
@@ -3145,9 +3145,10 @@ struct _Loader(Movable):
         shines down the node's -z axis: toward a target node one meter down
         it, as three.js adds its `target` to the light.
         """
-        var root = self.extension(self.document.root(), LIGHTS_PUNCTUAL)
-        if root == NO_NODE:
-            raise Error("glTF: a node names a light and the file has none")
+        var root = present(
+            self.extension(self.document.root(), LIGHTS_PUNCTUAL),
+            "glTF: a node names a light and the file has none",
+        )
         var lights = self.array_of(root, "lights")
         if index < 0 or index >= self.document.length(lights):
             raise Error("glTF: a node names a light that is not there")

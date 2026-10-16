@@ -276,9 +276,9 @@ def _field(
     Raises:
         Error: If the key is missing or does not hold a number.
     """
-    var child = document.get(node, key)
-    if child == NO_NODE:
-        raise Error("Font: " + owner + " has no '" + key + "'")
+    var child = document.required(
+        node, key, "Font: " + owner + " has no '" + key + "'"
+    )
     return document.number(child)
 
 
@@ -290,9 +290,9 @@ def _object(
     Raises:
         Error: If the key is missing or does not hold an object.
     """
-    var child = document.get(node, key)
-    if child == NO_NODE:
-        raise Error("Font: " + owner + " has no '" + key + "'")
+    var child = document.required(
+        node, key, "Font: " + owner + " has no '" + key + "'"
+    )
     if document.kind(child) != OBJECT:
         raise Error("Font: '" + key + "' must be an object")
     return child

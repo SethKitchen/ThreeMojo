@@ -102,6 +102,26 @@ comptime NULL = JsonKind(5)
 
 # What `JsonDocument.get` returns for a key an object does not have.
 comptime NO_NODE = -1
+
+
+def present(node: Int, complaint: String) raises -> Int:
+    """Return a node, refusing one that was not there.
+
+    Args:
+        node: A node index, or `NO_NODE`.
+        complaint: The error when the node is `NO_NODE`.
+
+    Returns:
+        `node`.
+
+    Raises:
+        Error: If `node` is `NO_NODE`.
+    """
+    if node == NO_NODE:
+        raise Error(complaint)
+    return node
+
+
 # How deep an object or array can sit inside others. A file nested past
 # this is refused rather than read on a stack that has no more room.
 comptime MAX_DEPTH = 256
@@ -525,9 +545,23 @@ struct JsonDocument(Movable):
                 the child has another kind.
         """
         var found = self.optional_kind(node, key, kind, complaint)
-        if found == NO_NODE:
-            raise Error(complaint)
-        return found
+        return present(found, complaint)
+
+    def required(self, node: Int, key: String, complaint: String) raises -> Int:
+        """Return an object's child under `key`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            complaint: The error when the key is absent.
+
+        Returns:
+            The child's index.
+
+        Raises:
+            Error: If the node is not an object, or the key is absent.
+        """
+        return present(self.get(node, key), complaint)
 
     def is_null(self, node: Int) raises -> Bool:
         """Return True if a node is `null`.
