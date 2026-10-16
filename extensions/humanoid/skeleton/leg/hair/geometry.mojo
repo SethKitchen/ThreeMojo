@@ -16,7 +16,6 @@ from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.hair_shafts import mesh_hair_shafts
-from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.leg.hair.dimensions import (
     HairField,
     HairPart,
@@ -75,7 +74,6 @@ def hair_from_dimensions(
     if not part.is_valid():
         raise Error("A hair part must be a named hair group")
     var label = hair_part_label(part)
-    check_detail(detail, label)
     var field = HairField(dimensions, part)
     var radius = 0.0015 * dimensions.stature.value
     return mesh_hair_shafts(

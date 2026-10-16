@@ -14,7 +14,7 @@ marching tetrahedra. Connectivity comes from the field.
 
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisBone,
     PelvisBoneField,
@@ -69,6 +69,5 @@ def pelvis_bone_from_dimensions(
     if not part.is_valid():
         raise Error("A pelvic bone must be one of the four bones")
     var label = pelvis_bone_label(part)
-    check_detail(detail, label)
     var field = PelvisBoneField(dimensions, part)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

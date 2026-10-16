@@ -14,7 +14,6 @@ marching tetrahedra. Connectivity comes from the field.
 
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscleDimensions,
@@ -59,6 +58,5 @@ def pelvis_skin_from_dimensions(
         Error: If `dimensions.validate` refuses the copy, if `detail`
             is out of range, or if the field produces no surface.
     """
-    check_detail(detail, "pelvic skin")
     var field = PelvisSkinField(dimensions)
     return mesh_surface(field, field.low, field.high, detail, "pelvic skin")

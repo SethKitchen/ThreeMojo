@@ -26,7 +26,7 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     foot_muscle_part_label,
     is_tendon,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 
 
 def foot_muscle(
@@ -78,7 +78,6 @@ def muscle_from_dimensions(
     if not part.is_valid():
         raise Error("A foot muscle must be a named muscle or tendon")
     var label = foot_muscle_part_label(part)
-    check_detail(detail, label)
     var field = FootMuscleField(dimensions, part)
     if is_tendon(part):
         var least = 0.0018 * dimensions.foot.stature.value
@@ -87,4 +86,4 @@ def muscle_from_dimensions(
         var box = tube_set_bounds(field.tubes, 0.004)
         field.low = box.low
         field.high = box.high
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

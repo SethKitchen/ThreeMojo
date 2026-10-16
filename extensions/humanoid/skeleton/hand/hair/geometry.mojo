@@ -27,7 +27,6 @@ from extensions.humanoid.skeleton.hand.hair.dimensions import (
     hand_hair_field,
     hand_hair_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.spec import HumanoidSpec
 
 # The radius a hand hair mesh shows, as a ratio of stature: finer than
@@ -82,7 +81,6 @@ def hand_hair_from_dimensions(
             range, or if a shaft produces no surface.
     """
     var label = hand_hair_label(part)
-    check_detail(detail, label)
     var field = hand_hair_field(dimensions, part, side)
     return hair_mesh_from_field(
         field, DISPLAY_HAND_HAIR * dimensions.arm.stature.value, detail, label

@@ -28,7 +28,6 @@ from extensions.humanoid.skeleton.head.skin.scan import (
     still_targets,
 )
 from extensions.humanoid.skeleton.head.skin.tint import tint_head_skin
-from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.surface_nets import (
     mesh_surface,
     share_height,
@@ -131,7 +130,6 @@ def head_skin_from_dimensions(
             out of range, if the field produces no surface, or if a shape
             is not the model's.
     """
-    check_detail(detail, "head skin")
     var field = HeadSkinField(dimensions)
     var h = dimensions.head.copy()
     var seam = h.at(0, NECK_SEAM, 0).y
