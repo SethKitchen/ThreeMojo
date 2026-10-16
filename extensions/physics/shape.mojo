@@ -30,7 +30,7 @@ triangle mesh" (2004).
 from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
-from math.cross import cross_vectors
+from math.cross import cross_vectors, wide_cross, widen_vector
 from math.finite import positive_finite
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
@@ -165,18 +165,13 @@ def any_perpendicular(n: Vector3) -> Vector3:
 # Widen before subtracting coordinates or multiplying lengths. All products
 # through degree five of finite Float32 coordinates fit in Float64.
 def _wide(v: Vector3) -> SIMD[DType.float64, 4]:
-    return SIMD[DType.float64, 4](Float64(v.x), Float64(v.y), Float64(v.z), 0)
+    return widen_vector(v)
 
 
 def _wide_cross(
     a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
-    return SIMD[DType.float64, 4](
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-        0,
-    )
+    return wide_cross(a, b)
 
 
 def _wide_dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
