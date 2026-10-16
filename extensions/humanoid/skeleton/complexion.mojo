@@ -33,7 +33,7 @@ from extensions.humanoid.genome import (
 )
 from math.norm import squared_length2
 from math.smoothstep import clamped_smoothstep, hermite_fade
-from math.utils import clamp, mix_delta
+from math.utils import clamp, mix_bilinear, mix_delta
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
@@ -266,9 +266,14 @@ def value_noise(
     var x1 = _wrap(ix + 1, period)
     var y0 = _wrap(iy, up)
     var y1 = _wrap(iy + 1, up)
-    var a = _lerp(_hash(x0, y0, seed), _hash(x1, y0, seed), tx)
-    var b = _lerp(_hash(x0, y1, seed), _hash(x1, y1, seed), tx)
-    return _lerp(a, b, ty)
+    return mix_bilinear(
+        _hash(x0, y0, seed),
+        _hash(x1, y0, seed),
+        _hash(x0, y1, seed),
+        _hash(x1, y1, seed),
+        tx,
+        ty,
+    )
 
 
 def _fbm(

@@ -34,7 +34,10 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import length2, squared_length2
 from math.smoothstep import clamped_smoothstep
-from math.utils import interleaved_gradient_noise as _gradient_noise
+from math.utils import (
+    interleaved_gradient_noise as _gradient_noise,
+    mix_bilinear,
+)
 
 from postprocessing.display_nodes import (
     exp_f,
@@ -701,15 +704,14 @@ def _value_at(
     var fy = py - Float32(y0)
     var x1 = min(x0 + 1, width - 1)
     var y1 = min(y0 + 1, height - 1)
-    var top = (
-        values[y0 * width + x0]
-        + (values[y0 * width + x1] - values[y0 * width + x0]) * fx
+    return mix_bilinear(
+        values[y0 * width + x0],
+        values[y0 * width + x1],
+        values[y1 * width + x0],
+        values[y1 * width + x1],
+        fx,
+        fy,
     )
-    var bottom = (
-        values[y1 * width + x0]
-        + (values[y1 * width + x1] - values[y1 * width + x0]) * fx
-    )
-    return top + (bottom - top) * fy
 
 
 def depth_aware_blur_channel(

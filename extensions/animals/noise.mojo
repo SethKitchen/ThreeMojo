@@ -12,6 +12,7 @@ mark rides the skin as the animal moves.
 """
 
 from math.norm import squared_length3
+from math.utils import mix_trilinear
 from extensions.sdf.vector import V3
 from std.math import floor, sqrt
 
@@ -67,13 +68,9 @@ def vnoise3(p: V3) -> Float64:
     var c101 = ihash(xi + 1, yi, zi + 1)
     var c011 = ihash(xi, yi + 1, zi + 1)
     var c111 = ihash(xi + 1, yi + 1, zi + 1)
-    var x00 = c000 + (c100 - c000) * u
-    var x10 = c010 + (c110 - c010) * u
-    var x01 = c001 + (c101 - c001) * u
-    var x11 = c011 + (c111 - c011) * u
-    var y0 = x00 + (x10 - x00) * v
-    var y1 = x01 + (x11 - x01) * v
-    return y0 + (y1 - y0) * w
+    return mix_trilinear[DType.float64, 1](
+        c000, c100, c010, c110, c001, c101, c011, c111, u, v, w
+    )
 
 
 def fbm3(p: V3, octaves: Int = 4) -> Float64:

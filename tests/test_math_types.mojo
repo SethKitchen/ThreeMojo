@@ -22,6 +22,7 @@ from math.utils import (
     lerp,
     map_linear,
     mix_bilinear,
+    mix_trilinear,
     pingpong,
     smooth_step,
     smootherstep,
@@ -311,6 +312,78 @@ def test_a_bilinear_mix_goes_across_then_down() raises:
     assert_equal(mix_bilinear(0, 10, 0, 0, 0.5, 0), 5)
     assert_equal(mix_bilinear(0, 0, 8, 8, 0, 0.25), 2)
     assert_equal(mix_bilinear(1, 3, 5, 9, 0.5, 0.5), 4.5)
+    assert_equal(
+        mix_bilinear(
+            Float32(0),
+            Float32(10),
+            Float32(0),
+            Float32(0),
+            Float32(0.5),
+            Float32(0),
+        ),
+        Float32(5),
+    )
+    assert_equal(
+        mix_bilinear(
+            Float32(1),
+            Float32(3),
+            Float32(5),
+            Float32(9),
+            Float32(0.5),
+            Float32(0.5),
+        ),
+        Float32(4.5),
+    )
+
+
+def test_a_trilinear_mix_goes_across_then_down_then_deep() raises:
+    assert_equal(
+        mix_trilinear[DType.float64, 1](
+            Float64(0),
+            Float64(8),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0.25),
+            Float64(0),
+            Float64(0),
+        ),
+        Float64(2),
+    )
+    assert_equal(
+        mix_trilinear[DType.float64, 1](
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(8),
+            Float64(1),
+            Float64(1),
+            Float64(1),
+        ),
+        Float64(8),
+    )
+    var lanes = mix_trilinear[DType.float32, 4](
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](4, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        Float32(0.5),
+        Float32(0),
+        Float32(0),
+    )
+    assert_equal(lanes[0], 2)
+    assert_equal(lanes[3], 1)
 
 
 def main() raises:

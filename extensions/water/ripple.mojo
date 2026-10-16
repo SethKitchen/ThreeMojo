@@ -14,6 +14,7 @@ same arithmetic runs on a `RippleField` and on a copy in device memory.
 
 from extensions.water.resolution import require_resolution, SpectrumResolution
 from math.norm import squared_length2
+from math.utils import mix_bilinear
 from std.math import cos, floor, sqrt
 from units.si import Length
 
@@ -205,11 +206,10 @@ def _sample_height(
     var v10 = field.velocity[field._at(x1, y0)]
     var v01 = field.velocity[field._at(x0, y1)]
     var v11 = field.velocity[field._at(x1, y1)]
-    var h0 = h00 + (h10 - h00) * fx
-    var h1 = h01 + (h11 - h01) * fx
-    var vel0 = v00 + (v10 - v00) * fx
-    var vel1 = v01 + (v11 - v01) * fx
-    return _HeightVelocity(h0 + (h1 - h0) * fy, vel0 + (vel1 - vel0) * fy)
+    return _HeightVelocity(
+        mix_bilinear(h00, h10, h01, h11, fx, fy),
+        mix_bilinear(v00, v10, v01, v11, fx, fy),
+    )
 
 
 def step_ripple(

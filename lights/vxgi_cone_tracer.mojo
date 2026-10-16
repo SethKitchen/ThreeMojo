@@ -32,7 +32,11 @@ functions on the device, so the two agree.
 """
 
 from math.sine import fraction
-from math.utils import clamp, interleaved_gradient_noise as _gradient_noise
+from math.utils import (
+    clamp,
+    interleaved_gradient_noise as _gradient_noise,
+    mix_trilinear,
+)
 from math.vector3 import Vector3
 from std.math import cos, exp2, floor, log2, pow, sin, sqrt
 from std.memory import bitcast
@@ -391,13 +395,9 @@ def sample_level(
     var fx = ax[2]
     var fy = ay[2]
     var fz = az[2]
-    var x00 = c000 + (c100 - c000) * fx
-    var x10 = c010 + (c110 - c010) * fx
-    var x01 = c001 + (c101 - c001) * fx
-    var x11 = c011 + (c111 - c011) * fx
-    var y0 = x00 + (x10 - x00) * fy
-    var y1 = x01 + (x11 - x01) * fy
-    return y0 + (y1 - y0) * fz
+    return mix_trilinear[DType.float32, 4](
+        c000, c100, c010, c110, c001, c101, c011, c111, fx, fy, fz
+    )
 
 
 def sample_volume(
