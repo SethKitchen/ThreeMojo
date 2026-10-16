@@ -331,9 +331,7 @@ def _add_run(
                 assets.textures.get(info.map), at[0], at[1]
             )
             alpha *= texel.a
-            albedo = Vector3(
-                albedo.x * texel.r, albedo.y * texel.g, albedo.z * texel.b
-            )
+            albedo = albedo * Vector3(texel.r, texel.g, texel.b)
         if info.alpha_test > 0 and alpha < info.alpha_test:
             continue
         if alpha < collector.min_opacity:
@@ -347,9 +345,7 @@ def _add_run(
             var texel = sample_texture(
                 assets.textures.get(info.emissive_map), at[0], at[1]
             )
-            emissive = Vector3(
-                emissive.x * texel.r, emissive.y * texel.g, emissive.z * texel.b
-            )
+            emissive = emissive * Vector3(texel.r, texel.g, texel.b)
         collector.emit(a, b, c, albedo, emissive, info.side)
 
 

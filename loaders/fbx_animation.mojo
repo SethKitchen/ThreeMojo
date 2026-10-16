@@ -631,7 +631,7 @@ def _rotation_track(
         turned.multiply(post)
         # Unroll: the same rotation on the side of the key before.
         if _flips(key, previous, turned):
-            turned = Quaternion(-turned.x, -turned.y, -turned.z, -turned.w)
+            turned = -turned
         values.append(turned.x)
         values.append(turned.y)
         values.append(turned.z)

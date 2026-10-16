@@ -404,11 +404,7 @@ def ltc_evaluate(
     # any tangent serves then, since the lobe is symmetric about the
     # normal, and the axis least along it is taken.
     var along = normal.dot(toward_eye)
-    var t1 = Vector3(
-        toward_eye.x - normal.x * along,
-        toward_eye.y - normal.y * along,
-        toward_eye.z - normal.z * along,
-    )
+    var t1 = toward_eye - normal * along
     if t1.length() < 1e-6:
         t1 = normal
         if normal.x * normal.x < 0.5:
@@ -418,7 +414,7 @@ def ltc_evaluate(
     t1.normalize()
     var t2 = normal
     t2.cross(t1)
-    t2 = Vector3(-t2.x, -t2.y, -t2.z)
+    t2 = -t2
     var c0 = _transformed(minv, t1, t2, normal, corner0 - position)
     var c1 = _transformed(minv, t1, t2, normal, corner1 - position)
     var c2 = _transformed(minv, t1, t2, normal, corner2 - position)

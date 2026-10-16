@@ -546,13 +546,9 @@ def femur_dimensions(
     var y0 = 0.5 * (medial.y + lateral.y) + 0.085 * L
     # Shaft first: proximal is more lateral by the bicondylar angle.
     var shaft_up = Vector3(sin(obliq.value), cos(obliq.value), 0)
-    var shaft_distal = Vector3(-shaft_up.x, -shaft_up.y, -shaft_up.z)
+    var shaft_distal = -shaft_up
     var medial_dir = Vector3(-cos(obliq.value), sin(obliq.value), 0)
-    var neck = Vector3(
-        shaft_distal.x * cos(ccd.value) + medial_dir.x * sin(ccd.value),
-        shaft_distal.y * cos(ccd.value) + medial_dir.y * sin(ccd.value),
-        shaft_distal.z * cos(ccd.value) + medial_dir.z * sin(ccd.value),
-    )
+    var neck = shaft_distal * cos(ccd.value) + medial_dir * sin(ccd.value)
     neck = Quaternion.from_axis_angle(shaft_up, ante).rotate(neck)
     neck.normalize()
     var head_center_y = 0.5 * L - head_r
