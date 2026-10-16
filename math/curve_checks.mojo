@@ -5,6 +5,8 @@
 
 """Shared parameter and count boundaries for curve sampling."""
 
+from math.polyline import PolylineVertex
+
 
 def check_curve_parameter(value: Float64) raises:
     """Require a finite parameter in the closed unit interval.
@@ -77,3 +79,35 @@ def curve_count_product(first: Int, second: Int) raises -> Int:
         if first > Int.MAX // second:
             raise Error("A curve sample count cannot fit in Int")
     return first * second
+
+
+def parameter_samples[
+    C: AnyType,
+    T: PolylineVertex,
+    //,
+    take: def(C, Float32) raises thin -> T,
+](curve: C, divisions: Int) raises -> List[T]:
+    """Return `divisions + 1` values at equal steps from zero through one.
+
+    Parameters:
+        C: The curve type.
+        T: The value type.
+        take: Reads `curve` at one parameter.
+
+    Args:
+        curve: The curve.
+        divisions: How many runs to cut the parameter into. At least one.
+
+    Returns:
+        The values, first to last.
+
+    Raises:
+        Error: If `divisions` is less than one, the sample count cannot
+            fit in Int, or `take` raises.
+    """
+    var sample_count = curve_sample_count(divisions)
+    var out = List[T]()
+    # At least one division, so this loop runs.
+    for index in range(sample_count):  # pragma: no branch
+        out.append(take(curve, Float32(index) / Float32(divisions)))
+    return out^
