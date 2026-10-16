@@ -29,7 +29,11 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from helpers.light_probe import PROBE_VERTEX_SHADER
+from helpers.light_probe import (
+    PROBE_VERTEX_SHADER,
+    SH_COEFFICIENT_UNIFORMS,
+    SH_GET_IRRADIANCE,
+)
 from lights.light_probe_grid import LightProbeGrid
 from materials.glsl import compile_shader_material
 from materials.material import MaterialId, shader_material
@@ -44,38 +48,13 @@ comptime GRID_HELPER_SEGMENTS = 16
 
 # three.js's fragment node, in GLSL: the irradiance at the world normal,
 # held at zero or above. The nine coefficients are nine uniforms.
-comptime GRID_HELPER_FRAGMENT_SHADER = """
-uniform vec3 sh0;
-uniform vec3 sh1;
-uniform vec3 sh2;
-uniform vec3 sh3;
-uniform vec3 sh4;
-uniform vec3 sh5;
-uniform vec3 sh6;
-uniform vec3 sh7;
-uniform vec3 sh8;
-
+comptime GRID_HELPER_FRAGMENT_SHADER = (
+    SH_COEFFICIENT_UNIFORMS
+    + """
 varying vec3 vNormal;
-
-vec3 shGetIrradianceAt( in vec3 normal ) {
-
-    float x = normal.x, y = normal.y, z = normal.z;
-
-    vec3 result = sh0 * 0.886227;
-
-    result += sh1 * 2.0 * 0.511664 * y;
-    result += sh2 * 2.0 * 0.511664 * z;
-    result += sh3 * 2.0 * 0.511664 * x;
-
-    result += sh4 * 2.0 * 0.429043 * x * y;
-    result += sh5 * 2.0 * 0.429043 * y * z;
-    result += sh6 * ( 0.743125 * z * z - 0.247708 );
-    result += sh7 * 2.0 * 0.429043 * x * z;
-    result += sh8 * 0.429043 * ( x * x - y * y );
-    return result;
-
-}
-
+"""
+    + SH_GET_IRRADIANCE
+    + """
 void main() {
 
     vec3 normal = normalize( vNormal );
@@ -85,6 +64,7 @@ void main() {
     gl_FragColor = vec4( max( shGetIrradianceAt( worldNormal ), vec3( 0.0 ) ), 1.0 );
 
 }"""
+)
 
 
 struct LightProbeGridHelper(Movable):
