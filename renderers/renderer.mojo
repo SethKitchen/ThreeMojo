@@ -275,7 +275,12 @@ from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
 from render.srgb import srgb_to_linear
-from render.target import RenderTarget, check_samples, sample_grid
+from render.target import (
+    RenderTarget,
+    check_samples,
+    require_rect,
+    sample_grid,
+)
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
     NO_OFFSET,
@@ -6121,8 +6126,7 @@ struct Renderer(Movable):
         Raises:
             Error: If the rectangle is empty or reaches outside the target.
         """
-        if not rect.fits(self.width, self.height):
-            raise Error("A scissor must lie inside the target")
+        require_rect(rect, self.width, self.height, "scissor")
         self.scissor = rect
 
     def set_scissor_test(mut self, enabled: Bool):

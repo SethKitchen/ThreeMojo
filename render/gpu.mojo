@@ -101,6 +101,7 @@ from render.target import (
     block_velocity,
     check_samples,
     color_only,
+    require_rect,
     resolve_block,
     sample_grid,
 )
@@ -10122,8 +10123,7 @@ struct GpuRenderer(Movable):
         var narrowed = Bool(scissor)
         if narrowed:
             kept = scissor.value()
-            if not kept.fits(self.width, self.height):
-                raise Error("A scissor must lie inside the target")
+            require_rect(kept, self.width, self.height, "scissor")
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,

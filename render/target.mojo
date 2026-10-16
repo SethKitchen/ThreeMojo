@@ -313,6 +313,22 @@ def check_samples(samples: Int) raises:
         raise Error("A render target's samples must be a square: 4, 9 or 16")
 
 
+def require_rect(rect: Rect, width: Int, height: Int, name: String) raises:
+    """Refuse a rectangle that does not lie inside the target.
+
+    Args:
+        rect: The rectangle.
+        width: The target width in pixels.
+        height: The target height in pixels.
+        name: The noun in the error, such as "scissor".
+
+    Raises:
+        Error: If the rectangle is empty or reaches outside the target.
+    """
+    if not rect.fits(width, height):
+        raise Error("A " + name + " must lie inside the target")
+
+
 trait SampleSource:
     """Where a multisample resolve reads its samples: a host target, or
     the kernel's planes. `resolve_block` asks these four things and
@@ -757,8 +773,7 @@ struct RenderTarget(Movable, SampleSource):
         Raises:
             Error: If the rectangle is empty or reaches outside the target.
         """
-        if not rect.fits(self.width, self.height):
-            raise Error("A scissor must lie inside the target")
+        require_rect(rect, self.width, self.height, "scissor")
         self.scissor = rect
 
     def clear_inside(
@@ -801,8 +816,7 @@ struct RenderTarget(Movable, SampleSource):
             Error: If the rectangle is empty or reaches outside the target,
                 or the depth mode is none of the three.
         """
-        if not rect.fits(self.width, self.height):
-            raise Error("A clear must lie inside the target")
+        require_rect(rect, self.width, self.height, "clear")
         if not depth_mode.is_valid():
             raise Error("A depth mode that is none of the three")
         if color:
@@ -1423,8 +1437,7 @@ struct RenderTarget(Movable, SampleSource):
             or buffer.has_metal_roughs() != self.has_metal_roughs()
         ):
             raise Error("A multisample buffer must have the target's outputs")
-        if not rect.fits(self.width, self.height):
-            raise Error("A resolve must lie inside the target")
+        require_rect(rect, self.width, self.height, "resolve")
         self._resolve_blocks(buffer, grid, rect)
 
     def _resolve_blocks(
