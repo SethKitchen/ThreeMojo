@@ -40,8 +40,8 @@ from loaders.draco_mesh import (
     DracoTraversalMethod,
     CornerVisitor,
     attribute_connectivity,
-    corner_priority,
     depth_first_walk,
+    prediction_degree_walk,
 )
 from std.collections import Dict
 
@@ -508,62 +508,13 @@ def _prediction_degree(
     mut data: EncodingData,
 ) raises:
     """Draco's `MaxPredictionDegreeTraverser::TraverseFromCorner`, from
-    each corner of the order."""
-    var face_done = List[Bool](length=table.faces(), fill=False)
-    var vertex_done = List[Bool](length=table.vertices(), fill=False)
-    var degree = List[Int](length=table.vertices(), fill=0)
-    var stacks: List[List[Int]] = [List[Int](), List[Int](), List[Int]()]
-    # A mesh past the check has a triangle: the loop runs.
-    for start in order:  # pragma: no branch
-        stacks[0].append(start)
-        var best = 0
-        var ends: List[Int] = [table.next(start), table.previous(start), start]
-        for corner in ends:  # pragma: no branch
-            var vertex = table.vertex(corner)
-            if not vertex_done[vertex]:
-                vertex_done[vertex] = True
-                data.visit(vertex, corner, faces)
-        while True:
-            var corner = NONE
-            # The best priority is 0, 1 or 2. The loop always runs.
-            for priority in range(best, 3):  # pragma: no branch
-                if len(stacks[priority]) > 0:
-                    corner = stacks[priority].pop()
-                    best = priority
-                    break
-            if corner == NONE:
-                break
-            if face_done[corner // 3]:
-                continue
-            while True:
-                face_done[corner // 3] = True
-                var vertex = table.vertex(corner)
-                if not vertex_done[vertex]:
-                    vertex_done[vertex] = True
-                    data.visit(vertex, corner, faces)
-                var right = table.right_corner(corner)
-                var left = table.left_corner(corner)
-                var right_done = right == NONE or face_done[right // 3]
-                var left_done = left == NONE or face_done[left // 3]
-                if not left_done:
-                    var priority = corner_priority(
-                        table, left, vertex_done, degree
-                    )
-                    if right_done and priority <= best:
-                        corner = left
-                        continue
-                    stacks[priority].append(left)
-                    best = min(best, priority)
-                if not right_done:
-                    var priority = corner_priority(
-                        table, right, vertex_done, degree
-                    )
-                    if priority <= best:
-                        corner = right
-                        continue
-                    stacks[priority].append(right)
-                    best = min(best, priority)
-                break
+    each corner of the order.
+
+    Raises:
+        Error: If a start corner has no vertex.
+    """
+    # A mesh past the check has a triangle, so `order` is not empty.
+    prediction_degree_walk(table, faces, order, data)
 
 
 struct _Valence(Movable):
