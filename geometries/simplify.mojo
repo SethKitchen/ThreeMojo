@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.cross import wide_dot
 from math.norm import (
     _ordinary_squared,
     length3,
@@ -119,7 +120,7 @@ struct _Face(Copyable, Movable):
 
 def _dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
     """Return the dot product of the first three numbers."""
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    return wide_dot(a, b)
 
 
 def _unit3(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:

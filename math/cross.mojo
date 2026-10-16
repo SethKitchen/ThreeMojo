@@ -8,8 +8,8 @@
 `Vector3.cross` keeps the product in one statement. A caller that must
 leave both inputs unchanged uses `cross_vectors`. `cross_components`
 is that product for any width, including the `Float64` vectors.
-`widen_vector` and `wide_cross` keep a `Float32` vector in four
-`Float64` lanes.
+`widen_vector`, `wide_cross`, and `wide_dot` keep a `Float32` vector in
+four `Float64` lanes.
 """
 
 from math.vector3 import Vector3
@@ -97,3 +97,19 @@ def wide_cross(
         a[0], a[1], a[2], b[0], b[1], b[2]
     )
     return SIMD[DType.float64, 4](x, y, z, 0)
+
+
+def wide_dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
+    """Return the dot product of the first three lanes.
+
+    The sum is `a.x b.x + a.y b.y + a.z b.z`, the order three.js uses.
+    The fourth lane is left out.
+
+    Args:
+        a: The first vector.
+        b: The second vector.
+
+    Returns:
+        The dot product.
+    """
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]

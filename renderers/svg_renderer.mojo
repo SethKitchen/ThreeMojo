@@ -75,6 +75,7 @@ from materials.material import (
     PHYSICAL,
     STANDARD,
 )
+from math.cross import wide_dot
 from render.framebuffer import Color
 from renderers.projector import (
     Matrix,
@@ -730,7 +731,7 @@ struct SVGRenderer(Movable):
 
 def _dot(a: Vec, b: Vec) -> Float64:
     """Return the dot product of two directions, as three.js adds it."""
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    return wide_dot(a, b)
 
 
 def _unit(v: Vec) -> Vec:

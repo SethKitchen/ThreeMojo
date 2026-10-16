@@ -46,7 +46,7 @@ reads the points of the `Curve3` and takes the tangent by the base rule,
 as three.js does for its `CatmullRomCurve3` and the two Bezier curves.
 """
 
-from math.cross import wide_cross
+from math.cross import wide_cross, wide_dot
 from math.curve_checks import check_curve_parameter, curve_sample_count
 from math.utils import clamp
 from math.curve3 import Curve3, FrenetFrames
@@ -111,7 +111,7 @@ def dot3(a: Point3, b: Point3) -> Float64:
     Returns:
         `a.x * b.x + a.y * b.y + a.z * b.z`.
     """
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    return wide_dot(a, b)
 
 
 def cross3(a: Point3, b: Point3) -> Point3:
