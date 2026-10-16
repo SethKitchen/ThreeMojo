@@ -64,6 +64,7 @@ from extensions.sdf.vector import (
     cross,
     dot,
     length,
+    mix,
     normalize,
     smoothstep,
 )
@@ -446,16 +447,14 @@ struct _Geo(Movable):
 
     def lip_y(self, u: Float64) -> Float64:
         var t = clamp((u - self.u_f) / (self.u_c - self.u_f), 0.0, 1.0)
-        return (
-            self.y_f
-            + (self.y_c - self.y_f) * pow(t, 0.7)
-            - self.smile * 0.012 * self.tl * sin(pi * t)
-        )
+        return mix(
+            self.y_f, self.y_c, pow(t, 0.7)
+        ) - self.smile * 0.012 * self.tl * sin(pi * t)
 
     def lip_point(
         self, t: Float64, s: Float64, inset: Float64, dy: Float64 = 0.0
     ) -> V3:
-        var u = self.u_f + (self.u_c - self.u_f) * pow(t, 0.75)
+        var u = mix(self.u_f, self.u_c, pow(t, 0.75))
         var y = self.lip_y(u) + dy
         return V3(s * self.surf_x(u, y) * inset, y, self.z(u))
 
@@ -791,7 +790,7 @@ def _taper_fin(
     for i in range(7):  # pragma: no branch
         var f = Float64(i) / 6.0
         var sc = 1.0 - 0.72 * f
-        var th = t_edge + (t_root - t_edge) * pow(f, 1.2)
+        var th = mix(t_edge, t_root, pow(f, 1.2))
         var pts = List[Float64](capacity=len(poly))
         # The fin tables are literal outlines.
         for j in range(len(poly) // 2):
@@ -1162,7 +1161,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.002 * tl,
         carve=True,
     )
-    var cav_u = g.u_f + (g.u_c - g.u_f) * 0.55
+    var cav_u = mix(g.u_f, g.u_c, 0.55)
     var cav_c = V3(0.0, g.lip_y(cav_u) + 0.004 * tl, g.z(cav_u))
     var cav_r = V3(g.hw(cav_u) * 0.68, 0.014 * tl, (g.u_c - g.u_f) * 0.62 * tl)
     _ = m.ell("mouth", head, cav_c, cav_r, k=0.003 * tl, carve=True)
@@ -1745,7 +1744,7 @@ def shark_paint(
         var belly_fin = fin_paint[2]
         mark = fin_paint[1]
         c = mix3(c, fin_paint[0], w_fin)
-        belly = belly + (belly_fin - belly) * w_fin
+        belly = mix(belly, belly_fin, w_fin)
         fin = w_fin > 0.5
     if not fin:
         # A thin shadow round the eye: the black eye stands out of the gray.

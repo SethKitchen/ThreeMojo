@@ -261,9 +261,9 @@ def _hl(x: Float64, y: Float64, z: Float64) -> V3:
 
 def _tail_radius(t: Float64) -> Float64:
     if t < 0.4:
-        return 0.034 + (0.024 - 0.034) * (t / 0.4)
+        return mix(0.034, 0.024, t / 0.4)
     if t < 0.8:
-        return 0.024 + (0.021 - 0.024) * ((t - 0.4) / 0.4)
+        return mix(0.024, 0.021, (t - 0.4) / 0.4)
     return 0.021 - 0.002 * ((t - 0.8) / 0.2)
 
 
@@ -1031,7 +1031,7 @@ def _paint_body(
             inner * 0.45 * smoothstep(0.15, 0.45, p.y)
             + smoothstep(-0.3, -0.85, up) * 0.45
         )
-        w = w + (wl - w) * legness
+        w = mix(w, wl, legness)
     w = clamp(w, 0.0, 1.0)
     var col = mix3(c[LOW_FLANK], c[FLANK], smoothstep(-0.2, 0.4, up))
     col = mix3(col, c[DORSAL], smoothstep(0.55, 0.95, up) * 0.85)

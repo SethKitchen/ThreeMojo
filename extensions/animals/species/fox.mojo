@@ -294,8 +294,8 @@ def fox_rig(t: Traits) raises -> Rig:
 
 def _tail_radius(t: Float64, tb: Float64) -> Float64:
     # The brush: a huge round cylinder, thick almost to the end.
-    var root = 0.021 + (0.027 - 0.021) * (t / 0.15)
-    var mid = 0.027 + (0.033 - 0.027) * ((t - 0.15) / 0.4)
+    var root = mix(0.021, 0.027, t / 0.15)
+    var mid = mix(0.027, 0.033, (t - 0.15) / 0.4)
     var tip = 0.033 - 0.017 * pow(max(t - 0.55, 0.0) / 0.45, 1.8)
     return tb * (root if t < 0.15 else (mid if t < 0.55 else tip))
 

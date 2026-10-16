@@ -796,7 +796,7 @@ def _wing_stack(t: Traits) -> _Stack:
                     ls.z,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_h,
+                    mix(f.fold, f.spread, e_h),
                     False,
                 )
                 _raster(
@@ -825,7 +825,7 @@ def _wing_stack(t: Traits) -> _Stack:
                     ls.y,
                     1.0,
                     f,
-                    f.fold + (f.spread - f.fold) * e_u,
+                    mix(f.fold, f.spread, e_u),
                     True,
                 )
                 _raster(
@@ -1611,8 +1611,8 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             rig.bone("neck" + String(i)),
             rig.j(a),
             rig.j(b),
-            r0 + (r1 - r0) * pow(u0, 0.75),
-            r0 + (r1 - r0) * pow(u1, 0.75),
+            mix(r0, r1, pow(u0, 0.75)),
+            mix(r0, r1, pow(u1, 0.75)),
             k=0.02,
         )
     if not juv:
@@ -1770,7 +1770,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.ell(
             "comb",
             h,
-            _comb(t, ho, V3(0.0, 0.0165, z0 + (z1 - z0) * 0.45)),
+            _comb(t, ho, V3(0.0, 0.0165, mix(z0, z1, 0.45))),
             V3(0.0021 * hk, 0.0075 * sqrt(ch) * hk, 0.024 * cb * hk),
             axis=normalize(V3(0.0, 0.08, 1.0)),
             k=0.004,
@@ -1781,7 +1781,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.ell(
             "comb",
             h,
-            _comb(t, ho, V3(0.0, 0.018 + 0.004 * ch, z0 + (z1 - z0) * 0.98)),
+            _comb(t, ho, V3(0.0, 0.018 + 0.004 * ch, mix(z0, z1, 0.98))),
             V3(0.0019 * hk, 0.0075 * ch * hk, 0.009 * cb * hk),
             axis=normalize(V3(0.0, 0.3, -1.0)),
             k=0.004,
@@ -1791,7 +1791,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         for i in range(5):  # pragma: no branch
             var u = (Float64(i) + 0.5) / 5.0
             var ph = (0.012 + 0.009 * sin(pi * (0.15 + 0.8 * u))) * ch
-            var z = z0 + (z1 - z0) * (0.08 + 0.78 * u)
+            var z = mix(z0, z1, 0.08 + 0.78 * u)
             var tilt = -0.3 + 0.6 * u
             _ = m.ell(
                 "comb",

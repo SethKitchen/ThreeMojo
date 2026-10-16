@@ -372,7 +372,7 @@ def _ear_tip() -> V3:
 def _tail_radius(t: Float64) -> Float64:
     # A smooth round tail, tapering a little.
     if t < 0.3:
-        return 0.05 + (0.034 - 0.05) * (t / 0.3)
+        return mix(0.05, 0.034, t / 0.3)
     return 0.034 - 0.012 * ((t - 0.3) / 0.7)
 
 
@@ -1544,9 +1544,9 @@ def lion_palette(t: Traits) -> Palette:
             )
             var y = rec709_luminance(c.x, c.y, c.z)
             c = V3(
-                max(0.0, y + (c.x - y) * 1.15),
-                max(0.0, y + (c.y - y) * 1.15),
-                max(0.0, y + (c.z - y) * 1.15),
+                max(0.0, mix(y, c.x, 1.15)),
+                max(0.0, mix(y, c.y, 1.15)),
+                max(0.0, mix(y, c.z, 1.15)),
             )
         var natal = (
             i == DORSAL
@@ -1630,7 +1630,7 @@ def _rbox(
 
 def _smin(a: Float64, b: Float64, k: Float64) -> Float64:
     var h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
-    return b + (a - b) * h - k * h * (1.0 - h)
+    return mix(b, a, h) - k * h * (1.0 - h)
 
 
 def _tail_along(p: V3) -> Tuple[Float64, V3]:
@@ -1932,7 +1932,7 @@ def _paint_body(
             inner * 0.75 * smoothstep(0.12, 0.4, p.y)
             + smoothstep(-0.3, -0.85, up) * 0.5
         )
-        w = w + (wl - w) * legness
+        w = mix(w, wl, legness)
     var maned = male and mane_k > 0.0
     if maned:
         # No pale bib just below a mane: the chest there is mane colored.

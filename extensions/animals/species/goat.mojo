@@ -328,7 +328,7 @@ def goat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var lop = _lop(variant)
     if kid:
         var occ = _hl(V3(0.0, -0.045, -0.1))
-        var nb = NECK_BASE_J + (occ - NECK_BASE_J) * 0.15
+        var nb = lerp(NECK_BASE_J, occ, 0.15)
         t.warps.add(shift_warp(nb, occ, _kid_neck(lop)))
     var hc = HEAD_O + _kid_neck(lop) if kid else HEAD_O
     var head_k = (
@@ -445,7 +445,7 @@ def goat_rig(t: Traits) raises -> Rig:
             )
         )
         if kid:
-            tip = eb + (tip - eb) * 1.15
+            tip = lerp(eb, tip, 1.15)
     rig.set("earTipL", tip)
     var bt = _hlk(V3(0.0, -0.094, 0.115), kid)
     rig.set("beardTop", bt)
@@ -510,7 +510,7 @@ def _horn_at(pth: List[HornPoint], sarc: Float64, hlen: Float64) -> HornPoint:
     var f = u - Float64(i)
     return HornPoint(
         lerp(pth[i].p, pth[i + 1].p, f),
-        pth[i].r + (pth[i + 1].r - pth[i].r) * f,
+        mix(pth[i].r, pth[i + 1].r, f),
         u / Float64(n),
     )
 

@@ -238,7 +238,7 @@ def cow_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var udder = 0.0
     var no_udder = male or calf
     if not no_udder:
-        udder = b[3] + (b[4] - b[3]) * r.next()
+        udder = mix(b[3], b[4], r.next())
     t.set("udder", udder)
     t.set("dewlap", b[5] * (1.4 if male else 1.0) * (0.8 + 0.4 * r.next()))
     var peak = 0.0

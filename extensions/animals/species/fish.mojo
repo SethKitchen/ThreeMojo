@@ -56,6 +56,7 @@ from extensions.sdf.vector import (
     clamp,
     dot,
     length,
+    mix,
     normalize,
     smoothstep,
 )
@@ -769,9 +770,9 @@ def _median_rays(g: _Geo, d: _Median, dorsal: Bool) -> List[Float64]:
     # The morph tables give every fish its fin rays.
     for i in range(d.n):
         var f = 0.0 if d.n == 1 else Float64(i) / Float64(d.n - 1)
-        var u = d.u0 + (d.u1 - d.u0) * f
-        var a = (d.a0 + (d.a1 - d.a0) * f) * pi / 180.0
-        var l = d.l0 + (d.l1 - d.l0) * f
+        var u = mix(d.u0, d.u1, f)
+        var a = mix(d.a0, d.a1, f) * pi / 180.0
+        var l = mix(d.l0, d.l1, f)
         var bz = g.z(u)
         var by: Float64
         if dorsal:
@@ -799,7 +800,7 @@ def _adipose_rays(g: _Geo) -> List[Float64]:
     var rays = List[Float64]()
     for i in range(6):  # pragma: no branch
         var f = Float64(i) / 5.0
-        var u = g.v.ad_u0 + (g.v.ad_u1 - g.v.ad_u0) * f
+        var u = mix(g.v.ad_u0, g.v.ad_u1, f)
         var bz = g.z(u)
         var by = g.yc(u) + g.hd(u) - 0.006 * sl
         var l = (
