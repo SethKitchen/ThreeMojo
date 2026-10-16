@@ -12,12 +12,16 @@ two balls, then builds the surface where the field crosses isolation.
 Each ball paints its own color onto the vertices. The surface turns.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.marching_cubes import MarchingCubes
@@ -55,11 +59,16 @@ def main() raises:
     stand.set_scale(1.45, 1.45, 1.45)
     var node = scene.add(stand^)
     scene.add_mesh(Mesh(surface, paint, node))
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.6, 1.4)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.4))
+    fill_and_key(
+        scene,
+        1.2,
+        1.6,
+        1.4,
+        Color(255, 255, 255),
+        0.4,
+        Color(255, 255, 255),
+        2.4,
+    )
 
     var camera = gallery_camera(
         WIDTH,

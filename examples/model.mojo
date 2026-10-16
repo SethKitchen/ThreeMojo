@@ -11,12 +11,16 @@
 into a BufferGeometry. After that it is an ordinary mesh.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from loaders.obj import read_obj
 from materials.material import Material
 from math.vector3 import Vector3
@@ -56,11 +60,16 @@ def main() raises:
     var node = scene.add(tilted^)
     scene.add_mesh(Mesh(block, paint, node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.45, 0.8, 0.55)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.45,
+        0.8,
+        0.55,
+        Color(255, 255, 255),
+        0.69,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     var camera = gallery_camera(
         WIDTH,

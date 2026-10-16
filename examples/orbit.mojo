@@ -12,7 +12,12 @@ writes the result as a position. That is Vector3 and Quaternion doing the
 work the page describes.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -20,7 +25,6 @@ from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -82,11 +86,16 @@ def main() raises:
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(ball, paint, node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.3, 0.9, 0.6)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.3,
+        0.9,
+        0.6,
+        Color(255, 255, 255),
+        0.69,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     var camera = gallery_camera(
         WIDTH,

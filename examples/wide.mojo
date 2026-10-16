@@ -12,13 +12,17 @@ in pixels and the caps are round. The color runs along the path. A
 one-pixel line cannot do either.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import LineWidth, Material, line_material
 from math.vector3 import Vector3
 from objects.line_segments2 import Line2, line_geometry
@@ -81,11 +85,16 @@ def main() raises:
     scene.add_mesh(Mesh(block, blue, node))
     scene.add_wide_line(Line2(path, ink, node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.8, 1.2, 1.4)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.5))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.2))
+    fill_and_key(
+        scene,
+        0.8,
+        1.2,
+        1.4,
+        Color(255, 255, 255),
+        0.5,
+        Color(255, 255, 255),
+        2.2,
+    )
 
     var camera = gallery_camera(
         WIDTH,

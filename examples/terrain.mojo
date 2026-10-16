@@ -12,14 +12,18 @@ the height sets the vertex color. The ground turns one whole turn. The
 field itself stays put, so the loop has no jump.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.noise import SimplexNoise
 from math.utils import SeededRandom
@@ -129,11 +133,15 @@ def main() raises:
     var ground = scene.add(Object3D())
     scene.add_mesh(Mesh(ground_shape, paint, ground))
 
-    var lamp = Object3D()
-    lamp.set_position(1.4, 2.2, 1.2)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
-    scene.add_light(
-        directional_light(Color(255, 244, 230), scene.add(lamp^), 2.1)
+    fill_and_key(
+        scene,
+        1.4,
+        2.2,
+        1.2,
+        Color(255, 255, 255),
+        0.4,
+        Color(255, 244, 230),
+        2.1,
     )
 
     var camera = gallery_camera(

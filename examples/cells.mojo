@@ -13,7 +13,12 @@ a mix of two colors. The time walks one full period of the cells, and
 the sphere turns one whole turn.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -21,7 +26,6 @@ from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import STANDARD, Material
 from materials.nodes import COLOR_NODE, NodeGraph, NodeProgramId
 from materials.tsl_noise import voronoi2d
@@ -117,11 +121,15 @@ def main() raises:
     var scene = Scene()
     var ball = scene.add(Object3D())
     scene.add_mesh(Mesh(ball_shape, paint, ball))
-    var lamp = Object3D()
-    lamp.set_position(0.8, 1.5, 1.7)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.32))
-    scene.add_light(
-        directional_light(Color(255, 248, 236), scene.add(lamp^), 2.2)
+    fill_and_key(
+        scene,
+        0.8,
+        1.5,
+        1.7,
+        Color(255, 255, 255),
+        0.32,
+        Color(255, 248, 236),
+        2.2,
     )
 
     var camera = gallery_camera(

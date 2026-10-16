@@ -16,7 +16,7 @@ every second, and follows it when the terminal answers.
 This example needs a terminal. It is not run by `make animation`.
 """
 
-from examples.output import gallery_camera
+from examples.output import fill_and_key, gallery_camera
 
 from controls.input import CTRL_C, ESCAPE, KEY_DOWN, Key, RESIZE
 from controls.orbit_controls import OrbitControls
@@ -28,7 +28,6 @@ from geometries.box import cube
 from geometries.sphere import sphere
 from helpers.grid import grid_helper
 from helpers.material import helper_material
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -79,11 +78,16 @@ def main() raises:
     var grid = assets.geometries.add(grid_helper(Length(4.0, METER), 8))
     scene.add_line(Line(grid, paint, root, mode=SEGMENTS))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
     scene.update()
 
     var camera = gallery_camera(

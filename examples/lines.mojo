@@ -14,7 +14,12 @@ path is dashed, and its dashes are measured along the path itself, so
 they keep their length as it climbs and turns.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -22,7 +27,6 @@ from core.buffer_geometry import BufferGeometry, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import BASIC, Material, line_dashed_material
 from math.vector3 import Vector3
 from objects.line import LOOP, STRIP, Line
@@ -118,11 +122,16 @@ def main() raises:
     scene.add_line(Line(ring, gold, node, mode=LOOP))
     scene.add_line(Line(path, white, node, mode=STRIP))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     var camera = gallery_camera(
         WIDTH,

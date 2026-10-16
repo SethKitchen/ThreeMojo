@@ -12,14 +12,18 @@ before the frames start. Detail stays at zero, so the triangles do not
 change. The sphere then turns one whole turn.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.sculptor import SCULPT_INFLATE, Sculptor
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.ray import Ray
 from math.vector3 import Vector3
@@ -74,11 +78,15 @@ def main() raises:
     var scene = Scene()
     var ball = scene.add(Object3D())
     scene.add_mesh(Mesh(shape, clay, ball))
-    var lamp = Object3D()
-    lamp.set_position(1.4, 2.4, 1.8)
-    scene.add_light(ambient_light(Color(210, 206, 198), 0.34))
-    scene.add_light(
-        directional_light(Color(255, 244, 228), scene.add(lamp^), 1.8)
+    fill_and_key(
+        scene,
+        1.4,
+        2.4,
+        1.8,
+        Color(210, 206, 198),
+        0.34,
+        Color(255, 244, 228),
+        1.8,
     )
     scene.update()
     _raise_knob(scene, assets)

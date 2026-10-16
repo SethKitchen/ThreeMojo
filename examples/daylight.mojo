@@ -26,7 +26,7 @@ from objects.mesh import Mesh
 from objects.sky import Sky
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, pi, sin
+from std.math import cos, sin
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/sky.png"

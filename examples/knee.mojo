@@ -11,7 +11,12 @@ The page is Knee. A six-foot male right knee shows articular cartilage,
 both menisci and both collateral ligaments on the assembled bones.
 """
 
-from examples.output import example_destination, gallery_camera, spin_gallery
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_gallery,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
@@ -28,7 +33,6 @@ from extensions.humanoid.skeleton.look import (
     muscle_phong,
     tendon_phong,
 )
-from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
@@ -75,11 +79,16 @@ def main() raises:
         detail=DETAIL,
     )
 
-    var lamp = Object3D()
-    lamp.set_position(0.22, 0.18, 0.35)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.55))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.70))
+    fill_and_key(
+        scene,
+        0.22,
+        0.18,
+        0.35,
+        Color(255, 248, 235),
+        0.55,
+        Color(255, 244, 220),
+        2.70,
+    )
 
     var camera = gallery_camera(
         WIDTH,

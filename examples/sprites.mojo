@@ -17,7 +17,12 @@ of sight by its material. The small blue sprite keeps its size on the
 image as it orbits, because its attenuation is off.
 """
 
-from examples.output import example_destination, gallery_camera, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    spin_clip,
+)
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -25,7 +30,6 @@ from core.buffer_geometry import BufferGeometry, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import (
     Material,
     PointSize,
@@ -159,11 +163,16 @@ def main() raises:
     var beside_node = scene.add(beside^)
     scene.add_sprite(Sprite(pin, beside_node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
+    )
 
     var camera = gallery_camera(
         WIDTH,
