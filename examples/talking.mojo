@@ -59,7 +59,7 @@ from extensions.humanoid.skeleton.head.hair.strands import add_groom
 from extensions.humanoid.skeleton.head.hair.styles import BUN
 from extensions.humanoid.skeleton.head.speech import Speech
 from extensions.humanoid.skeleton.look import add_complexion
-from extensions.humanoid.skeleton.morph import smoothstep
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.spec import HumanoidSpec
 from lights.light import directional_light
 from math.bounds import Plane
@@ -257,9 +257,9 @@ def main() raises:
             var end = length
             if k + 1 < len(phrases):
                 end = starts[k + 1]
-            var mood = smoothstep(
+            var mood = clamped_smoothstep(
                 starts[k] - MOOD_TIME, starts[k] + MOOD_TIME, t
-            ) * (1 - smoothstep(end - MOOD_TIME, end + MOOD_TIME, t))
+            ) * (1 - clamped_smoothstep(end - MOOD_TIME, end + MOOD_TIME, t))
             if mood > 0:
                 face.add_expression(moods[k], mood * strengths[k])
             speeches[k].speak(face, t - starts[k])

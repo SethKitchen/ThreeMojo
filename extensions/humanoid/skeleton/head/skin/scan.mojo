@@ -55,7 +55,8 @@ from extensions.humanoid.skeleton.head.face_model import (
 )
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from extensions.humanoid.skeleton.mesh_field import MeshField
-from extensions.humanoid.skeleton.morph import bump, smoothstep
+from extensions.humanoid.skeleton.morph import bump
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.skeleton.sculpt import box_gap
 from extensions.humanoid.skeleton.surface_nets import (
     finish_surface,
@@ -193,7 +194,7 @@ def ear_weight(point: Vector3) -> Float32:
         The weight, zero through one.
     """
     var side = Vector3(abs(point.x), point.y, point.z)
-    return smoothstep(EAR_ROOT_IN, EAR_ROOT_OUT, side.x) * bump(
+    return clamped_smoothstep(EAR_ROOT_IN, EAR_ROOT_OUT, side.x) * bump(
         side, EAR_MIDDLE, EAR_REACH
     )
 
@@ -225,7 +226,9 @@ def warp_ear(
         q.y,
         q.x * sin(turn) + q.z * cos(turn),
     )
-    q.y -= Float32(0.35) * lobe * w * (1 - smoothstep(66.5, 68.5, point.y))
+    q.y -= (
+        Float32(0.35) * lobe * w * (1 - clamped_smoothstep(66.5, 68.5, point.y))
+    )
     var p = q + EAR_ROOT
     return Vector3(side * p.x, p.y, p.z)
 
@@ -299,7 +302,7 @@ def fit_over[
         var limits = List[Float32](length=end, fill=3.0e38)
         var short = False
         for v in range(end):  # pragma: no branch
-            var up = smoothstep(sink_low, sink_high, points[v].y)
+            var up = clamped_smoothstep(sink_low, sink_high, points[v].y)
             var goal = margin * up - sink * (1 - up)
             var need = goal - hull.distance(points[v])
             # A vertex off its goal by more than the margin needs another
@@ -522,7 +525,7 @@ def place(
         var other = model.shape(identity, rest, count)
         for v in range(len(shape)):  # pragma: no branch
             var y = scan_to_template(shape[v]).y
-            var k = smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
+            var k = clamped_smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
             shape[v] = shape[v] + (other[v] - shape[v]) * k
     var points = List[Vector3](capacity=len(shape))
     for p in shape:  # pragma: no branch
@@ -851,7 +854,7 @@ def rig_expressions(
     var still = _area_normals(points, indices)
     var fade = List[Float32](capacity=len(points))
     for p in points:  # pragma: no branch
-        fade.append(smoothstep(floor, floor + h.cm(RIG_FADE), p.y))
+        fade.append(clamped_smoothstep(floor, floor + h.cm(RIG_FADE), p.y))
     surface.morph_relative = True
     for name in shapes:  # pragma: no branch
         var weights = rest_expression(model)

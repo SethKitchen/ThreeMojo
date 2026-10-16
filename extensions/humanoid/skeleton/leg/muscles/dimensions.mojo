@@ -1009,14 +1009,14 @@ def _nearest_bone(d: MuscleDimensions, point: Vector3) -> Vector3:
 def _bones_at(d: MuscleDimensions, y: Float32) -> List[Vector3]:
     """Return the bone shafts at height `y`: x and z, and radius in y."""
     var S = d.stature.value
-    var knee = _at(d.med_condyle, d.lat_condyle, 0.5)
+    var knee = mix_delta3(d.med_condyle, d.lat_condyle, 0.5)
     var bones = List[Vector3]()
     if y >= knee.y:
         var femur = _along(d.lt, d.femur_mid, knee, y)
         bones.append(Vector3(femur.x, 0.0080 * S, femur.z))
         return bones^
     var tibia = _along(
-        _at(d.tib_med, d.tib_lat, 0.5), d.tibia_mid, d.plafond, y
+        mix_delta3(d.tib_med, d.tib_lat, 0.5), d.tibia_mid, d.plafond, y
     )
     var fibula = _along(d.fib_head, d.fibula_mid, d.lat_mal, y)
     bones.append(Vector3(tibia.x, 0.0085 * S, tibia.z))
@@ -1032,10 +1032,10 @@ def _along(
     if y >= middle.y:
         var span = top.y - middle.y
         var t = min(max((top.y - y) / span, Float32(0)), Float32(1))
-        return _at(top, middle, t)
+        return mix_delta3(top, middle, t)
     var span = middle.y - bottom.y
     var t = min(max((middle.y - y) / span, Float32(0)), Float32(1))
-    return _at(middle, bottom, t)
+    return mix_delta3(middle, bottom, t)
 
 
 def _sort_by_reach(mut stations: List[_Station]):
@@ -1047,11 +1047,6 @@ def _sort_by_reach(mut stations: List[_Station]):
             stations[k + 1] = stations[k]
             k -= 1
         stations[k + 1] = held
-
-
-def _at(a: Vector3, b: Vector3, t: Float32) -> Vector3:
-    """Return the point `t` of the way from `a` to `b`."""
-    return mix_delta3(a, b, t)
 
 
 def _r(stature: Float32, scale: Float32, ratio: Float32) -> Float32:
@@ -1068,16 +1063,16 @@ def _fusiform(
     depth: Float32 = 0.78,
 ) -> MuscleChain:
     """Return a tapered elliptical belly from origin to insertion."""
-    var belly = _at(origin, insertion, 0.46) + belly_off
+    var belly = mix_delta3(origin, insertion, 0.46) + belly_off
     var r0 = 0.55 * r_end
     var r1 = 0.76 * r_belly
     var r3 = 0.68 * r_belly
     var r4 = 0.45 * r_end
     return MuscleChain(
         origin,
-        _at(origin, belly, 0.50),
+        mix_delta3(origin, belly, 0.50),
         belly,
-        _at(belly, insertion, 0.50),
+        mix_delta3(belly, insertion, 0.50),
         insertion,
         r0,
         r1,
@@ -1100,16 +1095,16 @@ def _strap(
     depth: Float32,
 ) -> MuscleChain:
     """Return a long flat strap with tapered attachment ends."""
-    var belly = _at(origin, insertion, 0.48) + belly_off
+    var belly = mix_delta3(origin, insertion, 0.48) + belly_off
     var r0 = 0.58 * width
     var r1 = 0.88 * width
     var r3 = 0.84 * width
     var r4 = 0.50 * width
     return MuscleChain(
         origin,
-        _at(origin, belly, 0.52),
+        mix_delta3(origin, belly, 0.52),
         belly,
-        _at(belly, insertion, 0.54),
+        mix_delta3(belly, insertion, 0.54),
         insertion,
         r0,
         r1,
@@ -1137,12 +1132,14 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
         lat = Float32(-1)
     # It rises from the back of the ilium, the sacrum and the coccyx,
     # beside the natal cleft, and crosses behind the hip.
-    var origin = _at(d.psis, d.sacral, 0.45) + Vector3(
+    var origin = mix_delta3(d.psis, d.sacral, 0.45) + Vector3(
         lat * 0.003 * S, 0, -0.008 * S
     )
     # Its lower fibers run into the iliotibial tract and the gluteal
     # tuberosity, well down the femur, so the fold fades out laterally.
-    var insertion = _at(d.gt, d.femur_mid, 0.42) + Vector3(0, 0, -0.012 * S)
+    var insertion = mix_delta3(d.gt, d.femur_mid, 0.42) + Vector3(
+        0, 0, -0.012 * S
+    )
     var belly = d.hip + Vector3(lat * 0.006 * S, -0.036 * S, -0.058 * S)
     var r0 = 0.55 * rb
     var r1 = 0.88 * rb
@@ -1151,9 +1148,9 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var r4 = 0.34 * rb
     return MuscleChain(
         origin,
-        _at(origin, belly, 0.50),
+        mix_delta3(origin, belly, 0.50),
         belly,
-        _at(belly, insertion, 0.50),
+        mix_delta3(belly, insertion, 0.50),
         insertion,
         r0,
         r1,
@@ -1176,14 +1173,14 @@ def _glute_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     trochanter. It lies flat on the ilium: about two centimeters thick.
     """
     # The middle of its origin, behind the tubercle and below the crest.
-    var origin = _at(d.iliac, d.gt, 0.10) + Vector3(0, 0, -0.006 * S)
+    var origin = mix_delta3(d.iliac, d.gt, 0.10) + Vector3(0, 0, -0.006 * S)
     var gt = d.gt
     var unit = S * scale / Float32(182.88)
     return MuscleChain(
         origin,
-        _at(origin, gt, 0.30),
-        _at(origin, gt, 0.55),
-        _at(origin, gt, 0.80),
+        mix_delta3(origin, gt, 0.30),
+        mix_delta3(origin, gt, 0.55),
+        mix_delta3(origin, gt, 0.80),
         gt,
         1.0 * unit,
         1.8 * unit,
@@ -1200,7 +1197,7 @@ def _glute_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 def _tfl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.0133)
-    var insertion = _at(d.gt, d.gerdy, 0.18)
+    var insertion = mix_delta3(d.gt, d.gerdy, 0.18)
     return _fusiform(
         d.asis, insertion, Vector3(0, 0, 0.010 * S), 0.58 * rb, rb, 0.70
     )
@@ -1235,7 +1232,7 @@ def _rectus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 def _vastus_lat(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.0237)
-    var origin = _at(d.gt, d.femur_mid, 0.18)
+    var origin = mix_delta3(d.gt, d.femur_mid, 0.18)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -1252,7 +1249,7 @@ def _vastus_lat(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 def _vastus_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.0225)
-    var origin = _at(d.lt, d.med_condyle, 0.22)
+    var origin = mix_delta3(d.lt, d.med_condyle, 0.22)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -1272,7 +1269,7 @@ def _vastus_intermedius(
 ) -> MuscleChain:
     """Return the deep quadriceps belly that packs around the femur."""
     var rb = _r(S, scale, 0.0200)
-    var origin = _at(d.aiis, d.femur_mid, 0.30)
+    var origin = mix_delta3(d.aiis, d.femur_mid, 0.30)
     var insertion = d.patella + Vector3(0, 0.012 * S, 0.001 * S)
     return _fusiform(
         origin,
@@ -1315,7 +1312,7 @@ def _adductor_magnus(
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = _at(d.pubic_arch, d.ischial, 0.56)
+    var origin = mix_delta3(d.pubic_arch, d.ischial, 0.56)
     var insertion = d.med_condyle + Vector3(-lat * 0.006 * S, 0.018 * S, 0)
     return _fusiform(
         origin,
@@ -1391,7 +1388,9 @@ def _gastroc(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.021)
     var med = d.med_condyle + Vector3(0, -0.008 * S, -0.016 * S)
     var latc = d.lat_condyle + Vector3(0, -0.008 * S, -0.016 * S)
-    var merge = _at(d.med_condyle, d.heel, 0.52) + Vector3(0, 0, -0.026 * S)
+    var merge = mix_delta3(d.med_condyle, d.heel, 0.52) + Vector3(
+        0, 0, -0.026 * S
+    )
     var r0 = 0.30 * rb
     var r1 = 0.95 * rb
     var r2 = 0.38 * rb
@@ -1399,9 +1398,9 @@ def _gastroc(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var r4 = 0.28 * rb
     return MuscleChain(
         med,
-        _at(med, merge, 0.44),
+        mix_delta3(med, merge, 0.44),
         merge,
-        _at(latc, merge, 0.44),
+        mix_delta3(latc, merge, 0.44),
         latc,
         r0,
         r1,
@@ -1423,7 +1422,9 @@ def _soleus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     join the calcaneal tendon a hand's breadth above the heel.
     """
     var rb = _r(S, scale, 0.0322)
-    var origin = _at(d.fib_head, d.tibia_mid, 0.22) + Vector3(0, 0, -0.016 * S)
+    var origin = mix_delta3(d.fib_head, d.tibia_mid, 0.22) + Vector3(
+        0, 0, -0.016 * S
+    )
     var insertion = Vector3(
         d.heel.x, d.plafond.y + 0.07 * S, d.heel.z - 0.004 * S
     )
@@ -1447,7 +1448,7 @@ def _tib_post(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = _at(d.tib_med, d.fib_head, 0.48) + Vector3(
+    var origin = mix_delta3(d.tib_med, d.fib_head, 0.48) + Vector3(
         -lat * 0.004 * S, -0.030 * S, -0.008 * S
     )
     var insertion = d.med_mal + Vector3(0, 0.018 * S, -0.004 * S)
@@ -1499,7 +1500,7 @@ def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     longus's.
     """
     var rb = _r(S, scale, 0.0116)
-    var origin = _at(d.fibula_mid, d.lat_mal, 0.22)
+    var origin = mix_delta3(d.fibula_mid, d.lat_mal, 0.22)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
@@ -1524,7 +1525,7 @@ def _fhl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = _at(d.fib_head, d.lat_mal, 0.30) + Vector3(
+    var origin = mix_delta3(d.fib_head, d.lat_mal, 0.30) + Vector3(
         -lat * 0.004 * S, 0, -0.012 * S
     )
     var insertion = d.plafond + Vector3(-lat * 0.004 * S, 0.012 * S, -0.020 * S)
@@ -1543,8 +1544,8 @@ def _fdl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var top = _at(d.tib_med, d.tib_lat, 0.5)
-    var origin = _at(top, d.tibia_mid, 0.85) + Vector3(
+    var top = mix_delta3(d.tib_med, d.tib_lat, 0.5)
+    var origin = mix_delta3(top, d.tibia_mid, 0.85) + Vector3(
         -lat * 0.008 * S, 0, -0.016 * S
     )
     var insertion = d.med_mal + Vector3(lat * 0.002 * S, 0.016 * S, -0.012 * S)
@@ -1569,7 +1570,7 @@ def _ehl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = _at(d.fib_head, d.lat_mal, 0.40) + Vector3(
+    var origin = mix_delta3(d.fib_head, d.lat_mal, 0.40) + Vector3(
         -lat * 0.010 * S, 0, 0.012 * S
     )
     var insertion = d.plafond + Vector3(-lat * 0.002 * S, 0.012 * S, 0.020 * S)
@@ -1590,14 +1591,16 @@ def _achilles(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     # thick, five centimeters behind the ankle's center.
     var width = _r(S, Float32(1), 0.0045)
     var depth = Float32(0.72) * width
-    var origin = _at(d.med_condyle, d.heel, 0.52) + Vector3(0, 0, -0.026 * S)
+    var origin = mix_delta3(d.med_condyle, d.heel, 0.52) + Vector3(
+        0, 0, -0.026 * S
+    )
     var low = Vector3(d.heel.x, d.plafond.y + 0.04 * S, d.heel.z - 0.003 * S)
     var insertion = d.heel + Vector3(0, 0.004 * S, -0.008 * S)
     return MuscleChain(
         origin,
-        _at(origin, low, 0.5),
+        mix_delta3(origin, low, 0.5),
         low,
-        _at(low, insertion, 0.5),
+        mix_delta3(low, insertion, 0.5),
         insertion,
         0.60 * width,
         0.85 * width,

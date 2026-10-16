@@ -73,7 +73,7 @@ from extensions.humanoid.skeleton.loft import (
     fit_loft,
     loft_distance,
 )
-from extensions.humanoid.skeleton.morph import smoothstep
+from math.smoothstep import clamped_smoothstep
 from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.math import max, min
@@ -249,7 +249,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
             return d
         # Across the wrist the hand's skin becomes the arm's, so the two
         # meshes lie on one surface where they overlap.
-        var w = smoothstep(self.join_from, self.join_to, point.y)
+        var w = clamped_smoothstep(self.join_from, self.join_to, point.y)
         d = d + (self.arm.distance(point) - d) * w
         # Past its top it sinks under the arm's skin, and closes there,
         # with no rim to stand out of it.

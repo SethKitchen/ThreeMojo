@@ -139,14 +139,6 @@ struct ClipVertex(ImplicitlyCopyable):
         self.previous = Vector3(0, 0, 0)
 
 
-def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
-    """Return one color channel a fraction `t` of the way from `a` to `b`."""
-    # Done in floats and kept there. Rounding to a byte at each cut, as this
-    # used to, spent a level of precision every time a triangle crossed a
-    # plane — and a triangle can cross two.
-    return mix_delta(a, b, t)
-
-
 @fieldwise_init
 struct _DepthClipSide(ImplicitlyCopyable):
     """The kept side of a camera-space depth plane, selected at compile time."""
@@ -217,38 +209,35 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     """Return the vertex a fraction `t` of the way from `a` to `b`, every
     varying interpolated with the position."""
     var mixed = ClipVertex(
-        _mix_vector(a.position, b.position, t),
+        mix_delta3(a.position, b.position, t),
         a.color.mix(b.color, t),
         # Not renormalized here: a cut vertex is about to be interpolated
         # across a triangle anyway, and the fragment normalizes what it gets.
-        _mix_vector(a.normal, b.normal, t),
-        _mix(a.u, b.u, t),
-        _mix(a.v, b.v, t),
-        _mix_vector(a.world, b.world, t),
+        # The channels stay floats. Rounding to a byte at each cut spent a
+        # level of precision every time a triangle crossed a plane.
+        mix_delta3(a.normal, b.normal, t),
+        mix_delta(a.u, b.u, t),
+        mix_delta(a.v, b.v, t),
+        mix_delta3(a.world, b.world, t),
         a.emissive.mix(b.emissive, t),
-        _mix(a.line_distance, b.line_distance, t),
-        _mix(a.u1, b.u1, t),
-        _mix(a.v1, b.v1, t),
+        mix_delta(a.line_distance, b.line_distance, t),
+        mix_delta(a.u1, b.u1, t),
+        mix_delta(a.v1, b.v1, t),
     )
     mixed.custom = a.custom + (b.custom - a.custom) * t
-    mixed.gouraud_direct = _mix_vector(a.gouraud_direct, b.gouraud_direct, t)
-    mixed.gouraud_indirect = _mix_vector(
+    mixed.gouraud_direct = mix_delta3(a.gouraud_direct, b.gouraud_direct, t)
+    mixed.gouraud_indirect = mix_delta3(
         a.gouraud_indirect, b.gouraud_indirect, t
     )
-    mixed.gouraud_back_direct = _mix_vector(
+    mixed.gouraud_back_direct = mix_delta3(
         a.gouraud_back_direct, b.gouraud_back_direct, t
     )
-    mixed.gouraud_back_indirect = _mix_vector(
+    mixed.gouraud_back_indirect = mix_delta3(
         a.gouraud_back_indirect, b.gouraud_back_indirect, t
     )
-    mixed.current = _mix_vector(a.current, b.current, t)
-    mixed.previous = _mix_vector(a.previous, b.previous, t)
+    mixed.current = mix_delta3(a.current, b.current, t)
+    mixed.previous = mix_delta3(a.previous, b.previous, t)
     return mixed^
-
-
-def _mix_vector(a: Vector3, b: Vector3, t: Float32) -> Vector3:
-    """Return a vector a fraction `t` of the way from `a` to `b`."""
-    return mix_delta3(a, b, t)
 
 
 def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
