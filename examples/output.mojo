@@ -8,7 +8,8 @@
 Each example builds its own scene. This file reads the path from the
 first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
-can write them here. It can also copy one tile into a sheet.
+can write them here. It can also copy one tile into a sheet, or light a
+scene and spin it.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -16,9 +17,10 @@ from core.assets import Assets
 from core.clock import Clock
 from core.object3d import NodeId
 from core.scene import Scene
+from examples.preview import add_sky_and_sun
 from render.apng import encode
-from render.framebuffer import Framebuffer
-from renderers.renderer import Renderer
+from render.framebuffer import Color, Framebuffer
+from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv, stderr
 from units.si import MILLISECOND, Angle, DEGREE
@@ -145,6 +147,54 @@ def spin_gallery(
         renderer, camera, assets, scene, node, frame_count
     )
     write_frames(frames, destination, delay_ms, frame_count)
+
+
+def spin_daylight(
+    width: Int,
+    height: Int,
+    background: Color,
+    fill: Float32,
+    sun: Float32,
+    mut scene: Scene,
+    assets: Assets,
+    node: NodeId,
+    camera: PerspectiveCamera,
+    frame_count: Int,
+    delay_ms: Int,
+    destination: String,
+) raises:
+    """Light `scene`, turn `node` through one circle, and write the frames.
+
+    Args:
+        width: The image width in pixels.
+        height: The image height in pixels.
+        background: The color behind the scene.
+        fill: The sky fill strength.
+        sun: The sun strength.
+        scene: The persistent scene, edited in place.
+        assets: The geometry, materials and textures.
+        node: The node to turn about y.
+        camera: The camera to view through.
+        frame_count: How many frames cover the circle.
+        delay_ms: How long each frame is shown, in milliseconds.
+        destination: The path of the animated PNG.
+
+    Raises:
+        Error: If the scene, the render, or the write is invalid.
+    """
+    var renderer = Renderer(width, height, workers=available_workers())
+    renderer.set_background(background)
+    add_sky_and_sun(scene, fill, sun)
+    spin_gallery(
+        renderer,
+        camera,
+        assets,
+        scene,
+        node,
+        frame_count,
+        delay_ms,
+        destination,
+    )
 
 
 def spin_pair_gallery(
