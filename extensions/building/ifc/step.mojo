@@ -26,6 +26,7 @@ and `\\X4\\hhhhhhhh...\\X0\\` for UTF-32 code points. The writer escapes
 every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
 from core.ordinal import ordinal_valid
+from loaders.bytes import bytes_match
 
 from std.math import isfinite
 
@@ -740,13 +741,7 @@ struct _Reader:
         return value
 
     def starts(self, text: String) -> Bool:
-        var bytes = text.as_bytes()
-        if self.at + len(bytes) > len(self.data):
-            return False
-        for i in range(len(bytes)):  # pragma: no branch
-            if self.data[self.at + i] != bytes[i]:
-                return False
-        return True
+        return bytes_match(Span(self.data), self.at, len(self.data), text)
 
     def string(mut self) raises -> String:
         """Read a quoted string, decoding its escapes."""

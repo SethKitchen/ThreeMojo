@@ -50,6 +50,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from loaders.bytes import bytes_match
 from loaders.text_number import read_finite_float32
 from render.srgb import srgb_to_linear
 from std.math import isfinite
@@ -136,14 +137,7 @@ def _holds(bytes: List[UInt8], at: Int, word: String) -> Bool:
     Returns:
         Whether every byte of the word is there.
     """
-    var text = word.as_bytes()
-    if at + len(text) > len(bytes):
-        return False
-    # The words looked for are never empty: the loop always runs.
-    for index in range(len(text)):  # pragma: no branch
-        if bytes[at + index] != text[index]:
-            return False
-    return True
+    return bytes_match(Span(bytes), at, len(bytes), word)
 
 
 def is_binary_stl(bytes: List[UInt8]) -> Bool:

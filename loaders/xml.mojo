@@ -34,6 +34,7 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
+from loaders.bytes import bytes_match
 from loaders.utf8 import append_utf8
 
 # What `XmlDocument.child` returns when there is no such child, and what
@@ -413,13 +414,7 @@ struct _Parser(Movable):
 
     def starts_with(self, word: String) -> Bool:
         """Return True if the bytes at the cursor spell `word`."""
-        var expected = word.as_bytes()
-        if self.at + len(expected) > len(self.bytes):
-            return False
-        for offset in range(len(expected)):  # pragma: no branch
-            if self.bytes[self.at + offset] != expected[offset]:
-                return False
-        return True
+        return bytes_match(Span(self.bytes), self.at, len(self.bytes), word)
 
     def skip_space(mut self) -> Bool:
         """Step over white space and return True if there was any."""

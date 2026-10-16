@@ -29,6 +29,7 @@ bits. `integer` refuses a number with a fraction.
 
 from core.ordinal import ordinal_valid
 
+from loaders.bytes import bytes_match
 from loaders.utf8 import append_utf8
 from std.math import isfinite
 
@@ -763,14 +764,9 @@ struct _Parser(Movable):
 
     def literal(mut self, word: String) raises:
         """Step over `true`, `false` or `null`, whole."""
-        var expected = word.as_bytes()
-        for offset in range(len(expected)):  # pragma: no branch
-            if (
-                self.at + offset >= len(self.bytes)
-                or self.bytes[self.at + offset] != expected[offset]
-            ):
-                raise Error(self.where() + "expected " + word)
-        self.at += len(expected)
+        if not bytes_match(Span(self.bytes), self.at, len(self.bytes), word):
+            raise Error(self.where() + "expected " + word)
+        self.at += word.byte_length()
 
     def hex_digit(mut self) raises -> Int:
         """Read one hex digit of a `\\u` escape."""

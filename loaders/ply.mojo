@@ -66,6 +66,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import ordinal_valid
+from loaders.bytes import bytes_match
 from loaders.js_text import split_fields
 
 from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
@@ -322,15 +323,10 @@ def _find_bytes(bytes: List[UInt8], word: String) -> Int:
     Returns:
         Its first byte, or -1 when the file does not hold it.
     """
-    var text = word.as_bytes()
-    for at in range(len(bytes) - len(text) + 1):
-        var found = True
-        # The word is not empty: the loop always runs.
-        for index in range(len(text)):  # pragma: no branch
-            if bytes[at + index] != text[index]:
-                found = False
-                break
-        if found:
+    var count = word.byte_length()
+    var limit = len(bytes)
+    for at in range(limit - count + 1):
+        if bytes_match(Span(bytes), at, limit, word):
             return at
     return -1
 

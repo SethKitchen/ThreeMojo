@@ -36,6 +36,7 @@ refused with the place where it happened. three.js logs chevrotain's
 errors and then throws.
 """
 
+from loaders.bytes import bytes_match
 from loaders.js_number import js_parse_float
 from std.math import isfinite
 
@@ -324,14 +325,7 @@ def _line_end(bytes: Span[UInt8, _], at: Int) -> Int:
 
 def _starts_with(bytes: Span[UInt8, _], at: Int, word: String) -> Bool:
     """Return True if the text at `at` starts with `word`."""
-    var w = word.as_bytes()
-    if at + len(w) > len(bytes):
-        return False
-    # Each word has letters. The loop always runs.
-    for i in range(len(w)):  # pragma: no branch
-        if bytes[at + i] != w[i]:
-            return False
-    return True
+    return bytes_match(bytes, at, len(bytes), word)
 
 
 def _string_length(bytes: Span[UInt8, _], at: Int) -> Int:
