@@ -14,7 +14,7 @@ and the foot. The surfaces are physically based, lit by a room
 environment and a lamp that casts soft shadows, and tone mapped.
 """
 
-from examples.output import example_destination, spin_gallery
+from examples.output import example_destination, gallery_camera, spin_gallery
 from examples.studio import (
     cast_received_shadows,
     room_lit_scene,
@@ -24,7 +24,6 @@ from examples.studio import (
     tissue_materials,
 )
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -133,13 +132,9 @@ def main() raises:
     studio_floor(scene, assets, Length(6.0, METER))
     studio_sun(scene, 1.4, 2.6, 2.2, Length(1.4, METER))
 
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH, HEIGHT, Vector3(0.0, 0.62, 3.3), Vector3(0.0, 0.50, 0.0)
     )
-    camera.place(Vector3(0.0, 0.62, 3.3), Vector3(0.0, 0.50, 0.0))
 
     spin_gallery(
         renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination

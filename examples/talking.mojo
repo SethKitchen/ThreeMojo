@@ -18,10 +18,9 @@ how many frames to draw, one or more. The default draws the whole
 speech, twenty frames a second.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 from examples.preview import turn_about_vertical
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -69,7 +68,7 @@ from renderers.renderer import Renderer, available_workers
 from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/talking.png"
 comptime DEFAULT_QUALITY = "high"
@@ -238,13 +237,7 @@ def main() raises:
     var rim_node = scene.add(rim^)
     scene.add_light(directional_light(Color(200, 214, 255), rim_node, 0.9))
     var eye = Vector3(0.0, 0.04, 0.74)
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
-    )
-    camera.place(eye, Vector3(0.0, 0.025, 0.0))
+    var camera = gallery_camera(WIDTH, HEIGHT, eye, Vector3(0.0, 0.025, 0.0))
     var key_toward = Vector3(1.0, 1.4, 2.4)
     key_toward.normalize()
     var rim_toward = Vector3(-1.4, 1.0, -1.2)

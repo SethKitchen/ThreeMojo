@@ -20,6 +20,7 @@ level below it. The default is `xhigh`.
 
 from examples.output import (
     example_destination,
+    gallery_camera,
     hang_centered,
     spin_pair_gallery,
 )
@@ -32,7 +33,6 @@ from examples.studio import (
     tissue_materials,
 )
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -82,7 +82,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
 from renderers.renderer import available_workers
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
+from units.si import FOOT, GRAM, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/arm.png"
 comptime WIDTH = 640
@@ -197,13 +197,9 @@ def main() raises:
     studio_floor(scene, assets, Length(12.0, METER))
     studio_sun(scene, 1.2, 2.2, 2.0, Length(1.2, METER))
 
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH, HEIGHT, Vector3(0.0, 0.66, 2.1), Vector3(0.0, 0.6, 0.0)
     )
-    camera.place(Vector3(0.0, 0.66, 2.1), Vector3(0.0, 0.6, 0.0))
 
     spin_pair_gallery(
         renderer,
