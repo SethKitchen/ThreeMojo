@@ -42,6 +42,7 @@ factor for the reason `lights.lighting.blinn_phong` drops it: the lit sum
 is scaled by `Lighting.scale` once, at the end.
 """
 
+from lights.fresnel import schlick_weight
 from math.smoothstep import smoothstep
 from math.utils import saturate
 from math.vector2 import Vector2
@@ -64,15 +65,11 @@ comptime OUTSIDE_IOR = Float32(1)
 # of one along the tangent at full strength, which turns the material's
 # own vector by nothing and scales it by one, exactly. See `layers_of`.
 comptime NO_ANISOTROPY_TEXEL = Vector3(1, 0.5, 1)
-# The two numbers in three.js's `F_Schlick`, as `lights.lighting` holds
-# them. Held here as well, because that module imports this one.
-comptime _FRESNEL_SLOPE = Float32(-5.55473)
-comptime _FRESNEL_OFFSET = Float32(-6.98316)
 
 
 def _schlick(f0: Float32, f90: Float32, cosine: Float32) -> Float32:
     """Return three.js's scalar `F_Schlick`, spelled as `f_schlick` is."""
-    var fresnel = exp2((_FRESNEL_SLOPE * cosine + _FRESNEL_OFFSET) * cosine)
+    var fresnel = schlick_weight(cosine)
     return f0 * (1 - fresnel) + f90 * fresnel
 
 
