@@ -49,6 +49,7 @@ opacity node, or the material's `opacity`. Texture gather inputs are
 refused by name when reached. They are not ordinary RGBA samples.
 """
 from core.ordinal import ordinal_valid
+from core.search import first_match
 
 from loaders.json import (
     ARRAY,
@@ -186,10 +187,7 @@ def node_material_properties() -> List[String]:
 
 def _position(names: List[String], name: String) -> Int:
     """Return where a name is in a list, or -1."""
-    for index in range(len(names)):
-        if names[index] == name:
-            return index
-    return -1
+    return first_match(names, name)
 
 
 def node_json_type_of(name: String) -> NodeJsonType:

@@ -55,6 +55,7 @@ headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
 from core.ordinal import ordinal_valid
+from core.search import last_match
 
 from loaders.usd_specs import (
     NO_VALUE,
@@ -729,11 +730,7 @@ struct _Crate(Movable):
         Returns:
             The place of the last section of that name, or -1.
         """
-        var found = -1
-        for k in range(len(self.names)):
-            if self.names[k] == name:
-                found = k
-        return found
+        return last_match(self.names, name)
 
     def required(self, name: String) raises -> _Section:
         """Return a section that must be there.
