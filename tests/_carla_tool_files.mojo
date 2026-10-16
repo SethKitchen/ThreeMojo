@@ -319,10 +319,13 @@ def stub_curl(
         put_bytes(folder + "/body", data)
     else:
         put(folder + "/body", body)
-    var header = status_line + "\r\n"
-    if content_type:
-        header += "Content-Type: " + content_type + "\r\n"
-    put(folder + "/headers", header + "\r\n")
+    # A stub with no status line only fails, so it needs no headers file.
+    # Some endpoint scanners delete a file that holds only a blank header.
+    if status_line:
+        var header = status_line + "\r\n"
+        if content_type:
+            header += "Content-Type: " + content_type + "\r\n"
+        put(folder + "/headers", header + "\r\n")
     stub_program(
         program,
         "log='"

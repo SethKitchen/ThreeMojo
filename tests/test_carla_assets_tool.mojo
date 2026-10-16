@@ -2139,7 +2139,8 @@ def test_reserved_and_case_insensitive_path_clashes_are_refused() raises:
         var entries: List[String] = [manifest_text(free, free.root)]
         var ids: List[String] = ["scan"]
         if second:
-            put_bytes(setup.fixture.cache + "/" + second, setup.scan)
+            # The clash is refused from the manifest alone. A second cached
+            # file cannot exist beside the first on a case-insensitive disk.
             free.set(free.root, "id", free.new_str("second"))
             free.set(free_file, "path", free.new_str(second))
             var member = free.item(free.get(free_file, "extract"), 0)
