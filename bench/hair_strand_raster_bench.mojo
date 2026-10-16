@@ -32,6 +32,7 @@ The CPU stages need no GPU. The numbers describe the machine that runs
 the bench.
 """
 
+from bench.timing import _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -53,15 +54,6 @@ from renderers.renderer import Renderer
 from std.sys import argv, num_logical_cores
 from std.time import perf_counter_ns
 from units.si import DEGREE, FOOT, METER, Angle, Length
-
-
-def _sorted(var times: List[Int]) -> List[Int]:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
-    return times^
 
 
 def _median(var times: List[Int]) -> Float64:
