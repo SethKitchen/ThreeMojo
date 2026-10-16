@@ -437,7 +437,7 @@ def iridescence_fresnel(
     var cm = Vector3(rs.x - t121, rs.y - t121, rs.z - t121)
     # Two orders, always, so the loop never runs zero times.
     for order in range(1, 3):  # pragma: no branch
-        cm = Vector3(cm.x * root.x, cm.y * root.y, cm.z * root.z)
+        cm = cm * root
         var sm = _sensitivity(Float32(order) * opd, phi * Float32(order))
         total = Vector3(
             total.x + cm.x * 2 * sm.x,
