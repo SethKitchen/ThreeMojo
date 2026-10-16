@@ -30,7 +30,7 @@ from generators.utils import (
     meters,
     radians,
 )
-from math.utils import SeededRandom
+from math.utils import SeededRandom, js_round
 from std.math import atan2, cos, floor, pi, pow, sin
 from units.si import (
     Angle,
@@ -273,7 +273,7 @@ def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
 
 def _js_round(value: Float64) -> Int:
     """Return JavaScript's `Math.round`: halves go up."""
-    return Int(floor(value + 0.5))
+    return Int(js_round(value))
 
 
 def _signed(mut random: SeededRandom) -> Float64:

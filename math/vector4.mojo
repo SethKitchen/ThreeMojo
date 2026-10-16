@@ -33,7 +33,8 @@ from math.polyline import (
     scale_to_length,
 )
 from math.quaternion import Quaternion
-from math.vector3 import Vector3, _js_round
+from math.utils import js_round
+from math.vector3 import Vector3
 from math.norm import dot4, length4, normalized4
 from std.math import acos, ceil, floor, pi, sqrt, trunc
 from units.si import Angle, RADIAN
@@ -481,10 +482,10 @@ struct Vector4(Equatable, ImplicitlyCopyable, PolylineVertex):
         """Round each component to the nearest whole number, a half up,
         three.js's `round`."""
         self = Vector4(
-            _js_round(self.x),
-            _js_round(self.y),
-            _js_round(self.z),
-            _js_round(self.w),
+            js_round(self.x),
+            js_round(self.y),
+            js_round(self.z),
+            js_round(self.w),
         )
 
     def round_to_zero(mut self):

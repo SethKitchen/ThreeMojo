@@ -34,7 +34,8 @@ from core.ordinal import ordinal_valid
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
 from std.benchmark import black_box
-from std.math import floor, isfinite, max, min
+from math.utils import js_round
+from std.math import isfinite, max, min
 
 
 @fieldwise_init
@@ -202,8 +203,7 @@ def _round(x: Float64) -> Int:
     Returns:
         The whole number.
     """
-    var whole = floor(x)
-    return Int(whole) + (1 if x - whole >= 0.5 else 0)
+    return Int(js_round(x))
 
 
 struct Lut(Copyable, Movable):

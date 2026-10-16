@@ -31,7 +31,7 @@ from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
-from math.utils import SeededRandom, mix_delta
+from math.utils import SeededRandom, js_round, mix_delta
 from math.norm import (
     _ordinary_product,
     dot3,
@@ -42,17 +42,6 @@ from math.norm import (
 )
 from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
-
-
-def _js_round(value: Float32) -> Float32:
-    """Return `value` rounded to the nearest whole number, a half rounded
-    up, as JavaScript's `Math.round` rounds: -2.5 gives -2.
-
-    Adding a half and taking the floor rounds 0.49999997 up in Float32,
-    so the fraction is compared instead. It is exact for every float.
-    """
-    var whole = floor(value)
-    return whole + Float32(1) if value - whole >= 0.5 else whole
 
 
 @fieldwise_init
@@ -544,7 +533,7 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
     def round(mut self):
         """Round each component to the nearest whole number, a half up,
         three.js's `round`."""
-        self = Vector3(_js_round(self.x), _js_round(self.y), _js_round(self.z))
+        self = Vector3(js_round(self.x), js_round(self.y), js_round(self.z))
 
     def round_to_zero(mut self):
         """Drop each component's fraction, three.js's `roundToZero`."""

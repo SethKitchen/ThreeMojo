@@ -43,7 +43,8 @@ opentype.js holds it, is not written: `FontLoader` does not read it.
 from loaders.font import Font, parse_font
 from loaders.json import quote_json
 from loaders.three_mf import js_key_order
-from std.math import floor, isnan, nan
+from math.utils import js_round
+from std.math import isnan, nan
 from std.pathlib import Path
 
 # How deep a composite glyph may nest components.
@@ -501,7 +502,7 @@ def _round(value: Float64) -> Int:
     Returns:
         The nearest whole number.
     """
-    return Int(floor(value + 0.5))
+    return Int(js_round(value))
 
 
 def _mac_roman(byte: Int) -> Int:
