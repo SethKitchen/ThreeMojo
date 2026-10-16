@@ -26,6 +26,7 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.humanoid.skeleton.field import DistanceField, cross
+from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import acos, iota, max, min
@@ -404,8 +405,7 @@ struct MeshTree(Movable):
         var high = Vector3(-3.0e38, -3.0e38, -3.0e38)
         for i in range(first * 3, end * 3):  # pragma: no branch
             var p = self.points[self.triangles[self.order[i // 3] * 3 + i % 3]]
-            low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
-            high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
+            enclose_point(low, high, p)
         self.low.append(low)
         self.high.append(high)
         self.left.append(-1)
