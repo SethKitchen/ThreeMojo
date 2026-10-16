@@ -37,7 +37,7 @@ from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture, float_texture
 from std.math import (
@@ -552,7 +552,7 @@ def bicubic[
     var right = (ix + h1x - 0.5) / size.x
     var low = (iy + h0y - 0.5) / size.y
     var high = (iy + h1y - 0.5) / size.y
-    var none = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var none = TRANSPARENT_BLACK
     var bottom = _weighted(
         _weighted(none, source.fetch_level(left, low, level), g0x),
         source.fetch_level(right, low, level),

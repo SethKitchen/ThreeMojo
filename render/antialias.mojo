@@ -64,7 +64,12 @@ uses the target's `samples`, independent of the renderer's `antialias`,
 and keeps the averaged light without a display conversion.
 """
 
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+)
 from render.raster_state import STANDARD_DEPTH, DepthMode, is_nearer
 
 # How many samples across and down each output pixel is drawn with when a
@@ -108,7 +113,7 @@ def downsample(
     # Both dimensions are positive, so neither loop runs zero times.
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
-            var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+            var total = TRANSPARENT_BLACK
             var nearest = image.depth_at(x * factor, y * factor)
             for row in range(factor):  # pragma: no branch
                 for column in range(factor):  # pragma: no branch

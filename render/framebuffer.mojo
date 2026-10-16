@@ -673,7 +673,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
 
 # What a missing texture reads, and what a source with no map reads.
 comptime OPAQUE_WHITE = FloatColor(1.0, 1.0, 1.0, 1.0)
-# What an invalid sample and an uncovered pixel read.
+# What an invalid sample, an uncovered pixel, and an empty sum read.
 comptime TRANSPARENT_BLACK = FloatColor(0.0, 0.0, 0.0, 0.0)
 
 

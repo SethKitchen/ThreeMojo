@@ -52,7 +52,7 @@ from math.sine import fraction, noise_scale, sin_float32
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from postprocessing.sampling import sample, u_of, v_of
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
     REVERSED_DEPTH,
@@ -1265,7 +1265,7 @@ def _ssr_pixel(
     y: Int,
 ) -> FloatColor:
     """Return one pixel of `ssr_reflections`."""
-    var none = FloatColor(0, 0, 0, 0)
+    var none = TRANSPARENT_BLACK
     var width = view.width
     var height = view.height
     var res_x = Float32(width)
@@ -1370,9 +1370,7 @@ def ssr_blur(
         The blurred reflections. Where no neighbor reflects anything, the
         light is black, which three.js leaves divided by zero.
     """
-    var out = List[FloatColor](
-        length=width * height, fill=FloatColor(0, 0, 0, 0)
-    )
+    var out = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     var y = 0
     while y < height:
         var x = 0
@@ -1466,7 +1464,7 @@ def ssr_light(
         source = bounced.copy()
         if len(source) != len(frame.colors):
             source = List[FloatColor](
-                length=len(frame.colors), fill=FloatColor(0, 0, 0, 0)
+                length=len(frame.colors), fill=TRANSPARENT_BLACK
             )
     var reflections = ssr_reflections(view, source, normals, settings)
     if settings.selective:
@@ -1475,10 +1473,10 @@ def ssr_light(
         for slot in range(len(reflections)):  # pragma: no branch
             var chosen = slot < len(selected) and selected[slot]
             if not chosen:
-                reflections[slot] = FloatColor(0, 0, 0, 0)
+                reflections[slot] = TRANSPARENT_BLACK
     for slot in range(len(ground)):
         if ground[slot]:
-            reflections[slot] = FloatColor(0, 0, 0, 0)
+            reflections[slot] = TRANSPARENT_BLACK
     if output == EFFECT_OUTPUT:
         _show_reflections(frame, reflections)
         return
@@ -1589,9 +1587,7 @@ def _outline_blur(
     image: `OutlinePass`'s separable blur, `max_radius` taps each side
     spread over `kernel_radius` texels of the output, with a sigma of half
     the radius."""
-    var out = List[FloatColor](
-        length=width * height, fill=FloatColor(0, 0, 0, 0)
-    )
+    var out = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     var sigma = kernel_radius / 2
     var step = kernel_radius / Float32(max_radius)
     var du = Float32(0)

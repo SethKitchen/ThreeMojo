@@ -57,7 +57,7 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
@@ -989,7 +989,7 @@ def tilt_shift_pixel(
         The weighted sum of the taps, premultiplied.
     """
     var step = spread * abs(focus - v)
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var tap = 0
     while tap < 9:
         var weight = TILT_LAST_WEIGHT
@@ -1092,7 +1092,7 @@ def triangle_blur_pixel(
     Returns:
         The weighted mean of the taps.
     """
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var total = Float32(0)
     var offset = glsl_rand(u, v)
     var t = -TRIANGLE_ITERATIONS

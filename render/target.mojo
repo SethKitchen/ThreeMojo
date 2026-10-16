@@ -101,7 +101,13 @@ from render.raster_state import (
     test_fragment,
     window_depth,
 )
-from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    SrgbBytes,
+)
 from render.rect import Rect
 from render.texture import (
     BILINEAR,
@@ -505,7 +511,7 @@ def resolve_block[
     Returns:
         The resolved pixel.
     """
-    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var total = TRANSPARENT_BLACK
     var nearest = cleared_depth(depth_mode)
     # Counted rather than flagged: a `Bool` raised in a nested loop and
     # read after it hangs codegen; see `docs/wiki/The-Mojo-compiler-hang.md`.
@@ -1839,7 +1845,7 @@ struct RenderTarget(Movable, SampleSource):
                 var n = self.normals[slot]
                 value = FloatColor(n.x, n.y, n.z, 1)
                 if n.length() == 0:
-                    value = FloatColor(0, 0, 0, 0)
+                    value = TRANSPARENT_BLACK
                 elif packs:
                     value = FloatColor(
                         n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1

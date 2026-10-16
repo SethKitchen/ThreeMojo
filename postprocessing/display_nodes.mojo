@@ -43,7 +43,7 @@ from math.vector2 import Vector2
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
 from units.si import Length, METER
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pi, pow, sin, sqrt
 
@@ -380,7 +380,7 @@ def box_blur_pixel(
     var sep = Float32(max(settings.separation, 1))
     var step_u = 1 / Float32(source.width) * sep
     var step_v = 1 / Float32(source.height) * sep
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var count = 0
     for i in range(-settings.size, settings.size + 1):  # pragma: no branch
         for j in range(-settings.size, settings.size + 1):  # pragma: no branch
@@ -419,7 +419,7 @@ def hash_blur_pixel(
     var v = v_of(y, source.height)
     var repeats = Float32(settings.repeats)
     var amount = settings.blur_amount
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     for step in range(settings.repeats):  # pragma: no branch
         var i = Float32(step)
         # three.js's `degrees( i / repeats * 360 )`: the loop's angle, in

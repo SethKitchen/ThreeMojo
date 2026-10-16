@@ -221,7 +221,12 @@ from materials.material import MaterialId
 from materials.nodes import NodeProgramId
 from render.antialias import SUPERSAMPLE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+)
 from render.raster_state import cleared_depth, is_nearer
 from render.target import (
     OUTPUT_COLOR,
@@ -3953,7 +3958,7 @@ def supersample[
     # the nearest of them is the nearest in that mode.
     frame.depth_mode = renderer.depth_mode_for(camera)
     for slot in range(pixels):  # pragma: no branch
-        frame.colors[slot] = FloatColor(0, 0, 0, 0)
+        frame.colors[slot] = TRANSPARENT_BLACK
         frame.data[slot] = True
         frame.depth[slot] = cleared_depth(frame.depth_mode)
     for index in range(count):  # pragma: no branch
@@ -4086,9 +4091,7 @@ def taa_render[
             memory.hold.append(held.light_at(slot))
         memory.hold_data = held.data.copy()
         memory.hold_depth = held.depth.copy()
-        memory.sum = List[FloatColor](
-            length=pixels, fill=FloatColor(0, 0, 0, 0)
-        )
+        memory.sum = List[FloatColor](length=pixels, fill=TRANSPARENT_BLACK)
         step.accumulate_index = 0
     var weight = 1 / Float32(TAA_SAMPLES)
     var offsets = jitter_offsets(JITTER_LEVELS - 1)
@@ -4184,7 +4187,7 @@ def blur_pixel(
     Returns:
         The weighted sum of the nine taps.
     """
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var tap = 0
     while tap < 9:
         var weight = BLUR_LAST_WEIGHT
@@ -4498,7 +4501,7 @@ def convolution_pixel(
     var size = Float32(len(kernel))
     var u = u_of(x, source.width) - (size - 1) / 2 * step_u
     var v = v_of(y, source.height) - (size - 1) / 2 * step_v
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     for i in range(len(kernel)):  # pragma: no branch
         var tap = source.sample(u, v)
         var weight = kernel[i]
@@ -4596,9 +4599,7 @@ def bloom_light(
     """
     var width = frame.width
     var height = frame.height
-    var bright = List[FloatColor](
-        length=width * height, fill=FloatColor(0, 0, 0, 0)
-    )
+    var bright = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     for index in range(len(frame.colors)):  # pragma: no branch
         bright[index] = bright_pixel(frame.colors[index], threshold)
     # Each level blurs the one before it into half its size, the first
@@ -4645,7 +4646,7 @@ def bloom_light(
         while x < width:
             var u = u_of(x, width)
             var v = v_of(y, height)
-            var glow = FloatColor(0, 0, 0, 0)
+            var glow = TRANSPARENT_BLACK
             var level = 0
             while level < BLOOM_LEVELS:
                 glow = bloom_glow(
