@@ -1089,58 +1089,16 @@ struct PredictionScheme(Copyable, Movable):
             var tip = reader.position(p)
             var next_pos = reader.position(next)
             var prev_pos = reader.position(prev)
-            var pn = _sub(prev_pos, next_pos)
-            var pn_norm2 = _dot(pn, pn)
-            if pn_norm2 != 0:
-                var cn = _sub(tip, next_pos)
-                var cn_dot_pn = _dot(pn, cn)
-                var pn_u = p_u - n_u
-                var pn_v = p_v - n_v
-                var limit = 0x7FFFFFFFFFFFFFFF
-                draco_require(
-                    max(abs(n_u), abs(n_v)) <= limit // pn_norm2,
-                    "a texture coordinate prediction overflows",
-                )
-                # Draco 1.5.6 compares the dot product itself, not its size,
-                # here and below.
-                draco_require(
-                    cn_dot_pn <= limit // max(abs(pn_u), abs(pn_v)),
-                    "a texture coordinate prediction overflows",
-                )
-                var x_u = n_u * pn_norm2 + cn_dot_pn * pn_u
-                var x_v = n_v * pn_norm2 + cn_dot_pn * pn_v
-                var pn_max = max(max(abs(pn[0]), abs(pn[1])), abs(pn[2]))
-                draco_require(
-                    cn_dot_pn <= limit // pn_max,
-                    "a texture coordinate prediction overflows",
-                )
-                var x_pos = List[Int](capacity=3)
-                for k in range(3):  # pragma: no branch
-                    x_pos.append(
-                        next_pos[k]
-                        + truncated_divide(cn_dot_pn * pn[k], pn_norm2)
-                    )
-                var cx = _sub(tip, x_pos)
-                var cx_norm2 = _dot(cx, cx)
-                var norm = _int_sqrt(UInt64(cx_norm2) * UInt64(pn_norm2))
-                var cx_u = pn_v * norm
-                var cx_v = -pn_u * norm
+            var ready, u0, v0, u1, v1 = _predicted_tex_sides(
+                n_u, n_v, p_u, p_v, tip, next_pos, prev_pos
+            )
+            if ready:
                 draco_require(
                     len(self.orientations) > 0, "the orientations run out"
                 )
-                var orientation = self.orientations.pop()
-                var u: Int
-                var v: Int
-                if orientation:
-                    u = x_u + cx_u
-                    v = x_v + cx_v
-                else:
-                    u = x_u - cx_u
-                    v = x_v - cx_v
-                return [
-                    to_int32(truncated_divide(u, pn_norm2)),
-                    to_int32(truncated_divide(v, pn_norm2)),
-                ]
+                if self.orientations.pop():
+                    return [to_int32(u0), to_int32(v0)]
+                return [to_int32(u1), to_int32(v1)]
         # Draco first takes the previous vertex's value here, then always
         # replaces it; that dead store is left out.
         var offset: Int
@@ -1256,6 +1214,81 @@ def _parallelogram(
             )
         )
     return out^
+
+
+def _predicted_tex_sides(
+    n_u: Int,
+    n_v: Int,
+    p_u: Int,
+    p_v: Int,
+    tip: List[Int],
+    next_pos: List[Int],
+    prev_pos: List[Int],
+) raises -> Tuple[Bool, Int, Int, Int, Int]:
+    """Return both sides of Draco's portable texture prediction.
+
+    The positive orientation is the first pair. The negative orientation
+    is the second. A zero edge leaves the prediction unset, and the
+    caller uses the previous value instead.
+
+    Args:
+        n_u: The next corner's u.
+        n_v: The next corner's v.
+        p_u: The previous corner's u.
+        p_v: The previous corner's v.
+        tip: The predicted vertex, as three integers.
+        next_pos: The next corner's position.
+        prev_pos: The previous corner's position.
+
+    Returns:
+        Whether the edge has a length, then the positive u and v and the
+        negative u and v. Those four are the quotients before they are
+        narrowed to 32 bits.
+
+    Raises:
+        Error: If a product overflows a 64-bit integer.
+    """
+    var pn = _sub(prev_pos, next_pos)
+    var pn_norm2 = _dot(pn, pn)
+    if pn_norm2 == 0:
+        return (False, 0, 0, 0, 0)
+    var cn = _sub(tip, next_pos)
+    var cn_dot_pn = _dot(pn, cn)
+    var pn_u = p_u - n_u
+    var pn_v = p_v - n_v
+    var limit = 0x7FFFFFFFFFFFFFFF
+    draco_require(
+        max(abs(n_u), abs(n_v)) <= limit // pn_norm2,
+        "a texture coordinate prediction overflows",
+    )
+    draco_require(
+        cn_dot_pn <= limit // max(abs(pn_u), abs(pn_v)),
+        "a texture coordinate prediction overflows",
+    )
+    var x_u = n_u * pn_norm2 + cn_dot_pn * pn_u
+    var x_v = n_v * pn_norm2 + cn_dot_pn * pn_v
+    var pn_max = max(max(abs(pn[0]), abs(pn[1])), abs(pn[2]))
+    draco_require(
+        cn_dot_pn <= limit // pn_max,
+        "a texture coordinate prediction overflows",
+    )
+    var x_pos = List[Int](capacity=3)
+    for k in range(3):  # pragma: no branch
+        x_pos.append(
+            next_pos[k] + truncated_divide(cn_dot_pn * pn[k], pn_norm2)
+        )
+    var cx = _sub(tip, x_pos)
+    var cx_norm2 = _dot(cx, cx)
+    var norm = _int_sqrt(UInt64(cx_norm2) * UInt64(pn_norm2))
+    var cx_u = pn_v * norm
+    var cx_v = -pn_u * norm
+    return (
+        True,
+        truncated_divide(x_u + cx_u, pn_norm2),
+        truncated_divide(x_v + cx_v, pn_norm2),
+        truncated_divide(x_u - cx_u, pn_norm2),
+        truncated_divide(x_v - cx_v, pn_norm2),
+    )
 
 
 def _sub(a: List[Int], b: List[Int]) -> List[Int]:
