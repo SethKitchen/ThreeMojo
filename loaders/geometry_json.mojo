@@ -163,9 +163,9 @@ def _extruded(
 ) raises -> BufferGeometry:
     """Return an `ExtrudeGeometry` from its shapes and options."""
     var shapes = _shapes_of(doc, item, library)
-    var options = doc.get(item, "options")
-    if options == NO_NODE or doc.kind(options) != OBJECT:
-        raise Error("Geometry JSON: an extrusion needs its options")
+    var options = doc.required_kind(
+        item, "options", OBJECT, "Geometry JSON: an extrusion needs its options"
+    )
     var steps = _count(doc, options, "steps", 1)
     var curve_segments = _count(doc, options, "curveSegments", 12)
     var path = doc.get(options, "extrudePath")

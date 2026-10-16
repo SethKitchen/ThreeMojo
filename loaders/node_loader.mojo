@@ -1090,9 +1090,12 @@ struct NodeLoader(Movable):
         var own = document.get(item, "nodes")
         if own != NO_NODE and document.kind(own) == ARRAY:
             self.parse_nodes(document, own)
-        var inputs = document.get(item, "inputNodes")
-        if inputs == NO_NODE or document.kind(inputs) != OBJECT:
-            raise Error("Node JSON: a node material needs inputNodes")
+        var inputs = document.required_kind(
+            item,
+            "inputNodes",
+            OBJECT,
+            "Node JSON: a node material needs inputNodes",
+        )
         var refs = List[Int](length=NODE_OUTPUT_COUNT, fill=-1)
         for index in range(document.length(inputs)):
             var property = document.key(inputs, index)
