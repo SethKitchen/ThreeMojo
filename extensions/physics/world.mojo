@@ -2158,19 +2158,14 @@ struct PhysicsWorld(Movable):
         if owner == ignore.value or not self.bodies[owner].collides:
             return best
         ref tri = self._triangles[t]
-        var met = ray.intersect_triangle(tri.a, tri.b, tri.c, True)
-        if not Bool(met):
-            return best
-        var distance = (met.value() - ray.origin).length()
-        if distance > reach:
-            return best
-        if Bool(best) and best.value().distance <= distance:
-            return best
-        return RaycastHit(
-            BodyId(owner),
-            met.value(),
-            unit_or(cross(tri.b - tri.a, tri.c - tri.a), Vector3(0, 0, 1)),
-            distance,
+        return _triangle_ray_hit(
+            ray,
+            tri.a,
+            tri.b,
+            tri.c,
+            reach,
+            best,
+            owner,
             self.bodies[owner].material,
         )
 
@@ -2216,6 +2211,34 @@ def _box_of(shape: WorldShape) -> Box3:
     for v in shape.polyhedron.vertices:  # pragma: no branch
         box.expand_by_point(v)
     return box
+
+
+def _triangle_ray_hit(
+    ray: Ray,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    reach: Float32,
+    best: Optional[RaycastHit],
+    owner: Int,
+    material: PhysicsMaterial,
+) -> Optional[RaycastHit]:
+    """Return the nearer hit of a ray on one triangle, or `best`."""
+    var met = ray.intersect_triangle(a, b, c, True)
+    if not Bool(met):
+        return best
+    var distance = (met.value() - ray.origin).length()
+    if distance > reach:
+        return best
+    if Bool(best) and best.value().distance <= distance:
+        return best
+    return RaycastHit(
+        BodyId(owner),
+        met.value(),
+        unit_or(cross(b - a, c - a), Vector3(0, 0, 1)),
+        distance,
+        material,
+    )
 
 
 def _sphere_hit(ray: Ray, center: Vector3, radius: Float32) -> Float32:
