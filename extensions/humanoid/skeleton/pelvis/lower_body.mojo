@@ -40,6 +40,7 @@ from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
 from extensions.humanoid.skeleton.leg.contents import LegContents
 from extensions.humanoid.skeleton.limb.skin import LimbSkinField
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     lymph_phong,
     nerve_phong,
@@ -56,14 +57,11 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     pelvis_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.pelvis.skin.dimensions import PelvisSkinField
+from extensions.humanoid.skeleton.place import place_mesh
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
 from std.math import max, min
 
-# Optional `add_lower_body` paint. A negative id asks the assembler to
-# create the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 # The crotch, as shares of the stature: how far below the pubic
 # symphysis the thighs part, how wide the crease between them is, and
 # how round the fork is where they part.
@@ -340,11 +338,13 @@ def add_lower_body(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        var shape = assets.geometries.add(
-            lower_body_skin_mesh(spec, skin_detail)
+        _ = place_mesh(
+            scene,
+            assets,
+            root_id,
+            lower_body_skin_mesh(spec, skin_detail),
+            skin,
         )
-        var nid = scene.attach(Object3D(), root_id)
-        scene.add_mesh(Mesh(shape, skin, nid))
     return root_id
 
 

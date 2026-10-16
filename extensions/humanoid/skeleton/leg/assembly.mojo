@@ -18,7 +18,6 @@ frame. This module stores the origin of that frame in the leg frame.
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
@@ -95,6 +94,7 @@ from extensions.humanoid.skeleton.leg.vessels.geometry import (
     vessel_from_dimensions,
 )
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     hair_phong,
     lymph_phong,
@@ -102,13 +102,9 @@ from extensions.humanoid.skeleton.look import (
     skin_phong,
     vein_phong,
 )
+from extensions.humanoid.skeleton.place import place_mesh
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
-
-# Optional `add_leg` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 
 
 @fieldwise_init
@@ -247,76 +243,71 @@ def add_leg(
     var root = Object3D()
     var root_id = scene.attach(root^, parent)
     if contents.includes_bones():
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             femur_from_dimensions(pose.femur, detail),
-            pose.femur_origin,
             bone_paint,
+            pose.femur_origin,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             tibia_from_dimensions(pose.tibia, detail),
-            pose.tibia_origin,
             bone_paint,
+            pose.tibia_origin,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             fibula_from_dimensions(pose.fibula, detail),
-            pose.fibula_origin,
             bone_paint,
+            pose.fibula_origin,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             patella_from_dimensions(pose.patella, detail),
-            pose.patella_origin,
             bone_paint,
+            pose.patella_origin,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             articular_cartilage(spec, side, detail),
-            Vector3(0, 0, 0),
             cartilage_paint,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             medial_meniscus(spec, side, detail),
-            Vector3(0, 0, 0),
             meniscus_paint,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             lateral_meniscus(spec, side, detail),
-            Vector3(0, 0, 0),
             meniscus_paint,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             medial_collateral(spec, side, detail),
-            Vector3(0, 0, 0),
             ligament_paint,
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             lateral_collateral(spec, side, detail),
-            Vector3(0, 0, 0),
             ligament_paint,
         )
     if contents.includes_muscles():
@@ -327,12 +318,11 @@ def add_leg(
             var paint = muscle_paint
             if is_tendon(part):
                 paint = tendon_paint
-            _place(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
                 muscle_from_dimensions(pose.muscles, part, detail),
-                Vector3(0, 0, 0),
                 paint,
             )
             index += 1
@@ -346,12 +336,11 @@ def add_leg(
             var paint = vein
             if is_artery(vessel):
                 paint = artery
-            _place(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
                 vessel_from_dimensions(pose.muscles, vessel, detail),
-                Vector3(0, 0, 0),
                 paint,
             )
             v_index += 1
@@ -360,12 +349,11 @@ def add_leg(
         var nodes = named_lymph_parts()
         var l_index = 0
         while l_index < len(nodes):
-            _place(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
                 lymph_from_dimensions(pose.muscles, nodes[l_index], detail),
-                Vector3(0, 0, 0),
                 lymph,
             )
             l_index += 1
@@ -374,12 +362,11 @@ def add_leg(
         var trunks = named_nerve_parts()
         var n_index = 0
         while n_index < len(trunks):
-            _place(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
                 nerve_from_dimensions(pose.muscles, trunks[n_index], detail),
-                Vector3(0, 0, 0),
                 nerve,
             )
             n_index += 1
@@ -387,12 +374,11 @@ def add_leg(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _place(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
             skin_from_dimensions(pose.muscles, detail),
-            Vector3(0, 0, 0),
             skin,
         )
     if contents.includes_hair():
@@ -402,41 +388,12 @@ def add_leg(
         var groups = named_hair_parts()
         var h_index = 0
         while h_index < len(groups):
-            _place(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
                 hair_from_dimensions(pose.muscles, groups[h_index], detail),
-                Vector3(0, 0, 0),
                 keratin,
             )
             h_index += 1
     return root_id
-
-
-def _place(
-    mut scene: Scene,
-    mut assets: Assets,
-    parent: NodeId,
-    var geometry: BufferGeometry,
-    origin: Vector3,
-    paint: MaterialId,
-) raises:
-    """Attach one mesh at `origin` under `parent`.
-
-    Args:
-        scene: The scene that receives the node and the mesh.
-        assets: Geometry store for the new mesh.
-        parent: Node the part hangs from.
-        geometry: The solid to draw.
-        origin: Position of the solid's frame in the parent, in meters.
-        paint: Material id.
-
-    Raises:
-        Error: If the scene refuses the node or the mesh.
-    """
-    var node = Object3D()
-    node.set_position(origin.x, origin.y, origin.z)
-    var nid = scene.attach(node^, parent)
-    var shape = assets.geometries.add(geometry^)
-    scene.add_mesh(Mesh(shape, paint, nid))

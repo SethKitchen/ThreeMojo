@@ -531,7 +531,7 @@ def add_game_humanoid(
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
     var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-    place_mesh(scene, assets, holder_id, shell^, hair)
+    _ = place_mesh(scene, assets, holder_id, shell^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -546,7 +546,7 @@ def add_game_humanoid(
         var iris = assets.textures.add(iris_albedo(64, spec.genome))
         eye = assets.materials.add(eye_physical(iris))
     for _ in range(2):  # pragma: no branch
-        place_mesh(scene, assets, holder_id, eyes.pop(0), eye)
+        _ = place_mesh(scene, assets, holder_id, eyes.pop(0), eye)
     var strands = List[HairStrands]()
     if guides > 0:
         strands.append(

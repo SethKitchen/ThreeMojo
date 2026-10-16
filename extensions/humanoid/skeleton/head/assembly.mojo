@@ -183,7 +183,7 @@ def add_head(
     if contents.includes_bones():
         var bones = named_head_bones()
         for index in range(len(bones)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -200,7 +200,7 @@ def add_head(
             if is_paired_head_ligament(parts[index]):
                 count = 2
             for s in range(count):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -216,7 +216,7 @@ def add_head(
             if is_paired_head_muscle(parts[index]):
                 count = 2
             for s in range(count):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -234,7 +234,7 @@ def add_head(
             if is_head_artery(parts[index]):
                 paint = artery
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -248,7 +248,7 @@ def add_head(
         var parts = named_head_lymph()
         for index in range(len(parts)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -265,7 +265,7 @@ def add_head(
             if is_paired_head_nerve(parts[index]):
                 count = 2
             for s in range(count):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -291,7 +291,7 @@ def add_head(
         # ridge: only the scalp's hair is a mesh. It is meshed nearly
         # as finely as the skin, fine enough for a close crop.
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-        place_mesh(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
@@ -324,7 +324,7 @@ def add_head(
             var iris = assets.textures.add(iris_albedo(64, spec.genome))
             eye = assets.materials.add(eye_physical(iris))
         for s in range(2):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,

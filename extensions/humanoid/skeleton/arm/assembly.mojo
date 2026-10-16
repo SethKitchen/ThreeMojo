@@ -15,7 +15,6 @@ the torso's scapula.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
@@ -62,21 +61,19 @@ from extensions.humanoid.skeleton.arm.vessels.geometry import (
     arm_vessel_from_dimensions,
 )
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     hair_phong,
     lymph_phong,
     nerve_phong,
+    resolved_paint,
     skin_phong,
     vein_phong,
 )
+from extensions.humanoid.skeleton.place import place_mesh
 from extensions.humanoid.spec import HumanoidSpec
-from materials.material import Material, MaterialId
+from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
-
-# Optional `add_arm` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 
 
 def add_arm(
@@ -142,7 +139,7 @@ def add_arm(
     if contents.includes_bones():
         var bones = named_arm_bones()
         for index in range(len(bones)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -158,7 +155,7 @@ def add_arm(
                 or parts[index] == ARTICULAR_CARTILAGE
             ):
                 paint = cartilage_paint
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -170,7 +167,7 @@ def add_arm(
     if contents.includes_muscles():
         var parts = named_arm_muscles()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -185,7 +182,7 @@ def add_arm(
             var paint = vein
             if is_arm_artery(parts[index]):
                 paint = artery
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -196,7 +193,7 @@ def add_arm(
         var lymph = resolved_paint(assets, lymph_paint, lymph_phong())
         var parts = named_arm_lymph()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -207,7 +204,7 @@ def add_arm(
         var nerve = resolved_paint(assets, nerve_paint, nerve_phong())
         var parts = named_arm_nerves()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -218,7 +215,7 @@ def add_arm(
         var skin = resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
@@ -229,7 +226,7 @@ def add_arm(
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var parts = named_arm_hair()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -237,48 +234,3 @@ def add_arm(
                 hair,
             )
     return root_id
-
-
-def resolved_paint(
-    mut assets: Assets, paint: MaterialId, var material: Material
-) raises -> MaterialId:
-    """Return `paint`, or store `material` when `paint` is unset.
-
-    Args:
-        assets: Material store for a new default look.
-        paint: Caller paint, or `UNSET_PAINT`.
-        material: Default look for this layer.
-
-    Returns:
-        A stored material id.
-
-    Raises:
-        Error: If the store refuses the material.
-    """
-    if paint.value >= 0:
-        return paint
-    return assets.materials.add(material^)
-
-
-def place_mesh(
-    mut scene: Scene,
-    mut assets: Assets,
-    parent: NodeId,
-    var geometry: BufferGeometry,
-    paint: MaterialId,
-) raises:
-    """Attach one mesh at its parent's origin.
-
-    Args:
-        scene: The scene that receives the node and the mesh.
-        assets: Geometry store for the new mesh.
-        parent: Node the part hangs from.
-        geometry: The solid to draw.
-        paint: Material id.
-
-    Raises:
-        Error: If the scene refuses the node or the mesh.
-    """
-    var nid = scene.attach(Object3D(), parent)
-    var shape = assets.geometries.add(geometry^)
-    scene.add_mesh(Mesh(shape, paint, nid))

@@ -22,6 +22,7 @@ from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     lymph_phong,
     nerve_phong,
@@ -81,10 +82,6 @@ from extensions.humanoid.skeleton.torso.vessels.geometry import (
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from extensions.humanoid.skeleton.place import place_mesh
-
-# Optional `add_torso` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 
 
 def add_torso(
@@ -147,7 +144,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_bone(bones[index]):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -166,7 +163,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_ligament(band):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -181,7 +178,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_muscle(parts[index]):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -202,7 +199,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_vessel(vessel):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -218,7 +215,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_lymph(groups[index]):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -234,7 +231,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_nerve(trunks[index]):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -247,7 +244,7 @@ def add_torso(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
