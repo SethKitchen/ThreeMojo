@@ -427,6 +427,56 @@ def reproject_window_depth(
     return (view_z + near) / (near - far)
 
 
+def neighborhood_motion(
+    depth: FloatPlane,
+    velocity: FloatPlane,
+    x: Int,
+    y: Int,
+    origin_x: Int,
+    origin_y: Int,
+) -> Tuple[Float32, Float32, Float32, Float32]:
+    """Return the depth range of a 3 by 3 neighborhood and the velocity at
+    its closest sample.
+
+    The closest sample starts at `(origin_x, origin_y)` and moves to any
+    neighbor whose depth is less than 2. The velocity is three.js's
+    conversion from normalized device coordinates to a texture coordinate
+    that grows down.
+
+    Args:
+        depth: Window depth, one float a pixel.
+        velocity: Velocity, two floats a pixel.
+        x: The neighborhood's center column.
+        y: The neighborhood's center row, down from the top.
+        origin_x: The column kept when every neighbor is at least 2.
+        origin_y: The row kept in that case.
+
+    Returns:
+        The closest depth, the farthest depth, and the velocity across
+        and down.
+    """
+    var closest = Float32(2)
+    var closest_x = origin_x
+    var closest_y = origin_y
+    var farthest = Float32(-1)
+    # Nine neighbors, fixed, across then down.
+    for dx in range(-1, 2):  # pragma: no branch
+        for dy in range(-1, 2):  # pragma: no branch
+            var d = depth.load(x + dx, y + dy, 0)
+            if d < closest:
+                closest = d
+                closest_x = x + dx
+                closest_y = y + dy
+            if d > farthest:
+                farthest = d
+    return (
+        closest,
+        farthest,
+        velocity.load(closest_x, closest_y, 0) * 0.5,
+        velocity.load(closest_x, closest_y, 1) * -0.5,
+    )
+
+
 def traa_pixel(
     beauty: LightView,
     history: LightView,
@@ -458,25 +508,11 @@ def traa_pixel(
     # WebGPU `uv()` runs.
     var u = (Float32(x) + 0.5) / Float32(w)
     var v_down = (Float32(y) + 0.5) / Float32(h)
-    # The closest and farthest depths of the 3 by 3 neighbors.
-    var closest = Float32(2)
-    var closest_x = 0
-    var closest_y = 0
-    var farthest = Float32(-1)
-    # Nine neighbors, fixed.
-    for dx in range(-1, 2):  # pragma: no branch
-        for dy in range(-1, 2):  # pragma: no branch
-            var d = depth.load(x + dx, y + dy, 0)
-            if d < closest:
-                closest = d
-                closest_x = x + dx
-                closest_y = y + dy
-            if d > farthest:
-                farthest = d
-    # The velocity, from normalized device coordinates to a texture
-    # coordinate that grows down.
-    var offset_u = velocity.load(closest_x, closest_y, 0) * 0.5
-    var offset_v = velocity.load(closest_x, closest_y, 1) * -0.5
+    # The closest and farthest depths of the 3 by 3 neighbors, and the
+    # velocity at the closest. A depth of at least 2 keeps column 0.
+    var closest, farthest, offset_u, offset_v = neighborhood_motion(
+        depth, velocity, x, y, 0, 0
+    )
     var history_u = u - offset_u
     var history_v = v_down - offset_v
     var then = reproject_window_depth(
