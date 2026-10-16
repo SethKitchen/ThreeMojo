@@ -102,6 +102,7 @@ from extensions.anatomy.muscle import (
     MuscleArchitecture,
     default_tension,
     muscle_density,
+    stored_moment_arm,
 )
 from extensions.animals.anatomy.body import (
     ANURAN,
@@ -121,7 +122,7 @@ from extensions.animals.registry import (
     SpeciesId,
 )
 from extensions.animals.rig import Pose, Rig
-from extensions.sdf.vector import V3, Rigid, cross, dot, length, lerp
+from extensions.sdf.vector import V3, Rigid, length, lerp
 from std.math import cos, isfinite, pow
 from units.si import DEGREE, KILOGRAM, METER, Angle, Length, Mass
 
@@ -718,10 +719,7 @@ struct AnimalMuscle(Copyable, Movable):
             var lever = p[k] - center
             var line = p[k - 1] - p[k]
             var pull = line * (1.0 / length(line))
-            var arm = dot(cross(lever, pull), axis)
-            if not isfinite(Float32(arm)):
-                raise Error("A muscle moment arm must fit a finite SI length")
-            out.append(Length(Float32(arm), METER))
+            out.append(stored_moment_arm(lever, pull, axis))
         return out^
 
     def unit_length(self, world: List[Rigid]) raises -> Length:

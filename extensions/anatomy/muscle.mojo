@@ -519,7 +519,29 @@ def moment_arm(
         raise Error("A joint axis must have a direction")
     var lever = insertion - center
     var pull = line * (1.0 / reach)
-    var arm = lever.cross(pull).dot(axis * (1.0 / size))
+    return stored_moment_arm(lever, pull, axis * (1.0 / size))
+
+
+def stored_moment_arm(
+    lever: Vec3d, pull: Vec3d, unit_axis: Vec3d
+) raises -> Length:
+    """Return `(lever x pull) . unit_axis` as a finite length.
+
+    `pull` and `unit_axis` are unit vectors. The cross product is formed
+    before the dot product.
+
+    Args:
+        lever: From the joint center to the insertion, in meters.
+        pull: The unit direction of the pull.
+        unit_axis: The unit joint axis.
+
+    Returns:
+        The signed moment arm, in meters.
+
+    Raises:
+        Error: If the result does not fit a finite SI length.
+    """
+    var arm = lever.cross(pull).dot(unit_axis)
     if not isfinite(Float32(arm)):
         raise Error("A muscle moment arm must fit a finite SI length")
     return Length(Float32(arm), METER)
