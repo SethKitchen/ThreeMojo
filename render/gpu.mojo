@@ -291,6 +291,7 @@ from render.tonemap import (
     tone_map,
     tone_map_with,
 )
+from render.screen_coord import pixel_frag_coord
 from materials.nodes import (
     AO_NODE,
     BACKDROP_ALPHA_NODE,
@@ -5868,13 +5869,8 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
@@ -6071,13 +6067,8 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
