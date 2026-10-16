@@ -29,7 +29,8 @@ from extensions.humanoid.skeleton.field import Bounds, empty_bounds
 from math.box_extent import box_exterior
 from math.catmull import catmull_rom_weights
 from math.norm import squared_length2
-from math.vector3 import Vector3
+from math.utils import mix_delta
+from math.vector3 import Vector3, mix_delta3
 from std.math import atan2, cos, max, min, pi, sin, sqrt
 
 # Rays around every section. Thirty-six resolve a calf's two heads and
@@ -559,10 +560,13 @@ def _add_segment(
         if cross >= 0 and cross <= 1:
             _add_round(
                 out,
-                a.center + (b.center - a.center) * cross,
-                a.ml + (b.ml - a.ml) * cross,
-                a.ap + (b.ap - a.ap) * cross,
-                min(a.ml + (b.ml - a.ml) * cross, a.ap + (b.ap - a.ap) * cross),
+                mix_delta3(a.center, b.center, cross),
+                mix_delta(a.ml, b.ml, cross),
+                mix_delta(a.ap, b.ap, cross),
+                min(
+                    mix_delta(a.ml, b.ml, cross),
+                    mix_delta(a.ap, b.ap, cross),
+                ),
                 at,
                 axis,
             )
@@ -574,9 +578,9 @@ def _add_segment(
     var k = 0
     while k < steps:
         var t = t0 + (t1 - t0) * Float32(k) / Float32(steps - 1)
-        var center = a.center + (b.center - a.center) * t
-        var ml = a.ml + (b.ml - a.ml) * t
-        var ap = a.ap + (b.ap - a.ap) * t
+        var center = mix_delta3(a.center, b.center, t)
+        var ml = mix_delta(a.ml, b.ml, t)
+        var ap = mix_delta(a.ap, b.ap, t)
         _add_round(out, center, ml, ap, min(ml, ap), at, axis)
         k += 1
 

@@ -16,9 +16,10 @@ from extensions.sdf.vector import (
     dot,
     frame_zy,
     length,
+    lerp,
 )
 from math.norm import squared_length2
-from math.utils import min3
+from math.utils import min3, mix_delta
 from std.math import sqrt
 
 
@@ -91,7 +92,7 @@ def segment_distance(p: V3, a: V3, b: V3) -> Float64:
         The distance. It is never negative.
     """
     var u = segment_param(p, a, b)
-    return length(p - (a + (b - a) * u))
+    return length(p - lerp(a, b, u))
 
 
 def round_cone_estimate(
@@ -113,7 +114,7 @@ def round_cone_estimate(
         The estimated distance. It is negative inside.
     """
     var u = segment_param(p, a, b)
-    return length(p - (a + (b - a) * u)) - (ra + (rb - ra) * u)
+    return length(p - lerp(a, b, u)) - mix_delta(ra, rb, u)
 
 
 def ellipsoid_estimate(p: V3, c: V3, r: V3) -> Float64:

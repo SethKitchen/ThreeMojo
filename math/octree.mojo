@@ -59,7 +59,7 @@ from math.capsule import Capsule
 from math.ray import Ray, _RayProducts
 from math.triangle import Triangle, _segment_closest_points
 from math.utils import clamp, max3, min3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import inf, max, min, sqrt
 
 
@@ -296,7 +296,7 @@ def triangle_capsule_intersect(
     var span = abs(d1) + abs(d2)
     # Both endpoints can touch the radius-offset plane. Use either endpoint.
     var delta = abs(d1 / span) if span != 0 else Float32(0)
-    var crossing = capsule.start + (capsule.end - capsule.start) * delta
+    var crossing = mix_delta3(capsule.start, capsule.end, delta)
     if _contains_point(triangle, crossing):
         return Contact(plane.normal, crossing, abs(min(d1, d2)))
     var r2 = capsule.radius * capsule.radius

@@ -17,6 +17,7 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.humanoid.skeleton.field import DistanceField
+from math.utils import mix_trilinear
 from math.vector3 import Vector3
 
 # The collider's grid: cells along each side of its box.
@@ -91,20 +92,16 @@ struct HairCollider(Copyable, DistanceField, Movable):
         var fw = w - Float32(k)
         var n = self.cells
         var at = (k * n + j) * n + i
-        var c00 = self.values[at] + (self.values[at + 1] - self.values[at]) * fu
-        var c10 = (
-            self.values[at + n]
-            + (self.values[at + n + 1] - self.values[at + n]) * fu
+        return mix_trilinear[DType.float32, 1](
+            self.values[at],
+            self.values[at + 1],
+            self.values[at + n],
+            self.values[at + n + 1],
+            self.values[at + n * n],
+            self.values[at + n * n + 1],
+            self.values[at + n * n + n],
+            self.values[at + n * n + n + 1],
+            fu,
+            fv,
+            fw,
         )
-        var c01 = (
-            self.values[at + n * n]
-            + (self.values[at + n * n + 1] - self.values[at + n * n]) * fu
-        )
-        var c11 = (
-            self.values[at + n * n + n]
-            + (self.values[at + n * n + n + 1] - self.values[at + n * n + n])
-            * fu
-        )
-        var c0 = c00 + (c10 - c00) * fv
-        var c1 = c01 + (c11 - c01) * fv
-        return c0 + (c1 - c0) * fw

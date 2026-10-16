@@ -90,7 +90,7 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
 from math.smoothstep import hermite_fade
-from math.utils import max3, min3
+from math.utils import max3, min3, mix_delta
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -268,7 +268,7 @@ struct BodySkinField(Copyable, DistanceField, Movable):
             self.band_top - self.band_bottom
         )
         var w = hermite_fade(t)
-        return below + (above - below) * w
+        return mix_delta(below, above, w)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
