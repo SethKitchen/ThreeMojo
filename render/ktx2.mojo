@@ -90,6 +90,7 @@ from render.compressed_texture import (
 from render.etc1s import Etc1sGlobal, etc1s_image
 from render.exr import half_to_float
 from render.inflate import zlib_inflate
+from render.ktx_id import ktx_file_id
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
@@ -368,20 +369,7 @@ def identifier() -> List[UInt8]:
     Returns:
         The identifier.
     """
-    return [
-        0xAB,
-        0x4B,
-        0x54,
-        0x58,
-        0x20,
-        0x32,
-        0x30,
-        0xBB,
-        0x0D,
-        0x0A,
-        0x1A,
-        0x0A,
-    ]
+    return ktx_file_id(0x32, 0x30)
 
 
 def _u64(bytes: List[UInt8], at: Int) raises -> Int:
