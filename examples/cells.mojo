@@ -13,7 +13,7 @@ a mix of two colors. The time walks one full period of the cells, and
 the sphere turns one whole turn.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -124,13 +124,15 @@ def main() raises:
         directional_light(Color(255, 248, 236), scene.add(lamp^), 2.2)
     )
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.15, 0.2, 2.85),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.15, 0.2, 2.85), Vector3(0, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()

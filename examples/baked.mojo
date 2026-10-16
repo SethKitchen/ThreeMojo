@@ -13,7 +13,7 @@ The lamp walks a circle. A warmup of the same circle lets the average
 settle, so the recorded turn starts where it ends.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -137,13 +137,15 @@ def main() raises:
     var light_map = ProgressiveLightMap(assets, 128)
     light_map.add_objects_to_light_map(scene, assets, [0, 1])
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(2.4, 1.8, 2.6),
+        Vector3(0, 0.2, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
-    camera.place(Vector3(2.4, 1.8, 2.6), Vector3(0, 0.2, 0))
 
     for index in range(WARMUP):
         _place(scene, lamp_node, index - WARMUP)

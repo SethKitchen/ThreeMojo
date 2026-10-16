@@ -12,9 +12,8 @@ rings whose radius swells and narrows. Both ends are capped. The vase
 turns one whole turn.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.object3d import Object3D
@@ -85,13 +84,15 @@ def main() raises:
         directional_light(Color(255, 246, 232), scene.add(lamp^), 1.9)
     )
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(1.15, 0.35, 2.7),
+        Vector3(0, 0.05, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(1.15, 0.35, 2.7), Vector3(0, 0.05, 0))
 
     spin_clip(
         renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination

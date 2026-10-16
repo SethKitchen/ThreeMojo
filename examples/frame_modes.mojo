@@ -13,7 +13,7 @@ drawn displaced by that mode shape, scaled up so the sway shows, through
 one cycle.
 """
 
-from examples.output import example_destination, write_frames
+from examples.output import example_destination, gallery_camera, write_frames
 from examples.preview import Triangles, add_sky_and_sun, heat_color
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -50,13 +50,15 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.5, METER),
-        Length(300, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(46, 22, 52),
+        Vector3(0, 10, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.5, METER),
+        far=Length(300, METER),
     )
-    camera.place(Vector3(46, 22, 52), Vector3(0, 10, 0))
     return camera^
 
 

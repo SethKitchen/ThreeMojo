@@ -12,9 +12,8 @@ patches of the classic model. The body, the lid, the handle and the
 spout are one geometry.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -54,13 +53,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.35))
     scene.add_light(directional_light(Color(255, 244, 230), lamp_node, 2.6))
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(1.5, 1.05, 2.3),
+        Vector3(0, 0.2, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(1.5, 1.05, 2.3), Vector3(0, 0.2, 0))
 
     spin_clip(
         renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination

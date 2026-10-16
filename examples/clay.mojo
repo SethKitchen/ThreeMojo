@@ -12,9 +12,8 @@ before the frames start. Detail stays at zero, so the triangles do not
 change. The sphere then turns one whole turn.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -87,13 +86,15 @@ def main() raises:
     scene.node(ball).rotate_y(Angle(75.0, DEGREE))
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(1.75, 0.85, 3.1),
+        Vector3(0, 0.05, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(1.75, 0.85, 3.1), Vector3(0, 0.05, 0))
 
     spin_clip(
         renderer, camera, assets, scene, ball, FRAMES, DELAY_MS, destination

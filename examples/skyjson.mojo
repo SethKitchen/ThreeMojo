@@ -12,9 +12,8 @@ writer stores that cube as the scene's environment, and the reader
 builds its PMREM again. The picture is the ball that came back.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
 from core.clock import Clock
@@ -112,13 +111,15 @@ def main() raises:
     remove(document)
     var subject = loaded.meshes[0].node
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.3, 0.35, 2.8),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
-    camera.place(Vector3(0.3, 0.35, 2.8), Vector3(0, 0, 0))
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
