@@ -1179,6 +1179,42 @@ struct _Positions(Movable):
         ]
 
 
+def _mirrored_values(
+    o: Int,
+    n: Int,
+    r: Int,
+    p: Int,
+    values: List[Int],
+    components: Int,
+) -> Optional[List[Int]]:
+    """Return the mirrored prediction `n + r - o`, or none before value `p`.
+
+    Args:
+        o: The value across the opposite edge.
+        n: The next value around that face.
+        r: The previous value around that face.
+        p: The value being predicted. Earlier values are below it.
+        values: The stored components.
+        components: How many components each value has.
+
+    Returns:
+        The prediction, or none when one of the three values is not yet
+        stored.
+    """
+    if o >= p or n >= p or r >= p:
+        return None
+    var out = List[Int](capacity=components)
+    for c in range(components):  # pragma: no branch
+        out.append(
+            to_int32(
+                values[n * components + c]
+                + values[r * components + c]
+                - values[o * components + c]
+            )
+        )
+    return out^
+
+
 def _parallelogram(
     p: Int,
     corner: Int,
@@ -1195,18 +1231,7 @@ def _parallelogram(
     var o = data.vertex_values[data.table.vertex(opposite)]
     var n = data.vertex_values[data.table.vertex(data.table.next(opposite))]
     var r = data.vertex_values[data.table.vertex(data.table.previous(opposite))]
-    if o >= p or n >= p or r >= p:
-        return None
-    var out = List[Int](capacity=components)
-    for c in range(components):  # pragma: no branch
-        out.append(
-            to_int32(
-                values[n * components + c]
-                + values[r * components + c]
-                - values[o * components + c]
-            )
-        )
-    return out^
+    return _mirrored_values(o, n, r, p, values, components)
 
 
 def _predicted_tex_sides(
