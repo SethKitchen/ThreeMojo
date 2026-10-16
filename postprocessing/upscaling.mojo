@@ -33,7 +33,7 @@ it at the frame's size.
 """
 
 from math.norm import squared_length2
-from postprocessing.display_nodes import scaled_size
+from postprocessing.display_nodes import replace_light, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
@@ -216,16 +216,11 @@ def sharpen_light(mut frame: RenderTarget, settings: UpscaleSettings):
         frame: The frame, replaced.
         settings: The sharpness and whether it denoises.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = rcas_pixel(
-                view, x, y, settings.sharpness, settings.denoise
-            )
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return rcas_pixel(view, x, y, settings.sharpness, settings.denoise)
+
+    replace_light[pixel](frame)
 
 
 # --- EASU --------------------------------------------------------------------

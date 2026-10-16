@@ -442,6 +442,29 @@ def hash_blur_pixel(
     )
 
 
+def replace_light[
+    pixel: def(LightView, Int, Int) capturing[_] -> FloatColor
+](mut frame: RenderTarget):
+    """Replace every pixel from a copy of the frame.
+
+    The width and the height are positive, so both loops run.
+
+    Parameters:
+        pixel: The color of one pixel, read from the copy.
+
+    Args:
+        frame: The frame, replaced. Each pixel's data flag is cleared.
+    """
+    var before = frame.colors.copy()
+    var view = LightView(before, frame.width, frame.height)
+    for y in range(frame.height):  # pragma: no branch
+        for x in range(frame.width):  # pragma: no branch
+            var slot = y * frame.width + x
+            frame.colors[slot] = pixel(view, x, y)
+            frame.data[slot] = False
+    _ = before^
+
+
 def box_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
     """Run `boxBlur` over the frame, every pixel reading the frame as it
     was before the pass.
@@ -450,14 +473,11 @@ def box_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, replaced.
         settings: The box blur's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = box_blur_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return box_blur_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 def hash_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
@@ -468,14 +488,11 @@ def hash_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, replaced.
         settings: The hash blur's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = hash_blur_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return hash_blur_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- motionBlur --------------------------------------------------------------
@@ -853,16 +870,11 @@ def chromatic_aberration_light(
         frame: The frame, replaced.
         settings: The strength, the center and the scale.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = chromatic_aberration_pixel(
-                view, x, y, settings
-            )
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return chromatic_aberration_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- AnamorphicNode ----------------------------------------------------------
