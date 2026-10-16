@@ -65,6 +65,7 @@ from loaders.js_text import (
     js_string,
     js_trim,
     js_units,
+    latin1_units,
 )
 from loaders.js_number import (
     js_parse_float,
@@ -815,21 +816,6 @@ struct _Binary:
         return at
 
 
-def _latin1(bytes: Span[UInt8, _]) -> List[Int]:
-    """Return bytes as `String.fromCharCode` reads each one.
-
-    Args:
-        bytes: The bytes.
-
-    Returns:
-        One code unit each.
-    """
-    var out = List[Int](capacity=len(bytes))
-    for b in bytes:
-        out.append(Int(b))
-    return out^
-
-
 def _count(line: List[Int], word: Int, what: String) raises -> Int:
     """Return `parseInt( line.split( ' ' )[ word ], 10 )` as a count.
 
@@ -878,7 +864,7 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
     var index = 0
     while True:
         var end = file.line_end(index)
-        var line = _latin1(Span(file.bytes)[index:end])
+        var line = latin1_units(Span(file.bytes)[index:end])
         var next = end + 1
         if _starts(line, "DATASET"):
             var dataset = _second_word(line)
