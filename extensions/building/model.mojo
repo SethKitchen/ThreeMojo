@@ -579,7 +579,7 @@ def _inside(outline: List[Point2], p: Point2, tolerance: Float64) -> Bool:
         var b = outline[(i + 1) % n]
         var d = b - a
         var t = clamp((p - a).dot(d) / d.dot(d), 0.0, 1.0)
-        var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+        var foot = a + d * t
         var offset = p - foot
         if offset.dot(offset) <= tolerance * tolerance:
             return True

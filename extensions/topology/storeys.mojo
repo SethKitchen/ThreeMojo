@@ -91,7 +91,7 @@ def _points_on(
     for i in range(len(overlay.points)):  # pragma: no branch
         var p = overlay.points[i]
         var t = (p - a).dot(d) / length_squared
-        var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+        var foot = a + d * t
         var offset = p - foot
         var near_end = (
             t * t * length_squared <= tolerance * tolerance
