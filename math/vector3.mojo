@@ -14,6 +14,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.matrix_determinant import _sum_products
+from math.polyline import PolylineVertex
 
 from std.math import isfinite
 from math.euler import Euler
@@ -38,7 +39,7 @@ def _js_round(value: Float32) -> Float32:
 
 
 @fieldwise_init
-struct Vector3(Equatable, ImplicitlyCopyable):
+struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
     """A point or direction in 3D space.
 
     Like three.js, the mutating methods change the vector in place rather than
