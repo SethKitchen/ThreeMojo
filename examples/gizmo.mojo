@@ -13,6 +13,8 @@ that points at the eye is left out, so the axes change as the camera
 goes round. The terminal window itself is `examples/viewer.mojo`.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from controls.transform_controls import TransformControls
 from core.assets import Assets
@@ -28,12 +30,10 @@ from materials.material import Material, MaterialId
 from math.vector3 import Vector3
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/controls.png"
 comptime WIDTH = 240
@@ -152,12 +152,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

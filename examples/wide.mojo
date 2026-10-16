@@ -12,6 +12,8 @@ in pixels and the caps are round. The color runs along the path. A
 one-pixel line cannot do either.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -23,13 +25,11 @@ from materials.material import LineWidth, Material, line_material
 from math.vector3 import Vector3
 from objects.line_segments2 import Line2, line_geometry
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, FloatColor, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/wide.png"
 comptime WIDTH = 240
@@ -137,12 +137,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, node, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

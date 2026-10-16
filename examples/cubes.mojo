@@ -28,6 +28,8 @@ tilt `rotation.y += 0.01` in the `XYZ` order would come to the same turn; it
 does not in general, and `core.object3d` says why.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -38,12 +40,10 @@ from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, RADIAN, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/cubes.png"
 comptime WIDTH = 260
@@ -149,12 +149,4 @@ def main() raises:
             frame_at(renderer, camera, assets, scene, pivot, center, moon, step)
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

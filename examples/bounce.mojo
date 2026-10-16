@@ -12,6 +12,8 @@ normals, `VXGINode` gathers the bounced light, and `vxgi_light` lays
 that light on the picture. The camera sways and returns.
 """
 
+from examples.output import write_example
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -26,7 +28,6 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from postprocessing.screen_space import DepthView
 from postprocessing.vxgi_node import VXGINode, vxgi_light
-from render.apng import encode
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import (
     FLOAT_TARGET,
@@ -37,9 +38,8 @@ from render.target import (
 )
 from renderers.renderer import Renderer, available_workers
 from std.math import pi, sin
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/vxgi.png"
 comptime WIDTH = 240
@@ -206,12 +206,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

@@ -12,6 +12,8 @@ target. Each half is cleared to its own background and drawn by its own
 camera, and neither touches the other. The target is resolved once.
 """
 
+from examples.output import write_example
+
 from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -24,14 +26,12 @@ from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.rect import Rect
 from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from std.sys import argv
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/split.png"
 comptime WIDTH = 240
@@ -153,12 +153,4 @@ def main() raises:
         frames.append(
             frame_at(renderer, camera, plan, assets, scene, pivot, step)
         )
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

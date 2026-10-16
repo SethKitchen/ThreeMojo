@@ -13,6 +13,8 @@ The red box turns with it. The blue box rides a `Gyroscope`, so it follows
 the bar and keeps its own turn.
 """
 
+from examples.output import write_example
+
 from animation.keyframe_track import MeshIndex
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -29,13 +31,11 @@ from math.vector3 import Vector3
 from objects.gyroscope import gyroscope
 from objects.mesh import Mesh
 from objects.morph_blend_mesh import MorphBlendMesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import sqrt
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.sys import argv
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/animated.png"
 comptime WIDTH = 240
@@ -245,12 +245,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
