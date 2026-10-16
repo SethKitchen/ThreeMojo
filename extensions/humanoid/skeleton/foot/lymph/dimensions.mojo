@@ -36,7 +36,7 @@ from extensions.humanoid.skeleton.foot.chain import (
     TubeSet,
     display_tube_set,
     one_tube,
-    tube_set_bounds,
+    tube_set_soft_bounds,
     tube_set_distance,
 )
 from math.vector3 import Vector3
@@ -91,7 +91,7 @@ struct FootLymphField(DistanceField, ImplicitlyCopyable):
         var S = dimensions.stature.value
         self.k = 0.00025 * S
         self.epsilon = 0.00015 * S
-        var box = tube_set_bounds(self.tubes, 0.003)
+        var box = tube_set_soft_bounds(self.tubes)
         self.low = box.low
         self.high = box.high
 
