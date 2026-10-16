@@ -384,25 +384,47 @@ def subpixel_correction(
     return (1 - wx * wy) / 0.75
 
 
-def _previous_depth(
-    previous: FloatPlane, u: Float32, v_down: Float32, frame: TraaFrame
+def reproject_window_depth(
+    previous: FloatPlane,
+    u: Float32,
+    v_down: Float32,
+    near: Float32,
+    far: Float32,
+    perspective: Bool,
+    previous_projection_inverse: Matrix4,
+    previous_camera_world: Matrix4,
+    view: Matrix4,
 ) -> Float32:
     """Return the last frame's depth at a place, moved into this frame's
-    view: three.js's `samplePreviousDepth`. The depth texture is read at
-    the nearest texel."""
+    view: three.js's `samplePreviousDepth`, reading the nearest texel.
+
+    TRAA and TAAU both read the history this way.
+
+    Args:
+        previous: The last frame's window depth.
+        u: Across, zero at the left.
+        v_down: Down, zero at the top.
+        near: The camera's near distance, in meters.
+        far: Its far distance.
+        perspective: Whether the projection divides by distance.
+        previous_projection_inverse: The last frame's projection inverse.
+        previous_camera_world: The last frame's camera world matrix.
+        view: This frame's view matrix.
+
+    Returns:
+        The depth, in this frame's window depth.
+    """
     var x = Int(floor(u * Float32(previous.width)))
     var y = Int(floor(v_down * Float32(previous.height)))
     var depth = previous.load(x, y, 0)
     # three.js's `getViewPosition`, in WebGL's clip space.
     var clip = Vector3(u * 2 - 1, (1 - v_down) * 2 - 1, depth * 2 - 1)
-    var seen = frame.previous_projection_inverse.transform_point(clip)
-    var world = frame.previous_camera_world.transform_point(seen)
-    var view_z = frame.view.transform_point(world).z
-    if frame.perspective:
-        return ((frame.near + view_z) * frame.far) / (
-            (frame.far - frame.near) * view_z
-        )
-    return (view_z + frame.near) / (frame.near - frame.far)
+    var seen = previous_projection_inverse.transform_point(clip)
+    var world = previous_camera_world.transform_point(seen)
+    var view_z = view.transform_point(world).z
+    if perspective:
+        return ((near + view_z) * far) / ((far - near) * view_z)
+    return (view_z + near) / (near - far)
 
 
 def traa_pixel(
@@ -457,7 +479,17 @@ def traa_pixel(
     var offset_v = velocity.load(closest_x, closest_y, 1) * -0.5
     var history_u = u - offset_u
     var history_v = v_down - offset_v
-    var then = _previous_depth(previous_depth, history_u, history_v, frame)
+    var then = reproject_window_depth(
+        previous_depth,
+        history_u,
+        history_v,
+        frame.near,
+        frame.far,
+        frame.perspective,
+        frame.previous_projection_inverse,
+        frame.previous_camera_world,
+        frame.view,
+    )
     var valid_uv = (
         history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
     )
