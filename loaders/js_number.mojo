@@ -35,6 +35,22 @@ def _is_digit(byte: UInt8) -> Bool:
     return byte >= 48 and byte <= 57
 
 
+def is_decimal_text(text: String) -> Bool:
+    """Return True when a text holds decimal digits and nothing else.
+
+    Args:
+        text: The text. Every caller passes one character or more.
+
+    Returns:
+        True when every byte is `0` to `9`.
+    """
+    var bytes = text.as_bytes()
+    for at in range(len(bytes)):  # pragma: no branch
+        if not _is_digit(bytes[at]):
+            return False
+    return True
+
+
 def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a white space byte at `i`."""
     return i < len(bytes) and _is_space(bytes[i])

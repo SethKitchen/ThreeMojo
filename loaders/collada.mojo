@@ -91,6 +91,7 @@ from lights.light import (
     spot_light,
 )
 from loaders.collada_animation import read_collada_animations
+from loaders.collada_id import collada_reference
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
@@ -349,24 +350,6 @@ def load_collada(
     loader.model.line_count = len(scene.lines) - loader.model.first_line
     loader.read_animations()
     return loader.model.copy()
-
-
-def _reference(url: String) raises -> String:
-    """Return the id a `#id` reference names.
-
-    Args:
-        url: The reference.
-
-    Returns:
-        The id, without `#`.
-
-    Raises:
-        Error: If the reference does not begin with `#`, which is the one
-            form three.js's `parseId` reads.
-    """
-    if not url.startswith("#"):
-        raise Error("Collada: a reference must be #id, not '" + url + "'")
-    return String(url[byte=1:])
 
 
 def _floats(text: String) raises -> List[Float64]:
@@ -811,7 +794,7 @@ struct _Loader(Movable):
         var instance = self.document.child(element, "instance_effect")
         if instance == NO_ELEMENT:
             raise Error("Collada: a material instances no effect")
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.effects:
             raise Error("Collada: a material instances no effect: " + url)
         var profile = self.document.child(self.effects[url], "profile_COMMON")
@@ -1161,7 +1144,7 @@ struct _Loader(Movable):
         var instance = self.document.child(top, "instance_visual_scene")
         if instance == NO_ELEMENT:
             raise Error("Collada: <scene> instances no visual scene")
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.visual_scenes:
             raise Error("Collada: <scene> names no visual scene: " + url)
         var visual = self.visual_scenes[url]
@@ -1245,7 +1228,9 @@ struct _Loader(Movable):
                 if self.known(child, self.lights):
                     count += 1
             elif name == "instance_geometry":
-                var id = _reference(self.document.attribute(child, "url"))
+                var id = collada_reference(
+                    self.document.attribute(child, "url")
+                )
                 self.build_geometry(id, assets)
                 var kinds = List[String]()
                 for slot in range(self.built_count[id]):
@@ -1260,7 +1245,10 @@ struct _Loader(Movable):
     def known(self, element: Int, library: Dict[String, Int]) raises -> Bool:
         """Return True if an instance's `url` names an entry of a
         library."""
-        return _reference(self.document.attribute(element, "url")) in library
+        return (
+            collada_reference(self.document.attribute(element, "url"))
+            in library
+        )
 
     def place_node(
         mut self,
@@ -1323,7 +1311,9 @@ struct _Loader(Movable):
                 # Placed once every bone is.
                 self.rig.waiting.append(_Controlled(instance, id))
             elif name == "instance_node":
-                var url = _reference(self.document.attribute(instance, "url"))
+                var url = collada_reference(
+                    self.document.attribute(instance, "url")
+                )
                 if url not in self.nodes:
                     raise Error(
                         "Collada: <instance_node> names no node: " + url
@@ -1343,7 +1333,7 @@ struct _Loader(Movable):
         """Add the camera an `<instance_camera>` names, riding its node,
         as three.js's `buildCamera` builds it. A camera the file does not
         have is skipped, as three.js skips it."""
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.cameras:
             return
         var technique = NO_ELEMENT
@@ -1419,7 +1409,7 @@ struct _Loader(Movable):
         """Add the light an `<instance_light>` names, at its node, as
         three.js's `buildLight` builds it. A light the file does not have
         is skipped, as three.js skips it."""
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.lights:
             return
         var technique = self.document.child(
@@ -1481,7 +1471,7 @@ struct _Loader(Movable):
         """Add a mesh or a line per primitive of the geometry an
         `<instance_geometry>` names, each with the material its symbol is
         bound to."""
-        var id = _reference(self.document.attribute(instance, "url"))
+        var id = collada_reference(self.document.attribute(instance, "url"))
         self.build_geometry(id, assets)
         var bindings = Dict[String, String]()
         for bind in self.document.children_named(instance, "bind_material"):
@@ -1530,9 +1520,9 @@ struct _Loader(Movable):
         depth, as three.js's `getElementsByTagName` gathers them."""
         for child in self.document.children(element):
             if self.document.name(child) == "instance_material":
-                bindings[self.document.attribute(child, "symbol")] = _reference(
-                    self.document.attribute(child, "target")
-                )
+                bindings[
+                    self.document.attribute(child, "symbol")
+                ] = collada_reference(self.document.attribute(child, "target"))
             else:
                 self.collect_bindings(child, bindings)
 
@@ -1651,7 +1641,9 @@ struct _Loader(Movable):
                 vertices.append(
                     _Input(
                         self.document.attribute(input, "semantic"),
-                        _reference(self.document.attribute(input, "source")),
+                        collada_reference(
+                            self.document.attribute(input, "source")
+                        ),
                         0,
                     )
                 )
@@ -1772,7 +1764,7 @@ struct _Loader(Movable):
             inputs.append(
                 _Input(
                     semantic,
-                    _reference(self.document.attribute(input, "source")),
+                    collada_reference(self.document.attribute(input, "source")),
                     offset[0],
                 )
             )
@@ -1975,7 +1967,7 @@ struct _Loader(Movable):
                     self.rig.controllers[id] = index
         # The list is not empty, or the function returned above.
         for waiting in self.rig.waiting.copy():  # pragma: no branch
-            var url = _reference(
+            var url = collada_reference(
                 self.document.attribute(waiting.instance, "url")
             )
             if url not in self.rig.controllers:
@@ -1991,7 +1983,9 @@ struct _Loader(Movable):
                         " does not read one"
                     )
                 raise Error("Collada: a controller has no <skin>")
-            var geometry = _reference(self.document.attribute(skin, "source"))
+            var geometry = collada_reference(
+                self.document.attribute(skin, "source")
+            )
             self.build_geometry(geometry, assets)
             var data = self.read_skin(skin)
             var skeleton = self.skeleton_for(waiting.instance, data, assets)
@@ -2082,7 +2076,7 @@ struct _Loader(Movable):
             if len(offset) != 1:
                 raise Error("Collada: an input needs one offset")
             inputs[self.document.attribute(input, "semantic")] = (
-                _reference(self.document.attribute(input, "source")),
+                collada_reference(self.document.attribute(input, "source")),
                 offset[0],
             )
         return inputs^
@@ -2235,7 +2229,7 @@ struct _Loader(Movable):
         """
         var found = List[Int]()
         for root in self.document.children_named(instance, "skeleton"):
-            var id = _reference(String(self.document.text(root).strip()))
+            var id = collada_reference(String(self.document.text(root).strip()))
             if id in self.nodes:
                 self.collect_bones(self.nodes[id], found, assets)
             elif id in self.visual_scenes:

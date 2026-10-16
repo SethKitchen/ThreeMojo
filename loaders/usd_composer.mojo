@@ -76,6 +76,7 @@ from geometries.cylinder import cone, cylinder
 from geometries.sphere import sphere
 from loaders.gltf import decode_image
 from loaders.js_number import js_number_text
+from loaders.js_text import is_js_word
 from loaders.model_nodes import authored_color, decompose_onto
 from loaders.three_mf import js_key_order
 from loaders.usd_geometry import (
@@ -590,23 +591,6 @@ def _no_angles(text: String) -> String:
     return text.replace("<", "").replace(">", "")
 
 
-def _is_word(byte: UInt8) -> Bool:
-    """Return True for a byte that `\\w` matches.
-
-    Args:
-        byte: The byte.
-
-    Returns:
-        Whether it is a letter, a digit or `_`.
-    """
-    return (
-        (byte >= 0x30 and byte <= 0x39)
-        or (byte >= 0x41 and byte <= 0x5A)
-        or (byte >= 0x61 and byte <= 0x7A)
-        or byte == 0x5F
-    )
-
-
 def variant_path_match(path: String) -> Optional[Tuple[String, String]]:
     """Match three.js's `VARIANT_PATH_REGEX`,
     `^(.+?)\\/\\{(\\w+)=(\\w+)\\}\\/(.+)$`: a path inside a variant.
@@ -625,13 +609,13 @@ def variant_path_match(path: String) -> Optional[Tuple[String, String]]:
             continue
         var at = i + 2
         var first = at
-        while at < n and _is_word(bytes[at]):
+        while at < n and is_js_word(bytes[at]):
             at += 1
         if at == first or at >= n or bytes[at] != 0x3D:
             continue
         at += 1
         var second = at
-        while at < n and _is_word(bytes[at]):
+        while at < n and is_js_word(bytes[at]):
             at += 1
         var closes = at + 1 < n and bytes[at] == 0x7D and bytes[at + 1] == 0x2F
         if at == second or not closes or at + 2 >= n:

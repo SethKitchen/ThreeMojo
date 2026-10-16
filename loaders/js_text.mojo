@@ -14,6 +14,7 @@ index into the list is an index JavaScript's `slice`, `indexOf` and
 
 `is_js_space` is the white space that JavaScript's `\\s` and `trim` match:
 the ASCII spaces, the line terminators, and the Unicode spaces.
+`is_js_word` is a byte JavaScript's `\\w` matches: a letter, a digit or `_`.
 """
 
 
@@ -42,6 +43,23 @@ def is_js_space(unit: Int) -> Bool:
         0xFEFF,
     ]
     return unit in spaces
+
+
+def is_js_word(byte: UInt8) -> Bool:
+    """Return True for a byte that JavaScript's `\\w` matches.
+
+    Args:
+        byte: The byte.
+
+    Returns:
+        Whether it is a letter, a digit or `_`.
+    """
+    return (
+        (byte >= 0x30 and byte <= 0x39)
+        or (byte >= 0x41 and byte <= 0x5A)
+        or (byte >= 0x61 and byte <= 0x7A)
+        or byte == 0x5F
+    )
 
 
 def js_units(text: String) -> List[Int]:
