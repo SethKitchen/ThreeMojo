@@ -59,6 +59,7 @@ limits, and explicit zero and nonfinite rules.
 from math.triangle_normal import _difference_product_wide
 
 from math.norm import normalized3, _ordinary_squared
+from math.utils import clamp
 
 from core.assets import Assets
 from core.search import first_match
@@ -234,7 +235,7 @@ def _physical_reflectivity(value: Float64) -> Float64:
     """Return a physical material's reflectivity after three.js's setter
     and getter: through the index of refraction and back."""
     var ior = (1 + 0.4 * value) / (1 - 0.4 * value)
-    return max(0.0, min(1.0, 2.5 * (ior - 1) / (ior + 1)))
+    return clamp(2.5 * (ior - 1) / (ior + 1), 0.0, 1.0)
 
 
 struct LwoGroup(Copyable, Movable):

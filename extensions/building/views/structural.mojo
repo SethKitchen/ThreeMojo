@@ -28,6 +28,7 @@ Loads and Associated Criteria for Buildings and Other Structures", table
 code and occupancy.
 """
 
+from math.utils import clamp
 from std.math import isfinite
 from extensions.building.ids import ElementId
 from extensions.building.kinds import BEAM, COLUMN, SpaceUse, WALL
@@ -203,7 +204,7 @@ def _plan_distance(p: Vec3d, a: Vec3d, b: Vec3d) -> Float64:
     var dx = b.x - a.x
     var dy = b.y - a.y
     var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)
-    t = max(0.0, min(1.0, t))
+    t = clamp(t, 0.0, 1.0)
     var ex = a.x + t * dx - p.x
     var ey = a.y + t * dy - p.y
     return (ex * ex + ey * ey) ** 0.5
