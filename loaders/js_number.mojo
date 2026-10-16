@@ -20,6 +20,7 @@ integer past 2 to the 53 is summed a digit at a time, so it can round
 differently.
 """
 
+from loaders.bytes import hex_digit_value
 from std.math import inf, isfinite, isnan, nan
 from std.ffi import external_call
 from std.memory import bitcast
@@ -155,13 +156,7 @@ def _digit_value(byte: UInt8, radix: Int) -> Int:
     Returns:
         The value, or -1 when the character is not a digit of the radix.
     """
-    var value = -1
-    if byte >= 48 and byte <= 57:
-        value = Int(byte) - 48
-    elif byte >= 97 and byte <= 102:
-        value = Int(byte) - 87
-    elif byte >= 65 and byte <= 70:
-        value = Int(byte) - 55
+    var value = hex_digit_value(Int(byte))
     return value if value < radix else -1
 
 

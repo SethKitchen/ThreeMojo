@@ -30,6 +30,7 @@ three.js warns and leaves the color unchanged for a string it cannot read.
 Here that string is refused.
 """
 
+from loaders.bytes import hex_digit_value
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
 from std.math import floor
@@ -376,13 +377,7 @@ def _is_word(byte: UInt8) -> Bool:
 
 def _hex_digit(byte: UInt8) -> Int:
     """Return the value of a hexadecimal digit, or minus one."""
-    if _is_digit(byte):
-        return Int(byte) - 48
-    if byte >= 65 and byte <= 70:
-        return Int(byte) - 55
-    if byte >= 97 and byte <= 102:
-        return Int(byte) - 87
-    return -1
+    return hex_digit_value(Int(byte))
 
 
 struct _Scanner(Movable):

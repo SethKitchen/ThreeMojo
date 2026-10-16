@@ -38,6 +38,7 @@ hexadecimal, an edge color that names no color, an alpha or luminance
 that is not a number, and a file that is not found.
 """
 
+from loaders.bytes import hex_digit_value
 from loaders.js_number import js_parse_float
 from std.math import nan
 from std.pathlib import Path
@@ -73,14 +74,7 @@ def js_parse_int(text: String) -> Float64:
     var value = Float64(0)
     var digits = 0
     while i < len(b):
-        var c = Int(b[i])
-        var d = -1
-        if c >= 48 and c <= 57:
-            d = c - 48
-        elif c >= 97 and c <= 102:
-            d = c - 87
-        elif c >= 65 and c <= 70:
-            d = c - 55
+        var d = hex_digit_value(Int(b[i]))
         if d < 0 or d >= radix:
             break
         value = value * Float64(radix) + Float64(d)
@@ -242,14 +236,7 @@ def _style(style: String) -> Optional[Vec]:
         return None
     var digits = List[Int]()
     for k in range(1, len(b)):  # pragma: no branch
-        var c = Int(b[k])
-        var d = -1
-        if c >= 48 and c <= 57:
-            d = c - 48
-        elif c >= 97 and c <= 102:
-            d = c - 87
-        elif c >= 65 and c <= 70:
-            d = c - 55
+        var d = hex_digit_value(Int(b[k]))
         if d < 0:
             return None
         digits.append(d)

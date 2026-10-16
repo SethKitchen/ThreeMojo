@@ -72,6 +72,7 @@ from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from loaders.bytes import hex_digit_value
 from loaders.gltf import decode_image
 from loaders.js_number import js_parse_float
 from loaders.model_nodes import decompose_onto
@@ -1115,14 +1116,8 @@ def _hex_byte(display: String) raises -> Int:
     """
     var value = 0
     for byte in display.as_bytes()[7:9]:  # pragma: no branch
-        var digit: Int
-        if byte >= 48 and byte <= 57:
-            digit = Int(byte) - 48
-        elif byte >= 97 and byte <= 102:
-            digit = Int(byte) - 87
-        elif byte >= 65 and byte <= 70:
-            digit = Int(byte) - 55
-        else:
+        var digit = hex_digit_value(Int(byte))
+        if digit < 0:
             raise Error("3MF: a color's alpha is not hex: " + display)
         value = value * 16 + digit
     return value

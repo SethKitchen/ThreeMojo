@@ -29,7 +29,7 @@ bits. `integer` refuses a number with a fraction.
 
 from core.ordinal import ordinal_valid
 
-from loaders.bytes import bytes_match
+from loaders.bytes import bytes_match, hex_digit_value
 from loaders.utf8 import append_utf8
 from std.math import isfinite
 
@@ -770,15 +770,8 @@ struct _Parser(Movable):
 
     def hex_digit(mut self) raises -> Int:
         """Read one hex digit of a `\\u` escape."""
-        var byte = self.peek()
-        var digit: Int
-        if byte >= 48 and byte <= 57:
-            digit = byte - 48
-        elif byte >= 97 and byte <= 102:
-            digit = byte - 87
-        elif byte >= 65 and byte <= 70:
-            digit = byte - 55
-        else:
+        var digit = hex_digit_value(self.peek())
+        if digit < 0:
             raise Error(self.where() + "expected a hex digit")
         self.at += 1
         return digit

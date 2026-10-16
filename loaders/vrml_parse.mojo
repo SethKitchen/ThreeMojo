@@ -36,7 +36,7 @@ refused with the place where it happened. three.js logs chevrotain's
 errors and then throws.
 """
 
-from loaders.bytes import bytes_match
+from loaders.bytes import bytes_match, hex_digit_value
 from loaders.js_number import js_parse_float
 from std.math import isfinite
 
@@ -194,8 +194,7 @@ def _is_digit(byte: UInt8) -> Bool:
 
 def _is_hex_digit(byte: UInt8) -> Bool:
     """Return True for `[0-9a-fA-F]`."""
-    var lower = byte | 32
-    return _is_digit(byte) or (lower >= 97 and lower <= 102)
+    return hex_digit_value(Int(byte)) >= 0
 
 
 def _excluded(byte: UInt8) -> Bool:
