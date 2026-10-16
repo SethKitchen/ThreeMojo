@@ -979,17 +979,15 @@ struct _Loader(Movable):
 
     def array(self, node: Int, key: String) raises -> Int:
         """Return an object's array under `key`, or `NO_NODE`."""
-        var found = self.document.get(node, key)
-        if found != NO_NODE and self.document.kind(found) != ARRAY:
-            raise Error("Object JSON: " + key + " must be an array")
-        return found
+        return self.document.optional_kind(
+            node, key, ARRAY, "Object JSON: " + key + " must be an array"
+        )
 
     def entry(self, node: Int, key: String) raises -> Int:
         """Return an object's object under `key`, or `NO_NODE`."""
-        var found = self.document.get(node, key)
-        if found != NO_NODE and self.document.kind(found) != OBJECT:
-            raise Error("Object JSON: " + key + " must be an object")
-        return found
+        return self.document.optional_kind(
+            node, key, OBJECT, "Object JSON: " + key + " must be an object"
+        )
 
     def numbers_of(self, list: Int) raises -> List[Float32]:
         """Return every number of an array, each finite."""

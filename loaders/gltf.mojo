@@ -1221,10 +1221,12 @@ struct _Loader(Movable):
 
     def list(self, key: String) raises -> Int:
         """Return the root's array under `key`, or `NO_NODE`."""
-        var found = self.document.get(self.document.root(), key)
-        if found != NO_NODE and self.document.kind(found) != ARRAY:
-            raise Error("glTF: " + key + " must be an array")
-        return found
+        return self.document.optional_kind(
+            self.document.root(),
+            key,
+            ARRAY,
+            "glTF: " + key + " must be an array",
+        )
 
     def count(self, key: String) raises -> Int:
         """Return how many entries the root's array under `key` has."""
@@ -1273,11 +1275,11 @@ struct _Loader(Movable):
     def number_list(self, node: Int, key: String) raises -> List[Float32]:
         """Return an object's array of numbers under `key`, of any length,
         or an empty list when the key is absent."""
-        var found = self.document.get(node, key)
+        var found = self.document.optional_kind(
+            node, key, ARRAY, "glTF: " + key + " must be an array of numbers"
+        )
         if found == NO_NODE:
             return List[Float32]()
-        if self.document.kind(found) != ARRAY:
-            raise Error("glTF: " + key + " must be an array of numbers")
         return self.document.finite_numbers(
             found, "glTF: " + key + " must be finite"
         )
@@ -1291,10 +1293,9 @@ struct _Loader(Movable):
 
     def array_of(self, node: Int, key: String) raises -> Int:
         """Return an object's array under `key`, which must be there."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE or self.document.kind(found) != ARRAY:
-            raise Error("glTF: " + key + " must be an array")
-        return found
+        return self.document.required_kind(
+            node, key, ARRAY, "glTF: " + key + " must be an array"
+        )
 
     def text(self, node: Int, key: String) raises -> String:
         """Return an object's string under `key`, or empty."""
@@ -1328,15 +1329,14 @@ struct _Loader(Movable):
     def extension(self, node: Int, name: String) raises -> Int:
         """Return the object an extension keeps under an object's
         `extensions`, or `NO_NODE` when it keeps none there."""
-        var all = self.document.get(node, "extensions")
+        var all = self.document.optional_kind(
+            node, "extensions", OBJECT, "glTF: extensions must be an object"
+        )
         if all == NO_NODE:
             return NO_NODE
-        if self.document.kind(all) != OBJECT:
-            raise Error("glTF: extensions must be an object")
-        var found = self.document.get(all, name)
-        if found != NO_NODE and self.document.kind(found) != OBJECT:
-            raise Error("glTF: " + name + " must be an object")
-        return found
+        return self.document.optional_kind(
+            all, name, OBJECT, "glTF: " + name + " must be an object"
+        )
 
     def numbers(
         self, node: Int, key: String, count: Int
@@ -1864,11 +1864,11 @@ struct _Loader(Movable):
         second, `uv` or `uv1`: a geometry here has no third. See
         `texture_set`.
         """
-        var found = self.document.get(material, key)
+        var found = self.document.optional_kind(
+            material, key, OBJECT, "glTF: " + key + " must be an object"
+        )
         if found == NO_NODE:
             return -1
-        if self.document.kind(found) != OBJECT:
-            raise Error("glTF: " + key + " must be an object")
         var set = self.texture_set(found)
         if set < 0 or set > 1:
             raise Error(
