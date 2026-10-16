@@ -27,6 +27,7 @@ is anterior.
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -232,8 +233,7 @@ struct PelvisSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def pelvic_fat(sex: Sex) -> Float32:
