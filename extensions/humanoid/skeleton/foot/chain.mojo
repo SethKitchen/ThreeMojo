@@ -355,6 +355,33 @@ def enlarge_tube_set(set: TubeSet, least: Float32) -> TubeSet:
     )
 
 
+def display_tube_set(
+    mut tubes: TubeSet,
+    mut blend: Float32,
+    mut low: Vector3,
+    mut high: Vector3,
+    least: Float32,
+    blend_value: Float32,
+):
+    """Hold a tube set's radii up and box the result.
+
+    The box is the tubes' box plus `0.004`.
+
+    Args:
+        tubes: The tubes.
+        blend: The blend distance, the field's `k`.
+        low: The box's low corner.
+        high: The box's high corner.
+        least: The smallest radius to keep, in meters.
+        blend_value: The blend distance to store, in meters.
+    """
+    tubes = enlarge_tube_set(tubes, least)
+    blend = blend_value
+    var box = tube_set_bounds(tubes, 0.004)
+    low = box.low
+    high = box.high
+
+
 def _union(a: Bounds, b: Bounds) -> Bounds:
     """Return the box that holds both `a` and `b`."""
     return Bounds(

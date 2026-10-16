@@ -34,7 +34,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.chain import (
     TubeSet,
-    enlarge_tube_set,
+    display_tube_set,
     one_tube,
     tube_set_bounds,
     tube_set_distance,
@@ -125,11 +125,14 @@ def display_lymph_field(
     """
     var field = FootLymphField(dimensions, part)
     var least = 0.0014 * dimensions.stature.value
-    field.tubes = enlarge_tube_set(field.tubes, least)
-    field.k = 0.0007 * dimensions.stature.value
-    var box = tube_set_bounds(field.tubes, 0.004)
-    field.low = box.low
-    field.high = box.high
+    display_tube_set(
+        field.tubes,
+        field.k,
+        field.low,
+        field.high,
+        least,
+        0.0007 * dimensions.stature.value,
+    )
     return field
 
 
