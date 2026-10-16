@@ -44,6 +44,7 @@ from core.layers import Layers
 from core.object3d import NO_PARENT
 from core.scene import Scene
 from lights.fresnel import schlick_weight
+from lights.ggx import ggx_base, ggx_smith_root
 from lights.physical_layers import (
     PhysicalLayers,
     anisotropic_ggx,
@@ -532,11 +533,11 @@ def ggx(
         return fresnel * stretched
     # three.js's V_GGX_SmithCorrelated.
     var a2 = alpha * alpha
-    var gv = dot_nl * sqrt(a2 + (1 - a2) * dot_nv * dot_nv)
-    var gl = dot_nv * sqrt(a2 + (1 - a2) * dot_nl * dot_nl)
+    var gv = dot_nl * ggx_smith_root(dot_nv, a2)
+    var gl = dot_nv * ggx_smith_root(dot_nl, a2)
     var visibility = 0.5 / max(gv + gl, GGX_EPSILON)
     # three.js's D_GGX, without its reciprocal pi.
-    var denominator = dot_nh * dot_nh * (a2 - 1) + 1
+    var denominator = ggx_base(dot_nh, a2)
     var lobe = a2 / (denominator * denominator)
     var scale = visibility * lobe
     return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)

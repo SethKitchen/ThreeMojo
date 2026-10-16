@@ -33,6 +33,7 @@ environment mode, which `postprocessing.ssr_node` does not port.
 """
 
 from core.extent import positive_extent
+from lights.ggx import ggx_base, ggx_smith_root
 from math.matrix4 import Matrix4
 from math.utils import mix_delta, rec709_luminance
 from math.norm import squared_length2
@@ -42,7 +43,6 @@ from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import clamped_texel
 from render.framebuffer import FloatColor
 from std.math import asin, atan2, cos, floor, isfinite, max, min, pi, pow, sin
-from std.math import sqrt
 
 
 def half(value: Float32) -> Float32:
@@ -338,7 +338,7 @@ def d_gtr(roughness: Float32, n_dot_h: Float32, k: Float32) -> Float32:
         `a^2 / (pi (n.h^2 (a^2 - 1) + 1)^k)`.
     """
     var a2 = roughness * roughness
-    var base = n_dot_h * n_dot_h * (a2 - 1) + 1
+    var base = ggx_base(n_dot_h, a2)
     return a2 / (Float32(pi) * pow(base, k))
 
 
@@ -353,7 +353,7 @@ def smith_g(n_dot_x: Float32, alpha: Float32) -> Float32:
         `2 n.x / (n.x + sqrt(a^2 + (1 - a^2) n.x^2))`.
     """
     var a2 = alpha * alpha
-    return 2 * n_dot_x / (n_dot_x + sqrt(a2 + (1 - a2) * n_dot_x * n_dot_x))
+    return 2 * n_dot_x / (n_dot_x + ggx_smith_root(n_dot_x, a2))
 
 
 def geometry_term(
