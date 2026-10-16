@@ -15,6 +15,7 @@ index into the list is an index JavaScript's `slice`, `indexOf` and
 `is_js_space` is the white space that JavaScript's `\\s` and `trim` match:
 the ASCII spaces, the line terminators, and the Unicode spaces.
 `is_js_word` is a byte JavaScript's `\\w` matches: a letter, a digit or `_`.
+`split_fields` splits a line on white space.
 """
 
 
@@ -141,3 +142,18 @@ def js_trim(units: List[Int]) -> List[Int]:
     while end > start and is_js_space(units[end - 1]):
         end -= 1
     return js_part(units, start, end)
+
+
+def split_fields(line: String) -> List[String]:
+    """Return a line split on white space.
+
+    Args:
+        line: The line.
+
+    Returns:
+        The words, in order.
+    """
+    var fields = List[String]()
+    for piece in line.split():
+        fields.append(String(piece))
+    return fields^
