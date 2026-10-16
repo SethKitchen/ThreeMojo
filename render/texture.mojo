@@ -98,7 +98,7 @@ from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from std.math import exp2
-from math.norm import length2, _ordinary_squared
+from math.norm import length2, _ordinary_squared, squared_length2
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import (
@@ -2085,7 +2085,7 @@ def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
     var c = v.x * v.x + v.y * v.y
     var half_sum = (a + c) / 2
     var half_difference = (a - c) / 2
-    var spread_squared = half_difference * half_difference + b * b
+    var spread_squared = squared_length2[DType.float32](half_difference, b)
     var scale = Float32(1)
     var largest_component = max(
         max(abs(u.x), abs(u.y)), max(abs(v.x), abs(v.y))

@@ -49,6 +49,7 @@ from core.scene import Scene
 from geometries.cylinder import cylinder
 from materials.material import BASIC, Material, sprite_material
 from math.euler import Euler, XYZ
+from math.norm import squared_length2
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -196,7 +197,7 @@ def disk_image(color: Color) raises -> Texture:
                         + (Float32(j) + 0.5) / Float32(DISK_SAMPLES)
                         - DISK_CENTER
                     )
-                    if x * x + y * y <= reach:
+                    if squared_length2[DType.float32](x, y) <= reach:
                         inside += 1
             var alpha = UInt8(
                 (inside * 255 + DISK_SAMPLES * DISK_SAMPLES // 2)

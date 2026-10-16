@@ -114,7 +114,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2
+from math.norm import length2, squared_length2
 
 from math.triangle_normal import normal_or_zero
 
@@ -1586,7 +1586,7 @@ def _within_on_image(
         var by = Float64(far_end.y) * Float64(half_y)
         var sx = bx - ax
         var sy = by - ay
-        var squared = sx * sx + sy * sy
+        var squared = squared_length2[DType.float64](sx, sy)
         var fraction = Float64(0)
         if squared > 0:
             fraction = (
