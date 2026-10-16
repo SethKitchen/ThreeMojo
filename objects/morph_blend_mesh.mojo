@@ -28,6 +28,7 @@ An `update` by a time that is not a number is refused, and so is a mesh
 that is not in the scene.
 """
 
+from loaders.bytes import ascii_digit
 from core.scene import Scene
 from animation.keyframe_track import MeshIndex
 from std.math import floor, isfinite, nan
@@ -121,7 +122,7 @@ def _animation_word(name: String) -> Optional[String]:
         var next = end
         if next < len(bytes) and bytes[next] == 95:
             next += 1
-        if next < len(bytes) and bytes[next] >= 48 and bytes[next] <= 57:
+        if next < len(bytes) and ascii_digit(Int(bytes[next])):
             return String(name[byte=at:end])
         at = end
     return None

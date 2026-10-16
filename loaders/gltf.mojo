@@ -221,6 +221,7 @@ from loaders.draco import (
     DracoGeometry,
     decode_draco,
 )
+from loaders.bytes import ascii_digit
 from loaders.draco_attributes import DracoDataType
 from loaders.meshopt import (
     FILTER_NONE,
@@ -1074,7 +1075,7 @@ def decode_base64(text: String) raises -> List[UInt8]:
             digit = value - 65
         elif value >= 97 and value <= 122:
             digit = value - 71
-        elif value >= 48 and value <= 57:
+        elif ascii_digit(value):
             digit = value + 4
         elif value == 43:
             digit = 62

@@ -49,6 +49,7 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
 )
+from loaders.bytes import ascii_digit
 from loaders.three_mf import js_key_order
 from std.memory import bitcast
 from std.pathlib import Path
@@ -664,7 +665,7 @@ struct _Reader:
 
 def _digit_before(bytes: Span[UInt8, _], end: Int) -> Bool:
     """Return True if the byte before `end` is a digit."""
-    return end > 0 and bytes[end - 1] >= 48 and bytes[end - 1] <= 57
+    return end > 0 and ascii_digit(Int(bytes[end - 1]))
 
 
 def md2_animation_name(frame: String) -> Optional[String]:
@@ -687,7 +688,7 @@ def md2_animation_name(frame: String) -> Optional[String]:
     for k in range(end):
         var b = bytes[k]
         var word = (
-            (b >= 48 and b <= 57)
+            ascii_digit(Int(b))
             or (b >= 65 and b <= 90)
             or (b >= 97 and b <= 122)
             or b == 95

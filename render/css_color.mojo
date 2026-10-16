@@ -30,7 +30,7 @@ three.js warns and leaves the color unchanged for a string it cannot read.
 Here that string is refused.
 """
 
-from loaders.bytes import hex_digit_value
+from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
 from std.math import floor
@@ -360,12 +360,12 @@ def color_name_hex(name: String) -> Optional[Int]:
 
 def _is_space(byte: UInt8) -> Bool:
     """Return True for an ASCII space, tab or line break."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
+    return ascii_space(Int(byte))
 
 
 def _is_digit(byte: UInt8) -> Bool:
     """Return True for an ASCII digit."""
-    return byte >= 48 and byte <= 57
+    return ascii_digit(Int(byte))
 
 
 def _is_word(byte: UInt8) -> Bool:

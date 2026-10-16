@@ -42,6 +42,7 @@ number, and a file that ends early. An empty line is zero, as
 """
 
 from math.rounded_product import rounded_product
+from loaders.bytes import ascii_space
 from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
@@ -140,7 +141,7 @@ def _js_number(text: String) raises -> Float64:
 
 def _is_space(byte: UInt8) -> Bool:
     """Return True for an ASCII white space byte."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
+    return ascii_space(Int(byte))
 
 
 def _tokens(line: String) -> List[String]:
