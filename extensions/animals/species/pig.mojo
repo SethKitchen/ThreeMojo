@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import cone_or_ball, ell_y
 from extensions.animals.kit import (
+    digitigrade_hind,
     fore_reach,
     EyeSpec,
     eye_frame_of,
@@ -1268,15 +1269,10 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             leg_k,
         )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         var chf = rig.j("hcoffin" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
         _ = ell_y(
             m,
             "thigh",
@@ -1378,7 +1374,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
         _digits(
             m,
-            rig.bone("hpaw" + side),
+            hpaw,
             rig.bone("hhoof" + side),
             mt,
             chf,

@@ -33,6 +33,7 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    digitigrade_hind,
     fore_reach,
     EyeSpec,
     eye_frame_of,
@@ -1441,15 +1442,10 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone("pastern", fpaw, mc, cf, 0.0155, 0.0165, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 1.0)
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         var chf = rig.j("hcoffin" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
         _ = ell_y(
             m,
             "thigh",
@@ -1552,7 +1548,6 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var hpaw = rig.bone("hpaw" + side)
         dewclaw_balls(m, hpaw, mt, s, -0.021, 0.0055)
         _ = m.cone("pastern", hpaw, mt, chf, 0.015, 0.016, k=0.01)
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.95)
