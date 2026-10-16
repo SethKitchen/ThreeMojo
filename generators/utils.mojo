@@ -203,6 +203,14 @@ struct Vec3d(ImplicitlyCopyable):
         """
         return length3(self.x, self.y, self.z)
 
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x`, `y`, and `z` are all finite.
+        """
+        return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
+
     def distance_to(self, other: Self) -> Float64:
         """Return the distance to another point.
 

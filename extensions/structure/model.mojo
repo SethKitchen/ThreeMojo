@@ -248,7 +248,7 @@ struct StructuralModel(Copyable, Movable):
         Raises:
             Error: If the position is not finite.
         """
-        if not (isfinite(at.x) and isfinite(at.y) and isfinite(at.z)):
+        if not at.is_finite():
             raise Error("A node position must be finite")
         self.nodes.append(at)
         for _ in range(6):  # pragma: no branch

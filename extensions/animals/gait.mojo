@@ -123,7 +123,7 @@ def solve_two_bone(
             y-z plane, or the solution is outside the numeric range.
     """
     for p in [root, mid, end, target]:  # pragma: no branch
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+        if not p.is_finite():
             raise Error("A leg point must be finite")
     var a = mid - root
     var b = end - mid

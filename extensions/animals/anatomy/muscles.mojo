@@ -647,7 +647,7 @@ struct AnimalMuscle(Copyable, Movable):
             if bone < 0 or bone >= len(world):
                 raise Error("A muscle path names a missing bone transform")
             var p = world[bone].apply(self.points[k])
-            if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+            if not p.is_finite():
                 raise Error("A muscle path must have finite points")
             if k > 0:
                 var span = length(p - out[k - 1])
