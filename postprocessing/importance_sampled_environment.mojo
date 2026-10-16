@@ -38,6 +38,7 @@ from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
+from postprocessing.sampling import clamped_texel
 from render.framebuffer import FloatColor
 from std.math import asin, atan2, cos, floor, isfinite, max, min, pi, pow, sin
 from std.math import sqrt
@@ -211,9 +212,7 @@ struct EquirectEnvironment(Copyable, Movable):
             The texel blend.
         """
         var px = u * Float32(self.width) - 0.5
-        var py = min(
-            max(v * Float32(self.height) - 0.5, 0), Float32(self.height - 1)
-        )
+        var py = clamped_texel(v, self.height)
         var fx0 = floor(px)
         var x0 = Int(fx0)
         var fx = px - fx0
@@ -248,7 +247,7 @@ struct EquirectEnvironment(Copyable, Movable):
         Returns:
             The blend of the two nearest entries.
         """
-        var p = min(max(at * Float32(count) - 0.5, 0), Float32(count - 1))
+        var p = clamped_texel(at, count)
         var i = Int(p)
         var f = p - Float32(i)
         var j = min(i + 1, count - 1)
@@ -588,8 +587,8 @@ def conditional_at(env: EquirectEnvironment, u: Float32, v: Float32) -> Float32:
     """
     var w = env.width
     var h = env.height
-    var px = min(max(u * Float32(w) - 0.5, 0), Float32(w - 1))
-    var py = min(max(v * Float32(h) - 0.5, 0), Float32(h - 1))
+    var px = clamped_texel(u, w)
+    var py = clamped_texel(v, h)
     var x0 = Int(px)
     var y0 = Int(py)
     var fx = px - Float32(x0)
