@@ -263,17 +263,6 @@ def _held_world(
     return world^
 
 
-def _column_lengths(matrix: Matrix4) -> Vector3:
-    """Return the lengths of the first three columns, three.js's
-    `setFromMatrixScale`: no sign for a mirror."""
-    ref e = matrix.elements
-    return Vector3(
-        Vector3(e[0], e[1], e[2]).length(),
-        Vector3(e[4], e[5], e[6]).length(),
-        Vector3(e[8], e[9], e[10]).length(),
-    )
-
-
 def retarget(
     mut scene: Scene,
     target: Int,
@@ -327,7 +316,7 @@ def retarget(
                 var undo = _held_world(scene, mesh, mesh, held)
                 undo.invert()
                 relative.premultiply(undo)
-            var size = _column_lengths(relative)
+            var size = Vector3.from_matrix_scale(relative)
             if size.x * size.y * size.z == 0:
                 raise Error("A source bone that flattens an axis has no turn")
             relative.scale(Vector3(1 / size.x, 1 / size.y, 1 / size.z))
