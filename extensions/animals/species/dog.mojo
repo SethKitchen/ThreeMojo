@@ -43,7 +43,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     head_local,
     reference_to_head_local,
-    is_limb,
+    coat_place,
     mirrored_blob,
     hashed_stream,
     pick_cumulative,
@@ -1829,19 +1829,9 @@ def dog_paint(
     var nz2 = vnoise3(V3(p.x * 38.0 + n_off, p.y * 38.0, p.z * 38.0)) - 0.5
     var c: V3
     var agouti: Float64
-    var region = 0
+    var region, limb = coat_place(bone)
     var leg = 0.0
-    if bone == "head":
-        region = 2
-    elif bone == "jaw":
-        region = 6
-    elif bone.startswith("ear"):
-        region = 5
-    elif bone.startswith("tail"):
-        region = 4
-    elif bone == "neck1" or bone == "neck2":
-        region = 1
-    elif is_limb(bone):
+    if limb:
         # The limb's own colors take over below the body line.
         leg = smoothstep(0.42, 0.24, p.y)
     if region <= 1:

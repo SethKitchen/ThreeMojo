@@ -68,6 +68,34 @@ def _checked(quality: Quality) raises:
         raise Error("Quality must be low, medium, high or xhigh")
 
 
+def _cells(
+    quality: Quality, low: Int, medium: Int, high: Int, extra: Int
+) raises -> Int:
+    """Return the count for one named quality.
+
+    Args:
+        quality: The mesh level.
+        low: The count at `LOW`.
+        medium: The count at `MEDIUM`.
+        high: The count at `HIGH`.
+        extra: The count at `XHIGH`.
+
+    Returns:
+        The count for `quality`.
+
+    Raises:
+        Error: If `quality` is not a named level.
+    """
+    _checked(quality)
+    if quality == LOW:
+        return low
+    if quality == MEDIUM:
+        return medium
+    if quality == HIGH:
+        return high
+    return extra
+
+
 def anatomy_detail(quality: Quality) raises -> Int:
     """Return the detail of each bone, ligament, muscle and vessel.
 
@@ -80,14 +108,7 @@ def anatomy_detail(quality: Quality) raises -> Int:
     Raises:
         Error: If `quality` is not a named level.
     """
-    _checked(quality)
-    if quality == LOW:
-        return 8
-    if quality == MEDIUM:
-        return 10
-    if quality == HIGH:
-        return 12
-    return 16
+    return _cells(quality, 8, 10, 12, 16)
 
 
 def skin_detail(quality: Quality) raises -> Int:
@@ -102,14 +123,7 @@ def skin_detail(quality: Quality) raises -> Int:
     Raises:
         Error: If `quality` is not a named level.
     """
-    _checked(quality)
-    if quality == LOW:
-        return 32
-    if quality == MEDIUM:
-        return 40
-    if quality == HIGH:
-        return 48
-    return 56
+    return _cells(quality, 32, 40, 48, 56)
 
 
 def hand_skin_detail(quality: Quality) raises -> Int:
@@ -124,14 +138,7 @@ def hand_skin_detail(quality: Quality) raises -> Int:
     Raises:
         Error: If `quality` is not a named level.
     """
-    _checked(quality)
-    if quality == LOW:
-        return 24
-    if quality == MEDIUM:
-        return 32
-    if quality == HIGH:
-        return 40
-    return 48
+    return _cells(quality, 24, 32, 40, 48)
 
 
 def triangle_budget(quality: Quality) raises -> Int:
@@ -146,14 +153,7 @@ def triangle_budget(quality: Quality) raises -> Int:
     Raises:
         Error: If `quality` is not a named level.
     """
-    _checked(quality)
-    if quality == LOW:
-        return 90000
-    if quality == MEDIUM:
-        return 200000
-    if quality == HIGH:
-        return 450000
-    return 1000000
+    return _cells(quality, 90000, 200000, 450000, 1000000)
 
 
 def quality_named(name: String) raises -> Quality:
