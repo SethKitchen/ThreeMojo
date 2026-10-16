@@ -35,7 +35,7 @@ from math.norm import (
     _ordinary_squared,
     squared_length3,
 )
-from math.quaternion import quaternion_rotate
+from math.quaternion import quaternion_rotate, quaternion_terms
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.math import cos, isfinite, sin, sqrt
@@ -478,18 +478,9 @@ def compose_matrix(
     Returns:
         The matrix, rounded to `Float32`.
     """
-    var x2 = qx + qx
-    var y2 = qy + qy
-    var z2 = qz + qz
-    var xx = qx * x2
-    var xy = qx * y2
-    var xz = qx * z2
-    var yy = qy * y2
-    var yz = qy * z2
-    var zz = qz * z2
-    var wx = qw * x2
-    var wy = qw * y2
-    var wz = qw * z2
+    var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[DType.float64](
+        qx, qy, qz, qw
+    )
     return basis_matrix(
         Vec3d(
             (1 - (yy + zz)) * scale.x, (xy + wz) * scale.x, (xz - wy) * scale.x

@@ -43,6 +43,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.binary import little_endian_u32
+from math.quaternion import quaternion_terms
 from math.norm import (
     dot3,
     dot4,
@@ -227,18 +228,9 @@ def write_covariance(
         y = unit[1]
         z = unit[2]
         w = unit[3]
-    var x2 = x + x
-    var y2 = y + y
-    var z2 = z + z
-    var xx = x * x2
-    var xy = x * y2
-    var xz = x * z2
-    var yy = y * y2
-    var yz = y * z2
-    var zz = z * z2
-    var wx = w * x2
-    var wy = w * y2
-    var wz = w * z2
+    var xx, xy, xz, yy, yz, zz, wx, wy, wz = quaternion_terms[DType.float64](
+        x, y, z, w
+    )
     # The rows of M = R S: M[r][c] is Matrix4.compose's te[c * 4 + r].
     var m00 = (1 - (yy + zz)) * sx
     var m10 = (xy + wz) * sx
