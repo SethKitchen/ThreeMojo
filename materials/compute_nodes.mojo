@@ -110,7 +110,7 @@ from materials.nodes import (
 )
 from math.vector3 import Vector3
 from postprocessing.sampling import Untracked
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, OPAQUE_WHITE
 from render.texture import NEAREST, Texture, float_texture
 from std.memory import bitcast
 
@@ -1748,7 +1748,7 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         Returns:
             White.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
@@ -1764,7 +1764,7 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         Returns:
             White.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: a compute program reads no texture.
@@ -1778,7 +1778,7 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         Returns:
             White.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> Lanes:
         """Return ones: a compute program reads no texture.
