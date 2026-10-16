@@ -95,6 +95,7 @@ from loaders.collada_id import collada_reference
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
+    remember_material,
     texture_from_bytes,
 )
 from loaders.three_mf import js_key_order
@@ -1531,9 +1532,7 @@ struct _Loader(Movable):
     ) -> MaterialId:
         """Return one of the materials three.js makes when a file names
         none, making it the first time."""
-        if key not in self.defaults:
-            self.defaults[key] = assets.materials.add(material)
-        return self.defaults.get(key, MaterialId(0))
+        return remember_material(self.defaults, key, material, assets)
 
     def material_for(
         mut self,

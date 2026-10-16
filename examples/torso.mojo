@@ -19,12 +19,12 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `high`.
 """
 
-from examples.output import example_destination, spin_frame
+from examples.output import example_destination, spin_frame, stand_on_floor
 from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.quality import (
@@ -90,28 +90,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DEFAULT_QUALITY = "high"
 comptime SPACING = Float32(0.44)
-
-
-def _stand(
-    mut scene: Scene, parent: NodeId, x: Float32, ground: Float32
-) raises -> NodeId:
-    """Return a node that stands a body at `x` with its soles on the floor.
-
-    Args:
-        scene: The scene that receives the node.
-        parent: Shared parent that turns both bodies.
-        x: Position along the row, in meters.
-        ground: Height of the hip joint centers above the soles.
-
-    Returns:
-        The body's node.
-
-    Raises:
-        Error: If the scene refuses the node.
-    """
-    var holder = Object3D()
-    holder.set_position(x, ground, 0)
-    return scene.attach(holder^, parent)
 
 
 def main() raises:
@@ -182,7 +160,7 @@ def main() raises:
     )
     var pivot = scene.add(Object3D())
     var first = len(scene.meshes)
-    var anatomy = _stand(scene, pivot, -SPACING, ground)
+    var anatomy = stand_on_floor(scene, pivot, -SPACING, ground)
     _ = add_body(
         scene,
         assets,
@@ -198,7 +176,7 @@ def main() raises:
         detail,
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
-    var covered = _stand(scene, pivot, SPACING, ground)
+    var covered = stand_on_floor(scene, pivot, SPACING, ground)
     _ = add_body(
         scene,
         assets,
