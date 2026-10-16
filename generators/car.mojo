@@ -37,6 +37,7 @@ from generators.utils import (
     part,
 )
 from geometries.box import box
+from geometries.grid import append_cell
 from geometries.circle import circle
 from geometries.lathe import lathe
 from geometries.loft import loft
@@ -393,12 +394,7 @@ def panel(
                 var b = a + 1
                 var d = a + columns + 1
                 var c = d + 1
-                index.append(a)
-                index.append(b)
-                index.append(d)
-                index.append(b)
-                index.append(c)
-                index.append(d)
+                append_cell(index, a, b, c, d)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
