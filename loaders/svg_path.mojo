@@ -35,6 +35,7 @@ limits, and explicit zero and nonfinite rules.
 
 from std.math import isfinite
 
+from math.matrix_inverse import adjugate3
 from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
 from math.path import Path, Shape
@@ -741,23 +742,22 @@ struct SvgMatrix(Copyable, Movable):
         var n13 = self.e[6]
         var n23 = self.e[7]
         var n33 = self.e[8]
-        var t11 = n33 * n22 - n32 * n23
-        var t12 = n32 * n13 - n33 * n12
-        var t13 = n23 * n12 - n22 * n13
-        var det = n11 * t11 + n21 * t12 + n31 * t13
+        var c0, c1, c2, c3, c4, c5, c6, c7, c8, det = adjugate3[DType.float64](
+            n11, n21, n31, n12, n22, n32, n13, n23, n33
+        )
         var out = SvgMatrix(0, 0, 0, 0, 0, 0, 0, 0, 0)
         if det == 0:
             return out^
         var inv = 1 / det
-        out.e[0] = t11 * inv
-        out.e[1] = (n31 * n23 - n33 * n21) * inv
-        out.e[2] = (n32 * n21 - n31 * n22) * inv
-        out.e[3] = t12 * inv
-        out.e[4] = (n33 * n11 - n31 * n13) * inv
-        out.e[5] = (n31 * n12 - n32 * n11) * inv
-        out.e[6] = t13 * inv
-        out.e[7] = (n21 * n13 - n23 * n11) * inv
-        out.e[8] = (n22 * n11 - n21 * n12) * inv
+        out.e[0] = c0 * inv
+        out.e[1] = c1 * inv
+        out.e[2] = c2 * inv
+        out.e[3] = c3 * inv
+        out.e[4] = c4 * inv
+        out.e[5] = c5 * inv
+        out.e[6] = c6 * inv
+        out.e[7] = c7 * inv
+        out.e[8] = c8 * inv
         return out^
 
     def transposed(self) -> SvgMatrix:

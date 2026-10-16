@@ -42,6 +42,7 @@ from math.matrix_inverse import (
     _inverse_needs_wide,
     _determinant_needs_wide,
     _inverse_wide,
+    adjugate3,
 )
 from std.math import cos, sin, isfinite
 from units.si import Angle
@@ -438,11 +439,9 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         var n23 = e[7]
         var n33 = e[8]
 
-        var t11 = n33 * n22 - n32 * n23
-        var t12 = n32 * n13 - n33 * n12
-        var t13 = n23 * n12 - n22 * n13
-
-        var det = n11 * t11 + n21 * t12 + n31 * t13
+        var c0, c1, c2, c3, c4, c5, c6, c7, c8, det = adjugate3[DType.float32](
+            n11, n21, n31, n12, n22, n32, n13, n23, n33
+        )
         # Bound cancellation with every unsigned determinant product. Using
         # the rounded cofactors here can hide cancellation inside each one.
         var terms = (
@@ -457,15 +456,15 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
 
         var inv = Float32(1) / det
         var out = Array[Float32, 9](fill=0.0)
-        out[0] = t11 * inv
-        out[1] = (n31 * n23 - n33 * n21) * inv
-        out[2] = (n32 * n21 - n31 * n22) * inv
-        out[3] = t12 * inv
-        out[4] = (n33 * n11 - n31 * n13) * inv
-        out[5] = (n31 * n12 - n32 * n11) * inv
-        out[6] = t13 * inv
-        out[7] = (n21 * n13 - n23 * n11) * inv
-        out[8] = (n22 * n11 - n21 * n12) * inv
+        out[0] = c0 * inv
+        out[1] = c1 * inv
+        out[2] = c2 * inv
+        out[3] = c3 * inv
+        out[4] = c4 * inv
+        out[5] = c5 * inv
+        out[6] = c6 * inv
+        out[7] = c7 * inv
+        out[8] = c8 * inv
         self.elements = out^
 
     def transform(self, vector: Vector3) -> Vector3:
