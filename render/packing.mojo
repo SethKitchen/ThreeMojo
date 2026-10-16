@@ -3,8 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""How a depth or a distance is written into the bytes of a pixel: three.js's
+"""How a depth, a distance, or a normal is written into a pixel: three.js's
 `packing.glsl`, and the four `DepthPacking` modes of `MeshDepthMaterial`.
+
+A unit normal is packed into zero to one per axis by `packed_normal`,
+three.js's `packNormalToRGB`.
 
 A byte holds 256 steps. A depth written as one gray therefore keeps only
 eight bits of itself. The packings spread one number across two, three or
@@ -276,6 +279,22 @@ def normalized_distance(
     var dist = length3(dx, dy, dz)
     var fraction = (dist - near) / (far - near)
     return min(max(fraction, Float32(0)), Float32(1))
+
+
+def packed_normal(facing: Vector3) -> Vector3:
+    """Return a unit normal mapped into zero to one per axis, three.js's
+    `packNormalToRGB`: each component halved and moved up by a half, so a
+    surface square-on to the camera is (0.5, 0.5, 1).
+
+    Args:
+        facing: The unit normal, in the space it is to be shown in.
+
+    Returns:
+        The three channels, before quantization.
+    """
+    return Vector3(
+        facing.x * 0.5 + 0.5, facing.y * 0.5 + 0.5, facing.z * 0.5 + 0.5
+    )
 
 
 def packed_distance_fragment(

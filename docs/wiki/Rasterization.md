@@ -54,7 +54,7 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `check_triangle_state(a, b, c)` | Refuse corners that disagree, or hold a value neither backend knows. |
 | `mip_level(du, dv, width, height)` | The mip level for a texture footprint. |
 | `data_color(r, g, b, a)` | Three channels of data as the light that resolves to their bytes. |
-| `packed_normal(normal)` | A unit normal mapped into zero to one per axis. |
+| `packed_normal(normal)` | A unit normal mapped into zero to one per axis. The function is in `render.packing`. |
 | `packed_depth(z)` | An NDC depth as the gray a `DEPTH` material shows. |
 | `check_alpha_map(texture)` | Refuse an alpha map that is not stored as data. |
 | `check_gradient_map(texture)` | Refuse a toon ramp that is not stored as data. |

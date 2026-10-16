@@ -707,11 +707,8 @@ def lit_radiance[
         foot[3],
         t,
     )
-    var color = Vector3(
-        f * refl.x + (1.0 - f) * under.x + sun_rgb.x,
-        f * refl.y + (1.0 - f) * under.y + sun_rgb.y,
-        f * refl.z + (1.0 - f) * under.z + sun_rgb.z,
-    )
+    var open = 1.0 - f
+    var color = refl * f + under * open + sun_rgb
     var haze = 1.0 - exp(-t * 0.004)
     var flat = _unit(wd.x, 0.0, wd.z)
     var muh = flat.x * sun.x + flat.z * sun.z
@@ -721,11 +718,7 @@ def lit_radiance[
         0.22 * pow(muh, Float32(6)) + 0.3 * pow(muh, Float32(64))
     )
     var haze_w = haze * 0.8
-    color = Vector3(
-        color.x + (haze_c.x * 0.95 - color.x) * haze_w,
-        color.y + (haze_c.y * 0.95 - color.y) * haze_w,
-        color.z + (haze_c.z * 0.95 - color.z) * haze_w,
-    )
+    color = mix_delta3(color, haze_c * 0.95, haze_w)
     var above = sky_radiance(rd.x, rd.y, rd.z, sun)
     var mu = rd.x * sun.x + rd.y * sun.y + rd.z * sun.z
     var disc = smoothstep(0.99996, 0.999985, mu) * 18.0
@@ -890,7 +883,7 @@ def _underwater[
         focus = 0.45
     if focus > 3.0:
         focus = 3.0
-    caus = Vector3(caus.x * focus, caus.y * focus, caus.z * focus)
+    caus = caus * focus
     var sig_a = Vector3(0.40, 0.074, 0.088)
     var sig_s = Vector3(0.028, 0.052, 0.068)
     var sig_t = sig_a + sig_s
@@ -900,19 +893,11 @@ def _underwater[
     var ao = 0.55 + 0.45 * smoothstep(0.08, 0.42, bed.height)
     var sun_rgb = Vector3(1.0, 0.90, 0.74) * 6.0
     var sun_light = sun_rgb * ts
-    var esun = Vector3(
-        sun_light.x * absorb.x * caus.x * (-sun_t_y) * (0.75 + 0.25 * ao),
-        sun_light.y * absorb.y * caus.y * (-sun_t_y) * (0.75 + 0.25 * ao),
-        sun_light.z * absorb.z * caus.z * (-sun_t_y) * (0.75 + 0.25 * ao),
-    )
+    var esun = (((sun_light * absorb) * caus) * (-sun_t_y)) * (0.75 + 0.25 * ao)
     var pi = Float32(3.141592653589793)
     var sky_irr = Vector3(0.62, 0.70, 0.78) * (pi * 0.22)
     var sky_abs = _exp3((sig_a + sig_s * 0.4) * (column * 1.25))
-    var esky = Vector3(
-        sky_irr.x * sky_abs.x * ao,
-        sky_irr.y * sky_abs.y * ao,
-        sky_irr.z * sky_abs.z * ao,
-    )
+    var esky = (sky_irr * sky_abs) * ao
     var floor_l = Vector3(
         bed.r / pi * (esun.x + esky.x),
         bed.g / pi * (esun.y + esky.y),
@@ -941,11 +926,7 @@ def _underwater[
         sig_s.y / sig_t.y * mid.y * (1.0 - view_abs.y) * 3.2,
         sig_s.z / sig_t.z * mid.z * (1.0 - view_abs.z) * 3.2,
     )
-    var color = Vector3(
-        floor_l.x * view_abs.x + scatter.x,
-        floor_l.y * view_abs.y + scatter.y,
-        floor_l.z * view_abs.z + scatter.z,
-    )
+    var color = floor_l * view_abs + scatter
     return _specks(color, x, z, ray, travel, clock, sun_light)
 
 
@@ -1035,9 +1016,9 @@ def _caustic_grad[
         var sample = _caustic_lod(
             field, u + step.du * o, v + step.dv * o, step.lod
         )
-        acc = Vector3(acc.x + sample.x, acc.y + sample.y, acc.z + sample.z)
+        acc = acc + sample
     var inv = 1.0 / Float32(count)
-    return Vector3(acc.x * inv, acc.y * inv, acc.z * inv)
+    return acc * inv
 
 
 def _caustic_lod[
