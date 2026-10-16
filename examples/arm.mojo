@@ -23,7 +23,14 @@ from examples.output import (
     hang_centered,
     spin_pair_gallery,
 )
-from examples.studio import room_lit_scene, studio_renderer, tissue_materials
+from examples.studio import (
+    cast_received_shadows,
+    room_lit_scene,
+    studio_floor,
+    studio_renderer,
+    studio_sun,
+    tissue_materials,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -72,12 +79,7 @@ from extensions.humanoid.skeleton.torso.bones.geometry import (
     torso_bone_from_dimensions,
 )
 from extensions.humanoid.spec import HumanoidSpec
-from geometries.plane import plane
-from lights.light import directional_light
-from materials.material import standard_material
 from math.vector3 import Vector3
-from objects.mesh import Mesh
-from render.framebuffer import Color
 from renderers.renderer import available_workers
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
@@ -191,34 +193,9 @@ def main() raises:
         hair_paint=hair,
     )
     fit_triangle_budget(scene, assets, first, budget, available_workers())
-    for index in range(len(scene.meshes)):
-        scene.meshes[index].cast_shadow = True
-        scene.meshes[index].receive_shadow = True
-
-    var floor = Object3D()
-    floor.rotate_x(Angle(-90.0, DEGREE))
-    var ground_shape = assets.geometries.add(
-        plane(Length(12.0, METER), Length(12.0, METER))
-    )
-    var ground_look = assets.materials.add(
-        standard_material(Color(92, 90, 86), roughness=0.85)
-    )
-    scene.add_mesh(
-        Mesh(ground_shape, ground_look, scene.add(floor^), receive_shadow=True)
-    )
-
-    var lamp = Object3D()
-    lamp.set_position(1.2, 2.2, 2.0)
-    var lamp_node = scene.add(lamp^)
-    var sun = directional_light(Color(255, 244, 228), lamp_node, 2.2)
-    sun.cast_shadow = True
-    sun.shadow.map_size = 1024
-    sun.shadow.bias = -0.0005
-    sun.shadow.normal_bias = 0.01
-    sun.shadow.set_extent(Length(1.2, METER))
-    sun.shadow.near = Length(0.5, METER)
-    sun.shadow.far = Length(8.0, METER)
-    scene.add_light(sun)
+    cast_received_shadows(scene)
+    studio_floor(scene, assets, Length(12.0, METER))
+    studio_sun(scene, 1.2, 2.2, 2.0, Length(1.2, METER))
 
     var camera = PerspectiveCamera(
         Angle(30.0, DEGREE),
