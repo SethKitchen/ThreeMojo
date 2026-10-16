@@ -34,6 +34,7 @@ environment mode, which `postprocessing.ssr_node` does not port.
 
 from core.extent import positive_extent
 from math.matrix4 import Matrix4
+from math.utils import mix_delta
 from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -256,7 +257,7 @@ struct EquirectEnvironment(Copyable, Movable):
 
 def _lerp(a: Float32, b: Float32, t: Float32) -> Float32:
     """Return GLSL's `mix` of two numbers."""
-    return a + (b - a) * t
+    return mix_delta(a, b, t)
 
 
 # --- SpecularHelpers ---------------------------------------------------------

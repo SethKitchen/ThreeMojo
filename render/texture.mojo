@@ -99,6 +99,7 @@ from core.ordinal import ordinal_valid
 
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
+from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import (
@@ -520,7 +521,7 @@ def float_texel(
 
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
     """Return one channel a fraction `t` of the way from `near` to `far`."""
-    return near + (far - near) * t
+    return mix_delta(near, far, t)
 
 
 def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:

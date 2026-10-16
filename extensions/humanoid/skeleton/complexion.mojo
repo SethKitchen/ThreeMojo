@@ -32,6 +32,7 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from math.norm import squared_length2
+from math.utils import mix_delta
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
@@ -43,7 +44,7 @@ comptime MAX_MAP = 512
 
 def _lerp(a: Float32, b: Float32, t: Float32) -> Float32:
     """Return `a` moved toward `b` by `t`."""
-    return a + (b - a) * t
+    return mix_delta(a, b, t)
 
 
 def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:

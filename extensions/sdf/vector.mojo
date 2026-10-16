@@ -11,6 +11,7 @@ Coordinates are meters.
 """
 
 from generators.utils import Vec3d
+from math.utils import mix_delta
 from std.math import cos, isfinite, sin, sqrt
 
 # A point or a direction, in meters.
@@ -173,7 +174,7 @@ def mix(a: Float64, b: Float64, t: Float64) -> Float64:
     Returns:
         `a + (b - a) t`.
     """
-    return a + (b - a) * t
+    return mix_delta(a, b, t)
 
 
 @fieldwise_init
