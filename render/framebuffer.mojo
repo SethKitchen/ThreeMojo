@@ -625,6 +625,17 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             _to_byte(self.a),
         )
 
+    def encode_opaque(self) -> Color:
+        """Return the display bytes of this light, with alpha forced opaque.
+
+        `encode` keeps this color's alpha. A material color is the sRGB
+        bytes of the light and is always opaque.
+
+        Returns:
+            The eight-bit color. Alpha is 255.
+        """
+        return FloatColor(self.r, self.g, self.b, 1).encode()
+
     def encode_with(self, bytes: SrgbBytes) -> Color:
         """Return what `encode` returns, read from a table of thresholds
         rather than worked out with a power for each channel.

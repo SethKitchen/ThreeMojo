@@ -95,7 +95,7 @@ from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from objects.points import Points
 from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, SRGB, linear_to_srgb
+from render.srgb import LINEAR, SRGB
 from render.texture import CLAMP, MIRROR, REPEAT, Wrap, texture_from
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import sqrt
@@ -1363,11 +1363,8 @@ def lwo_resource_path(url: String) -> String:
 def _authored(color: Rgb) -> Color:
     """Return linear light as the sRGB bytes a material holds."""
     return FloatColor(
-        linear_to_srgb(Float32(color[0])),
-        linear_to_srgb(Float32(color[1])),
-        linear_to_srgb(Float32(color[2])),
-        1,
-    ).quantize()
+        Float32(color[0]), Float32(color[1]), Float32(color[2])
+    ).encode_opaque()
 
 
 def _load(mut map: Optional[LwoMap], mut assets: Assets) raises -> TextureId:
