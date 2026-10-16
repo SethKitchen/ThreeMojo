@@ -30,6 +30,7 @@ from core.buffer_geometry import (
     UV,
     UV1,
 )
+from math.norm import squared_length3
 from std.math import isfinite
 from units.si import Length, METER
 
@@ -66,7 +67,7 @@ def _distance_squared(p: List[Float64], a: Int, b: Int) -> Float64:
     var dx = p[a * 3] - p[b * 3]
     var dy = p[a * 3 + 1] - p[b * 3 + 1]
     var dz = p[a * 3 + 2] - p[b * 3 + 2]
-    return dx * dx + dy * dy + dz * dz
+    return squared_length3[DType.float64](dx, dy, dz)
 
 
 def tessellate(

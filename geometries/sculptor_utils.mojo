@@ -28,7 +28,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.cross import cross_components
-from math.norm import dot3, length3
+from math.norm import dot3, length3, squared_length3
 from std.math import isnan, sqrt
 
 # The tag three.js writes in the fourth slot of a face. Kept for the
@@ -128,7 +128,7 @@ def sqr_dist(a: Point3, b: Point3) -> Float64:
     var dx = a.x - b.x
     var dy = a.y - b.y
     var dz = a.z - b.z
-    return dx * dx + dy * dy + dz * dz
+    return squared_length3[DType.float64](dx, dy, dz)
 
 
 def _sub(a: Point3, b: Point3) -> Point3:
@@ -317,7 +317,7 @@ def distance_sq_to_triangle(
     var dx = ap.x - ab.x * v - ac.x * w
     var dy = ap.y - ab.y * v - ac.y * w
     var dz = ap.z - ab.z * v - ac.z * w
-    return dx * dx + dy * dy + dz * dz
+    return squared_length3[DType.float64](dx, dy, dz)
 
 
 def _edge_rest(offset: Point3, edge: Point3, share: Float64) -> Point3:

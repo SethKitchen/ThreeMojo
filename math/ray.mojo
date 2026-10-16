@@ -47,7 +47,7 @@ from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
 from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
-from math.norm import normalized3, _ordinary_squared
+from math.norm import normalized3, _ordinary_squared, squared_length3
 from std.math import copysign, inf, max, min, nan, sqrt
 from std.memory import bitcast
 from std.sys.intrinsics import unlikely
@@ -135,9 +135,9 @@ def _line_products[
     var dx = ray_products.dx if prepared else Float64(direction.x)
     var dy = ray_products.dy if prepared else Float64(direction.y)
     var dz = ray_products.dz if prepared else Float64(direction.z)
-    var norm_sq = (
-        ray_products.norm_sq if prepared else dx * dx + dy * dy + dz * dz
-    )
+    var norm_sq = ray_products.norm_sq if prepared else squared_length3[
+        DType.float64
+    ](dx, dy, dz)
     # Cross the points separately. Subtracting a small center from a distant
     # origin first can erase its perpendicular offset even in Float64.
     var cross_x = (Float64(point.y) * dz - Float64(point.z) * dy) - (
@@ -670,7 +670,7 @@ struct Ray(ImplicitlyCopyable):
         var dx = Float64(self.direction.x)
         var dy = Float64(self.direction.y)
         var dz = Float64(self.direction.z)
-        var norm = dx * dx + dy * dy + dz * dz
+        var norm = squared_length3[DType.float64](dx, dy, dz)
         var r2 = Float64(sphere.radius) * Float64(sphere.radius)
         if (
             q < inf[DType.float64]()
@@ -838,7 +838,7 @@ struct Ray(ImplicitlyCopyable):
         var dx = Float64(self.direction.x)
         var dy = Float64(self.direction.y)
         var dz = Float64(self.direction.z)
-        var norm = dx * dx + dy * dy + dz * dz
+        var norm = squared_length3[DType.float64](dx, dy, dz)
         var projection = x * dx + y * dy + z * dz
         var distance = x * x + y * y + z * z
         var radius = Float64(sphere.radius) * Float64(sphere.radius)
@@ -954,7 +954,7 @@ struct Ray(ImplicitlyCopyable):
             ox * dy - oy * dx,
             ox * dz - oz * dx,
             oy * dz - oz * dy,
-            dx * dx + dy * dy + dz * dz,
+            squared_length3[DType.float64](dx, dy, dz),
             magnitude > 0
             and magnitude + abs(ox + oy + oz) < inf[DType.float64](),
         )

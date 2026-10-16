@@ -14,6 +14,7 @@ is a clearance lower bound. No sampled hit does not prove no overlap.
 from extensions.humanoid.skeleton.field import DistanceField, finite_point
 from extensions.humanoid.skeleton.limb.sampling import SampleGrid
 from extensions.humanoid.skeleton.occupancy import check_mass_step
+from math.norm import squared_length3
 from math.vector3 import Vector3
 from std.math import isfinite, max, min, sqrt
 from units.si import Length, Volume
@@ -96,7 +97,7 @@ def diagnose_pair[
     var dx = max(Float64(low.x) - Float64(high.x), Float64(0))
     var dy = max(Float64(low.y) - Float64(high.y), Float64(0))
     var dz = max(Float64(low.z) - Float64(high.z), Float64(0))
-    var distance = sqrt(dx * dx + dy * dy + dz * dz)
+    var distance = sqrt(squared_length3[DType.float64](dx, dy, dz))
     if not isfinite(Float32(distance)):
         raise Error("Diagnostic clearance exceeds the supported length range")
     var gap = Length(Float32(distance))

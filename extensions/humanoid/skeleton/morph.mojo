@@ -54,6 +54,7 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from extensions.humanoid.sex import MALE, Sex
+from math.norm import squared_length3
 from math.vector3 import Vector3
 from std.math import cos, isfinite, max, min, sin
 
@@ -149,7 +150,7 @@ def bump(point: Vector3, center: Vector3, radius: Float32) -> Float32:
     var dx = point.x - center.x
     var dy = point.y - center.y
     var dz = point.z - center.z
-    var q = (dx * dx + dy * dy + dz * dz) / (radius * radius)
+    var q = squared_length3[DType.float32](dx, dy, dz) / (radius * radius)
     if q >= 1:
         return 0
     var w = 1 - q

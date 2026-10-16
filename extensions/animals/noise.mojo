@@ -11,6 +11,7 @@ spots, rosettes and patches on the skin in reference space, so each
 mark rides the skin as the animal moves.
 """
 
+from math.norm import squared_length3
 from extensions.sdf.vector import V3
 from std.math import floor, sqrt
 
@@ -137,7 +138,7 @@ def cells3(p: V3, seed: Int) -> Cell:
         var dx = Float64(cx) + jx - p.x
         var dy = Float64(cy) + jy - p.y
         var dz = Float64(cz) + jz - p.z
-        var d = sqrt(dx * dx + dy * dy + dz * dz)
+        var d = sqrt(squared_length3[DType.float64](dx, dy, dz))
         var closer = d < best
         next = best if closer else min(next, d)
         id = ihash(cx + 7, cy + 11, cz + seed * 101 + 13) if closer else id
