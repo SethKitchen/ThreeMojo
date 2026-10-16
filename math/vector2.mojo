@@ -6,7 +6,7 @@
 """A 2D vector, ported from three.js `src/math/Vector2.js`."""
 
 from math.matrix3 import Matrix3
-from math.polyline import PolylineVertex
+from math.polyline import PolylineVertex, clamp_to_length
 from math.utils import SeededRandom
 from math.vector3 import _js_round
 from math.norm import length2, normalized2, _ordinary_squared
@@ -378,12 +378,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
             low: The shortest length.
             high: The longest.
         """
-        var length = self.length()
-        if _ordinary_squared(self.length_sq()):
-            self = self / length * max(low, min(high, length))
-        else:
-            self.normalize()
-            self = self * max(low, min(high, length))
+        clamp_to_length(self, low, high)
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.
