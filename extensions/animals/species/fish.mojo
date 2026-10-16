@@ -61,7 +61,7 @@ from extensions.sdf.vector import (
 )
 from extensions.animals.warp import girth_warp, scale_about_warp
 from math.norm import squared_length2
-from math.utils import nearest_distance
+from math.utils import min3, nearest_distance
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The fish's head origin moves with the variant, so the eye is placed
@@ -1297,7 +1297,7 @@ def _clown_bands(g: _Geo, u: Float64, e0: Float64) -> Float64:
         abs(u - (0.53 + 0.07 * bulge - 0.03)) - (0.05 + 0.012 * bulge)
     ) * sl
     var b3 = (abs(u - 0.905) - 0.035) * sl
-    return min(b1, min(b2, b3))
+    return min3(b1, b2, b3)
 
 
 def _spot(p: V3, cell: Float64, radius: Float64, seed: Int) -> Float64:

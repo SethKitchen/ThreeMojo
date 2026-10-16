@@ -25,6 +25,7 @@ from extensions.sdf.vector import (
     length,
 )
 from math.norm import squared_length3
+from math.utils import max3, min3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores, size_of
@@ -396,7 +397,7 @@ struct _Grid:
             var i = min((gx - (n & 1)) // f, self.lattice.bx - 1)
             var j = min((gy - ((n >> 1) & 1)) // f, self.lattice.by - 1)
             var k = min((gz - (n >> 2)) // f, self.lattice.bz - 1)
-            if min(i, min(j, k)) < 0:
+            if min3(i, j, k) < 0:
                 continue
             var b = self.lattice.block_index(i, j, k)
             var slot = self.slot_of[b]
@@ -695,7 +696,7 @@ def _share_faces(mut grid: _Grid):
             var lx = n % side
             var ly = (n // side) % side
             var lz = n // (side * side)
-            if max(lx, max(ly, lz)) < f:
+            if max3(lx, ly, lz) < f:
                 continue
             var at = grid.locate(bi * f + lx, bj * f + ly, bk * f + lz)
             # This block holds the point and is active: an owner exists.
@@ -730,7 +731,7 @@ def _spill(
             var ni = bi + (step if axis == 0 else 0)
             var nj = bj + (step if axis == 1 else 0)
             var nk = bk + (step if axis == 2 else 0)
-            var outside = min(ni, min(nj, nk)) < 0
+            var outside = min3(ni, nj, nk) < 0
             outside = outside or ni >= lt.bx or nj >= lt.by or nk >= lt.bz
             if outside:
                 continue
@@ -856,7 +857,7 @@ def _faces(grid: _Grid, cells: List[Int], mut mesh: SurfaceMesh):
             var qb = grid.vertex(gx + bx, gy + by, gz + bz)
             var qc = grid.vertex(gx + bx + cx, gy + by + cy, gz + bz + cz)
             var qd = grid.vertex(gx + cx, gy + cy, gz + cz)
-            if min(qb, min(qc, qd)) < 0:
+            if min3(qb, qc, qd) < 0:
                 continue
             _emit(mesh, v, qb, qc, qd, v0 < 0)
 

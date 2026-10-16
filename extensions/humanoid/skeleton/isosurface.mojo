@@ -17,7 +17,7 @@ Twenty-four is the default. Sixty-four is the most.
 from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
-from math.utils import clamp
+from math.utils import clamp, max3
 from math.vector3 import Vector3, mix_delta3
 from std.math import atan2, max, min, pi
 
@@ -76,7 +76,7 @@ def make_grid(low: Vector3, high: Vector3, detail: Int) -> SampleGrid:
     var span_x = high.x - low.x
     var span_y = high.y - low.y
     var span_z = high.z - low.z
-    var cell = max(span_y, max(span_x, span_z)) / Float32(_long_cells(detail))
+    var cell = max3(span_y, span_x, span_z) / Float32(_long_cells(detail))
     var nx = _axis_cells(span_x, cell, MIN_CROSS_CELLS)
     var ny = _axis_cells(span_y, cell, MIN_CROSS_CELLS)
     var nz = _axis_cells(span_z, cell, MIN_CROSS_CELLS)

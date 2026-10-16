@@ -51,7 +51,7 @@ from math.matrix4 import Matrix4
 from math.norm import squared_length2
 from math.path import Path, Shape
 from math.sine import fraction
-from math.utils import SeededRandom, js_round
+from math.utils import SeededRandom, js_round, min3
 from math.vector2 import Vector2
 from std.math import floor, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -532,7 +532,7 @@ def build_footprint(
     """
     var hw = width / 2
     var hd = depth / 2
-    var c = min(chamfer, min(hw, hd))
+    var c = min3(chamfer, hw, hd)
     var corners = [
         Vec3d(hw, 0, hd),
         Vec3d(-hw, 0, hd),

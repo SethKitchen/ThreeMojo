@@ -71,7 +71,7 @@ from cameras.camera import Camera
 from core.extent import positive_extent
 from core.scene import Scene
 from math.finite import positive_finite
-from math.utils import rec709_luminance
+from math.utils import max3, rec709_luminance
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3, mix_delta3
@@ -1890,7 +1890,7 @@ def _highlight_rows(
             r /= count
             g /= count
             b /= count
-            var l = max(r, max(g, b))
+            var l = max3(r, g, b)
             var k = l - threshold
             if k < 0.0:
                 k = 0.0

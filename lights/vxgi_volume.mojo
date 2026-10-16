@@ -78,6 +78,7 @@ from lights.vxgi_scene_collector import (
 from math.bounds import Box3
 from math.finite import positive_finite
 from math.smoothstep import smoothstep
+from math.utils import max3
 from math.vector3 import Vector3
 from std.math import ceil, cos, floor, isfinite, log2, pi, tan
 from units.si import Angle, DEGREE, Length, METER
@@ -1127,7 +1128,7 @@ struct VXGIVolume(Movable):
         var sy = Float64(size.y)
         var sz = Float64(size.z)
         var resolution = max(MIN_RESOLUTION, self.resolution)
-        var voxel = max(sx, max(sy, sz)) / Float64(resolution)
+        var voxel = max3(sx, sy, sz) / Float64(resolution)
         if not voxel > 0:
             raise Error("A VXGI volume's bounds must have a size")
         var levels = max(

@@ -58,6 +58,7 @@ from materials.material import (
 from math.bounds import Box3
 from math.sine import fraction
 from math.matrix4 import Matrix4
+from math.utils import max3
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
@@ -245,7 +246,7 @@ struct _Collector(Movable):
             var ab = pa.distance_to_squared(pb)
             var bc = pb.distance_to_squared(pc)
             var ca = pc.distance_to_squared(pa)
-            var longest = max(ab, max(bc, ca))
+            var longest = max3(ab, bc, ca)
             if longest > self.max_edge_sq:
                 if longest == ab:
                     var middle = (pa + pb) * 0.5

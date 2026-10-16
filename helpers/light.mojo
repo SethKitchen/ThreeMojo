@@ -52,6 +52,7 @@ from lights.light import (
     SPOT,
 )
 from math.matrix4 import Matrix4, scaling, translation
+from math.utils import max3
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from std.math import cos, pi, sin, tan
@@ -387,7 +388,7 @@ def rect_area_light_helper(
     """
     _check(light, RECT_AREA, "rect area light")
     var paint = light.radiance()
-    var brightest = max(paint.r, max(paint.g, paint.b))
+    var brightest = max3(paint.r, paint.g, paint.b)
     if brightest > 1:
         paint = FloatColor(
             paint.r / brightest, paint.g / brightest, paint.b / brightest

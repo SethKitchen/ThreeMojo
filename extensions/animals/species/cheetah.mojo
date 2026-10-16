@@ -61,6 +61,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from math.sine import fraction
+from math.utils import max3
 from std.math import cos, floor, log, pi, pow, sin
 from extensions.sdf.distance import almond_distance
 
@@ -1086,7 +1087,7 @@ def _paint_face(c: List[V3], tag: String, bone: String, p: V3, n: V3) -> Paint:
     var w = clamp(
         max(
             max(max(whisker, moustache), max(lip, under_eye)),
-            max(above_eye, max(chin_w, throat_w)),
+            max3(above_eye, chin_w, throat_w),
         ),
         0.0,
         1.0,
