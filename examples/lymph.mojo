@@ -11,11 +11,11 @@ The page is Lymph. A six-foot male right leg stands with bones, knee
 tissues, lymph nodes and lymphatic trunks.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, spin_frame
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
@@ -44,35 +44,6 @@ comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DETAIL = 12
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the leg by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        node: The parent of the leg.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -127,7 +98,7 @@ def main() raises:
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

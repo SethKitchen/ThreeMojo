@@ -13,12 +13,12 @@ front of it as it goes. The second camera rides a node aimed at the cube,
 and its outline rides the same node.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, spin_frame, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
 from helpers.axes import axes_helper
@@ -40,35 +40,6 @@ comptime WIDTH = 240
 comptime HEIGHT = 180
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    pivot: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the camera's pivot by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through, riding a child of the pivot.
-        assets: The geometries and materials.
-        scene: The persistent scene, edited in place.
-        pivot: The node the camera swings around.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(pivot).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -141,5 +112,5 @@ def main() raises:
     frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
     write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

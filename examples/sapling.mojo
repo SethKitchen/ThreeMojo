@@ -12,12 +12,12 @@ a seed. The trunk is shorter than the default, so the crown fits the
 frame. The tree turns one whole turn.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, spin_frame, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from generators.tree import TreeGenerator, TreeParameters
 from lights.light import ambient_light, directional_light
@@ -58,35 +58,6 @@ def _tree() raises -> TreeGenerator:
     return TreeGenerator(parameters^)
 
 
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the tree by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera, placed in front of the tree.
-        assets: The geometry and the material.
-        scene: The persistent scene, edited in place.
-        node: The node the tree rides.
-        step: How much further the tree turns.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
-
-
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
@@ -121,6 +92,6 @@ def main() raises:
     frame_clock.start()
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, node, step))
+        frames.append(spin_frame(renderer, camera, assets, scene, node, step))
 
     write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
