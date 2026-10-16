@@ -56,6 +56,36 @@ struct _Node(ImplicitlyCopyable, Movable, _MedianNode):
         self.escape = escape
 
 
+def _overlap_misses(query: Box3, box: Box3) -> Bool:
+    """Return True when `box` misses `query`."""
+    return not box.intersects_box(query)
+
+
+def _ray_misses(query: Ray, box: Box3) -> Bool:
+    """Return True when `box` misses `query`."""
+    return not query.intersects_box(box)
+
+
+@fieldwise_init
+struct _AxisLine(ImplicitlyCopyable):
+    """Two coordinates of an infinite line, and the axes they lie on."""
+
+    var a: Float32
+    var b: Float32
+    var first: Int
+    var second: Int
+
+
+def _axis_misses(query: _AxisLine, box: Box3) -> Bool:
+    """Return True when `box` misses the infinite line `query`."""
+    return (
+        query.a < component(box.min, query.first)
+        or query.a > component(box.max, query.first)
+        or query.b < component(box.min, query.second)
+        or query.b > component(box.max, query.second)
+    )
+
+
 struct _PrimitiveIndex(Movable):
     var nodes: List[_Node]
     var boxes: List[Box3]
@@ -122,14 +152,29 @@ struct _PrimitiveIndex(Movable):
             self.nodes, self.boxes, self.order, self.buffer, start, end
         )
 
-    def overlap(self, box: Box3, mut found: List[Int]) -> Int:
+    def _collect[
+        Q: ImplicitlyCopyable, //, misses: def(Q, Box3) thin -> Bool
+    ](self, query: Q, mut found: List[Int]) -> Int:
+        """Walk the tree and keep every leaf `misses` does not reject.
+
+        Parameters:
+            Q: The query.
+            misses: True when a node's box is outside the query.
+
+        Args:
+            query: What `misses` tests each box against.
+            found: The leaf entries, replaced.
+
+        Returns:
+            How many nodes the walk read.
+        """
         found.clear()
         var visited = 0
         var i = 0
         while i < len(self.nodes):
             visited += 1
             ref node = self.nodes[i]
-            if not node.box.intersects_box(box):
+            if misses(query, node.box):
                 i = node.escape
                 continue
             if node.entry >= 0:
@@ -137,45 +182,25 @@ struct _PrimitiveIndex(Movable):
             i += 1
         return visited
 
+    def overlap(self, box: Box3, mut found: List[Int]) -> Int:
+        return self._collect[_overlap_misses](box, found)
+
     def ray(self, ray: Ray, mut found: List[Int]) -> Int:
-        found.clear()
-        var visited = 0
-        var i = 0
-        while i < len(self.nodes):
-            visited += 1
-            ref node = self.nodes[i]
-            if not ray.intersects_box(node.box):
-                i = node.escape
-                continue
-            if node.entry >= 0:
-                found.append(node.entry)
-            i += 1
-        return visited
+        return self._collect[_ray_misses](ray, found)
 
     def axis_line(
         self, origin: Vector3, axis: Int, mut found: List[Int]
     ) -> Int:
         # Internal callers admit axis 0..2. Test the full line, not a half-ray:
         # longitudinal culling could change rounded legacy narrow answers.
-        found.clear()
         var first = (axis + 1) % 3
         var second = (axis + 2) % 3
-        var a = component(origin, first)
-        var b = component(origin, second)
-        var visited = 0
-        var i = 0
-        while i < len(self.nodes):
-            visited += 1
-            ref node = self.nodes[i]
-            if (
-                a < component(node.box.min, first)
-                or a > component(node.box.max, first)
-                or b < component(node.box.min, second)
-                or b > component(node.box.max, second)
-            ):
-                i = node.escape
-                continue
-            if node.entry >= 0:
-                found.append(node.entry)
-            i += 1
-        return visited
+        return self._collect[_axis_misses](
+            _AxisLine(
+                component(origin, first),
+                component(origin, second),
+                first,
+                second,
+            ),
+            found,
+        )
