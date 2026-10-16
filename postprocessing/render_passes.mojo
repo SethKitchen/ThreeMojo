@@ -26,7 +26,7 @@ from cameras.camera import Camera
 from core.scene import Scene
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
-from postprocessing.sampling import u_of, v_of
+from postprocessing.sampling import mix, u_of, v_of
 from postprocessing.effects import texture_pixel
 from postprocessing.screen_space import DepthView
 from render.cube_texture import CubeTexture
@@ -324,16 +324,6 @@ def check_transition(settings: TransitionSettings) raises:
         raise Error("A transition threshold must be positive")
 
 
-def _mixed(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
-    """Return GLSL's `mix` of two colors."""
-    return FloatColor(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
-    )
-
-
 def transition_pixel(
     first: FloatColor,
     second: FloatColor,
@@ -365,8 +355,8 @@ def transition_pixel(
             max((texel.r - r) * (1 / settings.threshold), Float32(0)),
             Float32(1),
         )
-        return _mixed(first, second, t)
-    return _mixed(second, first, settings.mix_ratio)
+        return mix(first, second, t)
+    return mix(second, first, settings.mix_ratio)
 
 
 def transition_light(

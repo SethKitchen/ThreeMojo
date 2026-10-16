@@ -41,6 +41,7 @@ from core.buffer_geometry import BufferGeometry
 from core.object3d import NO_PARENT, facing
 from core.scene import Scene
 from helpers.segments import Segments
+from lights.aim import light_target_position
 from lights.light import (
     DIRECTIONAL,
     HEMISPHERE,
@@ -90,9 +91,7 @@ def _positive(size: Length, name: String) raises -> Float32:
 def _target(light: Light, scene: Scene) raises -> Vector3:
     """Return where a light's target is in world space: its node's world
     position, or the origin for `NO_PARENT`."""
-    if light.target == NO_PARENT:
-        return Vector3(0, 0, 0)
-    return scene.world_position(light.target)
+    return light_target_position(scene, light)
 
 
 def _aimed(position: Vector3, target: Vector3) raises -> Matrix4:
