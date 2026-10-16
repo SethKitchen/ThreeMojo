@@ -43,7 +43,7 @@ from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
 from math.smoothstep import clamped_smoothstep
-from math.utils import SeededRandom, clamp
+from math.utils import SeededRandom, clamp, glsl_mod
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -827,11 +827,6 @@ def _hypot(x: Float32, y: Float32) -> Float32:
     return length2(x, y)
 
 
-def _glsl_mod(x: Float32, y: Float32) -> Float32:
-    """Return GLSL's `mod`: `x` less `y` times the floor of their ratio."""
-    return x - y * floor(x / y)
-
-
 def dot_radius_distance(
     shape: HalftoneShape,
     channel: Float32,
@@ -929,12 +924,12 @@ def reference_cell(
     var dot_normal = n.x * p.x + n.y * p.y
     var dot_line = -n.y * p.x + n.x * p.y
     var offset = Vector2(n.x * dot_normal, n.y * dot_normal)
-    var offset_normal = _glsl_mod(_hypot(offset.x, offset.y), step)
+    var offset_normal = glsl_mod(_hypot(offset.x, offset.y), step)
     var normal_dir = Float32(1) if dot_normal < 0 else Float32(-1)
     var normal_scale = (
         -offset_normal if offset_normal < threshold else step - offset_normal
     ) * normal_dir
-    var offset_line = _glsl_mod(_hypot(p.x - offset.x, p.y - offset.y), step)
+    var offset_line = glsl_mod(_hypot(p.x - offset.x, p.y - offset.y), step)
     var line_dir = Float32(1) if dot_line < 0 else Float32(-1)
     var line_scale = (
         -offset_line if offset_line < threshold else step - offset_line

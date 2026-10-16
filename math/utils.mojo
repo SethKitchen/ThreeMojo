@@ -105,6 +105,19 @@ def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
     return start + (end - start) * t
 
 
+def glsl_mod(x: Float32, y: Float32) -> Float32:
+    """Return GLSL's `mod`: `x` minus `y` times the floor of their ratio.
+
+    Args:
+        x: The value.
+        y: The modulus.
+
+    Returns:
+        The remainder.
+    """
+    return x - y * floor(x / y)
+
+
 def inverse_lerp(x: Float32, y: Float32, value: Float32) -> Float32:
     """Return the fraction of the way `value` lies from `x` to `y`.
 
