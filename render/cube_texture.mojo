@@ -155,6 +155,44 @@ comptime SEEN_FROM_INSIDE = CubeLayout(0)
 comptime SEEN_FROM_OUTSIDE = CubeLayout(1)
 
 
+def require_cube_layout(layout: CubeLayout) raises:
+    """Refuse a layout that is not one of the two named layouts.
+
+    Args:
+        layout: The layout of six images.
+
+    Returns:
+        Nothing. The call returns when the layout is named.
+
+    Raises:
+        Error: If the layout is not `SEEN_FROM_INSIDE` or
+            `SEEN_FROM_OUTSIDE`.
+    """
+    if not layout.is_valid():
+        raise Error(
+            "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE"
+        )
+
+
+def cube_image_index(index: Int, outside: Bool) -> Int:
+    """Return which stored face an image slot reads.
+
+    Six image files keep the positive-x image in the negative-x slot
+    and the negative-x image in the positive-x slot. A cube seen from
+    inside keeps each image in the slot of the same name.
+
+    Args:
+        index: The slot, from `POSITIVE_X` through `NEGATIVE_Z`.
+        outside: True for three.js's six-file layout.
+
+    Returns:
+        The face that image belongs to.
+    """
+    if outside and index < NEGATIVE_X + 1:
+        return NEGATIVE_X - index
+    return index
+
+
 def face_forward(face: Int) -> Vector3:
     """Return the direction a cube's face looks out along.
 
@@ -998,16 +1036,10 @@ def cube_texture_from(
     """
     if len(images) != FACE_COUNT:
         raise Error("A cube texture is built from exactly six images")
-    if not layout.is_valid():
-        raise Error(
-            "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE"
-        )
+    require_cube_layout(layout)
     var faces = List[Texture]()
     for index in range(FACE_COUNT):  # pragma: no branch
-        var source = index
-        if layout == SEEN_FROM_OUTSIDE and index < NEGATIVE_X + 1:
-            # POSITIVE_X reads the nx image and NEGATIVE_X the px one.
-            source = NEGATIVE_X - index
+        var source = cube_image_index(index, layout == SEEN_FROM_OUTSIDE)
         ref image = images[source]
         var space = color_space.or_else(image.color_space)
         if space == UNKNOWN_SPACE:
