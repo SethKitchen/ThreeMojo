@@ -12,9 +12,8 @@ the height sets the vertex color. The ground turns one whole turn. The
 field itself stays put, so the loop has no jump.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_camera, spin_clip
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
@@ -137,13 +136,15 @@ def main() raises:
         directional_light(Color(255, 244, 230), scene.add(lamp^), 2.1)
     )
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(1.7, 1.25, 2.15),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(30.0, METER),
     )
-    camera.place(Vector3(1.7, 1.25, 2.15), Vector3(0, 0, 0))
 
     spin_clip(
         renderer, camera, assets, scene, ground, FRAMES, DELAY_MS, destination

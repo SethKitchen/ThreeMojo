@@ -19,7 +19,7 @@ that `Triangle.area2` already computes. A concave model, or two objects
 overlapping, needs the depth buffer, which is what `cubes.mojo` adds.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_geometry import POSITION, BufferGeometry
@@ -99,13 +99,15 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var camera = PerspectiveCamera(
-        Angle(50.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0, 2.5),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(50.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
 
     var geometry = cube_geometry(Length(1.0, METER))
 

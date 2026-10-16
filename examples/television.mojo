@@ -14,7 +14,7 @@ shows both screens on a stand. The ramp the box is shaded through is a
 data texture: three numbers, never an image file.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -65,13 +65,15 @@ def a_camera(
     Raises:
         Error: If its parameters are invalid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(width) / Float32(height),
-        near,
-        far,
+    var camera = gallery_camera(
+        width,
+        height,
+        Vector3(0, 0.6, back),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=near,
+        far=far,
     )
-    camera.place(Vector3(0, 0.6, back), Vector3(0, 0, 0))
     return camera^
 
 

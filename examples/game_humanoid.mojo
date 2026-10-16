@@ -19,7 +19,7 @@ The optional second argument is the baked file; the default is
 budget of triangles for the skin; the default is 10000.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera
 
 from animation.animation_clip import AnimationClip
 from animation.animation_mixer import (
@@ -27,7 +27,6 @@ from animation.animation_mixer import (
     AnimationAction,
     AnimationMixer,
 )
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -160,13 +159,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(200, 210, 255), 0.45))
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(24, 25, 28))
-    var camera = PerspectiveCamera(
-        Angle(35.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(-2.1, 0.1, 2.7),
+        Vector3(0.0, -0.05, 0.0),
+        field_of_view=Angle(35.0, DEGREE),
+        near=Length(0.05, METER),
+        far=Length(30.0, METER),
     )
-    camera.place(Vector3(-2.1, 0.1, 2.7), Vector3(0.0, -0.05, 0.0))
 
     var holds = materialize[HOLD]()
     var frames = List[Framebuffer]()

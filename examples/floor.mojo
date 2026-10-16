@@ -37,7 +37,7 @@ here it is a pass over the `uv` attribute, which `BufferGeometry` exists to
 allow.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -204,15 +204,17 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
 
-    var camera = PerspectiveCamera(
-        Angle(50.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(200.0, METER),
-    )
     # Low and looking slightly down: the horizon sits inside the frame, and
     # everything approaching it is minified without limit.
-    camera.place(Vector3(0, 1.4, 6.0), Vector3(0, 0.9, -6.0))
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 1.4, 6.0),
+        Vector3(0, 0.9, -6.0),
+        field_of_view=Angle(50.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(200.0, METER),
+    )
 
     var frame_clock = Clock()
     frame_clock.start()

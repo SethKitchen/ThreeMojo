@@ -12,9 +12,8 @@ ligaments and muscles. The program also prints tissue mass and Earth
 weight.
 """
 
-from examples.output import example_destination, spin_gallery
+from examples.output import example_destination, gallery_camera, spin_gallery
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -121,13 +120,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 248, 235), 0.55))
     scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.4))
 
-    var camera = PerspectiveCamera(
-        Angle(32.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.02, METER),
-        Length(8.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.16, 0.05, 0.38),
+        Vector3(0.0, -0.045, 0.04),
+        field_of_view=Angle(32.0, DEGREE),
+        near=Length(0.02, METER),
+        far=Length(8.0, METER),
     )
-    camera.place(Vector3(0.16, 0.05, 0.38), Vector3(0.0, -0.045, 0.04))
 
     spin_gallery(
         renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination

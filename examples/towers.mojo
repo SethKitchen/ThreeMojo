@@ -12,7 +12,7 @@ model from the skyscraper's seed: storeys, rooms, doors, windows, a frame
 and furniture. The render view draws its outside.
 """
 
-from examples.output import build_and_spin, example_destination
+from examples.output import example_destination, build_and_spin, gallery_camera
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -66,13 +66,15 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(1, METER),
-        Length(500, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(75, 48, 80),
+        Vector3(0, 26, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(1, METER),
+        far=Length(500, METER),
     )
-    camera.place(Vector3(75, 48, 80), Vector3(0, 26, 0))
     return camera^
 
 
