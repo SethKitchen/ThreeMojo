@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from math.box_extent import box_exterior
+from math.norm import squared_length3
 from math.cross import cross_vectors
 from math.vector3 import Vector3
 from std.math import max, min, sqrt
@@ -72,11 +73,11 @@ struct Piece(Copyable, Movable):
         var px = d.dot(self.u) / self.radii.x
         var py = d.dot(self.v) / self.radii.y
         var pz = d.dot(self.w) / self.radii.z
-        var k0 = sqrt(px * px + py * py + pz * pz)
+        var k0 = sqrt(squared_length3[DType.float32](px, py, pz))
         var qx = px / self.radii.x
         var qy = py / self.radii.y
         var qz = pz / self.radii.z
-        var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+        var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
         if k1 == 0:
             return -min(self.radii.x, min(self.radii.y, self.radii.z))
         return k0 * (k0 - 1) / k1

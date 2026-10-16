@@ -27,6 +27,7 @@ can both use.
 
 from extensions.humanoid.skeleton.field import Bounds, empty_bounds
 from math.box_extent import box_exterior
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import atan2, cos, max, min, pi, sin, sqrt
 
@@ -405,7 +406,7 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
     var plane = _plane(point, loft.axis)
     var du = plane[0] - (w * cu4).reduce_add()
     var dv = plane[1] - (w * cv4).reduce_add()
-    var rho = sqrt(du * du + dv * dv)
+    var rho = sqrt(squared_length2[DType.float32](du, dv))
     var angle = atan2(dv, du) + Float32(2 * pi)
     var step = Float32(2 * pi) / Float32(LOFT_RAYS)
     var r_pos = angle / step
@@ -438,7 +439,7 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
         axial += (
             du * (dw * cu4).reduce_add() + dv * (dw * cv4).reduce_add()
         ) / (rho * loft.spacing)
-    return gap / sqrt(1 + tangential * tangential + axial * axial)
+    return gap / sqrt(1 + squared_length2[DType.float32](tangential, axial))
 
 
 def _four(

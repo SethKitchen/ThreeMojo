@@ -27,6 +27,7 @@ local y axis is -∂w/∂x. These are right-handed rotations, the same as the
 frame element's.
 """
 
+from math.norm import squared_length2
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.numerics.dense import DenseMatrix
@@ -235,7 +236,7 @@ struct ShellElement(Copyable, Movable):
         for k in range(3):  # pragma: no branch
             var xij = self.x[ii[k]] - self.x[jj[k]]
             var yij = self.y[ii[k]] - self.y[jj[k]]
-            var l2 = xij * xij + yij * yij
+            var l2 = squared_length2[DType.float64](xij, yij)
             out.append(-xij / l2)
             out.append(0.75 * xij * yij / l2)
             out.append((0.25 * xij * xij - 0.5 * yij * yij) / l2)

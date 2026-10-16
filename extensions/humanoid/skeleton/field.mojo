@@ -14,6 +14,7 @@ from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
 from math.cross import cross_vectors
+from math.norm import squared_length3
 from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import isfinite, max, min, pi, sqrt
@@ -361,11 +362,11 @@ def sd_ellipse_segment(
     var pz = v / ap_r
     var pr = sqrt(ml_r * ap_r)
     var py = w / pr
-    var k0 = sqrt(px * px + py * py + pz * pz)
+    var k0 = sqrt(squared_length3[DType.float32](px, py, pz))
     var qx = px / ml_r
     var qy = py / pr
     var qz = pz / ap_r
-    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+    var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
     if k1 == 0:
         return -min(ml_r, ap_r)
     return k0 * (k0 - 1) / k1
@@ -376,11 +377,11 @@ def sd_ellipsoid(point: Vector3, center: Vector3, radii: Vector3) -> Float32:
     var px = (point.x - center.x) / radii.x
     var py = (point.y - center.y) / radii.y
     var pz = (point.z - center.z) / radii.z
-    var k0 = sqrt(px * px + py * py + pz * pz)
+    var k0 = sqrt(squared_length3[DType.float32](px, py, pz))
     var qx = px / radii.x
     var qy = py / radii.y
     var qz = pz / radii.z
-    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+    var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
     if k1 == 0:
         return -min(radii.x, min(radii.y, radii.z))
     return k0 * (k0 - 1) / k1
