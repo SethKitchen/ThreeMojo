@@ -2392,17 +2392,6 @@ def _track_name(
     return named[thing] + property_path(target)
 
 
-def _library(mut writer: JsonWriter, key: String, entries: List[String]) raises:
-    """Write a library under `key`, or nothing when it is empty."""
-    if len(entries) == 0:
-        return
-    writer.key(key)
-    writer.begin_array()
-    for entry in entries:  # pragma: no branch
-        writer.raw(entry)
-    writer.end_array()
-
-
 def object_to_json(
     scene: Scene,
     assets: Assets,
@@ -2565,13 +2554,13 @@ def object_to_json(
     writer.key("generator")
     writer.string("Object3D.toJSON")
     writer.end_object()
-    _library(writer, "geometries", out.library.geometries)
-    _library(writer, "materials", out.library.materials)
-    _library(writer, "textures", out.library.textures)
-    _library(writer, "images", out.library.images)
-    _library(writer, "shapes", out.library.shapes)
-    _library(writer, "skeletons", out.library.skeletons)
-    _library(writer, "animations", clips)
+    writer.raw_array("geometries", out.library.geometries)
+    writer.raw_array("materials", out.library.materials)
+    writer.raw_array("textures", out.library.textures)
+    writer.raw_array("images", out.library.images)
+    writer.raw_array("shapes", out.library.shapes)
+    writer.raw_array("skeletons", out.library.skeletons)
+    writer.raw_array("animations", clips)
     writer.key("object")
     writer.raw(tree.finish())
     writer.end_object()
@@ -2627,8 +2616,8 @@ def _standalone(
         var key = doc.key(root, at)
         writer.key(key)
         writer.raw(json_value_text(doc, doc.get(root, key)))
-    _library(writer, "textures", textures)
-    _library(writer, "images", images)
+    writer.raw_array("textures", textures)
+    writer.raw_array("images", images)
     writer.end_object()
     return writer.finish()
 

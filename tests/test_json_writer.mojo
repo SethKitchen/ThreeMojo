@@ -127,6 +127,15 @@ def test_a_document_is_written_with_its_commas_and_colons() raises:
     assert_equal(single.finish(), "7")
 
 
+def test_an_empty_raw_array_is_left_out() raises:
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.raw_array("gone", List[String]())
+    writer.raw_array("kept", ['{"a":1}', "2"])
+    writer.end_object()
+    assert_equal(writer.finish(), '{"kept":[{"a":1},2]}')
+
+
 def test_what_json_has_no_place_for_is_refused() raises:
     # A second root value.
     var twice = JsonWriter()

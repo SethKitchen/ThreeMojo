@@ -220,6 +220,25 @@ struct JsonWriter(Movable):
         """
         self._write(json)
 
+    def raw_array(mut self, key: String, entries: List[String]) raises:
+        """Write an array of JSON texts under `key`, or nothing when empty.
+
+        Args:
+            key: The key.
+            entries: One JSON text per element.
+
+        Raises:
+            Error: If no object is open, or a key is waiting for its value.
+        """
+        if len(entries) == 0:
+            return
+        self.key(key)
+        self.begin_array()
+        # Empty arrays return above, so this loop has an entry.
+        for entry in entries:  # pragma: no branch
+            self.raw(entry)
+        self.end_array()
+
     def finish(self) raises -> String:
         """Return the text, once its root value is complete.
 
