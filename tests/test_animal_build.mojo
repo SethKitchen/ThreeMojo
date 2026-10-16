@@ -29,6 +29,7 @@ from extensions.animals.coat import (
     Palette,
     SurfaceClass,
     band,
+    channel_gain,
     grizzle,
     mix3,
     paint_eye,
@@ -161,6 +162,10 @@ def test_surface_classes_and_palettes() raises:
     assert_equal(scaled.x, 2.0 * (1.0 + 0.1 * 0.5 + 0.25))
     assert_equal(scaled.y, 3.0 * (1.0 + 0.25))
     assert_equal(scaled.z, 4.0 * (1.0 - 0.2 * 0.5 + 0.25))
+    var gained = channel_gain(V3(2, 3, 4), 0.5, 0.14, 0.12, 0.1)
+    assert_equal(gained.x, 2.0 * (1.0 + 0.14 * 0.5))
+    assert_equal(gained.y, 3.0 * (1.0 + 0.12 * 0.5))
+    assert_equal(gained.z, 4.0 * (1.0 + 0.1 * 0.5))
     assert_almost_equal(Palette().get("any").y, 0.18)
 
 

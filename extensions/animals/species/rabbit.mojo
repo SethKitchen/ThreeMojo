@@ -23,6 +23,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
     body_region,
@@ -1159,10 +1160,6 @@ def rabbit_paint(
         c = mix3(c, pal.get("dutchWhite"), smoothstep(0.0008, -0.0008, d))
         ag *= smoothstep(-0.001, 0.001, d)
     var cv = fbm3(p * 40.0, 3) - 0.5
-    c = V3(
-        c.x * (1.0 + 0.14 * cv),
-        c.y * (1.0 + 0.12 * cv),
-        c.z * (1.0 + 0.09 * cv),
-    )
+    c = channel_gain(c, cv, 0.14, 0.12, 0.09)
     c = grizzle(c, p, 700.0, 0.06 + 0.22 * clamp(ag, 0.0, 1.0))
     return Paint(c, FUR)

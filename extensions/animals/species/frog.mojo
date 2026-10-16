@@ -21,6 +21,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     palette_of,
     srgb,
@@ -1234,9 +1235,5 @@ def frog_paint(
     if t.juvenile() > 0.0:
         col = mix3(col, mix3(col, pal.get("head"), 0.6), 0.3)
     var cv = fbm3(p * 60.0, 3) - 0.5
-    col = V3(
-        col.x * (1.0 + 0.16 * cv),
-        col.y * (1.0 + 0.13 * cv),
-        col.z * (1.0 + 0.1 * cv),
-    )
+    col = channel_gain(col, cv, 0.16, 0.13, 0.1)
     return Paint(col, SKIN if mouth else WET)

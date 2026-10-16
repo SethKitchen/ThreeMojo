@@ -21,6 +21,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     shade_swatch,
     srgb,
@@ -2040,11 +2041,7 @@ def pig_paint(
     # A faint, broad warm variation of the skin.
     var cv = fbm3(p * 3.0 + V3(off.z, 0.0, 0.0), 2) - 0.5
     if region != 7:
-        c = V3(
-            c.x * (1.0 + 0.035 * cv),
-            c.y * (1.0 + 0.012 * cv),
-            c.z * (1.0 + 0.012 * cv),
-        )
+        c = channel_gain(c, cv, 0.035, 0.012, 0.012)
     var muddy = region <= 1
     if muddy:
         c = _mud(t, c, p, off)

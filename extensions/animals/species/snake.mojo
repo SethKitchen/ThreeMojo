@@ -25,6 +25,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     shade_swatch,
     srgb,
@@ -1415,11 +1416,7 @@ def snake_paint(
         if palate:
             return Paint(srgb(0x8A5A58), SKIN)
     # Low-frequency mottling.
-    col = V3(
-        col.x * (1.0 + 0.1 * n_lo),
-        col.y * (1.0 + 0.1 * n_lo),
-        col.z * (1.0 + 0.08 * n_lo),
-    )
+    col = channel_gain(col, n_lo, 0.1, 0.1, 0.08)
     var spot = smoothstep(0.0008, -0.0008, pat)
     col = mix3(col, pcol, spot)
     var line = smoothstep(0.0005, -0.0005, mk)

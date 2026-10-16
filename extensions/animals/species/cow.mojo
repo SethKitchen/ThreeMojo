@@ -23,6 +23,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
     shade_swatch,
@@ -1995,9 +1996,7 @@ def _nostril_dist(hm: V3) -> Float64:
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
     var cv = fbm3(p * 5.0, 3) - 0.5
-    var v = V3(
-        c.x * (1.0 + 0.14 * cv), c.y * (1.0 + 0.12 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 150.0, 0.06)
 
 

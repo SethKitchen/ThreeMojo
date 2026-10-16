@@ -20,6 +20,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
     shade_swatch,
@@ -2235,11 +2236,7 @@ def goat_paint(
     # Low-frequency variation, and lock-to-lock streaks in long hair.
     var cv = fbm3(p * 7.0, 3) - 0.5
     if surface == FUR:
-        c = V3(
-            c.x * (1.0 + 0.12 * cv),
-            c.y * (1.0 + 0.1 * cv),
-            c.z * (1.0 + 0.08 * cv),
-        )
+        c = channel_gain(c, cv, 0.12, 0.1, 0.08)
         var shag = t.get("shaggy", 0.0) > 0.3 and region <= 1
         if long_hair or shag:
             var st = vnoise3(V3(p.x * 160.0, p.y * 40.0, p.z * 160.0))

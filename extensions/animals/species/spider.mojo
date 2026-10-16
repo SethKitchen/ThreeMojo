@@ -25,6 +25,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     shade_swatch,
     srgb,
@@ -1434,11 +1435,7 @@ def spider_paint(
             )
             pcol = pal.get("chevron")
             pint = dors * contrast * 0.8 * smoothstep(-0.35, 0.1, up)
-            col = V3(
-                col.x * (1.0 + 0.3 * noise_f),
-                col.y * (1.0 + 0.28 * noise_f),
-                col.z * (1.0 + 0.24 * noise_f),
-            )
+            col = channel_gain(col, noise_f, 0.3, 0.28, 0.24)
             hair = fbm3(p * (1.0 / (0.12 * mmu)), 2) - 0.5
         else:
             # Long reddish setae over black, strongest on the dorsum, and
@@ -1539,11 +1536,7 @@ def spider_paint(
             0.05 * mmu, 0.6 * mmu, eye_d
         )
     # Low-frequency color noise.
-    col = V3(
-        col.x * (1.0 + 0.22 * noise),
-        col.y * (1.0 + 0.2 * noise),
-        col.z * (1.0 + 0.16 * noise),
-    )
+    col = channel_gain(col, noise, 0.22, 0.2, 0.16)
     var spot = smoothstep(0.003, -0.003, pat) * max(pint, 0.0)
     col = mix3(col, pcol, clamp(spot, 0.0, 1.0))
     var line = smoothstep(0.002, -0.002, mk)

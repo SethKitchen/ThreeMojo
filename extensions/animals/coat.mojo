@@ -321,6 +321,30 @@ def shade_swatch(
     )
 
 
+def channel_gain(
+    color: V3, amount: Float64, red: Float64, green: Float64, blue: Float64
+) -> V3:
+    """Return a color with each channel scaled by one plus a weight.
+
+    The weight times `amount` is formed before it is added to one.
+
+    Args:
+        color: The color, in linear light.
+        amount: The variation. Noise centered on zero is the usual value.
+        red: The weight of red.
+        green: The weight of green.
+        blue: The weight of blue.
+
+    Returns:
+        The scaled color.
+    """
+    return V3(
+        color.x * (1.0 + red * amount),
+        color.y * (1.0 + green * amount),
+        color.z * (1.0 + blue * amount),
+    )
+
+
 def body_region(part: SurfacePart, bone: String) -> Int:
     """Return the coat region of one vertex.
 
