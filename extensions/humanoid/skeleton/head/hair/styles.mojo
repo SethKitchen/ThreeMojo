@@ -217,7 +217,7 @@ def cranium_frame(
     Returns:
         The three unit directions.
     """
-    var up = _unit(Vector3(q.x / radii.x, q.y / radii.y, q.z / radii.z))
+    var up = _unit(q / radii)
     var across = Vector3(1, 0, 0) - up * up.x
     if across.dot(across) < Float32(1e-6):
         across = Vector3(0, 0, 1) - up * up.z
