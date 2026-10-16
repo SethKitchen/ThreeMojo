@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.arm.ligaments.dimensions import (
     arm_ligament_field,
     arm_ligament_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -77,5 +77,4 @@ def arm_ligament_from_dimensions(
         0.0011 * dimensions.stature.value
     )
     var label = arm_ligament_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

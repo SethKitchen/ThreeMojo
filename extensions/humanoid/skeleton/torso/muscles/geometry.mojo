@@ -15,7 +15,7 @@ marching tetrahedra.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     TorsoMuscleDimensions,
     torso_muscle_dimensions,
@@ -75,5 +75,4 @@ def torso_muscle_from_dimensions(
     """
     var field = torso_muscle_field(dimensions, part, side)
     var label = torso_muscle_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)
