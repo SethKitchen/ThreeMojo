@@ -59,8 +59,8 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from loaders.text_number import read_finite_float32
 from math.vector3 import Vector3
-from std.math import isfinite
 from std.pathlib import Path
 
 
@@ -296,24 +296,9 @@ def _number(field: String, line: Int) raises -> Float32:
         Error: If the field is not a number, or is not finite once it is
             a `Float32`.
     """
-    var wide: Float64
-    try:
-        wide = Float64(field)
-    except reason:
-        raise Error(
-            _where(line)
-            + "not a number: "
-            + field
-            + " ("
-            + String(reason)
-            + ")"
-        )
-    var value = Float32(wide)
-    if not isfinite(value):
-        raise Error(
-            _where(line) + "a coordinate must be a finite number: " + field
-        )
-    return value
+    return read_finite_float32(
+        field, _where(line), "a coordinate must be a finite number"
+    )
 
 
 def _index(field: String, pool: Int, line: Int) raises -> Int:

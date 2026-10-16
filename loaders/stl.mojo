@@ -50,6 +50,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from loaders.text_number import read_finite_float32
 from render.srgb import srgb_to_linear
 from std.math import isfinite
 from std.memory import bitcast
@@ -380,26 +381,11 @@ struct _Words:
                 finite as a `Float32`.
         """
         var field = self.next("a number")
-        var wide: Float64
-        try:
-            wide = Float64(field)
-        except reason:
-            raise Error(
-                _where(self.line())
-                + "not a number: "
-                + field
-                + " ("
-                + String(reason)
-                + ")"
-            )
-        var value = Float32(wide)
-        if not isfinite(value):
-            raise Error(
-                _where(self.line())
-                + "a coordinate must be a finite number: "
-                + field
-            )
-        return value
+        return read_finite_float32(
+            field,
+            _where(self.line()),
+            "a coordinate must be a finite number",
+        )
 
     def rest_of_line(mut self) -> String:
         """Read the words left on the line of the word last read, and
