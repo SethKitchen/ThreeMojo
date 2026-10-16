@@ -13,7 +13,12 @@ matte surface. The right sphere is gray. Its specular color map tints
 the highlight gold or blue per texel.
 """
 
-from examples.output import example_destination, fill_and_key, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    spin_clip,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -24,7 +29,6 @@ from materials.material import physical_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.texture import IGNORED, data_texture
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/coats.png"
@@ -76,8 +80,7 @@ def highlight_tint() -> List[Float32]:
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(14, 16, 22))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(14, 16, 22))
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(0.62, METER), 48, 32))
     var coat = assets.textures.add(

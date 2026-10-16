@@ -11,7 +11,12 @@ Parallel projection keeps the cube the same size at every depth. The
 camera is a scene node, the same way a mesh is.
 """
 
-from examples.output import example_destination, fill_and_key, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    spin_clip,
+)
 
 from cameras.orthographic_camera import OrthographicCamera
 from core.assets import Assets
@@ -21,7 +26,6 @@ from geometries.box import cube
 from materials.material import Material
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/cameras.png"
@@ -34,8 +38,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var block = assets.geometries.add(cube(Length(1.1, METER)))

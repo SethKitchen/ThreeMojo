@@ -12,7 +12,12 @@ the floor only receives. The map is a soft percentage-closer filter, so
 the edge of the shadow is a band rather than a step.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -27,7 +32,7 @@ from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import cos, pi, sin
 from units.si import Angle, DEGREE, Length, METER
 
@@ -70,8 +75,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 20, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 20, 28))
     renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
 
     var assets = Assets()

@@ -19,7 +19,11 @@ The optional second argument is the baked file; the default is
 budget of triangles for the skin; the default is 10000.
 """
 
-from examples.output import example_destination, gallery_camera
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
 
 from animation.animation_clip import AnimationClip
 from animation.animation_mixer import (
@@ -52,7 +56,7 @@ from loaders.gltf import read_gltf
 from math.vector3 import Vector3
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
 from std.time import perf_counter_ns
@@ -157,8 +161,7 @@ def main() raises:
     var sun_node = scene.add(sun^)
     scene.add_light(directional_light(Color(255, 242, 226), sun_node, 2.4))
     scene.add_light(ambient_light(Color(200, 210, 255), 0.45))
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     var camera = gallery_camera(
         WIDTH,
         HEIGHT,

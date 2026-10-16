@@ -16,6 +16,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     spin_clip,
 )
 
@@ -28,7 +29,6 @@ from math.vector3 import Vector3
 from objects.line_segments2 import Line2, line_geometry
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin
 from units.si import Angle, DEGREE, Length, METER
 
@@ -65,8 +65,7 @@ def ribbon() -> Tuple[List[Vector3], List[FloatColor]]:
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var assets = Assets()
     var shape = ribbon()
     var path = assets.geometries.add(line_geometry(shape[0], shape[1]))

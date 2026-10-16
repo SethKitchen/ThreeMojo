@@ -12,7 +12,7 @@ Turning the camera turns the colors. That is why a normal is not a color
 that lighting can mix.
 """
 
-from examples.output import example_destination, spin_clip
+from examples.output import example_destination, gallery_renderer, spin_clip
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -22,7 +22,6 @@ from geometries.sphere import sphere
 from materials.material import normal_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/normals.png"
@@ -35,8 +34,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(1.0, METER), 28, 18))

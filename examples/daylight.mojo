@@ -12,7 +12,12 @@ inside. The sun position is a uniform. The sphere sits in the light so
 the sky has something to shine on.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from core.assets import Assets
 from core.clock import Clock
@@ -25,7 +30,6 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.sky import Sky
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, sin
 from units.si import DEGREE, METER, Angle, Length
 
@@ -39,8 +43,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 12, 20))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 12, 20))
     var assets = Assets()
     var scene = Scene()
 

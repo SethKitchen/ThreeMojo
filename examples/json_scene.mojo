@@ -12,7 +12,12 @@ with `write_object_json` and read with `load_object_json`. The picture
 is the scene that came back, not the one that was written.
 """
 
-from examples.output import example_destination, fill_and_key, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    write_example,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -25,7 +30,6 @@ from loaders.object_loader import ObjectCameras, load_object_json
 from materials.material import Material
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from std.os import remove
 from units.si import Angle, DEGREE, Length, METER
 
@@ -81,8 +85,7 @@ def main() raises:
     var subject = loaded.meshes[0].node
     remove(document)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
     frame_clock.start()

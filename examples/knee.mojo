@@ -15,6 +15,7 @@ from examples.output import (
     example_destination,
     fill_and_key,
     gallery_camera,
+    gallery_renderer,
     spin_gallery,
 )
 
@@ -35,7 +36,6 @@ from extensions.humanoid.skeleton.look import (
 )
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/knee.png"
@@ -50,8 +50,7 @@ def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 16, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 16, 14))
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))

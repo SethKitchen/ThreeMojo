@@ -16,7 +16,7 @@ every second, and follows it when the terminal answers.
 This example needs a terminal. It is not run by `make animation`.
 """
 
-from examples.output import fill_and_key, gallery_camera
+from examples.output import fill_and_key, gallery_camera, gallery_renderer
 
 from controls.input import CTRL_C, ESCAPE, KEY_DOWN, Key, RESIZE
 from controls.orbit_controls import OrbitControls
@@ -58,8 +58,7 @@ def main() raises:
     var width = columns
     var height = rows * 2
 
-    var renderer = Renderer(width, height, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(width, height, Color(16, 18, 26))
     var assets = Assets()
     var scene = Scene()
     var root = scene.add(Object3D())

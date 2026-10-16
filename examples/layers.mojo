@@ -13,7 +13,12 @@ with the angle. The right sphere is brushed metal, and its highlight is
 long in one direction. The camera turns around them.
 """
 
-from examples.output import example_destination, fill_and_key, spin_clip
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    gallery_renderer,
+    spin_clip,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -23,7 +28,6 @@ from geometries.sphere import sphere
 from materials.material import physical_material
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, METER, NANOMETER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/layers.png"
@@ -36,8 +40,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(14, 16, 22))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(14, 16, 22))
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(0.55, METER), 40, 28))
     var cloth = assets.materials.add(

@@ -13,7 +13,12 @@ with no cooling. Each frame is one hour: each room's floor is colored
 from 20 degrees Celsius, blue, to 34, red.
 """
 
-from examples.output import example_destination, gallery_camera, write_frames
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_frames,
+)
 from examples.preview import Triangles, add_sky_and_sun, heat_color
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -22,7 +27,6 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from units.si import DEGREE, DEGREE64, METER, Angle, Length
 from extensions.building.construction import Construction, Layer, double_glazing
 from extensions.building.generate.openings import (
@@ -188,8 +192,7 @@ def main() raises:
         1,
     )
     var result = simulate(view.model, weather, default_options())
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(26, 30, 40))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(26, 30, 40))
     var camera = _camera()
     var frames = List[Framebuffer]()
     for hour in range(FRAMES):

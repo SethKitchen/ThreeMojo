@@ -13,7 +13,12 @@ The red box turns with it. The blue box rides a `Gyroscope`, so it follows
 the bar and keeps its own turn.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from animation.keyframe_track import MeshIndex
 from cameras.perspective_camera import PerspectiveCamera
@@ -32,7 +37,7 @@ from objects.gyroscope import gyroscope
 from objects.mesh import Mesh
 from objects.morph_blend_mesh import MorphBlendMesh
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import sqrt
 from units.si import DEGREE, METER, Angle, Length
 
@@ -170,8 +175,7 @@ def frame_at(
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var shape = sphere(Length(0.62, METER), 16, 12)
     var positions = shape.clone_attribute(POSITION)

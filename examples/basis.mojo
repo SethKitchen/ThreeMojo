@@ -16,6 +16,7 @@ turn together.
 from examples.output import (
     example_destination,
     gallery_camera,
+    gallery_renderer,
     spin_frame,
     write_example,
 )
@@ -31,7 +32,6 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.ktx2 import read
-from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
 
@@ -45,8 +45,7 @@ comptime DELAY_MS = 55
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var assets = Assets()
     var card = assets.geometries.add(
         plane(Length(0.9, METER), Length(0.9, METER))

@@ -16,7 +16,11 @@ The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. The default is `high`.
 """
 
-from examples.output import example_destination, gallery_camera
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
 
 from core.assets import Assets
 from core.object3d import Object3D
@@ -58,7 +62,7 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import FOOT, Length, METER
@@ -133,8 +137,7 @@ def main() raises:
     if len(args) > 2:
         level = quality_named(String(args[2]))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.local_clipping_enabled = True

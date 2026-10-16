@@ -12,7 +12,12 @@ and a normal attachment. The top band is that light through ACES, so a
 bright lamp keeps its color. The bottom band is the view-space normal.
 """
 
-from examples.output import example_destination, gallery_camera, write_example
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
 
 from core.assets import Assets
 from core.clock import Clock
@@ -34,7 +39,6 @@ from render.target import (
     TargetOutput,
 )
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, tone_map
-from renderers.renderer import Renderer, available_workers
 from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/targets.png"
@@ -98,8 +102,7 @@ def show(light: FloatImage, normals: FloatImage) raises -> Framebuffer:
 def main() raises:
     var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HALF, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HALF, Color(16, 18, 26))
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(0.85, METER), 36, 24))
     var paint = assets.materials.add(Material(Color(180, 186, 196)))
