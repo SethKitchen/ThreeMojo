@@ -58,6 +58,9 @@ from postprocessing.traa import (
     history_is_kept,
     sample_inside,
     neighborhood_motion,
+    read_drawn_frame,
+    remember_jitter_camera,
+    render_jittered,
     reproject_window_depth,
     sample_motion,
     traa_jitter,
@@ -461,25 +464,18 @@ def taau_render[
         FLOAT_TARGET,
         [OUTPUT_COLOR, OUTPUT_VELOCITY],
     )
-    small.set_velocity_projection(camera.projection_matrix())
-    try:
-        small.render_into(drawn, scene, assets, moved)
-    finally:
-        small.set_velocity_projection(None)
-    settings.previous_camera_world = settings.camera_world
-    settings.previous_projection_inverse = settings.projection_inverse
-    var world = moved.view
-    world.invert()
-    settings.camera_world = world
-    var unprojects = moved.projection
-    unprojects.invert()
-    settings.projection_inverse = unprojects
+    render_jittered(small, drawn, scene, assets, camera, moved)
+    remember_jitter_camera(
+        settings.previous_camera_world,
+        settings.previous_projection_inverse,
+        settings.camera_world,
+        settings.projection_inverse,
+        moved.view,
+        moved.projection,
+    )
     var beauty = List[FloatColor](capacity=in_w * in_h)
     var velocities = List[Float32](capacity=in_w * in_h * 2)
-    for slot in range(in_w * in_h):  # pragma: no branch
-        beauty.append(drawn.straight_at(slot))
-        velocities.append(drawn.velocities[slot].x)
-        velocities.append(drawn.velocities[slot].y)
+    read_drawn_frame(drawn, beauty, velocities)
     var beauty_view = LightView(beauty, in_w, in_h)
     # A new output size seeds the history with the beauty read bilinear at
     # the output's pixels, as three.js's seed material does.
