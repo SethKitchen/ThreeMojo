@@ -559,11 +559,7 @@ def femur_dimensions(
     var neck_base_y = head_center_y - neck.y * neck_len
     var along = (neck_base_y - y0) / shaft_up.y
     var neck_base = Vector3(x0 + along * shaft_up.x, neck_base_y, 0)
-    var head_center = Vector3(
-        neck_base.x + neck.x * neck_len,
-        neck_base.y + neck.y * neck_len,
-        neck_base.z + neck.z * neck_len,
-    )
+    var head_center = neck_base + neck * neck_len
     var gt = Vector3(
         neck_base.x + 0.78 * gt_off,
         head_center.y - 0.70 * head_r,

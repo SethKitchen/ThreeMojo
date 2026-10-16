@@ -229,10 +229,7 @@ def _wall_places(
         var s = piece.width / 2 + 0.05
         while s <= length - piece.width / 2 - 0.05:
             var offset = piece.depth / 2 + 0.02
-            var center = Point2(
-                a.x + t.x * s + inward.x * offset,
-                a.y + t.y * s + inward.y * offset,
-            )
+            var center = a + t * s + inward * offset
             out.append(_Place(center, angle, random.next() * 0.1))
             s += 0.25
     return out^
@@ -364,9 +361,7 @@ def _zone(p: _Place, piece: _Piece) -> List[Point2]:
         )
     var front = Point2(-sin(p.angle), cos(p.angle))
     var shift = piece.depth / 2 + piece.clearance / 2 + 0.001
-    var center = Point2(
-        p.center.x + front.x * shift, p.center.y + front.y * shift
-    )
+    var center = p.center + front * shift
     return _box(center, p.angle, piece.width, piece.clearance)
 
 
@@ -386,9 +381,7 @@ def _chairs(
     var angles = List[Float64]()
     if piece.mode == _WALL:
         var reach = piece.depth / 2 + 0.3
-        spots.append(
-            Point2(p.center.x + front.x * reach, p.center.y + front.y * reach)
-        )
+        spots.append(p.center + front * reach)
         angles.append(p.angle + pi)
     else:
         var per_side = (piece.chairs + 1) // 2
@@ -398,12 +391,7 @@ def _chairs(
             for sign in range(2):  # pragma: no branch
                 var facing = 1.0 if sign == 0 else -1.0
                 var reach = facing * (piece.depth / 2 + 0.3)
-                spots.append(
-                    Point2(
-                        p.center.x + side.x * along + front.x * reach,
-                        p.center.y + side.y * along + front.y * reach,
-                    )
-                )
+                spots.append(p.center + side * along + front * reach)
                 angles.append(p.angle + (pi if sign == 0 else 0.0))
     # Each chair stands inside its piece's clearance, which the placer
     # checked against every piece already in the room. It can still leave

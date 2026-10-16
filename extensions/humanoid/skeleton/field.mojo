@@ -242,11 +242,7 @@ def bowed_station(t: Float32, a: Vector3, b: Vector3, bow: Vector3) -> Vector3:
     The bow offset peaks at mid-shaft, where `4 t (1 - t)` is one.
     """
     var s = 4 * t * (1 - t)
-    return Vector3(
-        a.x + t * (b.x - a.x) + s * bow.x,
-        a.y + t * (b.y - a.y) + s * bow.y,
-        a.z + t * (b.z - a.z) + s * bow.z,
-    )
+    return a + (b - a) * t + bow * s
 
 
 def abs_f(value: Float32) -> Float32:
@@ -333,9 +329,7 @@ def sd_ellipse_segment(
             t = 1
     var ml_r = ml_a + (ml_b - ml_a) * t
     var ap_r = ap_a + (ap_b - ap_a) * t
-    var center = Vector3(
-        a.x + along.x * t, a.y + along.y * t, a.z + along.z * t
-    )
+    var center = a + along * t
     var offset = point - center
     var tangent = Vector3(0, 1, 0)
     if span > 0:

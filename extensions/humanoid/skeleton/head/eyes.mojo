@@ -161,9 +161,10 @@ def eyeball_mesh(
             var u = Float32(step) / Float32(around)
             var angle = u * 2 * pi
             var direction = Vector3(sz * cos(angle), sz * sin(angle), cz)
-            positions.append(center.x + direction.x * r)
-            positions.append(center.y + direction.y * r)
-            positions.append(center.z + direction.z * r)
+            var placed = center + direction * r
+            positions.append(placed.x)
+            positions.append(placed.y)
+            positions.append(placed.z)
             normals.append(direction.x)
             normals.append(direction.y)
             normals.append(direction.z)

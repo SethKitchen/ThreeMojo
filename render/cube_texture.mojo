@@ -837,11 +837,7 @@ def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
     right.cross(up)
     var across = (Float32(x) + 0.5) / Float32(size) * 2 - 1
     var upward = 1 - (Float32(y) + 0.5) / Float32(size) * 2
-    return Vector3(
-        forward.x + right.x * across + up.x * upward,
-        forward.y + right.y * across + up.y * upward,
-        forward.z + right.z * across + up.z * upward,
-    )
+    return forward + right * across + up * upward
 
 
 def cube_from_equirectangular(
