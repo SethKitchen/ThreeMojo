@@ -458,6 +458,44 @@ def _check_output(output: ScreenSpaceOutput) raises:
         raise Error("A screen-space output must be one of the six named")
 
 
+def _screen_shown(
+    mut frame: RenderTarget,
+    view: DepthView,
+    output: ScreenSpaceOutput,
+    mut normals: List[Vector3],
+    message: String,
+) raises -> Bool:
+    """Write beauty, depth, or normals, and report whether that finished
+    the pass.
+
+    Args:
+        frame: The frame. Depth and normal outputs replace it.
+        view: Its depth.
+        output: What the pass leaves.
+        normals: Set to the view normals when the pass continues.
+        message: The error when the frame and the depth differ in size.
+
+    Returns:
+        True when the frame is finished.
+
+    Raises:
+        Error: When the frame and the depth are not one size.
+    """
+    if frame.width != view.width or frame.height != view.height:
+        raise Error(message)
+    if output == BEAUTY_OUTPUT:
+        return True
+    if output == DEPTH_OUTPUT:
+        show_depth(frame, view)
+        return True
+    var found = view.normals()
+    if output == NORMAL_OUTPUT:
+        show_normals(frame, found)
+        return True
+    normals = found^
+    return False
+
+
 # --- SSAO -------------------------------------------------------------------
 
 
@@ -728,18 +766,16 @@ def ssao_light(
             depth are not one size.
     """
     check_ssao(settings)
-    if frame.width != view.width or frame.height != view.height:
-        raise Error("An SSAO frame and its depth must be one size")
+    var normals = List[Vector3]()
+    if _screen_shown(
+        frame,
+        view,
+        settings.output,
+        normals,
+        "An SSAO frame and its depth must be one size",
+    ):
+        return
     var output = settings.output
-    if output == BEAUTY_OUTPUT:
-        return
-    if output == DEPTH_OUTPUT:
-        show_depth(frame, view)
-        return
-    var normals = view.normals()
-    if output == NORMAL_OUTPUT:
-        show_normals(frame, normals)
-        return
     var occlusion = ssao_occlusion(
         view,
         normals,
@@ -1096,18 +1132,16 @@ def sao_light(
             are not one size.
     """
     check_sao(settings)
-    if frame.width != view.width or frame.height != view.height:
-        raise Error("An SAO frame and its depth must be one size")
+    var normals = List[Vector3]()
+    if _screen_shown(
+        frame,
+        view,
+        settings.output,
+        normals,
+        "An SAO frame and its depth must be one size",
+    ):
+        return
     var output = settings.output
-    if output == BEAUTY_OUTPUT:
-        return
-    if output == DEPTH_OUTPUT:
-        show_depth(frame, view)
-        return
-    var normals = view.normals()
-    if output == NORMAL_OUTPUT:
-        show_normals(frame, normals)
-        return
     var occlusion = sao_occlusion(view, normals, settings, random_seed)
     if output == EFFECT_OUTPUT:
         show_values(frame, occlusion)
@@ -1448,18 +1482,16 @@ def ssr_light(
             are not one size.
     """
     check_ssr(settings)
-    if frame.width != view.width or frame.height != view.height:
-        raise Error("An SSR frame and its depth must be one size")
+    var normals = List[Vector3]()
+    if _screen_shown(
+        frame,
+        view,
+        settings.output,
+        normals,
+        "An SSR frame and its depth must be one size",
+    ):
+        return
     var output = settings.output
-    if output == BEAUTY_OUTPUT:
-        return
-    if output == DEPTH_OUTPUT:
-        show_depth(frame, view)
-        return
-    var normals = view.normals()
-    if output == NORMAL_OUTPUT:
-        show_normals(frame, normals)
-        return
     var source = frame.colors.copy()
     if settings.bouncing:
         source = bounced.copy()
