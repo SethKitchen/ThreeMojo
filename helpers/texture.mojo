@@ -55,8 +55,8 @@ most positive, as three.js merges them.
 """
 
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from geometries.surface import indexed_surface
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.scene import Scene
@@ -508,15 +508,12 @@ def _face_geometry(whole: BufferGeometry, face: Int) raises -> BufferGeometry:
             normals.append(facing.component(vertex, axis))
         uvs.append(placed.component(vertex, 0))
         uvs.append(placed.component(vertex, 1))
-    var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     # The face's two triangles, as the box winds them.
     var index = List[Int]()
     for corner in range(6):  # pragma: no branch
         index.append(whole.index[face * 6 + corner] - face * 4)
-    geometry.set_index(index^)
+    var geometry = BufferGeometry()
+    indexed_surface(geometry, positions^, normals^, uvs^, index^)
     return geometry^
 
 

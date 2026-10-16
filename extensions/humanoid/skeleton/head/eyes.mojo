@@ -19,8 +19,8 @@ from the front pole, at 0, to the back, at 1, which is how
     var eye = eyeball_mesh(dims, RIGHT, 24)
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
@@ -185,8 +185,5 @@ def eyeball_mesh(
                 indices.append(b)
                 indices.append(b + 1)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^

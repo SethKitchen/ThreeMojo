@@ -29,7 +29,8 @@ does not smear across it.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, POSITION, UV
+from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.isosurface import check_detail
 from math.vector3 import Vector3
@@ -679,10 +680,7 @@ def finish_surface(
                 indices[corner + n] = copy
         corner += 3
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
 
 
