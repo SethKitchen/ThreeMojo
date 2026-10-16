@@ -27,6 +27,8 @@ needs -- a byte offset, a count, an index -- exactly, up to fifty-three
 bits. `integer` refuses a number with a fraction.
 """
 
+from core.ordinal import ordinal_valid
+
 from loaders.utf8 import append_utf8
 from std.math import isfinite
 
@@ -88,14 +90,7 @@ struct JsonKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six kinds there are."""
-        return (
-            self == OBJECT
-            or self == ARRAY
-            or self == STRING
-            or self == NUMBER
-            or self == BOOLEAN
-            or self == NULL
-        )
+        return ordinal_valid(self.value, NULL.value)
 
 
 comptime OBJECT = JsonKind(0)

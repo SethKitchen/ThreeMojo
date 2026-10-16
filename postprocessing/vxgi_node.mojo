@@ -38,6 +38,8 @@ occlusion, plus the diffuse color times the irradiance over pi. The
 normals are the frame's, or the ones `DepthView` reconstructs.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.scene import Scene
 from lights.vxgi_cone_tracer import (
@@ -76,11 +78,7 @@ struct VxgiDebug(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three views."""
-        return (
-            self == VXGI_DEBUG_OFF
-            or self == VXGI_DEBUG_RADIANCE
-            or self == VXGI_DEBUG_OPACITY
-        )
+        return ordinal_valid(self.value, VXGI_DEBUG_OPACITY.value)
 
 
 # The irradiance and the occlusion, three.js's `0`.

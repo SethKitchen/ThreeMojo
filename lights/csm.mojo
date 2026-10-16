@@ -40,6 +40,8 @@ fit in Float32. Component finiteness and true zero are checked separately.
 See `docs/wiki/Norm-consumers.md` for the consumer audit.
 """
 
+from core.ordinal import ordinal_valid
+
 from cameras.camera import Camera
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
@@ -70,12 +72,7 @@ struct CsmMode(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `UNIFORM_SPLIT`, `LOGARITHMIC_SPLIT`,
             `PRACTICAL_SPLIT` or `CUSTOM_SPLIT`.
         """
-        return (
-            self == UNIFORM_SPLIT
-            or self == LOGARITHMIC_SPLIT
-            or self == PRACTICAL_SPLIT
-            or self == CUSTOM_SPLIT
-        )
+        return ordinal_valid(self.value, CUSTOM_SPLIT.value)
 
 
 # three.js's `'uniform'`: breaks spaced evenly from the near plane.

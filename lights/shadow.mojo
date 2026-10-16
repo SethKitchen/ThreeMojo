@@ -75,6 +75,8 @@ was drawn. It is compared in the map's zero-to-one depth, as three.js
 compares `gl_FragCoord.z`, so a bias means the same number here as there.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.texture import Texture
@@ -102,12 +104,7 @@ struct ShadowMapType(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `BASIC_SHADOW_MAP`, `PCF_SHADOW_MAP`,
             `PCF_SOFT_SHADOW_MAP` or `VSM_SHADOW_MAP`.
         """
-        return (
-            self == BASIC_SHADOW_MAP
-            or self == PCF_SHADOW_MAP
-            or self == PCF_SOFT_SHADOW_MAP
-            or self == VSM_SHADOW_MAP
-        )
+        return ordinal_valid(self.value, VSM_SHADOW_MAP.value)
 
 
 # three.js's `BasicShadowMap`: one texel compared, a hard edge.
@@ -714,7 +711,7 @@ struct CascadeBlend(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the blend is one of the two.
         """
-        return self == CSM_BLEND or self == SUN_BLEND
+        return ordinal_valid(self.value, SUN_BLEND.value)
 
 
 # three.js's `CSM`: see `cascade_reach`.

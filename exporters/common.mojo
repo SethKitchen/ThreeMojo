@@ -44,6 +44,8 @@ shown or hidden, as three.js's `traverse` reaches them. Batched
 meshes, sprites and wide lines are not written.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.buffer_geometry import (
     COLOR,
@@ -225,7 +227,7 @@ struct WorldKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is `WORLD_MESH`, `WORLD_LINE` or
         `WORLD_POINTS`."""
-        return self == WORLD_MESH or self == WORLD_LINE or self == WORLD_POINTS
+        return ordinal_valid(self.value, WORLD_POINTS.value)
 
 
 # Triangles: a `Mesh`, a `SkinnedMesh` or an `InstancedMesh`.

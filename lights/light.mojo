@@ -83,6 +83,8 @@ for a rect area light. `Light.power` reads it and `Light.set_power` sets
 the intensity from it, as three.js's setter does.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from lights.shadow import LightShadow, ShadowCascade, ShadowMap
@@ -109,15 +111,7 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is `AMBIENT`, `DIRECTIONAL`, `POINT`,
         `HEMISPHERE`, `SPOT`, `RECT_AREA` or `LIGHT_PROBE`."""
-        return (
-            self == AMBIENT
-            or self == DIRECTIONAL
-            or self == POINT
-            or self == HEMISPHERE
-            or self == SPOT
-            or self == RECT_AREA
-            or self == LIGHT_PROBE
-        )
+        return ordinal_valid(self.value, LIGHT_PROBE.value)
 
 
 # Fills every surface equally, whichever way it faces. No direction, no node.

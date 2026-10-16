@@ -278,6 +278,8 @@ two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
 
+from core.ordinal import ordinal_valid
+
 from animation.loop_time import _split_loop_time, _stored_loop_phase
 from animation.animation_clip import (
     ADDITIVE_BLEND_MODE,
@@ -361,7 +363,7 @@ struct Loop(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three loop modes there are."""
-        return self == ONCE or self == REPEAT or self == PING_PONG
+        return ordinal_valid(self.value, PING_PONG.value)
 
 
 # Stop at the end and stay there: three.js's `LoopOnce`.
@@ -381,7 +383,7 @@ struct AnimationEventKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two event kinds there are."""
-        return self == LOOPED or self == FINISHED
+        return ordinal_valid(self.value, FINISHED.value)
 
 
 # The action ran past an end of its clip and went on: three.js's `loop`.

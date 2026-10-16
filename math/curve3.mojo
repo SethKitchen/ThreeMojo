@@ -54,6 +54,8 @@ turns back. Frames where two steps point straight opposite ways, which
 leave no axis to turn about.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
@@ -89,12 +91,7 @@ struct Curve3Kind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for `LINE3`, `QUADRATIC3`, `CUBIC3` and `CATMULL_ROM3`.
         """
-        return (
-            self == LINE3
-            or self == QUADRATIC3
-            or self == CUBIC3
-            or self == CATMULL_ROM3
-        )
+        return ordinal_valid(self.value, CATMULL_ROM3.value)
 
     def control_count(self) -> Int:
         """Return how many points a curve of this kind takes, or zero for
@@ -138,7 +135,7 @@ struct CatmullRomType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for `CENTRIPETAL`, `CHORDAL` and `CATMULLROM`.
         """
-        return self == CENTRIPETAL or self == CHORDAL or self == CATMULLROM
+        return ordinal_valid(self.value, CATMULLROM.value)
 
 
 # Points spaced by the square root of the distance between them: three.js's

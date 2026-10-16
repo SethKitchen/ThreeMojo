@@ -134,6 +134,8 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
+from core.ordinal import ordinal_valid
+
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
     CUBIC_SPLINE,
@@ -266,7 +268,7 @@ struct GltfContainer(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three containers there are."""
-        return self == GLTF_EMBEDDED or self == GLTF_SEPARATE or self == GLB
+        return ordinal_valid(self.value, GLB.value)
 
 
 # One `.gltf`, its buffer and images as `data:` URIs.

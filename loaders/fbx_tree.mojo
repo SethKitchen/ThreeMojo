@@ -36,6 +36,8 @@ expands to the wrong length; an ASCII node without `:`, an unbalanced
 other than the one its `*count` declares.
 """
 
+from core.ordinal import ordinal_valid
+
 from render.inflate import zlib_inflate
 from std.memory import bitcast
 
@@ -66,7 +68,7 @@ struct FbxFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two forms there are."""
-        return self == FBX_ASCII or self == FBX_BINARY
+        return ordinal_valid(self.value, FBX_BINARY.value)
 
 
 # Text: `Name: value, value { ... }`.
@@ -84,14 +86,7 @@ struct FbxPropertyKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six kinds there are."""
-        return (
-            self == FBX_INTEGER
-            or self == FBX_NUMBER
-            or self == FBX_STRING
-            or self == FBX_INTEGERS
-            or self == FBX_NUMBERS
-            or self == FBX_BYTES
-        )
+        return ordinal_valid(self.value, FBX_BYTES.value)
 
 
 # A whole number: binary `Y`, `C`, `I` and `L`, or ASCII digits.

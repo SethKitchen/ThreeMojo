@@ -27,6 +27,8 @@ applied once. The Phong look lives in `bone.mojo`, not here.
     var weight = mass * STANDARD_GRAVITY
 """
 
+from core.ordinal import ordinal_valid
+
 from std.math import isfinite
 from units.si import (
     Density,
@@ -50,7 +52,7 @@ struct BoneKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `CORTICAL` or `TRABECULAR`."""
-        return self == CORTICAL or self == TRABECULAR
+        return ordinal_valid(self.value, TRABECULAR.value)
 
 
 # Compact bone of the diaphysis and the thin shell of the ends.

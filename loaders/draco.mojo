@@ -48,6 +48,8 @@ or traversal that is not known; and every check that Draco's decoder
 makes, with the reason as the message.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from loaders.draco_attributes import (
@@ -127,7 +129,7 @@ struct DracoGeometryType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two geometries there are.
         """
-        return self == DRACO_POINT_CLOUD or self == DRACO_TRIANGULAR_MESH
+        return ordinal_valid(self.value, DRACO_TRIANGULAR_MESH.value)
 
 
 comptime DRACO_POINT_CLOUD = DracoGeometryType(0)
@@ -150,7 +152,7 @@ struct DracoEncoding(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the two encodings of each geometry.
         """
-        return self == DRACO_SEQUENTIAL or self == DRACO_COMPRESSED
+        return ordinal_valid(self.value, DRACO_COMPRESSED.value)
 
 
 # Points or triangles in order.
@@ -207,7 +209,7 @@ struct DracoElement(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for `DRACO_VERTEX` and `DRACO_CORNER`.
         """
-        return self == DRACO_VERTEX or self == DRACO_CORNER
+        return ordinal_valid(self.value, DRACO_CORNER.value)
 
 
 comptime DRACO_VERTEX = DracoElement(0)

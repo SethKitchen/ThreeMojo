@@ -208,11 +208,7 @@ struct ExrPixelType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the code names a defined sample representation.
         """
-        return (
-            self == UINT_SAMPLES
-            or self == HALF_SAMPLES
-            or self == FLOAT_SAMPLES
-        )
+        return ordinal_valid(self.value, FLOAT_SAMPLES.value)
 
 
 # An unsigned 32-bit integer: an id, not light. Read past, never shown.

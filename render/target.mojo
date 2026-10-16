@@ -84,6 +84,8 @@ and `light_at` premultiply it first, where they read it as light. The
 kernel keeps its running color the same way.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
@@ -147,11 +149,7 @@ struct TargetType(Equatable, ImplicitlyCopyable, Writable):
             True for `UNSIGNED_BYTE_TARGET`, `HALF_FLOAT_TARGET` and
             `FLOAT_TARGET`.
         """
-        return (
-            self == UNSIGNED_BYTE_TARGET
-            or self == HALF_FLOAT_TARGET
-            or self == FLOAT_TARGET
-        )
+        return ordinal_valid(self.value, FLOAT_TARGET.value)
 
 
 # Eight bits a channel, zero to one: three.js's `UnsignedByteType`, the
@@ -190,12 +188,7 @@ struct TargetOutput(Equatable, ImplicitlyCopyable, Writable):
             True for `OUTPUT_COLOR`, `OUTPUT_NORMAL`, `OUTPUT_VELOCITY` and
             `OUTPUT_METAL_ROUGH`.
         """
-        return (
-            self == OUTPUT_COLOR
-            or self == OUTPUT_NORMAL
-            or self == OUTPUT_VELOCITY
-            or self == OUTPUT_METAL_ROUGH
-        )
+        return ordinal_valid(self.value, OUTPUT_METAL_ROUGH.value)
 
 
 # The lit color, what a single-attachment target holds: `pc_fragColor`.

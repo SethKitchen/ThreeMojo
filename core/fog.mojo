@@ -60,6 +60,8 @@ kernel as `lights.lighting.falloff` is, and held to the same numbers by the
 parity tests.
 """
 
+from core.ordinal import ordinal_valid
+
 from math.smoothstep import smoothstep
 from render.framebuffer import Color, FloatColor
 from std.math import exp, isfinite
@@ -79,7 +81,7 @@ struct FogKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `NO_FOG`, `LINEAR_FOG` or `EXP2_FOG`."""
-        return self == NO_FOG or self == LINEAR_FOG or self == EXP2_FOG
+        return ordinal_valid(self.value, EXP2_FOG.value)
 
 
 # No fog at all: every fragment keeps its own color. What a scene starts with.

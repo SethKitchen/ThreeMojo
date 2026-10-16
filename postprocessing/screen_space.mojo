@@ -41,6 +41,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2
 
@@ -81,14 +83,7 @@ struct ScreenSpaceOutput(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six outputs there are."""
-        return (
-            self == DEFAULT_OUTPUT
-            or self == EFFECT_OUTPUT
-            or self == BLUR_OUTPUT
-            or self == BEAUTY_OUTPUT
-            or self == DEPTH_OUTPUT
-            or self == NORMAL_OUTPUT
-        )
+        return ordinal_valid(self.value, NORMAL_OUTPUT.value)
 
 
 # The effect over the frame: three.js's `OUTPUT.Default`.

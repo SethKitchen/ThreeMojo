@@ -57,6 +57,8 @@ is skipped. three.js keeps it, and its `getPoints` then drops the repeated
 point, so the shape is the same.
 """
 
+from core.ordinal import ordinal_valid
+
 from loaders.js_number import js_string_to_number
 from loaders.json import NO_NODE, OBJECT, STRING, JsonDocument, parse_json
 from math.path import Shape
@@ -76,12 +78,7 @@ struct OutlineVerb(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four commands there are."""
-        return (
-            self == MOVE_TO
-            or self == LINE_TO
-            or self == QUADRATIC_TO
-            or self == CUBIC_TO
-        )
+        return ordinal_valid(self.value, CUBIC_TO.value)
 
     def point_count(self) -> Int:
         """Return how many points the command carries: its control points

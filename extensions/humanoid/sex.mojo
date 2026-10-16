@@ -12,6 +12,8 @@ here, and every boundary that reads a `Sex` already refuses one that is not
 valid.
 """
 
+from core.ordinal import ordinal_valid
+
 
 @fieldwise_init
 struct Sex(Equatable, ImplicitlyCopyable, Writable):
@@ -21,7 +23,7 @@ struct Sex(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `MALE` or `FEMALE`."""
-        return self == MALE or self == FEMALE
+        return ordinal_valid(self.value, FEMALE.value)
 
 
 # Adult male osteological template. The inverted Trotter and Gleser male

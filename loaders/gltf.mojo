@@ -166,6 +166,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import ordinal_valid
+
 from core.binary import little_endian_u32
 from math.norm import length3, normalized3, _ordinary_squared
 
@@ -461,7 +463,7 @@ struct GltfCameraKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `GLTF_PERSPECTIVE` or `GLTF_ORTHOGRAPHIC`."""
-        return self == GLTF_PERSPECTIVE or self == GLTF_ORTHOGRAPHIC
+        return ordinal_valid(self.value, GLTF_ORTHOGRAPHIC.value)
 
 
 # A camera of glTF's `perspective` type, three.js's `PerspectiveCamera`.

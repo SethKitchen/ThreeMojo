@@ -26,6 +26,8 @@ triangles `fit_triangle_budget` then keeps for the whole body.
     fit_triangle_budget(scene, assets, first, triangle_budget(level))
 """
 
+from core.ordinal import ordinal_valid
+
 
 @fieldwise_init
 struct Quality(Equatable, ImplicitlyCopyable, Writable):
@@ -40,7 +42,7 @@ struct Quality(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `LOW`, `MEDIUM`, `HIGH` or `XHIGH`."""
-        return self == LOW or self == MEDIUM or self == HIGH or self == XHIGH
+        return ordinal_valid(self.value, XHIGH.value)
 
 
 # The fewest triangles: under a hundred thousand for a whole body.
