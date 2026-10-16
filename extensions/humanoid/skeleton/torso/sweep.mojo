@@ -28,6 +28,7 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from math.box_extent import box_exterior
+from math.catmull import catmull_rom_point
 from math.norm import squared_length2
 from math.utils import clamp
 from math.vector3 import Vector3
@@ -450,13 +451,7 @@ def spline_points(points: List[Vector3], steps: Int) -> List[Vector3]:
         var p3 = points[min(span + 2, last)]
         for step in range(1, steps + 1):  # pragma: no branch
             var t = Float32(step) / Float32(steps)
-            var t2 = t * t
-            var t3 = t2 * t
-            var w0 = Float32(0.5) * (-t3 + 2 * t2 - t)
-            var w1 = Float32(0.5) * (3 * t3 - 5 * t2 + 2)
-            var w2 = Float32(0.5) * (-3 * t3 + 4 * t2 + t)
-            var w3 = Float32(0.5) * (t3 - t2)
-            out.append(p0 * w0 + p1 * w1 + p2 * w2 + p3 * w3)
+            out.append(catmull_rom_point(p0, p1, p2, p3, t))
     return out^
 
 

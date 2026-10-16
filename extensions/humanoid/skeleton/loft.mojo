@@ -27,6 +27,7 @@ can both use.
 
 from extensions.humanoid.skeleton.field import Bounds, empty_bounds
 from math.box_extent import box_exterior
+from math.catmull import catmull_rom_weights
 from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import atan2, cos, max, min, pi, sin, sqrt
@@ -399,7 +400,7 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
     var s = (along - loft.start) / loft.spacing
     var index = min(Int(s), loft.count - 2)
     var t = s - Float32(index)
-    var w = _spline_weights(t)
+    var w = catmull_rom_weights(t)
     var dw = _spline_slopes(t)
     var cu4 = _four(loft.center_u, index, loft.count)
     var cv4 = _four(loft.center_v, index, loft.count)
@@ -428,7 +429,7 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
         (dw * c2).reduce_add(),
         (dw * c3).reduce_add(),
     )
-    var wq = _spline_weights(q)
+    var wq = catmull_rom_weights(q)
     var gap = rho - (wq * values).reduce_add()
     # The gradient of rho - R(angle, along): the angular term over rho,
     # and the axial term including the drift of the center.
@@ -707,20 +708,8 @@ def _polygon_radii(support: List[Float32]) -> List[Float32]:
     return radii^
 
 
-def _spline_weights(t: Float32) -> SIMD[DType.float32, 4]:
-    """Return the Catmull-Rom weights of four stations at `t`."""
-    var t2 = t * t
-    var t3 = t2 * t
-    return SIMD[DType.float32, 4](
-        Float32(0.5) * (-t3 + 2 * t2 - t),
-        Float32(0.5) * (3 * t3 - 5 * t2 + 2),
-        Float32(0.5) * (-3 * t3 + 4 * t2 + t),
-        Float32(0.5) * (t3 - t2),
-    )
-
-
 def _spline_slopes(t: Float32) -> SIMD[DType.float32, 4]:
-    """Return the derivatives of `_spline_weights` at `t`."""
+    """Return the derivatives of `catmull_rom_weights` at `t`."""
     var t2 = t * t
     return SIMD[DType.float32, 4](
         Float32(0.5) * (-3 * t2 + 4 * t - 1),

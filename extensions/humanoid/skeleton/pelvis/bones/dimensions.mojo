@@ -56,6 +56,7 @@ from extensions.humanoid.skeleton.field import (
     ud_triangle,
 )
 from extensions.humanoid.skeleton.leg.femur.dimensions import femur_dimensions
+from math.catmull import catmull_rom_point
 from math.vector3 import Vector3
 from std.math import cos, max, min, sin
 from units.si import DEGREE, Angle, Length
@@ -460,7 +461,9 @@ struct HipBoneShape(Copyable, Movable):
             var after = rim[min(span + 2, last)]
             for step in range(1, WING_STEPS + 1):  # pragma: no branch
                 var t = Float32(step) / Float32(WING_STEPS)
-                var here = _spline(before, rim[span], rim[span + 1], after, t)
+                var here = catmull_rom_point(
+                    before, rim[span], rim[span + 1], after, t
+                )
                 self.plates.append(_Plate(d.hub, previous, here))
                 previous = here
         # The walls of the socket's two columns.
@@ -1064,19 +1067,6 @@ def _shift_lateral(mut dims: PelvisDimensions, shift: Vector3):
     dims.ischium = dims.ischium + shift
     dims.obturator = dims.obturator + shift
     dims.notch = dims.notch + shift
-
-
-def _spline(
-    p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: Float32
-) -> Vector3:
-    """Return the Catmull-Rom point `t` of the way from `p1` to `p2`."""
-    var t2 = t * t
-    var t3 = t2 * t
-    var w0 = Float32(0.5) * (-t3 + 2 * t2 - t)
-    var w1 = Float32(0.5) * (3 * t3 - 5 * t2 + 2)
-    var w2 = Float32(0.5) * (-3 * t3 + 4 * t2 + t)
-    var w3 = Float32(0.5) * (t3 - t2)
-    return p0 * w0 + p1 * w1 + p2 * w2 + p3 * w3
 
 
 def _sacral_station(
