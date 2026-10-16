@@ -178,7 +178,8 @@ from render.splatrule import ProjectedSplat
 from render.splat_raster import prepare_gaussian_splat
 from render.rasterizer import DRAW_SPLATS
 from math.matrix4 import Matrix4, translation
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
+from math.utils import mix_delta
 from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
 from geometries.edges import triangle_edges
 from objects.line import (
@@ -3731,13 +3732,13 @@ def _between(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     That is the perspective-correct mix three.js's varyings get.
     """
     return ClipVertex(
-        a.position + (b.position - a.position) * t,
+        mix_delta3(a.position, b.position, t),
         a.color.mix(b.color, t),
         Vector3(0, 0, 1),
         0,
         0,
-        a.world + (b.world - a.world) * t,
-        line_distance=a.line_distance + (b.line_distance - a.line_distance) * t,
+        mix_delta3(a.world, b.world, t),
+        line_distance=mix_delta(a.line_distance, b.line_distance, t),
     )
 
 

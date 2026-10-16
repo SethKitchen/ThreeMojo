@@ -53,6 +53,7 @@ from loaders.xml import XmlDocument, parse_xml
 from render.float_image import FloatImage
 from render.jpeg import decode as decode_jpeg
 from render.png import DecodedImage
+from math.utils import mix_bilinear
 from std.math import floor, isfinite, nan, sqrt
 from std.pathlib import Path
 
@@ -330,11 +331,8 @@ def scale_gain_map(gain: DecodedImage, width: Int, height: Int) -> List[UInt8]:
                 var b = Float64(gain.pixels[(y0 * gain.width + x1) * 4 + c])
                 var d = Float64(gain.pixels[(y1 * gain.width + x0) * 4 + c])
                 var e = Float64(gain.pixels[(y1 * gain.width + x1) * 4 + c])
-                var top = a + (b - a) * tx
-                var bottom = d + (e - d) * tx
-                out[(y * width + x) * 4 + c] = UInt8(
-                    Int(floor(top + (bottom - top) * ty + 0.5))
-                )
+                var sample = mix_bilinear(a, b, d, e, tx, ty)
+                out[(y * width + x) * 4 + c] = UInt8(Int(floor(sample + 0.5)))
     return out^
 
 
