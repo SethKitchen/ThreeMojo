@@ -145,6 +145,7 @@ from lights.light import (
     Light,
     LightMask,
 )
+from lights.light_slot import index_of_light
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import (
     CUBE_FACES,
@@ -4791,10 +4792,7 @@ def _panorama_seen(
 
 def _kept_for(kept: List[ShadowMap], light: Int) -> Int:
     """Return which of `kept` a light drew, or -1 for none."""
-    for slot in range(len(kept)):
-        if kept[slot].light == light:
-            return slot
-    return -1
+    return index_of_light(kept, light)
 
 
 def _light_aim(scene: Scene, light: Light) raises -> Vector3:

@@ -23,13 +23,14 @@ numbers from the light buffer and calls the same functions:
 
 from lights.ies_spot_light import ies_coordinate
 from lights.light import IES_SPOT, Light, PROJECTOR_SPOT, SPOT, SpotShape
+from lights.light_slot import LightSlot
 from lights.projector_light import projector_attenuation
 from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
 
 
-struct SpotProfile(Copyable, Movable):
+struct SpotProfile(Copyable, LightSlot, Movable):
     """The beam of one IES spot light or projector for one frame."""
 
     # Which of the scene's lights it shapes: its index in `scene.lights`.
@@ -44,6 +45,14 @@ struct SpotProfile(Copyable, Movable):
     # World space to the light's clip space, column major: the shadow
     # camera, with its aspect. Read only by a projector.
     var frame: SIMD[DType.float32, 16]
+
+    def slot_light(self) -> Int:
+        """Return which scene light this beam shapes.
+
+        Returns:
+            The light's index in `scene.lights`.
+        """
+        return self.light
 
     def __init__(
         out self,

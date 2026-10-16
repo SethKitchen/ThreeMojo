@@ -76,6 +76,7 @@ compares `gl_FragCoord.z`, so a bias means the same number here as there.
 """
 
 from core.ordinal import ordinal_valid
+from lights.light_slot import LightSlot
 
 from math.smoothstep import smoothstep
 from math.cross import cross_vectors
@@ -352,7 +353,7 @@ struct LightShadow(ImplicitlyCopyable):
             raise Error("A spot shadow's focus must be a positive number")
 
 
-struct ShadowMap(Copyable, Movable):
+struct ShadowMap(Copyable, LightSlot, Movable):
     """One light's view of the scene's depth, ready to compare against.
 
     Built by `Renderer.shadow_maps` once per frame per light that casts,
@@ -398,6 +399,14 @@ struct ShadowMap(Copyable, Movable):
     # faces for a cube, laid out as the depths are. Empty for a map drawn
     # without them. See `transmitted_shadow`.
     var colors: List[Float32]
+
+    def slot_light(self) -> Int:
+        """Return which scene light this map belongs to.
+
+        Returns:
+            The light's index in `scene.lights`.
+        """
+        return self.light
 
     def __init__(
         out self,
@@ -1759,7 +1768,7 @@ def inside_spot_map(place: Vector3) -> Bool:
     )
 
 
-struct SpotLightMap(Copyable, Movable):
+struct SpotLightMap(Copyable, LightSlot, Movable):
     """The picture a spot light projects, three.js's `SpotLight.map`, and
     the transform that takes a world position onto it.
 
@@ -1783,6 +1792,14 @@ struct SpotLightMap(Copyable, Movable):
     # the shadow's normal bias when the light casts, and zero when not,
     # as three.js adds it only under a shadow.
     var normal_bias: Float32
+
+    def slot_light(self) -> Int:
+        """Return which scene light projects this map.
+
+        Returns:
+            The light's index in `scene.lights`.
+        """
+        return self.light
 
     def __init__(
         out self,
