@@ -45,6 +45,7 @@ from extensions.animals.kit import (
     EyeSpec,
     sculpt_eye_socket,
     is_limb,
+    is_upper_limb,
     pick_weighted,
     aperture_tilt_along,
     draw_u32,
@@ -1500,12 +1501,7 @@ def boar_paint(
         var leg = 0.0
         if is_limb(bone):
             leg = 1.0
-            var upper = (
-                bone.startswith("scapula")
-                or bone.startswith("humerus")
-                or bone.startswith("femur")
-            )
-            if upper:
+            if is_upper_limb(bone):
                 leg = smoothstep(0.5, 0.36, p.y)
             var sd = 1.0 if p.x >= 0.0 else -1.0
             ventral = mix(

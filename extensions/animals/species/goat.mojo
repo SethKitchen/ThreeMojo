@@ -45,6 +45,7 @@ from extensions.animals.kit import (
     is_front_limb,
     imul32,
     is_limb,
+    is_upper_limb,
     pick_weighted,
     stream_of,
     lid_distance,
@@ -2011,12 +2012,7 @@ def _region(part_horn: Bool, part_jaw: Bool, tag: String, bone: String) -> Int:
 def _legness(bone: String, p: V3) -> Float64:
     if not is_limb(bone):
         return 0.0
-    var upper = (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("femur")
-    )
-    return smoothstep(0.58, 0.42, p.y) if upper else 1.0
+    return smoothstep(0.58, 0.42, p.y) if is_upper_limb(bone) else 1.0
 
 
 def _horn_t(t: Traits, p: V3) -> Float64:
