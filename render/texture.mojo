@@ -100,7 +100,13 @@ from std.math import exp2
 from math.norm import length2, _ordinary_squared
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
-from render.framebuffer import Color, FloatColor, Framebuffer, OPAQUE_WHITE
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    OPAQUE_WHITE,
+)
 from render.png import DecodedImage
 from render.srgb import (
     LINEAR,
@@ -1437,7 +1443,7 @@ struct Texture(Movable):
                 for x in range(next_wide):  # pragma: no branch
                     var left = x * wide
                     var right = left + wide
-                    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+                    var total = TRANSPARENT_BLACK
                     var first_row = top // next_tall
                     var past_row = _ceiling(bottom, next_tall)
                     var first_col = left // next_wide
@@ -1793,7 +1799,7 @@ struct Texture(Movable):
         Invalid runtime inputs return transparent black without a sample.
         """
         if not texture_grad_finite(u, v, dx, dy):
-            return FloatColor(0, 0, 0, 0)
+            return TRANSPARENT_BLACK
         if self.is_blank():
             return OPAQUE_WHITE
         var footprint = anisotropic_footprint(
@@ -1860,7 +1866,7 @@ struct Texture(Movable):
                 or not isfinite(footprint.step.x)
                 or not isfinite(footprint.step.y)
             ):
-                return FloatColor(0, 0, 0, 0)
+                return TRANSPARENT_BLACK
         if footprint.taps == 1:
             if explicit:
                 return self.sample_level(
@@ -1869,14 +1875,14 @@ struct Texture(Movable):
                     footprint.level,
                 )
             return self.sample_level(u, v, footprint.level)
-        var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+        var total = TRANSPARENT_BLACK
         for tap in range(footprint.taps):  # pragma: no branch
             var along = Float32(tap) - Float32(footprint.taps - 1) / 2
             var tap_u = u + footprint.step.x * along
             var tap_v = v + footprint.step.y * along
             if explicit:
                 if not isfinite(tap_u) or not isfinite(tap_v):
-                    return FloatColor(0, 0, 0, 0)
+                    return TRANSPARENT_BLACK
                 tap_u = gradient_sample_coordinate(tap_u, self.wrap_s)
                 tap_v = gradient_sample_coordinate(tap_v, self.wrap_t)
             var sampled = self.sample_level(

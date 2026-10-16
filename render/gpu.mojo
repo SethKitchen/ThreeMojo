@@ -89,7 +89,13 @@ from render.pointrule import (
     mip_level_of,
 )
 from render.rect import Rect
-from render.framebuffer import Color, FloatColor, Framebuffer, OPAQUE_WHITE
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    OPAQUE_WHITE,
+)
 from render.target import (
     UNSIGNED_BYTE_TARGET,
     RenderTarget,
@@ -5036,7 +5042,7 @@ def _sample_grad(
 ) -> FloatColor:
     """Read explicit gradients with the host's footprint arithmetic."""
     if not texture_grad_finite(u, v, dx, dy):
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var footprint = anisotropic_footprint(
         dx, dy, image.width, image.height, image.anisotropy
     )
@@ -5061,7 +5067,7 @@ def _sample_footprint(
             or not isfinite(footprint.step.x)
             or not isfinite(footprint.step.y)
         ):
-            return FloatColor(0, 0, 0, 0)
+            return TRANSPARENT_BLACK
     if footprint.taps == 1:
         if explicit:
             return _sample_level(
@@ -5075,14 +5081,14 @@ def _sample_footprint(
         return _sample_level(texels, ramp, image, u, v, footprint.level)
     # The taps along the long axis, averaged premultiplied, exactly as
     # `Texture.sample_footprint` averages them.
-    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var total = TRANSPARENT_BLACK
     for tap in range(footprint.taps):
         var along = Float32(tap) - Float32(footprint.taps - 1) / 2
         var tap_u = u + footprint.step.x * along
         var tap_v = v + footprint.step.y * along
         if explicit:
             if not isfinite(tap_u) or not isfinite(tap_v):
-                return FloatColor(0, 0, 0, 0)
+                return TRANSPARENT_BLACK
             tap_u = gradient_sample_coordinate(tap_u, image.wrap_s)
             tap_v = gradient_sample_coordinate(tap_v, image.wrap_t)
         var sampled = _sample_level(
@@ -11550,7 +11556,7 @@ def bloom_composite_kernel(
         return
     var u = u_of(x, w)
     var v = v_of(y, h)
-    var glow = FloatColor(0, 0, 0, 0)
+    var glow = TRANSPARENT_BLACK
     var level_width = halved_size(w)
     var level_height = halved_size(h)
     var start = 0
@@ -12628,7 +12634,7 @@ struct GpuComposer(Movable):
         elif len(saved) != 0:
             raise Error("A saved image must be the frame's size")
         else:
-            saved = [FloatColor(0, 0, 0, 0)]
+            saved = [TRANSPARENT_BLACK]
         for slot in range(len(saved)):
             floats.append(saved[slot].r)
             floats.append(saved[slot].g)
@@ -12815,9 +12821,7 @@ struct GpuComposer(Movable):
                     grid_dim=grid,
                     block_dim=(TILE, TILE),
                 )
-            var trail = List[FloatColor](
-                length=count, fill=FloatColor(0, 0, 0, 0)
-            )
+            var trail = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
             with self.light.map_to_host() as host:
                 unsafe_memcpy(
                     dest=trail.unsafe_ptr().unsafe_bitcast[Float32](),
@@ -13068,9 +13072,7 @@ struct GpuComposer(Movable):
         elif kind == SAVE:
             # The copy is kept on the host, in the composer, so both
             # backends share it, as the afterimage's trail is kept.
-            var kept = List[FloatColor](
-                length=count, fill=FloatColor(0, 0, 0, 0)
-            )
+            var kept = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
             with self.light.map_to_host() as host:
                 unsafe_memcpy(
                     dest=kept.unsafe_ptr().unsafe_bitcast[Float32](),
