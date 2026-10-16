@@ -56,6 +56,7 @@ from extensions.humanoid.genome import (
 from extensions.humanoid.sex import MALE, Sex
 from math.norm import squared_length3
 from math.smoothstep import clamped_smoothstep
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import cos, isfinite, max, min, sin
 
@@ -490,10 +491,10 @@ struct HeadMorph(ImplicitlyCopyable):
         var head = clamped_smoothstep(59.0, 69.0, point.y)
         if head > 0:
             var s = self.cranium_scale()
-            p.x = p.x * (1 + (s.x - 1) * head)
-            p.z = CRANIUM_Z + (p.z - CRANIUM_Z) * (1 + (s.z - 1) * head)
+            p.x = p.x * mix_delta(Float32(1), s.x, head)
+            p.z = mix_delta(CRANIUM_Z, p.z, mix_delta(Float32(1), s.z, head))
             if p.y > VAULT_Y:
-                p.y = VAULT_Y + (p.y - VAULT_Y) * s.y
+                p.y = mix_delta(VAULT_Y, p.y, s.y)
         # The neck stretches between its base and the skull.
         p.y += (
             NECK_STRETCH

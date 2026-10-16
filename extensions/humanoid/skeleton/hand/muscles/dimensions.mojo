@@ -45,7 +45,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     floats,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 
 
 @fieldwise_init
@@ -365,7 +365,7 @@ def _digit_tendon(
         var clear = f.cm((0.75 - 0.08 * Float32(index)) * s)
         var fade = Float32(1) - Float32(0.18) * Float32(index)
         tendon.round(joints[index] + face * clear, f.cm(r * fade))
-    var last = joints[count - 2] + (joints[count - 1] - joints[count - 2]) * 0.3
+    var last = mix_delta3(joints[count - 2], joints[count - 1], Float32(0.3))
     tendon.round(last + face * f.cm(0.35 * s), f.cm(r * 0.4))
     return tendon^
 

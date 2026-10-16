@@ -42,7 +42,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     Sweep,
     SweepField,
 )
-from math.utils import clamp
+from math.utils import clamp, mix_delta
 from math.vector3 import Vector3
 from std.math import exp, max, min
 
@@ -471,7 +471,7 @@ struct HairShape(Copyable, DistanceField, Movable):
             return self.group.distance(point)
         var up = (point.y - self.ears) / (self.crown - self.ears)
         up = clamp(up, 0, 1)
-        var depth = self.side_depth + (self.crown_depth - self.side_depth) * up
+        var depth = mix_delta(self.side_depth, self.crown_depth, up)
         var skin = self.skin.distance(point)
         var d = max(skin - depth, -skin - self.bury)
         d = smax(d, self.nape - point.y, self.soft)

@@ -39,6 +39,7 @@ from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
 from extensions.humanoid.spec import HumanoidSpec
+from math.utils import mix_delta
 from math.vector3 import Vector3, mix_delta3
 
 
@@ -347,9 +348,9 @@ def humanoid_rig(
             if p.x * sign > 0 and p.y < ankle.y and p.z > tip.z:
                 tip = p
         var ball = Vector3(
-            ankle.x + (tip.x - ankle.x) * BALL_ALONG,
+            mix_delta(ankle.x, tip.x, BALL_ALONG),
             sole + BALL_RISE * cm,
-            ankle.z + (tip.z - ankle.z) * BALL_ALONG,
+            mix_delta(ankle.z, tip.z, BALL_ALONG),
         )
         joints[thigh] = pelvis.hip_center(side)
         joints[thigh + 1] = knee
