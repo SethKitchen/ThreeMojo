@@ -28,7 +28,13 @@ from core.buffer_geometry import BufferGeometry
 from geometries.utils import merge_vertices
 from math.cross import cross_components
 from math.matrix4 import Matrix4
-from math.norm import dot3, length3, normalized3, _ordinary_squared
+from math.norm import (
+    dot3,
+    length3,
+    normalized3,
+    _ordinary_squared,
+    squared_length3,
+)
 from math.quaternion import quaternion_rotate
 from math.utils import SeededRandom
 from math.vector3 import Vector3
@@ -191,7 +197,7 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The unit vector, or the zero vector.
         """
-        var squared = self.x * self.x + self.y * self.y + self.z * self.z
+        var squared = squared_length3[DType.float64](self.x, self.y, self.z)
         # Keep three.js's reciprocal multiply for ordinary seeded fixtures.
         if _ordinary_squared(squared):
             return self * (1.0 / sqrt(squared))

@@ -58,7 +58,7 @@ limits, and explicit zero and nonfinite rules.
 
 from math.triangle_normal import _difference_product_wide
 
-from math.norm import normalized3, _ordinary_squared
+from math.norm import normalized3, _ordinary_squared, squared_length3
 from math.utils import clamp
 
 from core.assets import Assets
@@ -1106,7 +1106,7 @@ def _vertex_normals(
         var x = normals[v * 3]
         var y = normals[v * 3 + 1]
         var z = normals[v * 3 + 2]
-        if not _ordinary_squared(x * x + y * y + z * z):
+        if not _ordinary_squared(squared_length3[DType.float32](x, y, z)):
             var unit = normalized3(
                 wide_normals[v * 3],
                 wide_normals[v * 3 + 1],
@@ -1125,7 +1125,7 @@ def _normalize(mut normals: List[Float32]):
         var x = Float64(normals[v * 3])
         var y = Float64(normals[v * 3 + 1])
         var z = Float64(normals[v * 3 + 2])
-        var length = sqrt(x * x + y * y + z * z)
+        var length = sqrt(squared_length3[DType.float64](x, y, z))
         var scale = 1 / (length if length != 0 and length == length else 1)
         normals[v * 3] = Float32(x * scale)
         normals[v * 3 + 1] = Float32(y * scale)

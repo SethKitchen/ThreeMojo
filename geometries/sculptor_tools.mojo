@@ -246,7 +246,7 @@ def _half_edge_split(
     var ey = p1.y - p2.y
     var ez = p1.z - p2.z
     var offset = angle * 0.12 * length3(ex, ey, ez)
-    var length = sum.x * sum.x + sum.y * sum.y + sum.z * sum.z
+    var length = squared_length3[DType.float64](sum.x, sum.y, sum.z)
     offset = offset / sqrt(length) if length > 0 else offset
     var turn = ex * (u1.x - u2.x) + ey * (u1.y - u2.y) + ez * (u1.z - u2.z)
     offset = -offset if turn < 0 else offset

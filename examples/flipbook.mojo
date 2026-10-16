@@ -32,6 +32,7 @@ from geometries.box import box, cube
 from geometries.sphere import sphere
 from lights.light import ambient_light, directional_light
 from materials.material import Material
+from math.norm import squared_length3
 from math.vector3 import Vector3
 from objects.gyroscope import gyroscope
 from objects.mesh import Mesh
@@ -95,7 +96,7 @@ def _facing(
         var x = base.component(vertex, 0) / sx
         var y = base.component(vertex, 1) / sy
         var z = base.component(vertex, 2) / sz
-        var length = sqrt(x * x + y * y + z * z)
+        var length = sqrt(squared_length3[DType.float32](x, y, z))
         if length > 0:
             x /= length
             y /= length

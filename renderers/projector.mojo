@@ -65,6 +65,7 @@ from math.norm import (
     length3,
     normalized3,
     _ordinary_squared,
+    squared_length3,
 )
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
@@ -390,7 +391,7 @@ def apply_normal(m: List[Float64], v: Vec) -> Vec:
     var x = m[0] * v[0] + m[3] * v[1] + m[6] * v[2]
     var y = m[1] * v[0] + m[4] * v[1] + m[7] * v[2]
     var z = m[2] * v[0] + m[5] * v[1] + m[8] * v[2]
-    var squared = x * x + y * y + z * z
+    var squared = squared_length3[DType.float64](x, y, z)
     var bound = Float64(0)
     var products_safe = True
     var finite = isfinite(v[0]) and isfinite(v[1]) and isfinite(v[2])

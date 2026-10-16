@@ -14,6 +14,7 @@ an under-resolved occupancy grid as dimensional validation.
 """
 
 from math.finite import positive_finite
+from math.norm import squared_length3
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
     SHOULDER_HEIGHT,
@@ -43,7 +44,7 @@ def _extent(
         var x = dot(p.ax, direction) * p.r.x
         var y = dot(p.ay, direction) * p.r.y
         var z = dot(p.az, direction) * p.r.z
-        var radius = sqrt(x * x + y * y + z * z)
+        var radius = sqrt(squared_length3[DType.float64](x, y, z))
         return (center - radius, center + radius)
     if p.kind == CONE:
         var end = dot(p.b, direction)

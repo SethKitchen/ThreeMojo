@@ -51,7 +51,7 @@ from std.math import isfinite
 
 from math.triangle_normal import _difference_product_wide
 
-from math.norm import _ordinary_squared, normalized3
+from math.norm import _ordinary_squared, normalized3, squared_length3
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -783,9 +783,7 @@ def compute_vertex_normals(
         var y = Float64(normals[v * 3 + 1])
         var z = Float64(normals[v * 3 + 2])
         if not _ordinary_squared(
-            Float32(x) * Float32(x)
-            + Float32(y) * Float32(y)
-            + Float32(z) * Float32(z)
+            squared_length3[DType.float32](Float32(x), Float32(y), Float32(z))
         ):
             var scaled = _common_scale[DType.float64, 3](
                 [
@@ -798,7 +796,7 @@ def compute_vertex_normals(
             x = Float64(Float32(unit[0]))
             y = Float64(Float32(unit[1]))
             z = Float64(Float32(unit[2]))
-        var length = sqrt(x * x + y * y + z * z)
+        var length = sqrt(squared_length3[DType.float64](x, y, z))
         if length > 0:
             x = Float64(Float32(x / length))
             y = Float64(Float32(y / length))

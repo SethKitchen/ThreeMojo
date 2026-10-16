@@ -555,7 +555,7 @@ struct SculptorMesh(Movable):
         var x = self.normals[vertex * 3]
         var y = self.normals[vertex * 3 + 1]
         var z = self.normals[vertex * 3 + 2]
-        if _ordinary_squared(x * x + y * y + z * z):
+        if _ordinary_squared(squared_length3[DType.float32](x, y, z)):
             return normal
         var wide = self._vertex_area(vertex)
         if (

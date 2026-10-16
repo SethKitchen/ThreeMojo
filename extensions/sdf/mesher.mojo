@@ -24,6 +24,7 @@ from extensions.sdf.vector import (
     V3,
     length,
 )
+from math.norm import squared_length3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores, size_of
@@ -900,7 +901,7 @@ def _triangle(mut mesh: SurfaceMesh, a: Int, b: Int, c: Int):
 
 def _squared(mesh: SurfaceMesh, a: Int, b: Int) -> Float64:
     var d = mesh.vertex(a) - mesh.vertex(b)
-    return d.x * d.x + d.y * d.y + d.z * d.z
+    return squared_length3[DType.float64](d.x, d.y, d.z)
 
 
 def merge(mut into: SurfaceMesh, other: SurfaceMesh):
