@@ -50,6 +50,7 @@ from extensions.humanoid.skeleton.leg.fibula.dimensions import (
     fibula_dimensions,
 )
 from extensions.humanoid.skeleton.leg.knee.dimensions import (
+    KneeDimensions,
     femur_origin,
     fibula_origin,
     knee_dimensions_from_bones,
@@ -432,6 +433,58 @@ def _raw_chain(dimensions: MuscleDimensions, part: MusclePart) -> MuscleChain:
     return chain
 
 
+@fieldwise_init
+struct _LegBoneFrame(ImplicitlyCopyable):
+    """The four leg bones, the knee, and their origins in the leg frame."""
+
+    var femur: FemurDimensions
+    var tibia: TibiaDimensions
+    var fibula: FibulaDimensions
+    var patella: PatellaDimensions
+    var knee: KneeDimensions
+    var femur_origin: Vector3
+    var tibia_origin: Vector3
+    var fibula_origin: Vector3
+    var patella_origin: Vector3
+
+
+def _leg_bone_frame(spec: HumanoidSpec, side: BodySide) raises -> _LegBoneFrame:
+    """Return the connected leg bones and their origins.
+
+    Args:
+        spec: Standing height, osteological sex and athleticism.
+        side: `RIGHT` or `LEFT`.
+
+    Returns:
+        The bones, the knee, and the four origins in the leg frame.
+
+    Raises:
+        Error: If `spec` or `side` is refused by a bone template.
+    """
+    var femur = femur_dimensions(spec.stature, spec.sex, side)
+    var tibia = tibia_dimensions(spec.stature, spec.sex, side)
+    var fibula = fibula_dimensions(spec.stature, spec.sex, side)
+    var patella = patella_dimensions(spec.stature, spec.sex, side)
+    var knee = knee_dimensions_from_bones(femur, tibia, fibula, patella)
+    var f_origin = femur_origin(femur, knee.femoral_thickness)
+    var t_origin = tibia_origin(tibia, knee.tibial_thickness)
+    var fi_origin = fibula_origin(tibia, t_origin, fibula)
+    var p_origin = patella_origin(
+        femur, f_origin, patella, knee.patellar_thickness
+    )
+    return _LegBoneFrame(
+        femur,
+        tibia,
+        fibula,
+        patella,
+        knee,
+        f_origin,
+        t_origin,
+        fi_origin,
+        p_origin,
+    )
+
+
 def muscle_dimensions(
     spec: HumanoidSpec, side: BodySide = RIGHT
 ) raises -> MuscleDimensions:
@@ -447,27 +500,17 @@ def muscle_dimensions(
     Raises:
         Error: If `spec` or `side` is refused.
     """
-    var femur = femur_dimensions(spec.stature, spec.sex, side)
-    var tibia = tibia_dimensions(spec.stature, spec.sex, side)
-    var fibula = fibula_dimensions(spec.stature, spec.sex, side)
-    var patella = patella_dimensions(spec.stature, spec.sex, side)
-    var knee = knee_dimensions_from_bones(femur, tibia, fibula, patella)
-    var f_origin = femur_origin(femur, knee.femoral_thickness)
-    var t_origin = tibia_origin(tibia, knee.tibial_thickness)
-    var fi_origin = fibula_origin(tibia, t_origin, fibula)
-    var p_origin = patella_origin(
-        femur, f_origin, patella, knee.patellar_thickness
-    )
+    var frame = _leg_bone_frame(spec, side)
     return muscle_dimensions_from_bones(
         spec.athleticism,
-        femur,
-        tibia,
-        fibula,
-        patella,
-        f_origin,
-        t_origin,
-        fi_origin,
-        p_origin,
+        frame.femur,
+        frame.tibia,
+        frame.fibula,
+        frame.patella,
+        frame.femur_origin,
+        frame.tibia_origin,
+        frame.fibula_origin,
+        frame.patella_origin,
     )
 
 
