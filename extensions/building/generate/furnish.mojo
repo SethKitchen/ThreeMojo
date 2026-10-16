@@ -53,7 +53,7 @@ from extensions.building.kinds import (
     WARDROBE,
 )
 from extensions.building.model import Building, Furnishing, quads_apart
-from extensions.topology.arrangement import Point2, contains
+from extensions.topology.arrangement import Point2, contains, polygon_area
 from math.utils import SeededRandom
 from units.si import Angle64, Length64, METER, RADIAN, SQUARE_METER
 
@@ -179,7 +179,7 @@ struct _Room(Movable):
 def _room(building: Building, space: SpaceId) raises -> _Room:
     """Collect a room's outline, door swings and window strips."""
     var outline = building.spaces[space.value].outline.copy()
-    if _signed_area(outline) < 0:
+    if polygon_area(outline) < 0:
         outline.reverse()
     var room = _Room(outline^)
     # A space always has the walls and slabs of its cell.
@@ -202,17 +202,6 @@ def _room(building: Building, space: SpaceId) raises -> _Room:
             else:
                 room.windows.append(_box(center, angle, w, 1.2))
     return room^
-
-
-def _signed_area(points: List[Point2]) -> Float64:
-    var total = Float64(0)
-    var n = len(points)
-    for i in range(n):  # pragma: no branch
-        total += (
-            points[i].x * points[(i + 1) % n].y
-            - points[(i + 1) % n].x * points[i].y
-        )
-    return total / 2
 
 
 @fieldwise_init

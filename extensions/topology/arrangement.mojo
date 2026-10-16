@@ -224,7 +224,7 @@ def signed_area(points: List[Point2], loop: List[Int]) -> Float64:
     for i in range(n):  # pragma: no branch
         var p = points[loop[i]]
         var q = points[loop[(i + 1) % n]]
-        total += p.x * q.y - q.x * p.y
+        total += p.cross(q)
     return total / 2
 
 
@@ -242,7 +242,7 @@ def polygon_area(points: List[Point2]) -> Float64:
     for i in range(n):
         var p = points[i]
         var q = points[(i + 1) % n]
-        total += p.x * q.y - q.x * p.y
+        total += p.cross(q)
     return total / 2
 
 
