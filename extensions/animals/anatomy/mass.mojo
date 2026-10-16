@@ -568,24 +568,16 @@ def sample_mass(
         if solids == 0:
             continue
         var box = part_box(posed, ids)
-        low = V3(
-            min(low.x, box[0].x), min(low.y, box[0].y), min(low.z, box[0].z)
-        )
-        high = V3(
-            max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
-        )
+        low = low.min(box[0])
+        high = high.max(box[1])
         input.erode.append(coat if _erodes(SurfacePart(part)) else 0.0)
         input.parts.append(ids^)
     if len(input.parts) == 0:
         raise Error("The sculpt has no flesh to weigh")
     if len(input.coat) > 0:
         var box = part_box(posed, input.coat)
-        low = V3(
-            min(low.x, box[0].x), min(low.y, box[0].y), min(low.z, box[0].z)
-        )
-        high = V3(
-            max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
-        )
+        low = low.min(box[0])
+        high = high.max(box[1])
     var counts = V3(
         ceil((high.x - low.x) / h),
         ceil((high.y - low.y) / h),

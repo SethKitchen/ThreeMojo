@@ -142,6 +142,32 @@ struct Vec3d(ImplicitlyCopyable):
         """
         return Vec3d(-self.x, -self.y, -self.z)
 
+    def min(self, other: Self) -> Self:
+        """Return the smaller of each component, three.js's `min`.
+
+        Args:
+            other: The other vector.
+
+        Returns:
+            The smaller components.
+        """
+        return Vec3d(
+            min(self.x, other.x), min(self.y, other.y), min(self.z, other.z)
+        )
+
+    def max(self, other: Self) -> Self:
+        """Return the larger of each component, three.js's `max`.
+
+        Args:
+            other: The other vector.
+
+        Returns:
+            The larger components.
+        """
+        return Vec3d(
+            max(self.x, other.x), max(self.y, other.y), max(self.z, other.z)
+        )
+
     def dot(self, other: Self) -> Float64:
         """Return the dot product.
 
