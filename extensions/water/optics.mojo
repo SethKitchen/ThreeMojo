@@ -16,6 +16,7 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
+from math.sine import fraction
 from math.utils import clamp
 from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
@@ -91,9 +92,9 @@ def hash12(x: Float32, y: Float32) -> Float32:
     # differently. Each step is a Float32 operation rounded once.
     var c = Float32(0.1031)
     var k = Float32(33.33)
-    var px = _fract(_times(x, c))
-    var py = _fract(_times(y, c))
-    var pz = _fract(_times(x, c))
+    var px = fraction(_times(x, c))
+    var py = fraction(_times(y, c))
+    var pz = fraction(_times(x, c))
     var dot = _plus(
         _plus(_times(px, _plus(py, k)), _times(py, _plus(pz, k))),
         _times(pz, _plus(px, k)),
@@ -101,7 +102,7 @@ def hash12(x: Float32, y: Float32) -> Float32:
     px = _plus(px, dot)
     py = _plus(py, dot)
     pz = _plus(pz, dot)
-    return _fract(_times(_plus(px, py), pz))
+    return fraction(_times(_plus(px, py), pz))
 
 
 def _times(a: Float32, b: Float32) -> Float32:
@@ -115,10 +116,6 @@ def _plus(a: Float32, b: Float32) -> Float32:
     # Each operand comes from `_times`, `_plus` or `_fract`, and none of
     # them is a plain product, so the sum cannot fuse. It rounds once.
     return a + b
-
-
-def _fract(value: Float32) -> Float32:
-    return value - floor(value)
 
 
 def _sin(value: Float32) -> Float32:

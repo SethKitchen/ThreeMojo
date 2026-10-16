@@ -37,6 +37,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length2
+from math.sine import fraction
 
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -950,11 +951,6 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
 # --- LensflareNode -----------------------------------------------------------
 
 
-def _fract(x: Float32) -> Float32:
-    """Return GLSL's `fract`."""
-    return x - floor(x)
-
-
 def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
     """Add three.js's `LensflareNode` to the frame: ghosts of the light
     above a threshold, mirrored through the center, at a smaller size.
@@ -988,8 +984,8 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
             var g = Float32(0)
             var b = Float32(0)
             for i in range(settings.ghost_samples):
-                var su = _fract(tu + gu * Float32(i))
-                var sv = _fract(tv + gv * Float32(i))
+                var su = fraction(tu + gu * Float32(i))
+                var sv = fraction(tv + gv * Float32(i))
                 var du = su - 0.5
                 var dv = sv - 0.5
                 var d = length2(du, dv)

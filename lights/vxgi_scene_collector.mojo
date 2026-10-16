@@ -56,6 +56,7 @@ from materials.material import (
     TOON,
 )
 from math.bounds import Box3
+from math.sine import fraction
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -156,7 +157,7 @@ def _wrapped(coordinate: Float32, mode: Wrap) -> Float32:
     if coordinate >= 0 and coordinate <= 1:
         return coordinate
     if mode == REPEAT:
-        return coordinate - floor(coordinate)
+        return fraction(coordinate)
     if mode == CLAMP:
         return 0 if coordinate < 0 else 1
     # A mirrored repeat: an odd tile runs backward.
