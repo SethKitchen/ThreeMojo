@@ -35,7 +35,7 @@ from extensions.humanoid.skeleton.field import (
     mix_point,
     tapered_tube,
     mirrored_tube_distance,
-    tube_chain_bounds,
+    tube_root_bounds,
     widen_for_display,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
@@ -118,7 +118,7 @@ struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
         self.mirror = side == LEFT and not _unpaired(part)
         self.k = Float32(0.00025)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(self.chain, Float32(0.003) + self.chain.r0)
+        var box = tube_root_bounds(self.chain)
         if self.mirror:
             box = sided_bounds(box.low, box.high, side)
         self.low = box.low

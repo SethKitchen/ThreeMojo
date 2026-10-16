@@ -25,7 +25,7 @@ from extensions.humanoid.skeleton.field import (
     display_tube_chain,
     field_gradient,
     mix_point,
-    tube_chain_bounds,
+    tube_root_bounds,
     tube_chain_distance,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
@@ -100,7 +100,7 @@ struct NerveField(DistanceField, ImplicitlyCopyable):
         self.chain = chain
         self.k = Float32(0.00020)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(chain, Float32(0.003) + chain.r0)
+        var box = tube_root_bounds(chain)
         self.low = box.low
         self.high = box.high
 
