@@ -8,7 +8,7 @@
 Each example builds its own scene. This file reads the path from the
 first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
-can write them here.
+can write them here. It can also copy one tile into a sheet.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -266,6 +266,24 @@ def write_frames(
     """
     Path(destination).write_bytes(encode(frames, delay_ms=delay_ms))
     print("Wrote", destination, "-", frame_count, "frames")
+
+
+def blit(mut sheet: Framebuffer, piece: Framebuffer, x0: Int, y0: Int):
+    """Copy a tile into the sheet.
+
+    Args:
+        sheet: The whole picture.
+        piece: One tile.
+        x0: The tile's left column in the sheet.
+        y0: The tile's top row in the sheet.
+    """
+    var channels = len(piece.pixels) // (piece.width * piece.height)
+    for y in range(piece.height):
+        for x in range(piece.width):
+            var src = (y * piece.width + x) * channels
+            var dst = ((y0 + y) * sheet.width + x0 + x) * channels
+            for c in range(channels):
+                sheet.pixels[dst + c] = piece.pixels[src + c]
 
 
 def main():

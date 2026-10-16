@@ -15,7 +15,7 @@ mid-stride and the snake and the swimmers bend in an S. Each animal
 turns a whole turn.
 """
 
-from examples.output import example_destination
+from examples.output import blit, example_destination
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -149,24 +149,6 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
         out.append(renderer.render(scene, assets, camera))
         scene.node(body).rotate_y(step)
     return out^
-
-
-def blit(mut sheet: Framebuffer, piece: Framebuffer, x0: Int, y0: Int):
-    """Copy a tile into the sheet.
-
-    Args:
-        sheet: The whole picture.
-        piece: One tile.
-        x0: The tile's left column in the sheet.
-        y0: The tile's top row in the sheet.
-    """
-    var channels = len(piece.pixels) // (piece.width * piece.height)
-    for y in range(piece.height):
-        for x in range(piece.width):
-            var src = (y * piece.width + x) * channels
-            var dst = ((y0 + y) * sheet.width + x0 + x) * channels
-            for c in range(channels):
-                sheet.pixels[dst + c] = piece.pixels[src + c]
 
 
 def main() raises:
