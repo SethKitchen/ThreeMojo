@@ -95,11 +95,8 @@ def sky_face(face: Int) raises -> Texture:
             var tint = ground
             if direction.y >= 0:
                 var lean = direction.y
-                tint = FloatColor(
-                    horizon.r + (zenith.r - horizon.r) * lean,
-                    horizon.g + (zenith.g - horizon.g) * lean,
-                    horizon.b + (zenith.b - horizon.b) * lean,
-                )
+                var mixed = horizon.mix(zenith, lean)
+                tint = FloatColor(mixed.r, mixed.g, mixed.b)
             var shown = tint.encode()
             pixels.append(shown.r)
             pixels.append(shown.g)

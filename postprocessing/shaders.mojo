@@ -1189,12 +1189,7 @@ def focus_pixel(
         color.a * 2 - mean.a,
     )
     var keep = 1 - sample_dist * 0.5
-    color = FloatColor(
-        color.r + (mean.r - color.r) * keep,
-        color.g + (mean.g - color.g) * keep,
-        color.b + (mean.b - color.b) * keep,
-        color.a + (mean.a - color.a) * keep,
-    )
+    color = color.mix(mean, keep)
     return FloatColor(
         color.r * color.r * 0.95 + color.r,
         color.g * color.g * 0.95 + color.g,
@@ -1509,12 +1504,8 @@ def fake_sun_color(
     var k = 1 - prop
     prop = GOD_RAYS_SUN_PEAK * k * k * k
     var t = 1 - prop
-    return FloatColor(
-        sun_color.r + (bg_color.r - sun_color.r) * t,
-        sun_color.g + (bg_color.g - sun_color.g) * t,
-        sun_color.b + (bg_color.b - sun_color.b) * t,
-        1,
-    )
+    var mixed = sun_color.mix(bg_color, t)
+    return FloatColor(mixed.r, mixed.g, mixed.b, 1)
 
 
 def god_rays_combine_pixel(
