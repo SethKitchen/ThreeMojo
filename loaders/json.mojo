@@ -187,6 +187,25 @@ struct JsonDocument(Movable):
         self._check(node)
         return self.nodes[node].kind
 
+    def has_kind(self, node: Int, kind: JsonKind) raises -> Bool:
+        """Return True when `node` is present and holds `kind`.
+
+        A missing node is false. It is not an error.
+
+        Args:
+            node: A node index, or `NO_NODE`.
+            kind: The kind it must hold.
+
+        Returns:
+            True when the node exists and its kind is `kind`.
+
+        Raises:
+            Error: If the index is not `NO_NODE` and names no node.
+        """
+        if node == NO_NODE:
+            return False
+        return self.kind(node) == kind
+
     def length(self, node: Int) raises -> Int:
         """Return how many children an object or an array has.
 

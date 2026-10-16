@@ -2451,7 +2451,7 @@ struct _Loader(Movable):
         """
         var list = List[MaterialId]()
         var found = self.document.get(item, "material")
-        if found == NO_NODE or self.document.kind(found) != ARRAY:
+        if not self.document.has_kind(found, ARRAY):
             return list^
         var count = self.document.length(found)
         if count == 0:
