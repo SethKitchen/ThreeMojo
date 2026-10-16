@@ -186,6 +186,20 @@ def js_round(value: Float64) -> Float64:
     return whole + 1 if value - whole >= 0.5 else whole
 
 
+def saturate(value: Float32) -> Float32:
+    """Return `value` held from zero to one.
+
+    GLSL's `saturate`.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value within zero and one.
+    """
+    return clamp(value, 0, 1)
+
+
 def nearest_distance(value: Float64) -> Float64:
     """Return how far `value` lies from the nearest whole number.
 

@@ -43,7 +43,7 @@ is scaled by `Lighting.scale` once, at the end.
 """
 
 from math.smoothstep import smoothstep
-from math.utils import clamp
+from math.utils import saturate
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import cos, exp, exp2, log2, max, min, pi, sqrt
@@ -68,11 +68,6 @@ comptime NO_ANISOTROPY_TEXEL = Vector3(1, 0.5, 1)
 # them. Held here as well, because that module imports this one.
 comptime _FRESNEL_SLOPE = Float32(-5.55473)
 comptime _FRESNEL_OFFSET = Float32(-6.98316)
-
-
-def _saturated(value: Float32) -> Float32:
-    """Return `value` clamped to zero through one: GLSL's `saturate`."""
-    return clamp(value, 0, 1)
 
 
 def _schlick(f0: Float32, f90: Float32, cosine: Float32) -> Float32:
@@ -164,9 +159,9 @@ def charlie_sheen(
     if alpha == 0 or half.length() == 0:
         return Vector3(0, 0, 0)
     half.normalize()
-    var dot_nl = _saturated(normal.dot(toward_light))
-    var dot_nv = _saturated(normal.dot(toward_eye))
-    var dot_nh = _saturated(normal.dot(half))
+    var dot_nl = saturate(normal.dot(toward_light))
+    var dot_nv = saturate(normal.dot(toward_eye))
+    var dot_nh = saturate(normal.dot(half))
     var inverse = 1 / alpha
     var sin2h = max(1 - dot_nh * dot_nh, SHEEN_SINE_FLOOR)
     # three.js's D_Charlie, without its reciprocal pi.
@@ -176,7 +171,7 @@ def charlie_sheen(
     var denominator = 4 * (dot_nl + dot_nv - dot_nl * dot_nv)
     var visibility = Float32(1)
     if denominator > 0:
-        visibility = _saturated(1 / denominator)
+        visibility = saturate(1 / denominator)
     return color * (lobe * visibility)
 
 
@@ -204,7 +199,7 @@ def ibl_sheen(dot_nv: Float32, roughness: Float32) -> Float32:
         b = 44.0 * r2 - 23.7 * roughness + 3.26
         rise = 0
     var dg = exp(a * dot_nv + b) + rise
-    return _saturated(dg * (1 / Float32(pi)))
+    return saturate(dg * (1 / Float32(pi)))
 
 
 def sheen_scaling(color: Vector3) -> Float32:
@@ -265,7 +260,7 @@ def clearcoat_of(authored: Float32, texel: Float32) -> Float32:
     Returns:
         The clear coat, from zero to one.
     """
-    return _saturated(authored * texel)
+    return saturate(authored * texel)
 
 
 def sheen_roughness_of(authored: Float32, texel: Float32) -> Float32:
@@ -497,7 +492,7 @@ def anisotropic_ggx(
     var dot_bh = layers.bitangent.dot(half)
     var gv = dot_nl * Vector3(alpha_t * dot_tv, alpha * dot_bv, dot_nv).length()
     var gl = dot_nv * Vector3(alpha_t * dot_tl, alpha * dot_bl, dot_nl).length()
-    var visibility = _saturated(0.5 / (gv + gl))
+    var visibility = saturate(0.5 / (gv + gl))
     var a2 = alpha_t * alpha
     var v = Vector3(alpha * dot_th, alpha_t * dot_bh, a2 * dot_nh)
     var w2 = a2 / v.dot(v)
@@ -605,9 +600,9 @@ def layers_of(
     layers.sheen_roughness = sheen_roughness
     layers.sheen = max(max(sheen_color.x, sheen_color.y), sheen_color.z) > 0
     if thickness > 0:
-        layers.iridescence = _saturated(iridescence)
+        layers.iridescence = saturate(iridescence)
     if layers.iridescence > 0:
-        var dot_nv = _saturated(normal.dot(toward_eye))
+        var dot_nv = saturate(normal.dot(toward_eye))
         layers.iridescence_fresnel = iridescence_fresnel(
             OUTSIDE_IOR, iridescence_ior, dot_nv, thickness, specular
         )
@@ -629,7 +624,7 @@ def layers_of(
             direction = Vector2(1, 0)
         else:
             direction = Vector2(direction.x / strength, direction.y / strength)
-            strength = _saturated(strength)
+            strength = saturate(strength)
         layers.anisotropy = strength
         var alpha = roughness * roughness
         var weight = strength * strength

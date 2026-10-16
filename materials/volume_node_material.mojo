@@ -55,7 +55,7 @@ from materials.nodes import (
     SCATTERING_NODE,
     run_nodes,
 )
-from math.utils import clamp
+from math.utils import saturate
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from std.math import exp, inf, max, min
@@ -121,11 +121,6 @@ struct LitRay[origin: Origin[mut=False]](ImplicitlyCopyable, RayLights):
         return self.lighting[].volume_light_at(
             position, self.normal, self.receives
         )
-
-
-def _saturated(value: Float32) -> Float32:
-    """Return a value held between zero and one."""
-    return clamp(value, 0, 1)
 
 
 def _thinned(through: Float32, density: Float32, step: Float32) -> Float32:
@@ -209,9 +204,7 @@ def volumetric_light[
         green = _thinned(green, density.y, step)
         blue = _thinned(blue, density.z, step)
         travelled += step
-    return Vector3(
-        1 - _saturated(red), 1 - _saturated(green), 1 - _saturated(blue)
-    )
+    return Vector3(1 - saturate(red), 1 - saturate(green), 1 - saturate(blue))
 
 
 def volume_node_material(
