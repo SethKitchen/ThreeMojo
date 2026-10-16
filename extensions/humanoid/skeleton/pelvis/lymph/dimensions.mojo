@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
     empty_bounds,
+    enlarge_tube_chain,
     field_gradient,
     flip_x,
     mix_point,
@@ -250,11 +251,7 @@ struct PelvisLymphField(DistanceField, ImplicitlyCopyable):
             A wider copy. Nodes are already large enough to show.
         """
         var field = self
-        field.chain.r0 = max(field.chain.r0, least)
-        field.chain.r1 = max(field.chain.r1, least)
-        field.chain.r2 = max(field.chain.r2, least)
-        field.chain.r3 = max(field.chain.r3, least)
-        field.chain.r4 = max(field.chain.r4, least)
+        field.chain = enlarge_tube_chain(field.chain, least)
         field.k = max(field.k, Float32(0.4) * least)
         field.low = field.low - Vector3(least, least, least)
         field.high = field.high + Vector3(least, least, least)
