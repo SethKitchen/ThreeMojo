@@ -42,10 +42,11 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     _unit_vector,
     follower_across,
 )
+from math.sine import fraction
 from math.utils import clamp
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
-from std.math import floor, isfinite, max, min
+from std.math import isfinite, max, min
 from std.sys import num_logical_cores
 
 
@@ -289,7 +290,7 @@ struct HairSimulation(Movable):
                 0.73
             ) + wind.phase * Float32(strand)
             var flutter = timer * wind.frequency
-            flutter = flutter - floor(flutter)
+            flutter = fraction(flutter)
             var gust = 1 + wind.jitter * (flutter - Float32(0.5))
             var force = Vector3(0, -p.gravity, 0) + wind.direction * abs(
                 wind.strength * gust

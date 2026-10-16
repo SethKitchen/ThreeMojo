@@ -47,6 +47,7 @@ texture does not have, so a curve past the last clamps to the last row.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.matrix4 import Matrix4
+from math.sine import fraction
 from math.space_curve import (
     Point3,
     SpaceCurve,
@@ -261,7 +262,7 @@ struct Flow(Movable):
             portion = (world[0] + self.spine_offset.value) / spine_length
         var mt = portion * self.path_segment + self.path_offset
         mt = mt + instance_offset
-        mt = mt - floor(mt)
+        mt = fraction(mt)
         var row = Int(floor(mt)) + row_offset
         var spine_pos = self.sample(mt, row)
         var a = self.sample(mt, row + 1)

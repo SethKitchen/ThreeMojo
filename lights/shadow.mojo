@@ -84,6 +84,7 @@ from math.norm import squared_length2
 from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
+from math.sine import fraction
 from std.math import floor, isfinite, max, min, sqrt
 from units.si import Angle, Length, METER
 
@@ -1260,7 +1261,7 @@ def soft_fraction(coordinate: Float32, size: Int) -> Float32:
         Zero up to one.
     """
     var texels = coordinate * Float32(size) + 0.5
-    return texels - floor(texels)
+    return fraction(texels)
 
 
 def soft_shadow(
@@ -1333,7 +1334,7 @@ def bilinear_fraction(at: Float32) -> Float32:
     Returns:
         Zero up to one.
     """
-    return (at - 0.5) - floor(at - 0.5)
+    return fraction(at - 0.5)
 
 
 def bilinear(

@@ -44,6 +44,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length2
+from math.sine import fraction
 from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
@@ -55,7 +56,7 @@ from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import FloatColor
 from render.target import RenderTarget, UNSIGNED_BYTE_TARGET, stored
 from std.bit import pop_count
-from std.math import acos, ceil, cos, floor, isfinite, max, min, pi, pow, sin
+from std.math import acos, ceil, cos, isfinite, max, min, pi, pow, sin
 from std.math import sqrt
 from units.si import Length, METER
 
@@ -467,7 +468,7 @@ def ssgi_pixel(
     )
     var jitter = temporal[0] * 0.02
     var shifted = noise_offset + temporal[1]
-    var initial_step = (shifted - floor(shifted)) + glsl_rand(
+    var initial_step = fraction(shifted) + glsl_rand(
         (u + jitter) * 2 - 1, (v + jitter) * 2 - 1
     )
     var steps = Float32(settings.step_count)
@@ -723,7 +724,7 @@ def sss_pixel(
         temporal = SPATIAL_OFFSETS[settings.frame_id % 4]
         frame = Float32(settings.frame_id)
     var noise = interleaved_gradient_noise(d0x, d0y) + temporal
-    var offset = (noise - floor(noise)) + glsl_rand(u + frame, v + frame)
+    var offset = fraction(noise) + glsl_rand(u + frame, v + frame)
     for i in range(steps):
         var px = d0x + x_span * (Float32(i) + offset)
         var py = d0y + y_span * (Float32(i) + offset)
