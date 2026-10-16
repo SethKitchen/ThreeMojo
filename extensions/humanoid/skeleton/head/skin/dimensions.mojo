@@ -21,6 +21,7 @@ represents the dermis for occupancy and mass.
 """
 
 from extensions.humanoid.side import LEFT, RIGHT
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
@@ -362,8 +363,7 @@ struct HeadSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def head_skin_distance(
