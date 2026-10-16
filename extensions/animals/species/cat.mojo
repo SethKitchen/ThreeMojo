@@ -22,6 +22,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1284,11 +1285,7 @@ def cat_palette(t: Traits) raises -> Palette:
         var chin = name == "chin" and (v == BLACK or v == GRAY or v == TUXEDO)
         var warm = tone or calico_fur or stripe or chin
         if warm:
-            c = V3(
-                c.x * (1.0 + 0.08 * k + l),
-                c.y * (1.0 + 0.02 * k + l),
-                c.z * (1.0 - 0.08 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.08, 0.02, -0.08)
         out.set(name, c)
     var tabby = v == MACKEREL or v == CLASSIC
     if tabby:

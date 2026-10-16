@@ -25,6 +25,7 @@ from extensions.animals.coat import (
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1602,11 +1603,7 @@ def dog_palette(t: Traits) raises -> Palette:
         var kk = 2.2 * k if key == KEY_YELLOW else (
             0.15 * k if key == KEY_TERRIER and not patch else k
         )
-        c = V3(
-            c.x * (1.0 + 0.1 * kk + l),
-            c.y * (1.0 + 0.01 * kk + l),
-            c.z * (1.0 - 0.14 * kk + l),
-        )
+        c = shade_swatch(c, kk, l, 0.1, 0.01, -0.14)
         var sooty = (
             juv > 0.0
             and key == KEY_BLACK_TAN

@@ -290,6 +290,37 @@ def palette_of(names: List[String], hexes: List[Int]) raises -> Palette:
     return out^
 
 
+def shade_swatch(
+    color: V3,
+    shade: Float64,
+    light: Float64,
+    red: Float64,
+    green: Float64,
+    blue: Float64,
+) -> V3:
+    """Return a swatch scaled by shade and lightness on each channel.
+
+    Each channel is multiplied by one plus its weight times `shade`,
+    plus `light`. The weight product is formed before either add.
+
+    Args:
+        color: The swatch, in linear light.
+        shade: The individual's shade or warmth.
+        light: The individual's lightness.
+        red: The shade weight of red.
+        green: The shade weight of green.
+        blue: The shade weight of blue.
+
+    Returns:
+        The scaled swatch.
+    """
+    return V3(
+        color.x * (1.0 + red * shade + light),
+        color.y * (1.0 + green * shade + light),
+        color.z * (1.0 + blue * shade + light),
+    )
+
+
 def body_region(part: SurfacePart, bone: String) -> Int:
     """Return the coat region of one vertex.
 

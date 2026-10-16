@@ -26,6 +26,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import (
@@ -911,14 +912,6 @@ def _corn_mark(morph: Int) -> V3:
     return V3(0.012, 0.009, 0.008)
 
 
-def _tweak(c: V3, warm: Float64, light: Float64) -> V3:
-    return V3(
-        c.x * (1.0 + 0.1 * warm + light),
-        c.y * (1.0 + 0.02 * warm + light),
-        c.z * (1.0 - 0.1 * warm + light),
-    )
-
-
 def snake_palette(t: Traits) -> Palette:
     """Return one snake's palette: its morph, warmed, lightened and dulled.
 
@@ -961,7 +954,10 @@ def snake_palette(t: Traits) -> Palette:
             0xBFAE8C,
         ]
         for i in range(len(names)):  # pragma: no branch
-            out.set(names[i], _tweak(srgb(hexes[i]), warm, light))
+            out.set(
+                names[i],
+                shade_swatch(srgb(hexes[i]), warm, light, 0.1, 0.02, -0.1),
+            )
         var tone = clamp(t.get("tone", 0.0), -1.0, 1.0)
         var tgt = srgb(0x8F8C86) if tone < 0.0 else srgb(0x9A6A4E)
         var k = abs(tone) * 0.75
@@ -1002,7 +998,9 @@ def snake_palette(t: Traits) -> Palette:
     var hexes = _corn(pick)
     debug_assert(len(names) == len(hexes), "A palette needs one color per name")
     for i in range(len(names)):  # pragma: no branch
-        out.set(names[i], _tweak(srgb(hexes[i]), warm, light))
+        out.set(
+            names[i], shade_swatch(srgb(hexes[i]), warm, light, 0.1, 0.02, -0.1)
+        )
     var dulled = morph == NORMAL or morph == OKEETEE
     if dulled:
         var d = clamp(t.get("dull", 0.0), 0.0, 0.7)

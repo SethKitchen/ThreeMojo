@@ -26,6 +26,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1135,9 +1136,10 @@ def spider_palette(t: Traits) -> Palette:
                 or names[i] == "fang"
             )
             if not fixed:
-                var r = c.x * (1.0 + 0.12 * w + l)
-                var g = c.y * (1.0 + 0.03 * w + l)
-                var b = c.z * (1.0 - 0.12 * w + l)
+                var scaled = shade_swatch(c, w, l, 0.12, 0.03, -0.12)
+                var r = scaled.x
+                var g = scaled.y
+                var b = scaled.z
                 var y = 0.3 * r + 0.55 * g + 0.15 * b
                 c = V3(mix(r, y, gr), mix(g, y, gr), mix(b, y * 1.04, gr))
             out.set(names[i], c)

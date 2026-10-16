@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1351,11 +1352,7 @@ def wolf_palette(t: Traits) raises -> Palette:
             c = mix3(c, pale.get(name), 0.35 * tone)
         elif tone < 0.0 and not keep_pale:
             c = mix3(c, black.get(name), -0.25 * tone)
-        c = V3(
-            c.x * (1.0 + 0.1 * warm + light),
-            c.y * (1.0 + 0.02 * warm + light),
-            c.z * (1.0 - 0.1 * warm + light),
-        )
+        c = shade_swatch(c, warm, light, 0.1, 0.02, -0.1)
         var masked = (
             name == "cheek"
             or name == "throat"

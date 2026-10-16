@@ -25,6 +25,7 @@ from extensions.animals.coat import (
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import (
@@ -1300,11 +1301,7 @@ def boar_palette(t: Traits) raises -> Palette:
         var c = base.get(name)
         out.set(
             name,
-            V3(
-                c.x * (1.0 + 0.1 * k + l),
-                c.y * (1.0 + 0.03 * k + l),
-                c.z * (1.0 - 0.07 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.1, 0.03, -0.07),
         )
     out.set("stripe", srgb(0xE4BF8E))
     out.set("disc", srgb(0x5A4038 if coat == PIGLET_COAT else 0x3A3440))

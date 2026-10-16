@@ -27,6 +27,7 @@ from extensions.animals.coat import (
     mix3,
     body_region,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import JAW
@@ -953,11 +954,7 @@ def rabbit_palette(t: Traits) raises -> Palette:
             or name == "claw"
         )
         if not fixed:
-            c = V3(
-                c.x * (1.0 + 0.16 * k + l),
-                c.y * (1.0 + 0.04 * k + l),
-                c.z * (1.0 - 0.16 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.16, 0.04, -0.16)
         out.set(name, c)
     out.set("dutchWhite", srgb(0xF2F0EA))
     return out^

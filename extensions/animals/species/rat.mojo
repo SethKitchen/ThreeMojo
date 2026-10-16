@@ -30,6 +30,7 @@ from extensions.animals.coat import (
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1083,11 +1084,7 @@ def rat_palette(t: Traits) raises -> Palette:
             or name == "tailUnder"
         )
         if not fixed:
-            c = V3(
-                c.x * (1.0 + 0.12 * k + l),
-                c.y * (1.0 + 0.03 * k + l),
-                c.z * (1.0 - 0.12 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.12, 0.03, -0.12)
         var furry = (
             name == "back"
             or name == "flank"

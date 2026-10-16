@@ -22,6 +22,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1634,11 +1635,7 @@ def pig_palette(t: Traits) raises -> Palette:
         var c = srgb(hexes[i])
         out.set(
             names[i],
-            V3(
-                c.x * (1.0 + 0.06 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.05 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.06, 0.0, -0.05),
         )
     out.set("white", srgb(0xE8D6CC))
     out.set("spot", srgb(0x3A3436))

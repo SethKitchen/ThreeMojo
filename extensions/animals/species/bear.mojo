@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -1350,11 +1351,7 @@ def bear_palette(t: Traits) -> Palette:
     for i in range(len(hexes)):  # pragma: no branch
         var c = srgb(hexes[i])
         if i != CLAW:
-            c = V3(
-                c.x * (1.0 + 0.1 * k + l),
-                c.y * (1.0 + 0.02 * k + l),
-                c.z * (1.0 - 0.12 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.1, 0.02, -0.12)
             var face = i == HEAD or i == FACE or i == MUZZLE
             var tan = coat == BLACK_COAT and i == MUZZLE
             var amount = _face_desat(coat) if (face and not tan) else 0.22
