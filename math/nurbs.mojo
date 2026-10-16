@@ -58,6 +58,19 @@ from std.math import inf, isfinite
 comptime Point4 = SIMD[DType.float64, 4]
 
 
+def _weighted(point: Point4) -> Point4:
+    """Return a control point with its position multiplied by its weight.
+
+    Args:
+        point: The control point. Its fourth component is the weight.
+
+    Returns:
+        `(w x, w y, w z, w)`. The weight stays.
+    """
+    var w = point[3]
+    return Point4(point[0] * w, point[1] * w, point[2] * w, w)
+
+
 def point4(v: Vector4) -> Point4:
     """Return a control point in doubles.
 
@@ -293,11 +306,7 @@ def bspline_derivatives(
     var pw = List[Point4](capacity=len(points))
     for i in range(len(points)):  # pragma: no branch
         # A spline has one control point at least, so this runs.
-        var point = points[i]
-        var w = point[3]
-        point[0] *= w
-        point[1] *= w
-        point[2] *= w
+        var point = _weighted(points[i])
         pw.append(point)
     for k in range(du + 1):  # pragma: no branch
         # `du` is zero or more, so this runs.
@@ -514,11 +523,7 @@ def _surface_homogeneous(
         for k in range(p + 1):  # pragma: no branch
             # The degree is zero or more, so this runs.
             var point = points[uspan - p + k][vspan - q + l]
-            var w = point[3]
-            point[0] *= w
-            point[1] *= w
-            point[2] *= w
-            sum += point * nu[k]
+            sum += _weighted(point) * nu[k]
         temp.append(sum)
     var sw = Point4(0)
     for l in range(q + 1):  # pragma: no branch
@@ -590,11 +595,7 @@ def _volume_homogeneous(
             for k in range(p + 1):  # pragma: no branch
                 # The degree is zero or more, so this runs.
                 var point = points[uspan - p + k][vspan - q + l][wspan - r + m]
-                var weight = point[3]
-                point[0] *= weight
-                point[1] *= weight
-                point[2] *= weight
-                sum += point * nu[k]
+                sum += _weighted(point) * nu[k]
             sw += (sum * nw[m]) * nv[l]
     return sw
 
