@@ -854,11 +854,10 @@ def physical_outgoing(
         outgoing = outgoing * kept + sheen
     if clearcoat > 0:
         var fresnel = f_schlick(CLEARCOAT_F0, 1, dot_nv_coat.x)
-        outgoing = Vector3(
-            outgoing.x * (1 - clearcoat * fresnel.x) + coat.x * clearcoat,
-            outgoing.y * (1 - clearcoat * fresnel.y) + coat.y * clearcoat,
-            outgoing.z * (1 - clearcoat * fresnel.z) + coat.z * clearcoat,
+        var open = (
+            Vector3(Float32(1), Float32(1), Float32(1)) - fresnel * clearcoat
         )
+        outgoing = outgoing * open + coat * clearcoat
     return outgoing
 
 

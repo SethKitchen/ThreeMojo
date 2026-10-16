@@ -898,8 +898,9 @@ def _caudal_edge(
     # Its two callers ask for nine and six points.
     for i in range(1, n + 1):
         var f = Float64(i) / Float64(n)
-        var x = a.x + (b.x - a.x) * f
-        var y = a.y + (b.y - a.y) * f
+        var along = a.lerp(b, f)
+        var x = along.x
+        var y = along.y
         var s = sag * sin(pi * f)
         var notch = 0.0
         if from_tip and g.c_notch > 0.0:

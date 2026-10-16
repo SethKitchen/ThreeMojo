@@ -1112,7 +1112,7 @@ def _caustic_texel(field: CausticField, x: Int, y: Int) -> Vector3:
 
 def _mix3(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     var s = 1.0 - t
-    return Vector3(a.x * s + b.x * t, a.y * s + b.y * t, a.z * s + b.z * t)
+    return a * s + b * t
 
 
 def _floor_wrap(value: Float32) -> Float32:
