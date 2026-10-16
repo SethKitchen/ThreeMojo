@@ -54,6 +54,7 @@ from controls.input import (
     WHEEL,
 )
 from math.matrix4 import Matrix4
+from math.utils import clamp
 from math.quaternion import Quaternion
 from math.spherical import Spherical
 from math.vector3 import Vector3
@@ -100,7 +101,7 @@ comptime PAN = OrbitAction(3)
 
 def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     """Return `value` limited to the range from `low` to `high`."""
-    return max(low, min(high, value))
+    return clamp(value, low, high)
 
 
 struct OrbitControls(Copyable, Movable):

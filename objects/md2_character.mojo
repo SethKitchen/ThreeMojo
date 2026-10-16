@@ -37,6 +37,7 @@ from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.md2 import Md2Model, md2_clip
 from materials.material import LAMBERT, Material, MaterialId
+from math.utils import clamp
 from objects.mesh import Mesh
 from objects.morph_blend_mesh import MorphBlendMesh
 from render.framebuffer import Color
@@ -492,7 +493,7 @@ def _ease_out(k: Float32) -> Float32:
 
 def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     """Return three.js's `MathUtils.clamp`."""
-    return max(low, min(high, value))
+    return clamp(value, low, high)
 
 
 struct MD2CharacterComplex(Movable):

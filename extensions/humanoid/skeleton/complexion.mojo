@@ -32,7 +32,7 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from math.norm import squared_length2
-from math.utils import mix_delta
+from math.utils import clamp, mix_delta
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
@@ -49,7 +49,7 @@ def _lerp(a: Float32, b: Float32, t: Float32) -> Float32:
 
 def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     """Return `value` held to `low` through `high`."""
-    return max(low, min(high, value))
+    return clamp(value, low, high)
 
 
 def _smooth(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
