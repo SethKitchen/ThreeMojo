@@ -33,6 +33,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.norm import length2, squared_length2
+from math.smoothstep import clamped_smoothstep
 
 from postprocessing.display_nodes import (
     exp_f,
@@ -330,8 +331,7 @@ def circle(
 
 def _smoothstep_any(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     """Return GLSL's `smoothstep` for edges in either order."""
-    var t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
-    return t * t * (3 - 2 * t)
+    return clamped_smoothstep(edge0, edge1, x)
 
 
 def crt_vignette(

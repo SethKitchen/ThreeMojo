@@ -32,6 +32,7 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from math.norm import squared_length2
+from math.smoothstep import clamped_smoothstep
 from math.utils import clamp, mix_delta
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
@@ -54,8 +55,7 @@ def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
 
 def _smooth(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     """Return the Hermite step from `edge0` to `edge1`."""
-    var t = _clamp((x - edge0) / (edge1 - edge0), 0, 1)
-    return t * t * (3 - 2 * t)
+    return clamped_smoothstep(edge0, edge1, x)
 
 
 def _byte(value: Float32) -> UInt8:
