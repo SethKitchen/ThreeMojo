@@ -38,6 +38,7 @@ rounds it: Mojo fuses a multiply and an add by default, which rounds once.
 XYZ times the source's matrix to XYZ, the matrix that `convert` applies.
 three.js's internal `_getMatrix` multiplies the two the other way round.
 """
+from core.ordinal import ordinal_valid
 
 from render.framebuffer import Color, FloatColor, SrgbBytes
 from std.benchmark import black_box
@@ -86,7 +87,7 @@ struct ColorSpaceId(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a color space.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # three.js's `NoColorSpace`: numbers that are not color.

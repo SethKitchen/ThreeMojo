@@ -18,7 +18,7 @@ cited width table.
     var d = torso_ligament_distance(dims, INTERVERTEBRAL_DISCS, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.field import mix_point
 from extensions.anatomy.soft_tissue import (

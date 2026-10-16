@@ -20,6 +20,7 @@ the velocity by one plus h times the damping, so the damping never
 reverses a velocity, however large the step. Both dampings are 0 by
 default, as in Box2D: a body keeps its speed unless something acts on it.
 """
+from core.ordinal import ordinal_valid
 
 from extensions.physics.shape import (
     MESH,
@@ -68,7 +69,7 @@ struct BodyKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime STATIC = BodyKind(0)

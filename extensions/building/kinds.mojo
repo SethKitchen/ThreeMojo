@@ -5,6 +5,7 @@
 
 """The kinds of a building model: elements, openings, space uses, section
 shapes and furniture."""
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -19,7 +20,7 @@ struct ElementKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 4.
         """
-        return self.value >= 0 and self.value < 5
+        return ordinal_valid(self.value, 5 - 1)
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.
@@ -57,7 +58,7 @@ struct OpeningKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 1.
         """
-        return self.value >= 0 and self.value < 2
+        return ordinal_valid(self.value, 2 - 1)
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.
@@ -87,7 +88,7 @@ struct SpaceUse(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 11.
         """
-        return self.value >= 0 and self.value < 12
+        return ordinal_valid(self.value, 12 - 1)
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.
@@ -141,7 +142,7 @@ struct SectionShape(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value < 3
+        return ordinal_valid(self.value, 3 - 1)
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.
@@ -175,7 +176,7 @@ struct FurnitureKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 12.
         """
-        return self.value >= 0 and self.value < 13
+        return ordinal_valid(self.value, 13 - 1)
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.

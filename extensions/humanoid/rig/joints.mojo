@@ -30,6 +30,7 @@ This is not a three.js port. See Extensions.
     var rig = humanoid_rig(spec, skin)
     var knee = rig.at(RIGHT_SHIN)
 """
+from core.ordinal import ordinal_valid
 
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.side import LEFT, RIGHT
@@ -54,7 +55,7 @@ struct Joint(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named joint."""
-        return self.value >= 0 and self.value < JOINT_COUNT
+        return ordinal_valid(self.value, JOINT_COUNT - 1)
 
     def side(self) -> Int:
         """Return plus one for a joint of the right side, minus one for

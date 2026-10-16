@@ -19,7 +19,7 @@ osteometric table.
     var d = arm_bone_distance(dims, HUMERUS, RIGHT, dims.frame.elbow)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (

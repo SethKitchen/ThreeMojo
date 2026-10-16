@@ -19,6 +19,7 @@ inputs before rounding. They avoid an overflowing period or add-divisor
 step, retain small phases, and clamp Euclidean endpoint rounding toward
 zero. See the Math wiki page for the finite and exceptional contracts.
 """
+from core.ordinal import ordinal_valid
 
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
@@ -410,7 +411,7 @@ struct ProperEulerOrder(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is `XYX`, `YZY`, `ZXZ`, `XZX`, `YXY` or `ZYZ`.
         """
-        return self.value >= 0 and self.value <= 5
+        return ordinal_valid(self.value, 5)
 
 
 comptime PROPER_XYX = ProperEulerOrder(0)
@@ -478,7 +479,7 @@ struct ComponentType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is one of the `*_COMPONENT` constants.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 comptime FLOAT32_COMPONENT = ComponentType(0)

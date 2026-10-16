@@ -25,7 +25,7 @@ diagrammatic minimum radius so the current isosurface can show them.
     var d = pelvis_vessel_distance(dims, EXTERNAL_ILIAC_ARTERY, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,

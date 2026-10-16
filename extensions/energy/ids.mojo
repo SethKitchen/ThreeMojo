@@ -10,6 +10,7 @@ A `ZoneId`, a `SurfaceId` and a `WindowId` index the lists of a
 an id also check that it is in range. A `BoundaryKind` says what is on
 the outside face of a surface.
 """
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -69,7 +70,7 @@ struct BoundaryKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value < 3
+        return ordinal_valid(self.value, 3 - 1)
 
     def name(self) -> String:
         """Return the kind's name, in lowercase.

@@ -16,7 +16,7 @@ authored in template centimeters. They are not a cited width table.
     var d = head_ligament_distance(dims, LARYNX, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import CERVICAL, HeadDimensions
 from extensions.anatomy.soft_tissue import (

@@ -21,7 +21,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_vessel_distance(dims, DEEP_PALMAR_ARCH, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,

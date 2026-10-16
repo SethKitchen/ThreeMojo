@@ -48,6 +48,7 @@ This is not a three.js port. See Extensions.
     var style = HairStyleFile(hair_style_path(LAYERED))
     var strand = style.strand(dims.head, 0)
 """
+from core.ordinal import ordinal_valid
 
 from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
@@ -79,7 +80,7 @@ struct HairStyle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named style."""
-        return self.value >= 0 and self.value <= PIXIE.value
+        return ordinal_valid(self.value, PIXIE.value)
 
     def is_scanned(self) -> Bool:
         """Return True for a style an artist groomed, kept in a file."""

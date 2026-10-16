@@ -18,6 +18,7 @@ gain coefficient and its visible transmittance. These are the three
 numbers of the simple glazing model that thermal programs use for a
 window without a layer-by-layer description.
 """
+from core.ordinal import ordinal_valid
 
 from std.math import isfinite
 from extensions.building.ids import MaterialId
@@ -47,7 +48,7 @@ struct FlowDirection(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime HORIZONTAL_FLOW = FlowDirection(0)

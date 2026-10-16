@@ -46,6 +46,7 @@ one, stored and straight are the same numbers, so every mode agrees with
 three.js there. The result's alpha is kept between zero and one and its
 color above zero; the color is light and has no ceiling.
 """
+from core.ordinal import ordinal_valid
 
 # The first custom mode. Below it are the named modes.
 comptime CUSTOM_BASE = 1 << 24
@@ -75,7 +76,7 @@ struct BlendFactor(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a factor.
         """
-        return self.value >= 0 and self.value <= 14
+        return ordinal_valid(self.value, 14)
 
 
 comptime ZERO_FACTOR = BlendFactor(0)
@@ -110,7 +111,7 @@ struct BlendEquation(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an equation.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 comptime ADD_EQUATION = BlendEquation(0)

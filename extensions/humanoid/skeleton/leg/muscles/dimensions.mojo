@@ -23,7 +23,7 @@ not rebuild the others. Call `muscle_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import TONED, Athleticism, radius_scale
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide

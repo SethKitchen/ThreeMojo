@@ -47,6 +47,7 @@ three.js's shader for that primitive reads it; see
 triangle's corners before either backend sees it, so both receive the moved
 depths and agree without a device lane.
 """
+from core.ordinal import ordinal_valid
 
 from math.vector3 import Vector3
 from render.blend import Rgba
@@ -76,7 +77,7 @@ struct DepthFunc(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a depth function.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime NEVER_DEPTH = DepthFunc(0)
@@ -103,7 +104,7 @@ struct DepthMode(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a depth mode.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # The projection's own depth: -1 at the near plane, 1 at the far plane,
@@ -220,7 +221,7 @@ struct StencilFunc(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a stencil function.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime NEVER_STENCIL_FUNC = StencilFunc(0)
@@ -247,7 +248,7 @@ struct StencilOp(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a stencil operation.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime ZERO_STENCIL_OP = StencilOp(0)

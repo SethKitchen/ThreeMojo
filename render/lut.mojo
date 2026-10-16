@@ -29,6 +29,7 @@ range of no width, a value that is not a number, and a custom map that does
 not run from zero to one in order are refused. three.js gives no color for
 them.
 """
+from core.ordinal import ordinal_valid
 
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
@@ -52,7 +53,7 @@ struct ColorMapName(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a preset.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 # Blue, cyan, green, yellow, red. three.js: `'rainbow'`.

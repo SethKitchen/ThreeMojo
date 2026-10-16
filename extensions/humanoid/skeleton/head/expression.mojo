@@ -27,6 +27,7 @@ This is not a three.js port. See Extensions.
     face.add_viseme(OH, 1.0)
     face.apply(scene.meshes[skin])
 """
+from core.ordinal import ordinal_valid
 
 from objects.mesh import Mesh
 
@@ -44,7 +45,7 @@ struct FacialExpression(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named expression."""
-        return self.value >= 0 and self.value <= FEAR.value
+        return ordinal_valid(self.value, FEAR.value)
 
 
 comptime NEUTRAL = FacialExpression(0)
@@ -70,7 +71,7 @@ struct Viseme(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named viseme."""
-        return self.value >= 0 and self.value <= OU.value
+        return ordinal_valid(self.value, OU.value)
 
 
 # Silence: the mouth at rest.

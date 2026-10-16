@@ -21,7 +21,7 @@ paired, authored on the right and mirrored on x for the left.
     var d = torso_lymph_distance(dims, THORACIC_DUCT, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     template_points,

@@ -49,6 +49,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid
 
 from std.math import isfinite
 
@@ -115,7 +116,7 @@ struct RenderableKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the kind's name.

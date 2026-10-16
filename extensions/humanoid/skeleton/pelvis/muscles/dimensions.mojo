@@ -30,7 +30,7 @@ pelvic vessels, nerves and lymphatics run on to those points.
     var d = pelvis_muscle_distance(dims, PIRIFORMIS, RIGHT, dims.gt)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec

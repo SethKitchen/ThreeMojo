@@ -19,6 +19,7 @@ so a caller can refuse inputs it does not trust:
   read shows.
 - `DESIGN`: a modeling choice or a unit conversion, not a measurement.
 """
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -33,7 +34,7 @@ struct Evidence(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for the five grades.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
     def is_measured(self) -> Bool:
         """Return whether a source we read shows the value.
@@ -41,7 +42,7 @@ struct Evidence(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for `FROM_ABSTRACT`, `FROM_TEXT` and `CROSS_CHECKED`.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime FROM_ABSTRACT = Evidence(0)

@@ -10,6 +10,7 @@ Bone pores are included in the apparent-density regions. Their fluid and
 marrow mass is not added separately. Unresolved soft tissue uses fat as
 an explicit density proxy.
 """
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -25,7 +26,7 @@ struct LimbRegion(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for one of the seven named assignments.
         """
-        return self.value >= 0 and self.value < 7
+        return ordinal_valid(self.value, 7 - 1)
 
 
 comptime DERMIS_REGION = LimbRegion(0)

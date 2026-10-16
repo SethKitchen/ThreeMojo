@@ -24,7 +24,7 @@ is anterior.
     var d = pelvis_ligament_distance(dims, INGUINAL, RIGHT, dims.gt)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,

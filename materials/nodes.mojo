@@ -127,6 +127,7 @@ storage buffers and the statements' results through `NodeSource`.
 level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
+from core.ordinal import ordinal_valid
 
 from lights.shadow import ShadowShape
 from materials.compute_ids import (
@@ -668,7 +669,7 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an output.
         """
-        return self.value >= 0 and self.value < NODE_OUTPUT_COUNT
+        return ordinal_valid(self.value, NODE_OUTPUT_COUNT - 1)
 
     def value_type(self) -> ValueType:
         """Return the type a node given this output must have.
@@ -749,7 +750,7 @@ struct NodeContext(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero to six.
         """
-        return self.value >= 0 and self.value < NODE_CONTEXT_COUNT
+        return ordinal_valid(self.value, NODE_CONTEXT_COUNT - 1)
 
     def is_corner(self) -> Bool:
         """Return True if this is one of the triangle's three corners.

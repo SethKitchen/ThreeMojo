@@ -20,6 +20,7 @@ screen to a whole pixel from the center, in its vertex node. A renderer
 with `snap_vertices` on does the same to each corner of a frame before it
 is drawn.
 """
+from core.ordinal import ordinal_valid
 
 from materials.material import BLEND, Material
 from render.rasterizer import Corner, RasterVertex
@@ -40,7 +41,7 @@ struct DrawFilter(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a filter.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Every draw: what a renderer draws by default.

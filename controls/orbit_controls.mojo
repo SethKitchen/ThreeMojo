@@ -33,6 +33,7 @@ does. `MapControls` in `controls.map_controls` pans that way.
 Differences from three.js: touch input and a target radius limit are not
 ported.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -89,7 +90,7 @@ struct OrbitAction(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an action.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 comptime NO_ACTION = OrbitAction(0)

@@ -23,7 +23,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_nerve_distance(dims, MEDIAN_BRANCHES, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field

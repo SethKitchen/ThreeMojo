@@ -21,6 +21,7 @@ attribute: one number per vertex that says which zone of the model the
 vertex belongs to. three.js's materials branch on it. `PartId` is that
 number as a type, and `part` tags a geometry with one.
 """
+from core.ordinal import ordinal_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
@@ -58,7 +59,7 @@ struct PartId(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the code is from zero to eight.
         """
-        return self.value >= 0 and self.value < PART_ID_COUNT
+        return ordinal_valid(self.value, PART_ID_COUNT - 1)
 
 
 def generator_random(seed: Int) -> SeededRandom:

@@ -53,6 +53,7 @@ This does not promise identical texels from every hardware decode mode.
 when one block does not unpack, and three.js throws. Here the decode
 raises.
 """
+from core.ordinal import ordinal_valid
 
 from render.compressed_texture import check_decoded_size
 from render.exr import half_to_float
@@ -85,7 +86,7 @@ struct AstcProfile(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for UNORM, sRGB or HDR; False for every other value.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the profile's number.
@@ -113,7 +114,7 @@ struct EndpointMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for one of the sixteen modes."""
-        return self.value >= 0 and self.value <= 15
+        return ordinal_valid(self.value, 15)
 
     def is_ldr(self) -> Bool:
         """Return True for an LDR mode, whose endpoints are eight bits."""

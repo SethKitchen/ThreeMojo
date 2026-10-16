@@ -18,7 +18,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = ligament_distance(dims, ANTERIOR_TALOFIBULAR, dims.talar_head)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,

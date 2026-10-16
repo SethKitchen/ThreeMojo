@@ -60,6 +60,7 @@ Universal 1.50. It does not know UASTC HDR 6x6, XUASTC LDR or XUBC7, and
 three.js finds no target for UASTC HDR with alpha, so this reader
 refuses them too.
 """
+from core.ordinal import ordinal_valid
 
 from core.binary import little_endian_u32
 from render.compressed_texture import (
@@ -340,7 +341,7 @@ struct Supercompression(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if the specification defines the scheme."""
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the scheme's name.

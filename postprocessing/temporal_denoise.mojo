@@ -38,6 +38,7 @@ the camera takes the denoise's second tangent, as three.js means it to.
 The specular mode, which reprojects the hit point along the ray length an
 SSR pass leaves in alpha, is not ported.
 """
+from core.ordinal import ordinal_valid
 
 from render.color_math import floor_channels
 from math.matrix4 import Matrix4
@@ -87,7 +88,7 @@ struct AlphaSource(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a source.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # `'raylength'`: the distance to what a ray hit, three.js's default.

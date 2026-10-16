@@ -35,7 +35,7 @@ template. Call `validate` at every public consumer of an edited copy.
     var d = pelvis_bone_distance(dims, SACRUM, dims.promontory)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (

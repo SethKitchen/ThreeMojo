@@ -25,7 +25,7 @@ parameters. They are not a cited cross-section table.
     var d = head_muscle_distance(dims, MASSETER, RIGHT, p)
 """
 
-from extensions.humanoid.skeleton.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
