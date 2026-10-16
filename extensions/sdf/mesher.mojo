@@ -484,14 +484,7 @@ def _mesh_part(
 ) raises -> SurfaceMesh:
     # `mesh_part` with the first pass's margin, in half-diagonals.
     check_cell(cell, block)
-    if not (
-        isfinite(low.x)
-        and isfinite(low.y)
-        and isfinite(low.z)
-        and isfinite(high.x)
-        and isfinite(high.y)
-        and isfinite(high.z)
-    ):
+    if not (low.is_finite() and high.is_finite()):
         raise Error("A mesh box must have finite coordinates")
     if not (high.x > low.x and high.y > low.y and high.z > low.z):
         raise Error("A mesh box must not be empty")

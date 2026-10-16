@@ -109,14 +109,7 @@ def _plane_point_constant_wide(normal: Vector3, point: Vector3) -> Float32:
     var left = [Float64(normal.x), Float64(normal.y), Float64(normal.z)]
     var right = [Float64(point.x), Float64(point.y), Float64(point.z)]
     var product: Float64
-    if (
-        isfinite(normal.x)
-        and isfinite(normal.y)
-        and isfinite(normal.z)
-        and isfinite(point.x)
-        and isfinite(point.y)
-        and isfinite(point.z)
-    ):
+    if normal.is_finite() and point.is_finite():
         # Each widened Float32 product is exact in Float64. An expansion
         # also keeps a small middle term when the large terms cancel.
         product = _sum_products[3](left, right)
@@ -410,14 +403,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
         if self.is_empty():
             return Sphere.empty()
         var middle = self.center()
-        if not (
-            isfinite(self.min.x)
-            and isfinite(self.min.y)
-            and isfinite(self.min.z)
-            and isfinite(self.max.x)
-            and isfinite(self.max.y)
-            and isfinite(self.max.z)
-        ):
+        if not (self.min.is_finite() and self.max.is_finite()):
             return Sphere(middle, self.size().length() * 0.5)
         var radius = _radius_up(
             _extent_about_center(self.min.x, self.max.x, middle.x),

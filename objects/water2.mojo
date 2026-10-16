@@ -380,8 +380,7 @@ def _finite_flow(
 ) -> Bool:
     """Return True if every number of a water's flow is finite."""
     return (
-        isfinite(direction.x)
-        and isfinite(direction.y)
+        direction.is_finite()
         and isfinite(speed.to(PER_SECOND))
         and isfinite(reflectivity)
         and isfinite(scale)

@@ -733,8 +733,7 @@ def check_pass(step: Pass) raises:
         and isfinite(step.scale)
         and isfinite(step.angle.value)
         and isfinite(step.time)
-        and isfinite(step.center.x)
-        and isfinite(step.center.y)
+        and step.center.is_finite()
     ):
         raise Error("A pass setting must be finite")
     if (

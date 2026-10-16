@@ -5049,11 +5049,7 @@ def _sample_footprint(
 ) -> FloatColor:
     """Read bounded taps as `Texture._sample_footprint` reads them."""
     if explicit:
-        if (
-            not isfinite(footprint.level)
-            or not isfinite(footprint.step.x)
-            or not isfinite(footprint.step.y)
-        ):
+        if not isfinite(footprint.level) or not footprint.step.is_finite():
             return TRANSPARENT_BLACK
     if footprint.taps == 1:
         if explicit:

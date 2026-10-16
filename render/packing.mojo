@@ -336,11 +336,7 @@ def check_distance_range(
             greater than `near`, which would divide by zero or turn the
             fraction around.
     """
-    if (
-        not isfinite(reference.x)
-        or not isfinite(reference.y)
-        or not isfinite(reference.z)
-    ):
+    if not reference.is_finite():
         raise Error("A distance's reference position must be finite")
     if not isfinite(near) or near < 0:
         raise Error("A near distance must be finite and not negative")
