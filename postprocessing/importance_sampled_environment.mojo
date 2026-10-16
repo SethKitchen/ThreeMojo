@@ -34,6 +34,7 @@ environment mode, which `postprocessing.ssr_node` does not port.
 
 from core.extent import positive_extent
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
@@ -321,7 +322,7 @@ def mis_power_heuristic(pdf_a: Float32, pdf_b: Float32) -> Float32:
     Returns:
         The weight.
     """
-    return pdf_a * pdf_a / (pdf_a * pdf_a + pdf_b * pdf_b)
+    return pdf_a * pdf_a / squared_length2[DType.float32](pdf_a, pdf_b)
 
 
 def d_gtr(roughness: Float32, n_dot_h: Float32, k: Float32) -> Float32:

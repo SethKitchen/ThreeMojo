@@ -44,6 +44,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
@@ -356,7 +357,7 @@ def taau_pixel(
             var cy = Float32(ty) + 0.5 + frame.jitter_y
             var ddx = p_x - cx
             var ddy = p_y - cy
-            var w = exp_f((ddx * ddx + ddy * ddy) * -2.29)
+            var w = exp_f(squared_length2[DType.float32](ddx, ddy) * -2.29)
             var c = floor_channels(
                 beauty.at(
                     min(max(tx, 0), beauty.width - 1),

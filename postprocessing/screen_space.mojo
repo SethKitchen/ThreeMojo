@@ -45,7 +45,7 @@ from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from postprocessing.sample_math import gaussian_pdf
-from math.norm import length2
+from math.norm import length2, squared_length2
 
 from core.layers import Layers
 from math.matrix4 import Matrix4
@@ -1794,7 +1794,7 @@ def outline_light(
             var c4 = sample(down, half_width, half_height, u, v - dv)
             var diff1 = (c1.r - c2.r) * 0.5
             var diff2 = (c3.r - c4.r) * 0.5
-            var d = sqrt(diff1 * diff1 + diff2 * diff2)
+            var d = sqrt(squared_length2[DType.float32](diff1, diff2))
             var seen = min(min(c1.g, c2.g), min(c3.g, c4.g))
             var color = hidden
             if 1 - seen > 0.001:
