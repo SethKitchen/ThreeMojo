@@ -966,17 +966,11 @@ struct _Loader(Movable):
 
     def text(self, node: Int, key: String, default: String) raises -> String:
         """Return an object's string under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.string(found)
+        return self.document.optional_string(node, key, default)
 
     def flag(self, node: Int, key: String, default: Bool) raises -> Bool:
         """Return an object's boolean under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.boolean(found)
+        return self.document.optional_boolean(node, key, default)
 
     def color(self, node: Int, key: String, default: Int) raises -> Color:
         """Return an object's color under `key`, a 24-bit number, or

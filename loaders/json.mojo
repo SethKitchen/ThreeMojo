@@ -414,6 +414,50 @@ struct JsonDocument(Movable):
             raise Error("JSON: expected true or false")
         return found.flag
 
+    def optional_string(
+        self, node: Int, key: String, default: String
+    ) raises -> String:
+        """Return an object's string under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The text when the key is absent.
+
+        Returns:
+            The text, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                string.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.string(found)
+
+    def optional_boolean(
+        self, node: Int, key: String, default: Bool
+    ) raises -> Bool:
+        """Return an object's boolean under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The truth when the key is absent.
+
+        Returns:
+            The truth, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                boolean.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.boolean(found)
+
     def is_null(self, node: Int) raises -> Bool:
         """Return True if a node is `null`.
 
