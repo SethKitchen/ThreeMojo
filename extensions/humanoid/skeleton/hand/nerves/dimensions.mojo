@@ -23,6 +23,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_nerve_distance(dims, MEDIAN_BRANCHES, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -57,9 +58,7 @@ struct HandNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= DIGITAL_NERVES.value
+        return ordinal_valid(self.value, DIGITAL_NERVES.value)
 
 
 # The recurrent branch and the common palmar digital nerves.

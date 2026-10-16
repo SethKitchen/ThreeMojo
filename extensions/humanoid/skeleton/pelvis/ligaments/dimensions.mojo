@@ -24,6 +24,7 @@ is anterior.
     var d = pelvis_ligament_distance(dims, INGUINAL, RIGHT, dims.gt)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -81,9 +82,7 @@ struct PelvisLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named ligament or joint tissue."""
-        if self.value < 0:
-            return False
-        return self.value <= INTERPUBIC_DISC.value
+        return ordinal_valid(self.value, INTERPUBIC_DISC.value)
 
 
 comptime ANTERIOR_SACROILIAC = PelvisLigament(0)

@@ -17,6 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = hair_distance(dims, THIGH_HAIR, Vector3(0.04, 0.2, 0.06))
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -44,9 +45,7 @@ struct HairPart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hair group."""
-        if self.value < 0:
-            return False
-        return self.value <= CALF_HAIR.value
+        return ordinal_valid(self.value, CALF_HAIR.value)
 
 
 comptime THIGH_HAIR = HairPart(0)

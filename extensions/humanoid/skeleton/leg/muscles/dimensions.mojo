@@ -23,6 +23,7 @@ not rebuild the others. Call `muscle_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import TONED, Athleticism, radius_scale
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -85,9 +86,7 @@ struct MusclePart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named muscle part."""
-        if self.value < 0:
-            return False
-        return self.value <= EXTENSOR_HALLUCIS_LONGUS.value
+        return ordinal_valid(self.value, EXTENSOR_HALLUCIS_LONGUS.value)
 
 
 comptime GLUTEUS_MAXIMUS = MusclePart(0)

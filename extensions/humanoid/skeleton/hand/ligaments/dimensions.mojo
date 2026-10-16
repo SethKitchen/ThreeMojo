@@ -22,6 +22,7 @@ authored in template centimeters. They are not a cited width table.
     var d = hand_ligament_distance(dims, FLEXOR_RETINACULUM, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.arm.ligaments.dimensions import joint_pad
@@ -58,9 +59,7 @@ struct HandLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= TRIANGULAR_FIBROCARTILAGE.value
+        return ordinal_valid(self.value, TRIANGULAR_FIBROCARTILAGE.value)
 
 
 comptime FLEXOR_RETINACULUM = HandLigament(0)

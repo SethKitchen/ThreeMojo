@@ -18,6 +18,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = ligament_distance(dims, ANTERIOR_TALOFIBULAR, dims.talar_head)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -48,9 +49,7 @@ struct FootLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named ligament."""
-        if self.value < 0:
-            return False
-        return self.value <= LISFRANC.value
+        return ordinal_valid(self.value, LISFRANC.value)
 
 
 comptime ANTERIOR_TALOFIBULAR = FootLigament(0)

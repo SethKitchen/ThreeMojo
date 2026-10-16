@@ -22,6 +22,7 @@ not a cited osteometric table.
     var d = hand_bone_distance(dims, CAPITATE, RIGHT, dims.frame.wrist)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
@@ -54,9 +55,7 @@ struct HandBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hand bone."""
-        if self.value < 0:
-            return False
-        return self.value <= DISTAL_PHALANX_5.value
+        return ordinal_valid(self.value, DISTAL_PHALANX_5.value)
 
 
 comptime SCAPHOID = HandBone(0)
@@ -102,9 +101,7 @@ struct Finger(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the five digits."""
-        if self.value < 0:
-            return False
-        return self.value <= LITTLE.value
+        return ordinal_valid(self.value, LITTLE.value)
 
 
 comptime THUMB = Finger(0)

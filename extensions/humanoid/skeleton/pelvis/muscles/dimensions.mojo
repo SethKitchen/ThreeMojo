@@ -30,6 +30,7 @@ pelvic vessels, nerves and lymphatics run on to those points.
     var d = pelvis_muscle_distance(dims, PIRIFORMIS, RIGHT, dims.gt)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -87,9 +88,7 @@ struct PelvisMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named pelvic muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= ERECTOR_SPINAE.value
+        return ordinal_valid(self.value, ERECTOR_SPINAE.value)
 
 
 comptime ILIACUS = PelvisMuscle(0)

@@ -18,6 +18,7 @@ separate diagrammatic radius; see
     var d = arm_hair_distance(dims, FOREARM_HAIR, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.skin.dimensions import ArmSkinField
@@ -42,9 +43,7 @@ struct ArmHair(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hair group."""
-        if self.value < 0:
-            return False
-        return self.value <= FOREARM_HAIR.value
+        return ordinal_valid(self.value, FOREARM_HAIR.value)
 
 
 comptime UPPER_ARM_HAIR = ArmHair(0)

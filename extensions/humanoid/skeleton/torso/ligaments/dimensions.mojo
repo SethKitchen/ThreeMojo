@@ -18,6 +18,7 @@ cited width table.
     var d = torso_ligament_distance(dims, INTERVERTEBRAL_DISCS, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.field import mix_point
 from extensions.anatomy.soft_tissue import (
@@ -57,9 +58,7 @@ struct TorsoLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= CORACOCLAVICULAR_LIGAMENT.value
+        return ordinal_valid(self.value, CORACOCLAVICULAR_LIGAMENT.value)
 
 
 comptime INTERVERTEBRAL_DISCS = TorsoLigament(0)

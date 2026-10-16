@@ -24,6 +24,7 @@ parameters. They are not a cited osteometric table.
     var d = head_bone_distance(dims, SKULL, dims.at(0, 84.0, -1.0))
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from extensions.humanoid.skeleton.torso.sweep import (
@@ -53,9 +54,7 @@ struct HeadBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named head bone."""
-        if self.value < 0:
-            return False
-        return self.value <= HYOID.value
+        return ordinal_valid(self.value, HYOID.value)
 
 
 comptime C1 = HeadBone(0)

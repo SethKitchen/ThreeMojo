@@ -21,6 +21,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, MEDIAL_PLANTAR_NERVE, dims.navicular)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -56,9 +57,7 @@ struct FootNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named foot nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= SAPHENOUS_NERVE.value
+        return ordinal_valid(self.value, SAPHENOUS_NERVE.value)
 
 
 comptime TIBIAL_NERVE = FootNerve(0)

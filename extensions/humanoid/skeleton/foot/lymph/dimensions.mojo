@@ -20,6 +20,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, DORSAL_LYMPHATICS, dims.mt2_head)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -54,9 +55,7 @@ struct FootLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic trunk."""
-        if self.value < 0:
-            return False
-        return self.value <= LATERAL_COLLECTORS.value
+        return ordinal_valid(self.value, LATERAL_COLLECTORS.value)
 
 
 comptime DORSAL_LYMPHATICS = FootLymph(0)

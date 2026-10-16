@@ -16,6 +16,7 @@ authored in template centimeters. They are not a cited width table.
     var d = head_ligament_distance(dims, LARYNX, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import CERVICAL, HeadDimensions
 from extensions.anatomy.soft_tissue import (
@@ -48,9 +49,7 @@ struct HeadLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= TRACHEA.value
+        return ordinal_valid(self.value, TRACHEA.value)
 
 
 comptime CERVICAL_DISCS = HeadLigament(0)

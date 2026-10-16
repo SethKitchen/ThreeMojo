@@ -19,6 +19,7 @@ centimeters. They are not a cited hair density table; see
     var d = head_hair_distance(dims, SCALP_HAIR, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.genome import BROW_THICKNESS, HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, BodySide
@@ -62,9 +63,7 @@ struct HeadHair(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named group."""
-        if self.value < 0:
-            return False
-        return self.value <= EYEBROWS.value
+        return ordinal_valid(self.value, EYEBROWS.value)
 
 
 # Across the midline.

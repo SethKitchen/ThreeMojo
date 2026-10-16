@@ -25,6 +25,7 @@ separate diagrammatic minimum radius.
     var d = torso_vessel_distance(dims, THORACIC_AORTA, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     along_path,
@@ -58,9 +59,7 @@ struct TorsoVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= SUBCLAVIAN_VEIN.value
+        return ordinal_valid(self.value, SUBCLAVIAN_VEIN.value)
 
 
 comptime THORACIC_AORTA = TorsoVessel(0)

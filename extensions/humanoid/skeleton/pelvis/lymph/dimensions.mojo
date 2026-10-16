@@ -19,6 +19,7 @@ left.
     var d = pelvis_lymph_distance(dims, SACRAL_NODES, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -61,9 +62,7 @@ struct PelvisLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named node group or trunk."""
-        if self.value < 0:
-            return False
-        return self.value <= ILIAC_LYMPHATICS.value
+        return ordinal_valid(self.value, ILIAC_LYMPHATICS.value)
 
 
 comptime EXTERNAL_ILIAC_NODES = PelvisLymph(0)

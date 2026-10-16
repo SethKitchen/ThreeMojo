@@ -19,6 +19,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = foot_muscle_distance(dims, ABDUCTOR_HALLUCIS, dims.foot.heel)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -59,9 +60,7 @@ struct FootMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named foot muscle or tendon."""
-        if self.value < 0:
-            return False
-        return self.value <= EXTENSOR_HALLUCIS_BREVIS.value
+        return ordinal_valid(self.value, EXTENSOR_HALLUCIS_BREVIS.value)
 
 
 comptime CALCANEAL_TENDON = FootMuscle(0)

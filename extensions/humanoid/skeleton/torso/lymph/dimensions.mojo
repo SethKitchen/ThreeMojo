@@ -21,6 +21,7 @@ paired, authored on the right and mirrored on x for the left.
     var d = torso_lymph_distance(dims, THORACIC_DUCT, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     template_points,
@@ -51,9 +52,7 @@ struct TorsoLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic."""
-        if self.value < 0:
-            return False
-        return self.value <= AXILLARY_NODES.value
+        return ordinal_valid(self.value, AXILLARY_NODES.value)
 
 
 comptime CISTERNA_CHYLI = TorsoLymph(0)

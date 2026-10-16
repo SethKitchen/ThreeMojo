@@ -17,6 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, SCIATIC_NERVE, Vector3(0, 0.2, -0.04))
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -44,9 +45,7 @@ struct NervePart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= SURAL_NERVE.value
+        return ordinal_valid(self.value, SURAL_NERVE.value)
 
 
 comptime FEMORAL_NERVE = NervePart(0)

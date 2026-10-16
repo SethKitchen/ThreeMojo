@@ -18,6 +18,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, INGUINAL_NODES, Vector3(0, 0.3, 0.02))
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -49,9 +50,7 @@ struct LymphPart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymph solid."""
-        if self.value < 0:
-            return False
-        return self.value <= DEEP_LYMPHATICS.value
+        return ordinal_valid(self.value, DEEP_LYMPHATICS.value)
 
 
 comptime INGUINAL_NODES = LymphPart(0)
