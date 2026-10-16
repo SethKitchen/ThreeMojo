@@ -100,7 +100,6 @@ from core.ordinal import ordinal_valid
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
-from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import (
@@ -520,11 +519,6 @@ def float_texel(
     return FloatColor(r, g, b, 1.0 if alpha == IGNORED else a)
 
 
-def mix(near: Float32, far: Float32, t: Float32) -> Float32:
-    """Return one channel a fraction `t` of the way from `near` to `far`."""
-    return mix_delta(near, far, t)
-
-
 def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     """Return one color a fraction `t` of the way to another.
 
@@ -534,12 +528,7 @@ def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     """
     var one = near.premultiplied()
     var two = far.premultiplied()
-    return FloatColor(
-        mix(one.r, two.r, t),
-        mix(one.g, two.g, t),
-        mix(one.b, two.b, t),
-        mix(one.a, two.a, t),
-    ).unpremultiplied()
+    return one.mix(two, t).unpremultiplied()
 
 
 def mix_straight(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
@@ -566,12 +555,7 @@ def mix_straight(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     Returns:
         The interpolated color, straight rather than premultiplied.
     """
-    return FloatColor(
-        mix(near.r, far.r, t),
-        mix(near.g, far.g, t),
-        mix(near.b, far.b, t),
-        mix(near.a, far.a, t),
-    )
+    return near.mix(far, t)
 
 
 def blend_texels(
@@ -644,24 +628,9 @@ def blend(
     Returns:
         The blended color.
     """
-    var top = FloatColor(
-        mix(lower_left.r, lower_right.r, across),
-        mix(lower_left.g, lower_right.g, across),
-        mix(lower_left.b, lower_right.b, across),
-        mix(lower_left.a, lower_right.a, across),
-    )
-    var bottom = FloatColor(
-        mix(upper_left.r, upper_right.r, across),
-        mix(upper_left.g, upper_right.g, across),
-        mix(upper_left.b, upper_right.b, across),
-        mix(upper_left.a, upper_right.a, across),
-    )
-    return FloatColor(
-        mix(top.r, bottom.r, down),
-        mix(top.g, bottom.g, down),
-        mix(top.b, bottom.b, down),
-        mix(top.a, bottom.a, down),
-    )
+    var top = lower_left.mix(lower_right, across)
+    var bottom = upper_left.mix(upper_right, across)
+    return top.mix(bottom, down)
 
 
 def _to_byte(value: Float32, space: ColorSpace) -> UInt8:

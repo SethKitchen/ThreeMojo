@@ -222,12 +222,7 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
             _mix(a.position.y, b.position.y, t),
             _mix(a.position.z, b.position.z, t),
         ),
-        FloatColor(
-            _mix(a.color.r, b.color.r, t),
-            _mix(a.color.g, b.color.g, t),
-            _mix(a.color.b, b.color.b, t),
-            _mix(a.color.a, b.color.a, t),
-        ),
+        a.color.mix(b.color, t),
         # Not renormalized here: a cut vertex is about to be interpolated
         # across a triangle anyway, and the fragment normalizes what it gets.
         Vector3(
@@ -242,12 +237,7 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
             _mix(a.world.y, b.world.y, t),
             _mix(a.world.z, b.world.z, t),
         ),
-        FloatColor(
-            _mix(a.emissive.r, b.emissive.r, t),
-            _mix(a.emissive.g, b.emissive.g, t),
-            _mix(a.emissive.b, b.emissive.b, t),
-            _mix(a.emissive.a, b.emissive.a, t),
-        ),
+        a.emissive.mix(b.emissive, t),
         _mix(a.line_distance, b.line_distance, t),
         _mix(a.u1, b.u1, t),
         _mix(a.v1, b.v1, t),
