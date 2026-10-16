@@ -3645,15 +3645,10 @@ def _world_at(
     var aw = corners[unsafe_offset=base + LANE_INV_W]
     var bw = corners[unsafe_offset=b_base + LANE_INV_W]
     var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-    var inv_w = wa * aw + wb * bw + wc * cw
-    var share_a = wa
-    var share_b = wb
-    var share_c = wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = wa * aw * rcp
-        share_b = wb * bw * rcp
-        share_c = wc * cw * rcp
+    var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     return Vector3(
         corners[unsafe_offset=base + LANE_WX] * share_a
         + corners[unsafe_offset=b_base + LANE_WX] * share_b
@@ -3701,15 +3696,10 @@ def _normal_at(
     var aw = corners[unsafe_offset=base + LANE_INV_W]
     var bw = corners[unsafe_offset=b_base + LANE_INV_W]
     var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-    var inv_w = wa * aw + wb * bw + wc * cw
-    var share_a = wa
-    var share_b = wb
-    var share_c = wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = wa * aw * rcp
-        share_b = wb * bw * rcp
-        share_c = wc * cw * rcp
+    var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     var facing = Vector3(
         corners[unsafe_offset=base + LANE_NX] * share_a
         + corners[unsafe_offset=b_base + LANE_NX] * share_b
@@ -4675,15 +4665,10 @@ def _uv_at(
     var aw = corners[unsafe_offset=base + LANE_INV_W]
     var bw = corners[unsafe_offset=b_base + LANE_INV_W]
     var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-    var inv_w = wa * aw + wb * bw + wc * cw
-    var share_a = wa
-    var share_b = wb
-    var share_c = wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = wa * aw * rcp
-        share_b = wb * bw * rcp
-        share_c = wc * cw * rcp
+    var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     return Vector2(
         corners[unsafe_offset=base + lane] * share_a
         + corners[unsafe_offset=b_base + lane] * share_b
@@ -7108,14 +7093,10 @@ def rasterize_kernel(
             if not shades(test, tested or hashed or covered or masked):
                 stencil = test.stencil
                 continue
-            var share_a = wa
-            var share_b = wb
-            var share_c = wc
-            if inv_w != 0:
-                var rcp = Float32(1) / inv_w
-                share_a = wa * aw * rcp
-                share_b = wb * bw * rcp
-                share_c = wc * cw * rcp
+            var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+            var share_a = shares[0]
+            var share_b = shares[1]
+            var share_c = shares[2]
             # The metalness and roughness a physical surface settles on,
             # as `rasterize_shaded` keeps them; zero for every other.
             var frag_metal = Float32(0)
