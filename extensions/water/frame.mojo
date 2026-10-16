@@ -74,7 +74,7 @@ from math.finite import positive_finite
 from math.utils import rec709_luminance
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.tasks import TaskGroup
 from std.math import cos, exp, isfinite, pow, sin, sqrt
@@ -731,11 +731,7 @@ def lit_radiance[
     var disc = smoothstep(0.99996, 0.999985, mu) * 18.0
     above = above + Vector3(1.0, 0.90, 0.74) * (6.0 * disc)
     var horizon = smoothstep(-0.0005, 0.0015, rd.y)
-    return Vector3(
-        color.x + (above.x - color.x) * horizon,
-        color.y + (above.y - color.y) * horizon,
-        color.z + (above.z - color.z) * horizon,
-    )
+    return mix_delta3(color, above, horizon)
 
 
 def _wave_height[

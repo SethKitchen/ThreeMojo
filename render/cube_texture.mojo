@@ -94,7 +94,7 @@ from math.arc_tangent import atan2_float32
 from math.utils import clamp
 from math.euler import Euler
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.cube_uv import (
     CUBE_UV_EXTRA_COPIES,
     CUBE_UV_MIN_MIP,
@@ -738,11 +738,7 @@ def rough_reflection(
     """
     var bounce = reflected(toward_eye, normal)
     var bend = roughness * roughness
-    var bent = Vector3(
-        bounce.x + (normal.x - bounce.x) * bend,
-        bounce.y + (normal.y - bounce.y) * bend,
-        bounce.z + (normal.z - bounce.z) * bend,
-    )
+    var bent = mix_delta3(bounce, normal, bend)
     if bent.length() != 0:
         bent.normalize()
     return bent

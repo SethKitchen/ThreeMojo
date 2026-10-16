@@ -69,7 +69,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisDimensions,
     pelvis_dimensions,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import isfinite, sqrt
 from units.si import Length
 
@@ -1051,11 +1051,7 @@ def _sort_by_reach(mut stations: List[_Station]):
 
 def _at(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     """Return the point `t` of the way from `a` to `b`."""
-    return Vector3(
-        a.x + (b.x - a.x) * t,
-        a.y + (b.y - a.y) * t,
-        a.z + (b.z - a.z) * t,
-    )
+    return mix_delta3(a, b, t)
 
 
 def _r(stature: Float32, scale: Float32, ratio: Float32) -> Float32:

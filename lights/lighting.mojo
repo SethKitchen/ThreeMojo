@@ -92,7 +92,7 @@ from math.utils import clamp, saturate
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
 from math.cross import cross_vectors
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import Color, FloatColor
 from std.math import cos, exp2, log2, max, min, pi, sqrt
 from units.si import METER
@@ -514,11 +514,7 @@ def ggx(
     if layers.iridescence > 0:
         var film = layers.iridescence_fresnel
         var weight = layers.iridescence
-        fresnel = Vector3(
-            fresnel.x + (film.x - fresnel.x) * weight,
-            fresnel.y + (film.y - fresnel.y) * weight,
-            fresnel.z + (film.z - fresnel.z) * weight,
-        )
+        fresnel = mix_delta3(fresnel, film, weight)
     if layers.anisotropic:
         var stretched = anisotropic_ggx(
             toward_light,
@@ -658,11 +654,7 @@ def physical_surface(
     var f90 = specular_intensity + (1 - specular_intensity) * metalness
     return Reflected(
         Vector3(base.x * keep, base.y * keep, base.z * keep),
-        Vector3(
-            f0.x + (base.x - f0.x) * metalness,
-            f0.y + (base.y - f0.y) * metalness,
-            f0.z + (base.z - f0.z) * metalness,
-        ),
+        mix_delta3(f0, base, metalness),
         Vector3(f90, 0, 0),
     )
 
@@ -831,11 +823,7 @@ def physical_outgoing(
         if layers.iridescence > 0:
             var film = layers.iridescence_fresnel
             var weight = layers.iridescence
-            fr = Vector3(
-                fr.x + (film.x - fr.x) * weight,
-                fr.y + (film.y - fr.y) * weight,
-                fr.z + (film.z - fr.z) * weight,
-            )
+            fr = mix_delta3(fr, film, weight)
         var fab = dfg_approx(dot_nv, roughness)
         var single = Vector3(
             fr.x * fab.x + f90 * fab.y,
@@ -902,11 +890,7 @@ def physical_outgoing(
         # three.js's `transmission_fragment`: the diffuse light, direct and
         # indirect together, gives way to what the surface shows through
         # itself. The reflection and the glow are untouched.
-        diffuse = Vector3(
-            diffuse.x + (transmitted.x - diffuse.x) * transmission,
-            diffuse.y + (transmitted.y - diffuse.y) * transmission,
-            diffuse.z + (transmitted.z - diffuse.z) * transmission,
-        )
+        diffuse = mix_delta3(diffuse, transmitted, transmission)
     var outgoing = Vector3(
         diffuse.x + specular.x + glow.x,
         diffuse.y + specular.y + glow.y,
