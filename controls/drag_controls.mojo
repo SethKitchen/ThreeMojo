@@ -41,13 +41,11 @@ from core.ordinal import ordinal_valid
 from cameras.camera import Camera
 from controls.input import (
     InputEvent,
-    MIDDLE,
+    button_choice,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
-    PRIMARY,
     PointerButton,
-    SECONDARY,
 )
 from core.assets import Assets
 from core.object3d import NO_PARENT, NodeId
@@ -222,13 +220,13 @@ struct DragControls(Copyable, Movable):
         """
         if not button.is_valid():
             raise Error("Invalid pointer button: ", button.value)
-        var action = NO_DRAG
-        if button == PRIMARY:
-            action = self.primary_action
-        elif button == MIDDLE:
-            action = self.middle_action
-        elif button == SECONDARY:
-            action = self.secondary_action
+        var action = button_choice(
+            button,
+            self.primary_action,
+            self.middle_action,
+            self.secondary_action,
+            NO_DRAG,
+        )
         if not action.is_valid():
             raise Error("Invalid drag action: ", action.value)
         return action

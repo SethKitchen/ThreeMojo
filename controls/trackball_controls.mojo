@@ -50,16 +50,14 @@ from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
 from controls.input import (
     InputEvent,
     KEY_DOWN,
+    button_choice,
     require_input,
     KEY_UP,
     Key,
-    MIDDLE,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
-    PRIMARY,
     PointerButton,
-    SECONDARY,
     WHEEL,
 )
 from controls.orbit_controls import DOLLY, NO_ACTION, OrbitAction, PAN, ROTATE
@@ -254,13 +252,13 @@ struct TrackballControls(Copyable, Movable):
         Raises:
             Error: If the action set for the button is invalid.
         """
-        var action = NO_ACTION
-        if button == PRIMARY:
-            action = self.primary_action
-        elif button == MIDDLE:
-            action = self.middle_action
-        elif button == SECONDARY:
-            action = self.secondary_action
+        var action = button_choice(
+            button,
+            self.primary_action,
+            self.middle_action,
+            self.secondary_action,
+            NO_ACTION,
+        )
         if not action.is_valid():
             raise Error("Invalid trackball action: ", action.value)
         return action
