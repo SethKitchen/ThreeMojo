@@ -88,6 +88,7 @@ from extensions.animals.species.bird_rig import (
     vane_width,
     wing_fk,
     wing_joints,
+    wing_arm,
     wing_normal,
     wing_segment,
 )
@@ -1922,14 +1923,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     if not juv:
         shield = _shield(t)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var sh = rig.j("shoulder" + side)
-        var el = rig.j("elbow" + side)
-        var wr = rig.j("wrist" + side)
-        var tp = rig.j("handTip" + side)
-        var n = wing_normal(rig, side)
-        var ulna = rig.bone("ulna" + side)
-        var hand = rig.bone("hand" + side)
+        var s, sh, el, wr, tp, n, humerus, ulna, hand = wing_arm(rig, side)
         var th = 0.012 * wk * at
         wing_segment(
             m,
@@ -1937,7 +1931,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             n,
             sh,
             el,
-            rig.bone("humerus" + side),
+            humerus,
             th,
             0.02 * wk,
             0.005 * wk,
