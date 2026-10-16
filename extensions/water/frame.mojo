@@ -921,11 +921,8 @@ def _underwater[
         sun_light.z * mid_abs.z * (phase + 0.02)
         + sky_irr.z * sky_mid.z / (4.0 * pi),
     )
-    var scatter = Vector3(
-        sig_s.x / sig_t.x * mid.x * (1.0 - view_abs.x) * 3.2,
-        sig_s.y / sig_t.y * mid.y * (1.0 - view_abs.y) * 3.2,
-        sig_s.z / sig_t.z * mid.z * (1.0 - view_abs.z) * 3.2,
-    )
+    var open = Vector3(1.0 - view_abs.x, 1.0 - view_abs.y, 1.0 - view_abs.z)
+    var scatter = (((sig_s / sig_t) * mid) * open) * 3.2
     var color = floor_l * view_abs + scatter
     return _specks(color, x, z, ray, travel, clock, sun_light)
 

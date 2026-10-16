@@ -967,11 +967,7 @@ struct Sculptor(Movable):
             )
         var origin = _point(ray.origin)
         var direction = _point(ray.direction)
-        var length_sq = (
-            direction.x * direction.x
-            + direction.y * direction.y
-            + direction.z * direction.z
-        )
+        var length_sq = direction.dot(direction)
         if (
             not isfinite(origin.x)
             or not isfinite(origin.y)

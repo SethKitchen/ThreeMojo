@@ -350,11 +350,7 @@ def reflected(toward_eye: Vector3, normal: Vector3) -> Vector3:
         The reflected direction, unit length for unit inputs.
     """
     var along = normal.dot(toward_eye)
-    return Vector3(
-        2 * along * normal.x - toward_eye.x,
-        2 * along * normal.y - toward_eye.y,
-        2 * along * normal.z - toward_eye.z,
-    )
+    return normal * (2 * along) - toward_eye
 
 
 def refracted(toward_eye: Vector3, normal: Vector3, ratio: Float32) -> Vector3:
@@ -385,11 +381,7 @@ def refracted(toward_eye: Vector3, normal: Vector3, ratio: Float32) -> Vector3:
     if k < 0:
         return Vector3(0, 0, 0)
     var bend = ratio * along + sqrt(k)
-    return Vector3(
-        -ratio * toward_eye.x - bend * normal.x,
-        -ratio * toward_eye.y - bend * normal.y,
-        -ratio * toward_eye.z - bend * normal.z,
-    )
+    return (-toward_eye) * ratio - normal * bend
 
 
 @fieldwise_init

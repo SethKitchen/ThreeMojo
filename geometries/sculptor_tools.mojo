@@ -240,7 +240,7 @@ def _half_edge_split(
     _set_point(mesh.normals, mid, sum * 0.5)
     var u1 = _unit_or_x(n1)
     var u2 = _unit_or_x(n2)
-    var d = u1.x * u2.x + u1.y * u2.y + u1.z * u2.z
+    var d = u1.dot(u2)
     var angle = pi if d <= -1 else (0.0 if d >= 1 else acos(d))
     var ex = p1.x - p2.x
     var ey = p1.y - p2.y
@@ -609,9 +609,7 @@ def _dec_edge_collapse(
     mean_y /= Float64(ring_count)
     mean_z /= Float64(ring_count)
     var p1 = point_of(mesh.vertices, v1)
-    var dot_n = (
-        n.x * (mean_x - p1.x) + n.y * (mean_y - p1.y) + n.z * (mean_z - p1.z)
-    )
+    var dot_n = n.dot(Point3(mean_x, mean_y, mean_z) - p1)
     _set_point(
         mesh.vertices,
         v1,
@@ -867,7 +865,7 @@ def smooth_tangent_verts(
         var unit = reciprocal_normalized3(n.x, n.y, n.z)
         n = Point3(unit[0], unit[1], unit[2])
         var s = point_of(smooth, i)
-        var d = n.x * (s.x - v.x) + n.y * (s.y - v.y) + n.z * (s.z - v.z)
+        var d = n.dot(s - v)
         _set_point(mesh.vertices, vertex, v + (s - n * d - v) * intensity)
 
 
@@ -888,7 +886,7 @@ def get_front_vertices(
     var front = List[Int]()
     for vertex in vertices:  # pragma: no branch
         var n = mesh._normal_at(vertex)
-        if n.x * eye_dir.x + n.y * eye_dir.y + n.z * eye_dir.z <= 0:
+        if n.dot(eye_dir) <= 0:
             front.append(vertex)
     return front^
 
@@ -1008,11 +1006,7 @@ def tool_flatten(
     var comp = -1.0 if negative else 1.0
     for vertex in vertices:  # pragma: no branch
         var p = point_of(mesh.vertices, vertex)
-        var dist_to_plane = (
-            (p.x - plane_point.x) * normal.x
-            + (p.y - plane_point.y) * normal.y
-            + (p.z - plane_point.z) * normal.z
-        )
+        var dist_to_plane = (p - plane_point).dot(normal)
         if dist_to_plane * comp > 0:
             continue
         var dist = _reach(mesh, vertex, center, radius)

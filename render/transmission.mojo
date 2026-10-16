@@ -352,11 +352,7 @@ def refracted(incident: Vector3, normal: Vector3, eta: Float32) -> Vector3:
     if k < 0:
         return Vector3(0, 0, 0)
     var along = eta * cosine + sqrt(k)
-    return Vector3(
-        incident.x * eta - normal.x * along,
-        incident.y * eta - normal.y * along,
-        incident.z * eta - normal.z * along,
-    )
+    return incident * eta - normal * along
 
 
 def transmission_ray(
