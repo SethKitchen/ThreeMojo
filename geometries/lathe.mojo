@@ -35,14 +35,8 @@ lathe is where a shape drawn by hand meets the scene, and the drawing is
 made of plain points.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    LATHE_GEOMETRY,
-    NORMAL,
-    POSITION,
-    UV,
-)
+from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
+from geometries.surface import indexed_surface
 from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
 from math.norm import normalized2
@@ -221,10 +215,7 @@ def lathe(
             index.append(b)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = LATHE_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_json("points", _points_json(points))

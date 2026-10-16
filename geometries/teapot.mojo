@@ -28,8 +28,8 @@ is exact for every choice of parts, so the index here is simply the
 triangles kept.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
 from std.math import sqrt
 from units.si import Length, METER
 
@@ -1681,8 +1681,5 @@ def teapot(
         surface_count += 1
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(vertices^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, vertices^, normals^, uvs^, index^)
     return geometry^

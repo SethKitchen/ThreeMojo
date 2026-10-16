@@ -38,7 +38,6 @@ An outline that crosses itself is not refused. earcut fills it in, as
 three.js does, and the triangles follow the outline where it crosses.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
@@ -49,6 +48,7 @@ from core.buffer_geometry import (
 )
 from core.user_data import UserData
 from geometries.earcut import triangulate_shape
+from geometries.surface import indexed_surface
 from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
@@ -574,10 +574,7 @@ def shape_geometry(
         uvs.append(point.y)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(cut.index.copy())
+    indexed_surface(geometry, data^, normals^, uvs^, cut.index.copy())
     geometry.kind = SHAPE_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number("curveSegments", Float64(curve_segments))
@@ -625,10 +622,7 @@ def shape_geometry(
             index.append(corner + offset)
         counts.append(len(part.index))
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     var start = 0
     for at in range(len(counts)):  # pragma: no branch
         geometry.add_group(start, counts[at], MaterialIndex(at))

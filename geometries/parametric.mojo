@@ -34,8 +34,8 @@ limits, and explicit zero and nonfinite rules.
 
 from math.triangle_normal import normal_or_zero
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
 from math.vector3 import Vector3
 from std.math import cos, isfinite, pi, sin
 
@@ -177,10 +177,7 @@ def parametric[
             index.append(d)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     return geometry^
 
 

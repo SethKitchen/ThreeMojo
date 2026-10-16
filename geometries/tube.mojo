@@ -36,14 +36,8 @@ unturned would flip the binormal by a half turn, which is a choice no
 transport made. three.js checks neither; here both raise.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    NORMAL,
-    POSITION,
-    TUBE_GEOMETRY,
-    UV,
-)
+from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
+from geometries.surface import indexed_surface
 from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.grid import grid_index
@@ -258,8 +252,11 @@ def _sweep(
             uvs.append(v)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normal_data^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(grid_index(rings, radial_segments, False))
+    indexed_surface(
+        geometry,
+        data^,
+        normal_data^,
+        uvs^,
+        grid_index(rings, radial_segments, False),
+    )
     return geometry^

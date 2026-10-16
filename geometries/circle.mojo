@@ -33,15 +33,12 @@ triangle of each inner cell has two corners there and no area. A rasterizer
 draws nothing for such a triangle, so the disk looks as `circle` draws it.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     CIRCLE_GEOMETRY,
-    NORMAL,
-    POSITION,
     RING_GEOMETRY,
-    UV,
 )
+from geometries.surface import indexed_surface
 from core.user_data import UserData
 from std.math import cos, isfinite, sin
 from units.si import Angle, Length, METER, RADIAN, TURN
@@ -151,10 +148,7 @@ def circle(
         index.append(0)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = CIRCLE_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number("radius", Float64(radius.to(METER)))
@@ -251,10 +245,7 @@ def ring(
             index.append(d)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = RING_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number(

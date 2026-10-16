@@ -23,14 +23,8 @@ these itself, as `examples/floor.mojo` does; three.js would reach for
 `texture.repeat`, which is not ported yet.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    NORMAL,
-    PLANE_GEOMETRY,
-    POSITION,
-    UV,
-)
+from core.buffer_geometry import BufferGeometry, PLANE_GEOMETRY
+from geometries.surface import indexed_surface
 from core.user_data import UserData
 from units.si import Length, METER
 
@@ -108,10 +102,7 @@ def plane(
             index.append(d)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = PLANE_GEOMETRY
     geometry.parameters = UserData()
     geometry.parameters.set_number("width", Float64(width.to(METER)))
