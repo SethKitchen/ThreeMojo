@@ -20,13 +20,13 @@ level below it. The default is `xhigh`.
 """
 
 from examples.output import example_destination, hang_centered, spin_pair
+from examples.studio import room_lit_scene, studio_renderer
 from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from environments.room_environment import room_environment
 from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.quality import (
     anatomy_detail,
@@ -66,15 +66,12 @@ from extensions.humanoid.skeleton.look import (
 )
 from geometries.plane import plane
 from lights.light import directional_light
-from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import standard_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
@@ -113,12 +110,7 @@ def main() raises:
         "g",
     )
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(20, 21, 24))
-    renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
-    renderer.tone_mapping_exposure = 1.1
-    renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
-
+    var renderer = studio_renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var bone = assets.materials.add(
         bone_physical(assets.textures.add(bone_albedo(64)))
@@ -129,15 +121,7 @@ def main() raises:
         muscle_physical(assets.textures.add(muscle_albedo(64)))
     )
     var looks = add_complexion(assets, person.genome)
-
-    # Image-based light: three.js's RoomEnvironment through a PMREM.
-    var room = room_environment(assets)
-    room.update()
-    var lighting = pmrem_from_scene(renderer, room, assets, size=64)
-
-    var scene = Scene()
-    scene.environment = assets.cube_textures.add(lighting^)
-    scene.environment_intensity = 0.55
+    var scene = room_lit_scene(renderer, assets)
 
     # The head's middle: between the ears, a little below the eyes. The
     # floor meets the neck at its base, where the torso would go on.

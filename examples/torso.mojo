@@ -20,13 +20,13 @@ level below it. The default is `high`.
 """
 
 from examples.output import example_destination, spin_frame, stand_on_floor
+from examples.studio import room_lit_scene, studio_renderer, tissue_materials
 from examples.preview import turn_about_vertical
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
-from environments.room_environment import room_environment
 from extensions.humanoid.quality import (
     anatomy_detail,
     hand_skin_detail,
@@ -40,16 +40,8 @@ from extensions.humanoid.skeleton.simplify import (
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.bone import bone_albedo, bone_physical
 from extensions.humanoid.skeleton.leg.assembly import assemble_leg
-from extensions.humanoid.skeleton.look import (
-    add_complexion,
-    cartilage_physical,
-    ligament_physical,
-    muscle_albedo,
-    muscle_physical,
-    tendon_physical,
-)
+from extensions.humanoid.skeleton.look import add_complexion
 from extensions.humanoid.skeleton.pelvis.assembly import assemble_pelvis
 from extensions.humanoid.skeleton.torso.body import add_body
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -70,15 +62,12 @@ from extensions.humanoid.skeleton.head.hair.shading import HairLight
 from extensions.humanoid.skeleton.head.hair.strands import add_groom
 from geometries.plane import plane
 from lights.light import directional_light
-from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import standard_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from render.tonemap import ACES_FILMIC_TONE_MAPPING
-from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
@@ -124,32 +113,16 @@ def main() raises:
         "  diaphragm", torso_muscle_mass(person, DIAPHRAGM).mass.to(GRAM), "g"
     )
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(20, 21, 24))
-    renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
-    renderer.tone_mapping_exposure = 1.1
-    renderer.shadow_map_type = PCF_SOFT_SHADOW_MAP
-
+    var renderer = studio_renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var bone = assets.materials.add(
-        bone_physical(assets.textures.add(bone_albedo(64)))
-    )
-    var cartilage = assets.materials.add(cartilage_physical())
-    var ligament = assets.materials.add(ligament_physical())
-    var muscle = assets.materials.add(
-        muscle_physical(assets.textures.add(muscle_albedo(64)))
-    )
-    var tendon = assets.materials.add(tendon_physical())
+    var paints = tissue_materials(assets)
+    var bone = paints.bone
+    var cartilage = paints.cartilage
+    var ligament = paints.ligament
+    var muscle = paints.muscle
+    var tendon = paints.tendon
     var looks = add_complexion(assets, person.genome, whole_body=True)
-
-    # Image-based light: three.js's RoomEnvironment through a PMREM.
-    var room = room_environment(assets)
-    room.update()
-    var lighting = pmrem_from_scene(renderer, room, assets, size=64)
-
-    var scene = Scene()
-    scene.environment = assets.cube_textures.add(lighting^)
-    scene.environment_intensity = 0.55
+    var scene = room_lit_scene(renderer, assets)
 
     # The soles' height below the hip joint centers: the leg's origin,
     # its plafond, and the foot's ankle height.
