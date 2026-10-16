@@ -307,6 +307,28 @@ struct JsonDocument(Movable):
             raise Error("JSON: expected a whole number")
         return whole
 
+    def optional_integer(
+        self, node: Int, key: String, default: Int
+    ) raises -> Int:
+        """Return an object's whole number under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The value when the key is absent.
+
+        Returns:
+            The number, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                whole number.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.integer(found)
+
     def string(self, node: Int) raises -> String:
         """Return a string.
 

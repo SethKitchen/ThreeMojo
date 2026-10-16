@@ -968,10 +968,7 @@ struct _Loader(Movable):
 
     def integer(self, node: Int, key: String, default: Int) raises -> Int:
         """Return an object's whole number under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        return self.document.integer(found)
+        return self.document.optional_integer(node, key, default)
 
     def text(self, node: Int, key: String, default: String) raises -> String:
         """Return an object's string under `key`, or `default`."""
