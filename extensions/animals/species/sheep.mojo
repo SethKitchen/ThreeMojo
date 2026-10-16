@@ -63,8 +63,10 @@ from extensions.animals.species.hoofed import (
     head_frame,
     hoofed_bones,
     ClovenHoof,
+    HornPoint,
     add_cloven_hoof,
     dewclaw_balls,
+    horn_parameter,
 )
 from extensions.animals.traits import Traits
 from extensions.sdf.vector import (
@@ -428,15 +430,6 @@ def sheep_rig(t: Traits) raises -> Rig:
     hoofed_bones(rig, TAIL_SEGS)
     _ = rig.add_bone("udder", "udderTop", "udderBot", "pelvis")
     return rig^
-
-
-@fieldwise_init
-struct HornPoint(ImplicitlyCopyable):
-    """One station of a horn's center line: where, how thick, how far."""
-
-    var p: V3
-    var r: Float64
-    var t: Float64
 
 
 def _horn_path(t: Traits, s: Float64) -> List[HornPoint]:
@@ -2061,18 +2054,7 @@ def _wool_tag(tag: String) -> Bool:
 
 
 def _horn_t(t: Traits, p: V3) -> Float64:
-    var pth = _horn_path(t, 1.0 if p.x >= 0.0 else -1.0)
-    var best = 1e9
-    var bt = 0.0
-    for i in range(len(pth) - 1):
-        var a = pth[i].p
-        var ab = pth[i + 1].p - a
-        var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
-        var dd = length(p - (a + ab * u))
-        if dd < best:
-            best = dd
-            bt = pth[i].t + (pth[i + 1].t - pth[i].t) * u
-    return bt
+    return horn_parameter(_horn_path(t, 1.0 if p.x >= 0.0 else -1.0), p)
 
 
 def _face_flow(h: V3) -> V3:
