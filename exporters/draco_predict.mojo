@@ -61,7 +61,11 @@ from loaders.draco_attributes import (
     product32,
 )
 from loaders.draco_buffer import draco_require, to_int32, truncated_divide
-from loaders.draco_mesh import NONE, DracoCornerTable
+from loaders.draco_mesh import (
+    NONE,
+    DracoCornerTable,
+    next_parallelogram_corner,
+)
 from loaders.vrml_geometry import product
 from std.math import ceil, floor, isinf, isnan
 
@@ -615,15 +619,9 @@ struct _Scheme(Movable):
                     found.append(one.value().copy())
                     if len(found) == _MAX_PARALLELOGRAMS:
                         break
-                if first_pass:
-                    corner = data.table.swing_left(corner)
-                else:
-                    corner = data.table.swing_right(corner)
-                if corner == start:
-                    break
-                if corner == NONE and first_pass:
-                    first_pass = False
-                    corner = data.table.swing_right(start)
+                corner = next_parallelogram_corner(
+                    data.table, corner, start, first_pass
+                )
             var n = len(found)
             var offset = p * components
             var previous = _previous(values, p, components)
