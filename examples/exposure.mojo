@@ -11,9 +11,8 @@ Tone mapping runs once on the composited light of each pixel, after
 shading and fog. The curve stays put. Only the exposure changes.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
@@ -63,13 +62,15 @@ def main() raises:
     scene.add_light(directional_light(Color(255, 240, 210), lamp_node, 7.54))
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.15, 3.1),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.15, 3.1), Vector3(0, 0, 0))
 
     var frame_clock = Clock()
     frame_clock.start()

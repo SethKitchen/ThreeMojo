@@ -12,7 +12,7 @@ writes the result as a position. That is Vector3 and Quaternion doing the
 work the page describes.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -88,13 +88,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 1.1, 3.6),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 1.1, 3.6), Vector3(0, 0, 0))
 
     var frame_clock = Clock()
     frame_clock.start()

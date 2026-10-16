@@ -12,7 +12,7 @@ Each cell is drawn shrunk toward its center and lifted by its storey, so
 the shared faces between cells show as gaps.
 """
 
-from examples.output import build_and_spin, example_destination
+from examples.output import example_destination, build_and_spin, gallery_camera
 from examples.preview import Triangles
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -133,13 +133,15 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(13, 9, 14),
+        Vector3(0, 0.5, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(13, 9, 14), Vector3(0, 0.5, 0))
     return camera^
 
 

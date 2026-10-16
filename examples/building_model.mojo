@@ -12,7 +12,7 @@ plans. A window, a door, a column and a beam are added. The render view
 draws the ground storey only, so the rooms show.
 """
 
-from examples.output import build_and_spin, example_destination
+from examples.output import example_destination, build_and_spin, gallery_camera
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -181,13 +181,15 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(10, 8.5, 11),
+        Vector3(0, 1.2, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(10, 8.5, 11), Vector3(0, 1.2, 0))
     return camera^
 
 
