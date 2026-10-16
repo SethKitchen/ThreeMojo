@@ -14,7 +14,37 @@ The spot light's cone, the linear fog, and both rasterizers share
 kernel, and the parity tests hold the two to the same numbers. It lives in
 `math` rather than beside either caller so that `core.fog` and
 `lights.lighting` can both import it without importing each other.
+
+`hermite_fade` is the cubic `t * t * (3 - 2 * t)`. A waist blend, a
+complexion lattice, and a jump clip call it. Water and the SDF keep a
+fade written with `3.0`.
 """
+
+
+@always_inline
+def hermite_fade(t: Float32) -> Float32:
+    """Return the cubic fade `t * t * (3 - 2 * t)`.
+
+    Args:
+        t: The fraction, usually from zero to one.
+
+    Returns:
+        The faded fraction.
+    """
+    return t * t * (3 - 2 * t)
+
+
+@always_inline
+def hermite_fade(t: Float64) -> Float64:
+    """Return the cubic fade `t * t * (3 - 2 * t)`.
+
+    Args:
+        t: The fraction, usually from zero to one.
+
+    Returns:
+        The faded fraction.
+    """
+    return t * t * (3 - 2 * t)
 
 
 def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
@@ -39,7 +69,7 @@ def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     if x >= edge1:
         return 1
     var t = (x - edge0) / (edge1 - edge0)
-    return t * t * (3 - 2 * t)
+    return hermite_fade(t)
 
 
 def clamped_smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
@@ -58,7 +88,7 @@ def clamped_smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     """
     var fraction = (x - edge0) / (edge1 - edge0)
     var t = max(Float32(0), min(Float32(1), fraction))
-    return t * t * (3 - 2 * t)
+    return hermite_fade(t)
 
 
 def clamped_smoothstep(edge0: Float64, edge1: Float64, x: Float64) -> Float64:
@@ -77,4 +107,4 @@ def clamped_smoothstep(edge0: Float64, edge1: Float64, x: Float64) -> Float64:
     """
     var fraction = (x - edge0) / (edge1 - edge0)
     var t = max(Float64(0), min(Float64(1), fraction))
-    return t * t * (3 - 2 * t)
+    return hermite_fade(t)

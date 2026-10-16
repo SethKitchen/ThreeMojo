@@ -60,6 +60,7 @@ from extensions.humanoid.skeleton.pelvis.skin.dimensions import PelvisSkinField
 from extensions.humanoid.skeleton.place import place_mesh
 from materials.material import MaterialId
 from math.bounds import enclose_point
+from math.smoothstep import hermite_fade
 from math.vector3 import Vector3
 from std.math import max
 
@@ -158,7 +159,7 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
         # Across the band the surface morphs from the two thighs to the
         # one pelvis, so the crotch forms without a seam.
         var t = (point.y - bottom) / (top - bottom)
-        var w = t * t * (3 - 2 * t)
+        var w = hermite_fade(t)
         return self._parted(
             limbs + (self.pelvis.distance(point) - limbs) * w, point
         )

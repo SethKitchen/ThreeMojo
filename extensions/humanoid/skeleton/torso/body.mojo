@@ -89,6 +89,7 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
+from math.smoothstep import hermite_fade
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -269,7 +270,7 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         var t = (point.y - self.band_bottom) / (
             self.band_top - self.band_bottom
         )
-        var w = t * t * (3 - 2 * t)
+        var w = hermite_fade(t)
         return below + (above - below) * w
 
     def gradient(self, point: Vector3) -> Vector3:
