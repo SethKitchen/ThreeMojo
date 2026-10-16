@@ -71,6 +71,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.utils import min3
 from std.math import cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 8
@@ -1686,7 +1687,7 @@ def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:
         var c = q.c
         var r = q.r
         var u = V3((p.x - c.x) / r.x, (p.y - c.y) / r.y, (p.z - c.z) / r.z)
-        var di = (length(u) - 1.0 + 0.5 * nz) * min(r.x, min(r.y, r.z)) * 0.8
+        var di = (length(u) - 1.0 + 0.5 * nz) * min3(r.x, r.y, r.z) * 0.8
         d = min(d, di)
         if q.black:
             db = min(db, di)

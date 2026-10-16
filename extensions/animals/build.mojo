@@ -94,6 +94,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import scale_warp
+from math.utils import max3
 from materials.material import LAMBERT, PHONG, Material
 from render.framebuffer import Color
 from render.tasks import TaskGroup
@@ -265,7 +266,7 @@ def primitive_box(p: Primitive, outline: List[Float64]) -> Tuple[V3, V3]:
     var c = p.c
     var d = p.c
     if p.kind == ELLIPSOID:
-        reach = max(p.r.x, max(p.r.y, p.r.z))
+        reach = max3(p.r.x, p.r.y, p.r.z)
     elif p.kind == CONE:
         reach = max(p.r.x, p.r.y)
         d = p.b

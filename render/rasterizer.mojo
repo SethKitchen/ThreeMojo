@@ -40,7 +40,7 @@ from math.scaled_products import (
 
 from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2
-from math.utils import clamp
+from math.utils import clamp, max3, min3
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from units.si import Length, METER
@@ -467,10 +467,10 @@ def _bounds(
     Returns:
         The rows and columns to scan, possibly empty.
     """
-    var left = min(triangle.a.x, min(triangle.b.x, triangle.c.x))
-    var right = max(triangle.a.x, max(triangle.b.x, triangle.c.x))
-    var top = min(triangle.a.y, min(triangle.b.y, triangle.c.y))
-    var bottom = max(triangle.a.y, max(triangle.b.y, triangle.c.y))
+    var left = min3(triangle.a.x, triangle.b.x, triangle.c.x)
+    var right = max3(triangle.a.x, triangle.b.x, triangle.c.x)
+    var top = min3(triangle.a.y, triangle.b.y, triangle.c.y)
+    var bottom = max3(triangle.a.y, triangle.b.y, triangle.c.y)
     var lowest = height - 1
     if last_row >= 0:
         lowest = min(lowest, last_row)

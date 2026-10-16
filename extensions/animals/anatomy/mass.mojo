@@ -45,7 +45,7 @@ from extensions.sdf.ids import (
 )
 from extensions.sdf.vector import V3, dot
 from math.finite import positive_finite
-from math.utils import clamp
+from math.utils import clamp, min3
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
@@ -475,7 +475,7 @@ def _check_sampling_model(model: SdfModel) raises:
         if p.k < 0.0:
             raise Error("A sampled blend radius must be nonnegative")
         if p.kind == ELLIPSOID:
-            if min(p.r.x, min(p.r.y, p.r.z)) <= 0.0:
+            if min3(p.r.x, p.r.y, p.r.z) <= 0.0:
                 raise Error("Sampled ellipsoid radii must be positive")
         elif p.kind == CONE:
             var span = (p.b - p.c).length()
@@ -548,7 +548,7 @@ def sample_mass(
     var posed = animal.model.moved(world)
     _check_sampling_model(posed)
     for p in posed.prims:  # pragma: no branch
-        var radius = min(p.r.x, min(p.r.y, p.r.z))
+        var radius = min3(p.r.x, p.r.y, p.r.z)
         if p.kind == CONE:
             # r.z is unused for a cone, not a zero physical radius.
             radius = min(p.r.x, p.r.y)

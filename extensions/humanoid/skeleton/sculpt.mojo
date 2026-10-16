@@ -29,6 +29,7 @@ from extensions.humanoid.skeleton.field import (
 from math.box_extent import box_exterior
 from math.norm import squared_length3
 from math.cross import cross_vectors
+from math.utils import max3, min3
 from math.vector3 import Vector3, component_max, component_min
 from std.math import max, min, sqrt
 
@@ -79,7 +80,7 @@ struct Piece(Copyable, Movable):
         var qz = pz / self.radii.z
         var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
         if k1 == 0:
-            return -min(self.radii.x, min(self.radii.y, self.radii.z))
+            return -min3(self.radii.x, self.radii.y, self.radii.z)
         return k0 * (k0 - 1) / k1
 
 
@@ -155,7 +156,7 @@ struct Sculpt(Copyable, DistanceField, Movable):
     ) -> Piece:
         """Return an ellipsoid piece turned to `forward` and `up`."""
         var axes = _basis(forward, up)
-        var reach = max(radii.x, max(radii.y, radii.z))
+        var reach = max3(radii.x, radii.y, radii.z)
         return Piece(
             _ELLIPSOID,
             center,

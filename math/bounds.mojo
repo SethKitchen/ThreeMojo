@@ -64,6 +64,7 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
+from math.utils import max3, min3
 from math.vector3 import Vector3, component_max, component_min
 from math.norm import length3, _ordinary_squared
 from std.math import inf, isfinite, sqrt
@@ -1258,4 +1259,4 @@ def _separates(
     var p0 = v0.dot(axis)
     var p1 = v1.dot(axis)
     var p2 = v2.dot(axis)
-    return max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > reach
+    return max(-max3(p0, p1, p2), min3(p0, p1, p2)) > reach

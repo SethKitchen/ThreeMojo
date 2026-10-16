@@ -58,7 +58,7 @@ from math.bounds import Box3, Sphere
 from math.capsule import Capsule
 from math.ray import Ray, _RayProducts
 from math.triangle import Triangle, _segment_closest_points
-from math.utils import clamp
+from math.utils import clamp, max3, min3
 from math.vector3 import Vector3
 from std.math import inf, max, min, sqrt
 
@@ -456,29 +456,29 @@ struct Octree(Movable):
         self.bounds.min = Vector3(
             min(
                 self.bounds.min.x,
-                min(triangle.a.x, min(triangle.b.x, triangle.c.x)),
+                min3(triangle.a.x, triangle.b.x, triangle.c.x),
             ),
             min(
                 self.bounds.min.y,
-                min(triangle.a.y, min(triangle.b.y, triangle.c.y)),
+                min3(triangle.a.y, triangle.b.y, triangle.c.y),
             ),
             min(
                 self.bounds.min.z,
-                min(triangle.a.z, min(triangle.b.z, triangle.c.z)),
+                min3(triangle.a.z, triangle.b.z, triangle.c.z),
             ),
         )
         self.bounds.max = Vector3(
             max(
                 self.bounds.max.x,
-                max(triangle.a.x, max(triangle.b.x, triangle.c.x)),
+                max3(triangle.a.x, triangle.b.x, triangle.c.x),
             ),
             max(
                 self.bounds.max.y,
-                max(triangle.a.y, max(triangle.b.y, triangle.c.y)),
+                max3(triangle.a.y, triangle.b.y, triangle.c.y),
             ),
             max(
                 self.bounds.max.z,
-                max(triangle.a.z, max(triangle.b.z, triangle.c.z)),
+                max3(triangle.a.z, triangle.b.z, triangle.c.z),
             ),
         )
         self._nodes[0].triangles.append(len(self.triangles))

@@ -27,7 +27,7 @@ This is not a three.js port. See Extensions.
 
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from math.box_extent import box_exterior
-from math.utils import clamp
+from math.utils import clamp, max3
 from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.collections import Dict
@@ -67,7 +67,7 @@ def _closest_on_flat_triangle(
     var ab2 = ab.dot(ab)
     var ac2 = ac.dot(ac)
     var bc2 = bc.dot(bc)
-    if max(ab2, max(ac2, bc2)) == 0:
+    if max3(ab2, ac2, bc2) == 0:
         return (a, Float32(0), Float32(0), ON_A)
     if ab2 >= ac2 and ab2 >= bc2:
         var t = clamp((p - a).dot(ab) / ab2, 0, 1)

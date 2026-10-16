@@ -59,6 +59,102 @@ def clamp(value: Float64, low: Float64, high: Float64) -> Float64:
     return max(low, min(high, value))
 
 
+def min3(x: Float32, y: Float32, z: Float32) -> Float32:
+    """Return the smallest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The smallest.
+    """
+    return min(x, min(y, z))
+
+
+def min3(x: Float64, y: Float64, z: Float64) -> Float64:
+    """Return the smallest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The smallest.
+    """
+    return min(x, min(y, z))
+
+
+def min3(x: Int, y: Int, z: Int) -> Int:
+    """Return the smallest of three whole numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The smallest.
+    """
+    return min(x, min(y, z))
+
+
+def max3(x: Float32, y: Float32, z: Float32) -> Float32:
+    """Return the largest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The largest.
+    """
+    return max(x, max(y, z))
+
+
+def max3(x: Float64, y: Float64, z: Float64) -> Float64:
+    """Return the largest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The largest.
+    """
+    return max(x, max(y, z))
+
+
+def max3(x: Int, y: Int, z: Int) -> Int:
+    """Return the largest of three whole numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The largest.
+    """
+    return max(x, max(y, z))
+
+
 def lerp(x: Float32, y: Float32, t: Float32) -> Float32:
     """Return the value a fraction `t` of the way from `x` to `y`.
 

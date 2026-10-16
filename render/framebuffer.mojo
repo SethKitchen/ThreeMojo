@@ -59,6 +59,7 @@ from render.srgb import (
     srgb_to_linear,
 )
 from math.sine import fraction
+from math.utils import max3, min3
 from std.math import inf
 from std.memory import bitcast
 
@@ -361,8 +362,8 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         var r = self.r
         var g = self.g
         var b = self.b
-        var high = max(r, max(g, b))
-        var low = min(r, min(g, b))
+        var high = max3(r, g, b)
+        var low = min3(r, g, b)
         var lightness = (low + high) / 2
         var hue = Float32(0)
         var saturation = Float32(0)

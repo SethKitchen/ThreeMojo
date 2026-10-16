@@ -36,6 +36,7 @@ from extensions.sdf.vector import (
     normalize,
 )
 from math.norm import squared_length2, squared_length3
+from math.utils import max3, min3
 from std.collections import Dict
 from std.math import isfinite, sqrt
 
@@ -124,7 +125,7 @@ def _ellipsoid(p: Primitive, q: V3) -> Float64:
     var sz = qz / p.r.z
     var k1 = sqrt(squared_length3[DType.float64](sx, sy, sz))
     if k1 < 1e-12:
-        return -min(p.r.x, min(p.r.y, p.r.z))
+        return -min3(p.r.x, p.r.y, p.r.z)
     return k0 * (k0 - 1.0) / k1
 
 
@@ -389,11 +390,11 @@ struct SdfModel(Movable):
                 negative, `part` is not named, the axis is zero or
                 nonfinite, or the up hint is nonfinite.
         """
-        if not min(r.x, min(r.y, r.z)) > 0.0:
+        if not min3(r.x, r.y, r.z) > 0.0:
             raise Error("An ellipsoid's radii must be positive")
         if not (isfinite(axis.x) and isfinite(axis.y) and isfinite(axis.z)):
             raise Error("An ellipsoid axis must be finite and nonzero")
-        if max(abs(axis.x), max(abs(axis.y), abs(axis.z))) == 0.0:
+        if max3(abs(axis.x), abs(axis.y), abs(axis.z)) == 0.0:
             raise Error("An ellipsoid axis must be finite and nonzero")
         if not (isfinite(up.x) and isfinite(up.y) and isfinite(up.z)):
             raise Error("An ellipsoid up hint must be finite")
