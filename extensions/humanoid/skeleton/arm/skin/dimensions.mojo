@@ -41,6 +41,7 @@ from extensions.humanoid.skeleton.arm.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
+    Bounds,
     DistanceField,
     field_gradient,
     flip_x,
@@ -174,12 +175,9 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
         self.low = self.loft.low
         self.high = self.loft.high
         if self.mirror:
-            self.low = Vector3(
-                -self.loft.high.x, self.loft.low.y, self.loft.low.z
-            )
-            self.high = Vector3(
-                -self.loft.low.x, self.loft.high.y, self.loft.high.z
-            )
+            var mirrored = Bounds(self.low, self.high).mirrored_on_x()
+            self.low = mirrored.low
+            self.high = mirrored.high
 
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the anatomy-derived outer surface.

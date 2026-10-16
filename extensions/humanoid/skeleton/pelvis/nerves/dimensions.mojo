@@ -26,10 +26,9 @@ from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
     field_gradient,
-    flip_x,
+    mirrored_tube_distance,
     mix_point,
     tube_chain_bounds,
-    tube_chain_distance,
     widen_for_display,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
@@ -117,9 +116,7 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        if self.mirror:
-            return tube_chain_distance(self.chain, flip_x(point), self.k)
-        return tube_chain_distance(self.chain, point, self.k)
+        return mirrored_tube_distance(self.chain, self.mirror, self.k, point)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""

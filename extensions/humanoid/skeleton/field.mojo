@@ -77,6 +77,17 @@ struct Bounds(ImplicitlyCopyable):
             Vector3(self.high.x + pad, self.high.y + pad, self.high.z + pad),
         )
 
+    def mirrored_on_x(self) -> Bounds:
+        """Return this box reflected through the yz plane.
+
+        Returns:
+            The box with its x corners swapped and negated.
+        """
+        return Bounds(
+            Vector3(-self.high.x, self.low.y, self.low.z),
+            Vector3(-self.low.x, self.high.y, self.high.z),
+        )
+
 
 def empty_bounds() -> Bounds:
     """Return a box that grows from the first included primitive.
@@ -507,6 +518,25 @@ def tube_chain_distance(
     d = smin(d, sd_segment(point, chain.p1, chain.p2, chain.r1, chain.r2), k)
     d = smin(d, sd_segment(point, chain.p2, chain.p3, chain.r2, chain.r3), k)
     return smin(d, sd_segment(point, chain.p3, chain.p4, chain.r3, chain.r4), k)
+
+
+def mirrored_tube_distance(
+    chain: TubeChain, mirror: Bool, blend: Float32, point: Vector3
+) -> Float32:
+    """Return the distance to a tube, mirrored on x when `mirror` is set.
+
+    Args:
+        chain: The stations.
+        mirror: Whether the tube is on the left.
+        blend: The blend distance, the field's `k`.
+        point: The sample, in meters.
+
+    Returns:
+        The signed distance. Negative is inside.
+    """
+    if mirror:
+        return tube_chain_distance(chain, flip_x(point), blend)
+    return tube_chain_distance(chain, point, blend)
 
 
 def tube_chain_bounds(chain: TubeChain, pad: Float32) -> Bounds:
