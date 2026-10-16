@@ -202,6 +202,7 @@ from lights.lighting import (
 )
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.rasterizer import (
     joined,
@@ -4006,7 +4007,7 @@ def _physical[
     if rects > 0:
         var first_rect = first_spot + spots * SPOT_FLOATS
         var first_table = first_rect + rects * RECT_FLOATS
-        var dot_nv = max(Float32(0), min(Float32(1), normal.dot(toward_eye)))
+        var dot_nv = clamp(normal.dot(toward_eye), 0, 1)
         var uv = ltc_uv(dot_nv, roughness)
         var minv = _ltc_lookup(lights, first_table, uv)
         var fresnel = _ltc_lookup(lights, first_table + LTC_FLOATS, uv)
@@ -9039,13 +9040,8 @@ def rasterize_kernel(
                         around.y + baked.y,
                         around.z + baked.z,
                     )
-                    var dot_nv = max(
-                        Float32(0), min(Float32(1), facing.dot(toward_eye))
-                    )
-                    var dot_nv_coat = max(
-                        Float32(0),
-                        min(Float32(1), coat_normal.dot(toward_eye)),
-                    )
+                    var dot_nv = clamp(facing.dot(toward_eye), 0, 1)
+                    var dot_nv_coat = clamp(coat_normal.dot(toward_eye), 0, 1)
                     var radiance = Vector3(0, 0, 0)
                     var irradiance = Vector3(0, 0, 0)
                     var coat_radiance = Vector3(0, 0, 0)

@@ -1015,7 +1015,7 @@ def scattering_through(
         toward_light.z + normal.z * distortion,
     )
     half.normalize()
-    var facing = max(Float32(0), min(Float32(1), -toward_eye.dot(half)))
+    var facing = clamp(-toward_eye.dot(half), 0, 1)
     # The power as `exp2` of `log2`, as `blinn_phong` spells it, with zero
     # kept off `log2`.
     var lit = Float32(0)
@@ -2868,9 +2868,7 @@ struct Lighting(Movable):
         # The tables are looked up once per fragment, by the roughness
         # and the angle to the eye, and serve every rectangle.
         if len(self.rect_positions) > 0:
-            var dot_nv = max(
-                Float32(0), min(Float32(1), normal.dot(toward_eye))
-            )
+            var dot_nv = clamp(normal.dot(toward_eye), 0, 1)
             var uv = ltc_uv(dot_nv, roughness)
             var minv = ltc_lookup(self.ltc.first, uv)
             var fresnel = ltc_lookup(self.ltc.second, uv)
