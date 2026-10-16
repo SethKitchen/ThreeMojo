@@ -54,7 +54,7 @@ from math.norm import length2, squared_length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
-from math.utils import clamp, glsl_mod
+from math.utils import clamp, glsl_mod, lerp, mix_delta
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import LightView, u_of, v_of
@@ -546,9 +546,9 @@ def hue_saturation_color(
     if saturation > 0:
         k = 1 - 1 / (Float32(1.001) - saturation)
     return FloatColor(
-        r + (average - r) * k,
-        g + (average - g) * k,
-        b + (average - b) * k,
+        mix_delta(r, average, k),
+        mix_delta(g, average, k),
+        mix_delta(b, average, k),
         color.a,
     )
 
@@ -595,8 +595,8 @@ def _bleach(base: Float32, lum: Float32, l: Float32, a2: Float32) -> Float32:
     """Return one channel of `BleachBypassShader`."""
     var result1 = 2 * base * lum
     var result2 = 1 - 2 * (1 - lum) * (1 - base)
-    var new_color = result1 + (result2 - result1) * l
-    return a2 * new_color + (1 - a2) * base
+    var new_color = mix_delta(result1, result2, l)
+    return lerp(base, new_color, a2)
 
 
 def bleach_bypass_color(color: FloatColor, opacity: Float32) -> FloatColor:

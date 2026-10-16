@@ -147,6 +147,7 @@ from math.matrix4 import Matrix4
 from math.ray import Ray
 from math.triangle import Triangle
 from math.vector2 import Vector2
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from math.sort_utils import radix_sort
 from core.geometry_store import GeometryId
@@ -1606,7 +1607,7 @@ def _within_on_image(
         )
     share = min(max(share, Float32(0)), Float32(1))
     var closest = from_point + span * share
-    var depth = near_end.z + (far_end.z - near_end.z) * share
+    var depth = mix_delta(near_end.z, far_end.z, share)
     return depth >= -1 and depth <= 1 and (target - closest).length() < reach
 
 

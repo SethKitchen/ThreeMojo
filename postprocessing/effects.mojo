@@ -43,7 +43,7 @@ from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
 from math.smoothstep import clamped_smoothstep
-from math.utils import SeededRandom, clamp, glsl_mod, lerp
+from math.utils import SeededRandom, clamp, glsl_mod, lerp, mix_delta
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
@@ -1964,15 +1964,15 @@ def bokeh2_pixel(
         )
         var warm = (1 - m) * 0.6
         col = Vector3(
-            col.x + (1 - col.x) * warm,
+            mix_delta(col.x, Float32(1), warm),
             col.y + (0.5 - col.y) * warm,
-            col.z + (0 - col.z) * warm,
+            mix_delta(col.z, Float32(0), warm),
         )
         var cool = ((1 - e) - (1 - m)) * 0.2
         col = Vector3(
-            col.x + (0 - col.x) * cool,
+            mix_delta(col.x, Float32(0), cool),
             col.y + (0.5 - col.y) * cool,
-            col.z + (1 - col.z) * cool,
+            mix_delta(col.z, Float32(1), cool),
         )
     if settings.vignetting:
         var du = u - 0.5

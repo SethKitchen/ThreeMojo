@@ -342,6 +342,7 @@ from core.scene import Scene
 from materials.material import MAX_IOR, MIN_IOR
 from math.euler import Euler
 from math.quaternion import Quaternion
+from math.utils import mix_delta
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -445,7 +446,7 @@ struct Ramp(Copyable, ImplicitlyCopyable, Movable):
         if time <= self.start:
             return self.from_value
         var part = (time - self.start) / (self.end - self.start)
-        return self.from_value + (self.to_value - self.from_value) * part
+        return mix_delta(self.from_value, self.to_value, part)
 
 
 def checked_span(duration: Duration, what: String) raises -> Float32:
@@ -579,8 +580,8 @@ def rest_into_pile(
         piles[at + 3] = mixed.w
         return
     for offset in range(PILE):  # pragma: no branch
-        piles[at + offset] = (
-            original[offset] + (piles[at + offset] - original[offset]) * total
+        piles[at + offset] = mix_delta(
+            original[offset], piles[at + offset], total
         )
 
 

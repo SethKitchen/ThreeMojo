@@ -48,6 +48,7 @@ from math.sine import fraction
 from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
+from math.utils import mix_delta
 from math.vector3 import Vector3, reciprocal_unit
 from postprocessing.display_nodes import luminance_of
 from postprocessing.filter_nodes import interleaved_gradient_noise
@@ -734,7 +735,7 @@ def sss_pixel(
         var dx = px - d0x
         var dy = py - d0y
         var s = length2(dx, dy) / total
-        var ray_z = start.z + (end.z - start.z) * s
+        var ray_z = mix_delta(start.z, end.z, s)
         var delta = there - ray_z
         if delta > 0 and delta < settings.thickness.value:
             return 1 - settings.shadow_intensity

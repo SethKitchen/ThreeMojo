@@ -168,6 +168,7 @@ it was built can be edited afterward.
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.quaternion import Quaternion
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import isfinite, isnan
 from units.si import Duration, SECOND
@@ -1735,7 +1736,7 @@ struct KeyframeTrack(Copyable, Movable):
             return [mixed.x, mixed.y, mixed.z, mixed.w]
         var out = List[Float32]()
         for offset in range(len(near)):  # pragma: no branch
-            out.append(near[offset] + (far[offset] - near[offset]) * part)
+            out.append(mix_delta(near[offset], far[offset], part))
         return out^
 
     def sample_string(self, at: Duration) raises -> String:

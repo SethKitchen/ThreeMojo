@@ -30,6 +30,7 @@ The revealage is kept as a float, where three.js keeps eight bits.
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
+from math.utils import mix_delta
 from postprocessing.screen_space import DepthView
 from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.rasterizer import DRAW_SPLATS
@@ -110,9 +111,9 @@ def oit_composite(
     var g = accum.g / share
     var b = accum.b / share
     return FloatColor(
-        r + (beauty.r - r) * revealage,
-        g + (beauty.g - g) * revealage,
-        b + (beauty.b - b) * revealage,
+        mix_delta(r, beauty.r, revealage),
+        mix_delta(g, beauty.g, revealage),
+        mix_delta(b, beauty.b, revealage),
         beauty.a,
     )
 

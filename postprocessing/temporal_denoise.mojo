@@ -46,7 +46,8 @@ from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.utils import mix_delta
+from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
@@ -702,7 +703,7 @@ def temporal_reproject_pixel(
         * (1 + min(max((1 - stretch) + (1 - trust), 0), 1))
     )
     var original = Vector3(history.r, history.g, history.b)
-    var mixed = original + (clipped - original) * clamp_intensity
+    var mixed = mix_delta3(original, clipped, clamp_intensity)
     confidence *= exp_f(-(original - clipped).length() * clamp_intensity * 30)
     confidence *= 1 + (trust * 0.05 + 0.95 - 1) * min(max(motion * 100, 0), 1)
     if confidence < TSL_EPSILON:
@@ -1144,7 +1145,7 @@ def recurrent_denoise_pixel(
         var w = (
             exp_f(-(diff * aggressivity + plane * depth_scale)) * normal_weight
         )
-        shrink = shrink + (w - shrink) * settings.adapt
+        shrink = mix_delta(shrink, w, settings.adapt)
         bias = bias + (dir * (w - 0.5) - bias) * 0.5
         var neighbor_luma = luminance_of(
             raw_neighbor.r, raw_neighbor.g, raw_neighbor.b
