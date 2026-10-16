@@ -507,14 +507,6 @@ struct MassProperties(ImplicitlyCopyable):
         self.inertia = inertia
 
 
-def _diagonal(x: Float32, y: Float32, z: Float32) -> Matrix3:
-    var m = Matrix3()
-    m.elements[0] = x
-    m.elements[4] = y
-    m.elements[8] = z
-    return m
-
-
 struct Shape(Copyable, Movable):
     """One collision shape in its body's frame."""
 
@@ -664,7 +656,7 @@ struct Shape(Copyable, Movable):
             _check_size(self.radius)
             var r = Float64(self.radius)
             var i = _narrow_finite(0.4 * Float64(mass) * r * r)
-            props.inertia = _diagonal(i, i, i)
+            props.inertia = Matrix3.diagonal(i, i, i)
         elif self.kind == CAPSULE:
             props.inertia = self._capsule(mass)
         elif self.kind == MESH:
@@ -690,7 +682,7 @@ struct Shape(Copyable, Movable):
             0.4 * r * r + h * h * 0.25 + 0.375 * h * r
         )
         var across32 = _narrow_finite(across)
-        return _diagonal(across32, across32, _narrow_finite(axial))
+        return Matrix3.diagonal(across32, across32, _narrow_finite(axial))
 
 
 def _check_size(value: Float32) raises:
@@ -762,7 +754,7 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
                         / 120
                     )
     var density = Float64(mass) / volume
-    var inertia = _diagonal(
+    var inertia = Matrix3.diagonal(
         _narrow_finite(density * (covariance[4] + covariance[8])),
         _narrow_finite(density * (covariance[0] + covariance[8])),
         _narrow_finite(density * (covariance[0] + covariance[4])),
