@@ -52,7 +52,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.earcut import triangulate_shape
 from math.shape_path import is_clockwise
-from math.vector2 import Vector2
+from math.vector2 import Vector2, component_max, component_min
 from math.vector3 import Vector3
 from std.math import isfinite
 
@@ -188,12 +188,8 @@ def _cap(
     for column in range(columns):  # pragma: no branch
         flat.append(Float64(contour[column].x))
         flat.append(Float64(contour[column].y))
-        low = Vector2(
-            min(low.x, contour[column].x), min(low.y, contour[column].y)
-        )
-        high = Vector2(
-            max(high.x, contour[column].x), max(high.y, contour[column].y)
-        )
+        low = component_min(low, contour[column])
+        high = component_max(high, contour[column])
     var faces = triangulate_shape(flat)
     var width = max(high.x - low.x, JS_EPSILON)
     var height = max(high.y - low.y, JS_EPSILON)

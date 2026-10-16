@@ -18,7 +18,7 @@ length. A distance beyond Float32 still returns infinity.
 """
 
 from math.box_extent import _midpoint, _shrink_exceeds_extent
-from math.vector2 import Vector2
+from math.vector2 import Vector2, component_max, component_min
 from math.matrix_inverse import (
     _inverse_needs_wide,
     _determinant_needs_wide,
@@ -227,8 +227,8 @@ struct Box2(Equatable, ImplicitlyCopyable):
             self.min = point
             self.max = point
             return
-        self.min = Vector2(min(self.min.x, point.x), min(self.min.y, point.y))
-        self.max = Vector2(max(self.max.x, point.x), max(self.max.y, point.y))
+        self.min = component_min(self.min, point)
+        self.max = component_max(self.max, point)
 
     def union(mut self, other: Box2):
         """Grow the box to hold everything another holds.
@@ -248,12 +248,8 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Args:
             other: The other box.
         """
-        self.min = Vector2(
-            max(self.min.x, other.min.x), max(self.min.y, other.min.y)
-        )
-        self.max = Vector2(
-            min(self.max.x, other.max.x), min(self.max.y, other.max.y)
-        )
+        self.min = component_max(self.min, other.min)
+        self.max = component_min(self.max, other.max)
         if self.is_empty():
             self = Box2.empty()
 
@@ -329,10 +325,9 @@ struct Box2(Equatable, ImplicitlyCopyable):
         """
         if self.is_empty():
             raise Error("An empty box has no nearest point")
-        return Vector2(
-            max(self.min.x, min(self.max.x, point.x)),
-            max(self.min.y, min(self.max.y, point.y)),
-        )
+        var held = point
+        held.clamp(self.min, self.max)
+        return held
 
     def distance_to_point(self, point: Vector2) raises -> Float32:
         """Return the distance from a point to the box.

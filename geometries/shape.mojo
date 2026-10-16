@@ -53,7 +53,7 @@ from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
 from math.sort_utils import stable_sort
-from math.vector2 import Vector2
+from math.vector2 import Vector2, component_max, component_min
 from std.math import isfinite
 
 
@@ -106,8 +106,8 @@ def extent(points: List[Vector2], start: Int, count: Int) -> Float32:
     var high = points[start]
     for index in range(1, count):  # pragma: no branch
         var here = points[start + index]
-        low = Vector2(min(low.x, here.x), min(low.y, here.y))
-        high = Vector2(max(high.x, here.x), max(high.y, here.y))
+        low = component_min(low, here)
+        high = component_max(high, here)
     return (high - low).length()
 
 

@@ -466,7 +466,7 @@ struct Line3(Equatable, ImplicitlyCopyable):
             raise Error("A segment of no length has no direction")
         var t = (point - self.start).dot(line) / length_sq
         if clamp:
-            t = clamp(t, 0, 1)
+            t = _unit(t)
         return t
 
     def closest_point(self, point: Vector3, clamp: Bool) raises -> Vector3:
