@@ -23,6 +23,7 @@ Run it with `mojo run -I . bench/physics_ccd_walker_bench.mojo`.
 from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import Shape, PhysicsMaterial
+from bench.contacts import bodies_missing_contact
 from extensions.physics.world import CollisionEvent, PhysicsWorld
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
@@ -164,29 +165,16 @@ def _clearance(center: Vector3, walker: Bool) -> Float64:
     return nearest - radius
 
 
-def _missing(events: List[CollisionEvent], bodies: Int) -> Int:
-    """Return how many bodies 1 to `bodies` no event pairs with body 0."""
-    var touched = List[Bool](length=bodies + 1, fill=False)
-    for event in events:
-        if event.other.value == 0 and event.body.value > 0:
-            touched[event.body.value] = True
-    var missing = 0
-    for i in range(1, bodies + 1):
-        if not touched[i]:
-            missing += 1
-    return missing
-
-
 def _controls() raises:
     # Repeated events for one body cannot stand in for another body.
     var events = List[CollisionEvent]()
     for _ in range(3):
         events.append(CollisionEvent(BodyId(1), BodyId(0), Vector3(0, 0, 1)))
-    assert_equal(_missing(events, 2), 1)
+    assert_equal(bodies_missing_contact(events, 2), 1)
     events.append(CollisionEvent(BodyId(0), BodyId(2), Vector3(0, 0, -1)))
-    assert_equal(_missing(events, 2), 1)
+    assert_equal(bodies_missing_contact(events, 2), 1)
     events.append(CollisionEvent(BodyId(2), BodyId(0), Vector3(0, 0, 1)))
-    assert_equal(_missing(events, 2), 0)
+    assert_equal(bodies_missing_contact(events, 2), 0)
     # A corner raised 0.16 m. The old check, a global floor at the lowest
     # terrain height, passes a body 5 cm into this corner.
     var raised = _corner(3, 1)
@@ -295,7 +283,7 @@ def _run(name: String, side: Int, bodies: Int, walkers: Bool) raises:
                     least, _clearance(world.bodies[i].position, walkers)
                 )
             if continuous:
-                assert_equal(_missing(world.events, bodies), 0)
+                assert_equal(bodies_missing_contact(world.events, bodies), 0)
         if continuous:
             assert_true(least > -_TOLERANCE, String(least))
         print(
