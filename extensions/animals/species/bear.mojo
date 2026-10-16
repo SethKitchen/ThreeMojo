@@ -46,6 +46,7 @@ from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
+from math.utils import rec709_luminance
 from extensions.animals.traits import Traits, pick_age, pick_sex
 from extensions.sdf.vector import (
     V3,
@@ -1314,7 +1315,7 @@ def _agouti(coat: Int) -> V3:
 
 
 def _desat(c: V3, k: Float64) -> V3:
-    var y = 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z
+    var y = rec709_luminance(c.x, c.y, c.z)
     return V3(c.x + (y - c.x) * k, c.y + (y - c.y) * k, c.z + (y - c.z) * k)
 
 

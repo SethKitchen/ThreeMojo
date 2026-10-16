@@ -71,6 +71,7 @@ from cameras.camera import Camera
 from core.extent import positive_extent
 from core.scene import Scene
 from math.finite import positive_finite
+from math.utils import rec709_luminance
 from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -1261,7 +1262,7 @@ def grade_pixel(
     cr = aces_channel(cr)
     cg = aces_channel(cg)
     cb = aces_channel(cb)
-    var lum = cr * 0.2126 + cg * 0.7152 + cb * 0.0722
+    var lum = rec709_luminance(cr, cg, cb)
     cr = lum + (cr - lum) * 0.90
     cg = lum + (cg - lum) * 0.90
     cb = lum + (cb - lum) * 0.90
