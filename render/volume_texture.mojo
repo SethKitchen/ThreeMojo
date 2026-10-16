@@ -57,7 +57,7 @@ from render.texture import (
     Filter,
     TexelType,
     Wrap,
-    mix,
+    mix_straight,
     wrap_index,
 )
 from std.math import floor, isfinite
@@ -374,12 +374,7 @@ def mix_straight_texels(
     Returns:
         The blend, straight.
     """
-    return FloatColor(
-        mix(near.r, far.r, t),
-        mix(near.g, far.g, t),
-        mix(near.b, far.b, t),
-        mix(near.a, far.a, t),
-    )
+    return mix_straight(near, far, t)
 
 
 def _check_modes(
