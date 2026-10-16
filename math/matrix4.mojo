@@ -31,6 +31,7 @@ passed where radians are meant.
 """
 
 from math.euler import Euler
+from math.square_matrix import _post_multiply, _transpose_square
 from math.matrix3 import Matrix3
 from math.norm import length3, normalized3, _ordinary_squared
 from math.quaternion import Quaternion
@@ -213,31 +214,14 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
 
     def transpose(mut self):
         """Swap this matrix's rows and columns in place."""
-        for row in range(4):  # pragma: no branch
-            for column in range(row + 1, 4):
-                var high = self.elements[column * 4 + row]
-                self.elements[column * 4 + row] = self.elements[
-                    row * 4 + column
-                ]
-                self.elements[row * 4 + column] = high
+        _transpose_square[4](self.elements)
 
     def multiply(mut self, other: Self):
         """Post-multiply by `other`, giving `self * other`.
 
         Order matters: the right-hand matrix is applied to a point first.
         """
-        var result = Array[Float32, 16](fill=0.0)
-        # Fixed 4x4, so none of these can run zero times.
-        for row in range(4):  # pragma: no branch
-            for column in range(4):  # pragma: no branch
-                var total = Float32(0)
-                for k in range(4):  # pragma: no branch
-                    total += (
-                        self.elements[k * 4 + row]
-                        * other.elements[column * 4 + k]
-                    )
-                result[column * 4 + row] = total
-        self.elements = result^
+        _post_multiply[4](self.elements, other.elements)
 
     def premultiply(mut self, other: Self):
         """Pre-multiply by `other`, giving `other * self`."""

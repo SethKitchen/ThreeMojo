@@ -30,6 +30,7 @@ so degrees cannot be passed where radians are meant.
 """
 
 from math.matrix4 import Matrix4
+from math.square_matrix import _post_multiply, _transpose_square
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.matrix_inverse import (
@@ -332,13 +333,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
 
     def transpose(mut self):
         """Swap this matrix's rows and columns in place."""
-        for row in range(3):  # pragma: no branch
-            for column in range(row + 1, 3):
-                var high = self.elements[column * 3 + row]
-                self.elements[column * 3 + row] = self.elements[
-                    row * 3 + column
-                ]
-                self.elements[row * 3 + column] = high
+        _transpose_square[3](self.elements)
 
     def multiply(mut self, other: Self):
         """Post-multiply by `other`, giving `self * other`.
@@ -348,18 +343,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Args:
             other: The matrix to apply first.
         """
-        var result = Array[Float32, 9](fill=0.0)
-        # Fixed 3x3, so none of these can run zero times.
-        for row in range(3):  # pragma: no branch
-            for column in range(3):  # pragma: no branch
-                var total = Float32(0)
-                for k in range(3):  # pragma: no branch
-                    total += (
-                        self.elements[k * 3 + row]
-                        * other.elements[column * 3 + k]
-                    )
-                result[column * 3 + row] = total
-        self.elements = result^
+        _post_multiply[3](self.elements, other.elements)
 
     def premultiply(mut self, other: Self):
         """Pre-multiply by `other`, giving `other * self`.
