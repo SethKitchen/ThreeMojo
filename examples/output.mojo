@@ -10,8 +10,8 @@ first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
 scene and spin it, hang a part on a turning node, stand a body on the
-floor, make a gallery renderer, place a gallery camera, add a fill and
-a key lamp, or write a third of a turn.
+floor, make a gallery renderer, frame or place a gallery camera, add a
+fill and a key lamp, or write a third of a turn.
 """
 
 from cameras.camera import Camera
@@ -104,6 +104,40 @@ def gallery_renderer(
     return renderer^
 
 
+def framed_camera(
+    width: Int,
+    height: Int,
+    field_of_view: Angle = Angle(30.0, DEGREE),
+    near: Length = Length(0.05, METER),
+    far: Length = Length(30.0, METER),
+) raises -> PerspectiveCamera:
+    """Return a perspective camera for an image of `width` by `height`.
+
+    The field of view is 30 degrees, near is 5 centimeters, and far is
+    30 meters, unless a caller passes another value. The camera is not
+    placed.
+
+    Args:
+        width: Image width in pixels.
+        height: Image height in pixels.
+        field_of_view: The vertical field of view.
+        near: The near clipping distance.
+        far: The far clipping distance.
+
+    Returns:
+        The camera.
+
+    Raises:
+        Error: If the camera is not valid.
+    """
+    return PerspectiveCamera(
+        field_of_view,
+        Float32(width) / Float32(height),
+        near,
+        far,
+    )
+
+
 def gallery_camera(
     width: Int,
     height: Int,
@@ -133,12 +167,7 @@ def gallery_camera(
     Raises:
         Error: If the camera is not valid.
     """
-    var camera = PerspectiveCamera(
-        field_of_view,
-        Float32(width) / Float32(height),
-        near,
-        far,
-    )
+    var camera = framed_camera(width, height, field_of_view, near, far)
     camera.place(eye, target)
     return camera^
 

@@ -12,9 +12,13 @@ has `fog` off, so it stays orange while the other two fade. The camera
 walks in and back.
 """
 
-from examples.output import example_destination, fill_and_key, write_example
+from examples.output import (
+    example_destination,
+    fill_and_key,
+    framed_camera,
+    write_example,
+)
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.fog import linear_fog
@@ -71,11 +75,12 @@ def main() raises:
         2.2,
     )
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
 
     var frame_clock = Clock()
