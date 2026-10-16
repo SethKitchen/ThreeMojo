@@ -238,7 +238,7 @@ def _dot(a: Vector3, b: Vector3) -> Float32:
     Returns:
         The dot product.
     """
-    return a.x * b.x + a.y * b.y + a.z * b.z
+    return a.dot(b)
 
 
 def project_splat(

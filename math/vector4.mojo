@@ -34,7 +34,7 @@ from math.polyline import (
 )
 from math.quaternion import Quaternion
 from math.vector3 import Vector3, _js_round
-from math.norm import length4, normalized4
+from math.norm import dot4, length4, normalized4
 from std.math import acos, ceil, floor, pi, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -113,11 +113,15 @@ struct Vector4(Equatable, ImplicitlyCopyable, PolylineVertex):
         Returns:
             The dot product, all four components in.
         """
-        return (
-            self.x * other.x
-            + self.y * other.y
-            + self.z * other.z
-            + self.w * other.w
+        return dot4[DType.float32](
+            self.x,
+            self.y,
+            self.z,
+            self.w,
+            other.x,
+            other.y,
+            other.z,
+            other.w,
         )
 
     def length(self) -> Float32:

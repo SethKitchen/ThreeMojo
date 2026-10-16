@@ -28,7 +28,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.cross import cross_components
-from math.norm import length3
+from math.norm import dot3, length3
 from std.math import isnan, sqrt
 
 # The tag three.js writes in the fourth slot of a face. Kept for the
@@ -144,7 +144,7 @@ def _cross(a: Point3, b: Point3) -> Point3:
 
 def _dot(a: Point3, b: Point3) -> Float64:
     """Return `a . b`, summed left to right."""
-    return a.x * b.x + a.y * b.y + a.z * b.z
+    return dot3[DType.float64](a.x, a.y, a.z, b.x, b.y, b.z)
 
 
 def _hypot(p: Point3) -> Float64:

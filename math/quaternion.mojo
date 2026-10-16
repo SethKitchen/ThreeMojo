@@ -23,7 +23,7 @@ as the matrices `a.to_matrix() * b.to_matrix()` would.
 
 from math.euler import Euler
 from math.matrix4 import Matrix4
-from math.norm import length4, normalized4
+from math.norm import dot4, length4, normalized4
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.math import acos, atan2, cos, pi, sin, sqrt
@@ -267,11 +267,15 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
 
     def dot(self, other: Self) -> Float32:
         """Return the four-component dot product."""
-        return (
-            self.x * other.x
-            + self.y * other.y
-            + self.z * other.z
-            + self.w * other.w
+        return dot4[DType.float32](
+            self.x,
+            self.y,
+            self.z,
+            self.w,
+            other.x,
+            other.y,
+            other.z,
+            other.w,
         )
 
     def length(self) -> Float32:
