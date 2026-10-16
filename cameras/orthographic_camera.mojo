@@ -45,7 +45,7 @@ from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.projection import orthographic, viewport
+from math.projection import orthographic, view_to_screen
 from math.vector3 import Vector3
 from units.si import Length, METER
 
@@ -293,9 +293,7 @@ struct OrthographicCamera(Camera):
         Raises:
             Error: If the viewport or the projection is invalid.
         """
-        var combined = viewport(width, height)
-        combined.multiply(self.projection_matrix())
-        return combined^
+        return view_to_screen(self.projection_matrix(), width, height)
 
     def near_distance(self) -> Float32:
         """Return the near clipping distance, in meters."""

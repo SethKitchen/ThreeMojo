@@ -47,7 +47,7 @@ from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.projection import perspective, viewport
+from math.projection import perspective, view_to_screen
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import pi, atan, isfinite, max, min, tan
@@ -479,9 +479,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         Raises:
             Error: If the viewport or either camera matrix is invalid.
         """
-        var combined = viewport(width, height)
-        combined.multiply(self.view_projection_matrix())
-        return combined^
+        return view_to_screen(self.view_projection_matrix(), width, height)
 
     def view_to_screen_matrix(self, width: Int, height: Int) raises -> Matrix4:
         """Return the transform from camera space to pixels.
@@ -500,9 +498,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         Raises:
             Error: If the viewport or the projection is invalid.
         """
-        var combined = viewport(width, height)
-        combined.multiply(self.projection_matrix())
-        return combined^
+        return view_to_screen(self.projection_matrix(), width, height)
 
     def near_distance(self) -> Float32:
         """Return the near clipping distance, in meters."""
