@@ -37,9 +37,16 @@ from controls.input import (
     ARROW_RIGHT,
     ARROW_UP,
     InputEvent,
+    KEY_A,
+    KEY_D,
     KEY_DOWN,
+    KEY_F,
+    KEY_R,
+    KEY_S,
     KEY_UP,
+    KEY_W,
     Key,
+    require_input,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -57,13 +64,6 @@ from units.si import (
     Velocity,
 )
 
-# The keys, as three.js's `event.code` names them.
-comptime KEY_W = Key(119)
-comptime KEY_S = Key(115)
-comptime KEY_A = Key(97)
-comptime KEY_D = Key(100)
-comptime KEY_R = Key(114)
-comptime KEY_F = Key(102)
 comptime KEY_Q = Key(113)
 comptime KEY_E = Key(101)
 # A move or a turn smaller than this, squared, is no change. three.js:
@@ -193,12 +193,7 @@ struct FlyControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or a size
                 is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         _check_size(viewport_width, viewport_height)
         if not self.enabled:
             return

@@ -41,9 +41,14 @@ from controls.input import (
     ARROW_RIGHT,
     ARROW_UP,
     InputEvent,
+    KEY_A,
+    KEY_D,
     KEY_DOWN,
+    KEY_S,
     KEY_UP,
+    KEY_W,
     Key,
+    require_input,
     POINTER_DOWN,
     POINTER_MOVE,
 )
@@ -61,10 +66,6 @@ from units.si import (
     Velocity,
 )
 
-comptime KEY_W = Key(119)
-comptime KEY_S = Key(115)
-comptime KEY_A = Key(97)
-comptime KEY_D = Key(100)
 # Radians a pixel of movement turns. three.js: `_MOUSE_SENSITIVITY`.
 comptime MOUSE_SENSITIVITY = Float32(0.002)
 comptime QUARTER_TURN = Float32(pi / 2)
@@ -287,12 +288,7 @@ struct PointerLockControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or the
                 polar range is empty.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         if not (self.max_polar_angle.value >= self.min_polar_angle.value):
             raise Error(
                 "A polar range must not have its maximum below its minimum"

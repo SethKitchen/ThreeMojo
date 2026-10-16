@@ -49,6 +49,7 @@ from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
 from controls.input import (
     InputEvent,
     KEY_DOWN,
+    require_input,
     KEY_UP,
     Key,
     MIDDLE,
@@ -277,12 +278,7 @@ struct TrackballControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, a key or
                 an action is invalid, or a size is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         if viewport_width <= 0 or viewport_height <= 0:
             raise Error("A viewport's size must be positive")
         if not self.enabled:
