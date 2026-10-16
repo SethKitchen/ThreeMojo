@@ -446,11 +446,8 @@ def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
     """
     var fresnel = schlick_weight(cos_vh)
     var keep = 1 - fresnel
-    return Vector3(
-        f0.x * keep + f90 * fresnel,
-        f0.y * keep + f90 * fresnel,
-        f0.z * keep + f90 * fresnel,
-    )
+    var rise = f90 * fresnel
+    return f0 * keep + Vector3(rise, rise, rise)
 
 
 def ggx(
@@ -575,11 +572,8 @@ def environment_brdf(
         The fraction per channel.
     """
     var fab = dfg_approx(dot_nv, roughness)
-    return Vector3(
-        f0.x * fab.x + f90 * fab.y,
-        f0.y * fab.x + f90 * fab.y,
-        f0.z * fab.x + f90 * fab.y,
-    )
+    var grazing = f90 * fab.y
+    return f0 * fab.x + Vector3(grazing, grazing, grazing)
 
 
 struct Reflected(ImplicitlyCopyable):
@@ -821,23 +815,13 @@ def physical_outgoing(
             var weight = layers.iridescence
             fr = mix_delta3(fr, film, weight)
         var fab = dfg_approx(dot_nv, roughness)
-        var single = Vector3(
-            fr.x * fab.x + f90 * fab.y,
-            fr.y * fab.x + f90 * fab.y,
-            fr.z * fab.x + f90 * fab.y,
-        )
+        var grazing = f90 * fab.y
+        var single = fr * fab.x + Vector3(grazing, grazing, grazing)
         var ess = fab.x + fab.y
         var ems = 1 - ess
-        var average = Vector3(
-            fr.x + (1 - fr.x) * MULTISCATTER_MEAN,
-            fr.y + (1 - fr.y) * MULTISCATTER_MEAN,
-            fr.z + (1 - fr.z) * MULTISCATTER_MEAN,
-        )
-        var multi = Vector3(
-            single.x * average.x / (1 - ems * average.x) * ems,
-            single.y * average.y / (1 - ems * average.y) * ems,
-            single.z * average.z / (1 - ems * average.z) * ems,
-        )
+        var white = Vector3(Float32(1), Float32(1), Float32(1))
+        var average = mix_delta3(fr, white, MULTISCATTER_MEAN)
+        var multi = single * average / (white - average * ems) * ems
         var total = max(
             max(single.x + multi.x, single.y + multi.y), single.z + multi.z
         )
@@ -864,18 +848,10 @@ def physical_outgoing(
         # indirect together, gives way to what the surface shows through
         # itself. The reflection and the glow are untouched.
         diffuse = mix_delta3(diffuse, transmitted, transmission)
-    var outgoing = Vector3(
-        diffuse.x + specular.x + glow.x,
-        diffuse.y + specular.y + glow.y,
-        diffuse.z + specular.z + glow.z,
-    )
+    var outgoing = diffuse + specular + glow
     if layers.sheen:
         var kept = sheen_scaling(layers.sheen_color)
-        outgoing = Vector3(
-            outgoing.x * kept + sheen.x,
-            outgoing.y * kept + sheen.y,
-            outgoing.z * kept + sheen.z,
-        )
+        outgoing = outgoing * kept + sheen
     if clearcoat > 0:
         var fresnel = f_schlick(CLEARCOAT_F0, 1, dot_nv_coat.x)
         outgoing = Vector3(

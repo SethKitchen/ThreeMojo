@@ -1916,13 +1916,21 @@ def _coordinates_at(
     var share_b = shares[1]
     var share_c = shares[2]
     if second:
-        return Vector2(
-            a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
-            a.v1 * share_a + b.v1 * share_b + c.v1 * share_c,
+        return _shared2(
+            Vector2(a.u1, a.v1),
+            Vector2(b.u1, b.v1),
+            Vector2(c.u1, c.v1),
+            share_a,
+            share_b,
+            share_c,
         )
-    return Vector2(
-        a.u * share_a + b.u * share_b + c.u * share_c,
-        a.v * share_a + b.v * share_b + c.v * share_c,
+    return _shared2(
+        Vector2(a.u, a.v),
+        Vector2(b.u, b.v),
+        Vector2(c.u, c.v),
+        share_a,
+        share_b,
+        share_c,
     )
 
 
@@ -1944,11 +1952,7 @@ def _world_at(
     var share_a = shares[0]
     var share_b = shares[1]
     var share_c = shares[2]
-    return Vector3(
-        a.world.x * share_a + b.world.x * share_b + c.world.x * share_c,
-        a.world.y * share_a + b.world.y * share_b + c.world.y * share_c,
-        a.world.z * share_a + b.world.z * share_b + c.world.z * share_c,
-    )
+    return _shared(a.world, b.world, c.world, share_a, share_b, share_c)
 
 
 def _cross(left: Vector3, right: Vector3) -> Vector3:
@@ -2129,11 +2133,7 @@ def mapped_normal(
     var map_x = (texel.r * 2 - 1) * scale.x
     var map_y = (texel.g * 2 - 1) * scale.y
     var map_z = texel.b * 2 - 1
-    var perturbed = Vector3(
-        tangent.x * map_x + bitangent.x * map_y + normal.x * map_z,
-        tangent.y * map_x + bitangent.y * map_y + normal.y * map_z,
-        tangent.z * map_x + bitangent.z * map_y + normal.z * map_z,
-    )
+    var perturbed = _shared(tangent, bitangent, normal, map_x, map_y, map_z)
     if perturbed.length() == 0:
         return normal
     perturbed.normalize()
@@ -2332,10 +2332,8 @@ def _normal_at(
     var share_a = shares[0]
     var share_b = shares[1]
     var share_c = shares[2]
-    var facing = Vector3(
-        a.normal.x * share_a + b.normal.x * share_b + c.normal.x * share_c,
-        a.normal.y * share_a + b.normal.y * share_b + c.normal.y * share_c,
-        a.normal.z * share_a + b.normal.z * share_b + c.normal.z * share_c,
+    var facing = _shared(
+        a.normal, b.normal, c.normal, share_a, share_b, share_c
     )
     if facing.length() != 0:
         facing.normalize()
@@ -3816,11 +3814,33 @@ def _shared(
 ) -> Vector3:
     """Return three corners' values mixed by their shares, one component
     at a time, in the order the kernel mixes them."""
-    return Vector3(
-        a.x * share_a + b.x * share_b + c.x * share_c,
-        a.y * share_a + b.y * share_b + c.y * share_c,
-        a.z * share_a + b.z * share_b + c.z * share_c,
-    )
+    return a * share_a + b * share_b + c * share_c
+
+
+def _shared2(
+    a: Vector2,
+    b: Vector2,
+    c: Vector2,
+    share_a: Float32,
+    share_b: Float32,
+    share_c: Float32,
+) -> Vector2:
+    """Return three corners' pairs mixed by their shares.
+
+    The products are formed in `_shared`'s order.
+
+    Args:
+        a: The first corner.
+        b: The second corner.
+        c: The third corner.
+        share_a: The first corner's weight.
+        share_b: The second corner's weight.
+        share_c: The third corner's weight.
+
+    Returns:
+        The mixed pair.
+    """
+    return a * share_a + b * share_b + c * share_c
 
 
 def check_light_map(image: Texture) raises:
@@ -4190,10 +4210,18 @@ def rasterize_shaded(
             # for a target that keeps them; zero for every other surface.
             var metal_rough = Vector2(0, 0)
 
+            var rgb = _shared(
+                Vector3(a.color.r, a.color.g, a.color.b),
+                Vector3(b.color.r, b.color.g, b.color.b),
+                Vector3(c.color.r, c.color.g, c.color.b),
+                share_a,
+                share_b,
+                share_c,
+            )
             var base = FloatColor(
-                a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
-                a.color.g * share_a + b.color.g * share_b + c.color.g * share_c,
-                a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
+                rgb.x,
+                rgb.y,
+                rgb.z,
                 interpolate_alpha(
                     a.color.a, b.color.a, c.color.a, share_b, share_c
                 ),
@@ -4226,16 +4254,8 @@ def rasterize_shaded(
                 # the average of two unit vectors is shorter than either, so
                 # a normal interpolated and left alone dims the middle of
                 # every triangle.
-                facing = Vector3(
-                    a.normal.x * share_a
-                    + b.normal.x * share_b
-                    + c.normal.x * share_c,
-                    a.normal.y * share_a
-                    + b.normal.y * share_b
-                    + c.normal.y * share_c,
-                    a.normal.z * share_a
-                    + b.normal.z * share_b
-                    + c.normal.z * share_c,
+                facing = _shared(
+                    a.normal, b.normal, c.normal, share_a, share_b, share_c
                 )
                 if facing.length() != 0:
                     facing.normalize()
@@ -4257,16 +4277,8 @@ def rasterize_shaded(
                 or catches
                 or noded
             ):
-                spot = Vector3(
-                    a.world.x * share_a
-                    + b.world.x * share_b
-                    + c.world.x * share_c,
-                    a.world.y * share_a
-                    + b.world.y * share_b
-                    + c.world.y * share_c,
-                    a.world.z * share_a
-                    + b.world.z * share_b
-                    + c.world.z * share_c,
+                spot = _shared(
+                    a.world, b.world, c.world, share_a, share_b, share_c
                 )
             # The raw texture coordinates, both pairs, for the two modes
             # that read them and for a node graph. Each map places them
@@ -4276,11 +4288,23 @@ def rasterize_shaded(
             var v = Float32(0)
             var uv1 = Vector2(0, 0)
             if mode != SHADE_LIT or noded:
-                u = a.u * share_a + b.u * share_b + c.u * share_c
-                v = a.v * share_a + b.v * share_b + c.v * share_c
-                uv1 = Vector2(
-                    a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
-                    a.v1 * share_a + b.v1 * share_b + c.v1 * share_c,
+                var uv = _shared2(
+                    Vector2(a.u, a.v),
+                    Vector2(b.u, b.v),
+                    Vector2(c.u, c.v),
+                    share_a,
+                    share_b,
+                    share_c,
+                )
+                u = uv.x
+                v = uv.y
+                uv1 = _shared2(
+                    Vector2(a.u1, a.v1),
+                    Vector2(b.u1, b.v1),
+                    Vector2(c.u1, c.v1),
+                    share_a,
+                    share_b,
+                    share_c,
                 )
             var uv = Vector2(u, v)
             # The normal before any map perturbs it: what a clear coat lies
