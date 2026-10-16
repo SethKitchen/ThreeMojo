@@ -14,7 +14,7 @@ and the foot. The surfaces are physically based, lit by a room
 environment and a lamp that casts soft shadows, and tone mapped.
 """
 
-from examples.output import example_destination, spin_frame
+from examples.output import example_destination, spin_gallery
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -45,12 +45,10 @@ from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import MaterialId, standard_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/limb.png"
@@ -195,10 +193,6 @@ def main() raises:
     )
     camera.place(Vector3(0.0, 0.62, 3.3), Vector3(0.0, 0.50, 0.0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(spin_frame(renderer, camera, assets, scene, pivot, step))
-
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    spin_gallery(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
+    )

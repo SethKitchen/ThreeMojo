@@ -18,7 +18,7 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `xhigh`.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, spin_pair_gallery
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -70,12 +70,10 @@ from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import standard_material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, GRAM, Length, METER
 
@@ -86,38 +84,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DEFAULT_QUALITY = "xhigh"
 comptime SPACING = Float32(0.09)
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    left: NodeId,
-    right: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn both hands by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        left: The turning node of the anatomy.
-        right: The turning node of the skin.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(left).rotate_y(step)
-    scene.node(right).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def _hang(
@@ -294,14 +260,14 @@ def main() raises:
     )
     camera.place(Vector3(0.0, 0.94, 0.62), Vector3(0.0, 0.9, 0.0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(
-            frame_at(
-                renderer, camera, assets, scene, anatomy[0], covered[0], step
-            )
-        )
-
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    spin_pair_gallery(
+        renderer,
+        camera,
+        assets,
+        scene,
+        anatomy[0],
+        covered[0],
+        FRAMES,
+        DELAY_MS,
+        destination,
+    )

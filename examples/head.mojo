@@ -19,7 +19,7 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `xhigh`.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, spin_pair
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -86,38 +86,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DEFAULT_QUALITY = "xhigh"
 comptime SPACING = Float32(0.16)
-
-
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    left: NodeId,
-    right: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn both heads by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        left: The turning node of the anatomy.
-        right: The turning node of the skin.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(left).rotate_y(step)
-    scene.node(right).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
 
 
 def _turned(v: Vector3, angle: Float32) -> Vector3:
@@ -313,7 +281,7 @@ def main() raises:
         )
         hair.shade(assets, lights, camera_at, Vector3(0.11, 0.11, 0.12))
         frames.append(
-            frame_at(
+            spin_pair(
                 renderer, camera, assets, scene, anatomy[0], covered[0], step
             )
         )
