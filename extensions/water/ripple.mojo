@@ -13,6 +13,7 @@ same arithmetic runs on a `RippleField` and on a copy in device memory.
 """
 
 from extensions.water.resolution import require_resolution, SpectrumResolution
+from math.norm import squared_length2
 from std.math import cos, floor, sqrt
 from units.si import Length
 
@@ -255,7 +256,7 @@ def step_ripple(
             if drop_strength != 0.0:
                 var du = u - drop_u
                 var dv = v - drop_v
-                var d = sqrt(du * du + dv * dv)
+                var d = sqrt(squared_length2[DType.float32](du, dv))
                 if d < drop_radius:
                     var lobe = 0.5 + 0.5 * cos(
                         Float32(3.141592653589793) * d / drop_radius

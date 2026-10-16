@@ -15,6 +15,7 @@ real-valued height.
 from extensions.water.field import ComplexField, complex_mul
 from extensions.water.random import Mulberry32
 from extensions.water.resolution import require_resolution, SpectrumResolution
+from math.norm import squared_length2
 from std.math import cos, exp, floor, hypot, log, sin, sqrt
 from units.si import SECOND, Duration, Length
 
@@ -142,7 +143,7 @@ def build_spectrum(
             var i = y * n + x
             re[i] = draw_re
             im[i] = draw_im
-            s2 += 2.0 * k * k * (draw_re * draw_re + draw_im * draw_im)
+            s2 += 2.0 * k * k * squared_length2[DType.float32](draw_re, draw_im)
     var scale = target_slope / sqrt(s2)
     var field = ComplexField(resolution)
     for y in range(n):  # pragma: no branch

@@ -17,6 +17,7 @@ from core.extent import positive_extent
 from extensions.water.field import ComplexField, complex_mul, fft2
 from extensions.water.random import Mulberry32
 from extensions.water.resolution import require_resolution, SpectrumResolution
+from math.norm import squared_length2
 from std.math import cos, hypot, sin
 
 
@@ -32,7 +33,7 @@ def aperture_open(dx: Float32, dy: Float32, radius: Float32, n: Int) -> Bool:
     Returns:
         True when the sample is glass, false when metal or dust blocks it.
     """
-    if dx * dx + dy * dy > radius * radius:
+    if squared_length2[DType.float32](dx, dy) > radius * radius:
         return False
     var degrees = Float32(3.141592653589793 / 180.0)
     for k in range(6):  # pragma: no branch
@@ -86,7 +87,7 @@ def _on_dust(dx: Float32, dy: Float32, radius: Float32) -> Bool:
         var r = (0.015 + 0.03 * rng.next_unit()) * Float64(radius)
         var ddx = Float64(dx) - x
         var ddy = Float64(dy) - y
-        if ddx * ddx + ddy * ddy < r * r:
+        if squared_length2[DType.float64](ddx, ddy) < r * r:
             return True
     return False
 
@@ -180,7 +181,7 @@ def _power_spectrum(
             var sy = (y + n // 2) % n
             var re = freq.channel(sx, sy, 0)
             var im = freq.channel(sx, sy, 1)
-            power[y * n + x] = re * re + im * im
+            power[y * n + x] = squared_length2[DType.float32](re, im)
     return power^
 
 
