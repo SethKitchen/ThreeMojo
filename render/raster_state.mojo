@@ -49,6 +49,7 @@ depths and agree without a device lane.
 """
 from core.ordinal import ordinal_valid
 
+from math.finite import positive_finite
 from math.vector3 import Vector3
 from render.blend import Rgba
 from std.math import inf, isfinite, log2, max, min
@@ -561,7 +562,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             and self.depth_mode.is_valid()
             and (
                 self.depth_mode != LOGARITHMIC_DEPTH
-                or (isfinite(self.log_depth_scale) and self.log_depth_scale > 0)
+                or (positive_finite(Float64(self.log_depth_scale)))
             )
             and _is_fraction(self.blend_red)
             and _is_fraction(self.blend_green)

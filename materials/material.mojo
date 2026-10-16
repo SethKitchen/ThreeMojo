@@ -228,6 +228,7 @@ from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.euler import XYZ, Euler
+from math.finite import positive_finite
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
@@ -295,7 +296,7 @@ struct PointSize(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a finite size above zero."""
-        return isfinite(self.pixels) and self.pixels > 0
+        return positive_finite(Float64(self.pixels))
 
 
 # One pixel across: three.js's `PointsMaterial` default.
@@ -344,7 +345,7 @@ struct LineWidth(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a finite width above zero."""
-        return isfinite(self.size) and self.size > 0
+        return positive_finite(Float64(self.size))
 
 
 # One pixel across, on the image: three.js's `LineMaterial` default.

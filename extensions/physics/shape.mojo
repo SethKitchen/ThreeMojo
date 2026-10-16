@@ -31,6 +31,7 @@ from core.ordinal import ordinal_valid
 
 from math.convex_hull import ConvexHull
 from math.cross import cross_vectors
+from math.finite import positive_finite
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
@@ -698,7 +699,7 @@ struct Shape(Copyable, Movable):
 
 
 def _check_size(value: Float32) raises:
-    if not (isfinite(value) and value > 0):
+    if not (positive_finite(Float64(value))):
         raise Error("A shape dimension or mass must be positive and finite")
 
 

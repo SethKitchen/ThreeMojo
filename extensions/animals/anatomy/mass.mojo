@@ -44,6 +44,7 @@ from extensions.sdf.ids import (
     SurfacePart,
 )
 from extensions.sdf.vector import V3, dot
+from math.finite import positive_finite
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
@@ -123,13 +124,13 @@ struct BodyMass(Movable):
             if self.withers.value < self.ground.value:
                 raise Error("The sculpt has no withers")
             var height = self.withers - self.ground
-            if not (isfinite(height.value) and height.value > 0.0):
+            if not (positive_finite(Float64(height.value))):
                 raise Error("The sampled withers are absent or under-resolved")
             return height
         var value = (
             self.body_length if kind == BODY_LENGTH else self.total_length
         )
-        if not (isfinite(value.value) and value.value > 0.0):
+        if not (positive_finite(Float64(value.value))):
             raise Error("The sampled reference is absent or under-resolved")
         return value
 

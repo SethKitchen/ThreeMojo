@@ -89,6 +89,7 @@ from extensions.physics.shape import (
     _narrow_finite,
 )
 from math.bounds import Box3, Sphere
+from math.finite import positive_finite
 from math.matrix3 import Matrix3
 from math.octree import Octree
 from math.quaternion import Quaternion
@@ -334,7 +335,7 @@ struct PhysicsWorld(Movable):
                 body's mode or mass state is inconsistent.
         """
         var h = dt.value
-        if not (isfinite(h) and h > 0):
+        if not (positive_finite(Float64(h))):
             raise Error("A physics step must be more than zero")
         # Validate the complete batch before any body or pending force changes.
         for body in self.bodies:
