@@ -427,6 +427,67 @@ struct _Params(Copyable, Movable):
         self.attributes = _without(self.attributes, key)
 
 
+def _place_image(name: String, var map: LwoMap, mut params: _Params) -> Bool:
+    """Store `map` on the material channel `name` selects.
+
+    Args:
+        name: The LWO channel name.
+        map: The image. Consumed.
+        params: The material being built.
+
+    Returns:
+        True when `name` is a channel this stores.
+    """
+    ref m = params.material
+    if name == "Color":
+        map.srgb = True
+        m.map = map^
+        params.mark("map")
+        return True
+    if name == "Roughness":
+        m.roughness_map = map^
+        m.roughness = 1
+        params.mark("roughnessMap")
+        params.mark("roughness")
+        return True
+    if name == "Specular":
+        map.srgb = True
+        m.specular_map = map^
+        m.specular = _hex(0xFFFFFF)
+        params.mark("specularMap")
+        params.mark("specular")
+        return True
+    if name == "Luminous" or name == "Luminosity":
+        map.srgb = True
+        m.emissive_map = map^
+        m.emissive = _hex(0x808080)
+        params.mark("emissiveMap")
+        params.mark("emissive")
+        return True
+    if name == "Metallic":
+        m.metalness_map = map^
+        m.metalness = 1
+        params.mark("metalnessMap")
+        params.mark("metalness")
+        return True
+    if name == "Transparency" or name == "Alpha":
+        m.alpha_map = map^
+        m.transparent = True
+        params.mark("alphaMap")
+        params.mark("transparent")
+        return True
+    if name == "Normal":
+        m.normal_map = map^
+        params.mark("normalMap")
+        return True
+    if name == "Bump":
+        m.bump_map = map^
+        params.mark("bumpMap")
+        return True
+    _ = map^
+    return False
+
+
 struct _MaterialParser:
     """three.js's `MaterialParser`."""
 
@@ -590,52 +651,16 @@ struct _MaterialParser:
             var height = tree.get(node, "heightWrappingMode")
             if not height.is_undefined():
                 map.wrap_t = _wrap(height, "height")
-            ref m = params.material
-            if name == "Color":
-                map.srgb = True
-                m.map = map^
-                params.mark("map")
-            elif name == "Roughness":
-                m.roughness_map = map^
-                m.roughness = 1
-                params.mark("roughnessMap")
-                params.mark("roughness")
-            elif name == "Specular":
-                map.srgb = True
-                m.specular_map = map^
-                m.specular = _hex(0xFFFFFF)
-                params.mark("specularMap")
-                params.mark("specular")
-            elif name == "Luminous":
-                map.srgb = True
-                m.emissive_map = map^
-                m.emissive = _hex(0x808080)
-                params.mark("emissiveMap")
+            if name == "Luminous Color":
+                _ = map^
+                params.material.emissive = _hex(0x808080)
                 params.mark("emissive")
-            elif name == "Luminous Color":
-                m.emissive = _hex(0x808080)
-                params.mark("emissive")
-            elif name == "Metallic":
-                m.metalness_map = map^
-                m.metalness = 1
-                params.mark("metalnessMap")
-                params.mark("metalness")
-            elif name == "Transparency" or name == "Alpha":
-                m.alpha_map = map^
-                m.transparent = True
-                params.mark("alphaMap")
-                params.mark("transparent")
-            elif name == "Normal":
-                m.normal_map = map^
-                params.mark("normalMap")
+            elif _place_image(name, map^, params) and name == "Normal":
                 var amplitude = tree.get(node, "amplitude")
                 if amplitude.is_number():
-                    m.normal_scale = Vector2(
+                    params.material.normal_scale = Vector2(
                         Float32(amplitude.number), Float32(amplitude.number)
                     )
-            elif name == "Bump":
-                m.bump_map = map^
-                params.mark("bumpMap")
         if params.has("roughnessMap") and params.has("specularMap"):
             params.material.specular_map = None
             params.drop("specularMap")
@@ -666,47 +691,11 @@ struct _MaterialParser:
             if wrap >= 0:
                 map.wrap_s = _wrap(tree.get(wrap, "w"), "width")
                 map.wrap_t = _wrap(tree.get(wrap, "h"), "height")
-            ref m = params.material
-            if name == "Color":
-                map.srgb = True
-                m.map = map^
-                params.mark("map")
-            elif name == "Diffuse":
-                m.ao_map = map^
+            if name == "Diffuse":
+                params.material.ao_map = map^
                 params.mark("aoMap")
-            elif name == "Roughness":
-                m.roughness_map = map^
-                m.roughness = 1
-                params.mark("roughnessMap")
-                params.mark("roughness")
-            elif name == "Specular":
-                map.srgb = True
-                m.specular_map = map^
-                m.specular = _hex(0xFFFFFF)
-                params.mark("specularMap")
-                params.mark("specular")
-            elif name == "Luminosity":
-                map.srgb = True
-                m.emissive_map = map^
-                m.emissive = _hex(0x808080)
-                params.mark("emissiveMap")
-                params.mark("emissive")
-            elif name == "Metallic":
-                m.metalness_map = map^
-                m.metalness = 1
-                params.mark("metalnessMap")
-                params.mark("metalness")
-            elif name == "Transparency" or name == "Alpha":
-                m.alpha_map = map^
-                m.transparent = True
-                params.mark("alphaMap")
-                params.mark("transparent")
-            elif name == "Normal":
-                m.normal_map = map^
-                params.mark("normalMap")
-            elif name == "Bump":
-                m.bump_map = map^
-                params.mark("bumpMap")
+            else:
+                _ = _place_image(name, map^, params)
 
     def attributes(
         self, tree: LwoTree, attributes: Int, mut params: _Params
