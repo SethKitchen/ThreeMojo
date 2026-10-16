@@ -41,7 +41,7 @@ from extensions.humanoid.skeleton.head.skin.dimensions import (
 from extensions.humanoid.skeleton.torso.sweep import SweepField
 from extensions.humanoid.skeleton.morph import smoothstep
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import max, min, sqrt
 
 
@@ -78,7 +78,7 @@ comptime THINNESS = "thinness"
 
 def _mix(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     """Return `a` moved toward `b` by `t`."""
-    return a + (b - a) * t
+    return mix_delta3(a, b, t)
 
 
 def _zones(h: HeadDimensions) raises -> List[_Zone]:

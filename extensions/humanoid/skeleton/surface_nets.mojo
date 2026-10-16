@@ -34,7 +34,7 @@ from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.isosurface import check_detail
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.sys import num_logical_cores
@@ -121,7 +121,7 @@ def surface_gradient[
 def _crossing(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
     """Return where the field crosses zero between two samples."""
     var t = da / (da - db)
-    return a + (b - a) * t
+    return mix_delta3(a, b, t)
 
 
 def _u_of(point: Vector3) -> Float32:

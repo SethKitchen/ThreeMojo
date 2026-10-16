@@ -22,6 +22,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from math.norm import squared_length2
+from math.utils import mix_delta
 from render.srgb import srgb_to_linear
 from std.collections import Dict
 
@@ -115,7 +116,9 @@ def mix3(a: V3, b: V3, t: Float64) -> V3:
     Returns:
         The blend.
     """
-    return a + (b - a) * t
+    return V3(
+        mix_delta(a.x, b.x, t), mix_delta(a.y, b.y, t), mix_delta(a.z, b.z, t)
+    )
 
 
 def grizzle(c: V3, p: V3, scale: Float64, amount: Float64) -> V3:

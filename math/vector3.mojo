@@ -31,7 +31,7 @@ from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
-from math.utils import SeededRandom
+from math.utils import SeededRandom, mix_delta
 from math.norm import (
     _ordinary_product,
     dot3,
@@ -718,6 +718,27 @@ def reciprocal_unit(value: Vector3) -> Vector3:
     """
     var unit = reciprocal_normalized3[DType.float32](value.x, value.y, value.z)
     return Vector3(unit[0], unit[1], unit[2])
+
+
+def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
+    """Return `start` moved toward `end` by `t`.
+
+    Each component forms the difference first, then scales it, then adds
+    it, as `mix_delta` does.
+
+    Args:
+        start: The vector at zero.
+        end: The vector at one.
+        t: The fraction.
+
+    Returns:
+        The blend.
+    """
+    return Vector3(
+        mix_delta(start.x, end.x, t),
+        mix_delta(start.y, end.y, t),
+        mix_delta(start.z, end.z, t),
+    )
 
 
 def _ordinary_transform[

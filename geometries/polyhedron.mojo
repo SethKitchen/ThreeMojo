@@ -48,7 +48,7 @@ from core.buffer_geometry import (
     UV,
 )
 from core.user_data import UserData, json_number_text
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import atan2, pi, sqrt
 from units.si import Length, METER
 
@@ -59,7 +59,7 @@ comptime GOLDEN = Float32(1.618034)
 
 def _lerp(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     """Return the point a fraction `t` of the way from `a` to `b`."""
-    return a + (b - a) * t
+    return mix_delta3(a, b, t)
 
 
 def _push(mut data: List[Float32], point: Vector3):
