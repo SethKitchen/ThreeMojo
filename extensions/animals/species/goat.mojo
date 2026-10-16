@@ -61,6 +61,8 @@ from extensions.animals.species.hoofed import (
     HeadFrame,
     head_frame,
     hoofed_bones,
+    ClovenHoof,
+    add_cloven_hoof,
     dewclaw_balls,
 )
 from extensions.animals.traits import Traits
@@ -1620,51 +1622,30 @@ def _skin(m: SdfModel, body: List[Int], p: V3, d: V3) -> V3:
 
 
 def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
-    # Two claws with a cleft between them, the wall parallel to the
-    # pastern, heel bulbs behind, flat on the ground.
-    var zc = (c.z + toe_j.z) * 0.5
-    for k in [1.0, -1.0]:  # pragma: no branch
-        var x = c.x + 0.0105 * k * w
-        var top = V3(x, c.y + 0.008, c.z - 0.004)
-        var toe = V3(x - 0.002 * k, 0.006, toe_j.z - 0.004)
-        var heel = V3(x, 0.008, c.z - 0.016)
-        _ = m.cone("hoof", bone, top, toe, 0.0115 * w, 0.0055 * w, k=0.006)
-        _ = m.cone(
-            "hoof",
-            bone,
-            heel,
-            V3(toe.x, 0.006, zc + 0.004),
-            0.011 * w,
-            0.009 * w,
-            k=0.008,
-        )
-        _ = m.sphere(
-            "heelbulb", bone, V3(x, 0.013, c.z - 0.02), 0.0105 * w, k=0.008
-        )
-    _ = m.cone(
-        "coronet",
+    add_cloven_hoof(
+        m,
         bone,
-        c + V3(0, 0.012, -0.01),
-        c + V3(0, 0.006, 0.008),
-        0.017 * w,
-        0.017 * w,
-        k=0.008,
-    )
-    _ = m.ell(
-        "cleft",
-        bone,
-        V3(c.x, 0.006, zc + 0.012),
-        V3(0.0022, 0.02, 0.03),
-        k=0.002,
-        carve=True,
-    )
-    _ = m.ell(
-        "sole",
-        bone,
-        V3(c.x, -0.1 + 0.001, zc),
-        V3(0.1, 0.1, 0.1),
-        k=0.002,
-        carve=True,
+        c,
+        toe_j,
+        w,
+        ClovenHoof(
+            spread=0.0105,
+            toe_inset=0.002,
+            toe_height=0.006,
+            toe_back=0.004,
+            wall_root=0.0115,
+            wall_tip=0.0055,
+            heel_back=0.016,
+            heel_root=0.011,
+            heel_tip=0.009,
+            heel_forward=0.004,
+            bulb_height=0.013,
+            bulb_back=0.02,
+            bulb_radius=0.0105,
+            coronet_radius=0.017,
+            cleft_forward=0.012,
+            cleft_length=0.03,
+        ),
     )
 
 
