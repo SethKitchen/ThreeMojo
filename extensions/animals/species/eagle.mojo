@@ -82,6 +82,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import cos, pi, pow, sin, sqrt
 
 comptime NECK_SEGS = 4
@@ -241,7 +242,9 @@ def _knee(hip: V3, ankle: V3, l1: Float64, l2: Float64, pole: V3) -> V3:
     var span = length(d)
     var e1 = d * (1.0 / span)
     var e2 = normalize(pole - e1 * dot(pole, e1))
-    var c = (l1 * l1 + span * span - l2 * l2) / (2.0 * l1 * span)
+    var c = (squared_length2[DType.float64](l1, span) - l2 * l2) / (
+        2.0 * l1 * span
+    )
     var sn = sqrt(max(0.0, 1.0 - c * c))
     return hip + e1 * (l1 * c) + e2 * (l1 * sn)
 

@@ -95,6 +95,7 @@ from math.octree import Octree
 from math.quaternion import Quaternion
 from math.ray import Ray
 from math.triangle import Line3, Triangle
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, fma, inf, isfinite, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
@@ -1990,7 +1991,7 @@ struct PhysicsWorld(Movable):
             var t1 = p.tangent_impulse1 - p.tangent_mass1 * v.dot(p.tangent1)
             var t2 = p.tangent_impulse2 - p.tangent_mass2 * v.dot(p.tangent2)
             var limit = friction * p.normal_impulse
-            var size = sqrt(t1 * t1 + t2 * t2)
+            var size = sqrt(squared_length2[DType.float32](t1, t2))
             if size > limit:
                 t1 *= limit / size
                 t2 *= limit / size

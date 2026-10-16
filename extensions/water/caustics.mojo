@@ -15,6 +15,7 @@ arithmetic runs on a `CausticField` and on a copy in device memory.
 from extensions.water.optics import channel_ior, refract
 from extensions.water.surface import SurfaceField, sample_surface
 from math.vector3 import Vector3
+from math.norm import squared_length3
 from std.math import abs, floor, hypot, sqrt
 from units.si import Length
 
@@ -285,7 +286,7 @@ def render_caustics(
             var nx = -sample.slope_x
             var ny = Float32(1.0)
             var nz = -sample.slope_z
-            var nl = sqrt(nx * nx + ny * ny + nz * nz)
+            var nl = sqrt(squared_length3[DType.float32](nx, ny, nz))
             nx /= nl
             ny /= nl
             nz /= nl

@@ -22,6 +22,7 @@ has no height.
 from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
 from geometries.surface import indexed_surface
 from core.user_data import UserData
+from math.norm import squared_length3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
 
@@ -124,7 +125,7 @@ def capsule(
             data.append(Float32(z))
             # three.js's `normalize`: divided by its length. A normal is
             # never of no length: a pole's points straight along y.
-            var scale = 1 / sqrt(x * x + normal_y * normal_y + z * z)
+            var scale = 1 / sqrt(squared_length3[DType.float64](x, normal_y, z))
             normals.append(Float32(x * scale))
             normals.append(Float32(normal_y * scale))
             normals.append(Float32(z * scale))

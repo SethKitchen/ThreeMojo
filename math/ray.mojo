@@ -183,7 +183,7 @@ def _line_approach[
     var cz = products.cross_z
     return _LineApproach(
         products.projection * inverse,
-        (cx * cx + cy * cy + cz * cz) / products.norm_sq,
+        squared_length3[DType.float64](cx, cy, cz) / products.norm_sq,
         products.norm_sq,
         (dy * cz - dz * cy) * inverse,
         (dz * cx - dx * cz) * inverse,

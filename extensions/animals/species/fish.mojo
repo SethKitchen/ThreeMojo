@@ -60,6 +60,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import girth_warp, scale_about_warp
+from math.norm import squared_length2
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The fish's head origin moves with the variant, so the eye is placed
@@ -1479,7 +1480,7 @@ def fish_paint(
             # gill cover.
             var fz = (u - (g.v.op + 0.03)) / 0.058
             var fy = (p.y - (g.yc(g.v.op) + 0.2 * g.hd(g.v.op))) / (0.034 * sl)
-            var rr = fz * fz + fy * fy
+            var rr = squared_length2[DType.float64](fz, fy)
             c = mix3(c, pal.get("ear"), smoothstep(1.25, 0.9, rr))
     # The lips' cut faces, a little darker, toward the mouth's pink.
     c = mix3(c, mix3(c * 0.85, srgb(0xB88A80), 0.3), lip_cut)

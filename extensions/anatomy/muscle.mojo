@@ -38,6 +38,7 @@ and take and return `Float64`.
 """
 
 from math.finite import positive_finite
+from math.norm import squared_length2
 from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
 from units.si import (
@@ -393,7 +394,7 @@ def _fiber_from_reach(
     arch: MuscleArchitecture, reach: Float64
 ) raises -> Float64:
     var h = arch.thickness()
-    return sqrt(reach * reach + h * h)
+    return sqrt(squared_length2[DType.float64](reach, h))
 
 
 def _mismatch(

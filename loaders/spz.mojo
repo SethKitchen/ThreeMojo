@@ -57,6 +57,7 @@ from loaders.nrrd import gunzip
 from loaders.splat import le_u16, le_u32
 from render.data_utils import from_half_float
 from render.zstd import zstd_decompress
+from math.norm import squared_length3
 from std.math import exp, max, min, sqrt
 from std.pathlib import Path
 
@@ -148,7 +149,9 @@ def smallest_three(packed: Int) -> Tuple[Float64, Float64, Float64, Float64]:
     var a = spz_quaternion_component(packed & 1023)
     var b = spz_quaternion_component((packed >> 10) & 1023)
     var c = spz_quaternion_component((packed >> 20) & 1023)
-    var rest = sqrt(max(Float64(0), 1 - (a * a + b * b + c * c)))
+    var rest = sqrt(
+        max(Float64(0), 1 - squared_length3[DType.float64](a, b, c))
+    )
     if largest == 0:
         return (rest, c, b, a)
     if largest == 1:

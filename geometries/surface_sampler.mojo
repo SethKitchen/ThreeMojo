@@ -45,6 +45,7 @@ from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from math.norm import squared_length3
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -109,7 +110,7 @@ def _area(a: Vector3, b: Vector3, c: Vector3) -> Float64:
     var nx = ey * fz - ez * fy
     var ny = ez * fx - ex * fz
     var nz = ex * fy - ey * fx
-    return sqrt(nx * nx + ny * ny + nz * nz) * 0.5
+    return sqrt(squared_length3[DType.float64](nx, ny, nz)) * 0.5
 
 
 def _vertex_weight(attribute: BufferAttribute, vertex: Int) raises -> Float64:

@@ -30,6 +30,7 @@ triangles kept.
 
 from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
+from math.norm import squared_length3
 from std.math import sqrt
 from units.si import Length, METER
 
@@ -1637,7 +1638,7 @@ def teapot(
                 var nx = tdir[1] * sdir[2] - tdir[2] * sdir[1]
                 var ny = tdir[2] * sdir[0] - tdir[0] * sdir[2]
                 var nz = tdir[0] * sdir[1] - tdir[1] * sdir[0]
-                var length = sqrt(nx * nx + ny * ny + nz * nz)
+                var length = sqrt(squared_length3[DType.float64](nx, ny, nz))
                 var scale = 1.0 / (length if length != 0 else 1.0)
                 nx *= scale
                 ny *= scale

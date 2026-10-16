@@ -61,6 +61,7 @@ from extensions.sdf.vector import (
     normalize,
     smoothstep,
 )
+from math.norm import squared_length2, squared_length3
 from std.math import asin, cos, pi, sin, sqrt
 
 # The builds, in procedural-animals' order.
@@ -1407,7 +1408,7 @@ def spider_paint(
                 var sz = (u - uz) * r.z
                 spots = min(
                     spots,
-                    sqrt(sx * sx + sz * sz)
+                    sqrt(squared_length2[DType.float64](sx, sz))
                     - 0.32 * mmu * (1.0 - 0.15 * Float64(k)),
                 )
                 var vz = uz + abs(p.x) / r.x * 0.25
@@ -1449,7 +1450,7 @@ def spider_paint(
                 var bx = p.x / r.x
                 var by = (p.y - c.y - r.y * 0.7) / r.y
                 var bz = (p.z - c.z + r.z * 0.35) / r.z
-                var bd = sqrt(bx * bx + by * by + bz * bz)
+                var bd = sqrt(squared_length3[DType.float64](bx, by, bz))
                 var bare = 1.0 - smoothstep(0.28, 0.42, bd + 0.05 * noise)
                 pint *= 1.0 - bare
                 col = mix3(col, V3(0.004, 0.003, 0.003), bare * 0.6)

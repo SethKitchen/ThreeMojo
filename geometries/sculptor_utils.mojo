@@ -229,18 +229,18 @@ def distance_sq_to_segment(point: Point3, v1: Point3, v2: Point3) -> Float64:
     var vx = v2.x - v1.x
     var vy = v2.y - v1.y
     var vz = v2.z - v1.z
-    var length_squared = vx * vx + vy * vy + vz * vz
+    var length_squared = squared_length3[DType.float64](vx, vy, vz)
     if length_squared == 0:
-        return ptx * ptx + pty * pty + ptz * ptz
+        return squared_length3[DType.float64](ptx, pty, ptz)
     var t = (ptx * vx + pty * vy + ptz * vz) / length_squared
     if t < 0:
-        return ptx * ptx + pty * pty + ptz * ptz
+        return squared_length3[DType.float64](ptx, pty, ptz)
     if t > 1:
         return sqr_dist(point, v2)
     var rx = point.x - v1.x - t * vx
     var ry = point.y - v1.y - t * vy
     var rz = point.z - v1.z - t * vz
-    return rx * rx + ry * ry + rz * rz
+    return squared_length3[DType.float64](rx, ry, rz)
 
 
 def _degenerate_distance(

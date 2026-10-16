@@ -21,6 +21,7 @@ from extensions.sdf.vector import (
     mix,
     smoothstep,
 )
+from math.norm import squared_length2
 from render.srgb import srgb_to_linear
 from std.collections import Dict
 
@@ -206,7 +207,7 @@ def paint_eye(
     var squash = -look.slit if look.slit < 0.0 else 1.0
     var px = local.x * stretch
     var py = local.y * squash
-    var across = (px * px + py * py) ** 0.5 / iris_r
+    var across = squared_length2[DType.float64](px, py) ** 0.5 / iris_r
     var plain = (local.x * local.x + local.y * local.y) ** 0.5 / iris_r
     var front = smoothstep(0.0, 0.35 * radius, local.z)
     var pupil_edge = smoothstep(look.pupil * 0.85, look.pupil * 1.05, across)

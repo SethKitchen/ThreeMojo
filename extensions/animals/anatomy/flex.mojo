@@ -31,6 +31,7 @@ from extensions.animals.rig import Pose
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import CONE, ELLIPSOID
 from extensions.sdf.vector import V3, Rigid, dot, length
+from math.norm import squared_length2
 from std.math import pow, sqrt
 
 # The share of a belly's change in shape that the surface shows.
@@ -54,7 +55,7 @@ def fiber_ratio(muscle: AnimalMuscle, world: List[Rigid]) raises -> Float64:
     var unit = Float64(muscle.unit_length(world).value)
     var reach = max(0.0, unit - Float64(muscle.arch.tendon_slack.value))
     var h = muscle.arch.thickness()
-    var f = sqrt(reach * reach + h * h) / Float64(
+    var f = sqrt(squared_length2[DType.float64](reach, h)) / Float64(
         muscle.arch.fiber_length.value
     )
     return min(1.4, max(0.6, f))
