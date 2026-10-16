@@ -18,6 +18,7 @@ its active words. These helpers require finite inputs; callers validate at
 their public boundary. Tolerances must also be finite and nonnegative.
 """
 
+from math.next_float import next_binary64_up
 from math.scaled_products import _Scaled, _common_scale, _split
 from std.math import inf, isfinite, ldexp
 from std.memory import bitcast
@@ -233,18 +234,10 @@ struct _Interval(ImplicitlyCopyable):
         return _outward(min(min(a, b), min(c, d)), max(max(a, b), max(c, d)))
 
 
-def _up(value: Float64) -> Float64:
-    """Return the adjacent greater binary64, including subnormal values."""
-    if value == 0:
-        return bitcast[DType.float64](UInt64(1))
-    var bits = bitcast[DType.uint64](value)
-    return bitcast[DType.float64](bits + 1 if value > 0 else bits - 1)
-
-
 def _outward(low: Float64, high: Float64) -> _Interval:
     if not isfinite(low) or not isfinite(high):
         return _Interval(-inf[DType.float64](), inf[DType.float64]())
-    return _Interval(-_up(-low), _up(high))
+    return _Interval(-next_binary64_up(-low), next_binary64_up(high))
 
 
 def _interval_difference(a: _P, b: _P) -> Array[_Interval, 3]:

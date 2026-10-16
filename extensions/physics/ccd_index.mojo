@@ -13,21 +13,12 @@ links bound a query to at most 2*T-1 node visits, without a traversal stack.
 from extensions.physics.center_order import sort_by_center
 from extensions.physics.shape import _wide
 from math.bounds import Box3
+from math.next_float import next_binary64_up
 from math.triangle import Triangle
-from std.memory import bitcast
-
-
-def _up(value: Float64) -> Float64:
-    # Query operands are finite in the checked CCD domain. Include both
-    # signs of zero; returning the next positive subnormal is conservative.
-    if value == 0:
-        return bitcast[DType.float64](UInt64(1))
-    var bits = bitcast[DType.uint64](value)
-    return bitcast[DType.float64](bits + 1 if value > 0 else bits - 1)
 
 
 def _down(value: Float64) -> Float64:
-    return -_up(-value)
+    return -next_binary64_up(-value)
 
 
 def _bounds(
@@ -43,7 +34,9 @@ def _bounds(
     for axis in range(3):  # pragma: no branch
         var end = start[axis] + travel[axis]
         low[axis] = _down(min(start[axis], _down(end)) - reach)
-        high[axis] = _up(max(start[axis], _up(end)) + reach)
+        high[axis] = next_binary64_up(
+            max(start[axis], next_binary64_up(end)) + reach
+        )
     return (low, high)
 
 
