@@ -203,9 +203,9 @@ def fit_sun[
             origin, or the camera's view or projection is refused.
     """
     shadow.validate()
-    if not (
-        isfinite(position.x) and isfinite(position.y) and isfinite(position.z)
-    ) or (position.x == 0 and position.y == 0 and position.z == 0):
+    if not position.is_finite() or (
+        position.x == 0 and position.y == 0 and position.z == 0
+    ):
         raise Error("A sun at the origin has no direction")
     var direction = -position
     direction.normalize()
@@ -416,7 +416,7 @@ struct SunLight(Movable):
             # fit_sun normalized the finite nonzero sun direction. Adding
             # that bounded direction cannot overflow a finite position:
             # near the largest finite Float32 they are below half an ULP.
-            if not _finite_point(cascade.position):
+            if not cascade.position.is_finite():
                 raise Error("A sun's cascade position must be finite")
             changes.append(light)
         # All lights and node references are valid before the first write.
@@ -453,8 +453,3 @@ struct SunLight(Movable):
                 raise Error("A sun's cascades are not in this scene")
             _ = scene.get(self.nodes[index])
             _ = scene.get(self.targets[index])
-
-
-def _finite_point(point: Vector3) -> Bool:
-    """Return True if every coordinate is finite."""
-    return isfinite(point.x) and isfinite(point.y) and isfinite(point.z)

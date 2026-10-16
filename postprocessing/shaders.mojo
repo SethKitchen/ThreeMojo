@@ -266,11 +266,6 @@ struct EffectSettings(ImplicitlyCopyable):
         self.screen_height = 1024
 
 
-def _finite(v: Vector3) -> Bool:
-    """Return True if every component of `v` is finite."""
-    return isfinite(v.x) and isfinite(v.y) and isfinite(v.z)
-
-
 def check_effect(settings: EffectSettings) raises:
     """Refuse effect settings no shader could run.
 
@@ -306,9 +301,9 @@ def check_effect(settings: EffectSettings) raises:
         and isfinite(settings.wave_factor)
     )
     var vectors = (
-        _finite(settings.pow_rgb)
-        and _finite(settings.mul_rgb)
-        and _finite(settings.add_rgb)
+        settings.pow_rgb.is_finite()
+        and settings.mul_rgb.is_finite()
+        and settings.add_rgb.is_finite()
     )
     if not (scalars and vectors):
         raise Error("A shader effect's uniforms must be finite")
@@ -1342,7 +1337,7 @@ def check_god_rays(settings: GodRaysSettings) raises:
             above zero and at most one.
     """
     if not (
-        _finite(settings.sun)
+        settings.sun.is_finite()
         and isfinite(settings.intensity)
         and isfinite(settings.filter_length)
         and isfinite(settings.resolution_scale)

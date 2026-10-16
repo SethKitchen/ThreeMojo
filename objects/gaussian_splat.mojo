@@ -49,7 +49,7 @@ from math.matrix4 import Matrix4
 from math.norm import squared_length3
 from math.utils import max3
 from math.vector3 import Vector3
-from std.math import floor, inf, isfinite, max, min, sqrt
+from std.math import floor, inf, max, min, sqrt
 from std.memory import bitcast
 from units.si import Length, METER
 
@@ -289,9 +289,7 @@ struct GaussianSplat(Copyable, Movable):
         """
         self.compute_bounding_box()
         var middle = self.bounding_box.value().center()
-        if not (
-            isfinite(middle.x) and isfinite(middle.y) and isfinite(middle.z)
-        ):
+        if not middle.is_finite():
             # A finite center plus a positive extent can need an infinite
             # Float32 box endpoint. The center-only box still has a midpoint.
             # The empty box has a finite origin center, so this path has splats.
@@ -332,18 +330,14 @@ struct GaussianSplat(Copyable, Movable):
         replacing infinity; positive reaches and outside points fail.
         An empty set is enclosed, as for any universal point predicate.
         """
-        if not (
-            isfinite(middle.x) and isfinite(middle.y) and isfinite(middle.z)
-        ):
+        if not middle.is_finite():
             return False
         var stored_middle: Array[Float32, 3] = [middle.x, middle.y, middle.z]
         for index in range(self.count()):
             if self._sphere_extent(index) != 0:
                 return False
             var point = self._center(index)
-            if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
-            ):
+            if not point.is_finite():
                 return False
             var coordinate: Array[Float32, 3] = [point.x, point.y, point.z]
             if not _max_radius_encloses_box(

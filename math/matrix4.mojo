@@ -59,11 +59,6 @@ comptime FRAME_TOLERANCE = Float32(1e-4)
 comptime _LOOK_AT_NUDGE = Float32(0.0001)
 
 
-def _finite_direction(vector: Vector3) -> Bool:
-    """Return whether all three direction components are finite."""
-    return isfinite(vector.x) and isfinite(vector.y) and isfinite(vector.z)
-
-
 def _unit_direction(vector: Vector3) -> Vector3:
     """Normalize a finite nonzero direction without squared-norm overflow."""
     var result = vector
@@ -568,7 +563,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         for axis in range(3):  # pragma: no branch
             var start = axis * 4
             var direction = Vector3(e[start], e[start + 1], e[start + 2])
-            if not _finite_direction(direction):
+            if not direction.is_finite():
                 raise Error(
                     "A transform axis must be finite to extract rotation"
                 )
@@ -870,12 +865,12 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             Error: If a position is not finite, or up is zero or not finite.
             The matrix stays unchanged on failure.
         """
-        if not (_finite_direction(eye) and _finite_direction(target)):
+        if not (eye.is_finite() and target.is_finite()):
             raise Error("Look-at positions must be finite")
-        if not _finite_direction(up) or (up.x == 0 and up.y == 0 and up.z == 0):
+        if not up.is_finite() or (up.x == 0 and up.y == 0 and up.z == 0):
             raise Error("An up direction must be finite and not zero")
         var z = eye - target
-        if not _finite_direction(z):
+        if not z.is_finite():
             # Halve before subtraction when opposite finite coordinates
             # would overflow. The direction is unchanged.
             z = eye * 0.5 - target * 0.5

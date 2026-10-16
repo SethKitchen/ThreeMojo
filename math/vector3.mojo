@@ -73,6 +73,14 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
         """Return the Euclidean length of the vector."""
         return length3(self.x, self.y, self.z)
 
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x`, `y`, and `z` are all finite.
+        """
+        return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
+
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise."""
         self.x += other.x

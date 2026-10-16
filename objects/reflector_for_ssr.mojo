@@ -150,7 +150,7 @@ def fresnel_coefficient(eye: Vector3) -> Float32:
     Returns:
         The factor.
     """
-    if not (isfinite(eye.x) and isfinite(eye.y) and isfinite(eye.z)):
+    if not eye.is_finite():
         var up = eye.y / sqrt(eye.dot(eye))
         return 1 - up * up
     var unit = eye

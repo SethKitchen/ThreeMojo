@@ -38,7 +38,7 @@ from core.buffer_geometry import BufferGeometry
 from geometries.grid import append_cell
 from geometries.surface import indexed_surface
 from math.vector3 import Vector3
-from std.math import cos, isfinite, pi, sin
+from std.math import cos, pi, sin
 
 # The step the finite differences take, in units of `u` and `v`: three.js's
 # `EPS`.
@@ -96,7 +96,7 @@ struct SurfaceFunction[func: def(Float32, Float32) thin -> Vector3](
 
 def _check(point: Vector3) raises -> Vector3:
     """Return `point`, or raise if any of its numbers is not finite."""
-    if not (isfinite(point.x) and isfinite(point.y) and isfinite(point.z)):
+    if not point.is_finite():
         raise Error("A parametric surface must give finite points")
     return point
 
