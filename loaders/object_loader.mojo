@@ -958,13 +958,7 @@ struct _Loader(Movable):
         self, node: Int, key: String, default: Float32
     ) raises -> Float32:
         """Return an object's finite number under `key`, or `default`."""
-        var found = self.document.get(node, key)
-        if found == NO_NODE:
-            return default
-        var value = Float32(self.document.number(found))
-        if not isfinite(value):
-            raise Error("Object JSON: " + key + " must be finite")
-        return value
+        return self.document.optional_finite(node, key, default, "Object JSON")
 
     def integer(self, node: Int, key: String, default: Int) raises -> Int:
         """Return an object's whole number under `key`, or `default`."""

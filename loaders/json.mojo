@@ -329,6 +329,32 @@ struct JsonDocument(Movable):
             return default
         return self.integer(found)
 
+    def optional_finite(
+        self, node: Int, key: String, default: Float32, label: String
+    ) raises -> Float32:
+        """Return an object's finite number under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The value when the key is absent.
+            label: The file kind named when the number is not finite.
+
+        Returns:
+            The number as `Float32`, or `default`.
+
+        Raises:
+            Error: If the node is not an object, the value is not a
+                number, or the number is not finite.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        var value = Float32(self.number(found))
+        if not isfinite(value):
+            raise Error(label + ": " + key + " must be finite")
+        return value
+
     def string(self, node: Int) raises -> String:
         """Return a string.
 
