@@ -351,6 +351,51 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         """
         return Quaternion(-self.x, -self.y, -self.z, -self.w)
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum.
+
+        Args:
+            other: The quaternion to add.
+
+        Returns:
+            The component-wise sum.
+        """
+        return Quaternion(
+            self.x + other.x,
+            self.y + other.y,
+            self.z + other.z,
+            self.w + other.w,
+        )
+
+    def __sub__(self, other: Self) -> Self:
+        """Return the difference.
+
+        Args:
+            other: The quaternion to take away.
+
+        Returns:
+            The component-wise difference.
+        """
+        return Quaternion(
+            self.x - other.x,
+            self.y - other.y,
+            self.z - other.z,
+            self.w - other.w,
+        )
+
+    def __mul__(self, factor: Float32) -> Self:
+        """Return this quaternion scaled by a factor.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            Each component multiplied by `factor`.
+        """
+        return Quaternion(
+            self.x * factor, self.y * factor, self.z * factor, self.w * factor
+        )
+
     def conjugate(self) -> Self:
         """Return the opposite rotation, which for a unit quaternion is the
         inverse."""
@@ -396,24 +441,14 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         # So close that the arc is a line: blend straight and renormalize,
         # because the sine we would divide by is nearly zero.
         if sin_half_squared <= SLERP_EPSILON:
-            var blend = Quaternion(
-                self.x + (target.x - self.x) * t,
-                self.y + (target.y - self.y) * t,
-                self.z + (target.z - self.z) * t,
-                self.w + (target.w - self.w) * t,
-            )
+            var blend = self + (target - self) * t
             blend.normalize()
             return blend
         var sin_half = sqrt(sin_half_squared)
         var half = atan2(sin_half, cos_half)
         var keep = sin((1 - t) * half) / sin_half
         var take = sin(t * half) / sin_half
-        return Quaternion(
-            self.x * keep + target.x * take,
-            self.y * keep + target.y * take,
-            self.z * keep + target.z * take,
-            self.w * keep + target.w * take,
-        )
+        return self * keep + target * take
 
     @staticmethod
     def slerp_quaternions(start: Self, end: Self, t: Float32) -> Self:

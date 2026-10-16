@@ -241,11 +241,7 @@ struct Vec3d(ImplicitlyCopyable):
         Returns:
             The point.
         """
-        return Vec3d(
-            self.x + (other.x - self.x) * alpha,
-            self.y + (other.y - self.y) * alpha,
-            self.z + (other.z - self.z) * alpha,
-        )
+        return self + (other - self) * alpha
 
     def rotated(self, axis: Self, angle: Float64) -> Self:
         """Return the vector turned about a unit axis, three.js's
