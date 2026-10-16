@@ -41,7 +41,7 @@ from extensions.humanoid.skeleton.head.skin.dimensions import (
 from extensions.humanoid.skeleton.torso.sweep import SweepField
 from extensions.humanoid.skeleton.morph import smoothstep
 from math.utils import clamp
-from math.vector3 import Vector3, mix_delta3
+from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import max, min, sqrt
 
 
@@ -298,22 +298,8 @@ struct _Brows(Movable):
         self.edge = dimensions.head.cm(0.12)
         self.grain = dimensions.head.cm(0.12)
         var pad = Vector3(self.edge, self.edge, self.edge)
-        self.low = (
-            Vector3(
-                min(self.right.low.x, self.left.low.x),
-                min(self.right.low.y, self.left.low.y),
-                min(self.right.low.z, self.left.low.z),
-            )
-            - pad
-        )
-        self.high = (
-            Vector3(
-                max(self.right.high.x, self.left.high.x),
-                max(self.right.high.y, self.left.high.y),
-                max(self.right.high.z, self.left.high.z),
-            )
-            + pad
-        )
+        self.low = component_min(self.right.low, self.left.low) - pad
+        self.high = component_max(self.right.high, self.left.high) + pad
 
     def weight(self, point: Vector3) -> Float32:
         """Return how much of the hair's color a point takes."""

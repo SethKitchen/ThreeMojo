@@ -31,7 +31,7 @@ from math.box_extent import box_exterior
 from math.catmull import catmull_rom_point
 from math.norm import squared_length2
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from std.math import max, min, pi, sqrt
 
 # A value larger than any distance a torso part can hold.
@@ -85,16 +85,9 @@ struct Sweep(Copyable, Movable):
         """
         self.stations.append(Station(p, ml, ap))
         var r = max(ml, ap)
-        self.low = Vector3(
-            min(self.low.x, p.x - r),
-            min(self.low.y, p.y - r),
-            min(self.low.z, p.z - r),
-        )
-        self.high = Vector3(
-            max(self.high.x, p.x + r),
-            max(self.high.y, p.y + r),
-            max(self.high.z, p.z + r),
-        )
+        var span = Vector3(r, r, r)
+        self.low = component_min(self.low, p - span)
+        self.high = component_max(self.high, p + span)
 
     def round(mut self, p: Vector3, r: Float32):
         """Append one round station.

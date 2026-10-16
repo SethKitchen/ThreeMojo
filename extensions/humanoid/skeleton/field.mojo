@@ -16,7 +16,7 @@ from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
 from math.cross import cross_vectors
 from math.norm import squared_length3
 from math.utils import clamp
-from math.vector3 import Vector3, mix_delta3
+from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import isfinite, max, min, pi, sqrt
 from units.si import Angle, Length
 
@@ -55,16 +55,8 @@ struct Bounds(ImplicitlyCopyable):
             center: Ellipsoid center, in meters.
             radii: Semi-axes, in meters.
         """
-        self.low = Vector3(
-            min(self.low.x, center.x - radii.x),
-            min(self.low.y, center.y - radii.y),
-            min(self.low.z, center.z - radii.z),
-        )
-        self.high = Vector3(
-            max(self.high.x, center.x + radii.x),
-            max(self.high.y, center.y + radii.y),
-            max(self.high.z, center.z + radii.z),
-        )
+        self.low = component_min(self.low, center - radii)
+        self.high = component_max(self.high, center + radii)
 
     def padded(self, pad: Float32) -> Bounds:
         """Return this box grown by `pad` on every side.

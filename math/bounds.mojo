@@ -64,7 +64,7 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from math.norm import length3, _ordinary_squared
 from std.math import inf, isfinite, sqrt
 from std.memory import bitcast
@@ -161,10 +161,8 @@ def enclose_point(mut low: Vector3, mut high: Vector3, point: Vector3):
         high: The box's high corner.
         point: The point to take in.
     """
-    low = Vector3(min(low.x, point.x), min(low.y, point.y), min(low.z, point.z))
-    high = Vector3(
-        max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
-    )
+    low = component_min(low, point)
+    high = component_max(high, point)
 
 
 @fieldwise_init
@@ -244,16 +242,8 @@ struct Box3(Equatable, ImplicitlyCopyable):
         if self.is_empty():
             self = other
             return
-        self.min = Vector3(
-            min(self.min.x, other.min.x),
-            min(self.min.y, other.min.y),
-            min(self.min.z, other.min.z),
-        )
-        self.max = Vector3(
-            max(self.max.x, other.max.x),
-            max(self.max.y, other.max.y),
-            max(self.max.z, other.max.z),
-        )
+        self.min = component_min(self.min, other.min)
+        self.max = component_max(self.max, other.max)
 
     def center(self) -> Vector3:
         """Return the middle of this box, or the origin for an empty one."""

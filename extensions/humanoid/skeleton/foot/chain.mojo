@@ -22,8 +22,8 @@ from extensions.humanoid.skeleton.field import (
     tube_chain_distance,
     tube_chain_volume,
 )
-from math.vector3 import Vector3
-from std.math import max, min, pi
+from math.vector3 import Vector3, component_max, component_min
+from std.math import pi
 
 
 @fieldwise_init
@@ -398,18 +398,7 @@ def display_tube_set(
 
 def _union(a: Bounds, b: Bounds) -> Bounds:
     """Return the box that holds both `a` and `b`."""
-    return Bounds(
-        Vector3(
-            min(a.low.x, b.low.x),
-            min(a.low.y, b.low.y),
-            min(a.low.z, b.low.z),
-        ),
-        Vector3(
-            max(a.high.x, b.high.x),
-            max(a.high.y, b.high.y),
-            max(a.high.z, b.high.z),
-        ),
-    )
+    return Bounds(component_min(a.low, b.low), component_max(a.high, b.high))
 
 
 def _frustum(a: Vector3, b: Vector3, ra: Float32, rb: Float32) -> Float32:

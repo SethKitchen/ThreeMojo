@@ -29,7 +29,7 @@ from extensions.humanoid.skeleton.field import (
 from math.box_extent import box_exterior
 from math.norm import squared_length3
 from math.cross import cross_vectors
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from std.math import max, min, sqrt
 
 # The piece kinds.
@@ -95,16 +95,9 @@ def _basis(forward: Vector3, up: Vector3) -> Tuple[Vector3, Vector3, Vector3]:
 
 def _hold(mut low: Vector3, mut high: Vector3, center: Vector3, reach: Float32):
     """Grow a box to hold a sphere."""
-    low = Vector3(
-        min(low.x, center.x - reach),
-        min(low.y, center.y - reach),
-        min(low.z, center.z - reach),
-    )
-    high = Vector3(
-        max(high.x, center.x + reach),
-        max(high.y, center.y + reach),
-        max(high.z, center.z + reach),
-    )
+    var span = Vector3(reach, reach, reach)
+    low = component_min(low, center - span)
+    high = component_max(high, center + span)
 
 
 def box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:

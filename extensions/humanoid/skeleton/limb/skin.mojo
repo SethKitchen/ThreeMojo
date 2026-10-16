@@ -40,8 +40,7 @@ from extensions.humanoid.skeleton.leg.skin.dimensions import (
 )
 from extensions.humanoid.skeleton.place import place_mesh
 from materials.material import MaterialId
-from math.vector3 import Vector3
-from std.math import max, min
+from math.vector3 import Vector3, component_max, component_min
 
 
 struct LimbSkinField(Copyable, DistanceField, Movable):
@@ -76,16 +75,8 @@ struct LimbSkinField(Copyable, DistanceField, Movable):
         self.epsilon = self.foot.epsilon
         var foot_low = self.foot.low + self.ankle
         var foot_high = self.foot.high + self.ankle
-        self.low = Vector3(
-            min(self.leg.low.x, foot_low.x),
-            min(self.leg.low.y, foot_low.y),
-            min(self.leg.low.z, foot_low.z),
-        )
-        self.high = Vector3(
-            max(self.leg.high.x, foot_high.x),
-            max(self.leg.high.y, foot_high.y),
-            max(self.leg.high.z, foot_high.z),
-        )
+        self.low = component_min(self.leg.low, foot_low)
+        self.high = component_max(self.leg.high, foot_high)
 
     def distance(self, point: Vector3) -> Float32:
         """Return how far `point` lies outside the limb's skin, in meters.
