@@ -13,9 +13,13 @@ comes from Trotter and Gleser 1952. The surface is the cortical bone map.
 The program also prints each bone's tissue mass and Earth weight.
 """
 
-from examples.output import example_destination, spin_gallery
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    spin_gallery,
+    warm_lamp,
+)
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -24,7 +28,6 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_phong
 from extensions.humanoid.skeleton.leg.fibula.geometry import fibula
 from extensions.humanoid.skeleton.leg.fibula.mass import fibula_mass
-from lights.light import ambient_light, directional_light
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -149,19 +152,15 @@ def main() raises:
         paint,
     )
 
-    var lamp = Object3D()
-    lamp.set_position(0.38, 0.42, 0.80)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
-
-    var camera = PerspectiveCamera(
-        Angle(28.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(20.0, METER),
+    warm_lamp(scene, 0.38, 0.42, 0.80)
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.16, 0.04, 1.10),
+        Vector3(0.0, 0.0, 0.0),
+        field_of_view=Angle(28.0, DEGREE),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.16, 0.04, 1.10), Vector3(0.0, 0.0, 0.0))
 
     spin_gallery(
         renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination

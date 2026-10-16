@@ -12,9 +12,13 @@ at plus and minus ten centimeters. Each leg carries bones, knee tissues
 and skeletal muscles.
 """
 
-from examples.output import example_destination, spin_gallery
+from examples.output import (
+    example_destination,
+    gallery_camera,
+    spin_gallery,
+    warm_lamp,
+)
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -32,7 +36,6 @@ from extensions.humanoid.skeleton.look import (
     muscle_phong,
     tendon_phong,
 )
-from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from renderers.renderer import Renderer, available_workers
@@ -109,19 +112,15 @@ def main() raises:
         DETAIL,
     )
 
-    var lamp = Object3D()
-    lamp.set_position(0.65, 0.70, 1.2)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
-
-    var camera = PerspectiveCamera(
-        Angle(34.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(20.0, METER),
+    warm_lamp(scene, 0.65, 0.70, 1.2)
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.24, 0.06, 2.55),
+        Vector3(0.0, 0.02, 0.0),
+        field_of_view=Angle(34.0, DEGREE),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.24, 0.06, 2.55), Vector3(0.0, 0.02, 0.0))
 
     spin_gallery(
         renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination

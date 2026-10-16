@@ -11,7 +11,7 @@ The page is Muscles. A six-foot male right leg is drawn three times:
 bones only, untoned muscles, and toned muscles.
 """
 
-from examples.output import example_destination
+from examples.output import example_destination, gallery_camera, warm_lamp
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -36,7 +36,6 @@ from extensions.humanoid.skeleton.look import (
     muscle_phong,
     tendon_phong,
 )
-from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
 from materials.material import MaterialId
 from render.apng import encode
@@ -211,19 +210,15 @@ def main() raises:
         tendon_paint,
     )
 
-    var lamp = Object3D()
-    lamp.set_position(0.55, 0.65, 1.1)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
-
-    var camera = PerspectiveCamera(
-        Angle(36.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(20.0, METER),
+    warm_lamp(scene, 0.55, 0.65, 1.1)
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.06, 0.06, 2.60),
+        Vector3(0.0, 0.02, 0.0),
+        field_of_view=Angle(36.0, DEGREE),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.06, 0.06, 2.60), Vector3(0.0, 0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
