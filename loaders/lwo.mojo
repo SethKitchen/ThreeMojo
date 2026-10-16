@@ -61,6 +61,7 @@ from math.triangle_normal import _difference_product_wide
 from math.norm import normalized3, _ordinary_squared
 
 from core.assets import Assets
+from core.search import first_match
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     NORMAL,
@@ -1050,17 +1051,17 @@ def _set_name(
 def _lookup(names: List[String], values: List[Int], key: String) -> Int:
     """Return a key's value, or 0 when it is not there: three.js tests the
     value for truth, so 0 and absent are one."""
-    for k in range(len(names)):
-        if names[k] == key:
-            return values[k]
-    return 0
+    var at = first_match(names, key)
+    if at < 0:
+        return 0
+    return values[at]
 
 
 def _store(mut names: List[String], mut values: List[Int], key: String, v: Int):
-    for k in range(len(names)):
-        if names[k] == key:
-            values[k] = v
-            return
+    var at = first_match(names, key)
+    if at >= 0:
+        values[at] = v
+        return
     names.append(key)
     values.append(v)
 

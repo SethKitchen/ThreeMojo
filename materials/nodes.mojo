@@ -128,6 +128,7 @@ level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
 from core.ordinal import ordinal_valid
+from core.search import first_match
 
 from lights.shadow import ShadowShape
 from materials.compute_ids import (
@@ -859,17 +860,15 @@ def _lane_of(letter: UInt8) -> Int:
 
 def _note_texture(mut textures: List[TextureId], map: TextureId):
     """Append a texture to a program's list, once."""
-    for index in range(len(textures)):
-        if textures[index] == map:
-            return
+    if first_match(textures, map) >= 0:
+        return
     textures.append(map)
 
 
 def _note_place(mut places: List[Int], place: Int):
     """Append a place to a list, once."""
-    for index in range(len(places)):
-        if places[index] == place:
-            return
+    if first_match(places, place) >= 0:
+        return
     places.append(place)
 
 

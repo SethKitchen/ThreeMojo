@@ -1153,10 +1153,7 @@ struct NodeLoader(Movable):
 
 def _position_of_int(values: List[Int], value: Int) -> Int:
     """Return where a number is in a list, or -1."""
-    for index in range(len(values)):
-        if values[index] == value:
-            return index
-    return -1
+    return first_match(values, value)
 
 
 def _unary_methods() -> List[String]:

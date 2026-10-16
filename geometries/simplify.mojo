@@ -45,6 +45,7 @@ from math.norm import (
     reciprocal_normalized3,
 )
 from core.buffer_attribute import BufferAttribute
+from core.search import first_match
 from core.buffer_geometry import (
     BufferGeometry,
     COLOR,
@@ -141,10 +142,7 @@ def _unit4(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
 def _find(list: List[Int], value: Int) -> Int:
     """Return where `value` first is in `list`, or -1: JavaScript's
     `indexOf`."""
-    for index in range(len(list)):
-        if list[index] == value:
-            return index
-    return -1
+    return first_match(list, value)
 
 
 def _remove(mut list: List[Int], value: Int):
