@@ -28,6 +28,7 @@ from core.buffer_geometry import BufferGeometry
 from geometries.utils import merge_vertices
 from math.matrix4 import Matrix4
 from math.norm import length3, normalized3, _ordinary_squared
+from math.quaternion import quaternion_rotate
 from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.math import cos, isfinite, sin, sqrt
@@ -229,14 +230,10 @@ struct Vec3d(ImplicitlyCopyable):
         var qy = axis.y * s
         var qz = axis.z * s
         var qw = cos(half)
-        var tx = 2 * (qy * self.z - qz * self.y)
-        var ty = 2 * (qz * self.x - qx * self.z)
-        var tz = 2 * (qx * self.y - qy * self.x)
-        return Vec3d(
-            self.x + qw * tx + qy * tz - qz * ty,
-            self.y + qw * ty + qz * tx - qx * tz,
-            self.z + qw * tz + qx * ty - qy * tx,
+        var rx, ry, rz = quaternion_rotate[DType.float64](
+            qx, qy, qz, qw, self.x, self.y, self.z
         )
+        return Vec3d(rx, ry, rz)
 
     def vector3(self) -> Vector3:
         """Return the vector rounded to `Float32`.
@@ -267,14 +264,10 @@ struct Quat64(ImplicitlyCopyable):
         Returns:
             The turned vector.
         """
-        var tx = 2 * (self.y * v.z - self.z * v.y)
-        var ty = 2 * (self.z * v.x - self.x * v.z)
-        var tz = 2 * (self.x * v.y - self.y * v.x)
-        return Vec3d(
-            v.x + self.w * tx + self.y * tz - self.z * ty,
-            v.y + self.w * ty + self.z * tx - self.x * tz,
-            v.z + self.w * tz + self.x * ty - self.y * tx,
+        var rx, ry, rz = quaternion_rotate[DType.float64](
+            self.x, self.y, self.z, self.w, v.x, v.y, v.z
         )
+        return Vec3d(rx, ry, rz)
 
 
 def unit_vectors_quaternion(start: Vec3d, end: Vec3d) -> Quat64:

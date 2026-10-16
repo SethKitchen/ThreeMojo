@@ -40,6 +40,45 @@ comptime SLERP_EPSILON = Float32(1e-6)
 comptime HALF_TURN_EPSILON = Float32(1e-6)
 
 
+def quaternion_rotate[
+    dtype: DType
+](
+    x: SIMD[dtype, 1],
+    y: SIMD[dtype, 1],
+    z: SIMD[dtype, 1],
+    w: SIMD[dtype, 1],
+    vx: SIMD[dtype, 1],
+    vy: SIMD[dtype, 1],
+    vz: SIMD[dtype, 1],
+) -> Tuple[SIMD[dtype, 1], SIMD[dtype, 1], SIMD[dtype, 1]]:
+    """Return a vector turned by the quaternion `(x, y, z, w)`.
+
+    This is three.js's `applyQuaternion`: the product `q * v * q^-1`
+    with the middle step written out. The width is the caller's.
+
+    Args:
+        x: The quaternion's x.
+        y: The quaternion's y.
+        z: The quaternion's z.
+        w: The quaternion's real part.
+        vx: The vector's x.
+        vy: The vector's y.
+        vz: The vector's z.
+
+    Returns:
+        The turned vector's three components.
+    """
+    var two = SIMD[dtype, 1](2)
+    var tx = two * (y * vz - z * vy)
+    var ty = two * (z * vx - x * vz)
+    var tz = two * (x * vy - y * vx)
+    return (
+        vx + w * tx + y * tz - z * ty,
+        vy + w * ty + z * tx - x * tz,
+        vz + w * tz + x * ty - y * tx,
+    )
+
+
 @fieldwise_init
 struct Quaternion(Equatable, ImplicitlyCopyable):
     """A rotation as (x, y, z, w), the identity being (0, 0, 0, 1)."""
@@ -274,14 +313,10 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         three.js's `Vector3.applyQuaternion`: the product `q * v * q^-1` with
         the middle step written out, rather than building the matrix first.
         """
-        var tx = 2 * (self.y * v.z - self.z * v.y)
-        var ty = 2 * (self.z * v.x - self.x * v.z)
-        var tz = 2 * (self.x * v.y - self.y * v.x)
-        return Vector3(
-            v.x + self.w * tx + self.y * tz - self.z * ty,
-            v.y + self.w * ty + self.z * tx - self.x * tz,
-            v.z + self.w * tz + self.x * ty - self.y * tx,
+        var rx, ry, rz = quaternion_rotate[DType.float32](
+            self.x, self.y, self.z, self.w, v.x, v.y, v.z
         )
+        return Vector3(rx, ry, rz)
 
     def slerp(self, other: Self, t: Float32) -> Self:
         """Return the rotation a fraction `t` of the way from self to `other`.
