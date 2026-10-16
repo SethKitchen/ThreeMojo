@@ -17,6 +17,7 @@ from core.scene import Scene
 from generators.utils import Vec3d
 from lights.light import ambient_light, directional_light
 from materials.material import Material
+from math.utils import clamp
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -135,7 +136,7 @@ def heat_color(t: Float64) -> Vec3d:
     Returns:
         The linear color.
     """
-    var s = max(0.0, min(1.0, t))
+    var s = clamp(t, 0.0, 1.0)
     if s < 0.5:
         var k = s * 2
         return Vec3d(0.1 + 0.85 * k, 0.25 + 0.7 * k, 0.9)

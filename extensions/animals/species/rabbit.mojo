@@ -238,7 +238,7 @@ def rabbit_eye(t: Traits) -> EyeSpec:
 
 
 def _rear_w(z: Float64) -> Float64:
-    var u = min(1.0, max(0.0, (0.03 - z) / 0.12))
+    var u = clamp((0.03 - z) / 0.12, 0.0, 1.0)
     return u * u * (3.0 - 2.0 * u)
 
 

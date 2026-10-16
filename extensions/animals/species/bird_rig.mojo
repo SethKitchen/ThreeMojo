@@ -36,6 +36,7 @@ from extensions.animals.rig import Rig, add_sided
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
+    clamp,
     cross,
     dot,
     length,
@@ -1378,7 +1379,7 @@ def card_point(tag: String, local: V3, right: Bool) raises -> CardPoint:
     var up = local.z * sgn if fin >= 0 else local.y
     return CardPoint(
         String(tag[byte=:at]),
-        min(1.0, max(0.0, (cx + along) / ln)),
+        clamp((cx + along) / ln, 0.0, 1.0),
         cy + across,
         up > 0.0,
     )

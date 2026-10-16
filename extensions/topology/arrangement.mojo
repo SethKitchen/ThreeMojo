@@ -30,6 +30,7 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
+from math.utils import clamp
 from std.math import atan2, isfinite, sqrt
 from extensions.topology.ids import NO_REGION, RegionId
 from extensions.topology.weld import Welder
@@ -426,7 +427,7 @@ def arrange(
                 var p = Point2(a.x + t * r.x, a.y + t * r.y)
                 # Rounding can put the projection a hair outside the
                 # segment; the crossing is inside it.
-                var u = min(1.0, max(0.0, (p - c).dot(s) / s.dot(s)))
+                var u = clamp((p - c).dot(s) / s.dot(s), 0.0, 1.0)
                 split_t[i].append(t)
                 split_p[i].append(p)
                 split_t[j].append(u)

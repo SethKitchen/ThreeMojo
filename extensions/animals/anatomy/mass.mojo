@@ -45,6 +45,7 @@ from extensions.sdf.ids import (
 )
 from extensions.sdf.vector import V3, dot
 from math.finite import positive_finite
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
@@ -355,7 +356,7 @@ def _sample_task_checked(
             # At half a cell the share is zero: the cell holds no flesh.
             if solid < 0 or best >= 0.5 * h:
                 continue
-            var share = min(1.0, max(0.0, 0.5 - best / h))
+            var share = clamp(0.5 - best / h, 0.0, 1.0)
             var m = share * cell_volume * input[].density[solid]
             var bone = model[].prims[solid].bone.value
             var spot = Vector3(Float32(q.x), Float32(q.y), Float32(q.z))
