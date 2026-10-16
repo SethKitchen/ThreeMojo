@@ -19,12 +19,17 @@ check rejects a box sunk into the ground and a missing contact.
 Run it with `mojo run -I . bench/physics_ccd_box_bench.mojo`.
 """
 
-from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    BodyId,
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import PhysicsMaterial, Shape
 from bench.contacts import bodies_missing_contact
 from extensions.physics.world import CollisionEvent, PhysicsWorld
-from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -65,11 +70,7 @@ def _box(at: Vector3) raises -> RigidBody:
         Quaternion.identity(),
     )
     # A box that cannot turn: every inverse inertia element is zero.
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    body.set_inverse_inertia(locked)
+    body.set_inverse_inertia(locked_inverse_inertia())
     body.material = PhysicsMaterial(0.8, 0.1)
     return body^
 
