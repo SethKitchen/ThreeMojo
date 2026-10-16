@@ -33,6 +33,7 @@ from extensions.sdf.vector import (
     cross,
     normalize,
 )
+from math.norm import squared_length2
 from std.math import cos, floor, pi, sin, sqrt
 
 
@@ -267,7 +268,7 @@ def fin_outline(
     var bnv = rays[(n - 1) * 4 + 1]
     var bdu = bnu - b0u
     var bdv = bnv - b0v
-    var bl = sqrt(bdu * bdu + bdv * bdv)
+    var bl = sqrt(squared_length2[DType.float64](bdu, bdv))
     bl = bl if bl > 0.0 else 1.0
     var nx = -bdv / bl
     var ny = bdu / bl
@@ -384,7 +385,7 @@ def _side(rays: List[Float64], i: Int, qu: Float64, qv: Float64) -> Float64:
     var bv = rays[i * 4 + 1]
     var dx = rays[i * 4 + 2] - bu
     var dy = rays[i * 4 + 3] - bv
-    var l = sqrt(dx * dx + dy * dy)
+    var l = sqrt(squared_length2[DType.float64](dx, dy))
     l = l if l > 0.0 else 1.0
     return ((qu - bu) * -dy + (qv - bv) * dx) / l
 
@@ -437,7 +438,7 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
     var tv = rays[i0 * 4 + 3] + (rays[i0 * 4 + 7] - rays[i0 * 4 + 3]) * f
     var dx = tu - bu
     var dy = tv - bv
-    var l2 = dx * dx + dy * dy
+    var l2 = squared_length2[DType.float64](dx, dy)
     l2 = l2 if l2 > 0.0 else 1e-12
     var along = clamp(((qu - bu) * dx + (qv - bv) * dy) / l2, 0.0, 1.2)
     return RayCoords(phase, along)

@@ -52,6 +52,7 @@ from extensions.sdf.vector import (
     normalize,
     smoothstep,
 )
+from math.norm import squared_length2
 from std.math import atan2, floor, sin, sqrt
 from extensions.sdf.distance import rect_distance
 
@@ -259,7 +260,7 @@ def _pchip_slopes(x: List[Float64], y: List[Float64]) -> List[Float64]:
             continue
         var a = m[i] / d[i]
         var b = m[i + 1] / d[i]
-        var s = a * a + b * b
+        var s = squared_length2[DType.float64](a, b)
         if s > 9.0:
             var k = 3.0 / sqrt(s)
             m[i] = k * a * d[i]
@@ -1020,7 +1021,9 @@ def _feature(
     # A diamond, or a rounded box, `a` long and `bb` wide.
     if diamond:
         var l1 = abs(ds) / a + abs(du) / bb
-        return (l1 - 1.0) * (a * bb) / sqrt(a * a + bb * bb)
+        return (
+            (l1 - 1.0) * (a * bb) / sqrt(squared_length2[DType.float64](a, bb))
+        )
     var rr = min(a, bb) * 0.55
     return rect_distance(abs(ds) - (a - rr), abs(du) - (bb - rr)) - rr
 
@@ -1035,7 +1038,7 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
         var ay = pts[i].y
         var bx = pts[i + 1].x - ax
         var by = pts[i + 1].y - ay
-        var l2 = bx * bx + by * by
+        var l2 = squared_length2[DType.float64](bx, by)
         var f = clamp(
             ((px - ax) * bx + (py - ay) * by) / (l2 if l2 > 0.0 else 1e-12),
             0.0,
@@ -1043,7 +1046,9 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
         )
         var dx = px - ax - bx * f
         var dy = py - ay - by * f
-        var d = sqrt(dx * dx + dy * dy) - (w[i] + (w[i + 1] - w[i]) * f)
+        var d = sqrt(squared_length2[DType.float64](dx, dy)) - (
+            w[i] + (w[i + 1] - w[i]) * f
+        )
         best = min(best, d)
     return best
 

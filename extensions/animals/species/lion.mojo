@@ -64,6 +64,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import cos, exp, pi, pow, sin, sqrt
 from extensions.sdf.distance import almond_distance, rect_distance
 
@@ -2176,7 +2177,9 @@ def _paint_face(
                 var y = -0.98 - 0.086 * Float64(row) - 0.1 * (x - 0.13)
                 var dx = (ax - x) * FACE_X * hw * HS
                 var dy = (f.y - y) * FACE_E * HS
-                dd = min(dd, sqrt(dx * dx + dy * dy) - 0.0025)
+                dd = min(
+                    dd, sqrt(squared_length2[DType.float64](dx, dy)) - 0.0025
+                )
         col = mix3(col, c[WHISKER_DOT], smoothstep(0.0012, -0.0006, dd) * 0.9)
     # The black spot at the corner of the mouth.
     var corner = V3(ax - 0.55, f.y + 1.37, f.z - 0.1)
