@@ -80,6 +80,7 @@ from lights.light_slot import LightSlot
 
 from math.smoothstep import smoothstep
 from math.cross import cross_vectors
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
@@ -1741,7 +1742,7 @@ def cube_stored(
     var along = 2 * far * near / ((far + near) - ndc_depth * (far - near))
     var x = (Float32(column) + 0.5) / Float32(size) * 2 - 1
     var y = 1 - (Float32(row) + 0.5) / Float32(size) * 2
-    var distance = along * sqrt(1 + x * x + y * y)
+    var distance = along * sqrt(1 + squared_length2[DType.float32](x, y))
     return max(
         Float32(0), min(Float32(1), point_shadow_depth(distance, near, far))
     )

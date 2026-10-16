@@ -48,6 +48,7 @@ from geometries.plane import plane
 from geometries.shape import shape_geometry
 from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
 from math.path import Path, Shape
 from math.utils import SeededRandom
 from math.vector2 import Vector2
@@ -931,7 +932,7 @@ def _reveal_quad(
     the wall's thickness, both facing into the opening."""
     var dx = Float64(b.x) - Float64(a.x)
     var dy = Float64(b.y) - Float64(a.y)
-    var length = sqrt(dx * dx + dy * dy)
+    var length = sqrt(squared_length2[DType.float64](dx, dy))
     var inverse = 1 / (length if length != 0 else 1.0)
     var corners: List[Float32] = [
         a.x,

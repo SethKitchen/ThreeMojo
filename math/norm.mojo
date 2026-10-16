@@ -97,6 +97,24 @@ def dot3[
     return ax * bx + ay * by + az * bz
 
 
+def squared_length2[
+    dtype: DType
+](x: SIMD[dtype, 1], y: SIMD[dtype, 1]) -> SIMD[dtype, 1]:
+    """Return the squared length `x² + y²`.
+
+    The products are summed left to right, the same order as `dot2`.
+    The width is the caller's.
+
+    Args:
+        x: The x component.
+        y: The y component.
+
+    Returns:
+        The squared length, in the input precision.
+    """
+    return dot2[dtype](x, y, x, y)
+
+
 def squared_length3[
     dtype: DType
 ](x: SIMD[dtype, 1], y: SIMD[dtype, 1], z: SIMD[dtype, 1]) -> SIMD[dtype, 1]:

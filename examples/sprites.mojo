@@ -37,6 +37,7 @@ from materials.material import (
     points_material,
     sprite_material,
 )
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.points import Points
@@ -100,7 +101,7 @@ def a_disc(size: Int) raises -> Texture:
         for x in range(size):
             var dx = (Float32(x) + 0.5) / Float32(size) - 0.5
             var dy = (Float32(y) + 0.5) / Float32(size) - 0.5
-            var reach = sqrt(dx * dx + dy * dy) * 2
+            var reach = sqrt(squared_length2[DType.float32](dx, dy)) * 2
             var inside = 1 - reach * reach * reach
             if inside < 0:
                 inside = 0

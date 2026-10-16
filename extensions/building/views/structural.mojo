@@ -28,6 +28,7 @@ Loads and Associated Criteria for Buildings and Other Structures", table
 code and occupancy.
 """
 
+from math.norm import squared_length2
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.ids import ElementId
@@ -203,11 +204,13 @@ def _plan_distance(p: Vec3d, a: Vec3d, b: Vec3d) -> Float64:
     """Return the plan distance from a point to a segment."""
     var dx = b.x - a.x
     var dy = b.y - a.y
-    var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)
+    var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / squared_length2[
+        DType.float64
+    ](dx, dy)
     t = clamp(t, 0.0, 1.0)
     var ex = a.x + t * dx - p.x
     var ey = a.y + t * dy - p.y
-    return (ex * ex + ey * ey) ** 0.5
+    return squared_length2[DType.float64](ex, ey) ** 0.5
 
 
 def _inside(polygon: List[Vec3d], p: Vec3d) -> Bool:
