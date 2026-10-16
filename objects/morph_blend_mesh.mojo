@@ -28,7 +28,7 @@ An `update` by a time that is not a number is refused, and so is a mesh
 that is not in the scene.
 """
 
-from loaders.bytes import ascii_digit
+from loaders.bytes import ascii_digit, ascii_letter
 from core.scene import Scene
 from animation.keyframe_track import MeshIndex
 from std.math import floor, isfinite, nan
@@ -130,7 +130,7 @@ def _animation_word(name: String) -> Optional[String]:
 
 def _letter(byte: UInt8) -> Bool:
     """Return True for an ASCII letter, either case."""
-    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+    return ascii_letter(Int(byte))
 
 
 struct MorphBlendMesh(Movable):

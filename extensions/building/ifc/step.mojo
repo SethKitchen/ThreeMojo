@@ -26,7 +26,12 @@ and `\\X4\\hhhhhhhh...\\X0\\` for UTF-32 code points. The writer escapes
 every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
 from core.ordinal import ordinal_valid
-from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
+from loaders.bytes import (
+    ascii_digit,
+    ascii_letter,
+    bytes_match,
+    hex_digit_value,
+)
 
 from std.math import isfinite
 
@@ -694,7 +699,7 @@ struct _Reader:
         var start = self.at
         while self.at < len(self.data):
             var c = Int(self.data[self.at])
-            var letter = (c >= 65 and c <= 90) or (c >= 97 and c <= 122)
+            var letter = ascii_letter(c)
             var digit = ascii_digit(c)
             if letter or digit or c == 95 or c == 45:
                 self.at += 1
@@ -833,7 +838,7 @@ def _parse_value(
         if text.find(".") >= 0 or text.find("E") >= 0 or text.find("e") >= 0:
             return file.real(atof(text))
         return file.integer(atol(text))
-    var letter = (c >= 65 and c <= 90) or (c >= 97 and c <= 122)
+    var letter = ascii_letter(c)
     if letter:
         var name = reader.keyword()
         reader.expect(40, "a parenthesis after a type name")

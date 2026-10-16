@@ -20,7 +20,7 @@ byte as one code unit.
 """
 
 
-from loaders.bytes import ascii_digit, ascii_space
+from loaders.bytes import ascii_digit, ascii_letter, ascii_space
 
 
 def is_js_space(unit: Int) -> Bool:
@@ -58,12 +58,7 @@ def is_js_word(byte: UInt8) -> Bool:
     Returns:
         Whether it is a letter, a digit or `_`.
     """
-    return (
-        ascii_digit(Int(byte))
-        or (byte >= 0x41 and byte <= 0x5A)
-        or (byte >= 0x61 and byte <= 0x7A)
-        or byte == 0x5F
-    )
+    return ascii_digit(Int(byte)) or ascii_letter(Int(byte)) or byte == 0x5F
 
 
 def js_units(text: String) -> List[Int]:

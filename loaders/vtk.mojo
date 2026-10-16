@@ -59,7 +59,7 @@ keeps and draws from undefined positions.
 from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
-from loaders.bytes import ascii_digit
+from loaders.bytes import ascii_digit, ascii_letter, base64_digit
 from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
     is_js_space,
@@ -480,12 +480,7 @@ def _head(line: List[Int], prefix: String, runs: List[Int]) -> Bool:
         var end = at
         while end < len(line):
             var u = line[end]
-            var word = (
-                _is_digit(u)
-                or (u >= 65 and u <= 90)
-                or (u >= 97 and u <= 122)
-                or u == 95
-            )
+            var word = _is_digit(u) or ascii_letter(u) or u == 95
             var fits = (
                 (kind == 0 and u == 32)
                 or (kind == 1 and _is_digit(u))
@@ -1050,12 +1045,9 @@ def _look(units: List[Int], k: Int) -> Int:
         Its six bits.
     """
     var u = units[k]
-    if u >= 65 and u <= 90:
-        return u - 65
-    if u >= 97 and u <= 122:
-        return u - 71
-    if ascii_digit(u):
-        return u + 4
+    var digit = base64_digit(u)
+    if digit >= 0:
+        return digit
     if u == 43 or u == 45:
         return 62
     if u == 47 or u == 95:

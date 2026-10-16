@@ -30,7 +30,12 @@ three.js warns and leaves the color unchanged for a string it cannot read.
 Here that string is refused.
 """
 
-from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
+from loaders.bytes import (
+    ascii_digit,
+    ascii_letter,
+    ascii_space,
+    hex_digit_value,
+)
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
 from std.math import floor
@@ -371,7 +376,7 @@ def _is_digit(byte: UInt8) -> Bool:
 def _is_word(byte: UInt8) -> Bool:
     """Return True for a letter, a digit or an underscore: a regular
     expression's `\\w`."""
-    var letter = (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+    var letter = ascii_letter(Int(byte))
     return letter or _is_digit(byte) or byte == 95
 
 

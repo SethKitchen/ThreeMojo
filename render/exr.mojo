@@ -48,6 +48,7 @@ The rows come out from the top, the first line of the data window first,
 as every other reader here returns them. three.js flips them and marks the
 texture `flipY = false`, which samples the same way.
 """
+from loaders.bytes import ascii_letter
 from core.binary import little_endian_i32, little_endian_u16, little_endian_u32
 from core.ordinal import ordinal_valid
 
@@ -1639,7 +1640,7 @@ def _dwa_lower(name: String) -> String:
         var text = String(codepoint)
         if text.byte_length() == 1:
             var byte = Int(text.as_bytes()[0])
-            if byte >= 65 and byte <= 90:
+            if ascii_letter(byte) and byte <= 90:
                 out += chr(byte + 32)
                 continue
         out += text

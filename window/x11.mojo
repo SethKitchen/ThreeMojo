@@ -22,6 +22,7 @@ or motion event holds its position at 64 and 68, its modifier state at
 visual on a little-endian machine takes; any other visual is refused.
 """
 
+from loaders.bytes import ascii_letter
 from core.binary import little_endian_i32
 from core.extent import positive_extent
 from controls.input import (
@@ -127,9 +128,8 @@ def key_of(symbol: Int, control: Bool) -> Key:
         return Key(8)
     if symbol < 0x20 or symbol > 0x7E:
         return Key(-1)
-    var lower = symbol | 0x20
-    if control and lower >= 0x61 and lower <= 0x7A:
-        return Key(lower - 0x60)
+    if control and ascii_letter(symbol):
+        return Key((symbol | 0x20) - 0x60)
     return Key(symbol)
 
 
