@@ -45,6 +45,7 @@ from controls.input import (
     KEY_DOWN,
     InputEvent,
     button_choice,
+    refuse_invalid,
     require_input,
     Key,
     POINTER_DOWN,
@@ -523,7 +524,7 @@ struct OrbitControls(Copyable, Movable):
             NO_ACTION,
         )
         if not action.is_valid():
-            raise Error("Invalid orbit action: ", action.value)
+            refuse_invalid("orbit action", action.value)
         return action
 
     def _move(mut self, event: InputEvent, view: _View):

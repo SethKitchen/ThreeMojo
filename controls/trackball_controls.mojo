@@ -51,6 +51,7 @@ from controls.input import (
     InputEvent,
     KEY_DOWN,
     button_choice,
+    refuse_invalid,
     require_input,
     KEY_UP,
     Key,
@@ -260,7 +261,7 @@ struct TrackballControls(Copyable, Movable):
             NO_ACTION,
         )
         if not action.is_valid():
-            raise Error("Invalid trackball action: ", action.value)
+            refuse_invalid("trackball action", action.value)
         return action
 
     def handle(
