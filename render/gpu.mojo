@@ -86,7 +86,6 @@ from render.linerule import (
 from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
-    gl_point_coord,
     mip_level_of,
 )
 from render.rect import Rect
@@ -292,7 +291,11 @@ from render.tonemap import (
     tone_map,
     tone_map_with,
 )
-from render.screen_coord import pixel_frag_coord, screen_size_coord
+from render.screen_coord import (
+    pixel_frag_coord,
+    sampled_point_coord,
+    screen_size_coord,
+)
 from materials.nodes import (
     AO_NODE,
     BACKDROP_ALPHA_NODE,
@@ -6082,20 +6085,16 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         Returns:
             The two numbers, then zeros.
         """
-        if context.is_corner():
-            return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        var place = gl_point_coord(
+        return sampled_point_coord(
+            context,
+            self.x,
+            self.y,
             Vector2(
                 self.points[unsafe_offset=self.base + LANE_X],
                 self.points[unsafe_offset=self.base + LANE_Y],
             ),
             self.points[unsafe_offset=self.base + LANE_POINT_SIZE],
-            x,
-            y,
         )
-        return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the point's coordinates, world position, normal, color
