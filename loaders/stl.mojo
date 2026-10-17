@@ -53,7 +53,7 @@ from core.buffer_geometry import (
 from loaders.bytes import bytes_match
 from loaders.text_number import read_finite_float32
 from render.srgb import srgb_to_linear
-from std.math import isfinite
+from math.finite import require_finite
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -181,13 +181,13 @@ def _float(bytes: List[UInt8], at: Int, face: Int) raises -> Float32:
         Error: If it is not finite.
     """
     var value = bitcast[DType.float32](UInt32(little_endian_u32(bytes, at)))
-    if not isfinite(value):
-        raise Error(
-            "STL face "
-            + String(face)
-            + ": a coordinate must be a finite number, and this one is "
-            + String(value)
-        )
+    require_finite(
+        Float64(value),
+        "STL face "
+        + String(face)
+        + ": a coordinate must be a finite number, and this one is "
+        + String(value),
+    )
     return value
 
 

@@ -161,10 +161,10 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         var out = Matrix3.from_matrix4(matrix)
         # A Matrix3 always has nine entries.
         for index in range(9):  # pragma: no branch
-            if not isfinite(out.elements[index]):
-                raise Error(
-                    "A normal matrix requires a finite linear transform"
-                )
+            require_finite(
+                Float64(out.elements[index]),
+                "A normal matrix requires a finite linear transform",
+            )
         out.invert()
         var nonzero = False
         # A Matrix3 always has nine entries.

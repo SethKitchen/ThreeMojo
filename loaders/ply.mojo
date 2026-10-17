@@ -75,7 +75,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from math.vector3 import Vector3
 from render.srgb import srgb_to_linear
-from std.math import isfinite
+from math.finite import require_finite
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -641,10 +641,10 @@ def _coordinate(value: Float64, what: String) raises -> Float32:
         Error: If it is not finite as a `Float32`.
     """
     var narrow = Float32(value)
-    if not isfinite(narrow):
-        raise Error(
-            "`" + what + "` must be a finite number, and it is " + String(value)
-        )
+    require_finite(
+        Float64(narrow),
+        "`" + what + "` must be a finite number, and it is " + String(value),
+    )
     return narrow
 
 

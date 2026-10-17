@@ -62,7 +62,8 @@ from render.texture import (
     require_float_linear,
     wrap_index,
 )
-from std.math import floor, isfinite
+from math.finite import require_finite
+from std.math import floor
 
 
 # How many numbers a stored texel holds: red, green, blue and alpha.
@@ -269,10 +270,10 @@ struct VolumeImage(Movable):
                     value = data[texel * channels + channel]
                     # An infinity or a NaN poisons every blend that
                     # reaches it.
-                    if not isfinite(value):
-                        raise Error(
-                            "A float volume texture holds finite numbers"
-                        )
+                    require_finite(
+                        Float64(value),
+                        "A float volume texture holds finite numbers",
+                    )
                 stored.append(value)
         return VolumeImage(
             width, height, depth, FLOAT_TYPE, List[UInt8](), stored^

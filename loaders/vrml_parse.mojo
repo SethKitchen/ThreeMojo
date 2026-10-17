@@ -38,7 +38,7 @@ errors and then throws.
 
 from loaders.bytes import ascii_digit, bytes_match, hex_digit_value
 from loaders.js_number import js_parse_float
-from std.math import isfinite
+from math.finite import require_finite
 
 
 @fieldwise_init
@@ -785,10 +785,10 @@ struct _Parser(Movable):
         elif kind == VRML_NUMBER:
             var value = VrmlValue(VRML_NUMBER_VALUE)
             value.number = js_parse_float(image)
-            if not isfinite(value.number):
-                raise Error(
-                    "VRML: a number too big for a double " + self.where()
-                )
+            require_finite(
+                Float64(value.number),
+                "VRML: a number too big for a double " + self.where(),
+            )
             groups[3].append(value^)
         elif kind == VRML_HEX:
             var value = VrmlValue(VRML_HEX_VALUE)

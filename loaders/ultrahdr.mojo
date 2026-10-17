@@ -53,8 +53,9 @@ from loaders.xml import XmlDocument, parse_xml
 from render.float_image import FloatImage
 from render.jpeg import decode as decode_jpeg
 from render.png import DecodedImage
+from math.finite import require_finite
 from math.utils import mix_bilinear
-from std.math import floor, isfinite, nan, sqrt
+from std.math import floor, nan, sqrt
 from std.pathlib import Path
 
 # The name that starts the XMP of an APP1 segment.
@@ -382,10 +383,10 @@ def apply_gain_map(
         m.hdr_capacity_min,
         m.hdr_capacity_max,
     ]:
-        if not isfinite(value):
-            raise Error(
-                "UltraHDR: a number of the gain map's XMP is not finite"
-            )
+        require_finite(
+            Float64(value),
+            "UltraHDR: a number of the gain map's XMP is not finite",
+        )
     if m.hdr_capacity_max == m.hdr_capacity_min:
         raise Error("UltraHDR: the HDR capacity range must not be zero")
     var width = sdr.width
