@@ -359,6 +359,7 @@ from renderers.clip import (
     within_sides,
 )
 from render.tasks import TaskGroup
+from math.curve_checks import require_at_least_one
 from math.finite import require_positive_finite
 from std.math import cos, floor, isfinite, max, min, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
@@ -3319,8 +3320,7 @@ def require_renderer_workers(workers: Int) raises:
     Raises:
         Error: If `workers` is below one.
     """
-    if workers < 1:
-        raise Error("A renderer needs at least one worker")
+    require_at_least_one(workers, "A renderer needs at least one worker")
 
 
 def _checked_maps(

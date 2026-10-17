@@ -25,6 +25,7 @@ across and down at least, as three.js's `PVRLoader` reads it.
 """
 
 from core.binary import little_endian_u32
+from math.utils import is_power_of_two
 
 
 def pvrtc_bytes(width: Int, height: Int, two_bit: Bool) -> Int:
@@ -42,18 +43,6 @@ def pvrtc_bytes(width: Int, height: Int, two_bit: Bool) -> Int:
     var across = max(width // (8 if two_bit else 4), 2)
     var down = max(height // 4, 2)
     return across * down * 8
-
-
-def _is_power_of_two(value: Int) -> Bool:
-    """Return True for a power of two.
-
-    Args:
-        value: The value.
-
-    Returns:
-        Whether it is one.
-    """
-    return value > 0 and (value & (value - 1)) == 0
 
 
 def _color_a(data: Int) -> List[Int]:
@@ -336,7 +325,7 @@ def decode_pvrtc(
         Error: If a side is not a power of two, or the payload's length
             is not `pvrtc_bytes`.
     """
-    if not (_is_power_of_two(width) and _is_power_of_two(height)):
+    if not (is_power_of_two(width) and is_power_of_two(height)):
         raise Error("PVRTC: the width and the height must be powers of two")
     if len(data) != pvrtc_bytes(width, height, two_bit):
         raise Error("PVRTC: the payload's length does not match the size")

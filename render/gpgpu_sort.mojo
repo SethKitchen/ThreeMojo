@@ -26,6 +26,7 @@ the device, as three.js says of its own.
 """
 
 from materials.compute_ids import WORKGROUP_ID
+from math.utils import is_power_of_two
 from materials.compute_nodes import (
     ComputeKernel,
     ComputeNode,
@@ -42,11 +43,6 @@ comptime _SWAP_LOCAL = Float32(1)
 comptime _DISPERSE_LOCAL = Float32(2)
 comptime _FLIP_GLOBAL = Float32(3)
 comptime _DISPERSE_GLOBAL = Float32(4)
-
-
-def _is_power_of_two(n: Int) -> Bool:
-    """Return True for one, two, four and so on."""
-    return n > 0 and (n & (n - 1)) == 0
 
 
 def _log2(n: Int) -> Int:
@@ -355,9 +351,9 @@ struct BitonicSort(Movable):
         """
         if data.type != NODE_FLOAT:
             raise Error("A bitonic sort sorts a buffer of floats")
-        if data.count < 2 or not _is_power_of_two(data.count):
+        if data.count < 2 or not is_power_of_two(data.count):
             raise Error("A bitonic sort needs a power of two of elements")
-        if not _is_power_of_two(workgroup_size):
+        if not is_power_of_two(workgroup_size):
             raise Error("A bitonic sort's workgroup is a power of two")
         var count = data.count
         var dispatch = count // 2
