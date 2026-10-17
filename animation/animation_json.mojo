@@ -50,6 +50,7 @@ from animation.animation_clip import (
     AnimationBlendMode,
     AnimationClip,
     NORMAL_BLEND_MODE,
+    require_blend_mode,
 )
 from animation.keyframe_track import (
     BEZIER,
@@ -610,8 +611,7 @@ def write_clip(
     """
     if len(names) != len(clip.tracks):
         raise Error("A clip to write needs one name a track")
-    if not clip.blend_mode.is_valid():
-        raise Error("A clip needs a blend mode that exists")
+    require_blend_mode(clip.blend_mode)
     writer.begin_object()
     writer.key("name")
     writer.string(clip.name)

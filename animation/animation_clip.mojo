@@ -53,6 +53,22 @@ from std.math import isfinite
 from units.si import Duration, SECOND
 
 
+def require_frame_rate(fps: Float32) raises:
+    """Refuse a frame rate that is not a number above zero.
+
+    Args:
+        fps: Frames a second.
+
+    Returns:
+        Nothing. The call returns when the rate is finite and above zero.
+
+    Raises:
+        Error: If the rate is not a number or is not above zero.
+    """
+    if not isfinite(fps) or fps <= 0:
+        raise Error("A frame rate must be a number above zero")
+
+
 @fieldwise_init
 struct AnimationBlendMode(Equatable, ImplicitlyCopyable, Writable):
     """How a clip's values join the other actions' values, as a type rather
@@ -71,6 +87,22 @@ comptime NORMAL_BLEND_MODE = AnimationBlendMode(0)
 # Add on top of what the normal actions make, three.js's
 # `AdditiveAnimationBlendMode`.
 comptime ADDITIVE_BLEND_MODE = AnimationBlendMode(1)
+
+
+def require_blend_mode(blend_mode: AnimationBlendMode) raises:
+    """Refuse a blend mode that is not one of the two named modes.
+
+    Args:
+        blend_mode: The mode a clip uses.
+
+    Returns:
+        Nothing. The call returns when the mode is named.
+
+    Raises:
+        Error: If the mode is neither of the two.
+    """
+    if not blend_mode.is_valid():
+        raise Error("A clip needs a blend mode that exists")
 
 
 struct AnimationClip(Copyable, Movable):
@@ -114,8 +146,7 @@ struct AnimationClip(Copyable, Movable):
                 there is no duration and every track holds a single key,
                 which is a clip of no length.
         """
-        if not blend_mode.is_valid():
-            raise Error("A clip needs a blend mode that exists")
+        require_blend_mode(blend_mode)
         if len(tracks) == 0:
             raise Error("A clip needs at least one track")
         var runs = _longest(tracks)
@@ -289,8 +320,7 @@ def create_from_morph_target_sequence(
         Error: If the sequence is empty or holds a target that is not a
             morph target, or the frame rate is not a number above zero.
     """
-    if not isfinite(fps) or fps <= 0:
-        raise Error("A frame rate must be a number above zero")
+    require_frame_rate(fps)
     var count = len(sequence)
     if count == 0:
         raise Error("A morph target sequence needs at least one target")

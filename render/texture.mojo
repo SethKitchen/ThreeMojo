@@ -402,6 +402,24 @@ comptime UNSIGNED_BYTE_TYPE = TexelType(0)
 comptime FLOAT_TYPE = TexelType(1)
 
 
+def require_float_linear(texel_type: TexelType, space: ColorSpace) raises:
+    """Refuse a float texture whose color space is not linear.
+
+    Args:
+        texel_type: What one channel is stored as.
+        space: The color space the texture decodes with.
+
+    Returns:
+        Nothing. The call returns when the texture is not a float, or its
+            color space is linear.
+
+    Raises:
+        Error: If a float texture is not linear.
+    """
+    if texel_type == FLOAT_TYPE and space != LINEAR:
+        raise Error("A float texture holds linear light: it must be LINEAR")
+
+
 @fieldwise_init
 struct UvChannel(Equatable, ImplicitlyCopyable, Writable):
     """Which set of texture coordinates a texture is sampled with, as a
@@ -1128,8 +1146,7 @@ struct Texture(Movable):
         # A float holds linear light as it is. The sRGB curve is a way to
         # spend 256 steps where the eye sees them, and a float has no steps
         # to spend: three.js's HDR loaders mark their textures linear.
-        if self.texel_type == FLOAT_TYPE and self.color_space != LINEAR:
-            raise Error("A float texture holds linear light: it must be LINEAR")
+        require_float_linear(self.texel_type, self.color_space)
         if self.anisotropy < 1:
             raise Error("A texture's anisotropy is at least one")
         if self.anisotropy > MAX_ANISOTROPY:

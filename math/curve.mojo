@@ -99,6 +99,7 @@ from math.curve_checks import (
     parameter_samples,
     require_control_count,
     require_curve_kind,
+    require_length_table,
 )
 from math.polyline import PolylineVertex, prefix_lengths, unit_direction
 from math.vector2 import Vector2
@@ -304,8 +305,7 @@ def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
             fewer than two entries.
     """
     check_curve_parameter(Float64(u))
-    if len(table) < 2:
-        raise Error("A curve length table needs at least two entries")
+    require_length_table(len(table))
     var last = len(table) - 1
     var target = u * table[last]
     var index = 1

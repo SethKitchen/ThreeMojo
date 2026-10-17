@@ -7,9 +7,26 @@
 
 The geometry reader and the animation reader both read a white-space
 separated list, and refuse a value that is not finite as a `Float32`.
+Both also refuse a source stride below one.
 """
 
 from std.math import isfinite
+
+
+def require_positive_stride(stride: Int) raises:
+    """Refuse a Collada source stride that is not positive.
+
+    Args:
+        stride: How many values one element holds.
+
+    Returns:
+        Nothing. The call returns when the stride is at least one.
+
+    Raises:
+        Error: If the stride is below one.
+    """
+    if stride < 1:
+        raise Error("Collada: a source's stride must be positive")
 
 
 def collada_floats(text: String) raises -> List[Float64]:

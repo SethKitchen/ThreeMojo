@@ -69,6 +69,7 @@ from render.framebuffer import (
     Color,
     FloatColor,
     Framebuffer,
+    require_downsample_factor,
 )
 from render.raster_state import STANDARD_DEPTH, DepthMode, is_nearer
 
@@ -99,8 +100,7 @@ def downsample(
         Error: If the factor is less than one or does not divide both
             dimensions.
     """
-    if factor < 1:
-        raise Error("A downsample factor is at least one")
+    require_downsample_factor(factor)
     if image.width % factor != 0 or image.height % factor != 0:
         raise Error("A downsample factor must divide the image's size")
     var width = image.width // factor

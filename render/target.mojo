@@ -111,6 +111,7 @@ from render.framebuffer import (
     FloatColor,
     Framebuffer,
     pixel_slot,
+    require_downsample_factor,
     SrgbBytes,
 )
 from render.rect import Rect
@@ -1330,8 +1331,7 @@ struct RenderTarget(Movable, SampleSource):
             Error: If the factor is less than one or does not divide both
                 dimensions.
         """
-        if factor < 1:
-            raise Error("A downsample factor is at least one")
+        require_downsample_factor(factor)
         if self.width % factor != 0 or self.height % factor != 0:
             raise Error("A downsample factor must divide the target's size")
         var small = RenderTarget(

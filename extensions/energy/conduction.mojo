@@ -48,6 +48,23 @@ from units.si import (
 )
 from units.temperature import KELVIN, Temperature64
 
+
+def require_fourier(fourier: Float64) raises:
+    """Refuse a Fourier number that is not positive and finite.
+
+    Args:
+        fourier: The smallest Fourier number an element may have.
+
+    Returns:
+        Nothing. The call returns when the number is positive and finite.
+
+    Raises:
+        Error: If the number is not positive and finite.
+    """
+    if not (fourier > 0 and isfinite(fourier)):
+        raise Error("A Fourier number must be positive and finite")
+
+
 # The most elements one layer gets, however fine the criterion asks.
 comptime MAX_ELEMENTS_PER_LAYER = 64
 
@@ -103,8 +120,7 @@ struct LayeredWall(Copyable, Movable):
         var dt = step.to(SECOND)
         if not (dt > 0 and isfinite(dt)):
             raise Error("A conduction step must be positive and finite")
-        if not (fourier > 0 and isfinite(fourier)):
-            raise Error("A Fourier number must be positive and finite")
+        require_fourier(fourier)
         if not initial.is_valid():
             raise Error("A wall's initial temperature must be valid")
         self.step = dt

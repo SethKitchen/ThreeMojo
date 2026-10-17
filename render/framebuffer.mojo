@@ -839,6 +839,22 @@ def require_framebuffer_size(width: Int, height: Int) raises:
         raise Error("Framebuffer dimensions must be positive")
 
 
+def require_downsample_factor(factor: Int) raises:
+    """Refuse a downsample factor below one.
+
+    Args:
+        factor: How many pixels across and down become one.
+
+    Returns:
+        Nothing. The call returns when the factor is at least one.
+
+    Raises:
+        Error: If the factor is less than one.
+    """
+    if factor < 1:
+        raise Error("A downsample factor is at least one")
+
+
 def pixel_slot(x: Int, y: Int, width: Int, height: Int) raises -> Int:
     """Return the index of pixel `(x, y)` in a row-major image.
 

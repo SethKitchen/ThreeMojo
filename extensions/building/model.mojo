@@ -60,6 +60,7 @@ from extensions.topology.arrangement import (
 from extensions.topology.complex import HORIZONTAL, VERTICAL
 from extensions.topology.ids import CellId, FaceId, RegionId
 from extensions.topology.storeys import StoreyComplex, build_storeys
+from extensions.energy.solar import require_latitude, require_longitude
 from generators.utils import Vec3d
 from std.math import cos, pi, sin
 from units.si import (
@@ -118,10 +119,8 @@ struct Site(ImplicitlyCopyable):
         """
         var lat = self.latitude.to(DEGREE64)
         var lon = self.longitude.to(DEGREE64)
-        if not (lat >= -90 and lat <= 90):
-            raise Error("A latitude must be from -90 to 90 degrees")
-        if not (lon >= -180 and lon <= 180):
-            raise Error("A longitude must be from -180 to 180 degrees")
+        require_latitude(lat)
+        require_longitude(lon)
         if not (
             isfinite(self.elevation.to(METER))
             and isfinite(self.north.to(RADIAN))

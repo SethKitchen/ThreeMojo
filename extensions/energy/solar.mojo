@@ -40,6 +40,56 @@ from units.si import (
 )
 
 
+def require_month(month: Int) raises:
+    """Refuse a month that is not 1 to 12.
+
+    Args:
+        month: The month number.
+
+    Returns:
+        Nothing. The call returns when the month is 1 to 12.
+
+    Raises:
+        Error: If the month is outside 1 to 12.
+    """
+    if month < 1 or month > 12:
+        raise Error("A month must be 1 to 12")
+
+
+def require_latitude(degrees: Float64) raises:
+    """Refuse a latitude outside -90 to 90 degrees.
+
+    Args:
+        degrees: The latitude, north positive.
+
+    Returns:
+        Nothing. The call returns when the latitude is in range. A value
+            that is not finite is outside the range.
+
+    Raises:
+        Error: If the latitude is outside -90 to 90 degrees.
+    """
+    if not (degrees >= -90 and degrees <= 90):
+        raise Error("A latitude must be from -90 to 90 degrees")
+
+
+def require_longitude(degrees: Float64) raises:
+    """Refuse a longitude outside -180 to 180 degrees.
+
+    Args:
+        degrees: The longitude, east positive.
+
+    Returns:
+        Nothing. The call returns when the longitude is in range. A value
+            that is not finite is outside the range.
+
+    Raises:
+        Error: If the longitude is outside -180 to 180 degrees.
+    """
+    if not (degrees >= -180 and degrees <= 180):
+        raise Error("A longitude must be from -180 to 180 degrees")
+
+
 def day_of_year(month: Int, day: Int) raises -> Int:
     """Return the day of the year of a date in a year without February 29.
 
@@ -55,8 +105,7 @@ def day_of_year(month: Int, day: Int) raises -> Int:
     Raises:
         Error: If the month or the day is not in the calendar.
     """
-    if month < 1 or month > 12:
-        raise Error("A month must be 1 to 12")
+    require_month(month)
     var days: List[Int] = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     if day < 1 or day > days[month - 1]:
         raise Error("A day is not in its month")

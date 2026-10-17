@@ -96,6 +96,23 @@ from std.math import cos, isfinite, pi
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 
+def require_light_intensity(intensity: Float32) raises:
+    """Refuse a light intensity that is negative or not finite.
+
+    Args:
+        intensity: How bright, multiplying the color.
+
+    Returns:
+        Nothing. The call returns when the intensity is finite and not
+            negative.
+
+    Raises:
+        Error: If the intensity is negative or not finite.
+    """
+    if not isfinite(intensity) or intensity < 0:
+        raise Error("A light's intensity must be finite and not negative")
+
+
 @fieldwise_init
 struct LightKind(Equatable, ImplicitlyCopyable, Writable):
     """Which of the seven kinds of light this is, as a type rather than an
@@ -451,8 +468,7 @@ struct Light(ImplicitlyCopyable):
                 that is not an `IES_SPOT`; or a projector's aspect is
                 negative or not finite.
         """
-        if not isfinite(self.intensity) or self.intensity < 0:
-            raise Error("A light's intensity must be finite and not negative")
+        require_light_intensity(self.intensity)
         if self.kind == LIGHT_PROBE and not self.sh.is_finite():
             raise Error("A light probe's coefficients must be finite")
         self.cascade.validate()

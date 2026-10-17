@@ -50,7 +50,7 @@ from animation.keyframe_track import (
 )
 from core.object3d import NodeId
 from loaders.collada_id import collada_reference
-from loaders.collada_numbers import collada_floats
+from loaders.collada_numbers import collada_floats, require_positive_stride
 from loaders.xml import NO_ELEMENT, XmlDocument
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
@@ -119,8 +119,7 @@ def _source(document: XmlDocument, element: Int) raises -> _Source:
         var accessor = document.child(common, "accessor")
         if accessor != NO_ELEMENT:
             stride = _whole(document.attribute(accessor, "stride"))
-    if stride < 1:
-        raise Error("Collada: a source's stride must be positive")
+    require_positive_stride(stride)
     return _Source(values^, stride)
 
 
