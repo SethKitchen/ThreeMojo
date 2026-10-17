@@ -1213,10 +1213,7 @@ def _inflated(block: Span[UInt8, _]) raises -> List[UInt8]:
         raise Error("invalid zlib data")
     if (block[1] & 32) != 0:
         raise Error("invalid zlib data: preset dictionaries not supported")
-    var copy = List[UInt8](capacity=len(block))
-    for b in block:  # pragma: no branch
-        copy.append(b)
-    return inflate(copy, 2)
+    return inflate(block, 2)
 
 
 def _data_array(

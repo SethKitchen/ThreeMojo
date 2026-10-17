@@ -219,23 +219,23 @@ def _distance_extra() -> List[Int]:
     ]
 
 
-struct BitReader(Movable):
-    """A little-endian bit stream over a byte list.
+struct BitReader[origin: Origin[mut=False]](Movable):
+    """A little-endian bit stream over a byte span.
 
     DEFLATE packs its fields from the least significant bit of each byte
     upwards, and moves to the next byte when one runs out. A Huffman code is
     the exception and is read a bit at a time by `Huffman.decode`, most
     significant bit of the *code* first, which is why `read_bit` is public
-    rather than only `read_bits`.
+    rather than only `read_bits`. The caller keeps the bytes for the read.
     """
 
-    var bytes: List[UInt8]
+    var bytes: Span[UInt8, Self.origin]
     var position: Int
     var bit: Int
 
-    def __init__(out self, bytes: List[UInt8], start: Int):
-        """Start reading at byte `start`."""
-        self.bytes = bytes.copy()
+    def __init__(out self, bytes: Span[UInt8, Self.origin], start: Int):
+        """Start reading at byte `start`. The caller keeps `bytes`."""
+        self.bytes = bytes
         self.position = start
         self.bit = 0
 
@@ -327,7 +327,9 @@ struct Huffman(Movable):
                 self.symbols[offsets[lengths[symbol]]] = symbol
                 offsets[lengths[symbol]] += 1
 
-    def decode(self, mut reader: BitReader) raises -> Int:
+    def decode[
+        origin: Origin[mut=False]
+    ](self, mut reader: BitReader[origin]) raises -> Int:
         """Return the next symbol, reading one bit at a time.
 
         Walks lengths upwards holding the code built so far and the first code
@@ -369,7 +371,9 @@ def _fixed_literals() -> List[Int]:
     return lengths^
 
 
-def _read_dynamic_lengths(mut reader: BitReader) raises -> List[List[Int]]:
+def _read_dynamic_lengths[
+    origin: Origin[mut=False]
+](mut reader: BitReader[origin]) raises -> List[List[Int]]:
     """Return the literal and distance code lengths a dynamic block declares.
 
     The lengths are themselves Huffman coded, by a third code whose own
@@ -456,8 +460,10 @@ def _room_for(produced: Int, more: Int, limit: Int) raises:
         raise Error("A compressed stream expands to more than was expected")
 
 
-def _inflate_block(
-    mut reader: BitReader,
+def _inflate_block[
+    origin: Origin[mut=False]
+](
+    mut reader: BitReader[origin],
     mut out: List[UInt8],
     literals: Huffman,
     distances: Huffman,
@@ -512,7 +518,7 @@ def _inflate_block(
 
 
 def inflate(
-    bytes: List[UInt8], start: Int = 0, limit: Int = NO_LIMIT
+    bytes: Span[UInt8, _], start: Int = 0, limit: Int = NO_LIMIT
 ) raises -> List[UInt8]:
     """Return the bytes a DEFLATE stream expands to.
 
@@ -533,7 +539,30 @@ def inflate(
     return _inflate(reader, limit)
 
 
-def _inflate(mut reader: BitReader, limit: Int) raises -> List[UInt8]:
+def inflate(
+    bytes: List[UInt8], start: Int = 0, limit: Int = NO_LIMIT
+) raises -> List[UInt8]:
+    """Return the bytes a DEFLATE stream expands to.
+
+    Args:
+        bytes: The buffer holding the stream.
+        start: Where the stream begins in it.
+        limit: The most it may produce. `NO_LIMIT` to let it produce whatever
+            it likes, which is only safe for a stream you wrote yourself.
+
+    Returns:
+        The decompressed bytes.
+
+    Raises:
+        Error: If the stream is truncated, uses the reserved block type,
+            expands past `limit`, or is otherwise malformed.
+    """
+    return inflate(Span(bytes), start, limit)
+
+
+def _inflate[
+    origin: Origin[mut=False]
+](mut reader: BitReader[origin], limit: Int) raises -> List[UInt8]:
     """Expand every block, leaving `reader` just past the last one.
 
     Separate from `inflate` because the zlib wrapper needs to know where the
@@ -632,7 +661,7 @@ def zlib_inflate(
     if (Int(bytes[1]) >> 5) & 1 == 1:
         raise Error("A zlib stream with a preset dictionary cannot be read")
 
-    var reader = BitReader(bytes, 2)
+    var reader = BitReader(Span(bytes), 2)
     var out = _inflate(reader, limit)
 
     # The checksum sits on the next byte boundary after the last block.
