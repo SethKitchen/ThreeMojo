@@ -3625,20 +3625,17 @@ def _emit_sprite(
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
-        var a = quad[0]
-        var b = quad[thirds[half] - 1]
-        var c = quad[thirds[half]]
-        if _whole_in_view(a, b, c, near, far, sides, any_of):
-            paint.emit(corners, a, b, c)
-            continue
-        var pieces = clip_depth(a, b, c, near, far, sides, any_of)
-        for piece in range(len(pieces) // 3):
-            paint.emit(
-                corners,
-                pieces[piece * 3],
-                pieces[piece * 3 + 1],
-                pieces[piece * 3 + 2],
-            )
+        _emit_clipped(
+            paint,
+            corners,
+            quad[0],
+            quad[thirds[half] - 1],
+            quad[thirds[half]],
+            near,
+            far,
+            sides,
+            any_of,
+        )
 
 
 def _emit_clipped(
