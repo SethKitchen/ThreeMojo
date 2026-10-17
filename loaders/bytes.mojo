@@ -173,6 +173,36 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
     return at < len(bytes) and ascii_digit(bytes[at])
 
 
+def is_exponent_mark(byte: Int) -> Bool:
+    """Return True for `e` or `E`.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it starts a decimal exponent.
+
+    Raises:
+        Error: Never.
+    """
+    return byte == 101 or byte == 69
+
+
+def is_exponent_mark(byte: UInt8) -> Bool:
+    """Return True for `e` or `E`.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it starts a decimal exponent.
+
+    Raises:
+        Error: Never.
+    """
+    return is_exponent_mark(Int(byte))
+
+
 def js_float_byte(byte: UInt8) -> Bool:
     """Return True when `byte` can sit inside a JavaScript number.
 

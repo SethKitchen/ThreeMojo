@@ -26,6 +26,7 @@ from loaders.bytes import (
     ascii_space,
     ascii_space_at,
     hex_digit_value,
+    is_exponent_mark,
 )
 from std.math import inf, isfinite, isnan, nan
 from std.ffi import external_call
@@ -86,7 +87,7 @@ def js_parse_float(text: String) -> Float64:
     if digits == 0:
         return nan[DType.float64]()
     var end = i
-    var exp = i < n and (b[i] == 101 or b[i] == 69)
+    var exp = i < n and is_exponent_mark(b[i])
     if exp:
         i += 1
         if _sign_at(b, i):
@@ -197,7 +198,7 @@ def js_string_to_number(text: String) -> Float64:
             digits += 1
     if digits == 0:
         return nan[DType.float64]()
-    if i < n and (bytes[i] | 32) == 101:
+    if i < n and is_exponent_mark(bytes[i]):
         i += 1
         if _sign_at(bytes, i):
             i += 1

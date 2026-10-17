@@ -65,7 +65,9 @@ from loaders.bytes import (
     ascii_digit_at,
     ascii_letter,
     ascii_space,
+    is_exponent_mark,
     js_float_byte_at,
+    space_tab_line,
 )
 from loaders.svg_path import (
     SvgMatrix,
@@ -253,9 +255,9 @@ def parse_floats(
     for i in range(len(bytes)):
         var c = bytes[i]
         var current = String(chr(Int(c)))
-        var is_space = c == 32 or c == 9 or c == 13 or c == 10
+        var is_space = space_tab_line(c)
         var is_sign = c == 43 or c == 45
-        var is_exp = c == 101 or c == 69
+        var is_exp = is_exponent_mark(c)
         var is_flag = c == 48 or c == 49
         var at_flag = (
             len(flags) > 0 and is_flag and (len(result) % stride) in flags
