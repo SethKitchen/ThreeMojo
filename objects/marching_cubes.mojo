@@ -42,6 +42,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
+from core.ordinal import index_in_count
 from math.norm import squared_length3
 from render.framebuffer import FloatColor
 from math.finite import require_finite
@@ -398,15 +399,15 @@ struct MarchingCubes(Movable):
                     var count = 1
                     for x2 in range(-1, 2, 2):  # pragma: no branch
                         var x3 = x2 + x
-                        if not _inside(x3, size):
+                        if not index_in_count(x3, size):
                             continue
                         for y2 in range(-1, 2, 2):  # pragma: no branch
                             var y3 = y2 + y
-                            if not _inside(y3, size):
+                            if not index_in_count(y3, size):
                                 continue
                             for z2 in range(-1, 2, 2):  # pragma: no branch
                                 var z3 = z2 + z
-                                if not _inside(z3, size):
+                                if not index_in_count(z3, size):
                                     continue
                                 var val2 = Float64(
                                     copy[size2 * z3 + size * y3 + x3]
@@ -698,14 +699,13 @@ struct MarchingCubes(Movable):
         assets.geometries.geometries[id.value] = self.geometry()
 
 
-def _inside(index: Int, size: Int) -> Bool:
-    """Return True if a cell index lies in the cube."""
-    return index >= 0 and index < size
-
-
 def _in_cube(x: Int, y: Int, z: Int, size: Int) -> Bool:
     """Return True if a cell lies in the cube."""
-    return _inside(x, size) and _inside(y, size) and _inside(z, size)
+    return (
+        index_in_count(x, size)
+        and index_in_count(y, size)
+        and index_in_count(z, size)
+    )
 
 
 def _finite_pair(a: Float64, b: Float64) -> Bool:

@@ -66,7 +66,7 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import index_in_count, ordinal_valid
 
 from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
@@ -541,11 +541,6 @@ def require_collada_positions(held: Int, expected: Int) raises:
     """
     if held != expected:
         raise Error("Collada: a primitive's positions do not match its corners")
-
-
-def _within(index: Int, count: Int) -> Bool:
-    """Return True if an index is from zero to below a count."""
-    return index >= 0 and index < count
 
 
 def _sorted_place(amounts: List[Float64], amount: Float64) -> Int:
@@ -2153,12 +2148,12 @@ struct _Loader(Movable):
                     raise Error("Collada: <v> is shorter than <vcount> needs")
                 var bone = pairs[stride + joint_at]
                 var share = pairs[stride + weight_at]
-                if not _within(bone, len(data.names)):
+                if not index_in_count(bone, len(data.names)):
                     raise Error(
                         "Collada: a joint index outside the joints: "
                         + String(bone)
                     )
-                if not _within(share, len(shares)):
+                if not index_in_count(share, len(shares)):
                     raise Error("Collada: a weight index outside the weights")
                 # Largest first, equal weights keeping their order, as
                 # three.js's stable sort keeps them.
