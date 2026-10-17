@@ -61,6 +61,8 @@ from math.curve_checks import (
     curve_sample_count,
     curve_count_product,
     parameter_samples,
+    require_control_count,
+    require_curve_kind,
 )
 from math.bezier import (
     cubic_bezier_slope,
@@ -240,16 +242,10 @@ struct Curve3(Copyable, Movable):
                 is the same point, or if a curve that is not a Catmull-Rom
                 spline is closed.
         """
-        if not kind.is_valid():
-            raise Error("A curve needs a kind that exists")
+        require_curve_kind(kind.is_valid())
         if not curve_type.is_valid():
             raise Error("A Catmull-Rom curve needs a type that exists")
-        var wanted = kind.control_count()
-        if wanted == 0:
-            if len(points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(points) != wanted:
-            raise Error("A curve's points must match its kind")
+        require_control_count(kind.control_count(), len(points))
         if closed and kind != CATMULL_ROM3:
             raise Error("Only a Catmull-Rom curve can close")
         var moved = False
@@ -356,16 +352,10 @@ struct Curve3(Copyable, Movable):
 
     def _validate(self) raises:
         """Check mutable dispatch and storage in constant time."""
-        if not self.kind.is_valid():
-            raise Error("A curve needs a kind that exists")
+        require_curve_kind(self.kind.is_valid())
         if not self.curve_type.is_valid():
             raise Error("A Catmull-Rom curve needs a type that exists")
-        var wanted = self.kind.control_count()
-        if wanted == 0:
-            if len(self.points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(self.points) != wanted:
-            raise Error("A curve's points must match its kind")
+        require_control_count(self.kind.control_count(), len(self.points))
         if self.closed and self.kind != CATMULL_ROM3:
             raise Error("Only a Catmull-Rom curve can close")
 

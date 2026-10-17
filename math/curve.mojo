@@ -97,6 +97,8 @@ from math.curve_checks import (
     curve_sample_count,
     curve_count_product,
     parameter_samples,
+    require_control_count,
+    require_curve_kind,
 )
 from math.polyline import PolylineVertex, prefix_lengths, unit_direction
 from math.vector2 import Vector2
@@ -390,16 +392,10 @@ struct Curve(Copyable, Movable):
                 number of points does not match the kind, or if every point
                 is the same point, which has no direction anywhere.
         """
-        if not kind.is_valid():
-            raise Error("A curve needs a kind that exists")
+        require_curve_kind(kind.is_valid())
         if kind == ELLIPSE:
             raise Error("An ellipse is made with its radii and angles")
-        var wanted = kind.control_count()
-        if wanted == 0:
-            if len(points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(points) != wanted:
-            raise Error("A curve's points must match its kind")
+        require_control_count(kind.control_count(), len(points))
         var moved = False
         for index in range(1, len(points)):  # pragma: no branch
             var step = points[index] - points[0]
@@ -506,14 +502,8 @@ struct Curve(Copyable, Movable):
 
     def _validate(self) raises:
         """Check mutable dispatch and storage in constant time."""
-        if not self.kind.is_valid():
-            raise Error("A curve needs a kind that exists")
-        var wanted = self.kind.control_count()
-        if wanted == 0:
-            if len(self.points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(self.points) != wanted:
-            raise Error("A curve's points must match its kind")
+        require_curve_kind(self.kind.is_valid())
+        require_control_count(self.kind.control_count(), len(self.points))
 
     def point(self, t: Float32) raises -> Vector2:
         """Return the point at `t` along this curve's own parameter.

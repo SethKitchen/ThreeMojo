@@ -96,6 +96,7 @@ from render.framebuffer import (
     FloatColor,
     Framebuffer,
     OPAQUE_WHITE,
+    require_framebuffer_size,
 )
 from render.target import (
     UNSIGNED_BYTE_TARGET,
@@ -113,7 +114,6 @@ from render.target import (
 )
 from render.layered_target import LayeredRenderTarget
 from render.texture_copy import TexelPoint, copy_framebuffer_to_texture
-from core.extent import positive_extent
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
     ShadowShape,
@@ -9737,8 +9737,7 @@ struct GpuRenderer(Movable):
         Raises:
             Error: If the dimensions are not positive, or no GPU is present.
         """
-        if not positive_extent(width, height):
-            raise Error("Framebuffer dimensions must be positive")
+        require_framebuffer_size(width, height)
         if not available():
             raise Error("No GPU available")
         self.width = width
@@ -12230,8 +12229,7 @@ struct GpuComposer(Movable):
             Error: If the dimensions are not positive, or no GPU is
                 present.
         """
-        if not positive_extent(width, height):
-            raise Error("Framebuffer dimensions must be positive")
+        require_framebuffer_size(width, height)
         if not available():
             raise Error("No GPU available")
         self.width = width
