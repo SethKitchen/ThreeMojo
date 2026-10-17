@@ -89,7 +89,7 @@ def generator_random(seed: Int) -> SeededRandom:
 
 
 @fieldwise_init
-struct Vec3d(ImplicitlyCopyable):
+struct Vec3d(Equatable, ImplicitlyCopyable):
     """A point or direction in `Float64`, for arithmetic that three.js does
     in `Float64`.
 
@@ -134,6 +134,28 @@ struct Vec3d(ImplicitlyCopyable):
             The scaled vector.
         """
         return Vec3d(self.x * factor, self.y * factor, self.z * factor)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every component is exactly equal.
+
+        Args:
+            other: The vector to compare with.
+
+        Returns:
+            Whether the two are the same vector.
+        """
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any component differs.
+
+        Args:
+            other: The vector to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
 
     def __neg__(self) -> Self:
         """Return the vector pointing the other way, three.js's `negate`.

@@ -224,7 +224,7 @@ def _finite_vector(v: Vec3d, what: String) raises:
 def _direction(v: Vec3d) raises -> Vec3d:
     """Normalize a finite, nonzero generated direction."""
     _finite_vector(v, "A generated tree direction")
-    if v.x == 0 and v.y == 0 and v.z == 0:
+    if v == Vec3d(0, 0, 0):
         raise Error("A generated tree direction must be nonzero")
     return v.normalized()
 

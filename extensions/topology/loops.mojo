@@ -39,11 +39,6 @@ struct LoopParts(Movable):
         self.holes = holes^
 
 
-def _same(a: Vec3d, b: Vec3d) -> Bool:
-    """Return True if two corners have the same coordinates."""
-    return a.x == b.x and a.y == b.y and a.z == b.z
-
-
 def vector_area(points: List[Vec3d]) -> Vec3d:
     """Return a loop's normal scaled by its area, by Newell's method.
 
@@ -88,7 +83,7 @@ def split_bridged(points: List[Vec3d]) raises -> LoopParts:
         var q = points[(i + 1) % n]
         var found = False
         for k in range(n):  # pragma: no branch
-            if _same(points[k], q) and _same(points[(k + 1) % n], p):
+            if points[k] == q and points[(k + 1) % n] == p:
                 found = True
         bridge.append(found)
     var used = List[Bool](capacity=n)
@@ -107,12 +102,12 @@ def split_bridged(points: List[Vec3d]) raises -> LoopParts:
             var end = points[(e + 1) % n]
             var next = -1
             for k in range(n):  # pragma: no branch
-                if not bridge[k] and not used[k] and _same(points[k], end):
+                if not bridge[k] and not used[k] and points[k] == end:
                     next = k
             if next < 0:
                 # Removing pairs of opposite edges leaves every corner with
                 # as many edges in as out, so the trace closes.
-                debug_assert(_same(points[start], end), "an open cycle")
+                debug_assert(points[start] == end, "an open cycle")
                 break
             e = next
         cycles.append(cycle^)

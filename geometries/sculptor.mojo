@@ -549,9 +549,7 @@ struct Sculptor(Movable):
         self._ray_origin = near
         var offset = far - near
         # A finite direction remains usable even when its length cannot fit.
-        if not offset.is_finite() or (
-            offset.x == 0 and offset.y == 0 and offset.z == 0
-        ):
+        if not offset.is_finite() or (offset == Point3(0, 0, 0)):
             return False
         var unit = reciprocal_normalized3(offset.x, offset.y, offset.z)
         self._ray_direction = Point3(unit[0], unit[1], unit[2])
