@@ -72,6 +72,7 @@
 - [Continuous collision](Continuous-collision)
 - [Tick force restoration](Tick-force-restoration)
 - [Water](Water)
+- [Streamline](Streamline)
 - [Animals](Animals)
   - [Animal anatomy](Animal-anatomy)
   - [Anatomy validity](Anatomy-validity)

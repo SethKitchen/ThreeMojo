@@ -923,6 +923,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## NVIDIA Streamline
+
+<https://github.com/NVIDIA-RTX/Streamline>
+
+`extensions/streamline/` follows the public interface of Streamline 2.14.16
+for DLSS Super Resolution and DLSS Ray Reconstruction: the names and numeric
+values of the enumerators and the fields of `sl_dlss.h`, `sl_dlss_d.h` and
+`sl_consts.h`, and the rules of the programming guides for those features.
+No Streamline source code, header, library or binary is included or
+redistributed. The Mojo implementation is original work.
+
+Streamline is distributed under the license in its repository
+(`license.txt`, Copyright (c) 2023 NVIDIA Corporation). The DLSS runtime that
+Streamline loads is a separate NVIDIA product. This project does not include
+it. Anyone who builds a program on it must follow NVIDIA's terms for it.
+
 ## CARLA content assets
 
 The optional cache uses 47 converted CARLA content entries: 41 vehicles and

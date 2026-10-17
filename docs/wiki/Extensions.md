@@ -14,6 +14,8 @@ The geotech subject analyzes earth-retaining walls: earth and water pressure, LR
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
+The Streamline subject types NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction: modes, presets, options, per-frame constants and buffer checks. It has a CPU fallback upscaler. It does not run DLSS yet. See [Streamline](Streamline).
+
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
 
 ## Layout
@@ -111,6 +113,14 @@ extensions/
     agents*.mojo, navigation*.mojo               agents and walker navigation
     recorder*.mojo, replayer*.mojo               the recorder
     town.mojo, render_*.mojo, camera_render.mojo rendering
+  streamline/
+    kinds.mojo      modes, presets and buffer kinds
+    options.mojo    the options of Super Resolution and Ray Reconstruction
+    sizing.mojo     render size and the check of Streamline's reply
+    jitter.mojo     the jitter sequence
+    constants.mojo  the per-frame constants from two cameras
+    tags.mojo       the check of a frame's tagged buffers
+    upscaler.mojo   the upscaler trait and a CPU fallback
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
