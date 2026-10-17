@@ -105,15 +105,10 @@ def _dot(a: Vec, b: Vec) -> Float32:
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-def _length(a: Vec) -> Float32:
-    """Return the length, the C's `Length`."""
-    return length3(a[0], a[1], a[2])
-
-
 def _normalize(a: Vec) -> Vec:
     """Return the vector over its length, the C's `Normalize`."""
     if _ordinary_squared(_dot(a, a)):
-        return a * (1 / _length(a))
+        return a * (1 / length3(a[0], a[1], a[2]))
     var unit = normalized3(a[0], a[1], a[2])
     return _v(unit[0], unit[1], unit[2])
 
@@ -543,8 +538,8 @@ def _init_tri_info(
         # The fast-path gate proves a nonzero finite area and ordinary
         # squared derivative lengths. Their square roots are positive.
         var area = abs(signed_area)
-        var len_os = _length(os)
-        var len_ot = _length(ot)
+        var len_os = length3(os[0], os[1], os[2])
+        var len_ot = length3(ot[0], ot[1], ot[2])
         var sign = Float32(1)
         if (infos[f].flag & ORIENT_PRESERVING) == 0:
             sign = -1

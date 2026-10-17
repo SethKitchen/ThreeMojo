@@ -280,15 +280,11 @@ def _determinant(te: List[Float64]) -> Float64:
     )
 
 
-def _length(x: Float64, y: Float64, z: Float64) -> Float64:
-    return length3(x, y, z)
-
-
 def _decompose(te: List[Float64], mut node: LDrawNode):
     """Set a node's place from a matrix, three.js's `Matrix4.decompose`."""
-    var sx = _length(te[0], te[1], te[2])
-    var sy = _length(te[4], te[5], te[6])
-    var sz = _length(te[8], te[9], te[10])
+    var sx = length3(te[0], te[1], te[2])
+    var sy = length3(te[4], te[5], te[6])
+    var sz = length3(te[8], te[9], te[10])
     var first = normalized3(te[0], te[1], te[2])
     var second = normalized3(te[4], te[5], te[6])
     var third = normalized3(te[8], te[9], te[10])
