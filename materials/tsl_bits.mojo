@@ -687,6 +687,32 @@ def _trailing16(mut g: NodeGraph, v: NodeRef) raises -> NodeRef:
     return g.add(n, last)
 
 
+def _end_zeros(
+    mut g: NodeGraph, low: NodeRef, high: NodeRef, leading: Bool
+) raises -> NodeRef:
+    """Return the zeros at one end of a 32-bit value. The high half is
+    the end for leading zeros, and the low half is the end for trailing
+    zeros. A value of zero has 32."""
+    var zero = g.float(0)
+    var first = high if leading else low
+    var second = low if leading else high
+    var count: NodeRef
+    if leading:
+        count = g.select(
+            g.not_equal(first, zero),
+            _leading16(g, first),
+            g.add(g.float(16), _leading16(g, second)),
+        )
+    else:
+        count = g.select(
+            g.not_equal(first, zero),
+            _trailing16(g, first),
+            g.add(g.float(16), _trailing16(g, second)),
+        )
+    var none = g.logical_and(g.equal(high, zero), g.equal(low, zero))
+    return g.select(none, g.float(32), count)
+
+
 def count_one_bits(mut g: NodeGraph, x: NodeRef) raises -> NodeRef:
     """Return how many bits are one in each component, TSL's
     `countOneBits`.
@@ -720,16 +746,7 @@ def count_leading_zeros(mut g: NodeGraph, x: NodeRef) raises -> NodeRef:
         Error: If `x` is not a `float` or a vector of this graph.
     """
     var halves = _halves_of(g, x)
-    var low = halves[0]
-    var high = halves[1]
-    var zero = g.float(0)
-    var count = g.select(
-        g.not_equal(high, zero),
-        _leading16(g, high),
-        g.add(g.float(16), _leading16(g, low)),
-    )
-    var none = g.logical_and(g.equal(high, zero), g.equal(low, zero))
-    return g.select(none, g.float(32), count)
+    return _end_zeros(g, halves[0], halves[1], True)
 
 
 def count_trailing_zeros(mut g: NodeGraph, x: NodeRef) raises -> NodeRef:
@@ -747,16 +764,7 @@ def count_trailing_zeros(mut g: NodeGraph, x: NodeRef) raises -> NodeRef:
         Error: If `x` is not a `float` or a vector of this graph.
     """
     var halves = _halves_of(g, x)
-    var low = halves[0]
-    var high = halves[1]
-    var zero = g.float(0)
-    var count = g.select(
-        g.not_equal(low, zero),
-        _trailing16(g, low),
-        g.add(g.float(16), _trailing16(g, high)),
-    )
-    var none = g.logical_and(g.equal(high, zero), g.equal(low, zero))
-    return g.select(none, g.float(32), count)
+    return _end_zeros(g, halves[0], halves[1], False)
 
 
 # --- float packing ------------------------------------------------------------
