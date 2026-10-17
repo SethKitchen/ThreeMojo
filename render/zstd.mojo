@@ -42,7 +42,7 @@ decoded without that dictionary. A KTX 2.0 file carries no dictionary,
 and three.js's Basis Universal transcoder refuses such a frame too.
 """
 
-from core.binary import copy_bytes, little_endian_uint
+from core.binary import copy_byte_range, copy_bytes, little_endian_uint
 
 # A decoder that knows the size it expects passes it as the limit.
 comptime NO_LIMIT = 0x7FFFFFFFFFFFFFF
@@ -145,7 +145,7 @@ struct _Backward(Movable):
             raise Error(
                 "zstd: a bitstream is empty or does not end with its marker bit"
             )
-        self.data = List[UInt8](bytes[start:end])
+        self.data = copy_byte_range(bytes, start, end)
         self.pos = (end - start - 1) * 8 + _highbit(Int(bytes[end - 1]))
 
     def peek(self, count: Int) -> Int:
@@ -303,7 +303,7 @@ def _read_fse(
         Error: If the accuracy is too high, the counts do not fill the
             table, it names too many symbols, or it runs past `end`.
     """
-    var reader = _Forward(List[UInt8](bytes[at:end]))
+    var reader = _Forward(copy_byte_range(bytes, at, end))
     var log = reader.read(4) + 5
     if log > max_log:
         raise Error("zstd: an FSE table's accuracy is too high")

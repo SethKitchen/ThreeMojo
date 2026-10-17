@@ -40,6 +40,7 @@ no texels, or data of the wrong length, is refused. three.js writes a
 file with a data window of minus one.
 """
 
+from core.binary import copy_byte_range
 from core.extent import positive_extent
 from geometries.curve_modifier import to_half_float
 from render.deflate import zlib_deflate
@@ -155,7 +156,7 @@ def _write(
         var start = block_size * b
         var end = min(start + block_size, len(raw))
         if compression == NO_COMPRESSION:
-            chunks.append(List[UInt8](raw[start:end]))
+            chunks.append(copy_byte_range(raw, start, end))
             continue
         # Even bytes, then odd bytes, then each byte less the one before.
         var n = end - start
@@ -179,7 +180,7 @@ def _write(
         var packed = zlib_deflate(tmp)
         # A block that zlib does not make smaller is read as raw lines.
         if len(packed) >= n:
-            chunks.append(List[UInt8](raw[start:end]))
+            chunks.append(copy_byte_range(raw, start, end))
         else:
             chunks.append(packed^)
     var out = List[UInt8]()
