@@ -20,7 +20,13 @@ integer past 2 to the 53 is summed a digit at a time, so it can round
 differently.
 """
 
-from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
+from loaders.bytes import (
+    ascii_digit,
+    ascii_digit_at,
+    ascii_space,
+    ascii_space_at,
+    hex_digit_value,
+)
 from std.math import inf, isfinite, isnan, nan
 from std.ffi import external_call
 from std.memory import bitcast
@@ -42,16 +48,6 @@ def is_decimal_text(text: String) -> Bool:
     return True
 
 
-def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and ascii_space(bytes[i])
-
-
-def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a digit at `i`."""
-    return i < len(bytes) and ascii_digit(bytes[i])
-
-
 def _sign_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a `+` or a `-` at `i`."""
     return i < len(bytes) and (bytes[i] == 43 or bytes[i] == 45)
@@ -70,7 +66,7 @@ def js_parse_float(text: String) -> Float64:
     var b = text.as_bytes()
     var n = len(b)
     var i = 0
-    while _space_at(b, i):
+    while ascii_space_at(b, i):
         i += 1
     var start = i
     if _sign_at(b, i):
@@ -78,13 +74,13 @@ def js_parse_float(text: String) -> Float64:
     if String(text[byte=i:]).startswith("Infinity"):
         return -inf[DType.float64]() if b[start] == 45 else inf[DType.float64]()
     var digits = 0
-    while _digit_at(b, i):
+    while ascii_digit_at(b, i):
         i += 1
         digits += 1
     var point = i < n and b[i] == 46
     if point:
         i += 1
-        while _digit_at(b, i):
+        while ascii_digit_at(b, i):
             i += 1
             digits += 1
     if digits == 0:
@@ -96,7 +92,7 @@ def js_parse_float(text: String) -> Float64:
         if _sign_at(b, i):
             i += 1
         var exponent = 0
-        while _digit_at(b, i):
+        while ascii_digit_at(b, i):
             i += 1
             exponent += 1
         if exponent > 0:
@@ -120,13 +116,13 @@ def js_parse_int(text: String) -> Float64:
     """
     var b = text.as_bytes()
     var i = 0
-    while _space_at(b, i):
+    while ascii_space_at(b, i):
         i += 1
     var start = i
     if _sign_at(b, i):
         i += 1
     var first = i
-    while _digit_at(b, i):
+    while ascii_digit_at(b, i):
         i += 1
     if i == first:
         return nan[DType.float64]()
@@ -165,7 +161,7 @@ def js_string_to_number(text: String) -> Float64:
     var b = text.as_bytes()
     var start = 0
     var end = len(b)
-    while _space_at(b, start):
+    while ascii_space_at(b, start):
         start += 1
     while end > start and ascii_space(b[end - 1]):
         end -= 1
@@ -191,12 +187,12 @@ def js_string_to_number(text: String) -> Float64:
     if String(body[byte=i:]) == "Infinity":
         return js_parse_float(body)
     var digits = 0
-    while _digit_at(bytes, i):
+    while ascii_digit_at(bytes, i):
         i += 1
         digits += 1
     if i < n and bytes[i] == 46:
         i += 1
-        while _digit_at(bytes, i):
+        while ascii_digit_at(bytes, i):
             i += 1
             digits += 1
     if digits == 0:
@@ -206,7 +202,7 @@ def js_string_to_number(text: String) -> Float64:
         if _sign_at(bytes, i):
             i += 1
         var exponent = 0
-        while _digit_at(bytes, i):
+        while ascii_digit_at(bytes, i):
             i += 1
             exponent += 1
         if exponent == 0:

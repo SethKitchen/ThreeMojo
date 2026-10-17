@@ -60,7 +60,7 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized2, _ordinary_squared, squared_length2
 from math.utils import clamp
-from loaders.bytes import ascii_digit, ascii_letter, ascii_space
+from loaders.bytes import ascii_digit, ascii_digit_at, ascii_letter, ascii_space
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -165,11 +165,6 @@ def svg_unit_scale(
     if default_unit == SVG_PX:
         return 1 / _inches(unit) * dpi
     return _inches(default_unit) / _inches(unit)
-
-
-def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a digit at `i`."""
-    return i < len(bytes) and ascii_digit(bytes[i])
 
 
 def _in_number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
@@ -372,13 +367,13 @@ def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
     if signed:
         i += 1
     var digits = 0
-    while _digit_at(bytes, i):
+    while ascii_digit_at(bytes, i):
         i += 1
         digits += 1
     var fraction = i + 1 < n and bytes[i] == 46 and ascii_digit(bytes[i + 1])
     if fraction:
         i += 1
-        while _digit_at(bytes, i):
+        while ascii_digit_at(bytes, i):
             i += 1
     elif digits == 0:
         return -1
@@ -389,7 +384,7 @@ def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
         if exp_signed:
             j += 1
         var exponent = j
-        while _digit_at(bytes, j):
+        while ascii_digit_at(bytes, j):
             j += 1
         if j > exponent:
             i = j
