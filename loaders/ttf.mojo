@@ -51,18 +51,21 @@ from std.pathlib import Path
 comptime MAX_TTF_NESTING = 16
 
 
-struct _Data:
-    """A font's bytes, read big-endian."""
+struct _Data[origin: Origin[mut=False]]:
+    """A font's bytes, read big-endian.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
         """Hold the font.
 
         Args:
-            bytes: The font.
+            bytes: The font. The caller keeps it.
         """
-        self.bytes = bytes^
+        self.bytes = bytes
 
     def u8(self, at: Int) raises -> Int:
         """Return a byte.
@@ -170,8 +173,10 @@ struct _Glyph(Copyable, Movable):
         self.parsed = False
 
 
-def _coordinate(
-    data: _Data,
+def _coordinate[
+    origin: Origin[mut=False]
+](
+    data: _Data[origin],
     mut at: Int,
     flag: Int,
     previous: Float64,
@@ -207,7 +212,9 @@ def _coordinate(
     return previous + Float64(delta)
 
 
-def _f2dot14(data: _Data, mut at: Int) raises -> Float64:
+def _f2dot14[
+    origin: Origin[mut=False]
+](data: _Data[origin], mut at: Int) raises -> Float64:
     """Return a 2.14 fixed-point number, and move past it.
 
     Args:
@@ -261,16 +268,23 @@ def _transform(
     return out^
 
 
-struct _Font:
-    """The tables `convert` reads, and the glyphs, parsed as needed."""
+struct _Font[origin: Origin[mut=False]]:
+    """The tables `convert` reads, and the glyphs, parsed as needed.
 
-    var data: _Data
+    The caller keeps the font bytes for the read.
+    """
+
+    var data: _Data[Self.origin]
     var glyf: Int
     var loca: List[Int]
     var glyphs: List[_Glyph]
 
     def __init__(
-        out self, var data: _Data, glyf: Int, var loca: List[Int], count: Int
+        out self,
+        var data: _Data[Self.origin],
+        glyf: Int,
+        var loca: List[Int],
+        count: Int,
     ):
         """Hold the font's glyph tables.
 
@@ -637,7 +651,9 @@ def _mac_roman(byte: Int) -> Int:
     return high[byte - 128]
 
 
-def _full_name(data: _Data, start: Int) raises -> Optional[String]:
+def _full_name[
+    origin: Origin[mut=False]
+](data: _Data[origin], start: Int) raises -> Optional[String]:
     """Return the English full name, as opentype.js's `name` table and
     `getEnglishName( 'fullName' )` read it: the last Windows US-English
     or Macintosh English record that is not empty.
@@ -697,7 +713,9 @@ def _full_name(data: _Data, start: Int) raises -> Optional[String]:
     return found^
 
 
-def _cmap(data: _Data, start: Int) raises -> Dict[Int, Int]:
+def _cmap[
+    origin: Origin[mut=False]
+](data: _Data[origin], start: Int) raises -> Dict[Int, Int]:
     """Return opentype.js's `cmap.glyphIndexMap`.
 
     Args:
@@ -813,7 +831,7 @@ def ttf_json(bytes: List[UInt8], reversed: Bool = False) raises -> String:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var data = _Data(bytes.copy())
+    var data = _Data(Span(bytes))
     var signature = data.u32(0)
     if signature != 0x00010000 and signature != 0x74727565:
         raise Error("TTF: only TrueType outlines are read")

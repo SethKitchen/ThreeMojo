@@ -66,20 +66,23 @@ from std.memory import bitcast
 comptime MAX_TIFF_PIXELS = 1 << 26
 
 
-struct _Reader:
-    """A TIFF's bytes and byte order."""
+struct _Reader[origin: Origin[mut=False]]:
+    """A TIFF's bytes and byte order.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var little: Bool
 
-    def __init__(out self, var bytes: List[UInt8], little: Bool):
+    def __init__(out self, bytes: Span[UInt8, Self.origin], little: Bool):
         """Hold the file.
 
         Args:
-            bytes: The file.
+            bytes: The file. The caller keeps it.
             little: True for `II`, False for `MM`.
         """
-        self.bytes = bytes^
+        self.bytes = bytes
         self.little = little
 
     def byte(self, at: Int) -> Int:
@@ -164,7 +167,9 @@ struct _Ifd(Movable):
         return values.value()[0]
 
 
-def _read_ifd(reader: _Reader, offset: Int) raises -> _Ifd:
+def _read_ifd[
+    origin: Origin[mut=False]
+](reader: _Reader[origin], offset: Int) raises -> _Ifd:
     """Read one directory's numeric tags, as UTIF's `_readIFD` reads
     them: a value inside the entry when it fits.
 
@@ -213,8 +218,14 @@ def _read_ifd(reader: _Reader, offset: Int) raises -> _Ifd:
     return ifd^
 
 
-def _pack_bits(
-    data: _Reader, offset: Int, length: Int, mut target: List[UInt8], start: Int
+def _pack_bits[
+    origin: Origin[mut=False]
+](
+    data: _Reader[origin],
+    offset: Int,
+    length: Int,
+    mut target: List[UInt8],
+    start: Int,
 ):
     """Decode PackBits, UTIF's `_decodePackBits`: a byte past the target
     is dropped, as a typed array drops it.
@@ -247,7 +258,9 @@ def _pack_bits(
             at += 1
 
 
-def _code(data: _Reader, mut bit: Int, width: Int) -> Int:
+def _code[
+    origin: Origin[mut=False]
+](data: _Reader[origin], mut bit: Int, width: Int) -> Int:
     """Return the next LZW code, most significant bit first, and move
     past it. A byte past the end reads zero, as UTIF's `undefined` shifts.
 
@@ -298,8 +311,14 @@ def _emit(
     out += length
 
 
-def _lzw(
-    data: _Reader, offset: Int, length: Int, mut target: List[UInt8], start: Int
+def _lzw[
+    origin: Origin[mut=False]
+](
+    data: _Reader[origin],
+    offset: Int,
+    length: Int,
+    mut target: List[UInt8],
+    start: Int,
 ) raises:
     """Decode TIFF LZW, as UTIF's `_decodeLZW` does: codes of 9 to 12 bits,
     most significant first, the width growing one code early.
@@ -368,9 +387,11 @@ def _lzw(
         previous = value
 
 
-def _decompress(
+def _decompress[
+    origin: Origin[mut=False]
+](
     ifd: _Ifd,
-    data: _Reader,
+    data: _Reader[origin],
     offset: Int,
     length: Int,
     compression: Int,
@@ -459,7 +480,9 @@ def _decompress(
                     target[row + j] = target[row + j] + target[row + j - pixel]
 
 
-def _decode_image(ifd: _Ifd, data: _Reader) raises -> List[UInt8]:
+def _decode_image[
+    origin: Origin[mut=False]
+](ifd: _Ifd, data: _Reader[origin]) raises -> List[UInt8]:
     """Return the first image's bytes, UTIF's `decodeImage`.
 
     Args:
@@ -822,7 +845,7 @@ def read_tiff(bytes: List[UInt8]) raises -> Texture:
     var big = bytes[0] == 77 and bytes[1] == 77
     if not (little or big):
         raise Error("TIFF: the file starts with neither II nor MM")
-    var reader = _Reader(bytes.copy(), little)
+    var reader = _Reader(Span(bytes), little)
     var ifd = _read_ifd(reader, reader.u32(4))
     var pixels = _to_rgba8(ifd, _decode_image(ifd, reader))
     var texture = Texture(

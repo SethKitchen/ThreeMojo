@@ -294,7 +294,7 @@ struct LwoTree(Movable):
         return js_key_order(self.objects[object].keys)
 
 
-def _decode(bytes: List[UInt8], start: Int, end: Int) -> String:
+def _decode(bytes: Span[UInt8, _], start: Int, end: Int) -> String:
     """Return bytes as `TextDecoder` reads them: UTF-8, a byte that does
     not fit read as U+FFFD."""
     var out = String()
@@ -351,14 +351,17 @@ def string_offset(text: String) -> Int:
     return n + n % 2
 
 
-struct _Reader:
-    """three.js's `DataViewReader`: big-endian values from the bytes."""
+struct _Reader[origin: Origin[mut=False]]:
+    """three.js's `DataViewReader`: big-endian values from the bytes.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var offset: Int
 
-    def __init__(out self, var bytes: List[UInt8]):
-        self.bytes = bytes^
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        self.bytes = bytes
         self.offset = 0
 
     def need(self, size: Int) raises:
@@ -621,10 +624,13 @@ comptime _NODE_ATTRIBUTES: List[String] = [
 ]
 
 
-struct _Parser:
-    """three.js's `IFFParser` and its block parsers, with their state."""
+struct _Parser[origin: Origin[mut=False]]:
+    """three.js's `IFFParser` and its block parsers, with their state.
 
-    var r: _Reader
+    The caller keeps the bytes for the read.
+    """
+
+    var r: _Reader[Self.origin]
     var tree: LwoTree
     var materials: Int
     var current_layer: Int
@@ -638,8 +644,8 @@ struct _Parser:
     var points: List[Float64]
     var has_points: Bool
 
-    def __init__(out self, var bytes: List[UInt8]):
-        self.r = _Reader(bytes^)
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        self.r = _Reader(bytes)
         self.tree = LwoTree()
         self.materials = self.tree.add()
         self.tree.set(0, "materials", _object(self.materials))
@@ -1320,6 +1326,6 @@ def parse_lwo_tree(bytes: List[UInt8]) raises -> LwoTree:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var parser = _Parser(bytes.copy())
+    var parser = _Parser(Span(bytes))
     parser.parse()
     return parser^.take()
