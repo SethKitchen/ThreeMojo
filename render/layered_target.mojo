@@ -45,7 +45,7 @@ from render.cube_texture import (
     face_direction,
     require_equirect_texels,
 )
-from render.framebuffer import Color
+from render.framebuffer import Color, unit_byte
 from render.rect import Rect
 from render.srgb import LINEAR
 from render.target import (
@@ -128,11 +128,6 @@ def level_extent(extent: Int, level: Int) -> Int:
         The side of that level.
     """
     return max(1, extent >> level)
-
-
-def _byte(value: Float32) -> UInt8:
-    """Return the byte a byte target's stored fraction stands for."""
-    return UInt8(Int(value * 255 + 0.5))
 
 
 def require_layered_kind(kind: TargetKind) raises:
@@ -397,7 +392,7 @@ struct LayeredRenderTarget(Movable):
         if bytes:
             var pixels = List[UInt8](capacity=len(image.pixels))
             for at in range(len(image.pixels)):  # pragma: no branch
-                pixels.append(_byte(image.pixels[at]))
+                pixels.append(unit_byte(image.pixels[at]))
             texture = Texture(
                 base.width,
                 base.height,
@@ -416,7 +411,7 @@ struct LayeredRenderTarget(Movable):
             if bytes:
                 texture.offsets.append(len(texture.pixels))
                 for at in range(len(below.pixels)):  # pragma: no branch
-                    texture.pixels.append(_byte(below.pixels[at]))
+                    texture.pixels.append(unit_byte(below.pixels[at]))
             else:
                 texture.offsets.append(len(texture.data))
                 for at in range(len(below.pixels)):  # pragma: no branch
@@ -486,7 +481,7 @@ struct LayeredRenderTarget(Movable):
                     start, start + self.width * 4
                 ):  # pragma: no branch
                     if bytes:
-                        pixels.append(_byte(image.pixels[at]))
+                        pixels.append(unit_byte(image.pixels[at]))
                     else:
                         data.append(image.pixels[at])
         if bytes:

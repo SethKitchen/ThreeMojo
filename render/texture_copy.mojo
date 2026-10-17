@@ -27,7 +27,7 @@ chain rebuilds the chain, as three.js calls `generateMipmap` after a copy
 into level zero of a texture that generates mipmaps.
 """
 
-from render.framebuffer import Framebuffer
+from render.framebuffer import Framebuffer, unit_byte
 from render.rect import Rect
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.target import UNSIGNED_BYTE_TARGET, RenderTarget
@@ -513,7 +513,7 @@ def copy_framebuffer_to_texture(
         for at in range(region.width * Texture.CHANNELS):  # pragma: no branch
             var value = light.pixels[read + at]
             if bytes:
-                texture.pixels[write + at] = UInt8(Int(value * 255 + 0.5))
+                texture.pixels[write + at] = unit_byte(value)
             else:
                 texture.data[write + at] = value
     _regenerate(texture, level)

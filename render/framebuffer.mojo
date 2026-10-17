@@ -761,6 +761,24 @@ def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
     ).encode_opaque()
 
 
+def unit_byte(value: Float32) -> UInt8:
+    """Return a unit fraction as a byte.
+
+    The fraction is multiplied by 255, one half is added, and the whole
+    number is kept.
+
+    Args:
+        value: The fraction.
+
+    Returns:
+        The byte.
+
+    Raises:
+        Error: Never.
+    """
+    return UInt8(Int(value * 255 + 0.5))
+
+
 def _to_byte(value: Float32) -> UInt8:
     """Return `value` in 0-1 as a rounded, clamped byte."""
     var scaled = value * 255 + 0.5
