@@ -1172,6 +1172,19 @@ def available() -> Bool:
     return has_accelerator()
 
 
+def require_gpu() raises:
+    """Refuse a launch when this machine has no GPU.
+
+    Returns:
+        Nothing. The call returns when a GPU is present.
+
+    Raises:
+        Error: If no GPU is present.
+    """
+    if not available():
+        raise Error("No GPU available")
+
+
 def flatten(corners: List[RasterVertex]) -> List[Float32]:
     """Return `corners` as the flat float buffer the kernel reads.
 
@@ -9743,8 +9756,7 @@ struct GpuRenderer(Movable):
             Error: If the dimensions are not positive, or no GPU is present.
         """
         require_framebuffer_size(width, height)
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.width = width
         self.height = height
         self.drawn = False
@@ -12233,8 +12245,7 @@ struct GpuComposer(Movable):
                 present.
         """
         require_framebuffer_size(width, height)
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.width = width
         self.height = height
         self.round_trips = 0
@@ -13264,8 +13275,7 @@ struct GpuComputation(Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
         self.image = self.context.enqueue_create_buffer[DType.float32](4)
         self.code = self.context.enqueue_create_buffer[DType.float32](4)
@@ -13478,8 +13488,7 @@ struct GpuSplats(Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
         self.colors = self.context.enqueue_create_buffer[DType.float32](4)
         self.depth = self.context.enqueue_create_buffer[DType.float32](4)
@@ -13736,8 +13745,7 @@ struct GpuCompute(ComputeRunner, Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
         self.code = self.context.enqueue_create_buffer[DType.float32](4)
         self.before = self.context.enqueue_create_buffer[DType.float32](4)
