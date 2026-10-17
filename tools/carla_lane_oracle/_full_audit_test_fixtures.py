@@ -18,6 +18,35 @@ else:
     import full_audit_cleanup_contracts as cleanup
 
 
+def common758_leaf_texts(source):
+    """Exact old leaf inputs derived from one fully admitted physical root.
+
+    These strings are test data, never a production filesystem view. The old
+    complete positive baselines pass before any existing negative is applied.
+    """
+    source = Path(source)
+    bindings = cleanup.proof_bindings(source)
+    typed, shared, scaled = (cleanup.typed_boundary, cleanup.shared_helpers,
+                             cleanup.scaled_float32)
+    paths = set(typed.SOURCE_PATHS) | set(shared.SOURCE_PATHS) | set(shared.PROVIDERS)
+    paths |= set(scaled.SOURCE_PATHS) | set(scaled.PROVIDER_INPUTS)
+    physical = {name: (source/name).read_bytes() for name in paths}
+    if any(cleanup.sha(raw) != bindings[name] for name, raw in physical.items()):
+        raise AssertionError('leaf fixture differs from admitted physical input')
+    selected = cleanup._pr760_image_selected(physical)
+    texts = {name: (cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8'))
+             if selected and name in cleanup.pr760_stage.CARLA_REGISTRY_PATHS
+             else raw.decode('utf-8')) for name, raw in physical.items()}
+    typed.verify_sources({name: texts[name] for name in typed.SOURCE_PATHS})
+    shared.verify_correspondence({name: texts[name] for name in
+                                  (*shared.SOURCE_PATHS, *shared.PROVIDERS)})
+    scaled.verify_sources({name: texts[name] for name in scaled.SOURCE_PATHS})
+    for name, raw in physical.items():
+        if (source/name).read_bytes() != raw:
+            raise AssertionError('leaf fixture source changed after transport: ' + name)
+    return texts
+
+
 def verified_predecessors(source):
     record = cleanup.verify(source, exact=True)
     return {path: cleanup.reverse_exact(path, item['after_source'], item).encode('utf-8')
@@ -54,6 +83,8 @@ def copy_shared_helper_inputs(root, source):
                 raw = cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
                 if cleanup.sha(raw) != edge['before_sha256']:
                     raise AssertionError('historical helper predecessor changed: ' + name)
+        if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py'):
+            raw = cleanup.qualification_predecessor_bytes(name, raw)
         copied_bindings[name] = cleanup.sha(raw)
         target = Path(root)/name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -123,8 +154,8 @@ def copy_current_root(case, source, *, destination=None):
     return destination
 
 
-def copy_historical_boundary_root(case, source, *, destination=None):
-    """Admit current bytes, then create the complete historical main2d81 graph.
+def copy_common758_boundary_root(case, source, *, destination=None):
+    """Admit current bytes, then create the complete common758 predecessor graph.
 
     This is physical test data, never a production root adapter. Old tests
     retain their old byte/line and method-identity claims on this named root.
@@ -144,6 +175,17 @@ def copy_historical_boundary_root(case, source, *, destination=None):
             if cleanup.sha(raw) != stage.EDGES[name]['after_sha256'] or cleanup.sha(previous) != stage.EDGES[name]['before_sha256']:
                 raise AssertionError('historical fixture PR760 endpoint changed: ' + name)
             (root/name).write_bytes(previous)
+    for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py'):
+        target = root/name
+        target.write_bytes(cleanup.qualification_predecessor_bytes(name, target.read_bytes()))
+    cleanup.verify(root, exact=True)
+    return root
+
+
+def copy_historical_boundary_root(case, source, *, destination=None):
+    """Admit current bytes, then construct the preserved pre-typed graph."""
+    root = copy_common758_boundary_root(case, source, destination=destination)
+    typed = cleanup.typed_boundary
     for name in typed.SOURCE_PATHS:
         path = root/name
         if name in typed.NEW_INPUTS and not path.exists():

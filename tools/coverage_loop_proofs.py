@@ -1169,7 +1169,7 @@ DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b
  'render/volume_texture_store.mojo': '105a32971b5e88c613ec3a350d9b2c99c27d19080c6c66fb9d42bd4be546c8b0',
  'tests/test_hair_density_bounds_controls.mojo': '2cfb0de9ac61d170beaa7e47fbcaf5c51c7db139ed373f4ab4f07af2fae9e11c',
  'tests/test_reconciled_hair_density.mojo': '2e0c703b365bc98d3d6fc4c8796d4133edf004eafb753262ca89cd6d639be3c4',
- 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': 'eae32f3f428f3015d6c4d193c23b3c460ff8f0b85f4f274b8694f4b92f2e642e',
+ 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',
  'units/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',

@@ -529,6 +529,17 @@ class FullAuditCleanupContracts(unittest.TestCase):
             cleanup.verified_edges(self.root)
 
     def test_complete_current_positive_and_exact_receipt_bindings(self):
+        # Preserve the old authorities independently of the physical receipt.
+        authorities = ((cleanup.typed_boundary,
+                        ('CURRENT_DEPENDENCIES', 'NEW_INPUTS', 'TESTS',
+                         'BINDING_INPUTS', 'EDGES', 'EDGE_SHA256')),
+                       (cleanup.shared_helpers,
+                        ('BEFORE_SHA256', 'AFTER_SHA256', 'PROVIDERS', 'TESTS', 'EDITS')),
+                       (cleanup.scaled_float32,
+                        ('BEFORE_SHA256', 'AFTER_SHA256', 'PACKAGE_INPUTS',
+                         'PROVIDER_INPUTS', 'TESTS', 'EDITS')))
+        preserved = [(module, name, copy.deepcopy(getattr(module, name)))
+                     for module, names in authorities for name in names]
         self.assertEqual(cleanup.verify(self.root, exact=True), self.record)
         self.assertIsNone(self.semantic(self.current))
         bindings = cleanup.proof_bindings(self.root)
@@ -574,6 +585,55 @@ class FullAuditCleanupContracts(unittest.TestCase):
         for path in set(supplemental) | set(typed.SOURCE_PATHS):
             if path in typed.EDGES:
                 supplemental[path] = typed.edge(path)['after_sha256']
+        # The gate above admitted the complete physical PR760 image. Keep the
+        # retained expected table, prove each native predecessor join, then
+        # extend the physical expectation from the separately pinned image.
+        historical_supplemental = dict(supplemental)
+        stage = cleanup.pr760_stage
+        image_raw = (self.root/cleanup.PR760_IMAGE).read_bytes()
+        self.assertEqual(cleanup.sha(image_raw), cleanup.PR760_IMAGE_SHA256)
+        image = json.loads(image_raw)
+        self.assertEqual(image['stage_sha256'], cleanup.PR760_STAGE_SHA256)
+        self.assertEqual(image['status'], 'closed-candidate')
+        self.assertIs(image['public_admission'], False)
+        for path in set(historical_supplemental) & set(stage.CARLA_REGISTRY_PATHS):
+            raw = (self.root/path).read_bytes()
+            prior = stage.predecessor_source(path, raw.decode('utf-8'))
+            self.assertEqual(cleanup.sha(raw), stage.EDGES[path]['after_sha256'])
+            self.assertEqual(cleanup.sha(prior), historical_supplemental[path])
+        witnesses = (
+            'tools/test_conditioned_coverage_loops.py',
+            'tools/carla_lane_oracle/test_common758_current_successor.py',
+            'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
+            'tools/carla_lane_oracle/test_shared_helper_contracts.py',
+            'tools/carla_lane_oracle/test_scaled_float32_contracts.py',
+        )
+        self.assertEqual(set(image['qualification_successors']), set(witnesses))
+        for path in witnesses:
+            self.assertIn(path, historical_supplemental)
+            raw = (self.root/path).read_bytes()
+            prior = cleanup.qualification_predecessor_bytes(path, raw)
+            self.assertEqual(cleanup.sha(prior), historical_supplemental[path])
+        self.assertEqual({path: image['inputs'][path]
+                          for path in stage.REGISTRY_INPUT_SHA256},
+                         stage.REGISTRY_INPUT_SHA256)
+        # Every source used to classify entrypoints is a physical receipt input,
+        # including files outside the narrower pinned dependency closure.
+        physical = {path.as_posix(): cleanup.sha((self.root/path).read_bytes())
+                    for path in cleanup._sibling('cache_key').input_paths(self.root)
+                    if path.suffix == '.mojo'}
+        physical.update(image['inputs'])
+        physical.update(cleanup.PR760_IMPLEMENTATION_PREDECESSORS)
+        physical.update(cleanup.PR760_IMPLEMENTATION_SUCCESSORS)
+        physical.update({cleanup.PR760_IMAGE: cleanup.PR760_IMAGE_SHA256,
+                         cleanup.PR760_OWNER_PREDECESSOR:
+                             cleanup.PR760_OWNER_PREDECESSOR_SHA256,
+                         'tools/carla_lane_oracle/pr760_arithmetic_stage.py':
+                             cleanup.PR760_STAGE_SHA256})
+        supplemental.update(physical)
+        for module, name, unchanged in preserved:
+            self.assertEqual(getattr(module, name), unchanged)
+        typed.verify_authority()
         expected.update(supplemental)
         self.assertEqual(set(bindings), expected)
         self.assertEqual({path: bindings[path] for path in supplemental}, supplemental)
@@ -2999,15 +3059,31 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         # The reviewed XML helper imports one additional UTF-8 provider. Bind
         # the exact parser inputs instead of merely increasing a call count.
         xml, utf8 = 'loaders/xml.mojo', 'loaders/utf8.mojo'
-        self.assertEqual(cleanup.sha((self.root/xml).read_bytes()),
-                         cleanup.shared_helpers.AFTER_SHA256[xml])
+        # cache.verify above admitted the actual current root. Reconstruct only
+        # pure comparison inputs through the exact stage and retained typed
+        # inverses; never substitute them for observed physical source bytes.
+        stage = cleanup.pr760_stage
         expected_paths = {seed.MODULE, *self.seed_record['unchanged_inputs'], utf8}
+        physical = {name: (self.root/name).read_bytes() for name in expected_paths}
+        def retained(name):
+            text = physical[name].decode('utf-8')
+            if name in stage.CARLA_REGISTRY_PATHS:
+                edge = stage.EDGES[name]
+                self.assertEqual(cleanup.sha(physical[name]), edge['after_sha256'])
+                text = stage.predecessor_source(name, text)
+                self.assertEqual(cleanup.sha(text), edge['before_sha256'])
+            return cleanup.typed_boundary.historical_source(name, text)
+        self.assertEqual(cleanup.sha(retained(xml)),
+                         cleanup.shared_helpers.AFTER_SHA256[xml])
         self.assertNotIn(utf8, self.seed_record['unchanged_inputs'])
-        expected_texts = [cleanup.typed_boundary.historical_source(
-                              name, (self.root/name).read_bytes().decode('utf-8'))
-                          for name in sorted(expected_paths)]
-        self.assertCountEqual(texts, expected_texts)
-        self.assertIn((self.root/utf8).read_bytes().decode('utf-8'), texts)
+        expected_texts = {name: retained(name) for name in sorted(expected_paths)}
+        self.assertCountEqual(texts, expected_texts.values())
+        self.assertIn(expected_texts[utf8], texts)
+        self.assertEqual(cleanup.sha(expected_texts[utf8]),
+                         cleanup.shared_helpers.PROVIDERS[utf8])
+        self.assertNotEqual(expected_texts[utf8], physical[utf8].decode('utf-8'))
+        self.assertEqual(physical,
+                         {name: (self.root/name).read_bytes() for name in expected_paths})
         self.assertTrue(resolved)
         expected_known = frozenset(path.as_posix() for path in found[0][1] if path.suffix == '.mojo')
         self.assertTrue(all(known == expected_known for _, known in resolved))

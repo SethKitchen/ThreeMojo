@@ -143,6 +143,8 @@ class ClosedPhysicalImageControls(unittest.TestCase):
             for path, digest in expected.items():
                 raw = ((self.accepted['predecessors'][path]).encode()
                        if path in self.accepted['predecessors'] else (self.root/path).read_bytes())
+                if path == 'tools/carla_lane_oracle/test_scaled_float32_contracts.py':
+                    raw = owner.qualification_predecessor_bytes(path, raw)
                 self.assertEqual(owner.sha(raw), digest)
                 target = root/path; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(raw)
             result = owner.scaled_float32_proof_bindings(root)
@@ -160,6 +162,70 @@ class ClosedPhysicalImageControls(unittest.TestCase):
                 (root/path).write_bytes((self.root/path).read_bytes())
             with self.assertRaises((owner.ContractError,OSError)):
                 owner.scaled_float32_proof_bindings(root)
+
+    def test_qualification_witnesses_keep_exact_physical_and_historical_images(self):
+        rows = self.data['qualification_successors']
+        paths = {
+            'tools/test_conditioned_coverage_loops.py',
+            'tools/carla_lane_oracle/test_common758_current_successor.py',
+            'tools/carla_lane_oracle/test_typed_boundary_contracts.py',
+            'tools/carla_lane_oracle/test_shared_helper_contracts.py',
+            'tools/carla_lane_oracle/test_scaled_float32_contracts.py',
+        }
+        self.assertEqual(set(rows), paths)
+        for path, row in rows.items():
+            raw = (self.root/path).read_bytes()
+            old = (self.root/row['predecessor_archive']).read_bytes()
+            self.assertEqual(owner.sha(raw), row['after_sha256'])
+            self.assertEqual(owner.sha(old), row['before_sha256'])
+            self.assertEqual(owner.qualification_predecessor_bytes(path, raw), old)
+            self.assertEqual(owner.qualification_predecessor_bytes(path, old), old)
+            with self.subTest(path=path), self.changed(path, old):
+                with self.assertRaises(owner.ContractError):
+                    owner.verify(self.root, exact=True)
+            with self.assertRaises(owner.ContractError):
+                owner.qualification_predecessor_bytes(path, raw+b'\n')
+        path = next(iter(rows))
+        archive = rows[path]['predecessor_archive']
+        with self.changed(archive, (self.root/archive).read_bytes()+b'\n'):
+            with self.assertRaises(owner.ContractError):
+                owner.verify(self.root, exact=True)
+        target = self.root/archive
+        moved = target.with_suffix('.missing')
+        target.rename(moved)
+        try:
+            with self.assertRaises(owner.ContractError):
+                owner.verify(self.root, exact=True)
+        finally:
+            moved.rename(target)
+        with self.assertRaises(owner.ContractError):
+            owner.qualification_predecessor_bytes('tools/unregistered.py', b'pass\n')
+        owner.verify(self.root, exact=True)
+
+    def test_qualification_inverse_literals_and_builtin_inputs_are_authenticated(self):
+        path = 'tools/test_conditioned_coverage_loops.py'
+        raw = (self.root/path).read_bytes()
+        class Bytes(bytes):
+            pass
+        for value in (Bytes(raw), raw.decode('utf-8')):
+            with self.assertRaises(owner.ContractError):
+                owner.qualification_predecessor_bytes(path, value)
+        function = owner.qualification_predecessor_bytes
+        original = function.__code__
+        constants = list(original.co_consts)
+        index = next(index for index, value in enumerate(constants)
+                     if type(value) is tuple and len(value) == 3
+                     and type(value[0]) is str and len(value[0]) == 64)
+        before, after, edits = constants[index]
+        start, stop, old, new = edits[0]
+        constants[index] = (before, after, ((start, stop, old, (*new, '# changed span\n')), *edits[1:]))
+        try:
+            function.__code__ = original.replace(co_consts=tuple(constants))
+            with self.assertRaisesRegex(owner.ContractError, 'executing function changed'):
+                owner._pr760_candidate_bindings(self.root)
+        finally:
+            function.__code__ = original
+        owner._pr760_candidate_bindings(self.root)
 
     def test_mutation_after_candidate_before_publication_is_refused(self):
         original = Path.read_bytes

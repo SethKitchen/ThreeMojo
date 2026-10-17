@@ -2846,24 +2846,30 @@
     "tools/carla_lane_oracle/pr760-border_parser-predecessor.txt": "d7a638dcf4d5cadabd183be03cbea08945e9bb5351f4b96dd24803d42fa5626e",
     "tools/carla_lane_oracle/pr760-seed_count-predecessor.txt": "ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345",
     "tools/carla_lane_oracle/pr760-source-adapter-predecessor.txt": "83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0",
+    "tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt": "010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f",
+    "tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt": "633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9",
+    "tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt": "86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931",
+    "tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt": "c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2",
+    "tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt": "7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5",
     "tools/carla_lane_oracle/pr760-winner_sign-predecessor.txt": "2ed96052d6568fee1bb7700515b7ad03bd38edafc7ca413fc1c03bb9ad5f6aad",
     "tools/carla_lane_oracle/probe_typed_namespace_lookup.py": "e5bd86039476501b33d6b6e8cc3c877604ff6a388a4f87bc69c302bc39eb7461",
     "tools/carla_lane_oracle/seed_count_contracts.py": "daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90",
     "tools/carla_lane_oracle/source_contracts.py": "ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5",
-    "tools/carla_lane_oracle/test_common758_current_successor.py": "010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f",
+    "tools/carla_lane_oracle/test_common758_current_successor.py": "bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4",
     "tools/carla_lane_oracle/test_conditioned_cubic_contracts.py": "e6de36edf8083671416d28f90c129bed042a6e1f9fa2dcbb5b6fc2826f3d2e48",
     "tools/carla_lane_oracle/test_coverage_invariant_contracts.py": "8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841",
     "tools/carla_lane_oracle/test_expectation_binding_successor.py": "59fdf894d596242d6bc5b5bb5804652b158b7bbb60c7abe688bc6b45b47f6c2e",
-    "tools/carla_lane_oracle/test_pr760_arithmetic_stage.py": "f4f43b25e80302b912e53be8a88e20ca2afc3c91500b0e0bea9cbf567498b480",
-    "tools/carla_lane_oracle/test_pr760_physical_image.py": "67626fd833d55773de8aa50053fcade32de6bc0d51ab7ea21fb7d4150a078ec7",
-    "tools/carla_lane_oracle/test_shared_helper_contracts.py": "c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2",
-    "tools/carla_lane_oracle/test_typed_boundary_contracts.py": "7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5",
+    "tools/carla_lane_oracle/test_pr760_arithmetic_stage.py": "16a8cdd276db7fc859d9cbe706eb31f083f80dffd5984119847c495d5be661f2",
+    "tools/carla_lane_oracle/test_pr760_physical_image.py": "cf81e0a1f05dc073d6be181963540877ac506657fc89387f79d0057fbd3596f3",
+    "tools/carla_lane_oracle/test_scaled_float32_contracts.py": "dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6",
+    "tools/carla_lane_oracle/test_shared_helper_contracts.py": "e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78",
+    "tools/carla_lane_oracle/test_typed_boundary_contracts.py": "62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c",
     "tools/carla_lane_oracle/test_typed_owned_operations.py": "b71272abd022ff7453099ede5e5cd8ca8fc0dc6ba92057a94bdcd85170e39984",
     "tools/carla_lane_oracle/test_witness_format_contracts.py": "ad002f1255ae4f545a5cbfb3b8abf3f8e883a2637656248a232b297032b178de",
     "tools/carla_lane_oracle/translated_parameter_resolution.py": "0523d91f8d3b508619d37b9e9a73106c2b961cebf5808f23e61758c2a6228be9",
     "tools/carla_lane_oracle/winner_sign_contracts.py": "f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f",
     "tools/compile_fail_expectations.json": "7c96ffe1750ffee867b5b161529ed834cfa0d732780c5a2a8b5ef2f876cdb03e",
-    "tools/test_conditioned_coverage_loops.py": "633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9",
+    "tools/test_conditioned_coverage_loops.py": "1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc",
     "units/__init__.mojo": "5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479",
     "units/measure.mojo": "b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85",
     "units/photometry.mojo": "8a5a00da396381444f8701852dc626bb522ffd89ebfd8a57cad018577e75578b",
@@ -2872,9 +2878,36 @@
     "units/temperature.mojo": "66d781167abf82162c38a12e77871082c59862e5a54da4f26142ff65f51f4719"
   },
   "public_admission": false,
+  "qualification_successors": {
+    "tools/carla_lane_oracle/test_common758_current_successor.py": {
+      "after_sha256": "bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4",
+      "before_sha256": "010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f",
+      "predecessor_archive": "tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt"
+    },
+    "tools/carla_lane_oracle/test_scaled_float32_contracts.py": {
+      "after_sha256": "dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6",
+      "before_sha256": "86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931",
+      "predecessor_archive": "tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt"
+    },
+    "tools/carla_lane_oracle/test_shared_helper_contracts.py": {
+      "after_sha256": "e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78",
+      "before_sha256": "c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2",
+      "predecessor_archive": "tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt"
+    },
+    "tools/carla_lane_oracle/test_typed_boundary_contracts.py": {
+      "after_sha256": "62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c",
+      "before_sha256": "7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5",
+      "predecessor_archive": "tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt"
+    },
+    "tools/test_conditioned_coverage_loops.py": {
+      "after_sha256": "1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc",
+      "before_sha256": "633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9",
+      "predecessor_archive": "tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt"
+    }
+  },
   "schema": "pr760-closed-physical-image-v1",
   "scope": "One complete physical PR760 source/provider/witness image. Pure old-source comparisons never replace physical observations.",
-  "stage_sha256": "eae32f3f428f3015d6c4d193c23b3c460ff8f0b85f4f274b8694f4b92f2e642e",
+  "stage_sha256": "77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb",
   "status": "closed-candidate",
   "supplemental_predecessors": {
     "generators/utils.mojo": "c2e90002d2cab93997ff30089e23cc9f4ac75398b66f153818624376d2fed3a1",

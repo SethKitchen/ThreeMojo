@@ -23,7 +23,8 @@ UTF8 = 'loaders/utf8.mojo'
 class SharedHelperLeafControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.texts = {path: (ROOT/path).read_text()
+        baseline = fixtures.common758_leaf_texts(ROOT)
+        cls.texts = {path: baseline[path]
                      for path in (*helpers.SOURCE_PATHS, *helpers.PROVIDERS)}
 
     def test_each_exact_inverse_recovers_the_complete_original_bytes(self):
@@ -123,8 +124,10 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         records = {path: (self.root/path).read_bytes() for path in record['historical_records']}
         bindings = cleanup.proof_bindings(self.root)
         # The new native closure reaches the rendering provider directly.
-        self.assertEqual(bindings['render/color_math.mojo'],
-                         cleanup.typed_boundary.CURRENT_DEPENDENCIES['render/color_math.mojo'])
+        color = 'render/color_math.mojo'
+        self.assertEqual(bindings[color], cleanup.sha((self.root/color).read_bytes()))
+        self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(
+            color, (self.root/color).read_text())), cleanup.typed_boundary.CURRENT_DEPENDENCIES[color])
         bindings.update(cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS))
         for path in (*helpers.SOURCE_PATHS, *helpers.PROVIDERS, *helpers.TESTS, LEAF):
             self.assertEqual(bindings[path], hashlib.sha256((self.root/path).read_bytes()).hexdigest())
@@ -172,7 +175,8 @@ class SharedHelperIntegrationControls(unittest.TestCase):
         # The current typed graph independently binds this provider. The old
         # XML's local import closure does not relax that full-graph authority.
         historical = fixtures.copy_historical_boundary_root(self, ROOT)
-        for root, typed in ((self.root, True), (historical, False)):
+        common = fixtures.copy_common758_boundary_root(self, ROOT)
+        for root, typed in ((common, True), (historical, False)):
             old_xml = helpers.predecessor_source(XML, (root/XML).read_text()).encode()
             with self.subTest(typed=typed), patch.object(self, 'root', root), self.changed(XML, old_xml):
                 utf8 = root/UTF8
@@ -190,6 +194,23 @@ class SharedHelperIntegrationControls(unittest.TestCase):
                     else:
                         cleanup.verify(root, exact=True)
                 finally: utf8.write_bytes(raw)
+
+    def test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):
+        baseline = fixtures.common758_leaf_texts(self.root)
+        old = helpers.predecessor_source(XML, baseline[XML]).encode('utf-8')
+        with self.changed(XML, old):
+            with self.assertRaises(ValueError):
+                cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
+            utf8 = self.root/UTF8
+            raw = utf8.read_bytes()
+            utf8.unlink()
+            try:
+                with self.assertRaises(FileNotFoundError) as caught:
+                    cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
+                self.assertEqual(caught.exception.filename, str(utf8))
+            finally:
+                utf8.write_bytes(raw)
+        cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
 
     def test_fabricated_or_incomplete_owned_view_cannot_admit_sources(self):
         class Fake:
@@ -211,9 +232,12 @@ class SharedHelperIntegrationControls(unittest.TestCase):
                 def unreadable(path, *args, **kwargs):
                     if path == self.root/name: raise failure
                     return read(path, *args, **kwargs)
-                with patch.object(Path, 'read_bytes', unreadable), self.assertRaises(OSError) as caught:
+                with patch.object(Path, 'read_bytes', unreadable), self.assertRaises((OSError, ValueError)) as caught:
                     cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
-                self.assertIs(caught.exception, failure)
+                cause = caught.exception
+                while cause.__cause__ is not None:
+                    cause = cause.__cause__
+                self.assertIs(cause, failure)
 
     def test_new_helper_resolver_package_symlink_and_extra_import_reject(self):
         for name in ('loaders/utf8.mojopkg', 'render/color_math.mojopkg',
@@ -288,7 +312,10 @@ class SharedHelperIntegrationControls(unittest.TestCase):
                      'extensions/building/views/render.mojo'):
             self.assertTrue((self.root/name).is_file())
         bindings = cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
-        self.assertEqual(bindings['render/color_math.mojo'], helpers.PROVIDERS['render/color_math.mojo'])
+        color = 'render/color_math.mojo'
+        self.assertEqual(bindings[color], cleanup.sha((self.root/color).read_bytes()))
+        self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(
+            color, (self.root/color).read_text())), helpers.PROVIDERS[color])
         self.assertEqual(bindings[cleanup.MIGRATION], cleanup.MIGRATION_SHA256)
         paths = {name for name in bindings if name.endswith('.mojo')}
         self.assertFalse(cleanup.resolver_unshadowed(self.root, paths))

@@ -34921,7 +34921,7 @@ REGISTRY_INPUT_SHA256 = {'animation/animation_clip.mojo': '71842bfcf4a72c6c652a6
  'tests/test_xml.mojo': '3e8f4193cee7fe65cbbf630cf70f33410e90eadbbf6f9af72f2ddbdc799486b6',
  'tools/_example_output.mojo': 'd9018dd09b73fb73396b180bee560bff5411d35fcae450a94dcc91c7bd6905c6',
  'tools/_example_preview.mojo': '60d44f82ef97a8917ffe7b8e9178d3de4ebcbbfe039a8a1258c1a8bb60e649bf',
- 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'f4f43b25e80302b912e53be8a88e20ca2afc3c91500b0e0bea9cbf567498b480',
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '16a8cdd276db7fc859d9cbe706eb31f083f80dffd5984119847c495d5be661f2',
  'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
  'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
 REGISTRY_PROVIDER_SHA256 = {'animation/keyframe_track.mojo': '88024d946b3aebe154c7419517432d83af3251b9b2dc4fe8aab4ff53d81223b9',
@@ -35392,7 +35392,7 @@ REGISTRY_TEST_SHA256 = {'tests/test_anatomy_shared.mojo': 'c48a9061b13acdb292a25
  'tests/test_wide_lines.mojo': 'f72f98f16f8ba22c5437c4710bd4d8aae033db7d129c3ca1655c6f9200630f34',
  'tests/test_wood.mojo': '3442b8c28653a2cad0da08734fefa3a38df05bdb5dcfbf9daa9bc936bdb5a618',
  'tests/test_xml.mojo': '3e8f4193cee7fe65cbbf630cf70f33410e90eadbbf6f9af72f2ddbdc799486b6',
- 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': 'f4f43b25e80302b912e53be8a88e20ca2afc3c91500b0e0bea9cbf567498b480'}
+ 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py': '16a8cdd276db7fc859d9cbe706eb31f083f80dffd5984119847c495d5be661f2'}
 REGISTRY_REVIEW_RECORDS = {'animation/animation_clip.mojo': {'admission_granted': False,
                                    'baseline_commit': '0ad03120447c3b01fbdfa545f37debfbcd1d23bc',
                                    'batch': 'typed_animation',
@@ -47231,7 +47231,7 @@ DATA_NAMES = ('STATUS',
  'REGISTRY_QUALIFICATION_READY',
  'REGISTRY_UNRESOLVED_CONDITIONS',
  'REGISTRY_QUALIFICATION_RECORDS')
-DATA_SHA256 = 'cb9502f825b058748270c61c89045f092d6affdb37efd5aa0f01350326208100'
+DATA_SHA256 = '97a6441599bb3b198255455185c8dfd1d06e66512e659a2df72cc671c2cc841b'
 # END FIXED STAGING DATA
 
 
@@ -47248,8 +47248,8 @@ def sha(value):
 def verify_stage_data():
     """Authenticate fixed provenance data without granting root admission."""
     payload = {name: globals()[name] for name in DATA_NAMES}
-    require(DATA_SHA256 == 'cb9502f825b058748270c61c89045f092d6affdb37efd5aa0f01350326208100'
-            and sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) == 'cb9502f825b058748270c61c89045f092d6affdb37efd5aa0f01350326208100',
+    require(DATA_SHA256 == '97a6441599bb3b198255455185c8dfd1d06e66512e659a2df72cc671c2cc841b'
+            and sha(json.dumps(payload, sort_keys=True, separators=(',', ':'))) == '97a6441599bb3b198255455185c8dfd1d06e66512e659a2df72cc671c2cc841b',
             'fixed staging data changed')
     require(STATUS == 'staged-provenance-only' and len(OUTSTANDING_TYPED_PATHS) == 163
             and REGISTRY_QUALIFICATION_READY is False and REGISTRY_UNRESOLVED_CONDITIONS,
