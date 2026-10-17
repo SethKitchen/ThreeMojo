@@ -56,7 +56,6 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from cameras.camera import Camera
@@ -64,6 +63,7 @@ from controls.input import (
     InputEvent,
     POINTER_DOWN,
     refuse_invalid,
+    require_view_size,
     require_input,
     POINTER_MOVE,
     POINTER_UP,
@@ -532,8 +532,7 @@ struct TransformControls(Copyable, Movable):
             return events^
         if not Bool(self.node):
             return events^
-        if not positive_extent(width, height):
-            raise Error("A view must have a positive width and height")
+        require_view_size(width, height)
         scene.update()
         var frame = TransformFrame(camera, scene, self.node.value())
         self.raycaster.set_from_camera(

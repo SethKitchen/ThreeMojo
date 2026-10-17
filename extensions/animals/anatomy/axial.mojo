@@ -38,8 +38,9 @@ from extensions.animals.anatomy.body import (
     SHARK_PLAN,
     TELEOST,
     BodyPlan,
+    require_body_plan,
 )
-from extensions.animals.anatomy.mass import BodyMass
+from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import ABDOMEN, TAIL, segment_of
 from extensions.animals.rig import Rig
@@ -227,10 +228,8 @@ def axial_muscles(
         Error: If the plan is not named, the mass is for another rig, or
             a spider's rig lacks a leg bone.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
-    if len(mass.bones) != len(rig.bones):
-        raise Error("The mass was sampled from another rig")
+    require_body_plan(plan)
+    require_sampled_rig(len(mass.bones), len(rig.bones))
     for i in range(len(rig.bones)):
         var parent = rig.bones[i].parent.value
         if parent < -1 or parent >= i:

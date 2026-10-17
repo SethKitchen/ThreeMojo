@@ -59,6 +59,23 @@ comptime BLOCK = 8
 comptime COAT_SHARE = 0.3
 
 
+def require_sampled_rig(mass_count: Int, rig_count: Int) raises:
+    """Refuse a mass sample taken from another rig.
+
+    Args:
+        mass_count: How many bones the sample holds.
+        rig_count: How many bones the rig holds.
+
+    Returns:
+        Nothing. The call returns when the counts match.
+
+    Raises:
+        Error: If the sample and the rig have different bone counts.
+    """
+    if mass_count != rig_count:
+        raise Error("The mass was sampled from another rig")
+
+
 struct BodyMass(Movable):
     """The sampled mass properties of one animal, bone by bone.
 

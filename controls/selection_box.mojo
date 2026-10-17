@@ -45,12 +45,12 @@ from cameras.camera import Camera, unproject_point
 from controls.input import (
     InputEvent,
     refuse_invalid,
+    require_view_size,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
     PRIMARY,
 )
-from core.extent import positive_extent
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.scene import Scene
@@ -167,8 +167,7 @@ struct SelectionBox(Copyable, Movable):
             refuse_invalid("input kind", event.kind.value)
         if not event.button.is_valid():
             refuse_invalid("pointer button", event.button.value)
-        if not positive_extent(width, height):
-            raise Error("A view must have a positive width and height")
+        require_view_size(width, height)
         var corner = Vector3(
             (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,
             1 - (Float32(event.y) + 0.5) / Float32(height) * 2,

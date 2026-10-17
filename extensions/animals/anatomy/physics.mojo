@@ -19,7 +19,7 @@ has them.
 """
 
 from extensions.anatomy.inertia import SegmentInertia
-from extensions.animals.anatomy.mass import BodyMass
+from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.build import Animal
 from extensions.physics.body import DYNAMIC, RigidBody, rotation_matrix
 from extensions.physics.shape import Shape
@@ -103,8 +103,7 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         Error: If the mass is for another rig, or a body refuses its
             mass properties.
     """
-    if len(mass.bones) != len(animal.rig.bones):
-        raise Error("The mass was sampled from another rig")
+    require_sampled_rig(len(mass.bones), len(animal.rig.bones))
     var out = List[RigidBody]()
     for i in range(len(animal.rig.bones)):  # pragma: no branch
         if not (isfinite(mass.bones[i].mass) and mass.bones[i].mass >= 0.0):

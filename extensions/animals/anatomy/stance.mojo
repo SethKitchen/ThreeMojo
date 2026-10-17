@@ -31,7 +31,7 @@ or prove that they can support the missing moment.
 """
 
 from extensions.animals.anatomy.body import MAMMAL, species_body
-from extensions.animals.anatomy.mass import BodyMass
+from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.anatomy.muscles import (
     AnimalMuscle,
     descends,
@@ -195,8 +195,7 @@ def standing_loads(
     """
     if species_body(animal.species).plan != MAMMAL:
         raise Error("Standing loads are for quadruped mammals")
-    if len(mass.bones) != len(animal.rig.bones):
-        raise Error("The mass was sampled from another rig")
+    require_sampled_rig(len(mass.bones), len(animal.rig.bones))
     var total = mass.total()
     var weight = Float64(total.mass.value) * Float64(STANDARD_GRAVITY.value)
     var rig = animal.rig.copy()

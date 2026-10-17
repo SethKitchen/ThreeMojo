@@ -18,6 +18,7 @@ from extensions.animals.anatomy.body import (
     ARACHNID,
     MAMMAL,
     BodyPlan,
+    require_body_plan,
 )
 from extensions.animals.parts import EYEBALL, HORN, TEETH
 from extensions.sdf.ids import SurfacePart, require_part
@@ -229,8 +230,7 @@ def segment_of(plan: BodyPlan, bone: String) raises -> Segment:
     Raises:
         Error: If the plan is not named.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
+    require_body_plan(plan)
     var b = _base(bone)
     if plan == ARACHNID:
         if b == "prosoma" or b == "pedicel":

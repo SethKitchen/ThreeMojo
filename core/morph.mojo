@@ -24,6 +24,22 @@ stays implicitly copyable: a scene adds one by value.
 from std.math import isfinite
 
 
+def require_morph_target(target: Int) raises:
+    """Refuse a morph target index below zero.
+
+    Args:
+        target: Which target, from zero.
+
+    Returns:
+        Nothing. The call returns when the index is not negative.
+
+    Raises:
+        Error: If the target is negative.
+    """
+    if target < 0:
+        raise Error("A morph target index cannot be negative")
+
+
 struct MorphInfluences(ImplicitlyCopyable, Sized):
     """One weight per morph target, zero past the last one set."""
 
@@ -89,8 +105,7 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
         Raises:
             Error: If the target is negative.
         """
-        if target < 0:
-            raise Error("A morph target index cannot be negative")
+        require_morph_target(target)
         return self[target]
 
     def set(mut self, target: Int, weight: Float32) raises:
@@ -105,8 +120,7 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
         Raises:
             Error: If the target is negative or the weight is not a number.
         """
-        if target < 0:
-            raise Error("A morph target index cannot be negative")
+        require_morph_target(target)
         if not isfinite(weight):
             raise Error("A morph influence must be a number")
         while len(self.weights) <= target:

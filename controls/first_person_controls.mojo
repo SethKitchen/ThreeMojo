@@ -29,7 +29,6 @@ keeps turning toward where the pointer last was, as three.js's turns
 toward a pointer that rests.
 """
 
-from core.extent import positive_extent
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
@@ -55,6 +54,7 @@ from controls.input import (
     KEY_W,
     Key,
     require_input,
+    require_viewport_size,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -262,8 +262,7 @@ struct FirstPersonControls(Copyable, Movable):
                 is not positive.
         """
         require_input(event)
-        if not positive_extent(viewport_width, viewport_height):
-            raise Error("A viewport's size must be positive")
+        require_viewport_size(viewport_width, viewport_height)
         if not self.enabled:
             return
         if event.kind == KEY_DOWN:

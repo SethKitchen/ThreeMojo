@@ -72,6 +72,22 @@ comptime SERPENT = BodyPlan(5)
 comptime ARACHNID = BodyPlan(6)
 
 
+def require_body_plan(plan: BodyPlan) raises:
+    """Refuse a body plan that is not named.
+
+    Args:
+        plan: The body plan.
+
+    Returns:
+        Nothing. The call returns when the plan is named.
+
+    Raises:
+        Error: If the plan is not named.
+    """
+    if not plan.is_valid():
+        raise Error("A body plan must be named")
+
+
 @fieldwise_init
 struct ReferenceKind(Equatable, ImplicitlyCopyable, Writable):
     """Which length the reference length measures."""
