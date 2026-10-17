@@ -68,7 +68,7 @@ def little_endian_u32(bytes: List[UInt8], at: Int) -> Int:
     return _pack_u32(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3])
 
 
-def big_endian_u32(bytes: List[UInt8], at: Int) -> Int:
+def big_endian_u32(bytes: Span[UInt8, _], at: Int) -> Int:
     """Return the big-endian 32-bit word at `at`.
 
     Args:
@@ -87,6 +87,22 @@ def big_endian_u32(bytes: List[UInt8], at: Int) -> Int:
         | (Int(bytes[at + 2]) << 8)
         | Int(bytes[at + 3])
     )
+
+
+def big_endian_u32(bytes: List[UInt8], at: Int) -> Int:
+    """Return the big-endian 32-bit word at `at`.
+
+    Args:
+        bytes: The buffer.
+        at: The index of the first byte.
+
+    Returns:
+        The word, with the first byte in the high eight bits.
+
+    Raises:
+        Error: Never.
+    """
+    return big_endian_u32(Span(bytes), at)
 
 
 def little_endian_u32(bytes: Span[UInt8, _], at: Int) -> Int:
