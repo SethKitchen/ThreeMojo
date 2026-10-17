@@ -74,6 +74,22 @@ comptime ACROMIOCLAVICULAR_JOINT = TorsoLigament(5)
 comptime CORACOCLAVICULAR_LIGAMENT = TorsoLigament(6)
 
 
+def require_torso_ligament(part: TorsoLigament) raises:
+    """Refuse a torso ligament that is not named.
+
+    Args:
+        part: The part.
+
+    Returns:
+        Nothing. The call returns when the part is named.
+
+    Raises:
+        Error: If the part is not named.
+    """
+    if not part.is_valid():
+        raise Error("A torso ligament must be a named part")
+
+
 def torso_ligament_field(
     dimensions: TorsoDimensions, part: TorsoLigament, side: BodySide
 ) raises -> SweepField:
@@ -233,8 +249,7 @@ def is_paired_ligament(part: TorsoLigament) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso ligament must be a named part")
+    require_torso_ligament(part)
     return (
         part == COSTAL_CARTILAGES or part.value >= STERNOCLAVICULAR_JOINT.value
     )
@@ -254,8 +269,7 @@ def torso_ligament_tissue(part: TorsoLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso ligament must be a named part")
+    require_torso_ligament(part)
     if part == INTERVERTEBRAL_DISCS or part == STERNOCLAVICULAR_JOINT:
         return meniscus_tissue()
     if part == COSTAL_CARTILAGES:

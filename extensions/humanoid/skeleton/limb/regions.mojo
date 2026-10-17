@@ -45,6 +45,22 @@ comptime FAT_PROXY_REGION = LimbRegion(6)
 """Unresolved interior assigned the named fat density proxy."""
 
 
+def require_limb_region(region: LimbRegion) raises:
+    """Refuse a limb region that is not named.
+
+    Args:
+        region: The density assignment.
+
+    Returns:
+        Nothing. The call returns when the region is named.
+
+    Raises:
+        Error: If the region is not named.
+    """
+    if not region.is_valid():
+        raise Error("A limb region must be named")
+
+
 def region_label(region: LimbRegion) raises -> String:
     """Return a stable machine-readable name for a density assignment.
 

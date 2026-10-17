@@ -131,6 +131,22 @@ comptime LOOP = LineMode(1)
 comptime SEGMENTS = LineMode(2)
 
 
+def require_line_mode(mode: LineMode) raises:
+    """Refuse a line mode that is not named.
+
+    Args:
+        mode: The mode.
+
+    Returns:
+        Nothing. The call returns when the mode is named.
+
+    Raises:
+        Error: If the mode is not named.
+    """
+    if not mode.is_valid():
+        raise Error("A line needs a mode that exists")
+
+
 def segment_count(mode: LineMode, vertices: Int) raises -> Int:
     """Return how many segments `vertices` points make in `mode`.
 
@@ -147,8 +163,7 @@ def segment_count(mode: LineMode, vertices: Int) raises -> Int:
             or if `SEGMENTS` is given an odd count, which leaves a point
             with nothing to join it to.
     """
-    if not mode.is_valid():
-        raise Error("A line needs a mode that exists")
+    require_line_mode(mode)
     if vertices < 0:
         raise Error("A line cannot have fewer than no points")
     if mode == SEGMENTS:
@@ -268,8 +283,7 @@ struct Line(ImplicitlyCopyable):
             raise Error("A line must name a geometry")
         if material.value < 0:
             raise Error("A line must name a material")
-        if not mode.is_valid():
-            raise Error("A line needs a mode that exists")
+        require_line_mode(mode)
         if conditional and not (mode == SEGMENTS):
             raise Error(
                 "A conditional line is a list of sticks: its mode is SEGMENTS"

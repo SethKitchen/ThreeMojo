@@ -74,6 +74,22 @@ comptime SUBCLAVIAN_ARTERY = TorsoVessel(8)
 comptime SUBCLAVIAN_VEIN = TorsoVessel(9)
 
 
+def require_torso_vessel(part: TorsoVessel) raises:
+    """Refuse a torso vessel that is not named.
+
+    Args:
+        part: The vessel.
+
+    Returns:
+        Nothing. The call returns when the vessel is named.
+
+    Raises:
+        Error: If the vessel is not named.
+    """
+    if not part.is_valid():
+        raise Error("A torso vessel must be a named artery or vein")
+
+
 def is_torso_artery(part: TorsoVessel) raises -> Bool:
     """Return True if `part` is an artery.
 
@@ -86,8 +102,7 @@ def is_torso_artery(part: TorsoVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso vessel must be a named artery or vein")
+    require_torso_vessel(part)
     return (
         part == THORACIC_AORTA
         or part == UPPER_ABDOMINAL_AORTA
@@ -110,8 +125,7 @@ def is_paired_vessel(part: TorsoVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso vessel must be a named artery or vein")
+    require_torso_vessel(part)
     return part.value >= INTERNAL_THORACIC_ARTERY.value
 
 
