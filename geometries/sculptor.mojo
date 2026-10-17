@@ -58,7 +58,7 @@ from math.norm import (
     squared_length3,
 )
 from cameras.camera import Camera, project_point, unproject_point
-from controls.input import PRIMARY, PointerButton, refuse_invalid
+from controls.input import PRIMARY, PointerButton, require_named
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
@@ -1132,8 +1132,7 @@ struct Sculptor(Movable):
                 world matrix is outside the supported scale range or has
                 shear, or the camera cannot be read.
         """
-        if not button.is_valid():
-            refuse_invalid("pointer button", button.value)
+        require_named(button.is_valid(), "pointer button", button.value)
         if (
             not self.enabled
             or button != PRIMARY
