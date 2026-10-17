@@ -44,7 +44,7 @@ from extensions.sdf.ids import (
     SurfacePart,
 )
 from extensions.sdf.vector import V3, dot
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.utils import clamp, min3
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
@@ -273,8 +273,9 @@ def _sample_distance(model: SdfModel, ids: List[Int], q: V3) -> Float64:
 
 def _require_finite_distance(value: Float64) raises:
     """Refuse a nonfinite already-evaluated sampling distance."""
-    if not isfinite(value):
-        raise Error("A sampled field must have finite valid distances")
+    require_finite(
+        Float64(value), "A sampled field must have finite valid distances"
+    )
 
 
 def _require_nonnegative_candidate(candidate: Int) raises:
@@ -468,8 +469,7 @@ def _check_sampling_model(model: SdfModel) raises:
     # Mutable models are checked before culling, integer grid conversion,
     # pointer-indexed worker writes or unchecked tally accumulation.
     for value in model.outline:
-        if not isfinite(value):
-            raise Error("A sampled outline must be finite")
+        require_finite(Float64(value), "A sampled outline must be finite")
     for p in model.prims:
         if not p.kind.is_valid() or not p.part.is_valid():
             raise Error("A sampled primitive kind and part must be named")
@@ -485,8 +485,9 @@ def _check_sampling_model(model: SdfModel) raises:
                 if abs(dot(pair[0], pair[1])) > 1e-8:
                     raise Error("A sampled primitive frame must be orthonormal")
         for value in [p.k, p.lo, p.hi]:  # pragma: no branch
-            if not isfinite(value):
-                raise Error("Sampled primitive geometry must be finite")
+            require_finite(
+                Float64(value), "Sampled primitive geometry must be finite"
+            )
         if p.k < 0.0:
             raise Error("A sampled blend radius must be nonnegative")
         if p.kind == ELLIPSOID:

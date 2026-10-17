@@ -38,7 +38,7 @@ def require_hair_direction(direction: Vector3) raises:
         raise Error("Hair optical depth needs a finite light direction")
 
 
-from math.finite import require_positive_finite
+from math.finite import require_finite, require_positive_finite
 from std.math import ceil, floor, isfinite, max
 from std.sys import size_of
 from units.si import Length, METER
@@ -256,8 +256,9 @@ def _checked_density_samples(ratio: Float32) raises -> Int:
     """
     comptime assert size_of[Int]() == 4 or size_of[Int]() == 8
     var rounded = ceil(ratio)
-    if not isfinite(rounded):
-        raise Error("Hair density sample count is not representable")
+    require_finite(
+        Float64(rounded), "Hair density sample count is not representable"
+    )
     if rounded <= 1:
         return 1
     # Int.MIN is exactly -2^(width-1) on the supported signed Int widths.

@@ -28,7 +28,7 @@ This is not a three.js port. See Extensions.
     skin_weights(skin, rig)
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
@@ -202,8 +202,7 @@ struct _Heap(Movable):
 
 def _quantized_coordinate(value: Float32) raises -> Int:
     """Truncate the original Float32 grid product within the Int domain."""
-    if not isfinite(value):
-        raise Error("Skin positions must be finite for welding")
+    require_finite(Float64(value), "Skin positions must be finite for welding")
     var scaled = value * Float32(1e5)
     # Int.MAX rounds up to 2**63 in Float32. Use an exclusive upper
     # bound and an inclusive lower bound, both exact powers of two.

@@ -22,7 +22,7 @@ See Golub and Van Loan, "Matrix Computations" (4th edition, 2013),
 sections 3.4, 4.2 and 8.5.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from std.math import isfinite, sqrt
 from extensions.numerics.vector import require_row_count, zeros
 
@@ -393,8 +393,9 @@ def symmetric_eigen(a: DenseMatrix) raises -> EigenPairs:
     var n = a.rows
     var scale = Float64(0)
     for i in range(n * n):
-        if not isfinite(a.data[i]):
-            raise Error("An eigenproblem needs finite entries")
+        require_finite(
+            Float64(a.data[i]), "An eigenproblem needs finite entries"
+        )
         scale = max(scale, abs(a.data[i]))
     var m = a.copy()
     # Scaling preserves the eigenvectors and the relative stopping test.
@@ -481,8 +482,7 @@ def symmetric_eigen(a: DenseMatrix) raises -> EigenPairs:
     for c in range(n):
         var source = order[c]
         values[c] = m.data[source * n + source] * scale
-        if not isfinite(values[c]):
-            raise Error("The eigenvalues must be finite")
+        require_finite(Float64(values[c]), "The eigenvalues must be finite")
         var r = 0
         while r < n:
             vectors.data[r * n + c] = v.data[r * n + source]

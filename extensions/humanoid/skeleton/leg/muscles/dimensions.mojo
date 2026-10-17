@@ -69,9 +69,9 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisDimensions,
     pelvis_dimensions,
 )
-from math.finite import require_positive_finite
+from math.finite import require_finite, require_positive_finite
 from math.vector3 import Vector3, mix_delta3
-from std.math import isfinite, sqrt
+from std.math import sqrt
 from units.si import Length
 
 
@@ -239,8 +239,10 @@ struct MuscleDimensions(ImplicitlyCopyable):
         )
         # The packed SIMD has exactly BELLY_SLOTS (512) entries.
         for slot in range(BELLY_SLOTS):  # pragma: no branch
-            if not isfinite(self.bellies[slot]):
-                raise Error("A packed muscle station must be finite")
+            require_finite(
+                Float64(self.bellies[slot]),
+                "A packed muscle station must be finite",
+            )
             if slot % 4 >= 2 and self.bellies[slot] <= -1:
                 raise Error(
                     "A packed muscle radius multiplier must be positive"

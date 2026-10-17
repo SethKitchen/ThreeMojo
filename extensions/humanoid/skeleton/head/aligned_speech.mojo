@@ -32,6 +32,7 @@ from extensions.humanoid.skeleton.head.expression import (
     Viseme,
 )
 from loaders.json import ARRAY, parse_json
+from math.finite import require_finite
 from std.math import isfinite
 from units.si import Duration
 
@@ -258,8 +259,10 @@ struct AlignedSpeech(Copyable, Movable):
         """
         _time(duration)
         _time(origin)
-        if not isfinite(origin.value + duration.value):
-            raise Error("Audio origin plus duration must be finite")
+        require_finite(
+            Float64(origin.value + duration.value),
+            "Audio origin plus duration must be finite",
+        )
         if utterance.byte_length() == 0:
             raise Error("An aligned utterance needs an audio label")
         var previous = Float32(0)

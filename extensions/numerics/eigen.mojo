@@ -26,7 +26,7 @@ See Bathe and Wilson, "Large eigenvalue problems in dynamic analysis"
 section 11.6.
 """
 
-from math.finite import require_positive_tolerance
+from math.finite import require_finite, require_positive_tolerance
 from std.math import isfinite, sqrt
 from extensions.numerics.dense import (
     DenseMatrix,
@@ -94,8 +94,7 @@ def _swap_symmetric(mut a: DenseMatrix, first: Int, second: Int):
 
 def _checked_schur_value(value: Float64) raises -> Float64:
     """Refuse a nonfinite Schur update before it enters the working matrix."""
-    if not isfinite(value):
-        raise Error("An inertia count needs finite arithmetic")
+    require_finite(Float64(value), "An inertia count needs finite arithmetic")
     return value
 
 
@@ -134,8 +133,9 @@ def _pivoted_inertia(a: CsrMatrix) raises -> Int:
             var j = a.columns[e]
             if j >= i:
                 var value = a.values[e]
-                if not isfinite(value):
-                    raise Error("An inertia count needs finite entries")
+                require_finite(
+                    Float64(value), "An inertia count needs finite entries"
+                )
                 work.set(i, j, value)
                 work.set(j, i, value)
                 scale = max(scale, abs(value))
@@ -272,8 +272,7 @@ def count_eigenvalues_below(
             or the shift is an eigenvalue to working precision.
     """
     require_pair_size(k.size, m.size)
-    if not isfinite(shift):
-        raise Error("An eigenvalue shift must be finite")
+    require_finite(Float64(shift), "An eigenvalue shift must be finite")
     var shifted = _shifted(k, m, shift)
     try:
         var factor = SkylineFactor(shifted, reverse_cuthill_mckee(shifted))

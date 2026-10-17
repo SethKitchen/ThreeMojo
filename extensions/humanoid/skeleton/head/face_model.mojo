@@ -41,7 +41,8 @@ from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from math.cross import cross_vectors
 from math.vector3 import Vector3
-from std.math import isfinite, min
+from math.finite import require_finite
+from std.math import min
 
 # Where the converted model is kept, from the repository's root.
 comptime FACE_MODEL_PATH = "assets/face/ict_face.bin"
@@ -207,8 +208,7 @@ def _scale(bytes: List[UInt8], at: Int) raises -> Float32:
     var value = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
         unsafe_offset=at // 4
     ]
-    if not isfinite(value):
-        raise Error("A face model scale must be finite")
+    require_finite(Float64(value), "A face model scale must be finite")
     if value < 0 or value > Float32(1e30):
         raise Error("A face model scale is out of range")
     return value

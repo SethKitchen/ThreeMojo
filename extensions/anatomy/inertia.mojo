@@ -16,7 +16,7 @@ The humanoid's limb segments and the animals' body segments both use it.
 Sums are in `Float64`, so a million cells keep their precision.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.utils import min3
 from math.vector3 import Vector3
 from std.math import isfinite, sqrt
@@ -42,8 +42,7 @@ def _central_moment(raw: Float64, shift: Float64) raises -> Float64:
     # Sixteen least Float64 subnormals cover absolute rounding at zero.
     comptime UNDERFLOW = 7.9050503334599447e-323
     var central = raw - shift
-    if not isfinite(central):
-        raise Error("Central second moments must be finite")
+    require_finite(Float64(central), "Central second moments must be finite")
     # Multiply first so two finite raw moments cannot overflow the bound.
     var error = abs(raw) * ROUNDING + abs(shift) * ROUNDING + UNDERFLOW
     # Both signs are discarded: a smaller true moment is unresolved in
@@ -144,8 +143,9 @@ struct SegmentInertia(ImplicitlyCopyable):
             self.yz.value,
         ]
         comptime for axis in range(9):
-            if not isfinite(values[axis]):
-                raise Error("Segment mass properties must be finite")
+            require_finite(
+                Float64(values[axis]), "Segment mass properties must be finite"
+            )
         if min3(self.xx.value, self.yy.value, self.zz.value) < 0.0:
             raise Error("An inertia diagonal must be nonnegative")
         var x = Float64(self.xx.value)
@@ -179,8 +179,9 @@ struct SegmentInertia(ImplicitlyCopyable):
         var value = Float32(
             sqrt(Float64(moment.value) / Float64(self.mass.value))
         )
-        if not isfinite(value):
-            raise Error("A radius of gyration must fit a finite SI length")
+        require_finite(
+            Float64(value), "A radius of gyration must fit a finite SI length"
+        )
         return Length(value, METER)
 
 
@@ -263,11 +264,14 @@ struct InertiaTally(Copyable, Movable):
         if not (isfinite(self.mass) and self.mass >= 0.0):
             raise Error("A tally mass must be finite and nonnegative")
         comptime for axis in range(3):
-            if not isfinite(self.first[axis]):
-                raise Error("Tally first moments must be finite")
+            require_finite(
+                Float64(self.first[axis]), "Tally first moments must be finite"
+            )
         comptime for axis in range(6):
-            if not isfinite(self.second[axis]):
-                raise Error("Tally second moments must be finite")
+            require_finite(
+                Float64(self.second[axis]),
+                "Tally second moments must be finite",
+            )
         if self.mass == 0.0:
             comptime for axis in range(3):
                 if self.first[axis] != 0.0:

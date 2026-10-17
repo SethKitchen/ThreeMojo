@@ -23,7 +23,7 @@ from extensions.physics.center_order import (
     collect_median,
 )
 from extensions.physics.shape import component
-from std.math import isfinite
+from math.finite import require_finite
 
 
 @fieldwise_init
@@ -127,8 +127,9 @@ struct _PrimitiveIndex(Movable):
             )
             # The six stored coordinates always exist.
             for i in range(6):  # pragma: no branch
-                if not isfinite(values[i]):
-                    raise Error("An index entry must have finite bounds")
+                require_finite(
+                    Float64(values[i]), "An index entry must have finite bounds"
+                )
 
     def rebuild(mut self, boxes: List[Box3]) raises:
         # Validate the batch before replacing the previous valid snapshot.

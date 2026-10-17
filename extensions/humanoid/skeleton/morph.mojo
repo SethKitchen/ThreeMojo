@@ -58,7 +58,8 @@ from math.norm import squared_length3
 from math.smoothstep import clamped_smoothstep
 from math.utils import mix_delta
 from math.vector3 import Vector3
-from std.math import cos, isfinite, max, min, sin
+from math.finite import require_finite
+from std.math import cos, max, min, sin
 
 # Where each feature sits on the template, in centimeters: x to the
 # right, y above the hip joint centers, z forward.
@@ -208,11 +209,14 @@ struct HeadMorph(ImplicitlyCopyable):
             self.lip_fullness,
             self.neck_length,
         ]:  # pragma: no branch
-            if not isfinite(value):
-                raise Error("A head morph expression must be finite")
+            require_finite(
+                Float64(value), "A head morph expression must be finite"
+            )
         for index in range(FACE_SHAPES):  # pragma: no branch
-            if not isfinite(self.face_shapes[index]):
-                raise Error("A head face-shape expression must be finite")
+            require_finite(
+                Float64(self.face_shapes[index]),
+                "A head face-shape expression must be finite",
+            )
 
     def __init__(out self):
         """Make the identity morph of the template genome."""

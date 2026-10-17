@@ -33,7 +33,7 @@ from loaders.bytes import (
     hex_digit_value,
 )
 
-from std.math import isfinite
+from math.finite import require_finite
 
 # Lists and typed values share one nesting budget. The outer attribute
 # list counts as one level, so each recursive call has a bounded stack.
@@ -137,8 +137,7 @@ def require_step_real(value: Float64) raises:
     Raises:
         Error: If the real is not finite.
     """
-    if not isfinite(value):
-        raise Error("A STEP real must be finite")
+    require_finite(Float64(value), "A STEP real must be finite")
 
 
 struct StepFile(Movable):

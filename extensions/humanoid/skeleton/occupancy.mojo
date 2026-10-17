@@ -21,6 +21,7 @@ from core.ordinal import ordinal_valid
 from extensions.anatomy.tissue import BoneTissue
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
+from math.finite import require_finite
 from std.math import isfinite
 from units.si import (
     STANDARD_GRAVITY,
@@ -174,8 +175,9 @@ def check_mass_step(step: Length, bone: String) raises:
     Raises:
         Error: If `step` is not finite or is outside 2 mm through 20 mm.
     """
-    if not isfinite(step.value):
-        raise Error("A " + bone + " mass step must be finite")
+    require_finite(
+        Float64(step.value), "A " + bone + " mass step must be finite"
+    )
     if step < MIN_STEP:
         raise Error("A " + bone + " mass step must be at least 2 millimeters")
     if step > MAX_STEP:

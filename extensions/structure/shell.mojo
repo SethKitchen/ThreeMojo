@@ -28,8 +28,7 @@ frame element's.
 """
 
 from math.norm import squared_length2
-from math.finite import positive_finite
-from std.math import isfinite
+from math.finite import positive_finite, require_finite
 from extensions.building.material import BuildingMaterial
 from extensions.numerics.dense import DenseMatrix
 from extensions.structure.frame import LocalAxes
@@ -172,8 +171,9 @@ struct ShellElement(Copyable, Movable):
             raise Error("A shell thickness must be positive and finite")
         var values = [a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z]
         for i in range(len(values)):  # pragma: no branch
-            if not isfinite(values[i]):
-                raise Error("A shell's corners must be finite")
+            require_finite(
+                Float64(values[i]), "A shell's corners must be finite"
+            )
         var ab = b - a
         var ac = c - a
         var normal = ab.cross(ac)

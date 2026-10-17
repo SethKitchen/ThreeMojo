@@ -14,7 +14,7 @@ The matrices are square, because the stiffness, mass and conductance
 matrices of an analysis are square.
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 from extensions.numerics.vector import zeros
 
 
@@ -74,8 +74,7 @@ struct SparseBuilder(Movable):
             Error: If an index is out of range or the value is not finite.
         """
         require_matrix_index(row, col, self.size)
-        if not isfinite(value):
-            raise Error("A matrix entry must be a finite number")
+        require_finite(Float64(value), "A matrix entry must be a finite number")
         if value == 0:
             return
         self._rows.append(row)

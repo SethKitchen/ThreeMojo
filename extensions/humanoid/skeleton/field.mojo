@@ -17,7 +17,8 @@ from math.cross import cross_vectors
 from math.norm import squared_length3
 from math.utils import clamp, min3, mix_delta
 from math.vector3 import Vector3, component_max, component_min, mix_delta3
-from std.math import isfinite, max, min, pi, sqrt
+from math.finite import require_finite
+from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
 
 
@@ -114,8 +115,9 @@ def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
         raise Error("A " + bone + " needs a male or female template")
     if not side.is_valid():
         raise Error("A " + bone + " needs a left or right side")
-    if not isfinite(stature.value):
-        raise Error("A " + bone + "'s stature must be finite")
+    require_finite(
+        Float64(stature.value), "A " + bone + "'s stature must be finite"
+    )
     if stature < MIN_STATURE:
         raise Error("A " + bone + "'s stature must be at least 1.2 meters")
     if stature > MAX_STATURE:
@@ -136,8 +138,7 @@ def _finite_measure(value: Float32, name: String, bone: String) raises:
     Raises:
         Error: If the measure is not finite.
     """
-    if not isfinite(value):
-        raise Error("A " + bone + " " + name + " must be finite")
+    require_finite(Float64(value), "A " + bone + " " + name + " must be finite")
 
 
 def _positive_measure(value: Float32, name: String, bone: String) raises:

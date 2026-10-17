@@ -19,7 +19,7 @@ Coordinates are meters, z up. The x axis points east and the y axis points
 north unless `Site.north` says otherwise.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.construction import Construction, Glazing
@@ -221,8 +221,7 @@ struct Section(ImplicitlyCopyable):
         var d = self.depth.to(METER)
         if not positive_finite(b):
             raise Error("A section width must be positive and finite")
-        if not isfinite(d):
-            raise Error("A section depth must be finite")
+        require_finite(Float64(d), "A section depth must be finite")
         if not (
             isfinite(self.flange_thickness.value)
             and isfinite(self.web_thickness.value)

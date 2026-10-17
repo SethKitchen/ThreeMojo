@@ -55,7 +55,7 @@ from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from math.cross import cross_vectors
 from math.vector3 import Vector3
-from std.math import isfinite
+from math.finite import require_finite
 
 comptime _VERSION = 1
 comptime _HEADER = 20
@@ -298,8 +298,9 @@ struct HairStyleFile(Movable):
         var scale = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
             unsafe_offset=4
         ]
-        if not isfinite(scale):
-            raise Error("The hair style scale must be finite: " + path)
+        require_finite(
+            Float64(scale), "The hair style scale must be finite: " + path
+        )
         if scale < 0 or scale > Float32(1e30):
             raise Error("The hair style scale is out of range: " + path)
         var shorts = bytes.unsafe_ptr().unsafe_bitcast[Int16]()

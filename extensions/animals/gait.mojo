@@ -31,6 +31,7 @@ from extensions.sdf.vector import (
 from math.norm import squared_length2
 from math.sine import fraction
 from math.utils import clamp, max3
+from math.finite import require_finite
 from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
 from units.si import METER, SECOND, Duration, Length
 
@@ -133,8 +134,9 @@ def solve_two_bone(
         raise Error("A leg link must have finite positive planar length")
     var t = target - root
     var distance = length(V3(0.0, t.y, t.z))
-    if not isfinite(distance):
-        raise Error("A leg target displacement must be finite")
+    require_finite(
+        Float64(distance), "A leg target displacement must be finite"
+    )
     var reach = max(abs(la - lb), min(distance, la + lb))
     # Equal links can fold exactly onto their root. A small relative
     # radius selects a stable fold direction without dividing by zero.
@@ -315,8 +317,7 @@ def walk_pose_at(
         Error: If time is not finite or the walk parameters are invalid.
     """
     var seconds = Float64(elapsed.to(SECOND))
-    if not isfinite(seconds):
-        raise Error("Walk time must be finite")
+    require_finite(Float64(seconds), "Walk time must be finite")
     if not is_quadruped(rig):
         return Pose(len(rig.bones))
     var hip = Length(Float32(rig.j("hipL").y), METER)
@@ -351,8 +352,7 @@ def walk_pose(
     var pose = Pose(len(rig.bones))
     if not is_quadruped(rig):
         return pose^
-    if not isfinite(phase):
-        raise Error("Walk phase must be finite")
+    require_finite(Float64(phase), "Walk phase must be finite")
     var p = fraction(phase)
     var hip = rig.j("hipL").y
     var parameters = _walk_parameters(rig, froude)
