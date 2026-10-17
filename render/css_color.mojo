@@ -364,21 +364,11 @@ def color_name_hex(name: String) -> Optional[Int]:
     return None
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII space, tab or line break."""
-    return ascii_space(Int(byte))
-
-
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for an ASCII digit."""
-    return ascii_digit(Int(byte))
-
-
 def _is_word(byte: UInt8) -> Bool:
     """Return True for a letter, a digit or an underscore: a regular
     expression's `\\w`."""
     var letter = ascii_letter(Int(byte))
-    return letter or _is_digit(byte) or byte == 95
+    return letter or ascii_digit(byte) or byte == 95
 
 
 def _hex_digit(byte: UInt8) -> Int:
@@ -412,7 +402,7 @@ struct _Scanner(Movable):
 
     def skip_spaces(mut self):
         """Move past any spaces: a regular expression's `\\s*`."""
-        while not self.done() and _is_space(self.peek()):
+        while not self.done() and ascii_space(self.peek()):
             self.at += 1
 
     def eat(mut self, byte: UInt8) -> Bool:
@@ -437,10 +427,10 @@ struct _Scanner(Movable):
             The number, held at a million so that no string overflows it,
             or None if no digit is next.
         """
-        if not _is_digit(self.peek()):
+        if not ascii_digit(self.peek()):
             return None
         var value = 0
-        while _is_digit(self.peek()):
+        while ascii_digit(self.peek()):
             value = min(value * 10 + Int(self.peek()) - 48, 1000000)
             self.at += 1
         return value
@@ -454,15 +444,15 @@ struct _Scanner(Movable):
         """
         var whole = self.at
         var mantissa = Float64(0)
-        while _is_digit(self.peek()):
+        while ascii_digit(self.peek()):
             mantissa = mantissa * 10 + Float64(Int(self.peek()) - 48)
             self.at += 1
         var scale = Float64(1)
         if self.peek() == 46:
             self.at += 1
-            if not _is_digit(self.peek()):
+            if not ascii_digit(self.peek()):
                 return None
-            while _is_digit(self.peek()):
+            while ascii_digit(self.peek()):
                 mantissa = mantissa * 10 + Float64(Int(self.peek()) - 48)
                 scale *= 10
                 self.at += 1

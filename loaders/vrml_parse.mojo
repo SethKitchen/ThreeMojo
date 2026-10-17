@@ -187,11 +187,6 @@ struct VrmlToken(Copyable, Movable):
         self.offset = offset
 
 
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for `[0-9]`."""
-    return ascii_digit(Int(byte))
-
-
 def _is_hex_digit(byte: UInt8) -> Bool:
     """Return True for `[0-9a-fA-F]`."""
     return hex_digit_value(Int(byte)) >= 0
@@ -219,7 +214,7 @@ def _excluded(byte: UInt8) -> Bool:
 def _starts_identifier(byte: UInt8) -> Bool:
     """Return True for a byte that can start an identifier: not a digit,
     not `-`, and not excluded."""
-    return not (_excluded(byte) or _is_digit(byte) or byte == 0x2D)
+    return not (_excluded(byte) or ascii_digit(byte) or byte == 0x2D)
 
 
 def _identifier_length(bytes: Span[UInt8, _], at: Int) -> Int:
@@ -378,7 +373,7 @@ def _escape_length(bytes: Span[UInt8, _], at: Int) -> Int:
 def _digits(bytes: Span[UInt8, _], at: Int) -> Int:
     """Return where a run of digits from `at` ends."""
     var end = at
-    while end < len(bytes) and _is_digit(bytes[end]):
+    while end < len(bytes) and ascii_digit(bytes[end]):
         end += 1
     return end
 
@@ -410,7 +405,7 @@ def _number_length(bytes: Span[UInt8, _], at: Int) -> Int:
         whole < len(bytes)
         and bytes[whole] == 0x2E
         and whole + 1 < len(bytes)
-        and _is_digit(bytes[whole + 1])
+        and ascii_digit(bytes[whole + 1])
     )
     if fraction:
         end = _digits(bytes, whole + 1)

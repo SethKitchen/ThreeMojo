@@ -139,11 +139,6 @@ def _js_number(text: String) raises -> Float64:
     return value
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII white space byte."""
-    return ascii_space(Int(byte))
-
-
 def _tokens(line: String) -> List[String]:
     """Return a line's numbers as three.js's `textToArray` splits them:
     trimmed, commas as spaces, each run of two or more white space bytes
@@ -170,7 +165,7 @@ def _tokens(line: String) -> List[String]:
 
 def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and _is_space(bytes[i])
+    return i < len(bytes) and ascii_space(bytes[i])
 
 
 struct _Lines:

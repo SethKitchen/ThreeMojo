@@ -91,18 +91,6 @@ comptime MAX_VTK_ARRAY = 1 << 28
 comptime _MANY = -2
 
 
-def _is_digit(unit: Int) -> Bool:
-    """Return True for `0` to `9`.
-
-    Args:
-        unit: The code unit.
-
-    Returns:
-        Whether it is a digit.
-    """
-    return ascii_digit(unit)
-
-
 def _starts(units: List[Int], prefix: String) -> Bool:
     """Return True if code units start with an ASCII prefix.
 
@@ -402,14 +390,14 @@ def _number_end(line: List[Int], at: Int) -> Int:
     if line[i] == 45:
         i += 1
     var first = i
-    while i < n and _is_digit(line[i]):
+    while i < n and ascii_digit(line[i]):
         i += 1
     if i == first:
         return -1
     if i < n and line[i] == 46:
         i += 1
     while i < n and (
-        _is_digit(line[i]) or line[i] == 45 or line[i] == 43 or line[i] == 101
+        ascii_digit(line[i]) or line[i] == 45 or line[i] == 43 or line[i] == 101
     ):
         i += 1
     return i
@@ -471,7 +459,7 @@ def _starts_with_word(line: List[Int]) -> Bool:
     # Called when the line gave three numbers, so it is not empty; it is
     # trimmed, so it never starts with white space.
     var u = line[0]
-    return not (_is_digit(u) or u == 46 or u == 45)
+    return not (ascii_digit(u) or u == 46 or u == 45)
 
 
 def _head(line: List[Int], prefix: String, runs: List[Int]) -> Bool:
@@ -496,10 +484,10 @@ def _head(line: List[Int], prefix: String, runs: List[Int]) -> Bool:
         var end = at
         while end < len(line):
             var u = line[end]
-            var word = _is_digit(u) or ascii_letter(u) or u == 95
+            var word = ascii_digit(u) or ascii_letter(u) or u == 95
             var fits = (
                 (kind == 0 and u == 32)
-                or (kind == 1 and _is_digit(u))
+                or (kind == 1 and ascii_digit(u))
                 or (kind == 2 and word)
             )
             if not fits:
@@ -524,7 +512,7 @@ def _connectivity(line: List[Int]) -> List[Float64]:
     """
     var n = len(line)
     var at = 0
-    while at < n and _is_digit(line[at]):
+    while at < n and ascii_digit(line[at]):
         at += 1
     if at == 0 or at >= n or not is_js_space(line[at]):
         return []
@@ -534,7 +522,7 @@ def _connectivity(line: List[Int]) -> List[Float64]:
         at += 1
     var start = at
     var end = at
-    while end < n and (_is_digit(line[end]) or is_js_space(line[end])):
+    while end < n and (ascii_digit(line[end]) or is_js_space(line[end])):
         end += 1
     # JavaScript's `split( /\s+/ )`: an empty text is one empty word.
     var word = start

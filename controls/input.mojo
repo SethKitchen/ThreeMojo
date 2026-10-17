@@ -317,11 +317,6 @@ def require_input(event: InputEvent) raises:
         refuse_invalid("key", event.key.value)
 
 
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True if `byte` is an ASCII digit."""
-    return ascii_digit(Int(byte))
-
-
 def _is_final(byte: UInt8) -> Bool:
     """Return True if `byte` ends a control sequence."""
     return byte >= FINAL_LOW and byte <= FINAL_HIGH
@@ -347,7 +342,7 @@ def _parameters(bytes: List[UInt8], first: Int, end: Int) -> List[Int]:
         if byte == SEMICOLON_BYTE:
             numbers.append(current)
             current = 0
-        elif _is_digit(byte):
+        elif ascii_digit(byte):
             current = current * 10 + Int(byte - ZERO_BYTE)
         else:
             return List[Int]()

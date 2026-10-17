@@ -219,11 +219,6 @@ def _is_letter(c: UInt8) -> Bool:
     return ascii_letter(Int(c)) or c == UInt8(ord("_"))
 
 
-def _is_digit(c: UInt8) -> Bool:
-    """Return True for a decimal digit."""
-    return ascii_digit(Int(c))
-
-
 def _is_hex(c: UInt8) -> Bool:
     """Return True for a hexadecimal digit."""
     return hex_digit_value(Int(c)) >= 0
@@ -231,7 +226,7 @@ def _is_hex(c: UInt8) -> Bool:
 
 def _is_word_byte(c: UInt8) -> Bool:
     """Return True for a byte a name can hold after its first."""
-    return _is_letter(c) or _is_digit(c)
+    return _is_letter(c) or ascii_digit(c)
 
 
 def _is_space(c: UInt8) -> Bool:
@@ -254,7 +249,7 @@ def _is_sign(c: UInt8) -> Bool:
 def _starts_number(c: UInt8, next: UInt8) -> Bool:
     """Return True if a number begins at `c`: a digit, or a point and a
     digit."""
-    return _is_digit(c) or (c == UInt8(ord(".")) and _is_digit(next))
+    return ascii_digit(c) or (c == UInt8(ord(".")) and ascii_digit(next))
 
 
 def _is_hex_start(text: String) -> Bool:
@@ -430,13 +425,13 @@ struct _Lexer(Movable):
             if end == digits_at:
                 raise self.error(line, "a hexadecimal number needs digits")
         else:
-            while end < len(bytes) and _is_digit(bytes[end]):
+            while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
         var real = False
         if base == 10 and end < len(bytes) and bytes[end] == UInt8(ord(".")):
             real = True
             end += 1
-            while end < len(bytes) and _is_digit(bytes[end]):
+            while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
         if base == 10 and end < len(bytes) and _is_exponent(bytes[end]):
             real = True
@@ -444,7 +439,7 @@ struct _Lexer(Movable):
             if end < len(bytes) and _is_sign(bytes[end]):
                 end += 1
             var first = end
-            while end < len(bytes) and _is_digit(bytes[end]):
+            while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
             if end == first:
                 raise self.error(line, "an exponent needs digits")
@@ -717,10 +712,10 @@ struct _Lexer(Movable):
                     raise self.error(line, "an #if condition leaves a ( open")
                 at += 1
             return 1 if holds else 0
-        if _is_digit(part.as_bytes()[0]):
+        if ascii_digit(part.as_bytes()[0]):
             # A part has at least one byte.
             for index in range(part.byte_length()):  # pragma: no branch
-                if not _is_digit(part.as_bytes()[index]):
+                if not ascii_digit(part.as_bytes()[index]):
                     raise self.error(
                         line, "an #if condition counts in whole numbers"
                     )
