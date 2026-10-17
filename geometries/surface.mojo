@@ -12,7 +12,8 @@ also writes the triangle index. `record_kind` names the solid and starts
 its parameter record. `record_sweep` writes the theta sweep.
 `record_phi` writes the phi sweep. `record_tube` writes a tube's two
 radii. `record_width_height` writes a rectangle's width and height.
-`record_grid_segments` writes its two segment counts. They share the
+`record_grid_segments` writes its two segment counts.
+`record_shaft_segments` writes a shaft's two segment counts. They share the
 checks for a positive radius, three segments, and positive or finite box
 extents. A count below one is `require_at_least_one` in
 `math.curve_checks`.
@@ -218,6 +219,28 @@ def record_grid_segments(
         Error: If either count is not finite as a number.
     """
     geometry.parameters.set_number("widthSegments", Float64(width_segments))
+    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+
+
+def record_shaft_segments(
+    mut geometry: BufferGeometry,
+    radial_segments: Int,
+    height_segments: Int,
+) raises:
+    """Record how many cells a shaft has around and down its side.
+
+    Args:
+        geometry: The solid, after `record_kind`.
+        radial_segments: How many cells around.
+        height_segments: How many cells down the side.
+
+    Returns:
+        Nothing. `radialSegments` and `heightSegments` are set.
+
+    Raises:
+        Error: If either count is not finite as a number.
+    """
+    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
 
 

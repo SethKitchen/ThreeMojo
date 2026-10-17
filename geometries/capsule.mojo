@@ -24,6 +24,7 @@ from core.ordinal import require_non_negative
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    record_shaft_segments,
     require_positive_radius,
     require_three_segments,
 )
@@ -159,6 +160,5 @@ def capsule(
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_meters("height", length)
     geometry.parameters.set_number("capSegments", Float64(cap_segments))
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    record_shaft_segments(geometry, radial_segments, height_segments)
     return geometry^
