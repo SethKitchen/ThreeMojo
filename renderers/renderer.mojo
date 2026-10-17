@@ -290,6 +290,7 @@ from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
     PolygonOffset,
+    require_depth_mode,
     RasterState,
     log_depth_factor,
 )
@@ -330,6 +331,7 @@ from render.rasterizer import (
     LayerFactors,
     RasterVertex,
     ShadeMode,
+    require_shade_mode,
     TextureFrames,
     check_alpha_data_map,
     check_alpha_map,
@@ -6457,8 +6459,7 @@ struct Renderer(Movable):
             Error: If the mode is none of those three. The type stops a
                 bare integer; it does not stop `DepthMode(7)`.
         """
-        if not mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(mode)
         self.depth_mode = mode
 
     def depth_mode_for[C: Camera](self, camera: C) raises -> DepthMode:
@@ -6538,8 +6539,7 @@ struct Renderer(Movable):
                 shadow pass's. The type stops a bare integer; it does not
                 stop `ShadeMode(99)`.
         """
-        if not mode.is_valid():
-            raise Error("A shading mode that is none of the four")
+        require_shade_mode(mode)
         if mode == SHADE_SHADOW:
             raise Error(
                 "SHADE_SHADOW draws a shadow map's colors, which the"

@@ -98,6 +98,7 @@ from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
     FragmentTest,
+    require_depth_mode,
     RasterState,
     cleared_depth,
     is_nearer,
@@ -819,8 +820,7 @@ struct RenderTarget(Movable, SampleSource):
                 or the depth mode is none of the three.
         """
         require_rect(rect, self.width, self.height, "clear")
-        if not depth_mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(depth_mode)
         if color:
             self.clear = FloatColor(srgb=clear).premultiplied()
         if depth:

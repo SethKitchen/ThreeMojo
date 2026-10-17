@@ -61,6 +61,7 @@ from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
     cleared_depth,
+    require_depth_mode,
     is_nearer,
     log_depth_factor,
 )
@@ -207,8 +208,7 @@ struct DepthView(Movable):
             raise Error("A depth view's near distance must be before its far")
         if projection.determinant() == 0:
             raise Error("A depth view's projection must be invertible")
-        if not mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(mode)
         self.width = width
         self.height = height
         self.projection = projection
@@ -1697,8 +1697,7 @@ def outline_mask(
     """
     if len(all_depth) != len(selected_depth):
         raise Error("An outline's two depths must be one size")
-    if not mode.is_valid():
-        raise Error("A depth mode that is none of the three")
+    require_depth_mode(mode)
     var clear = cleared_depth(mode)
     var mask = List[FloatColor](capacity=len(all_depth))
     for slot in range(len(all_depth)):  # pragma: no branch

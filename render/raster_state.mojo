@@ -119,6 +119,22 @@ comptime LOGARITHMIC_DEPTH = DepthMode(1)
 comptime REVERSED_DEPTH = DepthMode(2)
 
 
+def require_depth_mode(mode: DepthMode) raises:
+    """Refuse a depth mode that is none of the three.
+
+    Args:
+        mode: The mode to check.
+
+    Returns:
+        Nothing. The call returns when the mode is named.
+
+    Raises:
+        Error: If `mode` is none of the three.
+    """
+    if not mode.is_valid():
+        raise Error("A depth mode that is none of the three")
+
+
 def log_depth_factor(far: Float32) -> Float32:
     """Return three.js's `logDepthBufFC` for a camera's far distance.
 

@@ -57,6 +57,7 @@ from render.raster_state import (
     LOGARITHMIC_DEPTH,
     REVERSED_DEPTH,
     log_depth_factor,
+    require_depth_mode,
 )
 from units.si import Length, METER
 
@@ -250,8 +251,7 @@ struct TransmissionTarget(Movable):
             raise Error("Volume scene depth needs positive raster dimensions")
         if len(target.depth) != target.width * target.height:
             raise Error("Volume scene depth needs one depth per raster pixel")
-        if not target.depth_mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(target.depth_mode)
         if not isfinite(far.value):
             raise Error("Volume scene depth needs a finite far distance")
         for index in range(VIEW_FLOATS):  # pragma: no branch

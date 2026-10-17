@@ -1896,6 +1896,22 @@ comptime SHADE_TEXTURE = ShadeMode(2)
 comptime SHADE_SHADOW = ShadeMode(3)
 
 
+def require_shade_mode(mode: ShadeMode) raises:
+    """Refuse a shading mode that is none of the four.
+
+    Args:
+        mode: The mode to check.
+
+    Returns:
+        Nothing. The call returns when the mode is named.
+
+    Raises:
+        Error: If `mode` is none of the four.
+    """
+    if not mode.is_valid():
+        raise Error("A shading mode that is none of the four")
+
+
 def _coordinates_at(
     a: RasterVertex,
     b: RasterVertex,
@@ -3900,8 +3916,7 @@ def rasterize_shaded(
             or a pixel
             write lands out of bounds — the last of which the loop prevents.
     """
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_shade_mode(mode)
     # A frame that asked these of each surface already passes `checked`.
     if not checked:
         check_triangle_state(a, b, c)
@@ -6592,8 +6607,7 @@ def rasterize_point(
             view is refused by `FogView.validate`, or the point names a
             texture the store does not have.
     """
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_shade_mode(mode)
     check_point_state(point)
     fog.validate()
     check_point_maps(point, mode, textures, cubes, programs, volumes, arrays)
@@ -7199,8 +7213,7 @@ def _check_frame(
         raise Error("Rasterizing needs whole segments")
     if workers < 1:
         raise Error("Rasterizing needs at least one worker")
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_shade_mode(mode)
     # Refused here, before any band starts, for the reason the triangle
     # state is: whether or not a triangle is visible, and however many
     # workers there are.
