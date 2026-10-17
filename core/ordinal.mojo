@@ -10,7 +10,8 @@ last name. A value outside that range is not a name. Each id keeps its
 own type. `index_in_count` is true from zero through one below a count.
 `require_index_in_count` refuses an index outside that range.
 `require_non_negative` refuses a value below zero. Callers keep their
-own error text.
+own error text. `require_draw_ids` refuses a negative node, geometry,
+and material, and builds the three messages from one label.
 """
 
 
@@ -78,3 +79,25 @@ def require_non_negative(value: Int, message: String) raises:
     """
     if value < 0:
         raise Error(message)
+
+
+def require_draw_ids(
+    node: Int, geometry: Int, material: Int, label: String
+) raises:
+    """Refuse a negative node, geometry, or material id.
+
+    Args:
+        node: The scene node id.
+        geometry: The geometry id.
+        material: The material id.
+        label: The words that start each message, such as `A line`.
+
+    Returns:
+        Nothing. The call returns when every id is zero or more.
+
+    Raises:
+        Error: If `node`, `geometry`, or `material` is below zero.
+    """
+    require_non_negative(node, label + " must name a scene node")
+    require_non_negative(geometry, label + " must name a geometry")
+    require_non_negative(material, label + " must name a material")

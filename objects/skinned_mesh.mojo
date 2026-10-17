@@ -111,7 +111,7 @@ first, and this port's glTF loader calls `normalize_skin_weights` the same
 way. Call it for a geometry built by hand whose weights do not sum to one.
 """
 
-from core.ordinal import ordinal_valid, require_non_negative
+from core.ordinal import ordinal_valid, require_draw_ids
 
 from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
@@ -255,14 +255,8 @@ struct SkinnedMesh(Copyable, Movable):
                 the two, or if the bind matrix is not a finite affine
                 transform that can be inverted.
         """
-        require_non_negative(
-            node.value, "A skinned mesh must name a scene node"
-        )
-        require_non_negative(
-            geometry.value, "A skinned mesh must name a geometry"
-        )
-        require_non_negative(
-            material.value, "A skinned mesh must name a material"
+        require_draw_ids(
+            node.value, geometry.value, material.value, "A skinned mesh"
         )
         if not bind_mode.is_valid():
             raise Error("A skinned mesh needs a bind mode that exists")

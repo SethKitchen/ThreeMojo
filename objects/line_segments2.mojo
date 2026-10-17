@@ -43,7 +43,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from core.ordinal import require_non_negative
+from core.ordinal import require_draw_ids
 from materials.material import MaterialId
 from math.vector3 import Vector3, append_vector3
 from objects.line import SEGMENTS, segment_count
@@ -143,9 +143,9 @@ struct LineSegments2(ImplicitlyCopyable):
         Raises:
             Error: If an id is negative or the coverage is not named.
         """
-        require_non_negative(node.value, "A wide line must name a scene node")
-        require_non_negative(geometry.value, "A wide line must name a geometry")
-        require_non_negative(material.value, "A wide line must name a material")
+        require_draw_ids(
+            node.value, geometry.value, material.value, "A wide line"
+        )
         require_line_coverage(coverage)
         self.geometry = geometry
         self.material = material

@@ -84,7 +84,11 @@ from core.order import stable_rising_order
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
-from core.ordinal import require_index_in_count, require_non_negative
+from core.ordinal import (
+    require_draw_ids,
+    require_index_in_count,
+    require_non_negative,
+)
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, require_affine
 from render.framebuffer import Color
@@ -191,14 +195,8 @@ struct InstancedMesh(Copyable, Movable):
         Raises:
             Error: If any id is negative, or the count is.
         """
-        require_non_negative(
-            node.value, "An instanced mesh must name a scene node"
-        )
-        require_non_negative(
-            geometry.value, "An instanced mesh must name a geometry"
-        )
-        require_non_negative(
-            material.value, "An instanced mesh must name a material"
+        require_draw_ids(
+            node.value, geometry.value, material.value, "An instanced mesh"
         )
         require_non_negative(
             count, "An instanced mesh cannot have a negative count"
