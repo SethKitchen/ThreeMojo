@@ -636,9 +636,7 @@ def parse_json(text: String) raises -> JsonDocument:
             grammar or beyond a `Float64`, anything after the root value,
             or nesting past `MAX_DEPTH`. The message names the byte offset.
     """
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     var parser = _Parser(bytes^)
     var document = JsonDocument()
     parser.skip_space()

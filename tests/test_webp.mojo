@@ -249,9 +249,7 @@ def _le32(value: Int) -> List[UInt8]:
 
 def _chunk(tag: String, data: List[UInt8], size: Int = -1) -> List[UInt8]:
     """A chunk, padded to an even length; `size` overrides its size."""
-    var out = List[UInt8]()
-    for b in tag.as_bytes():
-        out.append(b)
+    var out = List[UInt8](tag.as_bytes())
     out += _le32(len(data) if size < 0 else size)
     out += data.copy()
     if len(data) % 2 == 1:

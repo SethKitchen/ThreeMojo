@@ -325,9 +325,7 @@ def test_the_loaded_cube_draws() raises:
 def glb_of(json: String, bin: List[UInt8], version: Int = 2) -> List[UInt8]:
     """Return a container around a JSON text and a binary chunk."""
     var out = List[UInt8]()
-    var text = List[UInt8]()
-    for byte in json.as_bytes():
-        text.append(byte)
+    var text = List[UInt8](json.as_bytes())
     while len(text) % 4 != 0:
         text.append(32)
     var total = 12 + 8 + len(text)
@@ -349,9 +347,7 @@ def glb_of(json: String, bin: List[UInt8], version: Int = 2) -> List[UInt8]:
 
 
 def test_a_container_is_checked_chunk_by_chunk() raises:
-    var bin = List[UInt8]()
-    for byte in "abcd".as_bytes():
-        bin.append(byte)
+    var bin = List[UInt8]("abcd".as_bytes())
     var good = glb_of('{"asset":{"version":"2.0"}}', bin)
     var parts = split_glb(good)
     assert_equal(parts[0], '{"asset":{"version":"2.0"}} ')
@@ -1256,9 +1252,7 @@ def test_the_edges_of_every_check_are_reached() raises:
     with assert_raises():
         _ = read_gltf("no_such_file.gltf", scene, assets)
     # A container that is long enough but not a container.
-    var words = List[UInt8]()
-    for byte in "not a glb at all, no".as_bytes():
-        words.append(byte)
+    var words = List[UInt8]("not a glb at all, no".as_bytes())
     with assert_raises():
         _ = split_glb(words)
     # A binary chunk of no bytes.

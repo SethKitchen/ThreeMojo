@@ -23,9 +23,7 @@ from std.testing import (
 
 def text(line: String) -> List[UInt8]:
     """Return a string's bytes."""
-    var out = List[UInt8]()
-    for byte in line.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](line.as_bytes())
     return out^
 
 

@@ -55,8 +55,7 @@ from std.testing import (
 
 def push_text(mut out: List[UInt8], text: String):
     """Append a string and its null byte."""
-    for byte in text.as_bytes():
-        out.append(byte)
+    out.extend(text.as_bytes())
     out.append(0)
 
 

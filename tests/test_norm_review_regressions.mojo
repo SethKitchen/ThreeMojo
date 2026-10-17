@@ -300,9 +300,7 @@ def test_amf_positive_unit_conversion_cannot_erase_a_tiny_normal() raises:
             + "</y><z>0</z></coordinates><normal><nx>5e-324</nx><ny>0</ny><nz>0</nz></normal></vertex>"
         )
     source += "</vertices><volume><triangle><v1>0</v1><v2>1</v2><v3>2</v3></triangle></volume></mesh></object></amf>"
-    var bytes = List[UInt8]()
-    for byte in source.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](source.as_bytes())
     var scene = Scene()
     var assets = Assets()
     var model = parse_amf(bytes^, scene, assets)

@@ -42,10 +42,7 @@ def push_be32(mut out: List[UInt8], value: UInt32):
 
 def _push_ascii(mut out: List[UInt8], text: String):
     """Append the bytes of an ASCII string such as a chunk type."""
-    var bytes = text.as_bytes()
-    # A chunk type is always four characters.
-    for index in range(len(bytes)):  # pragma: no branch
-        out.append(bytes[index])
+    out.extend(text.as_bytes())
 
 
 def push_chunk(mut out: List[UInt8], kind: String, data: List[UInt8]) raises:

@@ -212,9 +212,7 @@ def join(parts: List[List[UInt8]]) -> List[UInt8]:
 
 def text(value: String) -> List[UInt8]:
     """Return a string and its zero."""
-    var out = List[UInt8]()
-    for byte in value.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](value.as_bytes())
     out.append(0)
     return out^
 

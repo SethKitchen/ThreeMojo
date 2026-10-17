@@ -204,8 +204,7 @@ def test_refusals() raises:
     )
     for _ in range(24):
         empty.append(0)
-    for byte in "pose".as_bytes():
-        empty.append(byte)
+    empty.extend("pose".as_bytes())
     for _ in range(12):
         empty.append(0)
     var model = parse_md2(empty)

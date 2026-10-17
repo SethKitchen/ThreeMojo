@@ -111,9 +111,7 @@ def test_every_escape_is_resolved_into_utf8() raises:
         '"a\\"b\\\\c\\/d\\be\\ff\\ng\\rh\\ti\\u0041\\u00e9\\u4e2d\\ud83d\\ude00"'
     )
     var text = document.string(document.root())
-    var expected = List[UInt8]()
-    for byte in 'a"b\\c/d'.as_bytes():
-        expected.append(byte)
+    var expected = List[UInt8]('a"b\\c/d'.as_bytes())
     expected.append(8)
     expected.append(101)
     expected.append(12)
@@ -124,11 +122,8 @@ def test_every_escape_is_resolved_into_utf8() raises:
     expected.append(104)
     expected.append(9)
     expected.append(105)
-    for byte in "Aé中😀".as_bytes():
-        expected.append(byte)
-    var got = List[UInt8]()
-    for byte in text.as_bytes():
-        got.append(byte)
+    expected.extend("Aé中😀".as_bytes())
+    var got = List[UInt8](text.as_bytes())
     assert_equal(len(got), len(expected))
     for index in range(len(got)):
         assert_equal(got[index], expected[index])
@@ -278,9 +273,7 @@ def test_the_edges_of_every_check_are_reached() raises:
     _ = refused('"\\u00G1"')
     _ = refused('"\\ud83d\\ue000"')
     var private = parse_json('"\\ue000"')
-    var got = List[UInt8]()
-    for byte in private.string(private.root()).as_bytes():
-        got.append(byte)
+    var got = List[UInt8](private.string(private.root()).as_bytes())
     assert_equal(len(got), 3)
     assert_equal(got[0], UInt8(0xEE))
     assert_equal(got[1], UInt8(0x80))

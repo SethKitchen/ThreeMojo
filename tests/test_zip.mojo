@@ -36,9 +36,7 @@ from std.testing import (
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a text as bytes."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 

@@ -39,9 +39,7 @@ def invalid_sequences() -> List[List[UInt8]]:
 
 def bytes_of(text: String) -> List[UInt8]:
     """Return a copy of valid text bytes."""
-    var out = List[UInt8]()
-    for byte in text.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](text.as_bytes())
     return out^
 
 

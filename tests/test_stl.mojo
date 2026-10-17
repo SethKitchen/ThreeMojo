@@ -63,9 +63,7 @@ def put_f32(mut bytes: List[UInt8], value: Float32):
 def header(text: String) -> List[UInt8]:
     """Return an 80-byte header that starts with `text`, padded with
     spaces."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     while len(bytes) < 80:
         bytes.append(0x20)
     return bytes^
@@ -102,9 +100,7 @@ def one_face(text: String, packed: Int = 0) -> List[UInt8]:
 
 def ascii_bytes(text: String) -> List[UInt8]:
     """Return a text as the bytes of a file."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 

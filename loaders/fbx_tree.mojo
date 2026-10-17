@@ -570,10 +570,7 @@ def parse_fbx_text(text: String) raises -> FbxDocument:
     var version = Int(digits)
     if version < MIN_ASCII_VERSION:
         raise Error("FBX: an ASCII file older than 7000: " + digits)
-    var bytes = List[UInt8]()
-    # The text holds `FBXVersion: `: the loop always runs.
-    for byte in text.as_bytes():  # pragma: no branch
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     var reader = _TextReader(bytes^)
     var document = FbxDocument(FBX_ASCII)
     document.version = version
