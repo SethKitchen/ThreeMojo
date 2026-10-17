@@ -75,6 +75,26 @@ def _append_tube_vertex(
     uvs.append(v)
 
 
+def _require_tube_radii(radius: Float32, tube: Float32, name: String) raises:
+    """Refuse a tube whose path radius or tube radius is not positive.
+
+    Args:
+        radius: The path radius.
+        tube: The tube radius.
+        name: `torus` or `torus knot`.
+
+    Returns:
+        Nothing. The call returns when both radii are positive.
+
+    Raises:
+        Error: If either radius is not positive.
+    """
+    if radius <= 0 or tube <= 0:
+        raise Error(
+            "A " + name + " needs a positive radius and a positive tube"
+        )
+
+
 def torus(
     radius: Length,
     tube: Length,
@@ -103,8 +123,7 @@ def torus(
             less than three, or the arc is not positive or is more than a
             turn.
     """
-    if radius.value <= 0 or tube.value <= 0:
-        raise Error("A torus needs a positive radius and a positive tube")
+    _require_tube_radii(radius.value, tube.value, "torus")
     if radial_segments < 3:
         raise Error("A torus needs at least three segments around its tube")
     if tubular_segments < 3:
@@ -197,8 +216,7 @@ def torus_knot(
         Error: If either radius is not positive, either segment count is
             less than three, or `p` or `q` is less than one.
     """
-    if radius.value <= 0 or tube.value <= 0:
-        raise Error("A torus knot needs a positive radius and a positive tube")
+    _require_tube_radii(radius.value, tube.value, "torus knot")
     if tubular_segments < 3:
         raise Error("A torus knot needs at least three segments along it")
     if radial_segments < 3:

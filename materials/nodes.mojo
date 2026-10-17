@@ -1138,6 +1138,23 @@ def require_unsigned_width(width: Int) raises:
         raise Error("An unsigned uniform has one to four components")
 
 
+def _require_noise_point(type: ValueType, name: String) raises:
+    """Refuse a noise point that is neither a vec2 nor a vec3.
+
+    Args:
+        type: The point's type.
+        name: Which noise reads the point.
+
+    Returns:
+        Nothing. The call returns when the point is a vec2 or a vec3.
+
+    Raises:
+        Error: If the point is another type.
+    """
+    if type != NODE_VEC2 and type != NODE_VEC3:
+        raise Error(name + " reads a vec2 or a vec3, not a " + type.name())
+
+
 struct NodeGraph(Copyable, Movable):
     """A graph of nodes being built, three.js's TSL expressions.
 
@@ -4429,10 +4446,7 @@ struct NodeGraph(Copyable, Movable):
         """
         self._check(p)
         var type = self._types[p.value]
-        if type != NODE_VEC2 and type != NODE_VEC3:
-            raise Error(
-                "Perlin noise reads a vec2 or a vec3, not a " + type.name()
-            )
+        _require_noise_point(type, "Perlin noise")
         return self._add(
             NODE_NOISE, NODE_FLOAT, p.value, value=Lanes(Float32(type.value))
         )
@@ -4668,10 +4682,7 @@ struct NodeGraph(Copyable, Movable):
         """
         self._check(position)
         var type = self._types[position.value]
-        if type != NODE_VEC2 and type != NODE_VEC3:
-            raise Error(
-                "Fractal noise reads a vec2 or a vec3, not a " + type.name()
-            )
+        _require_noise_point(type, "Fractal noise")
         var p = position
         if type == NODE_VEC2:
             p = self.join([position, self.float(0)])

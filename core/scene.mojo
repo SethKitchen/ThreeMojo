@@ -106,6 +106,24 @@ from objects.sprite import Sprite
 comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 
 
+def _refuse_range(index: Int, count: Int, message: String) raises:
+    """Refuse an index outside zero through `count`.
+
+    Args:
+        index: The index.
+        count: How many entries the list has.
+        message: The error text.
+
+    Returns:
+        Nothing. The call returns when the index names an entry.
+
+    Raises:
+        Error: If the index is negative or past the last entry.
+    """
+    if index < 0 or index >= count:
+        raise Error(message)
+
+
 def require_instanced_mesh(index: Int, count: Int) raises:
     """Refuse an instanced-mesh index the scene does not have.
 
@@ -119,8 +137,7 @@ def require_instanced_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If no instanced mesh has that index.
     """
-    if index < 0 or index >= count:
-        raise Error("No instanced mesh has that index")
+    _refuse_range(index, count, "No instanced mesh has that index")
 
 
 def require_skinned_mesh(index: Int, count: Int) raises:
@@ -136,8 +153,7 @@ def require_skinned_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If no skinned mesh has that index.
     """
-    if index < 0 or index >= count:
-        raise Error("No skinned mesh has that index")
+    _refuse_range(index, count, "No skinned mesh has that index")
 
 
 def require_mesh(index: Int, count: Int) raises:
@@ -153,8 +169,7 @@ def require_mesh(index: Int, count: Int) raises:
     Raises:
         Error: If no mesh has that index.
     """
-    if index < 0 or index >= count:
-        raise Error("No mesh has that index")
+    _refuse_range(index, count, "No mesh has that index")
 
 
 def require_lod_index(index: Int, count: Int) raises:
@@ -170,8 +185,7 @@ def require_lod_index(index: Int, count: Int) raises:
     Raises:
         Error: If no LOD has that index.
     """
-    if index < 0 or index >= count:
-        raise Error("No LOD has that index")
+    _refuse_range(index, count, "No LOD has that index")
 
 
 struct _Links(Movable):
@@ -209,8 +223,25 @@ def require_scene_index(index: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last entry.
     """
-    if index < 0 or index >= count:
-        raise Error("Scene node index out of range")
+    _refuse_range(index, count, "Scene node index out of range")
+
+
+def _require_scene_node(value: Int, count: Int, name: String) raises:
+    """Refuse a draw whose node is past the scene.
+
+    Args:
+        value: The node's integer.
+        count: How many nodes the scene holds.
+        name: What to call the draw in the error.
+
+    Returns:
+        Nothing. The call returns when the node is inside the scene.
+
+    Raises:
+        Error: If the node is past the last node.
+    """
+    if value >= count:
+        raise Error(name + " must name a node that is in the scene")
 
 
 struct Scene(Movable):
@@ -392,8 +423,7 @@ struct Scene(Movable):
         Raises:
             Error: If the mesh names a node the scene does not have.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error("A mesh must name a node that is in the scene")
+        _require_scene_node(mesh.node.value, len(self._nodes), "A mesh")
         self.meshes.append(mesh)
 
     def add_instanced_mesh(mut self, var mesh: InstancedMesh) raises:
@@ -408,10 +438,9 @@ struct Scene(Movable):
         Raises:
             Error: If it names a node the scene does not have.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error(
-                "An instanced mesh must name a node that is in the scene"
-            )
+        _require_scene_node(
+            mesh.node.value, len(self._nodes), "An instanced mesh"
+        )
         self.instanced_meshes.append(mesh^)
 
     def add_batched_mesh(mut self, var mesh: BatchedMesh) raises:
@@ -426,8 +455,7 @@ struct Scene(Movable):
         Raises:
             Error: If it names a node the scene does not have.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error("A batched mesh must name a node that is in the scene")
+        _require_scene_node(mesh.node.value, len(self._nodes), "A batched mesh")
         self.batched_meshes.append(mesh^)
 
     def add_lod(mut self, var lod: Lod) raises:
@@ -446,14 +474,12 @@ struct Scene(Movable):
             Error: If it names a node the scene does not have, or a level
                 cannot go under the LOD's node: the LOD's node is under it.
         """
-        if lod.node.value >= len(self._nodes):
-            raise Error("An LOD must name a node that is in the scene")
+        _require_scene_node(lod.node.value, len(self._nodes), "An LOD")
         var above = self._chain(lod.node)
         for level in lod.levels:
-            if level.object.value >= len(self._nodes):
-                raise Error(
-                    "An LOD level must name a node that is in the scene"
-                )
+            _require_scene_node(
+                level.object.value, len(self._nodes), "An LOD level"
+            )
             self._refuse_listed(level.object.value, above)
         for level in lod.levels:
             self.add(level.object, parent=lod.node)
@@ -539,8 +565,7 @@ struct Scene(Movable):
             Error: If it names a node the scene does not have, or one of
                 its bones does.
         """
-        if mesh.node.value >= len(self._nodes):
-            raise Error("A skinned mesh must name a node that is in the scene")
+        _require_scene_node(mesh.node.value, len(self._nodes), "A skinned mesh")
         for index in range(mesh.bone_count()):  # pragma: no branch
             var bone = mesh.skeleton.node(index)
             if bone.value < 0 or bone.value >= len(self._nodes):
@@ -563,8 +588,7 @@ struct Scene(Movable):
         Raises:
             Error: If the line names a node the scene does not have.
         """
-        if line.node.value >= len(self._nodes):
-            raise Error("A line must name a node that is in the scene")
+        _require_scene_node(line.node.value, len(self._nodes), "A line")
         self.lines.append(line)
 
     def add_gaussian_splat(mut self, var splat: GaussianSplat) raises:
@@ -594,8 +618,7 @@ struct Scene(Movable):
         Raises:
             Error: If the points name a node the scene does not have.
         """
-        if points.node.value >= len(self._nodes):
-            raise Error("Points must name a node that is in the scene")
+        _require_scene_node(points.node.value, len(self._nodes), "Points")
         self.points.append(points)
 
     def add_sprite(mut self, sprite: Sprite) raises:
@@ -611,8 +634,7 @@ struct Scene(Movable):
         Raises:
             Error: If the sprite names a node the scene does not have.
         """
-        if sprite.node.value >= len(self._nodes):
-            raise Error("A sprite must name a node that is in the scene")
+        _require_scene_node(sprite.node.value, len(self._nodes), "A sprite")
         self.sprites.append(sprite)
 
     def add_wide_line(mut self, line: LineSegments2) raises:
@@ -629,8 +651,7 @@ struct Scene(Movable):
         Raises:
             Error: If the line names a node the scene does not have.
         """
-        if line.node.value >= len(self._nodes):
-            raise Error("A wide line must name a node that is in the scene")
+        _require_scene_node(line.node.value, len(self._nodes), "A wide line")
         self.wide_lines.append(line)
 
     def add_clipping_group(mut self, var group: ClippingGroup) raises:
@@ -647,10 +668,9 @@ struct Scene(Movable):
             Error: If the group names a node the scene does not have, or a
                 node that already holds a clipping group.
         """
-        if group.node.value >= len(self._nodes):
-            raise Error(
-                "A clipping group must name a node that is in the scene"
-            )
+        _require_scene_node(
+            group.node.value, len(self._nodes), "A clipping group"
+        )
         for index in range(len(self.clipping_groups)):
             if self.clipping_groups[index].node == group.node:
                 raise Error("A node holds one clipping group at most")
