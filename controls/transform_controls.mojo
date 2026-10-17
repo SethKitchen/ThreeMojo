@@ -1194,13 +1194,13 @@ struct TransformControls(Copyable, Movable):
         var own = _handle_color(handle)
         # three.js's `setColors` recolors the red, green and blue
         # materials, and the yellow of the eye's ring with the active one.
-        if _same(own, RED):
+        if own == RED:
             own = self.x_color
-        elif _same(own, GREEN):
+        elif own == GREEN:
             own = self.y_color
-        elif _same(own, BLUE):
+        elif own == BLUE:
             own = self.z_color
-        elif _same(own, YELLOW):
+        elif own == YELLOW:
             own = self.active_color
         return FloatColor(srgb=self.active_color) if active else FloatColor(
             srgb=own
@@ -1220,11 +1220,6 @@ comptime ACTIVE_COLOR = YELLOW
 # How nearly a rotation handle's axis may point at the eye and still show
 # its helper line, three.js's 0.9.
 comptime AXIS_FACING = Float32(0.9)
-
-
-def _same(a: Color, b: Color) -> Bool:
-    """Return whether two colors are one: every channel equal."""
-    return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
 
 
 def _within(value: Float32, low: Length, high: Length) -> Float32:

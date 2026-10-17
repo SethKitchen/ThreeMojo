@@ -358,7 +358,7 @@ def to_non_indexed(
     return out^
 
 
-struct _Vector(ImplicitlyCopyable):
+struct _Vector(Equatable, ImplicitlyCopyable):
     """A three.js `Vector3` in doubles."""
 
     var x: Float64
@@ -378,6 +378,28 @@ struct _Vector(ImplicitlyCopyable):
             True when `x`, `y`, and `z` are all finite.
         """
         return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every component is exactly equal.
+
+        Args:
+            other: The vector to compare with.
+
+        Returns:
+            Whether the two are the same vector.
+        """
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any component differs.
+
+        Args:
+            other: The vector to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
 
     def length_sq(self) -> Float64:
         """Return three.js's `lengthSq`."""
@@ -418,9 +440,7 @@ struct _Vector(ImplicitlyCopyable):
         ):
             theta = self.dot(other) / sqrt(squared)
         else:
-            if (self.x == 0 and self.y == 0 and self.z == 0) or (
-                other.x == 0 and other.y == 0 and other.z == 0
-            ):
+            if self == Self(0, 0, 0) or other == Self(0, 0, 0):
                 return pi / 2
             theta = self.normalized().dot(other.normalized())
         return acos(min(max(theta, -1.0), 1.0))

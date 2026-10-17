@@ -64,7 +64,7 @@ from std.math import inf
 from std.memory import bitcast
 
 
-struct Color(ImplicitlyCopyable):
+struct Color(Equatable, ImplicitlyCopyable):
     """An 8-bit-per-channel RGBA color."""
 
     var r: UInt8
@@ -101,6 +101,33 @@ struct Color(ImplicitlyCopyable):
         """Return this color as a 24-bit value, three.js's `getHex`. Alpha
         is left out, as there."""
         return (Int(self.r) << 16) | (Int(self.g) << 8) | Int(self.b)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every channel is the same.
+
+        Args:
+            other: The color to compare with.
+
+        Returns:
+            Whether red, green, blue, and alpha match.
+        """
+        return (
+            self.r == other.r
+            and self.g == other.g
+            and self.b == other.b
+            and self.a == other.a
+        )
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any channel differs.
+
+        Args:
+            other: The color to compare with.
+
+        Returns:
+            Whether the two colors differ.
+        """
+        return not self == other
 
 
 def rgb_is_white(color: Color) -> Bool:

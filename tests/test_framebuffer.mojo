@@ -603,6 +603,17 @@ def test_encoding_with_the_table_matches_encoding() raises:
     _assert_same(linear_out.encode_with(light, table), linear_out.encode(light))
 
 
+def test_a_color_matches_when_every_channel_matches() raises:
+    var red = Color(255, 0, 0, 255)
+    assert_true(red == Color(255, 0, 0, 255))
+    assert_false(red != Color(255, 0, 0, 255))
+    assert_false(red == Color(0, 0, 0, 255))
+    assert_true(red != Color(0, 0, 0, 255))
+    assert_false(red == Color(255, 1, 0, 255))
+    assert_false(red == Color(255, 0, 1, 255))
+    assert_false(red == Color(255, 0, 0, 0))
+
+
 def _assert_same(left: Color, right: Color) raises:
     """Fail unless the two colors hold the same four bytes."""
     assert_equal(left.r, right.r)
