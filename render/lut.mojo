@@ -33,8 +33,7 @@ from core.ordinal import ordinal_valid
 
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
-from std.benchmark import black_box
-from math.utils import js_round_int
+from math.utils import js_round_int, rounded_product
 from math.finite import require_finite
 from std.math import max, min
 
@@ -188,9 +187,9 @@ def _mix(
     # rounds it. A fused multiply-add rounds once, and a channel on a
     # midpoint of `canvas_pixels` then rounds the other way.
     return (
-        a[0] + black_box((b[0] - a[0]) * t),
-        a[1] + black_box((b[1] - a[1]) * t),
-        a[2] + black_box((b[2] - a[2]) * t),
+        a[0] + rounded_product(b[0] - a[0], t),
+        a[1] + rounded_product(b[1] - a[1], t),
+        a[2] + rounded_product(b[2] - a[2], t),
     )
 
 

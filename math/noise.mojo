@@ -29,8 +29,7 @@ transform overflows is also refused before integer indexing.
 `random()` method and uses `Math.random` by default, which cannot be seeded.
 """
 
-from math.utils import SeededRandom
-from std.benchmark import black_box
+from math.utils import SeededRandom, rounded_product
 from math.finite import require_finite
 from std.math import floor, sqrt
 
@@ -759,24 +758,6 @@ comptime _SIMPLEX = SIMD[DType.uint8, 256](
 )
 
 
-def _mul(a: Float64, b: Float64) -> Float64:
-    """Return a product rounded on its own, before any sum uses it.
-
-    Mojo contracts `a * b + c` into one fused multiply-add by default, and
-    that rounds once where JavaScript rounds twice. The last bit then
-    differs from three.js. The barrier keeps the product a value of its own.
-    A product by zero, one or a power of two is exact and needs none.
-
-    Args:
-        a: One factor.
-        b: The other.
-
-    Returns:
-        The rounded product.
-    """
-    return black_box(a * b)
-
-
 def _check_finite(value: Float64) raises:
     """Refuse a coordinate that is not a finite number.
 
@@ -832,7 +813,7 @@ def _fade(t: Float64) -> Float64:
     Returns:
         The eased fraction.
     """
-    return t * t * t * (_mul(t, _mul(t, 6) - 15) + 10)
+    return t * t * t * (rounded_product(t, rounded_product(t, 6) - 15) + 10)
 
 
 def _lerp(x: Float64, y: Float64, t: Float64) -> Float64:
@@ -846,7 +827,7 @@ def _lerp(x: Float64, y: Float64, t: Float64) -> Float64:
     Returns:
         The mix.
     """
-    return _mul(1 - t, x) + _mul(t, y)
+    return rounded_product(1 - t, x) + rounded_product(t, y)
 
 
 def _grad(hash: Int, x: Float64, y: Float64, z: Float64) -> Float64:
@@ -1083,11 +1064,11 @@ struct SimplexNoise(Copyable, Movable):
         _check_finite(xin)
         _check_finite(yin)
         var f2 = 0.5 * (sqrt(3.0) - 1.0)
-        var s = _mul(xin + yin, f2)
+        var s = rounded_product(xin + yin, f2)
         var i = floor(xin + s)
         var j = floor(yin + s)
         var g2 = (3.0 - sqrt(3.0)) / 6.0
-        var t = _mul(i + j, g2)
+        var t = rounded_product(i + j, g2)
         # Any nonfinite cell also makes this sum nonfinite. Check before
         # _wrap converts the cells to integer permutation indices.
         _check_lattice(t)
@@ -1100,17 +1081,23 @@ struct SimplexNoise(Copyable, Movable):
             j1 = 0
         var x1 = x0 - Float64(i1) + g2
         var y1 = y0 - Float64(j1) + g2
-        var x2 = x0 - 1.0 + _mul(2.0, g2)
-        var y2 = y0 - 1.0 + _mul(2.0, g2)
+        var x2 = x0 - 1.0 + rounded_product(2.0, g2)
+        var y2 = y0 - 1.0 + rounded_product(2.0, g2)
         var ii = _wrap(i)
         var jj = _wrap(j)
         ref perm = self.perm
         var gi0 = perm[ii + perm[jj]] % 12
         var gi1 = perm[ii + i1 + perm[jj + j1]] % 12
         var gi2 = perm[ii + 1 + perm[jj + 1]] % 12
-        var n0 = _corner2(0.5 - _mul(x0, x0) - _mul(y0, y0), gi0, x0, y0)
-        var n1 = _corner2(0.5 - _mul(x1, x1) - _mul(y1, y1), gi1, x1, y1)
-        var n2 = _corner2(0.5 - _mul(x2, x2) - _mul(y2, y2), gi2, x2, y2)
+        var n0 = _corner2(
+            0.5 - rounded_product(x0, x0) - rounded_product(y0, y0), gi0, x0, y0
+        )
+        var n1 = _corner2(
+            0.5 - rounded_product(x1, x1) - rounded_product(y1, y1), gi1, x1, y1
+        )
+        var n2 = _corner2(
+            0.5 - rounded_product(x2, x2) - rounded_product(y2, y2), gi2, x2, y2
+        )
         return 70.0 * (n0 + n1 + n2)
 
     def noise3d(
@@ -1133,12 +1120,12 @@ struct SimplexNoise(Copyable, Movable):
         _check_finite(yin)
         _check_finite(zin)
         var f3 = 1.0 / 3.0
-        var s = _mul(xin + yin + zin, f3)
+        var s = rounded_product(xin + yin + zin, f3)
         var i = floor(xin + s)
         var j = floor(yin + s)
         var k = floor(zin + s)
         var g3 = 1.0 / 6.0
-        var t = _mul(i + j + k, g3)
+        var t = rounded_product(i + j + k, g3)
         _check_lattice(t)
         var x0 = xin - (i - t)
         var y0 = yin - (j - t)
@@ -1199,12 +1186,12 @@ struct SimplexNoise(Copyable, Movable):
         var x1 = x0 - Float64(i1) + g3
         var y1 = y0 - Float64(j1) + g3
         var z1 = z0 - Float64(k1) + g3
-        var x2 = x0 - Float64(i2) + _mul(2.0, g3)
-        var y2 = y0 - Float64(j2) + _mul(2.0, g3)
-        var z2 = z0 - Float64(k2) + _mul(2.0, g3)
-        var x3 = x0 - 1.0 + _mul(3.0, g3)
-        var y3 = y0 - 1.0 + _mul(3.0, g3)
-        var z3 = z0 - 1.0 + _mul(3.0, g3)
+        var x2 = x0 - Float64(i2) + rounded_product(2.0, g3)
+        var y2 = y0 - Float64(j2) + rounded_product(2.0, g3)
+        var z2 = z0 - Float64(k2) + rounded_product(2.0, g3)
+        var x3 = x0 - 1.0 + rounded_product(3.0, g3)
+        var y3 = y0 - 1.0 + rounded_product(3.0, g3)
+        var z3 = z0 - 1.0 + rounded_product(3.0, g3)
         var ii = _wrap(i)
         var jj = _wrap(j)
         var kk = _wrap(k)
@@ -1214,16 +1201,44 @@ struct SimplexNoise(Copyable, Movable):
         var gi2 = perm[ii + i2 + perm[jj + j2 + perm[kk + k2]]] % 12
         var gi3 = perm[ii + 1 + perm[jj + 1 + perm[kk + 1]]] % 12
         var n0 = _corner3(
-            0.6 - _mul(x0, x0) - _mul(y0, y0) - _mul(z0, z0), gi0, x0, y0, z0
+            0.6
+            - rounded_product(x0, x0)
+            - rounded_product(y0, y0)
+            - rounded_product(z0, z0),
+            gi0,
+            x0,
+            y0,
+            z0,
         )
         var n1 = _corner3(
-            0.6 - _mul(x1, x1) - _mul(y1, y1) - _mul(z1, z1), gi1, x1, y1, z1
+            0.6
+            - rounded_product(x1, x1)
+            - rounded_product(y1, y1)
+            - rounded_product(z1, z1),
+            gi1,
+            x1,
+            y1,
+            z1,
         )
         var n2 = _corner3(
-            0.6 - _mul(x2, x2) - _mul(y2, y2) - _mul(z2, z2), gi2, x2, y2, z2
+            0.6
+            - rounded_product(x2, x2)
+            - rounded_product(y2, y2)
+            - rounded_product(z2, z2),
+            gi2,
+            x2,
+            y2,
+            z2,
         )
         var n3 = _corner3(
-            0.6 - _mul(x3, x3) - _mul(y3, y3) - _mul(z3, z3), gi3, x3, y3, z3
+            0.6
+            - rounded_product(x3, x3)
+            - rounded_product(y3, y3)
+            - rounded_product(z3, z3),
+            gi3,
+            x3,
+            y3,
+            z3,
         )
         return 32.0 * (n0 + n1 + n2 + n3)
 
@@ -1250,12 +1265,12 @@ struct SimplexNoise(Copyable, Movable):
         _check_finite(w)
         var f4 = (sqrt(5.0) - 1.0) / 4.0
         var g4 = (5.0 - sqrt(5.0)) / 20.0
-        var s = _mul(x + y + z + w, f4)
+        var s = rounded_product(x + y + z + w, f4)
         var i = floor(x + s)
         var j = floor(y + s)
         var k = floor(z + s)
         var l = floor(w + s)
-        var t = _mul(i + j + k + l, g4)
+        var t = rounded_product(i + j + k + l, g4)
         _check_lattice(t)
         var x0 = x - (i - t)
         var y0 = y - (j - t)
@@ -1290,18 +1305,18 @@ struct SimplexNoise(Copyable, Movable):
         var y1 = y0 - Float64(j1) + g4
         var z1 = z0 - Float64(k1) + g4
         var w1 = w0 - Float64(l1) + g4
-        var x2 = x0 - Float64(i2) + _mul(2.0, g4)
-        var y2 = y0 - Float64(j2) + _mul(2.0, g4)
-        var z2 = z0 - Float64(k2) + _mul(2.0, g4)
-        var w2 = w0 - Float64(l2) + _mul(2.0, g4)
-        var x3 = x0 - Float64(i3) + _mul(3.0, g4)
-        var y3 = y0 - Float64(j3) + _mul(3.0, g4)
-        var z3 = z0 - Float64(k3) + _mul(3.0, g4)
-        var w3 = w0 - Float64(l3) + _mul(3.0, g4)
-        var x4 = x0 - 1.0 + _mul(4.0, g4)
-        var y4 = y0 - 1.0 + _mul(4.0, g4)
-        var z4 = z0 - 1.0 + _mul(4.0, g4)
-        var w4 = w0 - 1.0 + _mul(4.0, g4)
+        var x2 = x0 - Float64(i2) + rounded_product(2.0, g4)
+        var y2 = y0 - Float64(j2) + rounded_product(2.0, g4)
+        var z2 = z0 - Float64(k2) + rounded_product(2.0, g4)
+        var w2 = w0 - Float64(l2) + rounded_product(2.0, g4)
+        var x3 = x0 - Float64(i3) + rounded_product(3.0, g4)
+        var y3 = y0 - Float64(j3) + rounded_product(3.0, g4)
+        var z3 = z0 - Float64(k3) + rounded_product(3.0, g4)
+        var w3 = w0 - Float64(l3) + rounded_product(3.0, g4)
+        var x4 = x0 - 1.0 + rounded_product(4.0, g4)
+        var y4 = y0 - 1.0 + rounded_product(4.0, g4)
+        var z4 = z0 - 1.0 + rounded_product(4.0, g4)
+        var w4 = w0 - 1.0 + rounded_product(4.0, g4)
         var ii = _wrap(i)
         var jj = _wrap(j)
         var kk = _wrap(k)
@@ -1319,7 +1334,11 @@ struct SimplexNoise(Copyable, Movable):
         )
         var gi4 = perm[ii + 1 + perm[jj + 1 + perm[kk + 1 + perm[ll + 1]]]] % 32
         var n0 = _corner4(
-            0.6 - _mul(x0, x0) - _mul(y0, y0) - _mul(z0, z0) - _mul(w0, w0),
+            0.6
+            - rounded_product(x0, x0)
+            - rounded_product(y0, y0)
+            - rounded_product(z0, z0)
+            - rounded_product(w0, w0),
             gi0,
             x0,
             y0,
@@ -1327,7 +1346,11 @@ struct SimplexNoise(Copyable, Movable):
             w0,
         )
         var n1 = _corner4(
-            0.6 - _mul(x1, x1) - _mul(y1, y1) - _mul(z1, z1) - _mul(w1, w1),
+            0.6
+            - rounded_product(x1, x1)
+            - rounded_product(y1, y1)
+            - rounded_product(z1, z1)
+            - rounded_product(w1, w1),
             gi1,
             x1,
             y1,
@@ -1335,7 +1358,11 @@ struct SimplexNoise(Copyable, Movable):
             w1,
         )
         var n2 = _corner4(
-            0.6 - _mul(x2, x2) - _mul(y2, y2) - _mul(z2, z2) - _mul(w2, w2),
+            0.6
+            - rounded_product(x2, x2)
+            - rounded_product(y2, y2)
+            - rounded_product(z2, z2)
+            - rounded_product(w2, w2),
             gi2,
             x2,
             y2,
@@ -1343,7 +1370,11 @@ struct SimplexNoise(Copyable, Movable):
             w2,
         )
         var n3 = _corner4(
-            0.6 - _mul(x3, x3) - _mul(y3, y3) - _mul(z3, z3) - _mul(w3, w3),
+            0.6
+            - rounded_product(x3, x3)
+            - rounded_product(y3, y3)
+            - rounded_product(z3, z3)
+            - rounded_product(w3, w3),
             gi3,
             x3,
             y3,
@@ -1351,7 +1382,11 @@ struct SimplexNoise(Copyable, Movable):
             w3,
         )
         var n4 = _corner4(
-            0.6 - _mul(x4, x4) - _mul(y4, y4) - _mul(z4, z4) - _mul(w4, w4),
+            0.6
+            - rounded_product(x4, x4)
+            - rounded_product(y4, y4)
+            - rounded_product(z4, z4)
+            - rounded_product(w4, w4),
             gi4,
             x4,
             y4,

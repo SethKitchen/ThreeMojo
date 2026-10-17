@@ -47,9 +47,8 @@ from geometries.convex import convex
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.bounds import Plane
 from math.quaternion import Quaternion, quaternion_terms
-from math.utils import SeededRandom
+from math.utils import SeededRandom, rounded_product
 from math.vector3 import Vector3
-from std.benchmark import black_box
 from std.collections import Set
 from std.math import cos, pi, sin, sqrt
 from units.si import Angle, KILOGRAM, Length, METER, Mass, RADIAN
@@ -427,16 +426,14 @@ def _corner(coords: List[Float32], at: Int) -> _D:
     )
 
 
-def _mul(a: Float64, b: Float64) -> Float64:
-    """Return a product rounded on its own, as JavaScript rounds it: never
-    fused into a sum."""
-    return black_box(a * b)
-
-
 def _dot(a: _D, b: _D) -> Float64:
     """Return a dot product of the first three numbers, in three.js's
     order, each product rounded on its own."""
-    return _mul(a[0], b[0]) + _mul(a[1], b[1]) + _mul(a[2], b[2])
+    return (
+        rounded_product(a[0], b[0])
+        + rounded_product(a[1], b[1])
+        + rounded_product(a[2], b[2])
+    )
 
 
 @fieldwise_init
@@ -480,9 +477,9 @@ def _crossing(plane: _LocalPlane, start: _D, end: _D) -> _D:
         plane.normal, direction
     )
     return _D(
-        start[0] + _mul(direction[0], t),
-        start[1] + _mul(direction[1], t),
-        start[2] + _mul(direction[2], t),
+        start[0] + rounded_product(direction[0], t),
+        start[1] + rounded_product(direction[1], t),
+        start[2] + rounded_product(direction[2], t),
         0,
     )
 
@@ -509,9 +506,9 @@ def _d(v: Vector3) -> _D:
 def _cross(a: _D, b: _D) -> _D:
     """Return three.js's `crossVectors`, in doubles."""
     return _D(
-        _mul(a[1], b[2]) - _mul(a[2], b[1]),
-        _mul(a[2], b[0]) - _mul(a[0], b[2]),
-        _mul(a[0], b[1]) - _mul(a[1], b[0]),
+        rounded_product(a[1], b[2]) - rounded_product(a[2], b[1]),
+        rounded_product(a[2], b[0]) - rounded_product(a[0], b[2]),
+        rounded_product(a[0], b[1]) - rounded_product(a[1], b[0]),
         0,
     )
 
@@ -537,13 +534,22 @@ def _about(v: _D, axis: _D, angle: Float64) -> _D:
     var qy = axis[1] * s
     var qz = axis[2] * s
     var qw = cos(angle / 2)
-    var tx = 2 * (_mul(qy, v[2]) - _mul(qz, v[1]))
-    var ty = 2 * (_mul(qz, v[0]) - _mul(qx, v[2]))
-    var tz = 2 * (_mul(qx, v[1]) - _mul(qy, v[0]))
+    var tx = 2 * (rounded_product(qy, v[2]) - rounded_product(qz, v[1]))
+    var ty = 2 * (rounded_product(qz, v[0]) - rounded_product(qx, v[2]))
+    var tz = 2 * (rounded_product(qx, v[1]) - rounded_product(qy, v[0]))
     return _D(
-        v[0] + _mul(qw, tx) + _mul(qy, tz) - _mul(qz, ty),
-        v[1] + _mul(qw, ty) + _mul(qz, tx) - _mul(qx, tz),
-        v[2] + _mul(qw, tz) + _mul(qx, ty) - _mul(qy, tx),
+        v[0]
+        + rounded_product(qw, tx)
+        + rounded_product(qy, tz)
+        - rounded_product(qz, ty),
+        v[1]
+        + rounded_product(qw, ty)
+        + rounded_product(qz, tx)
+        - rounded_product(qx, tz),
+        v[2]
+        + rounded_product(qw, tz)
+        + rounded_product(qx, ty)
+        - rounded_product(qy, tx),
         0,
     )
 
@@ -582,16 +588,31 @@ def _local_plane(plane: _LocalPlane, object: BreakableObject) -> _LocalPlane:
     ]
     var p = plane.normal * -plane.constant
     var reference = _D(
-        _mul(e[0], p[0]) + _mul(e[1], p[1]) + _mul(e[2], p[2]) - e[12],
-        _mul(e[4], p[0]) + _mul(e[5], p[1]) + _mul(e[6], p[2]) - e[13],
-        _mul(e[8], p[0]) + _mul(e[9], p[1]) + _mul(e[10], p[2]) - e[14],
+        rounded_product(e[0], p[0])
+        + rounded_product(e[1], p[1])
+        + rounded_product(e[2], p[2])
+        - e[12],
+        rounded_product(e[4], p[0])
+        + rounded_product(e[5], p[1])
+        + rounded_product(e[6], p[2])
+        - e[13],
+        rounded_product(e[8], p[0])
+        + rounded_product(e[9], p[1])
+        + rounded_product(e[10], p[2])
+        - e[14],
         0,
     )
     var n = plane.normal
     var normal = _D(
-        _mul(e[0], n[0]) + _mul(e[1], n[1]) + _mul(e[2], n[2]),
-        _mul(e[4], n[0]) + _mul(e[5], n[1]) + _mul(e[6], n[2]),
-        _mul(e[8], n[0]) + _mul(e[9], n[1]) + _mul(e[10], n[2]),
+        rounded_product(e[0], n[0])
+        + rounded_product(e[1], n[1])
+        + rounded_product(e[2], n[2]),
+        rounded_product(e[4], n[0])
+        + rounded_product(e[5], n[1])
+        + rounded_product(e[6], n[2]),
+        rounded_product(e[8], n[0])
+        + rounded_product(e[9], n[1])
+        + rounded_product(e[10], n[2]),
         0,
     )
     return _LocalPlane(normal, -_dot(reference, normal))
