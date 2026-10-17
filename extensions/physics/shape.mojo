@@ -46,7 +46,7 @@ from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import atan2, isfinite, sqrt
+from std.math import atan2, sqrt
 from units.si import Length, METER
 
 # Two hull faces are one face when their normals and offsets agree this
@@ -177,8 +177,10 @@ def any_perpendicular(n: Vector3) -> Vector3:
 # through degree five of finite Float32 coordinates fit in Float64.
 def _finite_vector(v: Vector3) raises:
     for i in range(3):  # pragma: no branch
-        if not isfinite(component(v, i)):
-            raise Error("A mass center or shape position must be finite")
+        require_finite(
+            Float64(component(v, i)),
+            "A mass center or shape position must be finite",
+        )
 
 
 def _narrow_finite(value: Float64) raises -> Float32:

@@ -1973,8 +1973,9 @@ struct Material(ImplicitlyCopyable):
             line_width.is_valid(),
             "A line width must be a positive, finite number",
         )
-        if not isfinite(dash_offset.to(METER)):
-            raise Error("A dash offset must be finite")
+        require_finite(
+            Float64(dash_offset.to(METER)), "A dash offset must be finite"
+        )
         var widened = line_width != DEFAULT_LINE_WIDTH or dash_offset != NO_DASH
         if widened and kind != BASIC:
             raise Error(
@@ -1997,8 +1998,9 @@ struct Material(ImplicitlyCopyable):
             point_size.is_valid(),
             "A point size must be a positive number of pixels",
         )
-        if not isfinite(rotation.to(RADIAN)):
-            raise Error("A sprite rotation must be finite")
+        require_finite(
+            Float64(rotation.to(RADIAN)), "A sprite rotation must be finite"
+        )
         if kind != BASIC and (
             point_size != DEFAULT_POINT_SIZE or not size_attenuation
         ):
@@ -2177,8 +2179,10 @@ struct Material(ImplicitlyCopyable):
             raise Error("A film thickness cannot be negative")
         if not is_unit_fraction(anisotropy):
             raise Error("An anisotropy must be between zero and one")
-        if not isfinite(anisotropy_rotation.to(RADIAN)):
-            raise Error("An anisotropy rotation must be finite")
+        require_finite(
+            Float64(anisotropy_rotation.to(RADIAN)),
+            "An anisotropy rotation must be finite",
+        )
         var lowest = min(
             min(sheen_color_map.value, sheen_roughness_map.value),
             min(

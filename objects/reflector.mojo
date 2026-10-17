@@ -53,6 +53,7 @@ from materials.glsl import compile_shader_material
 from materials.material import MaterialId, shader_material
 from materials.nodes import NodeProgramId
 from math.bounds import Plane
+from math.finite import require_finite
 from math.matrix4 import Matrix4
 from math.projection import look_at, view_to_screen
 from math.quaternion import Quaternion
@@ -68,7 +69,6 @@ from render.target import (
 from render.texture import Texture
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
-from std.math import isfinite
 from units.si import Length, METER
 
 # three.js's `textureWidth` and `textureHeight` default, in pixels.
@@ -585,8 +585,7 @@ def check_clip_bias(bias: Length) raises:
     Raises:
         Error: If it is not finite.
     """
-    if not isfinite(bias.to(METER)):
-        raise Error("A clip bias must be finite")
+    require_finite(Float64(bias.to(METER)), "A clip bias must be finite")
 
 
 struct Reflector(Movable):

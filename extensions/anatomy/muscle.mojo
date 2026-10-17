@@ -41,6 +41,7 @@ from math.finite import (
     require_finite,
     require_finite_group,
     require_positive_finite,
+    require_non_negative_finite,
 )
 from math.norm import squared_length2
 from generators.utils import Vec3d
@@ -91,8 +92,10 @@ comptime SOLVE_STEPS = 60
 
 
 def _check_normalized_length(value: Float64) raises:
-    if not (isfinite(value) and value >= 0.0):
-        raise Error("A normalized fiber length must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(value),
+        "A normalized fiber length must be finite and nonnegative",
+    )
 
 
 def _check_activation(value: Float64) raises:
@@ -566,8 +569,9 @@ def stored_moment_arm(
         Error: If the result does not fit a finite SI length.
     """
     var arm = lever.cross(pull).dot(unit_axis)
-    if not isfinite(Float32(arm)):
-        raise Error("A muscle moment arm must fit a finite SI length")
+    require_finite(
+        Float64(Float32(arm)), "A muscle moment arm must fit a finite SI length"
+    )
     return Length(Float32(arm), METER)
 
 

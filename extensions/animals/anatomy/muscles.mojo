@@ -91,7 +91,11 @@ The fish, shark, snake and spider muscles are in
 """
 
 from core.ordinal import require_index_in_count
-from math.finite import require_finite_group, require_positive_finite
+from math.finite import (
+    require_finite_group,
+    require_positive_finite,
+    require_non_negative_finite,
+)
 from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
@@ -126,7 +130,7 @@ from extensions.animals.registry import (
 )
 from extensions.animals.rig import Pose, Rig
 from extensions.sdf.vector import V3, Rigid, length, lerp
-from std.math import cos, isfinite, pow
+from std.math import cos, pow
 from units.si import DEGREE, KILOGRAM, METER, Angle, Length, Mass
 
 # The greyhound's biceps femoris share of body mass, a side.
@@ -216,8 +220,10 @@ struct MuscleSpec(Copyable, Movable):
         require_positive_finite(
             Float64(body_kg), "Fiber body mass must be finite and positive"
         )
-        if not (isfinite(self.source_kg) and self.source_kg >= 0.0):
-            raise Error("Fiber source mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.source_kg),
+            "Fiber source mass must be finite and nonnegative",
+        )
         var fiber: Float64
         if self.source_kg > 0.0:
             require_positive_finite(

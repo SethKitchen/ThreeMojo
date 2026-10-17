@@ -16,10 +16,14 @@ The humanoid's limb segments and the animals' body segments both use it.
 Sums are in `Float64`, so a million cells keep their precision.
 """
 
-from math.finite import require_finite, require_positive_finite
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_non_negative_finite,
+)
 from math.utils import min3
 from math.vector3 import Vector3
-from std.math import isfinite, sqrt
+from std.math import sqrt
 from units.si import (
     KILOGRAM,
     KILOGRAM_SQUARE_METER,
@@ -95,8 +99,9 @@ def require_segment_length(length: Float64) raises:
     Raises:
         Error: If the length is negative or not finite.
     """
-    if not (isfinite(length) and length >= 0.0):
-        raise Error("A segment length must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(length), "A segment length must be finite and nonnegative"
+    )
 
 
 @fieldwise_init
@@ -175,8 +180,10 @@ struct SegmentInertia(ImplicitlyCopyable):
             Error: If the mass properties, moment or SI result is invalid.
         """
         self.check()
-        if not (isfinite(moment.value) and moment.value >= 0.0):
-            raise Error("A gyration moment must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(moment.value),
+            "A gyration moment must be finite and nonnegative",
+        )
         var value = Float32(
             sqrt(Float64(moment.value) / Float64(self.mass.value))
         )
@@ -211,14 +218,17 @@ struct InertiaTally(Copyable, Movable):
         Raises:
             Error: If a value is not finite, or a mass or width is negative.
         """
-        if not (isfinite(m) and m >= 0.0):
-            raise Error("A cell mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(m), "A cell mass must be finite and nonnegative"
+        )
         comptime for axis in range(3):
-            if not isfinite(p.get_component(axis)):
-                raise Error("A cell center must be finite")
+            require_finite(
+                Float64(p.get_component(axis)), "A cell center must be finite"
+            )
             var w = widths.get_component(axis)
-            if not (isfinite(w) and w >= 0.0):
-                raise Error("Cell widths must be finite and nonnegative")
+            require_non_negative_finite(
+                Float64(w), "Cell widths must be finite and nonnegative"
+            )
         self._add_cell(m, p, widths)
 
     def _add_cell(mut self, m: Float64, p: Vector3, widths: Vector3):
@@ -262,8 +272,9 @@ struct InertiaTally(Copyable, Movable):
         self.second += other.second
 
     def _check_sums(self) raises:
-        if not (isfinite(self.mass) and self.mass >= 0.0):
-            raise Error("A tally mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.mass), "A tally mass must be finite and nonnegative"
+        )
         comptime for axis in range(3):
             require_finite(
                 Float64(self.first[axis]), "Tally first moments must be finite"

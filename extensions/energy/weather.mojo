@@ -33,6 +33,7 @@ and C of that model for the 21st day of each month.
 """
 
 from core.ordinal import require_positive
+from math.finite import require_finite
 from std.math import cos, exp, isfinite, pi
 from std.pathlib import Path
 from loaders.text_number import file_line
@@ -110,8 +111,9 @@ struct WeatherLocation(Copyable, Movable):
         require_longitude(lon)
         if not (zone >= -12 and zone <= 14):
             raise Error("A time zone must be from -12 to 14 hours")
-        if not isfinite(self.elevation.to(METER)):
-            raise Error("An elevation must be finite")
+        require_finite(
+            Float64(self.elevation.to(METER)), "An elevation must be finite"
+        )
 
 
 @fieldwise_init
