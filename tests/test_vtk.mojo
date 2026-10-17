@@ -6,6 +6,7 @@
 """Tests for `loaders.vtk`: the files in `assets/vtk/` read as three.js
 0.180's `VTKLoader` reads them, from `assets/vtk/three_vtk.mjs`."""
 
+from core.binary import append_big_endian
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from loaders.json import JsonDocument, NULL, parse_json
 from loaders.vtk import (
@@ -180,15 +181,11 @@ def _binary(
     """
     var out = List[UInt8]()
     for part in parts:
-        out.extend(List[UInt8](part.as_bytes()))
+        out.extend(part.as_bytes())
     for value in ints:
-        var bits = UInt32(value & 0xFFFFFFFF)
-        for k in range(4):
-            out.append(UInt8((bits >> UInt32(24 - 8 * k)) & 255))
+        append_big_endian(out, value & 0xFFFFFFFF, 4)
     for value in floats:
-        var bits = bitcast[DType.uint32](value)
-        for k in range(4):
-            out.append(UInt8((bits >> UInt32(24 - 8 * k)) & 255))
+        append_big_endian(out, Int(bitcast[DType.uint32](value)), 4)
     return out^
 
 

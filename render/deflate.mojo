@@ -867,9 +867,6 @@ def zlib_deflate(data: Span[UInt8, _], level: Int = 6) raises -> List[UInt8]:
     var second = fl << 6
     second |= 31 - ((120 << 8) | second) % 31
     out[1] = UInt8(second)
-    var bytes = List[UInt8](capacity=len(data))
-    for b in data:
-        bytes.append(b)
-    var sum = Int(adler32(bytes))
+    var sum = Int(adler32(data))
     store_big_endian(out, len(out) - 4, sum, 4)
     return out^

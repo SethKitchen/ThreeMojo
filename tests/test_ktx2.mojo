@@ -451,7 +451,7 @@ def with_key_values(var file: List[UInt8], entries: List[UInt8]) -> List[UInt8]:
 def entry(key: String, value: List[UInt8]) -> List[UInt8]:
     """Return one key and value entry, padded to four bytes."""
     var out = List[UInt8](length=4, fill=0)
-    out.extend(List[UInt8](key.as_bytes()))
+    out.extend(key.as_bytes())
     out.append(0)
     out.extend(value.copy())
     put(out, 0, len(out) - 4)

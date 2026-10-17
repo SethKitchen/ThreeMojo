@@ -309,7 +309,7 @@ struct _Builder(Movable):
         if name == "TOKENS":
             var text = List[UInt8]()
             for t in self.tokens:
-                text.extend(List[UInt8](t.as_bytes()))
+                text.extend(t.as_bytes())
                 text.append(0)
             if self.open_end:
                 _ = text.pop()
