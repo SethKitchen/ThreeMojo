@@ -15,10 +15,11 @@ a smaller box, shrunk by the radius, plus the radius along that normal. The
 cells nearest the edges bend round the corner, and the middle band stays
 flat, because every vertex in it points the same way.
 
-three.js's `BoxGeometry` with segments is not ported, so this builds the
-unit box itself, with three.js's `buildPlane` order and winding: the faces
-right, left, top, bottom, front, back, each a grid of cells, two triangles
-a cell. `box` here orders its faces differently and has no segments.
+This builds the unit box itself. Each triangle owns its corners, and each
+coordinate is rounded through `Float32` before the normal is taken. That
+rounding decides which texture half a flat face uses. The faces run right,
+left, top, bottom, front, back. Each face is a grid of cells, two triangles
+a cell.
 
 The texture coordinates are three.js's. Across each face, `u` and `v` are
 measured along the arc of the rounded edge and the flat band between, so a

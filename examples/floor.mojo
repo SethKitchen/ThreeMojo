@@ -32,9 +32,8 @@ smooth right half; the animation shows the left half boiling.
 
 Each half is a `plane` laid flat and positioned, with its texture coordinates
 rescaled so one copy of the image covers one meter of floor and the two halves
-tile in step across the seam. three.js would express that as `texture.repeat`;
-here it is a pass over the `uv` attribute, which `BufferGeometry` exists to
-allow.
+tile in step across the seam. `Texture.repeat` does that at sample time.
+This example writes the scale into the `uv` attribute.
 """
 
 from examples.output import (
