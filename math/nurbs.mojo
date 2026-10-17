@@ -55,7 +55,7 @@ from core.ordinal import (
 from geometries.parametric import ParametricSurface
 from math.curve_checks import check_curve_parameter
 from math.space_curve import Point3, SpaceCurve, normalized3, point3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.vector4 import Vector4
 from math.finite import require_finite
 from std.math import inf, isfinite
@@ -728,7 +728,7 @@ def _checked_vector(p: Point3) raises -> Vector3:
     for axis in range(3):  # pragma: no branch
         if abs(p[axis]) > 3.4028234663852886e38:
             raise Error("A NURBS point must fit in Float32")
-    return Vector3(Float32(p[0]), Float32(p[1]), Float32(p[2]))
+    return vector3_from_float64(p[0], p[1], p[2])
 
 
 struct NURBSCurve(SpaceCurve):

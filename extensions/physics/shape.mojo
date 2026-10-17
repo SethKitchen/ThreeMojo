@@ -45,7 +45,7 @@ from math.finite import (
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from std.math import atan2, sqrt
 from units.si import Length, METER
 
@@ -343,7 +343,7 @@ struct Polyhedron(Copyable, Movable):
         for v in self.vertices:
             sum += widen_vector(v)
         sum /= Float64(len(self.vertices))
-        return Vector3(Float32(sum[0]), Float32(sum[1]), Float32(sum[2]))
+        return vector3_from_float64(sum[0], sum[1], sum[2])
 
     def support(self, direction: Vector3) -> Float32:
         """Return how far the solid reaches along a direction.
