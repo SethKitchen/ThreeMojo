@@ -78,7 +78,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import gltf_pixels
-from loaders.bytes import ascii_digit, ascii_letter
+from loaders.js_text import is_js_word
 from loaders.js_number import (
     js_float32_text,
     js_number_text,
@@ -293,7 +293,7 @@ def usd_name(name: String, fallback: String) -> String:
     """
     var out = String()
     for b in name.as_bytes():
-        var keep = ascii_letter(Int(b)) or ascii_digit(Int(b)) or b == 95
+        var keep = is_js_word(b)
         if keep:
             out += chr(Int(b))
     if out.byte_length() == 0:
