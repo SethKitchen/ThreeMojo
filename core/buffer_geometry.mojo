@@ -282,6 +282,22 @@ struct MaterialIndex(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= 0
 
 
+def require_material_index(index: MaterialIndex) raises:
+    """Refuse a material index that is negative.
+
+    Args:
+        index: The group's material index.
+
+    Returns:
+        Nothing. The call returns when the index is zero or more.
+
+    Raises:
+        Error: If the index is negative.
+    """
+    if not index.is_valid():
+        raise Error("A group's material index cannot be negative")
+
+
 @fieldwise_init
 struct DrawRange(Equatable, ImplicitlyCopyable, Writable):
     """The part of a geometry's triangle stream that is drawn, three.js's
@@ -725,8 +741,7 @@ struct BufferGeometry(Movable):
         """
         if start < 0 or count < 0:
             raise Error("A group cannot start or run a negative distance")
-        if not material_index.is_valid():
-            raise Error("A group's material index cannot be negative")
+        require_material_index(material_index)
         self.groups.append(GeometryGroup(start, count, material_index))
 
     def clear_groups(mut self):

@@ -131,6 +131,22 @@ comptime POSITIVE_Z = 4
 comptime NEGATIVE_Z = 5
 
 
+def require_cube_face(index: Int) raises:
+    """Refuse a cube face that is none of the six.
+
+    Args:
+        index: The face, from zero.
+
+    Returns:
+        Nothing. The call returns when the index names a face.
+
+    Raises:
+        Error: If the index is negative or past the sixth face.
+    """
+    if index < 0 or index >= FACE_COUNT:
+        raise Error("A cube has six faces")
+
+
 @fieldwise_init
 struct CubeLayout(Equatable, ImplicitlyCopyable, Writable):
     """Which way round six images are, as a type rather than a bare int.
@@ -626,8 +642,7 @@ struct CubeTexture(Movable):
         Raises:
             Error: If the index names no face.
         """
-        if index < 0 or index >= FACE_COUNT:
-            raise Error("A cube has six faces")
+        require_cube_face(index)
         return self.faces[index]
 
     def sample(self, direction: Vector3) -> FloatColor:

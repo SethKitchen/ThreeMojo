@@ -48,6 +48,44 @@ from math.exact_predicates import (
 )
 from std.math import frexp, isfinite, ldexp, sqrt
 
+
+def require_hull_count(count: Int) raises:
+    """Refuse a convex hull with fewer than four points.
+
+    Args:
+        count: How many points the hull is given.
+
+    Returns:
+        Nothing. The call returns when there are at least four points.
+
+    Raises:
+        Error: If there are fewer than four points.
+    """
+    if count < 4:
+        raise Error("A convex hull needs at least four points")
+
+
+def require_hull_finite(x: Float64, y: Float64, z: Float64) raises:
+    """Refuse a convex-hull point that is not finite.
+
+    Args:
+        x: The first coordinate.
+        y: The second coordinate.
+        z: The third coordinate.
+
+    Returns:
+        Nothing. The call returns when all three coordinates are finite.
+
+    Raises:
+        Error: If any coordinate is not finite.
+    """
+    var x_bad = not isfinite(x)
+    var y_bad = not isfinite(y)
+    var z_bad = not isfinite(z)
+    if x_bad or y_bad or z_bad:
+        raise Error("A convex hull needs finite points")
+
+
 # JavaScript's `Number.EPSILON`: the gap between one and the next `Float64`.
 comptime DOUBLE_EPSILON = Float64(2.220446049250313e-16)
 """The Float64 gap from one to its next representable value."""
@@ -228,8 +266,7 @@ struct ConvexHull(Movable):
                 finite, or the points all lie on one point, one line or one
                 plane within the tolerance.
         """
-        if len(points) < 4:
-            raise Error("A convex hull needs at least four points")
+        require_hull_count(len(points))
         self.tolerance = -1
         self._scale_exponent = 0
         self.faces = List[Int]()
@@ -257,11 +294,7 @@ struct ConvexHull(Movable):
         self._new_faces = List[Int]()
         # Four points at least, checked above.
         for point in points:  # pragma: no branch
-            var x_bad = not isfinite(point[0])
-            var y_bad = not isfinite(point[1])
-            var z_bad = not isfinite(point[2])
-            if x_bad or y_bad or z_bad:
-                raise Error("A convex hull needs finite points")
+            require_hull_finite(point[0], point[1], point[2])
             self._points.append(_Point(point[0], point[1], point[2]))
             self._source_points.append(point)
             self._vertex_prev.append(-1)

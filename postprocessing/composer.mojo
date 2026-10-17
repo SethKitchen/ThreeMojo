@@ -63,6 +63,7 @@ from postprocessing.antialiasing import (
     JitteredCamera,
     fxaa_light,
     jitter_offsets,
+    require_sample_level,
     smaa_light,
 )
 from postprocessing.display_nodes import (
@@ -748,8 +749,7 @@ def check_pass(step: Pass) raises:
         raise Error("A bloom's radius runs from zero to one")
     if step.kind == AFTERIMAGE and step.strength > 1:
         raise Error("An afterimage's damp runs from zero to one")
-    if step.sample_level < 0 or step.sample_level >= JITTER_LEVELS:
-        raise Error("A sample level runs from zero to five")
+    require_sample_level(step.sample_level)
     if step.accumulate_index < -1 or step.accumulate_index > TAA_SAMPLES:
         raise Error("An accumulate index runs from minus one to 32")
     check_ssao(step.ssao)

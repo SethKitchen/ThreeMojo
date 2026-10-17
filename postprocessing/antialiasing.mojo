@@ -713,6 +713,24 @@ def smaa_light(mut frame: RenderTarget):
 
 # The highest sample level; level `n` has two to the `n` samples.
 comptime JITTER_LEVELS = 6
+
+
+def require_sample_level(level: Int) raises:
+    """Refuse a sample level outside zero through five.
+
+    Args:
+        level: The level. Zero is one sample. Five is 32 samples.
+
+    Returns:
+        Nothing. The call returns when the level is zero through five.
+
+    Raises:
+        Error: If the level is outside zero through five.
+    """
+    if level < 0 or level >= JITTER_LEVELS:
+        raise Error("A sample level runs from zero to five")
+
+
 # `SSAARenderPass`'s `_JitterVectors`, every level in order, each pair an
 # x and a y in sixteenths of a pixel: one sample, then 2, 4, 8, 16 and 32.
 comptime _JITTER = SIMD[DType.int8, 128](
@@ -868,8 +886,7 @@ def jitter_offsets(level: Int) raises -> List[Vector2]:
     Raises:
         Error: If the level is outside zero through five.
     """
-    if level < 0 or level >= JITTER_LEVELS:
-        raise Error("A sample level runs from zero to five")
+    require_sample_level(level)
     var count = 1 << level
     var first = count - 1
     var offsets = List[Vector2](capacity=count)
