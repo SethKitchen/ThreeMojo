@@ -10,7 +10,8 @@ same way. `position_normal_surface` writes positions and normals.
 `textured_surface` also writes texture coordinates. `indexed_surface`
 also writes the triangle index. `record_kind` names the solid and starts
 its parameter record. `record_sweep` writes the theta sweep.
-`record_phi` writes the phi sweep. They share the checks for a positive
+`record_phi` writes the phi sweep. `record_tube` writes a tube's two
+radii. They share the checks for a positive
 radius, three segments, and positive or finite box extents. A count
 below one is `require_at_least_one` in `math.curve_checks`.
 """
@@ -26,7 +27,7 @@ from core.buffer_geometry import (
 from core.user_data import UserData
 from core.ordinal import require_positive
 from std.math import isfinite
-from units.si import Angle
+from units.si import Angle, Length
 
 
 def position_normal_surface(
@@ -156,6 +157,26 @@ def record_phi(
     """
     geometry.parameters.set_radians("phiStart", phi_start)
     geometry.parameters.set_radians("phiLength", phi_length)
+
+
+def record_tube(
+    mut geometry: BufferGeometry, radius: Length, tube: Length
+) raises:
+    """Record a tube's path radius and its tube radius.
+
+    Args:
+        geometry: The solid, after `record_kind`.
+        radius: The path radius.
+        tube: The tube radius.
+
+    Returns:
+        Nothing. `radius` and `tube` hold the lengths in meters.
+
+    Raises:
+        Error: If either length in meters is not finite.
+    """
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_meters("tube", tube)
 
 
 def require_positive_radius(radius: Float32, name: String) raises:

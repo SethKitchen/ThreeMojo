@@ -42,6 +42,7 @@ from core.buffer_geometry import (
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    record_tube,
     require_three_segments,
 )
 from geometries.circle import FULL_TURN, check_sweep
@@ -166,8 +167,7 @@ def torus(
         grid_index(radial_segments, tubular_segments, True),
     )
     record_kind(geometry, TORUS_GEOMETRY)
-    geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_meters("tube", tube)
+    record_tube(geometry, radius, tube)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
     geometry.parameters.set_radians("arc", arc)
@@ -290,8 +290,7 @@ def torus_knot(
         grid_index(tubular_segments, radial_segments, False),
     )
     record_kind(geometry, TORUS_KNOT_GEOMETRY)
-    geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_meters("tube", tube)
+    record_tube(geometry, radius, tube)
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("p", Float64(p))
