@@ -289,10 +289,7 @@ def _attribute(
     writer.string(array_type_name(attribute.component_type()))
     writer.key("array")
     if attribute.is_integer():
-        writer.begin_array()
-        for value in attribute.stored_values():
-            writer.integer(value)
-        writer.end_array()
+        writer.integers(attribute.stored_values())
     else:
         writer.numbers(attribute.packed())
     writer.key("normalized")
@@ -596,10 +593,7 @@ struct _Library(Movable):
             writer.key("type")
             writer.string(index_type(geometry.vertex_count()))
             writer.key("array")
-            writer.begin_array()
-            for entry in geometry.index:  # pragma: no branch
-                writer.integer(entry)
-            writer.end_array()
+            writer.integers(geometry.index)
             writer.end_object()
         if geometry.morph_count() > 0:
             writer.key("morphAttributes")
@@ -1836,10 +1830,7 @@ struct _Writer(Movable):
             writer.end_object()
         writer.end_array()
         writer.key("availableInstanceIds")
-        writer.begin_array()
-        for free in batch.available_instances:
-            writer.integer(free)
-        writer.end_array()
+        writer.integers(batch.available_instances)
         writer.key("availableGeometryIds")
         writer.begin_array()
         writer.end_array()
@@ -2068,10 +2059,7 @@ struct _Writer(Movable):
         if kind == LIGHT_PROBE:
             # three.js's `LightProbe.toJSON`: the 27 numbers, `sh.toArray`.
             writer.key("sh")
-            writer.begin_array()
-            for value in light.sh.to_array():  # pragma: no branch
-                writer.number(value)
-            writer.end_array()
+            writer.numbers(light.sh.to_array())
         if kind == RECT_AREA:
             writer.key("width")
             writer.number(light.width.to(METER))

@@ -145,6 +145,19 @@ def test_a_number_array_writes_each_value() raises:
         bad.numbers(nans)
 
 
+def test_an_integer_array_writes_each_value() raises:
+    var writer = JsonWriter()
+    var values = List[Int]()
+    values.append(1)
+    values.append(-3)
+    writer.integers(values)
+    assert_equal(writer.finish(), "[1,-3]")
+    var empty = JsonWriter()
+    var none = List[Int]()
+    empty.integers(none)
+    assert_equal(empty.finish(), "[]")
+
+
 def test_an_empty_raw_array_is_left_out() raises:
     var writer = JsonWriter()
     writer.begin_object()
