@@ -677,7 +677,7 @@ struct KTX2Container(Movable):
             )
         var size = self.image_bytes(level)
         var start = (layer * self.faces + face) * size
-        var bytes = List[UInt8](self.level_data[level][start : start + size])
+        var bytes = copy_bytes(self.level_data[level], start, size)
         if self.is_uastc_hdr():
             self._check_linear()
             return float_texture(

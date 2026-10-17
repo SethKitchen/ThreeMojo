@@ -14,6 +14,7 @@ precision, and the color and harmonics bytes exactly. Every way a file can
 be wrong is built byte by byte and refused.
 """
 
+from core.binary import copy_bytes
 from core.gaussian_splat_utils import GaussianSplatGeometry, write_covariance
 from loaders.gaussian_splat_ply import (
     detect_spherical_harmonics_degree,
@@ -488,7 +489,7 @@ def test_a_version_4_field_of_no_bytes_has_no_stream() raises:
 def test_version_4_that_is_wrong_is_refused() raises:
     var short = spz4(1, 0, one_splat_streams())
     with assert_raises(contains="invalid SPZ header"):
-        _ = parse_raw_spz_v4(List[UInt8](short[:19]))
+        _ = parse_raw_spz_v4(copy_bytes(short, 0, 19))
     var crowded = spz4(1, 0, one_splat_streams())
     put_u32(crowded, 8, 10000001)
     with assert_raises(contains="too many splats"):

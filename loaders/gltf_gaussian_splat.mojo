@@ -50,6 +50,7 @@ three numbers or not as many as the positions, or a band above a missing
 one is refused, with three.js's reasons.
 """
 
+from core.binary import copy_bytes
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 
 from core.gaussian_splat_utils import (
@@ -518,8 +519,7 @@ def _buffers(
         # GLB padding is not part of the declared buffer. Views must not
         # read it, even though the container supplies those extra bytes.
         if length < len(data):
-            var trimmed = List[UInt8](data[:length])
-            data = trimmed^
+            data = copy_bytes(data, 0, length)
         out.append(data^)
     return out^
 

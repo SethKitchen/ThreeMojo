@@ -5,6 +5,7 @@
 
 """Missing EXR codecs against independent OpenEXR 3.1.5 decode fixtures."""
 
+from core.binary import copy_bytes
 from render.exr import (
     decode,
     read_header,
@@ -148,7 +149,7 @@ def test_every_truncated_fixture_is_refused() raises:
         )
         for end in range(len(bytes)):
             with assert_raises():
-                _ = decode(List[UInt8](bytes[:end]))
+                _ = decode(copy_bytes(bytes, 0, end))
 
 
 def test_dwa_counters_and_rules_are_bounded() raises:
