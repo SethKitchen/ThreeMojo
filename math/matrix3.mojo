@@ -48,6 +48,23 @@ from std.math import cos, sin, isfinite
 from units.si import Angle
 
 
+def _require_matrix3(row: Int, column: Int) raises:
+    """Refuse a matrix index outside 0 to 2.
+
+    Args:
+        row: The row.
+        column: The column.
+
+    Returns:
+        Nothing. The call returns when both indexes are inside 0 to 2.
+
+    Raises:
+        Error: If either index is outside 0 to 2.
+    """
+    if row < 0 or row > 2 or column < 0 or column > 2:
+        raise Error("Matrix3 index out of range")
+
+
 struct Matrix3(Equatable, ImplicitlyCopyable):
     """A 3x3 matrix in column-major order."""
 
@@ -292,8 +309,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If either index is outside 0 to 2.
         """
-        if row < 0 or row > 2 or column < 0 or column > 2:
-            raise Error("Matrix3 index out of range")
+        _require_matrix3(row, column)
         return self.elements[column * 3 + row]
 
     def put(mut self, row: Int, column: Int, value: Float32) raises:
@@ -307,8 +323,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If either index is outside 0 to 2.
         """
-        if row < 0 or row > 2 or column < 0 or column > 2:
-            raise Error("Matrix3 index out of range")
+        _require_matrix3(row, column)
         self.elements[column * 3 + row] = value
 
     def set(

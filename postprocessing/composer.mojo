@@ -2845,6 +2845,21 @@ struct EffectComposer(Movable):
         self.memories.insert(index, List[FloatColor]())
         self.accumulations.insert(index, TaaMemory())
 
+    def _require_pass(self, index: Int) raises:
+        """Refuse a pass index the composer does not have.
+
+        Args:
+            index: Which pass.
+
+        Returns:
+            Nothing. The call returns when the index names a pass.
+
+        Raises:
+            Error: If the index is outside the passes.
+        """
+        if index < 0 or index >= len(self.passes):
+            raise Error("There is no pass at that index")
+
     def remove_pass(mut self, index: Int) raises:
         """Take a pass out: three.js's `removePass`.
 
@@ -2854,8 +2869,7 @@ struct EffectComposer(Movable):
         Raises:
             Error: If the index is outside the passes.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("There is no pass at that index")
+        self._require_pass(index)
         _ = self.passes.pop(index)
         _ = self.memories.pop(index)
         _ = self.accumulations.pop(index)
@@ -2878,8 +2892,7 @@ struct EffectComposer(Movable):
         Raises:
             Error: If the index names no save pass.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("There is no pass at that index")
+        self._require_pass(index)
         if self.passes[index].kind != SAVE:
             raise Error("Only a save pass keeps an image")
         if index >= len(self.memories):

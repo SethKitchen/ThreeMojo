@@ -138,6 +138,23 @@ def _determinant4[dtype: DType](e: Array[SIMD[dtype, 1], 16]) -> SIMD[dtype, 1]:
     )
 
 
+def _require_matrix4(row: Int, column: Int) raises:
+    """Refuse a matrix index outside 0 to 3.
+
+    Args:
+        row: The row.
+        column: The column.
+
+    Returns:
+        Nothing. The call returns when both indexes are inside 0 to 3.
+
+    Raises:
+        Error: If either index is outside 0 to 3.
+    """
+    if row < 0 or row > 3 or column < 0 or column > 3:
+        raise Error("Matrix4 index out of range")
+
+
 struct Matrix4(Equatable, ImplicitlyCopyable):
     """A 4x4 matrix in column-major order."""
 
@@ -157,14 +174,12 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
 
     def get(self, row: Int, column: Int) raises -> Float32:
         """Return the element at `row`, `column`, both zero-based."""
-        if row < 0 or row > 3 or column < 0 or column > 3:
-            raise Error("Matrix4 index out of range")
+        _require_matrix4(row, column)
         return self.elements[column * 4 + row]
 
     def put(mut self, row: Int, column: Int, value: Float32) raises:
         """Write `value` at `row`, `column`, both zero-based."""
-        if row < 0 or row > 3 or column < 0 or column > 3:
-            raise Error("Matrix4 index out of range")
+        _require_matrix4(row, column)
         self.elements[column * 4 + row] = value
 
     def set(

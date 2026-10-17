@@ -384,6 +384,21 @@ struct Pose(Movable):
         self.local = List[Rigid](length=bones, fill=identity())
         self.root = identity()
 
+    def _require_same_rig(self, rig: Rig) raises:
+        """Refuse a pose used on a rig with another bone count.
+
+        Args:
+            rig: The rig.
+
+        Returns:
+            Nothing. The call returns when the pose matches the rig.
+
+        Raises:
+            Error: If the pose is for another rig.
+        """
+        if len(self.local) != len(rig.bones):
+            raise Error("The pose is for another rig")
+
     def turn(mut self, rig: Rig, bone: String, axis: V3, angle: Float64) raises:
         """Turn one bone about its head joint, after any earlier turn.
 
@@ -398,8 +413,7 @@ struct Pose(Movable):
                 with another bone count.
         """
         var id = rig.bone(bone)
-        if len(self.local) != len(rig.bones):
-            raise Error("The pose is for another rig")
+        self._require_same_rig(rig)
         var turn = rotation_about(rig.head_of(id), axis, angle)
         self.local[id.value] = self.local[id.value].then(turn)
 
@@ -416,8 +430,7 @@ struct Pose(Movable):
             Error: If the pose is for a rig with another bone count, or
                 a parent does not name an earlier bone.
         """
-        if len(self.local) != len(rig.bones):
-            raise Error("The pose is for another rig")
+        self._require_same_rig(rig)
         var out = List[Rigid](capacity=len(rig.bones))
         for i in range(len(rig.bones)):
             var parent = rig.bones[i].parent

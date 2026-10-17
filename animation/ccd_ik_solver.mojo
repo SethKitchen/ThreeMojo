@@ -120,6 +120,22 @@ struct IkChain(Copyable, Movable):
         self.blend_factor = None
 
 
+def require_ik_blend(blend: Float32) raises:
+    """Refuse an IK blend outside zero through one.
+
+    Args:
+        blend: How far toward the solved pose the chain moves.
+
+    Returns:
+        Nothing. The call returns when the blend is inside that range.
+
+    Raises:
+        Error: If the blend is outside zero through one.
+    """
+    if not (blend >= 0 and blend <= 1):
+        raise Error("An IK blend factor must be from zero to one")
+
+
 struct CCDIKSolver(Movable):
     """Solves IK chains on one skinned mesh's skeleton: three.js's
     `CCDIKSolver`."""
@@ -157,8 +173,7 @@ struct CCDIKSolver(Movable):
                 raise Error("An IK chain cannot iterate a negative number")
             if Bool(chain.blend_factor):
                 var blend = chain.blend_factor.value()
-                if not (blend >= 0 and blend <= 1):
-                    raise Error("An IK blend factor must be from zero to one")
+                require_ik_blend(blend)
         self.mesh = mesh
         self.iks = iks^
 
@@ -197,8 +212,7 @@ struct CCDIKSolver(Movable):
         """
         if chain < 0 or chain >= len(self.iks):
             raise Error("No IK chain has that index")
-        if not (blend >= 0 and blend <= 1):
-            raise Error("An IK blend factor must be from zero to one")
+        require_ik_blend(blend)
         if self.mesh >= len(scene.skinned_meshes):
             raise Error("The IK solver's skinned mesh is not there")
         ref ik = self.iks[chain]

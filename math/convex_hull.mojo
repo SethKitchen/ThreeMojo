@@ -86,6 +86,23 @@ def require_hull_finite(x: Float64, y: Float64, z: Float64) raises:
         raise Error("A convex hull needs finite points")
 
 
+def require_hull_face(face: Int, count: Int) raises:
+    """Refuse a face index the hull does not have.
+
+    Args:
+        face: Which face.
+        count: How many faces the hull has.
+
+    Returns:
+        Nothing. The call returns when the index names a face.
+
+    Raises:
+        Error: If the index is negative or past the last face.
+    """
+    if face < 0 or face >= count:
+        raise Error("A face index is out of range")
+
+
 # JavaScript's `Number.EPSILON`: the gap between one and the next `Float64`.
 comptime DOUBLE_EPSILON = Float64(2.220446049250313e-16)
 """The Float64 gap from one to its next representable value."""
@@ -329,8 +346,7 @@ struct ConvexHull(Movable):
         Raises:
             Error: If either number is out of range.
         """
-        if face < 0 or face >= len(self.faces):
-            raise Error("A face index is out of range")
+        require_hull_face(face, len(self.faces))
         if corner < 0 or corner > 2:
             raise Error("A face has three corners")
         return self._edge_vertex[self._edge(self.faces[face], corner)]
@@ -347,8 +363,7 @@ struct ConvexHull(Movable):
         Raises:
             Error: If `face` is out of range.
         """
-        if face < 0 or face >= len(self.faces):
-            raise Error("A face index is out of range")
+        require_hull_face(face, len(self.faces))
         var n = self._normal[self.faces[face]]
         return Vector3(Float32(n.x), Float32(n.y), Float32(n.z))
 
