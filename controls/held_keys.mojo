@@ -34,6 +34,22 @@ comptime CAPITAL_Z = 90
 comptime CASE_OFFSET = 32
 
 
+def require_frame_time(delta: Duration) raises:
+    """Refuse a frame whose time is negative.
+
+    Args:
+        delta: The time since the last frame.
+
+    Returns:
+        Nothing. The call returns when the time is not negative.
+
+    Raises:
+        Error: If the time is negative.
+    """
+    if delta.value < 0:
+        raise Error("A frame's time must not be negative")
+
+
 def physical_key(key: Key) -> Key:
     """Return the key that types a character, as three.js's `event.code`
     names it: a capital letter is its small letter.

@@ -37,7 +37,7 @@ from extensions.building.construction import (
     inside_film,
 )
 from extensions.building.ids import ConstructionId
-from extensions.building.kinds import SpaceUse
+from extensions.building.kinds import SpaceUse, require_space_use
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Site
 from extensions.energy.ids import (
@@ -158,8 +158,7 @@ def typical_gains(use: SpaceUse) raises -> InternalGains:
     Raises:
         Error: If the use is not valid.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_space_use(use)
     var people: List[Float64] = [7, 1, 0, 3, 6, 3, 2, 3, 1, 0, 0, 20]
     var lighting: List[Float64] = [8, 5, 3, 8, 12, 5, 4, 7, 6, 4, 5, 10]
     var equipment: List[Float64] = [10, 0, 0, 1, 3, 4, 1, 25, 2, 0, 10, 5]
@@ -193,8 +192,7 @@ def gain_fraction(use: SpaceUse, hour: Int) raises -> Float64:
     Raises:
         Error: If the use is not valid or the hour is out of range.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_space_use(use)
     if hour < 0 or hour > 23:
         raise Error("An hour of the day must be 0 to 23")
     # The profile of each use: 0 work, 1 shop, 2 home, 3 always.
@@ -336,8 +334,7 @@ struct Zone(Copyable, Movable):
                 negative or not finite, a setpoint is not valid, or the
                 heating setpoint is above the cooling setpoint.
         """
-        if not self.use.is_valid():
-            raise Error("A space use is not valid")
+        require_space_use(self.use)
         _positive(self.volume.value, "A zone volume must be positive")
         _nonnegative(self.floor_area.value, "A floor area must be zero or more")
         _nonnegative(

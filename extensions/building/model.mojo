@@ -46,6 +46,7 @@ from extensions.building.kinds import (
     SectionShape,
     SpaceUse,
     WALL,
+    require_space_use,
     WINDOW,
 )
 from extensions.building.material import BuildingMaterial
@@ -1336,8 +1337,7 @@ struct Building(Movable):
         for i in range(len(self.spaces)):
             ref space = self.spaces[i]
             self.check_storey(space.storey)
-            if not space.use.is_valid():
-                raise Error("A space use is not valid")
+            require_space_use(space.use)
             if not space.cell.is_valid() or space.cell.value >= cells:
                 raise Error("A cell id is out of range")
             if space.cell.value != i:
@@ -1595,8 +1595,7 @@ def assemble(
         levels.append(z)
         var plan = List[Region]()
         for r in range(len(plans[s].spaces)):
-            if not plans[s].spaces[r].use.is_valid():
-                raise Error("A space use is not valid")
+            require_space_use(plans[s].spaces[r].use)
             plan.append(
                 Region(0, RegionId(r), plans[s].spaces[r].outline.copy())
             )

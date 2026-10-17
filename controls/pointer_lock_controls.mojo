@@ -34,7 +34,7 @@ its distance to its target.
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
-from controls.held_keys import HOLD_TIMEOUT, HeldKeys
+from controls.held_keys import HOLD_TIMEOUT, HeldKeys, require_frame_time
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -387,8 +387,7 @@ struct PointerLockControls(Copyable, Movable):
         Raises:
             Error: If the time is negative.
         """
-        if delta.value < 0:
-            raise Error("A frame's time must not be negative")
+        require_frame_time(delta)
         var step = self.movement_speed.to(METER_PER_SECOND) * delta.to(SECOND)
         var forward = self._axis(KEY_W, ARROW_UP) - self._axis(
             KEY_S, ARROW_DOWN

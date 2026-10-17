@@ -45,7 +45,12 @@ from extensions.animals.noise import cells3, fbm3
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones
 from extensions.sdf.field import SdfModel
-from extensions.animals.traits import Traits, pick_age, pick_sex
+from extensions.animals.traits import (
+    Traits,
+    pick_age,
+    pick_sex,
+    require_color_variant,
+)
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -114,8 +119,7 @@ def frog_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var age = pick_age(options.age)
     var variant = BULLFROG
     if options.variant.value >= 0:
-        if options.variant.value >= 3:
-            raise Error("The species has no such color variant")
+        require_color_variant(options.variant.value, 3)
         variant = options.variant.value
     var t = Traits(sex, age, variant)
     var juv = t.juvenile() > 0.0

@@ -33,7 +33,13 @@ from math.polygon_hit import ray_crosses
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.ids import ElementId
-from extensions.building.kinds import BEAM, COLUMN, SpaceUse, WALL
+from extensions.building.kinds import (
+    BEAM,
+    COLUMN,
+    SpaceUse,
+    WALL,
+    require_space_use,
+)
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Building
 from extensions.structure.ids import LoadCaseId, MemberId, NodeId, ShellId
@@ -79,8 +85,7 @@ def live_load(use: SpaceUse) raises -> Pressure64:
     Raises:
         Error: If the use is not valid.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_space_use(use)
     var kpa: List[Float64] = [
         2.40,
         4.79,

@@ -130,6 +130,22 @@ comptime MECHANICAL = SpaceUse(10)
 comptime MEETING = SpaceUse(11)
 
 
+def require_space_use(use: SpaceUse) raises:
+    """Refuse a space use that is not named.
+
+    Args:
+        use: The use of the space.
+
+    Returns:
+        Nothing. The call returns when the use is named.
+
+    Raises:
+        Error: If the use is not named.
+    """
+    if not use.is_valid():
+        raise Error("A space use is not valid")
+
+
 @fieldwise_init
 struct SectionShape(Equatable, ImplicitlyCopyable, Writable):
     """The shape of a frame member's cross-section."""
