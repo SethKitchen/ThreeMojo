@@ -36,6 +36,7 @@ from math.square_matrix import (
     _post_multiply,
     _scale_elements,
     _transpose_square,
+    fill_elements,
 )
 from math.matrix3 import Matrix3
 from math.norm import length3, normalized3, _ordinary_squared
@@ -1072,9 +1073,7 @@ def column_major_matrix(elements: List[Float32]) -> Matrix4:
         Error: Never.
     """
     var matrix = Matrix4()
-    # Sixteen entries, so the loop always runs.
-    for index in range(16):  # pragma: no branch
-        matrix.elements[index] = elements[index]
+    fill_elements(matrix.elements, elements)
     return matrix^
 
 

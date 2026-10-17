@@ -75,6 +75,7 @@ from materials.nodes import (
 )
 from math.matrix3 import Matrix3
 from math.matrix4 import column_major_matrix
+from math.square_matrix import fill_elements
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
@@ -679,8 +680,7 @@ struct NodeLoader(Movable):
             )
         if width == 9:
             var matrix = Matrix3()
-            for index in range(9):  # pragma: no branch
-                matrix.elements[index] = numbers[index]
+            fill_elements(matrix.elements, numbers)
             return self.graph.uniform(name, matrix)
         return self.graph.uniform(name, column_major_matrix(numbers))
 
