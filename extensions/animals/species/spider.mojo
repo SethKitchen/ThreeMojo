@@ -41,7 +41,7 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
 )
-from extensions.animals.noise import fbm3, centered_fbm
+from extensions.animals.noise import centered_fbm, offset_fbm
 from extensions.animals.options import (
     FEMALE,
     MALE,
@@ -1204,7 +1204,7 @@ def _hair(p: V3, a: V3, axis: V3, mm: Float64) -> Float64:
         dot(dp, up) / (0.09 * mm),
         dot(dp, axis) / (0.9 * mm),
     )
-    return fbm3(h, 2) - 0.5
+    return offset_fbm(h, 2)
 
 
 def spider_paint(

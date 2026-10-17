@@ -50,7 +50,7 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import fbm3, vnoise3, centered_fbm
+from extensions.animals.noise import centered_fbm, fbm3, offset_fbm, vnoise3
 from extensions.animals.options import (
     FEMALE,
     MALE,
@@ -1729,7 +1729,7 @@ def _white(
             d = min(d, (p.y - line_y) + 0.25 * wide)
         if leg > 0.3:
             var wob = (
-                fbm3(V3(p.x * 18.0 + off.y, p.y * 9.0, p.z * 18.0), 2) - 0.5
+                offset_fbm(V3(p.x * 18.0 + off.y, p.y * 9.0, p.z * 18.0), 2)
             ) * 0.12
             d = min(d, p.y - (0.3 if is_front_limb(bone) else 0.36) + wob)
         return -(d + jag)

@@ -39,7 +39,7 @@ from extensions.animals.kit import (
     mirrored_blob,
     aperture_local,
 )
-from extensions.animals.noise import cells3, vnoise3, centered_fbm
+from extensions.animals.noise import cells3, centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -988,7 +988,7 @@ def cheetah_paint(
         col.z * (1.0 + 0.1 * cv - 0.08 * cvh),
     )
     if radius > 0.0:
-        var wob = 1.0 + 0.22 * (vnoise3(p * 180.0) - 0.5)
+        var wob = 1.0 + 0.22 * (centered_value(p, 180.0))
         var spot = _spot(p, radius, seed % 4093, wob)
         var pale = (
             smoothstep(0.45, 0.95, ventral)

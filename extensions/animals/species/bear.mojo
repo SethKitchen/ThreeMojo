@@ -43,7 +43,12 @@ from extensions.animals.kit import (
     mirrored_blob,
     aperture_local,
 )
-from extensions.animals.noise import fbm3, centered_fbm, centered_value
+from extensions.animals.noise import (
+    fbm3,
+    centered_fbm,
+    centered_value,
+    offset_fbm,
+)
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1382,7 +1387,7 @@ def _lock(p: V3, scale: Float64, off: Float64) -> Float64:
         p.y * scale * 0.6 - p.z * 0.2 * scale,
         p.z * scale * 0.3,
     )
-    return fbm3(q, 2) - 0.5
+    return offset_fbm(q, 2)
 
 
 @fieldwise_init

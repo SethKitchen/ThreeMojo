@@ -54,7 +54,7 @@ from extensions.animals.kit import (
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3, centered_fbm
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm, centered_value
 from extensions.animals.options import (
     ADULT,
     FEMALE,
@@ -2133,7 +2133,7 @@ def sheep_paint(
     # The face's edge: the wool starts behind the ears and the jaw.
     var edge = not black and (region == 1 or region == 2)
     if edge:
-        var rag = 0.006 * (vnoise3(p * 120.0) - 0.5)
+        var rag = 0.006 * (centered_value(p, 120.0))
         var y_jaw = -0.14 + 0.387 * (h.z + 0.03)
         var wl = max(
             smoothstep(-0.061, -0.071, h.z + rag),
@@ -2212,7 +2212,7 @@ def sheep_paint(
         var ef = eye_frame_of(e, HEAD_O, 1.0 if p.x >= 0.0 else -1.0)
         var eye_d = length(p - ef.c)
         c = mix3(c, pal.get("muzzle"), smoothstep(0.024, 0.012, eye_d) * 0.2)
-        var tn = vnoise3(p * 160.0) - 0.5
+        var tn = centered_value(p, 160.0)
         c = c * (1.0 + 0.16 * tn + 0.08 * (centered_fbm(p, 30.0, 2)))
         # Streaks drawn out along the hair flow: short hair, not rubber.
         var flow = _face_flow(h)
@@ -2322,14 +2322,14 @@ def sheep_paint(
         var low = smoothstep(0.34, 0.2, p.y) * (1.0 - legness * 0.5)
         var britch = smoothstep(-0.35, -0.5, p.z) * smoothstep(0.55, 0.35, p.y)
         wc = mix3(wc, pal.get("stain"), max(low, britch) * 0.3)
-        var sn = vnoise3(p * 45.0) - 0.5
+        var sn = centered_value(p, 45.0)
         wc = channel_pair(wc, cv, sn, 0.035, 0.03, 0.025, 0.05, 0.05, 0.045)
         # The crimp: a fine, tight curl over the staple tips.
-        var crimp = vnoise3(p * 520.0) - 0.5
+        var crimp = centered_value(p, 520.0)
         wc = wc * (1.0 + 0.12 * crimp)
         c = mix3(c, wc, wool)
     elif region <= 1:
-        var tn = vnoise3(p * 160.0) - 0.5
+        var tn = centered_value(p, 160.0)
         c = channel_pair(c, cv, tn, 0.08, 0.07, 0.06, 0.14, 0.14, 0.14)
     _ = lamb
     return Paint(c, surface)

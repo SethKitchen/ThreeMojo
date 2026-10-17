@@ -52,7 +52,7 @@ from extensions.animals.kit import (
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import vnoise3, centered_fbm
+from extensions.animals.noise import vnoise3, centered_fbm, centered_value
 from extensions.animals.options import (
     ADULT,
     FEMALE,
@@ -1926,7 +1926,7 @@ def _mark_sd(
                 d,
                 (p.z + 0.02 + 0.22 * (p.y - 0.6)) * 0.9
                 + (centered_fbm(p, 6.0, 3)) * 0.12
-                + (vnoise3(p * 90.0) - 0.5) * 0.012,
+                + (centered_value(p, 90.0)) * 0.012,
             )
         if (masks & M_TAILPATCH) != 0:
             var zt = -0.4
