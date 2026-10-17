@@ -78,24 +78,11 @@ def _head(
     """Write three.js's `Curve.toJSON` fields: the metadata, unless a
     library leaves it out, the arc length divisions and the type."""
     if metadata:
-        _metadata(writer)
+        writer.metadata(CURVE_FORMAT, "Curve", "Curve.toJSON")
     writer.key("arcLengthDivisions")
     writer.integer(ARC_LENGTH_DIVISIONS)
     writer.key("type")
     writer.string(type_name)
-
-
-def _metadata(mut writer: JsonWriter) raises:
-    """Write a curve's `metadata`."""
-    writer.key("metadata")
-    writer.begin_object()
-    writer.key("version")
-    writer.number(CURVE_FORMAT)
-    writer.key("type")
-    writer.string("Curve")
-    writer.key("generator")
-    writer.string("Curve.toJSON")
-    writer.end_object()
 
 
 def _vector2(mut writer: JsonWriter, key: String, v: Vector2) raises:
