@@ -186,17 +186,32 @@ def _default_probes(size: Length) raises -> Int:
     return max(2, Int(rounded) + 1)
 
 
+def require_probe_product(left: Int, right: Int) raises:
+    """Refuse a light-probe count that overflows the lookup.
+
+    Args:
+        left: The count already formed.
+        right: The next axis.
+
+    Returns:
+        Nothing. The call returns when the product fits.
+
+    Raises:
+        Error: If `left` is greater than the probe limit divided by `right`.
+    """
+    if left > MAX_GRID_PROBES // right:
+        raise Error("A light probe grid has too many probes")
+
+
 def _probe_count(x: Int, y: Int, z: Int) raises -> Int:
     """Return a count that fits the shared host/device lookup indices."""
     if x < 1 or y < 1 or z < 1:
         raise Error("A light probe grid needs one probe or more a side")
     if x > MAX_GRID_AXIS or y > MAX_GRID_AXIS or z > MAX_GRID_AXIS:
         raise Error("A light probe grid axis exceeds the exact device count")
-    if x > MAX_GRID_PROBES // y:
-        raise Error("A light probe grid has too many probes")
+    require_probe_product(x, y)
     var xy = x * y
-    if xy > MAX_GRID_PROBES // z:
-        raise Error("A light probe grid has too many probes")
+    require_probe_product(xy, z)
     return xy * z
 
 

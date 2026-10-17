@@ -196,6 +196,23 @@ struct _Links(Movable):
         self.roots = roots^
 
 
+def require_scene_index(index: Int, count: Int) raises:
+    """Refuse a scene node index outside the array.
+
+    Args:
+        index: The node's index.
+        count: How many entries the array holds.
+
+    Returns:
+        Nothing. The call returns when the index names an entry.
+
+    Raises:
+        Error: If the index is negative or past the last entry.
+    """
+    if index < 0 or index >= count:
+        raise Error("Scene node index out of range")
+
+
 struct Scene(Movable):
     """A scene graph held as a flat array of nodes, each naming its parent."""
 
@@ -1459,8 +1476,7 @@ struct Scene(Movable):
 
     def _check(self, index: NodeId) raises:
         """Refuse an index that names no node."""
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        require_scene_index(index.value, len(self._nodes))
 
     def _check_start(self, index: NodeId) raises:
         """Refuse a node to start from that is neither a node nor
@@ -1650,8 +1666,7 @@ struct Scene(Movable):
     def _check_current(self, index: NodeId) raises:
         """Refuse an index out of range, or a question asked of a stale
         scene."""
-        if index.value < 0 or index.value >= len(self._world):
-            raise Error("Scene node index out of range")
+        require_scene_index(index.value, len(self._world))
         if self._stale:
             raise Error(
                 "The scene has changed since update(); call scene.update()"
