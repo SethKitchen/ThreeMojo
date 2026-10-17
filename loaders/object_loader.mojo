@@ -173,7 +173,13 @@ from core.background import (
 from core.fog import exp2_fog, linear_fog
 from core.geometry_store import GeometryId
 from core.layers import Layers
-from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
+from core.object3d import (
+    GROUP_TYPE,
+    NO_PARENT,
+    NodeId,
+    Object3D,
+    _place_from_column_major,
+)
 from core.scene import Scene
 from exporters.json_writer import JsonWriter
 from core.user_data import user_data_of
@@ -278,7 +284,7 @@ from materials.material import (
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.bounds import Plane
-from math.matrix4 import Matrix4, require_axis_extent
+from math.matrix4 import Matrix4, column_major_matrix
 from math.quaternion import Quaternion
 from math.utils import FLOAT32_COMPONENT
 from math.spherical_harmonics3 import (
@@ -840,22 +846,9 @@ def decompose(mut node: Object3D, elements: List[Float32]) raises:
     Raises:
         Error: If the matrix flattens an axis, which leaves no rotation.
     """
-    var matrix = Matrix4()
-    for index in range(16):  # pragma: no branch
-        matrix.elements[index] = elements[index]
-    var sx = matrix.column_length(0)
-    var sy = matrix.column_length(1)
-    var sz = matrix.column_length(2)
-    require_axis_extent(
-        sx, sy, sz, "Object JSON" + ": a matrix that flattens an axis"
+    _place_from_column_major(
+        node, elements, "Object JSON" + ": a matrix that flattens an axis"
     )
-    var position = Vector3(0, 0, 0)
-    var rotation = Quaternion.identity()
-    var scale = Vector3(0, 0, 0)
-    matrix.decompose(position, rotation, scale)
-    node.set_position(position.x, position.y, position.z)
-    node.set_quaternion(rotation)
-    node.set_scale(scale.x, scale.y, scale.z)
 
 
 def _flip_rows(mut pixels: List[UInt8], width: Int, height: Int):
@@ -2136,8 +2129,7 @@ struct _Loader(Movable):
             if node.matrix_auto_update:
                 decompose(node, matrix)
             else:
-                for index in range(16):  # pragma: no branch
-                    node.matrix.elements[index] = matrix[index]
+                node.matrix = column_major_matrix(matrix)
             return
         var position = self.numbers(item, "position", 3)
         if len(position) == 3:
@@ -2997,14 +2989,14 @@ struct _Loader(Movable):
                     var numbers = self.numbers_of(inverse)
                     if len(numbers) != 16:
                         raise Error("Object JSON: a bone inverse is 16 numbers")
-                    built.append(Bone(node, _matrix_of(numbers)))
+                    built.append(Bone(node, column_major_matrix(numbers)))
             var skeleton = bind_skeleton(
                 nodes, placed
             ) if given == 0 else Skeleton(built^)
             var bind = Matrix4()
             var elements = self.numbers(item, "bindMatrix", 16)
             if len(elements) == 16:
-                bind = _matrix_of(elements)
+                bind = column_major_matrix(elements)
             var mesh = SkinnedMesh(
                 self.geometry_named(item),
                 self.material_named(item),
@@ -3018,14 +3010,6 @@ struct _Loader(Movable):
             )
             self.wear(item, mesh.morph_influences)
             scene.add_skinned_mesh(mesh^)
-
-
-def _matrix_of(elements: List[Float32]) -> Matrix4:
-    """Return the matrix of sixteen numbers, column by column."""
-    var matrix = Matrix4()
-    for index in range(16):  # pragma: no branch
-        matrix.elements[index] = elements[index]
-    return matrix^
 
 
 def _wrapped(

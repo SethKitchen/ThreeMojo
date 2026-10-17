@@ -65,14 +65,19 @@ from core.gaussian_splat_utils import (
 from core.user_data import UserData, user_data_of
 from loaders.fbx import sanitize_node_name
 from loaders.gltf import (
-    _apply_matrix,
+    _FLAT_NODE_MATRIX,
     decode_base64,
     require_rising_sparse_index,
     require_sparse_indices,
     split_glb,
 )
 from core.scene import Scene
-from core.object3d import NodeId, Object3D, NO_PARENT
+from core.object3d import (
+    NO_PARENT,
+    NodeId,
+    Object3D,
+    _place_from_column_major,
+)
 from math.quaternion import Quaternion
 from objects.gaussian_splat import GaussianSplat
 from loaders.json import OBJECT, JsonDocument, parse_json
@@ -1022,7 +1027,7 @@ def load_gltf_gaussian_splat_scene(
                 placed.user_data = user_data_of(document, extras)
         var matrix = _node_numbers(document, node, "matrix", 16)
         if len(matrix) > 0:
-            _apply_matrix(placed, matrix)
+            _place_from_column_major(placed, matrix, _FLAT_NODE_MATRIX)
         else:
             var position = _node_numbers(document, node, "translation", 3)
             var rotation = _node_numbers(document, node, "rotation", 4)

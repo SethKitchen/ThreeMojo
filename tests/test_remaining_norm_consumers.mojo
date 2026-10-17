@@ -3,7 +3,6 @@
 
 """Independent direction and length oracles for the remaining norm consumers."""
 
-from geometries.edges import _face_normal as edge_normal
 from geometries.torus import torus_knot
 from geometries.utils import to_creased_normals
 from loaders.fbx import _triangulate as fbx_triangulate
@@ -17,12 +16,12 @@ from units.si import Length, METER
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, TANGENT, UV
 from core.gaussian_splat_utils import write_covariance
-from core.object3d import Object3D
+from core.object3d import Object3D, _place_from_column_major
 from geometries.mikktspace import generate_tangents, _normalize as mikk_unit, _v
 from geometries.sculptor_tools import _unit_or_x
 from geometries.sculptor_utils import Point3
 from lights.lighting import light_vector, toward_eye_at, PERSPECTIVE_VIEW
-from loaders.gltf import _apply_matrix
+from loaders.gltf import _FLAT_NODE_MATRIX
 from loaders.ldraw import _face_normal, Vec as LDrawVec
 from loaders.model_nodes import decompose_onto
 from loaders.object_loader import decompose as object_decompose
@@ -318,7 +317,7 @@ def test_loader_decompositions_keep_tiny_and_mirrored_scales() raises:
         var elements = List[Float32]()
         for element in matrix.elements:
             elements.append(element)
-        _apply_matrix(node, elements)
+        _place_from_column_major(node, elements, _FLAT_NODE_MATRIX)
         assert_equal(node.scale.x, -scale)
         object_decompose(node, elements)
         assert_equal(node.scale.x, -scale)
@@ -385,7 +384,6 @@ def test_stored_coordinate_normals_keep_extreme_component_ratios() raises:
     var b = Vector3(huge, huge, 3)
     var c = Vector3(0, tiny, 3)
     near3(normal_or_zero(a, b, c), 0, 0, 1)
-    near3(edge_normal(a, b, c), 0, 0, 1)
     near3(face_normal(a, b, c), 0, 0, 1)
     var g = triangle(1)
     g.set_attribute(

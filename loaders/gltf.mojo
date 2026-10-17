@@ -210,7 +210,7 @@ from core.buffer_geometry import (
     BufferGeometry,
 )
 from core.geometry_store import GeometryId
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NO_PARENT, NodeId, Object3D, _place_from_column_major
 from core.scene import Scene
 from core.user_data import UserData, user_data_of
 from lights.light import directional_light, point_light, spot_light
@@ -254,7 +254,7 @@ from materials.material import (
     points_material,
     standard_material,
 )
-from math.matrix4 import Matrix4, require_axis_extent
+from math.matrix4 import Matrix4
 from objects.skeleton import Bone, Skeleton
 from objects.instanced_mesh import InstancedMesh
 from objects.skinned_mesh import (
@@ -2874,7 +2874,7 @@ struct _Loader(Movable):
         placed.user_data = self.node_user_data(node, index)
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
-            _apply_matrix(placed, matrix)
+            _place_from_column_major(placed, matrix, _FLAT_NODE_MATRIX)
         else:
             var translation = self.numbers(node, "translation", 3)
             if len(translation) == 3:
@@ -3846,24 +3846,5 @@ def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
         )
 
 
-def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
-    """Set a node from a column-major matrix, decomposed as three.js's
-    `Matrix4.decompose` decomposes it: the scale is each column's
-    length, negated all three when the determinant is negative, and the
-    rotation is what is left once the columns are divided by it."""
-    var m = Matrix4()
-    for index in range(16):  # pragma: no branch
-        m.elements[index] = matrix[index]
-    var sx = m.column_length(0)
-    var sy = m.column_length(1)
-    var sz = m.column_length(2)
-    require_axis_extent(
-        sx, sy, sz, "glTF" + ": a node matrix that flattens an axis"
-    )
-    var position = Vector3(0, 0, 0)
-    var rotation = Quaternion.identity()
-    var scale = Vector3(0, 0, 0)
-    m.decompose(position, rotation, scale)
-    node.set_position(position.x, position.y, position.z)
-    node.set_quaternion(rotation)
-    node.set_scale(scale.x, scale.y, scale.z)
+# The error when a glTF node matrix has an axis of length zero.
+comptime _FLAT_NODE_MATRIX = "glTF: a node matrix that flattens an axis"
