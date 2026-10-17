@@ -26,30 +26,9 @@ from math.random import mulberry32_step
 from math.remainder import remainder_float64
 from math.sine import fraction
 from math.smoothstep import smoothstep
-from std.benchmark import black_box
 from std.math import cos, exp, floor, isfinite, sin
 from std.memory import bitcast
 from units.si import Angle, Duration, SECOND
-
-
-def rounded_product(a: Float64, b: Float64) -> Float64:
-    """Return `a * b` rounded on its own.
-
-    Mojo can contract a product into a following sum. That rounds once
-    where JavaScript rounds twice. The barrier keeps the product a value
-    of its own.
-
-    Args:
-        a: One factor.
-        b: The other.
-
-    Returns:
-        The rounded product.
-
-    Raises:
-        Error: Never.
-    """
-    return black_box(a * b)
 
 
 def clamp(value: Float32, low: Float32, high: Float32) -> Float32:

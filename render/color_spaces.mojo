@@ -40,7 +40,7 @@ three.js's internal `_getMatrix` multiplies the two the other way round.
 """
 from core.ordinal import ordinal_valid
 
-from math.utils import rounded_product
+from math.rounded_product import rounded_product
 from render.framebuffer import Color, FloatColor, SrgbBytes
 from std.math import pow
 

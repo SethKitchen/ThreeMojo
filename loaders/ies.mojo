@@ -41,7 +41,7 @@ number, and a file that ends early. An empty line is zero, as
 `Number("")` is in JavaScript.
 """
 
-from math.rounded_product import rounded_product
+from math.rounded_product import rounded_lerp, rounded_product
 from loaders.bytes import ascii_space_at
 from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
@@ -281,12 +281,6 @@ def parse_ies(text: String) raises -> IesLamp:
     return lamp^
 
 
-def _lerp(x: Float64, y: Float64, t: Float64) -> Float64:
-    """Return three.js's `MathUtils.lerp`, each product rounded before the
-    sum as JavaScript rounds it."""
-    return rounded_product(1 - t, x) + rounded_product(t, y)
-
-
 def _interpolate(lamp: IesLamp, phi: Float64, theta: Float64) -> Float64:
     """Return the value at a vertical and a horizontal angle, three.js's
     `interpolateCandelaValues`."""
@@ -320,11 +314,13 @@ def _interpolate(lamp: IesLamp, phi: Float64, theta: Float64) -> Float64:
     var t2 = (phi - start_phi) / delta_phi
     var next_theta = theta_index if delta_theta == 0 else theta_index + 1
     ref c = lamp.candela
-    var v1 = _lerp(c[theta_index][phi_index], c[next_theta][phi_index], t1)
-    var v2 = _lerp(
+    var v1 = rounded_lerp(
+        c[theta_index][phi_index], c[next_theta][phi_index], t1
+    )
+    var v2 = rounded_lerp(
         c[theta_index][phi_index + 1], c[next_theta][phi_index + 1], t1
     )
-    return _lerp(v1, v2, t2)
+    return rounded_lerp(v1, v2, t2)
 
 
 def _js_rem(a: Float64, b: Float64) -> Float64:
