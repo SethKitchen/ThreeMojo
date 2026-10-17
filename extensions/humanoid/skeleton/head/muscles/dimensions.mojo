@@ -25,7 +25,7 @@ parameters. They are not a cited cross-section table.
     var d = head_muscle_distance(dims, MASSETER, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
@@ -123,9 +123,7 @@ def head_muscle_label(part: HeadMuscle) -> String:
         "zygomaticus major",
         "orbicularis oris",
     ]
-    if not part.is_valid():
-        return "head muscle"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head muscle")
 
 
 def named_head_muscles() -> List[HeadMuscle]:

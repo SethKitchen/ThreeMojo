@@ -24,7 +24,7 @@ a cited cross-section table.
     var d = arm_muscle_distance(dims, BICEPS_BRACHII, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -107,8 +107,6 @@ def arm_muscle_label(part: ArmMuscle) -> String:
         A short American English label, or `"arm muscle"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "arm muscle"
     var names = List[String]()
     names.append("deltoid")
     names.append("supraspinatus")
@@ -140,7 +138,7 @@ def arm_muscle_label(part: ArmMuscle) -> String:
     names.append("extensor pollicis brevis")
     names.append("extensor pollicis longus")
     names.append("extensor indicis")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm muscle")
 
 
 def named_arm_muscles() -> List[ArmMuscle]:

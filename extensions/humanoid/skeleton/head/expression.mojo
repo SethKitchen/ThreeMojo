@@ -27,7 +27,7 @@ This is not a three.js port. See Extensions.
     face.add_viseme(OH, 1.0)
     face.apply(scene.meshes[skin])
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from math.utils import clamp
 
 from objects.mesh import Mesh
@@ -127,9 +127,9 @@ def facial_expression_label(expression: FacialExpression) -> String:
         "disgust",
         "fear",
     ]
-    if not expression.is_valid():
-        return "facial expression"
-    return names[expression.value]
+    return ordinal_label(
+        expression.is_valid(), expression.value, names, "facial expression"
+    )
 
 
 def named_facial_expressions() -> List[FacialExpression]:
@@ -171,9 +171,7 @@ def viseme_label(viseme: Viseme) -> String:
         "oh",
         "ou",
     ]
-    if not viseme.is_valid():
-        return "viseme"
-    return names[viseme.value]
+    return ordinal_label(viseme.is_valid(), viseme.value, names, "viseme")
 
 
 def named_visemes() -> List[Viseme]:

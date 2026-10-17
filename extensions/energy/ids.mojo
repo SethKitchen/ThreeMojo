@@ -10,7 +10,7 @@ A `ZoneId`, a `SurfaceId` and a `WindowId` index the lists of a
 an id also check that it is in range. A `BoundaryKind` says what is on
 the outside face of a surface.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 
 
 @fieldwise_init
@@ -95,10 +95,8 @@ struct BoundaryKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        if not self.is_valid():
-            return "unknown"
         var names: List[String] = ["exterior", "interzone", "ground"]
-        return names[self.value]
+        return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
 # The outdoor air, the sun and the sky.

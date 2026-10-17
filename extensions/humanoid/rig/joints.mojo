@@ -30,7 +30,7 @@ This is not a three.js port. See Extensions.
     var rig = humanoid_rig(spec, skin)
     var knee = rig.at(RIGHT_SHIN)
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 
 from core.buffer_geometry import POSITION, BufferGeometry
 from extensions.humanoid.side import LEFT, RIGHT
@@ -133,9 +133,7 @@ def joint_label(joint: Joint) -> String:
         "leftFoot",
         "leftToes",
     ]
-    if not joint.is_valid():
-        return "joint"
-    return names[joint.value]
+    return ordinal_label(joint.is_valid(), joint.value, names, "joint")
 
 
 def require_joint(joint: Joint) raises:

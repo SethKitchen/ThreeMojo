@@ -26,7 +26,7 @@ are not a cited caliber table.
     var d = arm_nerve_distance(dims, MEDIAN_NERVE, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -67,15 +67,13 @@ def arm_nerve_label(part: ArmNerve) -> String:
         A short American English label, or `"arm nerve"` when `part` is
         not named.
     """
-    if not part.is_valid():
-        return "arm nerve"
     var names = List[String]()
     names.append("axillary nerve")
     names.append("musculocutaneous nerve")
     names.append("radial nerve")
     names.append("median nerve")
     names.append("ulnar nerve")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm nerve")
 
 
 def named_arm_nerves() -> List[ArmNerve]:

@@ -5,7 +5,7 @@
 
 """The kinds of a building model: elements, openings, space uses, section
 shapes and furniture."""
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 
 
 @fieldwise_init
@@ -28,10 +28,8 @@ struct ElementKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        if not self.is_valid():
-            return "unknown"
         var names: List[String] = ["wall", "slab", "roof", "column", "beam"]
-        return names[self.value]
+        return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
 # A vertical element on a wall face of the cell complex.
@@ -66,10 +64,8 @@ struct OpeningKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        if not self.is_valid():
-            return "unknown"
         var names: List[String] = ["door", "window"]
-        return names[self.value]
+        return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
 comptime DOOR = OpeningKind(0)
@@ -96,8 +92,6 @@ struct SpaceUse(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        if not self.is_valid():
-            return "unknown"
         var names: List[String] = [
             "office",
             "corridor",
@@ -112,7 +106,7 @@ struct SpaceUse(Equatable, ImplicitlyCopyable, Writable):
             "mechanical",
             "meeting",
         ]
-        return names[self.value]
+        return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
 comptime OFFICE = SpaceUse(0)
@@ -166,10 +160,8 @@ struct SectionShape(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        if not self.is_valid():
-            return "unknown"
         var names: List[String] = ["rectangle", "i_shape", "circle"]
-        return names[self.value]
+        return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
 # A solid rectangle: width by depth.
@@ -200,8 +192,6 @@ struct FurnitureKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             The name, or "unknown" for a value that is not valid.
         """
-        if not self.is_valid():
-            return "unknown"
         var names: List[String] = [
             "desk",
             "chair",
@@ -217,7 +207,7 @@ struct FurnitureKind(Equatable, ImplicitlyCopyable, Writable):
             "sink",
             "cabinet",
         ]
-        return names[self.value]
+        return ordinal_label(self.is_valid(), self.value, names, "unknown")
 
 
 comptime DESK = FurnitureKind(0)

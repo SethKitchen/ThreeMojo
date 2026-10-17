@@ -48,7 +48,7 @@ This is not a three.js port. See Extensions.
     var style = HairStyleFile(hair_style_path(LAYERED))
     var strand = style.strand(dims.head, 0)
 """
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, ordinal_label
 
 from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
@@ -169,9 +169,7 @@ def hair_style_label(style: HairStyle) -> String:
         "bob",
         "pixie",
     ]
-    if not style.is_valid():
-        return "hair style"
-    return names[style.value]
+    return ordinal_label(style.is_valid(), style.value, names, "hair style")
 
 
 def named_hair_styles() -> List[HairStyle]:

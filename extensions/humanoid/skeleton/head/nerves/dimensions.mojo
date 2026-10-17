@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited fascicle table.
     var d = head_nerve_distance(dims, VAGUS_NERVE, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -97,9 +97,7 @@ def head_nerve_label(part: HeadNerve) -> String:
         "cervical plexus",
         "facial nerve",
     ]
-    if not part.is_valid():
-        return "head nerve"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head nerve")
 
 
 def named_head_nerves() -> List[HeadNerve]:

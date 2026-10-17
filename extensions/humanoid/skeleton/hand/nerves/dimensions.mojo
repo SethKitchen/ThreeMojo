@@ -23,7 +23,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_nerve_distance(dims, MEDIAN_BRANCHES, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -80,14 +80,12 @@ def hand_nerve_label(part: HandNerve) -> String:
         A short American English label, or `"hand nerve"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "hand nerve"
     var names = List[String]()
     names.append("median branches")
     names.append("ulnar branches")
     names.append("superficial radial nerve")
     names.append("digital nerves")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand nerve")
 
 
 def named_hand_nerves() -> List[HandNerve]:

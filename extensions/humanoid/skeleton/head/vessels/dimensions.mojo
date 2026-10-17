@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited lumen table.
     var d = head_vessel_distance(dims, COMMON_CAROTID_ARTERY, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -112,9 +112,7 @@ def head_vessel_label(part: HeadVessel) -> String:
         "external jugular vein",
         "vertebral artery",
     ]
-    if not part.is_valid():
-        return "head vessel"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head vessel")
 
 
 def named_head_vessels() -> List[HeadVessel]:

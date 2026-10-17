@@ -18,7 +18,7 @@ The genes are authored controls. They are not a model of the loci that
 set the traits in people. Many small genes set each of these traits,
 and development and environment change them too.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, ordinal_label
 from math.utils import clamp_unit
 
 from std.math import isfinite
@@ -158,8 +158,6 @@ def gene_label(gene: Gene) -> String:
         A lowercase name such as `"melanin"`, or `"gene"` when `gene` is
         not named.
     """
-    if not gene.is_valid():
-        return "gene"
     var names: List[String] = [
         "melanin",
         "undertone",
@@ -205,7 +203,7 @@ def gene_label(gene: Gene) -> String:
         "face shape 8",
         "hair curl",
     ]
-    return names[gene.value]
+    return ordinal_label(gene.is_valid(), gene.value, names, "gene")
 
 
 def named_genes() -> List[Gene]:
