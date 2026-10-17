@@ -44,7 +44,7 @@ is scaled by `Lighting.scale` once, at the end.
 
 from lights.fresnel import schlick_weight
 from math.smoothstep import smoothstep
-from math.utils import mix_delta, saturate
+from math.utils import clamp, mix_delta, saturate
 from math.vector2 import Vector2
 from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, exp2, log2, max, min, pi, sqrt
@@ -272,7 +272,7 @@ def sheen_roughness_of(authored: Float32, texel: Float32) -> Float32:
     Returns:
         The sheen roughness.
     """
-    return min(max(authored, SHEEN_ROUGHNESS_FLOOR), Float32(1)) * texel
+    return clamp(authored, SHEEN_ROUGHNESS_FLOOR, Float32(1)) * texel
 
 
 def iridescence_thickness(
