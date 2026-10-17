@@ -60,6 +60,7 @@ point, so the shape is the same.
 from core.ordinal import ordinal_valid
 
 from loaders.js_number import js_string_to_number
+from loaders.js_text import split_fields
 from loaders.json import NO_NODE, OBJECT, STRING, JsonDocument, parse_json
 from math.path import Shape
 from math.shape_path import ShapePath
@@ -246,9 +247,7 @@ def parse_outline(outline: String) raises -> List[OutlineStep]:
             `z`, which three.js's `TTFLoader` writes to close a contour,
             is stepped over, as three.js's `Font` steps over it.
     """
-    var tokens = List[String]()
-    for token in outline.split():
-        tokens.append(String(token))
+    var tokens = split_fields(outline)
     var steps = List[OutlineStep]()
     var at = 0
     while at < len(tokens):
