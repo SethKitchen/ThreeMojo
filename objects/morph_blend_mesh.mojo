@@ -31,6 +31,7 @@ that is not in the scene.
 from loaders.bytes import ascii_digit, ascii_letter
 from core.scene import Scene
 from animation.keyframe_track import MeshIndex
+from core.ordinal import require_index_in_count
 from math.finite import require_finite
 from std.math import floor, isfinite, nan
 
@@ -442,5 +443,8 @@ struct MorphBlendMesh(Movable):
 
 def _check(mesh: MeshIndex, scene: Scene) raises:
     """Refuse a mesh the scene does not have."""
-    if mesh.value < 0 or mesh.value >= len(scene.meshes):
-        raise Error("A blend mesh must name one of the scene's meshes")
+    require_index_in_count(
+        mesh.value,
+        len(scene.meshes),
+        "A blend mesh must name one of the scene's meshes",
+    )

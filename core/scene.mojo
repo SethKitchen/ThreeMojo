@@ -80,6 +80,7 @@ from core.object3d import (
     facing,
     scale_of,
 )
+from core.ordinal import require_index_in_count
 from lights.light import Light
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, compose
@@ -568,8 +569,11 @@ struct Scene(Movable):
         _require_scene_node(mesh.node.value, len(self._nodes), "A skinned mesh")
         for index in range(mesh.bone_count()):  # pragma: no branch
             var bone = mesh.skeleton.node(index)
-            if bone.value < 0 or bone.value >= len(self._nodes):
-                raise Error("A bone must name a node that is in the scene")
+            require_index_in_count(
+                bone.value,
+                len(self._nodes),
+                "A bone must name a node that is in the scene",
+            )
         self.skinned_meshes.append(mesh^)
 
     def add_line(mut self, line: Line) raises:
@@ -1507,8 +1511,11 @@ struct Scene(Movable):
     def _check_parent(self, parent: NodeId) raises:
         """Refuse a parent that is neither a node nor `NO_PARENT`."""
         if parent != NO_PARENT:
-            if parent.value < 0 or parent.value >= len(self._nodes):
-                raise Error("A node's parent must already be in the scene")
+            require_index_in_count(
+                parent.value,
+                len(self._nodes),
+                "A node's parent must already be in the scene",
+            )
 
     def _refuse_listed(self, child: Int, above: List[Int]) raises:
         """Refuse a node that is already in a parent chain.
@@ -1555,8 +1562,11 @@ struct Scene(Movable):
         var chain = List[Int]()
         var current = index
         while current != NO_PARENT:
-            if current.value < 0 or current.value >= len(self._nodes):
-                raise Error("A node's parent must be a node in the scene")
+            require_index_in_count(
+                current.value,
+                len(self._nodes),
+                "A node's parent must be a node in the scene",
+            )
             if len(chain) == len(self._nodes):
                 raise Error("A node's parents must not loop back to it")
             chain.append(current.value)

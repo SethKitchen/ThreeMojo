@@ -127,7 +127,7 @@ storage buffers and the statements' results through `NodeSource`.
 level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 from core.search import first_match
 
 from lights.shadow import ShadowShape
@@ -4846,8 +4846,11 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If `v` is negative or past the last variable.
         """
-        if v.value < 0 or v.value >= len(self._versions):
-            raise Error("A node graph has no variable with that ref")
+        require_index_in_count(
+            v.value,
+            len(self._versions),
+            "A node graph has no variable with that ref",
+        )
 
     def get(self, v: NodeVar) raises -> NodeRef:
         """Return the node a variable holds here, as reading a TSL `Var`.
@@ -6803,8 +6806,9 @@ struct NodeProgramStore(Copyable, Movable):
         Raises:
             Error: If no program has that id.
         """
-        if id.value < 0 or id.value >= len(self.programs):
-            raise Error("No node program has that id")
+        require_index_in_count(
+            id.value, len(self.programs), "No node program has that id"
+        )
         return self.programs[id.value]
 
     def set_frame(mut self, time: Duration, view: Matrix4):

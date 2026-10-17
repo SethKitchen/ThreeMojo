@@ -44,7 +44,7 @@ shown or hidden, as three.js's `traverse` reaches them. Batched
 meshes, sprites and wide lines are not written.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from core.assets import Assets
 from core.buffer_geometry import (
@@ -362,8 +362,11 @@ def _bucket(
 ) raises:
     """File one object under the node it rides, refusing a node the scene
     has not got."""
-    if node.value < 0 or node.value >= len(buckets):
-        raise Error(what + " names a node that is not in the scene")
+    require_index_in_count(
+        node.value,
+        len(buckets),
+        what + " names a node that is not in the scene",
+    )
     buckets[node.value].append(which)
 
 
