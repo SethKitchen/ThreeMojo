@@ -9,6 +9,8 @@ A sample is a duration in nanoseconds. The report sorts them and reads a
 nearest-rank percentile in milliseconds.
 """
 
+from math.utils import edge_index
+
 
 def _sorted(var times: List[Int]) -> List[Int]:
     """Return the samples in ascending order.
@@ -39,5 +41,5 @@ def _percentile(times: List[Int], fraction: Float64) -> Float64:
     """
     # Nearest rank on a sorted list.
     var rank = Int(fraction * Float64(len(times)) + 0.999999) - 1
-    rank = max(0, min(rank, len(times) - 1))
+    rank = edge_index(rank, len(times))
     return Float64(times[rank]) / 1e6

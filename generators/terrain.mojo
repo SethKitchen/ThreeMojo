@@ -29,6 +29,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from generators.utils import check_finite, generator_random, meters
 from math.noise import ImprovedNoise
+from math.utils import clamp
 from math.norm import squared_length2, squared_length3
 from std.math import floor, inf, pow, sqrt
 from units.si import (
@@ -371,8 +372,8 @@ struct TerrainGenerator(Movable):
         var size = meters(self.parameters.size)
         var n = self.grid_size
         var half = size / 2
-        var fx = max(0.0, min(segments, (x + half) / size * segments))
-        var fz = max(0.0, min(segments, (z + half) / size * segments))
+        var fx = clamp((x + half) / size * segments, 0.0, segments)
+        var fz = clamp((z + half) / size * segments, 0.0, segments)
         var ix = min(n - 2, Int(floor(fx)))
         var iz = min(n - 2, Int(floor(fz)))
         var tx = fx - Float64(ix)

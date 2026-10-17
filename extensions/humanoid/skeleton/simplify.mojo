@@ -43,6 +43,7 @@ from core.scene import Scene
 from core.search import first_match
 from math.bounds import enclose_point
 from math.curve_checks import require_at_least_one
+from math.utils import clamp
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
 from std.collections import Dict
@@ -1145,7 +1146,7 @@ def fit_triangle_budget_result(
         meshes.append(_read_mesh(assets.geometries.get(ids[index])))
     var count = len(meshes)
     var areas = List[Float64](length=count, fill=0)
-    var tasks = max(1, min(workers, count))
+    var tasks = clamp(workers, 1, count)
     var welds = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         welds.create_task(

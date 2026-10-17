@@ -22,9 +22,10 @@ fflate's Huffman tree, cut to 15 bits by the method of UZIP.js. At level
 zero, the data is cut into stored blocks of 65,535 bytes.
 
 The hash table has `2 ** bits` entries. fflate sets `bits` from the
-natural log of the data's length: `ceil(max(8, min(13, ln(n))) * 1.5)`.
+natural log of the data's length: `ceil(clamp(ln(n), 8, 13) * 1.5)`.
 """
 
+from math.utils import clamp
 from std.math import ceil, log
 
 from core.binary import store_big_endian
@@ -650,7 +651,7 @@ def _options(level: Int) raises -> Int:
 
 def hash_bits(length: Int) -> Int:
     """Return the bits of fflate's hash for data of a length: its `mem`
-    default, `ceil(max(8, min(13, ln(length))) * 1.5)`.
+    default, `ceil(clamp(ln(length), 8, 13) * 1.5)`.
 
     Args:
         length: The length of the data, in bytes.
@@ -658,9 +659,9 @@ def hash_bits(length: Int) -> Int:
     Returns:
         The bits, from 12 to 20.
     """
-    # The log of zero is minus infinity, and the `max` makes it eight.
+    # A length of zero uses zero. The hold lifts that to eight.
     var natural = log(Float64(length)) if length > 0 else 0.0
-    return Int(ceil(max(8.0, min(13.0, natural)) * 1.5))
+    return Int(ceil(clamp(natural, 8.0, 13.0) * 1.5))
 
 
 def _hash(data: Span[UInt8, _], i: Int, bs1: Int, bs2: Int, mask: Int) -> Int:

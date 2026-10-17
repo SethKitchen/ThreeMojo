@@ -478,7 +478,7 @@ def mesh_surface[
                     active[i + bx * (j + by * k)] = True
                     near.append(i + bx * (j + by * k))
     var pending = _sample_indices(values, grid, near, bx, by)
-    var tasks = max(1, min(threads, len(pending)))
+    var tasks = clamp(threads, 1, len(pending))
     var samplers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         samplers.create_task(
@@ -509,7 +509,7 @@ def mesh_surface[
     var count = len(crossed)
     var positions = List[Float32](length=count * 3, fill=0)
     var normals = List[Float32](length=count * 3, fill=0)
-    tasks = max(1, min(threads, count))
+    tasks = clamp(threads, 1, count)
     var placers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         placers.create_task(

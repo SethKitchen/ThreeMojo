@@ -85,7 +85,7 @@ from math.euler import Euler, XYZ
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
 from math.ray import Ray
-from math.utils import js_round
+from math.utils import clamp, js_round
 from math.vector2 import Vector2
 from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
@@ -1225,7 +1225,7 @@ comptime AXIS_FACING = Float32(0.9)
 def _within(value: Float32, low: Length, high: Length) -> Float32:
     """Return a coordinate kept between two limits, three.js's
     `Math.max( min, Math.min( max, value ) )`."""
-    return max(low.to(METER), min(high.to(METER), value))
+    return clamp(value, low.to(METER), high.to(METER))
 
 
 def _long_line(
