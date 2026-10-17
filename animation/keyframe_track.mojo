@@ -168,6 +168,7 @@ it was built can be edited afterward.
 from core.morph import require_morph_target
 from core.object3d import NodeId
 from materials.material import MaterialId
+from math.finite import require_positive_finite
 from math.quaternion import Quaternion
 from math.utils import mix_delta
 from math.vector3 import Vector3
@@ -1340,10 +1341,10 @@ struct KeyframeTrack(Copyable, Movable):
                 put every key at one time, and a negative factor would
                 make the times fall.
         """
-        if not isfinite(factor) or factor <= 0:
-            raise Error(
-                "A track's times can only be scaled by a number above zero"
-            )
+        require_positive_finite(
+            Float64(factor),
+            "A track's times can only be scaled by a number above zero",
+        )
         for key in range(len(self.times)):
             self.times[key] *= factor
         if self.interpolation == BEZIER:

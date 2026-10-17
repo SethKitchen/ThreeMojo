@@ -72,7 +72,8 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     sided_bounds,
 )
 from math.vector3 import Vector3
-from std.math import isfinite, pi, sqrt
+from math.finite import require_positive_finite
+from std.math import pi, sqrt
 
 
 @fieldwise_init
@@ -211,12 +212,17 @@ struct PelvisMuscleDimensions(ImplicitlyCopyable):
         """
         self.pelvis.validate()
         require_pelvis_athleticism(self.athleticism)
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error("A pelvic muscle radius scale must be positive")
-        if not isfinite(self.k) or self.k <= 0:
-            raise Error("A pelvic muscle blend radius must be positive")
-        if not isfinite(self.epsilon) or self.epsilon <= 0:
-            raise Error("A pelvic muscle gradient step must be positive")
+        require_positive_finite(
+            Float64(self.scale),
+            "A pelvic muscle radius scale must be positive",
+        )
+        require_positive_finite(
+            Float64(self.k), "A pelvic muscle blend radius must be positive"
+        )
+        require_positive_finite(
+            Float64(self.epsilon),
+            "A pelvic muscle gradient step must be positive",
+        )
         finite_point(self.gt, "greater trochanter", "pelvic muscle")
         finite_point(self.lt, "lesser trochanter", "pelvic muscle")
         finite_point(self.neck, "femoral neck", "pelvic muscle")

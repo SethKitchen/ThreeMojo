@@ -86,6 +86,7 @@ from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
 from math.sine import fraction
+from math.finite import require_positive_finite
 from std.math import floor, isfinite, max, min, sqrt
 from units.si import Angle, Length, METER
 
@@ -385,8 +386,10 @@ struct LightShadow(ImplicitlyCopyable):
             or self.intensity > 1
         ):
             raise Error("A shadow's intensity must be between zero and one")
-        if not isfinite(self.focus) or self.focus <= 0:
-            raise Error("A spot shadow's focus must be a positive number")
+        require_positive_finite(
+            Float64(self.focus),
+            "A spot shadow's focus must be a positive number",
+        )
 
 
 struct ShadowMap(Copyable, LightSlot, Movable):

@@ -41,8 +41,8 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     tube,
 )
+from math.finite import require_positive_finite
 from math.vector3 import Vector3
-from std.math import isfinite
 
 
 @fieldwise_init
@@ -129,8 +129,10 @@ struct TorsoMuscleDimensions(Copyable, Movable):
         """
         self.torso.validate()
         require_torso_athleticism(self.athleticism)
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error("A torso muscle radius scale must be positive")
+        require_positive_finite(
+            Float64(self.scale),
+            "A torso muscle radius scale must be positive",
+        )
 
 
 def torso_muscle_dimensions(spec: HumanoidSpec) raises -> TorsoMuscleDimensions:

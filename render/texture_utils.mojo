@@ -27,7 +27,7 @@ takes them and gives numbers that are not a size or a fit.
 """
 
 from render.texture import Texture
-from std.math import isfinite
+from math.finite import require_positive_finite
 
 
 @fieldwise_init
@@ -249,8 +249,9 @@ def _image_aspect(texture: Texture) -> Float64:
 
 def _check_aspect(aspect: Float64) raises:
     """Refuse an aspect ratio that is not a positive finite number."""
-    if not isfinite(aspect) or aspect <= 0:
-        raise Error("An aspect ratio must be a positive finite number")
+    require_positive_finite(
+        aspect, "An aspect ratio must be a positive finite number"
+    )
 
 
 def _place(

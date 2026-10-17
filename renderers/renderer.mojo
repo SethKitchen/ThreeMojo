@@ -359,6 +359,7 @@ from renderers.clip import (
     within_sides,
 )
 from render.tasks import TaskGroup
+from math.finite import require_positive_finite
 from std.math import cos, floor, isfinite, max, min, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
@@ -8280,11 +8281,13 @@ struct Renderer(Movable):
                             customs[vertex],
                         ),
                     ) * Float32(self.render_scale)
-                    if not isfinite(size) or size <= 0:
-                        raise Error(
-                            "A point's size node gave a size that is not"
-                            " above zero"
-                        )
+                    require_positive_finite(
+                        Float64(size),
+                        (
+                            "A point's size node gave a size that is not above"
+                            " zero"
+                        ),
+                    )
                 corners.append(
                     _to_raster(
                         ClipVertex(

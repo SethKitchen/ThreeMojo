@@ -37,8 +37,9 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
     shoulder_girdle,
     torso_dimensions,
 )
+from math.finite import require_positive_finite
 from math.vector3 import Vector3
-from std.math import cos, isfinite, sin
+from std.math import cos, sin
 from units.si import Length
 
 # How far the forearm turns out from the upper arm at the elbow, in
@@ -318,10 +319,10 @@ struct ArmMuscleDimensions(Copyable, Movable):
         """
         self.arm.validate()
         require_arm_athleticism(self.athleticism)
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error(
-                "An arm muscle radius scale must be finite and positive"
-            )
+        require_positive_finite(
+            Float64(self.scale),
+            "An arm muscle radius scale must be finite and positive",
+        )
 
 
 def arm_muscle_dimensions(spec: HumanoidSpec) raises -> ArmMuscleDimensions:

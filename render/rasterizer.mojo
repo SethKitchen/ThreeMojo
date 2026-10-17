@@ -218,6 +218,7 @@ from render.pointrule import (
     last_covered,
     mip_level_of,
 )
+from math.finite import require_positive_finite
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
 from render.tasks import TaskGroup
@@ -6650,8 +6651,9 @@ def check_point_state(point: RasterVertex) raises:
         raise Error("A point needs a material kind that exists")
     if not point.kind.is_unlit():
         raise Error("A point's material must be unlit")
-    if not isfinite(point.point_size) or point.point_size <= 0:
-        raise Error("A point needs a size above zero")
+    require_positive_finite(
+        Float64(point.point_size), "A point needs a size above zero"
+    )
     if (
         not isfinite(point.alpha_test)
         or point.alpha_test < 0
