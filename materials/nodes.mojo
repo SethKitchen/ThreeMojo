@@ -2148,6 +2148,56 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._add(NODE_VIEW_MATRIX, NODE_MAT4)
 
+    def _require_texture_uv(self, uv: NodeRef) raises:
+        """Refuse a texture coordinate that is not a vec2.
+
+        Args:
+            uv: The coordinate node.
+
+        Returns:
+            Nothing. The call returns when the node is a vec2.
+
+        Raises:
+            Error: If the node is not a vec2.
+        """
+        if self._types[uv.value] != NODE_VEC2:
+            raise Error(
+                "A texture node reads at a vec2, not a "
+                + self._types[uv.value].name()
+            )
+
+    def _require_texture_level(self, level: NodeRef) raises:
+        """Refuse a mip level that is not a float.
+
+        Args:
+            level: The level node.
+
+        Returns:
+            Nothing. The call returns when the node is a float.
+
+        Raises:
+            Error: If the node is not a float.
+        """
+        if self._types[level.value] != NODE_FLOAT:
+            raise Error(
+                "A texture's level is a float, not a "
+                + self._types[level.value].name()
+            )
+
+    def _require_blocks_closed(self) raises:
+        """Refuse a graph that still has an open If or Loop.
+
+        Returns:
+            Nothing. The call returns when every block is closed.
+
+        Raises:
+            Error: If an If or a Loop is still open.
+        """
+        if len(self._blocks) > 0:
+            raise Error(
+                "A node graph has an If or a Loop that End never closed"
+            )
+
     def texture(mut self, map: TextureId, uv: NodeRef) raises -> NodeRef:
         """Return a texture read at a coordinate, a linear `vec4` with
         straight alpha, three.js's `texture(map, uv)`. A shading mode that
@@ -2168,11 +2218,7 @@ struct NodeGraph(Copyable, Movable):
         if map.value < 0:
             raise Error("A texture node needs a texture")
         self._check(uv)
-        if self._types[uv.value] != NODE_VEC2:
-            raise Error(
-                "A texture node reads at a vec2, not a "
-                + self._types[uv.value].name()
-            )
+        self._require_texture_uv(uv)
         return self._add(
             NODE_TEXTURE,
             NODE_VEC4,
@@ -2203,11 +2249,7 @@ struct NodeGraph(Copyable, Movable):
                 "A texture node reads a texture, not a "
                 + self._types[sampler.value].name()
             )
-        if self._types[uv.value] != NODE_VEC2:
-            raise Error(
-                "A texture node reads at a vec2, not a "
-                + self._types[uv.value].name()
-            )
+        self._require_texture_uv(uv)
         return self._add(NODE_TEXTURE, NODE_VEC4, uv.value, sampler.value)
 
     def texture_level(
@@ -2393,11 +2435,7 @@ struct NodeGraph(Copyable, Movable):
                 "A texture's size is a texture's, not a "
                 + self._types[sampler.value].name()
             )
-        if self._types[level.value] != NODE_FLOAT:
-            raise Error(
-                "A texture's level is a float, not a "
-                + self._types[level.value].name()
-            )
+        self._require_texture_level(level)
         return self._add(
             NODE_TEXTURE_SIZE, NODE_VEC2, level.value, sampler.value
         )
@@ -2410,11 +2448,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If `level` is not a `float` of this graph.
         """
         self._check(level)
-        if self._types[level.value] != NODE_FLOAT:
-            raise Error(
-                "A texture's level is a float, not a "
-                + self._types[level.value].name()
-            )
+        self._require_texture_level(level)
         self._kinds[texel.value] = NODE_TEXTURE_LEVEL
         self._inputs[texel.value * 3 + 2] = level.value
         return texel
@@ -5608,10 +5642,7 @@ struct NodeGraph(Copyable, Movable):
                 than `MAX_INSTRUCTIONS` instructions or `MAX_REGISTERS`
                 values at once.
         """
-        if len(self._blocks) > 0:
-            raise Error(
-                "A node graph has an If or a Loop that End never closed"
-            )
+        self._require_blocks_closed()
         var work = self.copy()
         # The mask, with every discard joined to it.
         var mask = work._outputs[MASK_NODE.value]
@@ -5668,10 +5699,7 @@ struct NodeGraph(Copyable, Movable):
                 `MAX_INSTRUCTIONS` instructions or `MAX_REGISTERS` values
                 at once.
         """
-        if len(self._blocks) > 0:
-            raise Error(
-                "A node graph has an If or a Loop that End never closed"
-            )
+        self._require_blocks_closed()
         if len(self._discards) > 0:
             raise Error("A compute program has no fragment to Discard")
         var work = self.copy()

@@ -1358,18 +1358,61 @@ struct _Loader(Movable):
     def image_url(self, uuid: String) raises -> Int:
         """Return an image's `url`, a string or the array of a cube's six,
         which must be there."""
-        if uuid not in self.images:
-            raise Error("Object JSON: a texture names no image: " + uuid)
+        self._require_image(uuid)
         var item = self.document.at(self.library("images"), self.images[uuid])
         return self.document.required(
             item, "url", "Object JSON: an image has no URL"
         )
 
+    def _require_texture(self, uuid: String) raises:
+        """Refuse a uuid that names no texture.
+
+        Args:
+            uuid: The texture uuid.
+
+        Returns:
+            Nothing. The call returns when the texture is in the file.
+
+        Raises:
+            Error: If the uuid names no texture.
+        """
+        if uuid not in self.textures:
+            raise Error("Object JSON: names no texture: " + uuid)
+
+    def _require_image(self, uuid: String) raises:
+        """Refuse a uuid that names no image.
+
+        Args:
+            uuid: The image uuid.
+
+        Returns:
+            Nothing. The call returns when the image is in the file.
+
+        Raises:
+            Error: If the uuid names no image.
+        """
+        if uuid not in self.images:
+            raise Error("Object JSON: a texture names no image: " + uuid)
+
+    def _require_material(self, uuid: String) raises:
+        """Refuse a uuid that names no material.
+
+        Args:
+            uuid: The material uuid.
+
+        Returns:
+            Nothing. The call returns when the material is in the file.
+
+        Raises:
+            Error: If the uuid names no material.
+        """
+        if uuid not in self.materials:
+            raise Error("Object JSON: an object names no material: " + uuid)
+
     def is_cube(self, uuid: String) raises -> Bool:
         """Return True if a texture's image is six images, which makes it
         a `CubeTexture`, as `ObjectLoader.parseTextures` decides."""
-        if uuid not in self.textures:
-            raise Error("Object JSON: names no texture: " + uuid)
+        self._require_texture(uuid)
         var item = self.document.at(
             self.library("textures"), self.textures[uuid]
         )
@@ -2421,14 +2464,12 @@ struct _Loader(Movable):
         if entry == NO_NODE:
             return List[Float32]()
         var uuid = self.uuid(entry)
-        if uuid not in self.textures:
-            raise Error("Object JSON: names no texture: " + uuid)
+        self._require_texture(uuid)
         var texture = self.document.at(
             self.library("textures"), self.textures[uuid]
         )
         var image = self.text(texture, "image", "")
-        if image not in self.images:
-            raise Error("Object JSON: a texture names no image: " + image)
+        self._require_image(image)
         var url = self.entry(
             self.document.at(self.library("images"), self.images[image]),
             "url",
@@ -2473,8 +2514,7 @@ struct _Loader(Movable):
             raise Error("Object JSON: a mesh with an empty material list")
         for at in range(count):  # pragma: no branch
             var uuid = self.document.string(self.document.at(found, at))
-            if uuid not in self.materials:
-                raise Error("Object JSON: an object names no material: " + uuid)
+            self._require_material(uuid)
             list.append(MaterialId(self.materials[uuid]))
         return list^
 
@@ -2489,8 +2529,7 @@ struct _Loader(Movable):
                 "Object JSON: only a mesh can have more than one material"
             )
         var uuid = self.text(item, "material", "")
-        if uuid not in self.materials:
-            raise Error("Object JSON: an object names no material: " + uuid)
+        self._require_material(uuid)
         return MaterialId(self.materials[uuid])
 
     def instanced(self, item: Int, id: NodeId) raises -> InstancedMesh:

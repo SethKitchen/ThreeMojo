@@ -1151,9 +1151,24 @@ struct BufferGeometry(Movable):
             Error: If the geometry has no such attribute.
         """
         var slot = self._slot(name)
+        self._require_attribute(slot, name)
+        return self.values[slot]
+
+    def _require_attribute(self, slot: Int, name: String) raises:
+        """Refuse a missing attribute.
+
+        Args:
+            slot: The attribute's place, negative when it is absent.
+            name: The name in the error.
+
+        Returns:
+            Nothing. The call returns when the attribute is present.
+
+        Raises:
+            Error: If the geometry has no such attribute.
+        """
         if slot < 0:
             raise Error("This geometry has no attribute named " + name)
-        return self.values[slot]
 
     def clone_attribute(self, name: String) raises -> BufferAttribute:
         """Return an owning copy of the named attribute.
@@ -1173,8 +1188,7 @@ struct BufferGeometry(Movable):
             Error: If the geometry has no such attribute.
         """
         var slot = self._slot(name)
-        if slot < 0:
-            raise Error("This geometry has no attribute named " + name)
+        self._require_attribute(slot, name)
         return self.values[slot].clone()
 
     def vertex_count(self) raises -> Int:

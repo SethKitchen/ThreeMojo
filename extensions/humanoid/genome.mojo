@@ -220,6 +220,22 @@ def named_genes() -> List[Gene]:
     return genes^
 
 
+def require_named_gene(gene: Gene) raises:
+    """Refuse a gene that is not named.
+
+    Args:
+        gene: The gene.
+
+    Returns:
+        Nothing. The call returns when the gene is named.
+
+    Raises:
+        Error: If the gene is not named.
+    """
+    if not gene.is_valid():
+        raise Error("A genome has no " + gene_label(gene))
+
+
 struct Genome(Equatable, ImplicitlyCopyable, Writable):
     """One expression for each gene. Zero everywhere is the template."""
 
@@ -252,8 +268,7 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If `gene` is not named.
         """
-        if not gene.is_valid():
-            raise Error("A genome has no " + gene_label(gene))
+        require_named_gene(gene)
         return self.expressions[gene.value]
 
     def with_gene(self, gene: Gene, expression: Expression) raises -> Genome:
@@ -270,8 +285,7 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
             Error: If `gene` is not named, or `expression` is not finite
                 or lies outside -1 through 1.
         """
-        if not gene.is_valid():
-            raise Error("A genome has no " + gene_label(gene))
+        require_named_gene(gene)
         if not expression.is_valid():
             raise Error(
                 "The " + gene_label(gene) + " expression must lie in -1 to 1"

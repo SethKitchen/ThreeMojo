@@ -100,6 +100,22 @@ comptime DOLLY = OrbitAction(2)
 comptime PAN = OrbitAction(3)
 
 
+def require_dolly_factor(scale: Float32) raises:
+    """Refuse a dolly factor outside zero to one.
+
+    Args:
+        scale: The factor, between zero and one.
+
+    Returns:
+        Nothing. The call returns when the factor is in that range.
+
+    Raises:
+        Error: If the factor is not between zero and one.
+    """
+    if not (scale > 0 and scale <= 1):
+        raise Error("A dolly factor must be in (0, 1], got ", scale)
+
+
 struct OrbitControls(Copyable, Movable):
     """Turns pointer, wheel and key input into a camera orbiting a target."""
 
@@ -271,8 +287,7 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If the factor is not between zero and one.
         """
-        if not (scale > 0 and scale <= 1):
-            raise Error("A dolly factor must be in (0, 1], got ", scale)
+        require_dolly_factor(scale)
         self._scale *= scale
 
     def dolly_out(mut self, scale: Float32) raises:
@@ -285,8 +300,7 @@ struct OrbitControls(Copyable, Movable):
         Raises:
             Error: If the factor is not between zero and one.
         """
-        if not (scale > 0 and scale <= 1):
-            raise Error("A dolly factor must be in (0, 1], got ", scale)
+        require_dolly_factor(scale)
         self._scale /= scale
 
     def pan(
