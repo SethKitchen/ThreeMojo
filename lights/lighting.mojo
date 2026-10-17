@@ -63,6 +63,7 @@ from lights.shadow import (
     cascade_reach,
     sun_reach,
     shadow_strength,
+    require_shadow_type,
     view_depth,
 )
 from lights.aim import light_target_position
@@ -1439,8 +1440,7 @@ struct Lighting(Movable):
             var owner = self.shadows[slot].light
             if owner < 0 or owner >= len(scene.lights):
                 raise Error("A shadow map names a light that is not there")
-            if not self.shadows[slot].shadow_type.is_valid():
-                raise Error("A shadow map type that is none of the four")
+            require_shadow_type(self.shadows[slot].shadow_type)
             var kind = scene.lights[owner].kind
             if kind != DIRECTIONAL and kind != POINT and kind != SPOT:
                 raise Error(
