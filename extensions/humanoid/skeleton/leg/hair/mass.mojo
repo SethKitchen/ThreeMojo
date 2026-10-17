@@ -14,6 +14,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.leg.hair.dimensions import (
     HairField,
     HairPart,
+    require_hair_part,
     hair_distance,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -98,8 +99,7 @@ def hair_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hair part must be a named hair group")
+    require_hair_part(part)
     tissue.validate()
     var field = HairField(dimensions, part)
     var length = six_segment_length(

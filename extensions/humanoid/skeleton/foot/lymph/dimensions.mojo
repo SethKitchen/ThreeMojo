@@ -58,6 +58,22 @@ struct FootLymph(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, LATERAL_COLLECTORS.value)
 
 
+def require_foot_lymph(part: FootLymph) raises:
+    """Refuse a foot lymph trunk that is not named.
+
+    Args:
+        part: The trunk.
+
+    Returns:
+        Nothing. The call returns when the trunk is named.
+
+    Raises:
+        Error: If the trunk is not named.
+    """
+    if not part.is_valid():
+        raise Error("A foot lymph part must be a named trunk")
+
+
 comptime DORSAL_LYMPHATICS = FootLymph(0)
 comptime PLANTAR_LYMPHATICS = FootLymph(1)
 comptime MEDIAL_COLLECTORS = FootLymph(2)
@@ -85,8 +101,7 @@ struct FootLymphField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot lymph part must be a named trunk")
+        require_foot_lymph(part)
         self.tubes = _tubes(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.00025 * S

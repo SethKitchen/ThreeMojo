@@ -48,6 +48,22 @@ struct NervePart(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, SURAL_NERVE.value)
 
 
+def require_nerve_part(part: NervePart) raises:
+    """Refuse a nerve that is not named.
+
+    Args:
+        part: The nerve.
+
+    Returns:
+        Nothing. The call returns when the nerve is named.
+
+    Raises:
+        Error: If the nerve is not a named peripheral nerve.
+    """
+    if not part.is_valid():
+        raise Error("A nerve part must be a named peripheral nerve")
+
+
 comptime FEMORAL_NERVE = NervePart(0)
 comptime SCIATIC_NERVE = NervePart(1)
 comptime TIBIAL_NERVE = NervePart(2)
@@ -81,8 +97,7 @@ struct NerveField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A nerve part must be a named peripheral nerve")
+        require_nerve_part(part)
         var S = dimensions.stature.value
         var chain: TubeChain
         if part == FEMORAL_NERVE:

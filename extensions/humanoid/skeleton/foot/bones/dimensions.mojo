@@ -112,6 +112,22 @@ struct FootBone(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, TOE5_DISTAL.value)
 
 
+def require_foot_bone(part: FootBone) raises:
+    """Refuse a foot bone that is not named.
+
+    Args:
+        part: The bone.
+
+    Returns:
+        Nothing. The call returns when the bone is named.
+
+    Raises:
+        Error: If the bone is not one of the twenty-six.
+    """
+    if not part.is_valid():
+        raise Error("A foot bone must be one of the twenty-six bones")
+
+
 comptime TALUS = FootBone(0)
 comptime CALCANEUS = FootBone(1)
 comptime NAVICULAR = FootBone(2)
@@ -310,8 +326,7 @@ struct FootBoneField(DistanceField, ImplicitlyCopyable):
                 side is refused.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot bone must be one of the twenty-six bones")
+        require_foot_bone(part)
         var own = _shape(dimensions, part)
         self.segments = own.segments
         self.k = own.k

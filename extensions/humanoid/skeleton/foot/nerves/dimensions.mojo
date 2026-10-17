@@ -60,6 +60,22 @@ struct FootNerve(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, SAPHENOUS_NERVE.value)
 
 
+def require_foot_nerve(part: FootNerve) raises:
+    """Refuse a foot nerve that is not named.
+
+    Args:
+        part: The nerve.
+
+    Returns:
+        Nothing. The call returns when the nerve is named.
+
+    Raises:
+        Error: If the nerve is not named.
+    """
+    if not part.is_valid():
+        raise Error("A foot nerve must be a named nerve")
+
+
 comptime TIBIAL_NERVE = FootNerve(0)
 comptime MEDIAL_PLANTAR_NERVE = FootNerve(1)
 comptime LATERAL_PLANTAR_NERVE = FootNerve(2)
@@ -93,8 +109,7 @@ struct FootNerveField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot nerve must be a named nerve")
+        require_foot_nerve(part)
         self.tubes = _tubes(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.00030 * S

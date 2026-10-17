@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.occupancy import (
 from extensions.humanoid.skeleton.shell_sample import fill_at
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisBone,
+    require_pelvis_bone,
     PelvisBoneField,
     PelvisDimensions,
     pelvis_bone_label,
@@ -129,8 +130,7 @@ def pelvis_bone_mass_from_dimensions(
             fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A pelvic bone must be one of the four bones")
+    require_pelvis_bone(part)
     var label = pelvis_bone_label(part)
     var field = PelvisBoneField(dimensions, part)
     return sample_bone_mass[pelvis_bone_field_occupancy](

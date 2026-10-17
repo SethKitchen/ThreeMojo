@@ -20,6 +20,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 from extensions.humanoid.skeleton.foot.chain import tube_set_volume
 from extensions.humanoid.skeleton.foot.lymph.dimensions import (
     FootLymph,
+    require_foot_lymph,
     FootLymphField,
     lymph_distance,
 )
@@ -95,8 +96,7 @@ def foot_lymph_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot lymph part must be a named trunk")
+    require_foot_lymph(part)
     tissue.validate()
     var field = FootLymphField(dimensions, part)
     var volume = tube_set_volume(field.tubes)

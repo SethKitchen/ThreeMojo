@@ -128,6 +128,22 @@ comptime BOB = HairStyle(11)
 comptime PIXIE = HairStyle(12)
 
 
+def require_hair_style(style: HairStyle) raises:
+    """Refuse a hair style that is not named.
+
+    Args:
+        style: The style.
+
+    Returns:
+        Nothing. The call returns when the style is named.
+
+    Raises:
+        Error: If the style is not named.
+    """
+    if not style.is_valid():
+        raise Error("A hair style must be a named style")
+
+
 def hair_style_label(style: HairStyle) -> String:
     """Return the name of `style` for error text and tables.
 
@@ -183,8 +199,7 @@ def hair_style_path(style: HairStyle) raises -> String:
         Error: If `style` is not named, or is grown or designed, and so
             has no file.
     """
-    if not style.is_valid():
-        raise Error("A hair style must be a named style")
+    require_hair_style(style)
     if not style.is_scanned():
         raise Error("A grown or designed hair style has no file")
     return humanoid_asset_path(

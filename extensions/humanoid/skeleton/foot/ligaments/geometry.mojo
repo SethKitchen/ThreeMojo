@@ -21,6 +21,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.ligaments.dimensions import (
     FootLigament,
+    require_foot_ligament,
     FootLigamentField,
     ligament_part_label,
 )
@@ -73,8 +74,7 @@ def ligament_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot ligament must be a named ligament")
+    require_foot_ligament(part)
     var label = ligament_part_label(part)
     var field = FootLigamentField(dimensions, part)
     return mesh_checked(field, field.low, field.high, detail, label)

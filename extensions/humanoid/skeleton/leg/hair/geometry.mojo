@@ -19,6 +19,7 @@ from extensions.humanoid.skeleton.hair_shafts import mesh_hair_shafts
 from extensions.humanoid.skeleton.leg.hair.dimensions import (
     HairField,
     HairPart,
+    require_hair_part,
     hair_part_label,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -71,8 +72,7 @@ def hair_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hair part must be a named hair group")
+    require_hair_part(part)
     var label = hair_part_label(part)
     var field = HairField(dimensions, part)
     var radius = 0.0015 * dimensions.stature.value
