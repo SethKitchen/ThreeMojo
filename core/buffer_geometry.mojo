@@ -121,7 +121,7 @@ from math.matrix4 import (
 )
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3, append_vector3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from std.math import isfinite
 from units.si import Angle, Length, METER
 
@@ -1392,9 +1392,7 @@ struct BufferGeometry(Movable):
                     wide_sums[vertex * 3 + 1],
                     wide_sums[vertex * 3 + 2],
                 )
-                unit = Vector3(
-                    Float32(wide[0]), Float32(wide[1]), Float32(wide[2])
-                )
+                unit = vector3_from_float64(wide[0], wide[1], wide[2])
             sums[vertex * 3] = unit.x
             sums[vertex * 3 + 1] = unit.y
             sums[vertex * 3 + 2] = unit.z
@@ -1573,9 +1571,7 @@ struct BufferGeometry(Movable):
                         var magnitude = length3(wide[0], wide[1], wide[2])
                         scale = 1 / magnitude if magnitude > 0 else Float64(1)
                         var unit = normalized3(wide[0], wide[1], wide[2])
-                        normal = Vector3(
-                            Float32(unit[0]), Float32(unit[1]), Float32(unit[2])
-                        )
+                        normal = vector3_from_float64(unit[0], unit[1], unit[2])
                     if len(self.morph_normals) > 0:
                         scales.append(scale)
                         wide_scales.append(not ordinary)
@@ -1592,10 +1588,8 @@ struct BufferGeometry(Movable):
                                 _wide_normal(turn, normals.vector3(vertex))
                                 * scales[vertex]
                             )
-                            normal = Vector3(
-                                Float32(wide[0]),
-                                Float32(wide[1]),
-                                Float32(wide[2]),
+                            normal = vector3_from_float64(
+                                wide[0], wide[1], wide[2]
                             )
                         else:
                             normal = normal * Float32(scales[vertex])

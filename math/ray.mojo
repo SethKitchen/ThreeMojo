@@ -46,7 +46,7 @@ Like `Vector3` and the bounds, a ray holds bare `Float32` meters. The
 from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4, require_affine
 from math.matrix_determinant import _sum_products
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.norm import normalized3, _ordinary_squared, squared_length3
 from std.math import copysign, inf, max, min, nan, sqrt
 from std.memory import bitcast
@@ -521,9 +521,7 @@ struct Ray(ImplicitlyCopyable):
                 Float64(target.y) - Float64(self.origin.y),
                 Float64(target.z) - Float64(self.origin.z),
             )
-            toward = Vector3(
-                Float32(unit[0]), Float32(unit[1]), Float32(unit[2])
-            )
+            toward = vector3_from_float64(unit[0], unit[1], unit[2])
         self.direction = toward
 
     def recast(mut self, t: Float32):

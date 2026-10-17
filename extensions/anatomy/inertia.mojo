@@ -22,7 +22,7 @@ from math.finite import (
     require_non_negative_finite,
 )
 from math.utils import min3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from std.math import sqrt
 from units.si import (
     KILOGRAM,
@@ -327,7 +327,7 @@ struct InertiaTally(Copyable, Movable):
         _check_second_moments(sxx, syy, szz, sxy, sxz, syz, 1e-10)
         var result = SegmentInertia(
             Mass(mass_si, KILOGRAM),
-            Vector3(Float32(c[0]), Float32(c[1]), Float32(c[2])),
+            vector3_from_float64(c[0], c[1], c[2]),
             MomentOfInertia(Float32(syy + szz), KILOGRAM_SQUARE_METER),
             MomentOfInertia(Float32(sxx + szz), KILOGRAM_SQUARE_METER),
             MomentOfInertia(Float32(sxx + syy), KILOGRAM_SQUARE_METER),

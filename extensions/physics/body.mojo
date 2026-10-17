@@ -37,7 +37,7 @@ from math.cross import wide_cross, wide_dot, widen_vector
 from math.finite import require_finite, require_positive_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Mass
 
@@ -689,8 +689,8 @@ struct RigidBody(Copyable, Movable):
         q = _rotation_wide(self.rotation)
         momentum = _rotation_apply(_rotation_back(q), world_momentum)
         omega = _rotation_apply(q, _tensor_apply(inverse, momentum))
-        self.angular_velocity = Vector3(
-            Float32(omega[0]), Float32(omega[1]), Float32(omega[2])
+        self.angular_velocity = vector3_from_float64(
+            omega[0], omega[1], omega[2]
         )
         return True
 

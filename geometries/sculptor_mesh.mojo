@@ -468,10 +468,8 @@ struct SculptorMesh(Movable):
             var bx = v3.x - v1.x
             var by = v3.y - v1.y
             var bz = v3.z - v1.z
-            var raw = Vector3(
-                Float32(ay * bz - az * by),
-                Float32(az * bx - ax * bz),
-                Float32(ax * by - ay * bx),
+            var raw = vector3_from_float64(
+                ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
             )
             var first = vector3_from_float64(v1.x, v1.y, v1.z)
             var second = vector3_from_float64(v2.x, v2.y, v2.z)
@@ -480,9 +478,7 @@ struct SculptorMesh(Movable):
                 second - first, third - first, raw
             ) and _finite_triangle(first, second, third):
                 var wide = _triangle_cross_wide(first, second, third)
-                raw = Vector3(
-                    Float32(wide[0]), Float32(wide[1]), Float32(wide[2])
-                )
+                raw = vector3_from_float64(wide[0], wide[1], wide[2])
             self.face_normals[face * 3] = raw.x
             self.face_normals[face * 3 + 1] = raw.y
             self.face_normals[face * 3 + 2] = raw.z

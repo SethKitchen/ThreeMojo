@@ -319,7 +319,7 @@ def _sample_task_checked(
     var h = grid.h
     var rho = 0.5 * sqrt(3.0) * Float64(BLOCK) * h
     var kmax = model[].max_blend()
-    var widths = Vector3(Float32(h), Float32(h), Float32(h))
+    var widths = vector3_from_float64(h, h, h)
     var cell_volume = h * h * h
     var s = _fresh_stats()
     var lists = List[List[Int]]()

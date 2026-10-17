@@ -506,9 +506,7 @@ struct Sculptor(Movable):
         var x = ((client_x - rect[0]) / rect[2]) * 2 - 1
         var y = -((client_y - rect[1]) / rect[3]) * 2 + 1
         return point3_of(
-            unproject_point(
-                Vector3(Float32(x), Float32(y), Float32(z)), camera, scene
-            )
+            unproject_point(vector3_from_float64(x, y, z), camera, scene)
         )
 
     def _project[

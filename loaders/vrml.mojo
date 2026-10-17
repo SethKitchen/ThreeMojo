@@ -132,7 +132,7 @@ from materials.material import (
 )
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
 from objects.points import Points
@@ -878,9 +878,7 @@ struct _Builder(Movable):
                 )
             elif field.name == "scale":
                 var v = _first_numbers(field, 3)
-                object.scale = Vector3(
-                    Float32(v[0]), Float32(v[1]), Float32(v[2])
-                )
+                object.scale = vector3_from_float64(v[0], v[1], v[2])
             elif field.name == "translation":
                 var v = _first_numbers(field, 3)
                 object.set_position(Float32(v[0]), Float32(v[1]), Float32(v[2]))

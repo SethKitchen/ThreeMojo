@@ -125,7 +125,7 @@ from materials.material import (
 from math.matrix4 import Matrix4, rotation_axis, scaling, translation
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
@@ -1197,7 +1197,7 @@ struct _Loader(Movable):
                 var v = self.numbers(step, 4, "<rotate>")
                 matrix.multiply(
                     rotation_axis(
-                        Vector3(Float32(v[0]), Float32(v[1]), Float32(v[2])),
+                        vector3_from_float64(v[0], v[1], v[2]),
                         Angle(Float32(v[3]), DEGREE),
                     )
                 )
