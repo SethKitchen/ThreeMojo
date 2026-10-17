@@ -36,23 +36,40 @@ def write_predecessors(root, predecessors):
 
 
 def copy_shared_helper_inputs(root, source):
-    """Copy the verified arithmetic helper closure into a partial fixture."""
+    """Build an explicitly historical arithmetic-only physical test fixture.
+
+    The source first passes its full current admission. Current partial-root
+    refusal and current complete-root positives remain separate controls.
+    """
     bindings = cleanup.shared_helper_proof_bindings(source)
     bindings.update(cleanup.scaled_float32_proof_bindings(source))
+    copied_bindings = {}
     for name, digest in bindings.items():
         raw = (Path(source)/name).read_bytes()
         if cleanup.sha(raw) != digest:
             raise AssertionError('shared-helper fixture source changed: ' + name)
+        if name in cleanup.pr760_stage.CARLA_REGISTRY_PATHS:
+            edge = cleanup.pr760_stage.EDGES[name]
+            if cleanup.sha(raw) == edge['after_sha256']:
+                raw = cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
+                if cleanup.sha(raw) != edge['before_sha256']:
+                    raise AssertionError('historical helper predecessor changed: ' + name)
+        copied_bindings[name] = cleanup.sha(raw)
         target = Path(root)/name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(raw)
-        if cleanup.sha(target.read_bytes()) != digest:
+        if cleanup.sha(target.read_bytes()) != copied_bindings[name]:
             raise AssertionError('shared-helper fixture copy changed: ' + name)
     copied = cleanup.shared_helper_proof_bindings(root)
     copied.update(cleanup.scaled_float32_proof_bindings(root))
-    if copied != bindings:
+    # Stage-only implementation metadata is not part of historical leaf admission.
+    stage_only = {'tools/carla_lane_oracle/pr760_arithmetic_stage.py',
+                  cleanup.PR760_IMAGE, cleanup.PR760_OWNER_PREDECESSOR}
+    expected = {name: digest for name, digest in copied_bindings.items()
+                if name not in stage_only}
+    if copied != expected:
         raise AssertionError('shared-helper fixture closure changed')
-    return bindings
+    return copied
 
 
 def copy_current_root(case, source, *, destination=None):
@@ -66,8 +83,9 @@ def copy_current_root(case, source, *, destination=None):
         case.addCleanup(directory.cleanup)
         destination = Path(directory.name)
     destination = Path(destination)
+    admitted = cleanup.proof_bindings(source)
     paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.DEPENDENCY_TOOL_SHA256,
-             *cleanup.SOURCE_PATHS}
+             *cleanup.SOURCE_PATHS, *admitted}
     # The accepted-successor consumer also binds this proof document.
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
     # Supplemental witness-format proof inputs are physically copied too.
@@ -99,6 +117,8 @@ def copy_current_root(case, source, *, destination=None):
             raise AssertionError('fixture source is a symlink: ' + name)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(original, target)
+        if name in admitted and cleanup.sha(target.read_bytes()) != admitted[name]:
+            raise AssertionError('fixture admitted input copy changed: ' + name)
     cleanup.verify(destination, exact=True)
     return destination
 
@@ -112,6 +132,18 @@ def copy_historical_boundary_root(case, source, *, destination=None):
     """
     root = copy_current_root(case, source, destination=destination)
     typed = cleanup.typed_boundary
+    # Current root admission above owns the physical source; only this isolated
+    # historical test fixture receives the reviewed exact main predecessors.
+    stage = cleanup.pr760_stage
+    examples = {name: (root/name).read_bytes() for name in stage.EXAMPLE_PATHS}
+    selected = cleanup._pr760_image_selected(examples)
+    if selected:
+        for name in stage.CARLA_REGISTRY_PATHS:
+            raw = (root/name).read_bytes()
+            previous = stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
+            if cleanup.sha(raw) != stage.EDGES[name]['after_sha256'] or cleanup.sha(previous) != stage.EDGES[name]['before_sha256']:
+                raise AssertionError('historical fixture PR760 endpoint changed: ' + name)
+            (root/name).write_bytes(previous)
     for name in typed.SOURCE_PATHS:
         path = root/name
         if name in typed.NEW_INPUTS and not path.exists():
