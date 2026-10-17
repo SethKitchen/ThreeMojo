@@ -209,7 +209,7 @@ from objects.line_segments2 import (
     drawn_segments,
 )
 from objects.lod import Lod
-from objects.sprite import SPRITE_RADIUS, Sprite
+from objects.sprite import SPRITE_RADIUS, Sprite, sprite_place, sprite_span
 from objects.skinned_mesh import (
     ATTACHED,
     BONES_PER_VERTEX,
@@ -3555,14 +3555,13 @@ def _emit_sprite(
         world.elements[12], world.elements[13], world.elements[14]
     )
     var center = view.transform_point(origin)
-    var scale_x = world.column_length(0)
-    var scale_y = world.column_length(1)
-    if not material.size_attenuation and perspective:
-        scale_x *= -center.z
-        scale_y *= -center.z
-    var turn = material.rotation.to(RADIAN)
-    var turned_x = cos(turn)
-    var turned_y = sin(turn)
+    var scale_x, scale_y, turned_x, turned_y = sprite_span(
+        world,
+        center,
+        material.size_attenuation,
+        perspective,
+        material.rotation,
+    )
     var base = _with_opacity(FloatColor(srgb=material.color), material.opacity)
     # The unit square's corners and their coordinates, counterclockwise
     # from the bottom left: three.js's sprite geometry.
@@ -3570,18 +3569,21 @@ def _emit_sprite(
     var ys: List[Float32] = [-0.5, -0.5, 0.5, 0.5]
     var quad = List[ClipVertex]()
     for corner in range(4):  # pragma: no branch
-        var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
-        var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
         # Raw, on both pairs: each map places them for itself, and a
         # sprite has no `uv1`, so the second pair falls back to the first
         # as a mesh's does.
         var raw = Vector2(xs[corner] + 0.5, ys[corner] + 0.5)
         quad.append(
             ClipVertex(
-                Vector3(
-                    center.x + turned_x * aligned_x - turned_y * aligned_y,
-                    center.y + turned_y * aligned_x + turned_x * aligned_y,
-                    center.z,
+                sprite_place(
+                    center,
+                    sprite.center,
+                    xs[corner],
+                    ys[corner],
+                    scale_x,
+                    scale_y,
+                    turned_x,
+                    turned_y,
                 ),
                 base,
                 Vector3(0, 0, 1),

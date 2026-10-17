@@ -161,9 +161,10 @@ from materials.material import BACK_SIDE, FRONT_SIDE, MaterialId
 from objects.line import SEGMENTS, segment_count, segment_ends
 from objects.line_segments2 import drawn_segments
 from objects.mesh import Mesh
-from std.math import cos, inf, isnan, max, min, sin
+from objects.sprite import sprite_place, sprite_span
+from std.math import inf, isnan, max, min
 from std.memory import bitcast
-from units.si import Length, METER, RADIAN
+from units.si import Length, METER
 
 
 @fieldwise_init
@@ -1035,28 +1036,30 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         var center = view.transform_point(
             Vector3(world.elements[12], world.elements[13], world.elements[14])
         )
-        var scale_x = world.column_length(0)
-        var scale_y = world.column_length(1)
-        if not material.size_attenuation and self.camera_perspective:
-            scale_x *= -center.z
-            scale_y *= -center.z
-        var turn = material.rotation.to(RADIAN)
-        var turned_x = cos(turn)
-        var turned_y = sin(turn)
+        var scale_x, scale_y, turned_x, turned_y = sprite_span(
+            world,
+            center,
+            material.size_attenuation,
+            self.camera_perspective,
+            material.rotation,
+        )
         # The unit square's corners, counterclockwise from the bottom
         # left, carried to the world: three.js's `transformVertex`.
         var xs: List[Float32] = [-0.5, 0.5, 0.5, -0.5]
         var ys: List[Float32] = [-0.5, -0.5, 0.5, 0.5]
         var corners = List[Vector3]()
         for corner in range(4):  # pragma: no branch
-            var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
-            var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
             corners.append(
                 self.camera_world.transform_point(
-                    Vector3(
-                        center.x + turned_x * aligned_x - turned_y * aligned_y,
-                        center.y + turned_y * aligned_x + turned_x * aligned_y,
-                        center.z,
+                    sprite_place(
+                        center,
+                        sprite.center,
+                        xs[corner],
+                        ys[corner],
+                        scale_x,
+                        scale_y,
+                        turned_x,
+                        turned_y,
                     )
                 )
             )
