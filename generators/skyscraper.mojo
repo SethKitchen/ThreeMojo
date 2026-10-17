@@ -42,6 +42,7 @@ from generators.utils import (
     meters,
 )
 from geometries.box import box
+from math.vector3 import append_float64_xyz
 from geometries.surface import textured_surface
 from geometries.extrude import extrude
 from geometries.lathe import lathe
@@ -1305,18 +1306,17 @@ struct _Baked:
                         Float64(n[v * 3 + 2]),
                     )
                 ).normalized()
-                self.positions.append(Float32(at.x))
-                self.positions.append(Float32(at.y))
-                self.positions.append(Float32(at.z))
-                self.normals.append(Float32(normal.x))
-                self.normals.append(Float32(normal.y))
-                self.normals.append(Float32(normal.z))
+                append_float64_xyz(self.positions, at.x, at.y, at.z)
+                append_float64_xyz(self.normals, normal.x, normal.y, normal.z)
                 self.uvs.append(uv[v * 2])
                 self.uvs.append(uv[v * 2 + 1])
                 self.part_ids.append(Float32(id.value))
-                self.room_centers.append(Float32(room.center.x))
-                self.room_centers.append(Float32(room.center.y))
-                self.room_centers.append(Float32(room.center.z))
+                append_float64_xyz(
+                    self.room_centers,
+                    room.center.x,
+                    room.center.y,
+                    room.center.z,
+                )
                 self.room_sizes.append(Float32(room.width))
                 self.room_sizes.append(Float32(room.height))
 

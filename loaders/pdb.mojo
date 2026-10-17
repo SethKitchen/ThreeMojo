@@ -31,6 +31,7 @@ from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.ordinal import require_non_negative
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.text_number import file_line
+from math.vector3 import append_float64_xyz
 from render.srgb import srgb_to_linear
 from std.math import isnan
 from std.pathlib import Path
@@ -669,9 +670,7 @@ def parse_pdb(text: String) raises -> PdbModel:
     var positions = List[Float32]()
     var colors = List[Float32]()
     for atom in atoms:
-        positions.append(Float32(atom.x))
-        positions.append(Float32(atom.y))
-        positions.append(Float32(atom.z))
+        append_float64_xyz(positions, atom.x, atom.y, atom.z)
         colors.append(srgb_to_linear(Float32(atom.red) / 255))
         colors.append(srgb_to_linear(Float32(atom.green) / 255))
         colors.append(srgb_to_linear(Float32(atom.blue) / 255))
@@ -688,9 +687,7 @@ def parse_pdb(text: String) raises -> PdbModel:
             + String(bonds[at] + 1)
             + ", which no line gives",
         )
-        ends.append(Float32(atoms[found].x))
-        ends.append(Float32(atoms[found].y))
-        ends.append(Float32(atoms[found].z))
+        append_float64_xyz(ends, atoms[found].x, atoms[found].y, atoms[found].z)
     var atom_geometry = BufferGeometry()
     atom_geometry.set_attribute(
         String(POSITION), BufferAttribute(positions^, 3)
