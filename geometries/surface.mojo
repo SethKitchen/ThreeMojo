@@ -8,13 +8,21 @@
 A plane, a sphere, a tube and the other generated solids all finish the
 same way. `position_normal_surface` writes positions and normals.
 `textured_surface` also writes texture coordinates. `indexed_surface`
-also writes the triangle index. They share the checks for a positive
+also writes the triangle index. `record_kind` names the solid and starts
+its parameter record. They share the checks for a positive
 radius, three segments, and positive or finite box extents. A count
 below one is `require_at_least_one` in `math.curve_checks`.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+    GeometryType,
+)
+from core.user_data import UserData
 from core.ordinal import require_positive
 from std.math import isfinite
 
@@ -89,6 +97,23 @@ def indexed_surface(
     """
     textured_surface(geometry, positions^, normals^, uvs^)
     geometry.set_index(index^)
+
+
+def record_kind(mut geometry: BufferGeometry, kind: GeometryType):
+    """Name a generated solid and start its parameter record.
+
+    Args:
+        geometry: The solid.
+        kind: The three.js class, such as `SPHERE_GEOMETRY`.
+
+    Returns:
+        Nothing. The kind and an empty parameter record are set.
+
+    Raises:
+        Error: Never.
+    """
+    geometry.kind = kind
+    geometry.parameters = UserData()
 
 
 def require_positive_radius(radius: Float32, name: String) raises:

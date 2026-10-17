@@ -47,9 +47,8 @@ from core.buffer_geometry import (
     UV,
 )
 from core.ordinal import require_positive
-from core.user_data import UserData
 from geometries.earcut import triangulate_shape
-from geometries.surface import indexed_surface
+from geometries.surface import indexed_surface, record_kind
 from math.matrix_determinant import _determinant3_f32
 from math.path import Shape
 from math.polygon_area import signed_area64
@@ -592,8 +591,7 @@ def shape_geometry(
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, cut.index.copy())
-    geometry.kind = SHAPE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, SHAPE_GEOMETRY)
     geometry.parameters.set_number("curveSegments", Float64(curve_segments))
     geometry.shapes = [shape.copy()]
     return geometry^
@@ -643,8 +641,7 @@ def shape_geometry(
     for at in range(len(counts)):  # pragma: no branch
         geometry.add_group(start, counts[at], MaterialIndex(at))
         start += counts[at]
-    geometry.kind = SHAPE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, SHAPE_GEOMETRY)
     geometry.parameters.set_number("curveSegments", Float64(curve_segments))
     geometry.shapes = shapes.copy()
     return geometry^

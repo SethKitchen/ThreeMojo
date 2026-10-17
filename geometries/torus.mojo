@@ -39,8 +39,11 @@ from core.buffer_geometry import (
     TORUS_GEOMETRY,
     TORUS_KNOT_GEOMETRY,
 )
-from geometries.surface import indexed_surface, require_three_segments
-from core.user_data import UserData
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    require_three_segments,
+)
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
 from math.vector3 import Vector3, append_vector3, vector3_from_float64
@@ -162,8 +165,7 @@ def torus(
         uvs^,
         grid_index(radial_segments, tubular_segments, True),
     )
-    geometry.kind = TORUS_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, TORUS_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_meters("tube", tube)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
@@ -287,8 +289,7 @@ def torus_knot(
         uvs^,
         grid_index(tubular_segments, radial_segments, False),
     )
-    geometry.kind = TORUS_KNOT_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, TORUS_KNOT_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_meters("tube", tube)
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))

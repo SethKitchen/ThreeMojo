@@ -26,10 +26,10 @@ disagree with the next face.
 from core.buffer_geometry import BufferGeometry, SPHERE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
+    record_kind,
     require_positive_radius,
     require_three_segments,
 )
-from core.user_data import UserData
 from std.math import cos, isfinite, pi, sin
 from units.si import Angle, Length, RADIAN
 
@@ -158,8 +158,7 @@ def sphere(
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)
-    geometry.kind = SPHERE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, SPHERE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("widthSegments", Float64(width_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))

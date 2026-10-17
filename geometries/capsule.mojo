@@ -23,10 +23,10 @@ from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
 from core.ordinal import require_non_negative
 from geometries.surface import (
     indexed_surface,
+    record_kind,
     require_positive_radius,
     require_three_segments,
 )
-from core.user_data import UserData
 from math.curve_checks import require_at_least_one
 from math.utils import clamp
 from math.norm import squared_length3
@@ -155,8 +155,7 @@ def capsule(
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)
-    geometry.kind = CAPSULE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, CAPSULE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_meters("height", length)
     geometry.parameters.set_number("capSegments", Float64(cap_segments))

@@ -35,7 +35,11 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_index_in_count, require_non_negative
-from geometries.surface import require_positive_radius, textured_surface
+from geometries.surface import (
+    record_kind,
+    require_positive_radius,
+    textured_surface,
+)
 from math.norm import length2
 from core.buffer_geometry import (
     BufferGeometry,
@@ -46,7 +50,7 @@ from core.buffer_geometry import (
     TETRAHEDRON_GEOMETRY,
     GeometryType,
 )
-from core.user_data import UserData, json_number_text
+from core.user_data import json_number_text
 from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
 from std.math import atan2, pi, sqrt
 from units.si import Length
@@ -246,8 +250,7 @@ def polyhedron(
     textured_surface(geometry, data^, normals^, uvs^)
     if detail == 0:
         geometry.compute_vertex_normals()
-    geometry.kind = POLYHEDRON_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, POLYHEDRON_GEOMETRY)
     geometry.parameters.set_json("vertices", _numbers_json(vertices))
     geometry.parameters.set_json("indices", _integers_json(indices))
     geometry.parameters.set_meters("radius", radius)
@@ -275,8 +278,7 @@ def _regular_solid(
     class, and the parameters are the radius and the detail.
     """
     var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = kind
-    geometry.parameters = UserData()
+    record_kind(geometry, kind)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
