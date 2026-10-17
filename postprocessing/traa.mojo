@@ -279,11 +279,6 @@ struct FloatPlane(ImplicitlyCopyable):
         ]
 
 
-def _load(view: LightView, x: Int, y: Int) -> FloatColor:
-    """Return a pixel, the edge pixel's past the edge: `textureLoad`."""
-    return view.at(clamp(x, 0, view.width - 1), clamp(y, 0, view.height - 1))
-
-
 def clip_aabb(
     current: FloatColor,
     history: FloatColor,
@@ -692,9 +687,7 @@ def traa_pixel(
     )
     for at in range(8):  # pragma: no branch
         var near = floor_channels(
-            _load(
-                beauty, x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1])
-            )
+            beauty.load(x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
         )
         m1 = FloatColor(
             m1.r + near.r, m1.g + near.g, m1.b + near.b, m1.a + near.a
