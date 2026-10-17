@@ -29,7 +29,7 @@ from extensions.humanoid.skeleton.field import Bounds, empty_bounds
 from math.box_extent import box_exterior
 from math.catmull import catmull_rom_weights
 from math.norm import squared_length2
-from math.utils import mix_delta
+from math.utils import clamp, mix_delta
 from math.vector3 import Vector3, mix_delta3
 from std.math import atan2, cos, max, min, pi, sin, sqrt
 
@@ -449,10 +449,10 @@ def _four(
 ) -> SIMD[DType.float32, 4]:
     """Return the four values a spline between `index` and the next reads."""
     return SIMD[DType.float32, 4](
-        values[_clamp_index(index - 1, count)],
+        values[clamp(index - 1, 0, count - 1)],
         values[index],
         values[index + 1],
-        values[_clamp_index(index + 2, count)],
+        values[clamp(index + 2, 0, count - 1)],
     )
 
 
@@ -460,10 +460,10 @@ def _column(loft: Loft, index: Int, ray: Int) -> SIMD[DType.float32, 4]:
     """Return one ray's radius in the four sections a spline reads."""
     var column = (ray + 2 * LOFT_RAYS) % LOFT_RAYS
     return SIMD[DType.float32, 4](
-        loft.section_radius(_clamp_index(index - 1, loft.count), column),
+        loft.section_radius(clamp(index - 1, 0, loft.count - 1), column),
         loft.section_radius(index, column),
         loft.section_radius(index + 1, column),
-        loft.section_radius(_clamp_index(index + 2, loft.count), column),
+        loft.section_radius(clamp(index + 2, 0, loft.count - 1), column),
     )
 
 
@@ -721,11 +721,6 @@ def _spline_slopes(t: Float32) -> SIMD[DType.float32, 4]:
         Float32(0.5) * (-9 * t2 + 8 * t + 1),
         Float32(0.5) * (3 * t2 - 2 * t),
     )
-
-
-def _clamp_index(index: Int, count: Int) -> Int:
-    """Return `index` held inside `0 ..< count`."""
-    return min(max(index, 0), count - 1)
 
 
 def _ray_angle(ray: Int) -> Float32:

@@ -35,6 +35,8 @@ down the first column, then the second. The decoders return them
 row-major, as the rest of the project stores an image.
 """
 
+from math.utils import clamp
+
 
 def etc_modifiers() -> List[Int]:
     """Return the ETC1 offset tables, a small and a large offset per code.
@@ -99,11 +101,6 @@ struct EtcTables(Movable):
         self.eac = eac_modifiers()
 
 
-def _clamp(value: Int, low: Int, high: Int) -> Int:
-    """Return `value` held to `[low, high]`."""
-    return min(max(value, low), high)
-
-
 def _widen4(bits: Int) -> Int:
     """Return a four-bit channel as eight bits: `bits * 17`."""
     return (bits << 4) | bits
@@ -151,9 +148,9 @@ def _index(bits: Int, texel: Int) -> Int:
 def _put(mut out: List[UInt8], x: Int, y: Int, r: Int, g: Int, b: Int):
     """Store one opaque texel, clamped, at its row-major slot."""
     var slot = (y * 4 + x) * 4
-    out[slot] = UInt8(_clamp(r, 0, 255))
-    out[slot + 1] = UInt8(_clamp(g, 0, 255))
-    out[slot + 2] = UInt8(_clamp(b, 0, 255))
+    out[slot] = UInt8(clamp(r, 0, 255))
+    out[slot + 1] = UInt8(clamp(g, 0, 255))
+    out[slot + 2] = UInt8(clamp(b, 0, 255))
     out[slot + 3] = 255
 
 
@@ -424,7 +421,7 @@ def eac_alpha_block(
         for x in range(4):  # pragma: no branch
             var offset = tables.eac[fields[2] * 8 + _eac_index(fields[3], x, y)]
             out[y * 4 + x] = UInt8(
-                _clamp(fields[0] + offset * fields[1], 0, 255)
+                clamp(fields[0] + offset * fields[1], 0, 255)
             )
     return out^
 
@@ -466,6 +463,6 @@ def eac_r11_block(
         for x in range(4):  # pragma: no branch
             var offset = tables.eac[fields[2] * 8 + _eac_index(fields[3], x, y)]
             out[y * 4 + x] = Float32(
-                _clamp(base + offset * scale, low, high)
+                clamp(base + offset * scale, low, high)
             ) / Float32(high)
     return out^

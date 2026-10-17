@@ -33,6 +33,7 @@ data where libwebp checks for it, is refused.
 """
 
 from core.binary import copy_byte_range
+from math.utils import clamp
 from render.webp_lossy_tables import (
     AC_TABLE,
     BMODES_PROBA,
@@ -200,11 +201,6 @@ def _i16(value: Int) -> Int:
     return Int(Int16(value & 0xFFFF))
 
 
-def _clip8(value: Int) -> UInt8:
-    """Clamp to 0 to 255."""
-    return UInt8(min(max(value, 0), 255))
-
-
 def _mul1(a: Int) -> Int:
     return ((a * 20091) >> 16) + a
 
@@ -215,7 +211,7 @@ def _mul2(a: Int) -> Int:
 
 def _store(mut buf: List[UInt8], at: Int, v: Int):
     """Add a transform's output, over 8, to a pixel."""
-    buf[at] = _clip8(Int(buf[at]) + (v >> 3))
+    buf[at] = UInt8(clamp(Int(buf[at]) + (v >> 3), 0, 255))
 
 
 def _transform(coeffs: List[Int], c: Int, mut buf: List[UInt8], dst: Int):
@@ -340,8 +336,8 @@ def _true_motion(mut buf: List[UInt8], dst: Int, size: Int):
     for y in range(size):  # pragma: no branch
         var left = Int(buf[dst + y * _BPS - 1])
         for x in range(size):  # pragma: no branch
-            buf[dst + y * _BPS + x] = _clip8(
-                Int(buf[dst - _BPS + x]) + left - corner
+            buf[dst + y * _BPS + x] = UInt8(
+                clamp(Int(buf[dst - _BPS + x]) + left - corner, 0, 255)
             )
 
 
@@ -560,25 +556,17 @@ def _predict4(mut buf: List[UInt8], dst: Int, mode: Int):
 # --- loop filter ------------------------------------------------------------
 
 
-def _sclip1(v: Int) -> Int:
-    return min(max(v, -128), 127)
-
-
-def _sclip2(v: Int) -> Int:
-    return min(max(v, -16), 15)
-
-
 def _filter2(mut p: List[UInt8], at: Int, step: Int):
     """Adjust the two pixels either side of an edge."""
     var p1 = Int(p[at - 2 * step])
     var p0 = Int(p[at - step])
     var q0 = Int(p[at])
     var q1 = Int(p[at + step])
-    var a = 3 * (q0 - p0) + _sclip1(p1 - q1)
-    var a1 = _sclip2((a + 4) >> 3)
-    var a2 = _sclip2((a + 3) >> 3)
-    p[at - step] = _clip8(p0 + a2)
-    p[at] = _clip8(q0 - a1)
+    var a = 3 * (q0 - p0) + clamp(p1 - q1, -128, 127)
+    var a1 = clamp((a + 4) >> 3, -16, 15)
+    var a2 = clamp((a + 3) >> 3, -16, 15)
+    p[at - step] = UInt8(clamp(p0 + a2, 0, 255))
+    p[at] = UInt8(clamp(q0 - a1, 0, 255))
 
 
 def _filter4(mut p: List[UInt8], at: Int, step: Int):
@@ -588,13 +576,13 @@ def _filter4(mut p: List[UInt8], at: Int, step: Int):
     var q0 = Int(p[at])
     var q1 = Int(p[at + step])
     var a = 3 * (q0 - p0)
-    var a1 = _sclip2((a + 4) >> 3)
-    var a2 = _sclip2((a + 3) >> 3)
+    var a1 = clamp((a + 4) >> 3, -16, 15)
+    var a2 = clamp((a + 3) >> 3, -16, 15)
     var a3 = (a1 + 1) >> 1
-    p[at - 2 * step] = _clip8(p1 + a3)
-    p[at - step] = _clip8(p0 + a2)
-    p[at] = _clip8(q0 - a1)
-    p[at + step] = _clip8(q1 - a3)
+    p[at - 2 * step] = UInt8(clamp(p1 + a3, 0, 255))
+    p[at - step] = UInt8(clamp(p0 + a2, 0, 255))
+    p[at] = UInt8(clamp(q0 - a1, 0, 255))
+    p[at + step] = UInt8(clamp(q1 - a3, 0, 255))
 
 
 def _filter6(mut p: List[UInt8], at: Int, step: Int):
@@ -605,16 +593,16 @@ def _filter6(mut p: List[UInt8], at: Int, step: Int):
     var q0 = Int(p[at])
     var q1 = Int(p[at + step])
     var q2 = Int(p[at + 2 * step])
-    var a = _sclip1(3 * (q0 - p0) + _sclip1(p1 - q1))
+    var a = clamp(3 * (q0 - p0) + clamp(p1 - q1, -128, 127), -128, 127)
     var a1 = (27 * a + 63) >> 7
     var a2 = (18 * a + 63) >> 7
     var a3 = (9 * a + 63) >> 7
-    p[at - 3 * step] = _clip8(p2 + a3)
-    p[at - 2 * step] = _clip8(p1 + a2)
-    p[at - step] = _clip8(p0 + a1)
-    p[at] = _clip8(q0 - a1)
-    p[at + step] = _clip8(q1 - a2)
-    p[at + 2 * step] = _clip8(q2 - a3)
+    p[at - 3 * step] = UInt8(clamp(p2 + a3, 0, 255))
+    p[at - 2 * step] = UInt8(clamp(p1 + a2, 0, 255))
+    p[at - step] = UInt8(clamp(p0 + a1, 0, 255))
+    p[at] = UInt8(clamp(q0 - a1, 0, 255))
+    p[at + step] = UInt8(clamp(q1 - a2, 0, 255))
+    p[at + 2 * step] = UInt8(clamp(q2 - a3, 0, 255))
 
 
 def _hev(p: List[UInt8], at: Int, step: Int, thresh: Int) -> Bool:
@@ -719,10 +707,6 @@ struct LossyImage(Movable):
         self.width = width
         self.height = height
         self.rgba = rgba^
-
-
-def _clip(v: Int, m: Int) -> Int:
-    return min(max(v, 0), m)
 
 
 def _clip_rgb(value: Int) -> UInt8:
@@ -1005,14 +989,14 @@ def decode_lossy(var data: List[UInt8]) raises -> LossyImage:
                 q += base_q0
         else:
             q = base_q0
-        dq[s * 6] = dc_table[_clip(q + deltas[0], 127)]
-        dq[s * 6 + 1] = ac_table[_clip(q, 127)]
-        dq[s * 6 + 2] = dc_table[_clip(q + deltas[1], 127)] * 2
+        dq[s * 6] = dc_table[clamp(q + deltas[0], 0, 127)]
+        dq[s * 6 + 1] = ac_table[clamp(q, 0, 127)]
+        dq[s * 6 + 2] = dc_table[clamp(q + deltas[1], 0, 127)] * 2
         dq[s * 6 + 3] = max(
-            (ac_table[_clip(q + deltas[2], 127)] * 101581) >> 16, 8
+            (ac_table[clamp(q + deltas[2], 0, 127)] * 101581) >> 16, 8
         )
-        dq[s * 6 + 4] = dc_table[_clip(q + deltas[3], 117)]
-        dq[s * 6 + 5] = ac_table[_clip(q + deltas[4], 127)]
+        dq[s * 6 + 4] = dc_table[clamp(q + deltas[3], 0, 117)]
+        dq[s * 6 + 5] = ac_table[clamp(q + deltas[4], 0, 127)]
 
     # The token probabilities.
     _ = br.value_of(1)  # update_proba, ignored
@@ -1040,7 +1024,7 @@ def decode_lossy(var data: List[UInt8]) raises -> LossyImage:
                 lv += ref_lf_delta[0]
                 if i4x4 == 1:
                     lv += mode_lf_delta[0]
-            lv = _clip(lv, 63)
+            lv = clamp(lv, 0, 63)
             if lv > 0:
                 var ilevel = lv
                 if sharpness > 0:

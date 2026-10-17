@@ -55,6 +55,7 @@ raises.
 """
 from core.extent import positive_extent
 from core.ordinal import ordinal_valid
+from math.utils import clamp
 
 from render.compressed_texture import check_decoded_size
 from render.exr import half_to_float
@@ -520,11 +521,6 @@ def _bit_transfer_signed(a: Int, b: Int) -> Tuple[Int, Int]:
     return (new_a - 0x40 if (new_a & 0x20) != 0 else new_a, new_b)
 
 
-def _clamp(value: Int, top: Int) -> Int:
-    """Return a value clamped to 0 to `top`."""
-    return max(0, min(top, value))
-
-
 def _sign_extend(value: Int, bits: Int) -> Int:
     """Return the low `bits` bits of a value as a signed number."""
     var low = value & ((1 << bits) - 1)
@@ -554,7 +550,7 @@ def _clamped_pair(low: List[Int], high: List[Int]) -> List[Int]:
     """Return two RGBA endpoints clamped to eight bits."""
     var out = List[Int]()
     for value in _endpoint_pair(low, high):  # pragma: no branch
-        out.append(_clamp(value, 0xFF))
+        out.append(clamp(value, 0, 0xFF))
     return out^
 
 
@@ -620,13 +616,13 @@ def _hdr_rgb_base_scale(v: List[Int]) -> List[Int]:
     elif majcomp == 2:
         high = [blue, green, red]
     return [
-        _clamp(high[0] - scale, 0xFFF),
-        _clamp(high[1] - scale, 0xFFF),
-        _clamp(high[2] - scale, 0xFFF),
+        clamp(high[0] - scale, 0, 0xFFF),
+        clamp(high[1] - scale, 0, 0xFFF),
+        clamp(high[2] - scale, 0, 0xFFF),
         0x780,
-        _clamp(high[0], 0xFFF),
-        _clamp(high[1], 0xFFF),
-        _clamp(high[2], 0xFFF),
+        clamp(high[0], 0, 0xFFF),
+        clamp(high[1], 0, 0xFFF),
+        clamp(high[2], 0, 0xFFF),
         0x780,
     ]
 
@@ -686,14 +682,14 @@ def _hdr_rgb(v: List[Int]) -> List[Int]:
     vd0 *= scale
     vd1 *= scale
     var low: List[Int] = [
-        _clamp(va - vc, 0xFFF),
-        _clamp(va - vb0 - vc - vd0, 0xFFF),
-        _clamp(va - vb1 - vc - vd1, 0xFFF),
+        clamp(va - vc, 0, 0xFFF),
+        clamp(va - vb0 - vc - vd0, 0, 0xFFF),
+        clamp(va - vb1 - vc - vd1, 0, 0xFFF),
     ]
     var high: List[Int] = [
-        _clamp(va, 0xFFF),
-        _clamp(va - vb0, 0xFFF),
-        _clamp(va - vb1, 0xFFF),
+        clamp(va, 0, 0xFFF),
+        clamp(va - vb0, 0, 0xFFF),
+        clamp(va - vb1, 0, 0xFFF),
     ]
     # Swap the major component back into red's place.
     var order: List[Int] = [0, 1, 2]
@@ -726,7 +722,7 @@ def _hdr_alpha(v6: Int, v7: Int) -> Tuple[Int, Int]:
     high -= 0x20 >> mode
     low <<= 4 - mode
     high *= 1 << (4 - mode)
-    return (low, _clamp(high + low, 0xFFF))
+    return (low, clamp(high + low, 0, 0xFFF))
 
 
 def decode_endpoints(

@@ -40,7 +40,7 @@ from core.extent import positive_extent
 from core.layers import Layers
 from core.scene import Scene
 from math.matrix4 import Matrix4, translation
-from math.utils import mix_delta
+from math.utils import clamp, mix_delta
 from math.projection import view_to_screen
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -249,8 +249,8 @@ comptime SMAA_SMOOTH_MAX_DISTANCE = Float32(32)
 def _clamped(x: Int, y: Int, width: Int, height: Int) -> Int:
     """Return the index of a pixel, held inside the frame as a clamped
     texture read holds it."""
-    var cx = min(max(x, 0), width - 1)
-    var cy = min(max(y, 0), height - 1)
+    var cx = clamp(x, 0, width - 1)
+    var cy = clamp(y, 0, height - 1)
     return cy * width + cx
 
 

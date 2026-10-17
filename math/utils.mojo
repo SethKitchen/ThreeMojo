@@ -59,6 +59,23 @@ def clamp(value: Float64, low: Float64, high: Float64) -> Float64:
     return max(low, min(high, value))
 
 
+def clamp(value: Int, low: Int, high: Int) -> Int:
+    """Return `value` limited to the range from `low` to `high`.
+
+    Args:
+        value: The value.
+        low: The smallest answer.
+        high: The largest answer.
+
+    Returns:
+        The value within the range.
+
+    Raises:
+        Error: Never.
+    """
+    return max(low, min(high, value))
+
+
 def min3(x: Float32, y: Float32, z: Float32) -> Float32:
     """Return the smallest of three numbers.
 
