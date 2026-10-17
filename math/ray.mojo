@@ -44,7 +44,7 @@ Like `Vector3` and the bounds, a ray holds bare `Float32` meters. The
 """
 
 from math.bounds import Box3, Plane, Sphere
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
 from math.norm import normalized3, _ordinary_squared, squared_length3
@@ -1268,8 +1268,9 @@ struct Ray(ImplicitlyCopyable):
                 under one, or flattens the direction to nothing, which
                 leaves the ray no way to point.
         """
-        if not matrix.is_affine():
-            raise Error("A ray can only be carried through an affine matrix")
+        require_affine(
+            matrix, "A ray can only be carried through an affine matrix"
+        )
         var direction = matrix.transform_direction(self.direction)
         if direction.length() == 0:
             raise Error(

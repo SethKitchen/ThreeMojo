@@ -56,7 +56,7 @@ from math.box_extent import (
     require_nearest_box,
 )
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.matrix_determinant import _determinant3_f32, _sum_products
 from math.triangle import Line3, Triangle
 from math.triangle_normal import (
@@ -172,8 +172,9 @@ def require_affine_bound(matrix: Matrix4) raises:
     Raises:
         Error: If the matrix projects.
     """
-    if not matrix.is_affine():
-        raise Error("A bound can only be carried through an affine matrix")
+    require_affine(
+        matrix, "A bound can only be carried through an affine matrix"
+    )
 
 
 @fieldwise_init

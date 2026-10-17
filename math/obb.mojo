@@ -35,7 +35,7 @@ test reads its columns as the three unit axes of the box.
 
 from math.bounds import Box3, Plane, Sphere
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.ray import Ray
 from math.utils import clamp
 from math.vector3 import Vector3
@@ -520,8 +520,9 @@ struct OBB(ImplicitlyCopyable):
                 1e-6, a positive half size underflows, or a center, half size or
                 conservative bound overflows Float32. The box stays unchanged.
         """
-        if not matrix.is_affine():
-            raise Error("An OBB can only be carried through an affine matrix")
+        require_affine(
+            matrix, "An OBB can only be carried through an affine matrix"
+        )
         if not matrix.is_finite():
             raise Error("An OBB transform must be finite")
         _check_half_size(self.half_size)
