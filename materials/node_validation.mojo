@@ -167,8 +167,7 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             operands. Only declared integer data can hold nonfinite bits.
     """
     var size = len(program.code)
-    if size < nodes.PROGRAM_HEADER:
-        raise Error("Object JSON: a node program's code is too short")
+    nodes.require_program_code(size)
     # Control words stay finite even when the pool contains integer bits.
     for index in range(nodes.PROGRAM_HEADER):  # pragma: no branch
         if not isfinite(program.code[index]):

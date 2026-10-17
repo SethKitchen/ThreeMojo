@@ -29,7 +29,7 @@ sRGB, and so does this reader assume: a decoded TGA is `SRGB`.
 
 from core.binary import little_endian_u16
 from render.framebuffer import Color
-from render.png import MAX_PIXELS, DecodedImage
+from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
 
 # How long the fixed header is.
@@ -237,8 +237,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             )
     if width == 0 or height == 0:
         raise Error("A TGA file must have a width and a height")
-    if width * height > MAX_PIXELS:
-        raise Error("Image has too many pixels")
+    require_image_pixels(width, height)
 
     var at = HEADER_SIZE + id_length
     var palette = List[Color]()

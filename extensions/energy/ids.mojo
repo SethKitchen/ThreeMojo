@@ -28,6 +28,23 @@ struct ZoneId(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= 0
 
 
+def require_zone(id: ZoneId, count: Int) raises:
+    """Refuse a zone id that is not in range.
+
+    Args:
+        id: The zone.
+        count: How many zones there are.
+
+    Returns:
+        Nothing. The call returns when the id names a zone.
+
+    Raises:
+        Error: If the id is negative or past the last zone.
+    """
+    if not id.is_valid() or id.value >= count:
+        raise Error("A zone id is out of range")
+
+
 @fieldwise_init
 struct SurfaceId(Equatable, ImplicitlyCopyable, Writable):
     """The index of a heat transfer surface in a `ZoneModel`."""

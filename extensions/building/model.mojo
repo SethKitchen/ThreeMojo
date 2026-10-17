@@ -24,6 +24,7 @@ from std.math import isfinite
 from extensions.building.construction import Construction, Glazing
 from extensions.building.ids import (
     ConstructionId,
+    require_construction,
     ElementId,
     FurnishingId,
     MaterialId,
@@ -58,7 +59,13 @@ from extensions.topology.arrangement import (
     _check_region,
 )
 from extensions.topology.complex import HORIZONTAL, VERTICAL
-from extensions.topology.ids import CellId, FaceId, RegionId
+from extensions.topology.ids import (
+    CellId,
+    FaceId,
+    RegionId,
+    require_cell,
+    require_face,
+)
 from extensions.topology.storeys import StoreyComplex, build_storeys
 from extensions.energy.solar import require_latitude, require_longitude
 from generators.utils import Vec3d
@@ -801,8 +808,7 @@ struct Building(Movable):
         Raises:
             Error: If it is negative or past the last construction.
         """
-        if not id.is_valid() or id.value >= len(self.constructions):
-            raise Error("A construction id is out of range")
+        require_construction(id, len(self.constructions))
 
     # --- frame members and openings ----------------------------------------
 
@@ -1118,8 +1124,7 @@ struct Building(Movable):
         Raises:
             Error: If the face id is out of range.
         """
-        if not face.is_valid() or face.value >= len(self.face_element):
-            raise Error("A face id is out of range")
+        require_face(face, len(self.face_element))
         var index = self.face_element[face.value]
         if index < 0:
             return None
@@ -1337,8 +1342,7 @@ struct Building(Movable):
             ref space = self.spaces[i]
             self.check_storey(space.storey)
             require_space_use(space.use)
-            if not space.cell.is_valid() or space.cell.value >= cells:
-                raise Error("A cell id is out of range")
+            require_cell(space.cell, cells)
             if space.cell.value != i:
                 raise Error("Spaces must follow cell order")
             if self.topology.cell_storey[i] != space.storey.value:
@@ -1469,8 +1473,7 @@ struct Building(Movable):
                 if len(element.faces) != 1:
                     raise Error("A surface element needs one face")
                 var id = element.faces[0]
-                if not id.is_valid() or id.value >= faces:
-                    raise Error("A face id is out of range")
+                require_face(id, faces)
                 if owner[id.value] >= 0:
                     raise Error("Two elements must not own one face")
                 owner[id.value] = i

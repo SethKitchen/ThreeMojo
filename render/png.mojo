@@ -386,6 +386,23 @@ comptime MAX_DIMENSION = 1 << 16
 comptime MAX_PIXELS = 1 << 28
 
 
+def require_image_pixels(width: Int, height: Int) raises:
+    """Refuse an image whose pixel count passes the decoder limit.
+
+    Args:
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+
+    Returns:
+        Nothing. The call returns when the count is within the limit.
+
+    Raises:
+        Error: If the width times the height passes `MAX_PIXELS`.
+    """
+    if width * height > MAX_PIXELS:
+        raise Error("Image has too many pixels")
+
+
 def _channels_for(color_type: Int) raises -> Int:
     """Return how many samples per pixel a color type stores."""
     if color_type == 0:

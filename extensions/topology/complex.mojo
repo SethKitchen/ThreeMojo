@@ -22,7 +22,14 @@ and DesignScript" (2013).
 """
 
 from std.math import sqrt
-from extensions.topology.ids import CellId, EdgeId, FaceId, VertexId
+from extensions.topology.ids import (
+    CellId,
+    EdgeId,
+    FaceId,
+    VertexId,
+    require_cell,
+    require_face,
+)
 from extensions.topology.weld import Welder, require_weld_tolerance
 from generators.utils import Vec3d
 
@@ -206,13 +213,11 @@ struct CellComplex(Movable):
 
     def _check_cell(self, c: CellId) raises:
         """Refuse a cell id that is not in range."""
-        if not c.is_valid() or c.value >= len(self.cell_faces):
-            raise Error("A cell id is out of range")
+        require_cell(c, len(self.cell_faces))
 
     def _check_face(self, f: FaceId) raises:
         """Refuse a face id that is not in range."""
-        if not f.is_valid() or f.value >= len(self.faces):
-            raise Error("A face id is out of range")
+        require_face(f, len(self.faces))
 
     # --- queries ----------------------------------------------------------
 

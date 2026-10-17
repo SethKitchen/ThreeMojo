@@ -53,6 +53,7 @@ from math.box_extent import (
     _midpoint,
     _radius_up,
     _shrink_exceeds_extent,
+    require_nearest_box,
 )
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
@@ -297,8 +298,7 @@ struct Box3(Equatable, ImplicitlyCopyable):
             Error: If the box is empty. It has no points, so none is
                 nearest, and an inside-out corner is not an answer.
         """
-        if self.is_empty():
-            raise Error("An empty box has no nearest point")
+        require_nearest_box(self.is_empty())
         return self._nearest(point)
 
     def distance_to_point(self, point: Vector3) raises -> Float32:

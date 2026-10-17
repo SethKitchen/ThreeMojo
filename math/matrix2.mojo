@@ -17,7 +17,11 @@ Unlike three.js 0.180, `Box2.distance_to_point` uses the shared scale-safe
 length. A distance beyond Float32 still returns infinity.
 """
 
-from math.box_extent import _midpoint, _shrink_exceeds_extent
+from math.box_extent import (
+    _midpoint,
+    _shrink_exceeds_extent,
+    require_nearest_box,
+)
 from math.vector2 import Vector2, component_max, component_min
 from math.matrix_inverse import (
     _inverse_needs_wide,
@@ -323,8 +327,7 @@ struct Box2(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the box is empty.
         """
-        if self.is_empty():
-            raise Error("An empty box has no nearest point")
+        require_nearest_box(self.is_empty())
         var held = point
         held.clamp(self.min, self.max)
         return held

@@ -11,6 +11,22 @@ from std.math import sqrt
 from std.memory import bitcast
 
 
+def require_nearest_box(empty: Bool) raises:
+    """Refuse an empty box, which has no nearest point.
+
+    Args:
+        empty: Whether the box is empty.
+
+    Returns:
+        Nothing. The call returns when the box holds a point.
+
+    Raises:
+        Error: If the box is empty.
+    """
+    if empty:
+        raise Error("An empty box has no nearest point")
+
+
 def _midpoint(low: Float32, high: Float32) -> Float32:
     """Round a midpoint after a sum that cannot overflow for finite inputs."""
     return Float32((Float64(low) + Float64(high)) * 0.5)

@@ -63,7 +63,12 @@ from core.gaussian_splat_utils import (
 )
 from core.user_data import UserData, user_data_of
 from loaders.fbx import sanitize_node_name
-from loaders.gltf import decode_base64, split_glb, _apply_matrix
+from loaders.gltf import (
+    _apply_matrix,
+    decode_base64,
+    require_sparse_indices,
+    split_glb,
+)
 from core.scene import Scene
 from core.object3d import NodeId, Object3D, NO_PARENT
 from math.quaternion import Quaternion
@@ -413,8 +418,7 @@ def _apply_sparse_splat(
     var indices = document.get(sparse, "indices")
     var data = document.get(sparse, "values")
     var index_type = document.integer(document.get(indices, "componentType"))
-    if index_type != 5121 and index_type != 5123 and index_type != 5125:
-        raise Error("glTF: sparse indices must be unsigned integers")
+    require_sparse_indices(index_type)
     var index_size = _component_bytes(index_type)
     var component_size = _component_bytes(component)
     var found = _sparse_span(
