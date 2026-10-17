@@ -17,6 +17,7 @@ both in its binary chunk.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.binary import append_little_endian_u32
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
@@ -332,27 +333,19 @@ def glb_of(json: String, bin: List[UInt8], version: Int = 2) -> List[UInt8]:
     var total = 12 + 8 + len(text)
     if len(bin) > 0:
         total += 8 + len(bin)
-    push32(out, 0x46546C67)
-    push32(out, version)
-    push32(out, total)
-    push32(out, len(text))
-    push32(out, 0x4E4F534A)
+    append_little_endian_u32(out, 0x46546C67)
+    append_little_endian_u32(out, version)
+    append_little_endian_u32(out, total)
+    append_little_endian_u32(out, len(text))
+    append_little_endian_u32(out, 0x4E4F534A)
     for byte in text:
         out.append(byte)
     if len(bin) > 0:
-        push32(out, len(bin))
-        push32(out, 0x004E4942)
+        append_little_endian_u32(out, len(bin))
+        append_little_endian_u32(out, 0x004E4942)
         for byte in bin:
             out.append(byte)
     return out^
-
-
-def push32(mut out: List[UInt8], value: Int):
-    """Append a little-endian word."""
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-    out.append(UInt8((value >> 16) & 0xFF))
-    out.append(UInt8((value >> 24) & 0xFF))
 
 
 def test_a_container_is_checked_chunk_by_chunk() raises:
@@ -379,18 +372,18 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
         _ = split_glb(wrong_length)
     # A chunk header that runs past the file, and a chunk that does.
     var stub = List[UInt8]()
-    push32(stub, 0x46546C67)
-    push32(stub, 2)
-    push32(stub, 16)
-    push32(stub, 0)
+    append_little_endian_u32(stub, 0x46546C67)
+    append_little_endian_u32(stub, 2)
+    append_little_endian_u32(stub, 16)
+    append_little_endian_u32(stub, 0)
     with assert_raises():
         _ = split_glb(stub)
     var overrun = List[UInt8]()
-    push32(overrun, 0x46546C67)
-    push32(overrun, 2)
-    push32(overrun, 20)
-    push32(overrun, 100)
-    push32(overrun, 0x4E4F534A)
+    append_little_endian_u32(overrun, 0x46546C67)
+    append_little_endian_u32(overrun, 2)
+    append_little_endian_u32(overrun, 20)
+    append_little_endian_u32(overrun, 100)
+    append_little_endian_u32(overrun, 0x4E4F534A)
     with assert_raises():
         _ = split_glb(overrun)
     # A binary chunk before the JSON, two of either, an unknown type,
@@ -414,17 +407,17 @@ def test_a_container_is_checked_chunk_by_chunk() raises:
     with assert_raises():
         _ = split_glb(unknown)
     var twice_bin = good.copy()
-    push32(twice_bin, 4)
-    push32(twice_bin, 0x004E4942)
+    append_little_endian_u32(twice_bin, 4)
+    append_little_endian_u32(twice_bin, 0x004E4942)
     for byte in bin:
         twice_bin.append(byte)
     twice_bin[8] = UInt8(len(twice_bin))
     with assert_raises():
         _ = split_glb(twice_bin)
     var no_json = List[UInt8]()
-    push32(no_json, 0x46546C67)
-    push32(no_json, 2)
-    push32(no_json, 12)
+    append_little_endian_u32(no_json, 0x46546C67)
+    append_little_endian_u32(no_json, 2)
+    append_little_endian_u32(no_json, 12)
     with assert_raises():
         _ = split_glb(no_json)
     # A container loads through `load_gltf` with its chunk as the first
@@ -1270,8 +1263,8 @@ def test_the_edges_of_every_check_are_reached() raises:
         _ = split_glb(words)
     # A binary chunk of no bytes.
     var empty_bin = glb_of('{"asset":{"version":"2.0"}}', List[UInt8]())
-    push32(empty_bin, 0)
-    push32(empty_bin, 0x004E4942)
+    append_little_endian_u32(empty_bin, 0)
+    append_little_endian_u32(empty_bin, 0x004E4942)
     empty_bin[8] = UInt8(len(empty_bin))
     var parts = split_glb(empty_bin)
     assert_equal(len(parts[1]), 0)
