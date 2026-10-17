@@ -50,7 +50,8 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
 )
-from loaders.bytes import ascii_digit, ascii_letter
+from loaders.bytes import ascii_digit
+from loaders.js_text import is_js_word
 from loaders.three_mf import js_key_order
 from std.memory import bitcast
 from std.pathlib import Path
@@ -685,9 +686,7 @@ def md2_animation_name(frame: String) -> Optional[String]:
         return None
     for k in range(end):
         var b = bytes[k]
-        var word = (
-            ascii_digit(Int(b)) or ascii_letter(Int(b)) or b == 95 or b == 45
-        )
+        var word = is_js_word(b) or b == 45
         if not word:
             return None
     return String(frame[byte=:end])
