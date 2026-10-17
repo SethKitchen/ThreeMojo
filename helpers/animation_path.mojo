@@ -85,8 +85,7 @@ def animation_path(
     if divisions < 1:
         raise Error("An animation path needs one division at least")
     var track = position_track(clip, object)
-    if track < 0:
-        raise Error("The clip has no position track for the node")
+    require_position_track(track)
     var numbers = List[Float32]()
     for step in range(divisions + 1):  # pragma: no branch
         var at = Float32(step) / Float32(divisions) * clip.length
@@ -99,6 +98,22 @@ def animation_path(
         String(POSITION_ATTRIBUTE), BufferAttribute(numbers^, 3)
     )
     return geometry^
+
+
+def require_position_track(track: Int) raises:
+    """Refuse a clip that has no position track for the node.
+
+    Args:
+        track: The track index, or below zero when there is none.
+
+    Returns:
+        Nothing. The call returns when the clip has that track.
+
+    Raises:
+        Error: If the track index is below zero.
+    """
+    if track < 0:
+        raise Error("The clip has no position track for the node")
 
 
 def animation_path_markers(
@@ -118,8 +133,7 @@ def animation_path_markers(
         Error: If the clip has no position track for the node.
     """
     var track = position_track(clip, object)
-    if track < 0:
-        raise Error("The clip has no position track for the node")
+    require_position_track(track)
     var geometry = BufferGeometry()
     geometry.set_attribute(
         String(POSITION_ATTRIBUTE),

@@ -95,6 +95,24 @@ struct JsonKind(Equatable, ImplicitlyCopyable, Writable):
 
 
 comptime OBJECT = JsonKind(0)
+
+
+def require_json_object(kind: JsonKind) raises:
+    """Refuse a JSON node that is not an object.
+
+    Args:
+        kind: The node's kind.
+
+    Returns:
+        Nothing. The call returns when the node is an object.
+
+    Raises:
+        Error: If the node is not an object.
+    """
+    if kind != OBJECT:
+        raise Error("JSON: only an object has keys")
+
+
 comptime ARRAY = JsonKind(1)
 comptime STRING = JsonKind(2)
 comptime NUMBER = JsonKind(3)
@@ -256,8 +274,7 @@ struct JsonDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node]
-        if found.kind != OBJECT:
-            raise Error("JSON: only an object has keys")
+        require_json_object(found.kind)
         var answer = NO_NODE
         for index in range(len(found.keys)):
             if found.keys[index] == key:
@@ -280,8 +297,7 @@ struct JsonDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node]
-        if found.kind != OBJECT:
-            raise Error("JSON: only an object has keys")
+        require_json_object(found.kind)
         if index < 0 or index >= len(found.keys):
             raise Error("JSON: no key at position " + String(index))
         return found.keys[index]

@@ -75,6 +75,23 @@ struct Md2Part(Copyable, Movable):
     var wireframe: MaterialId
 
 
+def require_weapon_names(names: Int, weapons: Int) raises:
+    """Refuse a character that does not name each weapon once.
+
+    Args:
+        names: How many weapon names were given.
+        weapons: How many weapon models were given.
+
+    Returns:
+        Nothing. The call returns when the counts match.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if names != weapons:
+        raise Error("An MD2 character needs one name a weapon")
+
+
 def _lowest(model: Md2Model) raises -> Float32:
     """Return the lowest y of a model's first frame, three.js's
     `Box3.setFromBufferAttribute( position ).min.y`."""
@@ -234,8 +251,7 @@ struct MD2Character(Movable):
             Error: If there is not one name a weapon, or a model's clips
                 cannot be made.
         """
-        if len(weapon_names) != len(weapons):
-            raise Error("An MD2 character needs one name a weapon")
+        require_weapon_names(len(weapon_names), len(weapons))
         self.scale = scale
         self.animation_fps = 6
         var root = Object3D()
@@ -567,8 +583,7 @@ struct MD2CharacterComplex(Movable):
         Raises:
             Error: If there is not one name a weapon.
         """
-        if len(weapon_names) != len(weapons):
-            raise Error("An MD2 character needs one name a weapon")
+        require_weapon_names(len(weapon_names), len(weapons))
         self.scale = scale
         self.animation_fps = 6
         self.transition_frames = 15

@@ -470,6 +470,88 @@ comptime TORUS_KNOT_GEOMETRY = GeometryType(18)
 comptime TUBE_GEOMETRY = GeometryType(19)
 
 
+def require_draw_range(range: DrawRange) raises:
+    """Refuse a draw range that starts or runs a negative distance.
+
+    Args:
+        range: The range.
+
+    Returns:
+        Nothing. The call returns when the range is valid.
+
+    Raises:
+        Error: If the start or the count is negative.
+    """
+    if not range.is_valid():
+        raise Error("A draw range cannot start or run a negative distance")
+
+
+def require_stream_start(start: Int) raises:
+    """Refuse a run that starts before the stream.
+
+    Args:
+        start: The first slot.
+
+    Returns:
+        Nothing. The call returns when the start is zero or more.
+
+    Raises:
+        Error: If the start is negative.
+    """
+    if start < 0:
+        raise Error("A run cannot start before the stream")
+
+
+def require_instance_count(count: Int) raises:
+    """Refuse a negative instance count.
+
+    Args:
+        count: How many instances.
+
+    Returns:
+        Nothing. The call returns when the count is zero or more.
+
+    Raises:
+        Error: If the count is negative.
+    """
+    if count < 0:
+        raise Error("An instance count cannot be negative")
+
+
+def require_group_span(start: Int, count: Int) raises:
+    """Refuse a group that starts or runs a negative distance.
+
+    Args:
+        start: The first slot.
+        count: How many slots.
+
+    Returns:
+        Nothing. The call returns when both are zero or more.
+
+    Raises:
+        Error: If either is negative.
+    """
+    if start < 0 or count < 0:
+        raise Error("A group cannot start or run a negative distance")
+
+
+def require_morph_index(target: Int, count: Int) raises:
+    """Refuse a morph target the geometry does not have.
+
+    Args:
+        target: Which morph target.
+        count: How many position targets the geometry has.
+
+    Returns:
+        Nothing. The call returns when the index names a target.
+
+    Raises:
+        Error: If the index is negative or past the last target.
+    """
+    if target < 0 or target >= count:
+        raise Error("No morph target has that index")
+
+
 struct BufferGeometry(Movable):
     """Named vertex attributes, with optional indexed triangles."""
 
@@ -612,8 +694,7 @@ struct BufferGeometry(Movable):
                 refuses one.
         """
         var range = DrawRange(start, count)
-        if not range.is_valid():
-            raise Error("A draw range cannot start or run a negative distance")
+        require_draw_range(range)
         self.draw_range = range
 
     def drawn_run(self, start: Int, count: Int) raises -> Tuple[Int, Int]:
@@ -636,10 +717,8 @@ struct BufferGeometry(Movable):
             Error: If `start` is negative, the draw range is not valid, or
                 the geometry has no index and no positions.
         """
-        if start < 0:
-            raise Error("A run cannot start before the stream")
-        if not self.draw_range.is_valid():
-            raise Error("A draw range cannot start or run a negative distance")
+        require_stream_start(start)
+        require_draw_range(self.draw_range)
         var total = self.stream_length()
         var first = min(max(start, self.draw_range.start), total)
         var end = _run_end(start, count, total)
@@ -664,8 +743,7 @@ struct BufferGeometry(Movable):
             Error: If the draw range is not valid, or the geometry has no
                 positions.
         """
-        if not self.draw_range.is_valid():
-            raise Error("A draw range cannot start or run a negative distance")
+        require_draw_range(self.draw_range)
         var total = self.vertex_count()
         var first = min(self.draw_range.start, total)
         var end = total
@@ -686,8 +764,7 @@ struct BufferGeometry(Movable):
         """
         if not self.instanced:
             raise Error("Only an instanced geometry has an instance count")
-        if count < 0:
-            raise Error("An instance count cannot be negative")
+        require_instance_count(count)
         self.instance_count = count
 
     def drawn_instances(self) raises -> Int:
@@ -718,8 +795,7 @@ struct BufferGeometry(Movable):
                     cap = holds
         if Bool(self.instance_count):
             var count = self.instance_count.value()
-            if count < 0:
-                raise Error("An instance count cannot be negative")
+            require_instance_count(count)
             if cap < 0:
                 return count
             return min(count, cap)
@@ -755,8 +831,7 @@ struct BufferGeometry(Movable):
             Error: If `start` or `count` is negative, or the material index
                 is not valid.
         """
-        if start < 0 or count < 0:
-            raise Error("A group cannot start or run a negative distance")
+        require_group_span(start, count)
         require_material_index(material_index)
         self.groups.append(GeometryGroup(start, count, material_index))
 
@@ -943,8 +1018,7 @@ struct BufferGeometry(Movable):
         Raises:
             Error: If there is no such target.
         """
-        if target < 0 or target >= len(self.morph_positions):
-            raise Error("No morph target has that index")
+        require_morph_index(target, len(self.morph_positions))
         if target >= len(self.morph_names) or self.morph_names[target] == "":
             return String(target)
         return self.morph_names[target]
@@ -992,8 +1066,7 @@ struct BufferGeometry(Movable):
         Raises:
             Error: If there is no such target, or no such vertex.
         """
-        if target < 0 or target >= len(self.morph_positions):
-            raise Error("No morph target has that index")
+        require_morph_index(target, len(self.morph_positions))
         return self.morph_positions[target].vector3(vertex)
 
     def morph_normal(self, target: Int, vertex: Int) raises -> Vector3:
@@ -1713,8 +1786,7 @@ struct BufferGeometry(Movable):
             Error: If `start` is negative, or the geometry has no index and
                 no positions.
         """
-        if start < 0:
-            raise Error("A run cannot start before the stream")
+        require_stream_start(start)
         var total = self.stream_length()
         var first = min(start, total)
         var end = _run_end(start, count, total)
@@ -1796,8 +1868,7 @@ struct BufferGeometry(Movable):
         # `_runs` gives one run at least, so neither loop over the runs can
         # run zero times.
         for run in runs:  # pragma: no branch
-            if run.start < 0 or run.count < 0:
-                raise Error("A group cannot start or run a negative distance")
+            require_group_span(run.start, run.count)
             var first = min(run.start, total)
             var end = _run_end(run.start, run.count, total)
             for slot in range(first, end - 2, 3):
@@ -1894,8 +1965,7 @@ def _wide_tangents(geometry: BufferGeometry) raises -> List[Float32]:
     ref normals = geometry.attribute_view(String(NORMAL))
     ref uvs = geometry.attribute_view(String(UV))
     for run in runs:  # pragma: no branch
-        if run.start < 0 or run.count < 0:
-            raise Error("A group cannot start or run a negative distance")
+        require_group_span(run.start, run.count)
         var end = _run_end(run.start, run.count, total)
         for slot in range(min(run.start, total), end - 2, 3):
             var a = geometry.vertex_at(slot)
