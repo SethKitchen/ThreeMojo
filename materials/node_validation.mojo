@@ -9,6 +9,22 @@ from materials import nodes
 from std.math import floor, isfinite, max
 
 
+def require_finite_node_code(value: Float32) raises:
+    """Refuse a node-program word that is not finite.
+
+    Args:
+        value: One word of the program.
+
+    Returns:
+        Nothing. The call returns when the word is finite.
+
+    Raises:
+        Error: If the word is not finite.
+    """
+    if not isfinite(value):
+        raise Error("Object JSON: a node program needs finite code")
+
+
 def _whole(value: Float32, limit: Int) raises -> Int:
     """Read a finite, nonnegative integer only after checking its range."""
     if (
@@ -170,8 +186,7 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     nodes.require_program_code(size)
     # Control words stay finite even when the pool contains integer bits.
     for index in range(nodes.PROGRAM_HEADER):  # pragma: no branch
-        if not isfinite(program.code[index]):
-            raise Error("Object JSON: a node program needs finite code")
+        require_finite_node_code(program.code[index])
     var starts = List[Int]()
     var counts = List[Int]()
     var pool = nodes.PROGRAM_HEADER
@@ -271,8 +286,7 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
         for instruction in range(counts[output]):
             var at = starts[output] + instruction * nodes.INSTRUCTION_FLOATS
             for slot in range(nodes.INSTRUCTION_FLOATS):  # pragma: no branch
-                if not isfinite(program.code[at + slot]):
-                    raise Error("Object JSON: a node program needs finite code")
+                require_finite_node_code(program.code[at + slot])
             var kind = nodes.NodeKind(
                 _whole(program.code[at], nodes.NODE_INT_LAST.value)
             )
@@ -439,5 +453,5 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     # Unused words and gaps remain finite too. An integer declaration can
     # exempt only a checked four-word data span, never control or float data.
     for index in range(size):  # pragma: no branch
-        if payload_types[index] <= 0 and not isfinite(program.code[index]):
-            raise Error("Object JSON: a node program needs finite code")
+        if payload_types[index] <= 0:
+            require_finite_node_code(program.code[index])

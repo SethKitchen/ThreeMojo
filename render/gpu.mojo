@@ -114,6 +114,7 @@ from render.target import (
 )
 from render.layered_target import LayeredRenderTarget
 from render.texture_copy import TexelPoint, copy_framebuffer_to_texture
+from core.extent import positive_extent
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
     ShadowShape,
@@ -2464,7 +2465,7 @@ def _packed_offset(base: Int, offset: Int) raises -> Float32:
 
 def _volume_block_size(width: Int, height: Int, depth: Int) raises -> Int:
     """Check the header and block size before decoding a volume."""
-    if width < 1 or height < 1 or depth < 1:
+    if not positive_extent(width, height, depth):
         raise Error("A GPU volume needs positive dimensions")
     _ = _packed_index(width)
     _ = _packed_index(height)

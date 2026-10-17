@@ -109,6 +109,24 @@ comptime RLE_TRUE_COLOR = TgaImageType(10)
 comptime RLE_GRAYSCALE = TgaImageType(11)
 
 
+def require_tga_span(start: Int, count: Int, length: Int) raises:
+    """Refuse a TGA read that runs past the file.
+
+    Args:
+        start: The first byte to read.
+        count: How many bytes the read needs.
+        length: How many bytes the file has.
+
+    Returns:
+        Nothing. The call returns when the read stays inside the file.
+
+    Raises:
+        Error: If the read runs past the file.
+    """
+    if start + count > length:
+        raise Error("A TGA file ended inside its pixels")
+
+
 def unpack_pixels(
     kind: TgaImageType,
     bytes: List[UInt8],
@@ -141,8 +159,7 @@ def unpack_pixels(
         raise Error("A TGA image type this reader does not read")
     var size = count * pixel_bytes
     if not kind.is_run_length():
-        if start + size > len(bytes):
-            raise Error("A TGA file ended inside its pixels")
+        require_tga_span(start, size, len(bytes))
         var plain = List[UInt8](capacity=size)
         for index in range(size):
             plain.append(bytes[start + index])
@@ -159,15 +176,13 @@ def unpack_pixels(
         if done + run > count:
             raise Error("A TGA run-length packet runs past the image")
         if header & REPEAT_PACKET != 0:
-            if at + pixel_bytes > len(bytes):
-                raise Error("A TGA file ended inside its pixels")
+            require_tga_span(at, pixel_bytes, len(bytes))
             for _ in range(run):  # pragma: no branch
                 for index in range(pixel_bytes):  # pragma: no branch
                     out.append(bytes[at + index])
             at += pixel_bytes
         else:
-            if at + run * pixel_bytes > len(bytes):
-                raise Error("A TGA file ended inside its pixels")
+            require_tga_span(at, run * pixel_bytes, len(bytes))
             for index in range(run * pixel_bytes):  # pragma: no branch
                 out.append(bytes[at + index])
             at += run * pixel_bytes
