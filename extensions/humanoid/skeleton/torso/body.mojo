@@ -28,7 +28,7 @@ is anterior.
 
 from core.assets import Assets
 from core.buffer_geometry import POSITION, BufferGeometry
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -71,7 +71,8 @@ from extensions.humanoid.skeleton.surface_nets import (
     share_height,
 )
 from geometries.utils import merge_geometries
-from extensions.humanoid.skeleton.look import skin_phong
+from extensions.humanoid.skeleton.look import UNSET_PAINT, skin_phong
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 from extensions.humanoid.skeleton.pelvis.contents import PelvisContents
 from extensions.humanoid.skeleton.pelvis.lower_body import (
     LowerBodySkinField,
@@ -82,19 +83,18 @@ from extensions.humanoid.skeleton.torso.contents import (
     BOTH,
     SKIN,
     TorsoContents,
+    require_torso_contents,
 )
 from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     torso_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
-from math.vector3 import Vector3
-from objects.mesh import Mesh
+from math.smoothstep import hermite_fade
+from math.utils import max3, min3, mix_delta
+from math.vector3 import Vector3, centroid
 from std.math import max, min
 
-# Optional `add_body` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 # Where the body's mesh hands over to the head's, in template
 # centimeters: on the neck, below the chin, where the skin is upright
 # and a level cut crosses it cleanly.
@@ -199,16 +199,12 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         self.low = Vector3(
             min(self.lower.low.x, self.left_arm.low.x),
             min(self.lower.low.y, self.right_arm.low.y),
-            min(self.lower.low.z, min(self.torso.low.z, self.right_arm.low.z)),
+            min3(self.lower.low.z, self.torso.low.z, self.right_arm.low.z),
         )
         self.high = Vector3(
             max(self.lower.high.x, self.right_arm.high.x),
-            max(
-                self.head.high.y, max(self.torso.high.y, self.right_arm.high.y)
-            ),
-            max(
-                self.lower.high.z, max(self.torso.high.z, self.right_arm.high.z)
-            ),
+            max3(self.head.high.y, self.torso.high.y, self.right_arm.high.y),
+            max3(self.lower.high.z, self.torso.high.z, self.right_arm.high.z),
         )
 
     def distance(self, point: Vector3) -> Float32:
@@ -272,8 +268,8 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         var t = (point.y - self.band_bottom) / (
             self.band_top - self.band_bottom
         )
-        var w = t * t * (3 - 2 * t)
-        return below + (above - below) * w
+        var w = hermite_fade(t)
+        return mix_delta(below, above, w)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
@@ -427,9 +423,11 @@ def _leave_hands_out(mut geometry: BufferGeometry, field: BodySkinField) raises:
         var a = geometry.index[t]
         var b = geometry.index[t + 1]
         var c = geometry.index[t + 2]
-        var middle = (
-            positions.vector3(a) + positions.vector3(b) + positions.vector3(c)
-        ) / 3
+        var middle = centroid(
+            positions.vector3(a),
+            positions.vector3(b),
+            positions.vector3(c),
+        )
         if field.hand_draws(middle):
             continue
         kept.append(a)
@@ -511,11 +509,8 @@ def add_body(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Torso contents must be a named layer set")
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    require_torso_contents(contents)
+    var root_id = place_root(scene, parent, origin)
     # Every layer but the skin, drawn part by part; the layers use the
     # same bits in the torso and the pelvis.
     var inner = contents.value & (SKIN.value ^ 127)
@@ -620,11 +615,13 @@ def add_body(
             skin = assets.materials.add(
                 skin_phong(genome=spec.genome, tinted=True)
             )
-        var shape = assets.geometries.add(
-            body_skin_mesh(spec, skin_detail, workers)
+        _ = place_mesh_node(
+            scene,
+            assets,
+            root_id,
+            body_skin_mesh(spec, skin_detail, workers),
+            skin,
         )
-        var nid = scene.attach(Object3D(), root_id)
-        scene.add_mesh(Mesh(shape, skin, nid))
         var arms = arm_muscle_dimensions(spec)
         for s in range(2):  # pragma: no branch
             var side = RIGHT
@@ -636,8 +633,7 @@ def add_body(
             # The hands have no zones of color, but a tinted skin needs
             # the attribute on every mesh it paints.
             untinted(hand_skin)
-            var hand = assets.geometries.add(hand_skin^)
-            scene.add_mesh(Mesh(hand, skin, scene.attach(Object3D(), root_id)))
+            _ = place_mesh_node(scene, assets, root_id, hand_skin^, skin)
         # The skin's lids open on the eyes, and the scalp's hair lies on
         # it: they come with it.
         _ = add_head(

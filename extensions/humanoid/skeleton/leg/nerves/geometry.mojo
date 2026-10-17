@@ -15,13 +15,14 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     muscle_dimensions,
 )
 from extensions.humanoid.skeleton.leg.nerves.dimensions import (
     NervePart,
+    require_nerve_part,
     _display_nerve_field,
     nerve_part_label,
 )
@@ -71,9 +72,7 @@ def nerve_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A nerve part must be a named peripheral nerve")
+    require_nerve_part(part)
     var label = nerve_part_label(part)
-    check_detail(detail, label)
     var field = _display_nerve_field(dimensions, part)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

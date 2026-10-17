@@ -35,9 +35,12 @@ change the image, which is the one thing culling must not do.
 """
 
 from math.bounds import Box3, Plane, Sphere
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
+from math.projection import require_far_beyond_near
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from std.math import isfinite
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -73,6 +76,23 @@ comptime BOTTOM = 2
 comptime TOP = 3
 comptime FAR = 4
 comptime NEAR = 5
+
+
+def require_frustum_matrix(matrix: Matrix4) raises:
+    """Refuse a frustum matrix that is not finite.
+
+    Nothing. The call returns when every element is finite.
+
+    Args:
+        matrix: A projection, or a projection times a view.
+
+    Raises:
+        Error: If the matrix is not finite.
+    """
+    require_finite_group(
+        matrix.is_finite(),
+        "A frustum projection must be finite",
+    )
 
 
 @fieldwise_init
@@ -121,10 +141,11 @@ struct Frustum(Copyable, Movable):
                 a matrix of zeros, or one whose bottom row cancels another,
                 describes no volume.
         """
-        if not matrix.is_finite():
-            raise Error("A frustum projection must be finite")
-        if not coordinate_system.is_valid():
-            raise Error("A frustum reads WEBGL or WEBGPU coordinates")
+        require_frustum_matrix(matrix)
+        require_valid(
+            coordinate_system.is_valid(),
+            "A frustum reads WEBGL or WEBGPU coordinates",
+        )
         ref e = matrix.elements
         var far: Plane
         var near: Plane
@@ -185,8 +206,7 @@ struct Frustum(Copyable, Movable):
             Error: If the projection is not finite or a plane has no normal,
                 which a degenerate projection gives.
         """
-        if not projection.is_finite():
-            raise Error("A frustum projection must be finite")
+        require_frustum_matrix(projection)
         ref e = projection.elements
         var planes = List[Plane]()
         planes.append(Frustum._plane(e, 0, 1))
@@ -245,14 +265,12 @@ struct Frustum(Copyable, Movable):
         """
         if not clip.is_finite() or not view.is_finite():
             raise Error("Frustum clip and view matrices must be finite")
-        if not view.is_affine():
-            raise Error(
-                "A view matrix must be affine to place the depth planes"
-            )
+        require_affine(
+            view, "A view matrix must be affine to place the depth planes"
+        )
         if not isfinite(near) or not isfinite(far):
             raise Error("Frustum near and far distances must be finite")
-        if far <= near:
-            raise Error("The far plane must be beyond the near plane")
+        require_far_beyond_near(near, far)
         ref c = clip.elements
         ref e = view.elements
         # Camera-space z is the view's third row dotted with a point:

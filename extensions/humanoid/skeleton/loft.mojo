@@ -26,7 +26,11 @@ can both use.
 """
 
 from extensions.humanoid.skeleton.field import Bounds, empty_bounds
-from math.vector3 import Vector3
+from math.box_extent import box_exterior
+from math.catmull import catmull_rom_weights
+from math.norm import squared_length2
+from math.utils import edge_index, mix_delta
+from math.vector3 import Vector3, mix_delta3
 from std.math import atan2, cos, max, min, pi, sin, sqrt
 
 # Rays around every section. Thirty-six resolve a calf's two heads and
@@ -378,7 +382,7 @@ def loft_distance(loft: Loft, point: Vector3) -> Float32:
     Returns:
         The signed distance, in meters.
     """
-    var off_box = _box_gap(loft.low, loft.high, point)
+    var off_box = box_exterior(loft.low, loft.high, point).length()
     if off_box > LOFT_SHORTCUT:
         return off_box
     var along = _along(point, loft.axis)
@@ -397,14 +401,14 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
     var s = (along - loft.start) / loft.spacing
     var index = min(Int(s), loft.count - 2)
     var t = s - Float32(index)
-    var w = _spline_weights(t)
+    var w = catmull_rom_weights(t)
     var dw = _spline_slopes(t)
     var cu4 = _four(loft.center_u, index, loft.count)
     var cv4 = _four(loft.center_v, index, loft.count)
     var plane = _plane(point, loft.axis)
     var du = plane[0] - (w * cu4).reduce_add()
     var dv = plane[1] - (w * cv4).reduce_add()
-    var rho = sqrt(du * du + dv * dv)
+    var rho = sqrt(squared_length2[DType.float32](du, dv))
     var angle = atan2(dv, du) + Float32(2 * pi)
     var step = Float32(2 * pi) / Float32(LOFT_RAYS)
     var r_pos = angle / step
@@ -426,7 +430,7 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
         (dw * c2).reduce_add(),
         (dw * c3).reduce_add(),
     )
-    var wq = _spline_weights(q)
+    var wq = catmull_rom_weights(q)
     var gap = rho - (wq * values).reduce_add()
     # The gradient of rho - R(angle, along): the angular term over rho,
     # and the axial term including the drift of the center.
@@ -437,7 +441,7 @@ def _radial(loft: Loft, point: Vector3, along: Float32) -> Float32:
         axial += (
             du * (dw * cu4).reduce_add() + dv * (dw * cv4).reduce_add()
         ) / (rho * loft.spacing)
-    return gap / sqrt(1 + tangential * tangential + axial * axial)
+    return gap / sqrt(1 + squared_length2[DType.float32](tangential, axial))
 
 
 def _four(
@@ -445,10 +449,10 @@ def _four(
 ) -> SIMD[DType.float32, 4]:
     """Return the four values a spline between `index` and the next reads."""
     return SIMD[DType.float32, 4](
-        values[_clamp_index(index - 1, count)],
+        values[edge_index(index - 1, count)],
         values[index],
         values[index + 1],
-        values[_clamp_index(index + 2, count)],
+        values[edge_index(index + 2, count)],
     )
 
 
@@ -456,21 +460,11 @@ def _column(loft: Loft, index: Int, ray: Int) -> SIMD[DType.float32, 4]:
     """Return one ray's radius in the four sections a spline reads."""
     var column = (ray + 2 * LOFT_RAYS) % LOFT_RAYS
     return SIMD[DType.float32, 4](
-        loft.section_radius(_clamp_index(index - 1, loft.count), column),
+        loft.section_radius(edge_index(index - 1, loft.count), column),
         loft.section_radius(index, column),
         loft.section_radius(index + 1, column),
-        loft.section_radius(_clamp_index(index + 2, loft.count), column),
+        loft.section_radius(edge_index(index + 2, loft.count), column),
     )
-
-
-def _box_gap(low: Vector3, high: Vector3, point: Vector3) -> Float32:
-    """Return how far `point` lies outside the box, or zero inside it."""
-    var out = Vector3(
-        max(max(low.x - point.x, point.x - high.x), Float32(0)),
-        max(max(low.y - point.y, point.y - high.y), Float32(0)),
-        max(max(low.z - point.z, point.z - high.z), Float32(0)),
-    )
-    return out.length()
 
 
 def _reaches(
@@ -561,10 +555,13 @@ def _add_segment(
         if cross >= 0 and cross <= 1:
             _add_round(
                 out,
-                a.center + (b.center - a.center) * cross,
-                a.ml + (b.ml - a.ml) * cross,
-                a.ap + (b.ap - a.ap) * cross,
-                min(a.ml + (b.ml - a.ml) * cross, a.ap + (b.ap - a.ap) * cross),
+                mix_delta3(a.center, b.center, cross),
+                mix_delta(a.ml, b.ml, cross),
+                mix_delta(a.ap, b.ap, cross),
+                min(
+                    mix_delta(a.ml, b.ml, cross),
+                    mix_delta(a.ap, b.ap, cross),
+                ),
                 at,
                 axis,
             )
@@ -576,9 +573,9 @@ def _add_segment(
     var k = 0
     while k < steps:
         var t = t0 + (t1 - t0) * Float32(k) / Float32(steps - 1)
-        var center = a.center + (b.center - a.center) * t
-        var ml = a.ml + (b.ml - a.ml) * t
-        var ap = a.ap + (b.ap - a.ap) * t
+        var center = mix_delta3(a.center, b.center, t)
+        var ml = mix_delta(a.ml, b.ml, t)
+        var ap = mix_delta(a.ap, b.ap, t)
         _add_round(out, center, ml, ap, min(ml, ap), at, axis)
         k += 1
 
@@ -710,20 +707,8 @@ def _polygon_radii(support: List[Float32]) -> List[Float32]:
     return radii^
 
 
-def _spline_weights(t: Float32) -> SIMD[DType.float32, 4]:
-    """Return the Catmull-Rom weights of four stations at `t`."""
-    var t2 = t * t
-    var t3 = t2 * t
-    return SIMD[DType.float32, 4](
-        Float32(0.5) * (-t3 + 2 * t2 - t),
-        Float32(0.5) * (3 * t3 - 5 * t2 + 2),
-        Float32(0.5) * (-3 * t3 + 4 * t2 + t),
-        Float32(0.5) * (t3 - t2),
-    )
-
-
 def _spline_slopes(t: Float32) -> SIMD[DType.float32, 4]:
-    """Return the derivatives of `_spline_weights` at `t`."""
+    """Return the derivatives of `catmull_rom_weights` at `t`."""
     var t2 = t * t
     return SIMD[DType.float32, 4](
         Float32(0.5) * (-3 * t2 + 4 * t - 1),
@@ -731,11 +716,6 @@ def _spline_slopes(t: Float32) -> SIMD[DType.float32, 4]:
         Float32(0.5) * (-9 * t2 + 8 * t + 1),
         Float32(0.5) * (3 * t2 - 2 * t),
     )
-
-
-def _clamp_index(index: Int, count: Int) -> Int:
-    """Return `index` held inside `0 ..< count`."""
-    return min(max(index, 0), count - 1)
 
 
 def _ray_angle(ray: Int) -> Float32:

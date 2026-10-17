@@ -75,10 +75,23 @@ was drawn. It is compared in the map's zero-to-one depth, as three.js
 compares `gl_FragCoord.z`, so a bias means the same number here as there.
 """
 
+from core.ordinal import ordinal_valid, require_valid, require_positive
+from lights.light_slot import LightSlot
+
 from math.smoothstep import smoothstep
+from math.utils import clamped_texel, lerp
+from math.cross import cross_vectors
+from math.norm import squared_length2
 from math.vector3 import Vector3
+from render.color_math import rgb_channels
 from render.texture import Texture
 from render.texture_store import TextureId
+from math.sine import fraction
+from math.finite import (
+    require_non_negative_finite,
+    require_positive_finite,
+    require_unit_finite,
+)
 from std.math import floor, isfinite, max, min, sqrt
 from units.si import Angle, Length, METER
 
@@ -102,12 +115,7 @@ struct ShadowMapType(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `BASIC_SHADOW_MAP`, `PCF_SHADOW_MAP`,
             `PCF_SOFT_SHADOW_MAP` or `VSM_SHADOW_MAP`.
         """
-        return (
-            self == BASIC_SHADOW_MAP
-            or self == PCF_SHADOW_MAP
-            or self == PCF_SOFT_SHADOW_MAP
-            or self == VSM_SHADOW_MAP
-        )
+        return ordinal_valid(self.value, VSM_SHADOW_MAP.value)
 
 
 # three.js's `BasicShadowMap`: one texel compared, a hard edge.
@@ -121,6 +129,37 @@ comptime PCF_SOFT_SHADOW_MAP = ShadowMapType(2)
 # three.js's `VSMShadowMap`: the depth's mean and spread, blurred, read
 # with Chebyshev's bound.
 comptime VSM_SHADOW_MAP = ShadowMapType(3)
+
+
+def require_shadow_type(shadow_type: ShadowMapType) raises:
+    """Refuse a shadow map type that is none of the four.
+
+    Nothing. The call returns when the type is named.
+
+    Args:
+        shadow_type: The filter to check.
+
+    Raises:
+        Error: If `shadow_type` is none of the four.
+    """
+    require_valid(
+        shadow_type.is_valid(), "A shadow map type that is none of the four"
+    )
+
+
+def require_shadow_size(size: Int) raises:
+    """Refuse a shadow map that is not at least one texel a side.
+
+    Nothing. The call returns when the size is positive.
+
+    Args:
+        size: The map's width and height, in texels.
+
+    Raises:
+        Error: If the size is not positive.
+    """
+    require_positive(size, "A shadow map must be at least one texel a side")
+
 
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels
 # a side, no bias, one texel of blur, and eight blur samples for a
@@ -318,8 +357,9 @@ struct LightShadow(ImplicitlyCopyable):
             raise Error("A shadow map must be one to 8192 texels a side")
         if not isfinite(self.bias) or not isfinite(self.normal_bias):
             raise Error("A shadow bias must be finite")
-        if not isfinite(self.radius) or self.radius < 0:
-            raise Error("A shadow radius cannot be negative")
+        require_non_negative_finite(
+            Float64(self.radius), "A shadow radius cannot be negative"
+        )
         if self.blur_samples < 1 or self.blur_samples > MAX_BLUR_SAMPLES:
             raise Error("A shadow's blur takes one to 256 samples")
         var near = self.near.to(METER)
@@ -344,17 +384,17 @@ struct LightShadow(ImplicitlyCopyable):
                 "A shadow camera's right edge must lie beyond its left and"
                 " its top above its bottom"
             )
-        if (
-            not isfinite(self.intensity)
-            or self.intensity < 0
-            or self.intensity > 1
-        ):
-            raise Error("A shadow's intensity must be between zero and one")
-        if not isfinite(self.focus) or self.focus <= 0:
-            raise Error("A spot shadow's focus must be a positive number")
+        require_unit_finite(
+            Float64(self.intensity),
+            "A shadow's intensity must be between zero and one",
+        )
+        require_positive_finite(
+            Float64(self.focus),
+            "A spot shadow's focus must be a positive number",
+        )
 
 
-struct ShadowMap(Copyable, Movable):
+struct ShadowMap(Copyable, LightSlot, Movable):
     """One light's view of the scene's depth, ready to compare against.
 
     Built by `Renderer.shadow_maps` once per frame per light that casts,
@@ -401,6 +441,14 @@ struct ShadowMap(Copyable, Movable):
     # without them. See `transmitted_shadow`.
     var colors: List[Float32]
 
+    def slot_light(self) -> Int:
+        """Return which scene light this map belongs to.
+
+        Returns:
+            The light's index in `scene.lights`.
+        """
+        return self.light
+
     def __init__(
         out self,
         light: Int,
@@ -437,10 +485,8 @@ struct ShadowMap(Copyable, Movable):
                 four, the depths do not fill the square, or two squares
                 under `VSM_SHADOW_MAP`, or the colors fill no square.
         """
-        if size <= 0:
-            raise Error("A shadow map must be at least one texel a side")
-        if not shadow_type.is_valid():
-            raise Error("A shadow map type that is none of the four")
+        require_shadow_size(size)
+        require_shadow_type(shadow_type)
         var squares = 1
         if shadow_type == VSM_SHADOW_MAP:
             squares = 2
@@ -507,10 +553,8 @@ struct ShadowMap(Copyable, Movable):
                 four, the depths or the colors do not fill six squares, or
                 the far plane does not lie beyond the near plane.
         """
-        if size <= 0:
-            raise Error("A shadow map must be at least one texel a side")
-        if not shadow_type.is_valid():
-            raise Error("A shadow map type that is none of the four")
+        require_shadow_size(size)
+        require_shadow_type(shadow_type)
         if len(depths) != CUBE_FACES * size * size:
             raise Error("A point light's shadow must fill six square faces")
         if len(colors) != 0 and len(colors) != 4 * CUBE_FACES * size * size:
@@ -714,7 +758,7 @@ struct CascadeBlend(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the blend is one of the two.
         """
-        return self == CSM_BLEND or self == SUN_BLEND
+        return ordinal_valid(self.value, SUN_BLEND.value)
 
 
 # three.js's `CSM`: see `cascade_reach`.
@@ -820,8 +864,9 @@ struct ShadowCascade(ImplicitlyCopyable):
         if not self.is_cascade():
             return
         var span = self.span.to(METER)
-        if not isfinite(span) or span < 0:
-            raise Error("A shadow cascade's span must be a positive length")
+        require_non_negative_finite(
+            Float64(span), "A shadow cascade's span must be a positive length"
+        )
         if (
             not isfinite(self.start)
             or not isfinite(self.end)
@@ -832,8 +877,9 @@ struct ShadowCascade(ImplicitlyCopyable):
                 "A shadow cascade must start at zero or later and end no"
                 " sooner than it starts"
             )
-        if not self.blend.is_valid():
-            raise Error("A cascade blend that is none of the two")
+        require_valid(
+            self.blend.is_valid(), "A cascade blend that is none of the two"
+        )
         if self.blend == SUN_BLEND and (
             not isfinite(self.fade_start)
             or not isfinite(self.ramp_end)
@@ -1063,10 +1109,34 @@ def biased_position(
     Returns:
         The position to project into the map.
     """
-    return Vector3(
-        position.x + normal.x * normal_bias,
-        position.y + normal.y * normal_bias,
-        position.z + normal.z * normal_bias,
+    return position + normal * normal_bias
+
+
+def _clip_point(
+    frame: SIMD[DType.float32, 16], position: Vector3
+) -> SIMD[DType.float32, 4]:
+    """Return a point in a column-major frame, before dividing by w.
+
+    Lane zero is x, one is y, two is z, and three is w. A lane is that
+    row of the frame times the position, plus the translation.
+    """
+    return SIMD[DType.float32, 4](
+        frame[0] * position.x
+        + frame[4] * position.y
+        + frame[8] * position.z
+        + frame[12],
+        frame[1] * position.x
+        + frame[5] * position.y
+        + frame[9] * position.z
+        + frame[13],
+        frame[2] * position.x
+        + frame[6] * position.y
+        + frame[10] * position.z
+        + frame[14],
+        frame[3] * position.x
+        + frame[7] * position.y
+        + frame[11] * position.z
+        + frame[15],
     )
 
 
@@ -1092,30 +1162,11 @@ def shadow_coordinate(
     Returns:
         The map coordinate.
     """
-    var x = (
-        frame[0] * position.x
-        + frame[4] * position.y
-        + frame[8] * position.z
-        + frame[12]
-    )
-    var y = (
-        frame[1] * position.x
-        + frame[5] * position.y
-        + frame[9] * position.z
-        + frame[13]
-    )
-    var z = (
-        frame[2] * position.x
-        + frame[6] * position.y
-        + frame[10] * position.z
-        + frame[14]
-    )
-    var w = (
-        frame[3] * position.x
-        + frame[7] * position.y
-        + frame[11] * position.z
-        + frame[15]
-    )
+    var clip = _clip_point(frame, position)
+    var x = clip[0]
+    var y = clip[1]
+    var z = clip[2]
+    var w = clip[3]
     if w <= 0:
         return Vector3(0.5, 0.5, 2)
     var rcp = 1 / w
@@ -1204,17 +1255,12 @@ def shadow_tap(stored: Float32, depth: Float32, bias: Float32) -> Float32:
     return 0
 
 
-def _mix(low: Float32, high: Float32, weight: Float32) -> Float32:
-    """Return GLSL's `mix`: `low` at a weight of zero, `high` at one."""
-    return low * (1 - weight) + high * weight
-
-
 def _texel_at(column: Int, row: Int, size: Int) -> Int:
     """Return a texel's index with its column and row held to the map, as
     a map clamped to its edge reads past them."""
     # One statement: a soft shadow reads sixteen of these per fragment,
     # and a coverage run writes a record per statement.
-    return min(max(row, 0), size - 1) * size + min(max(column, 0), size - 1)
+    return clamped_texel(column, row, size, size)
 
 
 def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
@@ -1252,7 +1298,7 @@ def soft_fraction(coordinate: Float32, size: Int) -> Float32:
         Zero up to one.
     """
     var texels = coordinate * Float32(size) + 0.5
-    return texels - floor(texels)
+    return fraction(texels)
 
 
 def soft_shadow(
@@ -1279,13 +1325,13 @@ def soft_shadow(
         + taps[6]
         + taps[9]
         + taps[10]
-        + _mix(taps[4], taps[7], across)
-        + _mix(taps[8], taps[11], across)
-        + _mix(taps[1], taps[13], down)
-        + _mix(taps[2], taps[14], down)
-        + _mix(
-            _mix(taps[0], taps[3], across),
-            _mix(taps[12], taps[15], across),
+        + lerp(taps[4], taps[7], across)
+        + lerp(taps[8], taps[11], across)
+        + lerp(taps[1], taps[13], down)
+        + lerp(taps[2], taps[14], down)
+        + lerp(
+            lerp(taps[0], taps[3], across),
+            lerp(taps[12], taps[15], across),
             down,
         )
     ) * (Float32(1) / 9)
@@ -1325,7 +1371,7 @@ def bilinear_fraction(at: Float32) -> Float32:
     Returns:
         Zero up to one.
     """
-    return (at - 0.5) - floor(at - 0.5)
+    return fraction(at - 0.5)
 
 
 def bilinear(
@@ -1344,9 +1390,9 @@ def bilinear(
         The value between them.
     """
     var right = bilinear_fraction(across)
-    return _mix(
-        _mix(corners[first], corners[first + 1], right),
-        _mix(corners[first + 2], corners[first + 3], right),
+    return lerp(
+        lerp(corners[first], corners[first + 1], right),
+        lerp(corners[first + 2], corners[first + 3], right),
         bilinear_fraction(down),
     )
 
@@ -1485,7 +1531,7 @@ def vsm_moments(
                 var average = bilinear(corners, 0, across, down)
                 var spread = bilinear(corners, 4, across, down)
                 mean += average
-                squared += spread * spread + average * average
+                squared += squared_length2[DType.float32](spread, average)
             mean *= weight
             squared *= weight
             moments[row * size + column] = mean
@@ -1666,11 +1712,7 @@ def cube_texel(direction: Vector3, size: Int) -> Int:
     var face = cube_face(direction)
     var forward = cube_direction(face)
     var up = cube_up(face)
-    var right = Vector3(
-        forward.y * up.z - forward.z * up.y,
-        forward.z * up.x - forward.x * up.z,
-        forward.x * up.y - forward.y * up.x,
-    )
+    var right = cross_vectors(forward, up)
     var along = direction.dot(forward)
     var across = direction.dot(right) / along
     var upward = direction.dot(up) / along
@@ -1765,7 +1807,7 @@ def inside_spot_map(place: Vector3) -> Bool:
     )
 
 
-struct SpotLightMap(Copyable, Movable):
+struct SpotLightMap(Copyable, LightSlot, Movable):
     """The picture a spot light projects, three.js's `SpotLight.map`, and
     the transform that takes a world position onto it.
 
@@ -1789,6 +1831,14 @@ struct SpotLightMap(Copyable, Movable):
     # the shadow's normal bias when the light casts, and zero when not,
     # as three.js adds it only under a shadow.
     var normal_bias: Float32
+
+    def slot_light(self) -> Int:
+        """Return which scene light projects this map.
+
+        Returns:
+            The light's index in `scene.lights`.
+        """
+        return self.light
 
     def __init__(
         out self,
@@ -1849,4 +1899,4 @@ struct SpotLightMap(Copyable, Movable):
         if not inside_spot_map(place):
             return Vector3(1, 1, 1)
         var color = self.image.sample_level(place.x, 1 - place.y, 0)
-        return Vector3(color.r, color.g, color.b)
+        return rgb_channels(color)

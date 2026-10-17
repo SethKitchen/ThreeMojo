@@ -12,6 +12,8 @@ stops a bare integer at compile time. A value that is not `LEFT` or
 `RIGHT` is still constructible, and the boundary that reads it refuses it.
 """
 
+from core.ordinal import ordinal_valid
+
 
 @fieldwise_init
 struct BodySide(Equatable, ImplicitlyCopyable, Writable):
@@ -21,10 +23,27 @@ struct BodySide(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `RIGHT` or `LEFT`."""
-        return self == RIGHT or self == LEFT
+        return ordinal_valid(self.value, LEFT.value)
 
 
 # The right limb. In the bone's frame plus x is lateral, minus x is medial.
 comptime RIGHT = BodySide(0)
 # The left limb: the right bone with x flipped.
 comptime LEFT = BodySide(1)
+
+
+def require_side(side: BodySide, what: String) raises:
+    """Refuse a side that is not right or left.
+
+    Nothing. The call returns when the side is named.
+
+    Args:
+        side: The side to check.
+        what: The words before `side`, such as `A hand` or `An arm`.
+
+    Raises:
+        Error: If `side` is not `RIGHT` or `LEFT`. The message is
+            `<what> side must be RIGHT or LEFT`.
+    """
+    if not side.is_valid():
+        raise Error(what + " side must be RIGHT or LEFT")

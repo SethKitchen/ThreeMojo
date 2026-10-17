@@ -244,7 +244,7 @@ from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -327,7 +327,7 @@ def test_bones_are_named_and_solid() raises:
     # A long bone lies between two joints of its chain, and stops short
     # of both.
     var chain = finger_joints(dims, MIDDLE)
-    var middle = (chain[1] + chain[2]) * Float32(0.5)
+    var middle = midpoint(chain[1], chain[2])
     var proximal = finger_bones(MIDDLE)[1]
     assert_true(hand_bone_distance(dims, proximal, RIGHT, middle) < 0)
     assert_true(hand_bone_distance(dims, proximal, RIGHT, chain[1]) > 0)
@@ -606,7 +606,7 @@ def test_skin() raises:
     var ring = finger_joints(arm, RING)
     assert_true(right.distance(middle[1]) < 0)
     assert_true(right.distance(middle[len(middle) - 2]) < 0)
-    var between = (middle[3] + ring[3]) * Float32(0.5)
+    var between = midpoint(middle[3], ring[3])
     assert_true(right.distance(between) > -0.004)
     assert_true(left.distance(flip_x(middle[1])) < 0)
     assert_true(left.low.x < 0 and left.high.x < 0)

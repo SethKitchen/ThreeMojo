@@ -32,9 +32,9 @@ from extensions.humanoid.skeleton.leg.knee.dimensions import (
     MEDIAL_COLLATERAL,
     LATERAL_COLLATERAL,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, component_max, component_min
 from loaders.json import quote_json
-from std.math import max, min
+from std.math import max
 from std.utils import Variant
 from units.si import Length
 from extensions.humanoid.skeleton.leg.femur.dimensions import FemurField
@@ -460,16 +460,8 @@ def _work(first: _Component, second: _Component, step: Length) raises -> Int:
     # Preflight only. diagnose_pair remains the sole occupancy sampler.
     _check_bounds(first.low, first.high)
     _check_bounds(second.low, second.high)
-    var low = Vector3(
-        max(first.low.x, second.low.x),
-        max(first.low.y, second.low.y),
-        max(first.low.z, second.low.z),
-    )
-    var high = Vector3(
-        min(first.high.x, second.high.x),
-        min(first.high.y, second.high.y),
-        min(first.high.z, second.high.z),
-    )
+    var low = component_max(first.low, second.low)
+    var high = component_min(first.high, second.high)
     if low.x >= high.x or low.y >= high.y or low.z >= high.z:
         return 0
     var grid = SampleGrid(low, high, step)
@@ -623,8 +615,8 @@ def localize_pair[
     )
     if d.samples == 0:
         return text + ',"witness_point_m":null'
-    var low = Vector3(max(alo.x, blo.x), max(alo.y, blo.y), max(alo.z, blo.z))
-    var high = Vector3(min(ahi.x, bhi.x), min(ahi.y, bhi.y), min(ahi.z, bhi.z))
+    var low = component_max(alo, blo)
+    var high = component_min(ahi, bhi)
     var grid = SampleGrid(low, high, step)
     var witness = Float32.MAX
     var point = low
@@ -642,16 +634,8 @@ def localize_pair[
                     point = p
                 if fa < 0 and fb < 0:
                     hits += 1
-                    hit_low = Vector3(
-                        min(hit_low.x, p.x),
-                        min(hit_low.y, p.y),
-                        min(hit_low.z, p.z),
-                    )
-                    hit_high = Vector3(
-                        max(hit_high.x, p.x),
-                        max(hit_high.y, p.y),
-                        max(hit_high.z, p.z),
-                    )
+                    hit_low = component_min(hit_low, p)
+                    hit_high = component_max(hit_high, p)
     if hits != d.overlap_samples or witness != d.field_witness.value:
         raise Error("A witness pass must repeat the diagnostic grid")
     text += ',"witness_point_m":' + _vec(point)

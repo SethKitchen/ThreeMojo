@@ -30,10 +30,16 @@ fill it and to make it raw, in a buffer larger than any platform's.
 """
 
 from controls.input import InputDecoder, InputEvent
+from core.ordinal import require_positive
 from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
+from window.present import (
+    require_open,
+    require_presented_frame,
+    require_window_size,
+)
 
 comptime STANDARD_INPUT = 0
 comptime STANDARD_OUTPUT = 1
@@ -160,8 +166,7 @@ def _write_all(fd: Int, text: String) raises:
             base.unsafe_offset(done).unsafe_bitcast[NoneType](),
             total - done,
         )
-        if written <= 0:
-            raise Error("Could not write to the terminal")
+        require_positive(written, "Could not write to the terminal")
         done += written
 
 
@@ -212,10 +217,7 @@ struct TerminalWindow(Movable):
             Error: If the size is not positive, the input is not a
                 terminal, or the terminal cannot be set or written.
         """
-        if width <= 0 or height <= 0:
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_window_size(width, height)
         self.width = width
         self.height = height
         self.input_fd = input_fd
@@ -287,19 +289,7 @@ struct TerminalWindow(Movable):
             Error: If the window is closed, the frame is another size, or
                 the terminal cannot be written.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
-        if frame.width != self.width or frame.height != self.height:
-            raise Error(
-                "A frame of ",
-                frame.width,
-                "x",
-                frame.height,
-                " does not fit a window of ",
-                self.width,
-                "x",
-                self.height,
-            )
+        require_presented_frame(self.is_open, frame, self.width, self.height)
         _write_all(self.output_fd, encode_frame(frame))
 
     def request_size(self) raises:
@@ -315,8 +305,7 @@ struct TerminalWindow(Movable):
             Error: If the window is closed, or the terminal cannot be
                 written.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         _write_all(self.output_fd, SIZE_QUERY)
 
     def resize(mut self, width: Int, height: Int) raises:
@@ -331,12 +320,8 @@ struct TerminalWindow(Movable):
             Error: If the window is closed, the size is not positive, or
                 the terminal cannot be written.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
-        if width <= 0 or height <= 0:
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_open(self.is_open)
+        require_window_size(width, height)
         self.width = width
         self.height = height
         _write_all(self.output_fd, CLEAR)
@@ -359,8 +344,7 @@ struct TerminalWindow(Movable):
                 the terminal cannot be read. A timeout must be nonnegative,
                 finite, and fit native poll milliseconds.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         var milliseconds = poll_milliseconds(timeout)
         # `struct pollfd` is an int and two shorts: the descriptor, then
         # the events asked for in the low half of the next int, and the
@@ -379,8 +363,7 @@ struct TerminalWindow(Movable):
             buffer.unsafe_ptr().unsafe_bitcast[NoneType](),
             READ_BYTES,
         )
-        if count <= 0:
-            raise Error("Could not read the terminal: it closed")
+        require_positive(count, "Could not read the terminal: it closed")
         buffer.resize(count, 0)
         var events = self.decoder.feed(buffer)
         for index in range(len(events)):

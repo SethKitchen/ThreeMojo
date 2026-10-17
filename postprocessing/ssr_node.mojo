@@ -39,11 +39,12 @@ off.
 
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
+from math.cross import cross_vectors
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, TRANSPARENT_BLACK
 from render.target import RenderTarget
 from std.math import floor, isfinite, max, min
 from units.si import Length, METER
@@ -179,13 +180,6 @@ def _normal_at(view: LightView, u: Float32, v_down: Float32) -> Vector3:
     return n * (1 / size)
 
 
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
-
-
 def _view_z(frame: SsrNodeFrame, depth: Float32) -> Float32:
     """Return the view z of a window depth: three.js's
     `perspectiveDepthToViewZ` or `orthographicDepthToViewZ`."""
@@ -223,7 +217,7 @@ def ssr_node_pixel(
     var v_down = (Float32(y) + 0.5) / h
     var depth = view.depth_at(u, 1 - v_down)
     if depth >= 1:
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var here = view.position(u, 1 - v_down, depth)
     var world = frame.camera_world.transform_point(here)
     var normal = _normal_at(frame.normals, u, v_down)
@@ -232,7 +226,7 @@ def ssr_node_pixel(
         incident = here * (1 / here.length())
     var metalness = frame.metal_rough.sample(u, 1 - v_down).r
     if not settings.reflect_non_metals and metalness <= 0:
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     # GLSL's `reflect`, made unit length.
     var reflected = incident - normal * (2 * normal.dot(incident))
     reflected = reflected * (1 / reflected.length())
@@ -251,7 +245,7 @@ def ssr_node_pixel(
     # A ray whose end has no place on the image, a surface seen edge on,
     # reflects nothing: its step count would mean nothing.
     if not (isfinite(x_len) and isfinite(y_len)):
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var quality = min(max(settings.quality, 0), 1)
     var total = max(Int(max(abs(x_len), abs(y_len)) * quality), 1)
     var step_x = x_len / Float32(total)
@@ -283,7 +277,7 @@ def ssr_node_pixel(
             continue
         var there = view.position(su, 1 - sv, d)
         var away = (
-            _cross(there - here, there - far_end).length()
+            cross_vectors(there - here, there - far_end).length()
             / (far_end - here).length()
         )
         var beside = view.position(su + 1 / w, 1 - sv, d)
@@ -301,7 +295,7 @@ def ssr_node_pixel(
         hit_depth = d
         break
     if found == 0:
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var hit = view.position(hit_u, 1 - hit_v, hit_depth)
     var plane_distance = normal.dot(hit) - normal.dot(here)
     var world_distance = (
@@ -485,12 +479,8 @@ def ssr_node_light(
                 var b = LightView(
                     levels[high], sizes[high * 2], sizes[high * 2 + 1]
                 ).sample(u, v)
-                added = FloatColor(
-                    a.r + (b.r - a.r) * t,
-                    a.g + (b.g - a.g) * t,
-                    a.b + (b.b - a.b) * t,
-                    0,
-                )
+                var mixed = a.mix(b, t)
+                added = FloatColor(mixed.r, mixed.g, mixed.b, 0)
             else:
                 added = LightView(reflections, width, height).sample(u, v)
             var slot = y * w + x

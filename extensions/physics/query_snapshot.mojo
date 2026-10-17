@@ -23,6 +23,7 @@ owned linear path. Tight mathematical half-ray bounds cannot safely cull
 every answer from the existing Float32 narrow kernels.
 """
 
+from core.ordinal import require_index_in_count, require_valid
 from extensions.physics.body import BodyId
 from extensions.physics.collide import WorldShape
 from extensions.physics.shape import (
@@ -32,27 +33,25 @@ from extensions.physics.shape import (
     PhysicsMaterial,
     Polyhedron,
     _finite_vector,
-    cross,
     component,
-    unit_or,
 )
 from extensions.physics.world import (
     PhysicsWorld,
     RaycastHit,
     _box_of,
-    _cylinder_hit,
-    _polyhedron_hit,
-    _sphere_hit,
+    _shape_ray_hit,
+    _triangle_ray_hit,
 )
 from math.bounds import Box3
+from math.finite import require_positive_finite
 from math.octree import Octree
 from math.quaternion import Quaternion
 from math.ray import Ray
 from math.sort_utils import stable_sort
 from extensions.physics.primitive_index import _PrimitiveIndex
-from math.triangle import Line3, Triangle
+from math.triangle import Triangle
 from math.vector3 import Vector3
-from std.math import inf, isfinite, isnan
+from std.math import isfinite, isnan
 from std.memory import ArcPointer, bitcast
 from units.si import Length
 
@@ -165,8 +164,11 @@ def _polyhedron(poly: Polyhedron) raises:
             raise Error("A primitive solid has an invalid face")
     # Every validated face has three corners, and there are four faces.
     for corner in poly.face_corners:  # pragma: no branch
-        if corner < 0 or corner >= len(poly.vertices):
-            raise Error("A primitive solid corner is out of range")
+        require_index_in_count(
+            corner,
+            len(poly.vertices),
+            "A primitive solid corner is out of range",
+        )
     if len(poly.edge_a) != len(poly.edge_b):
         raise Error("A primitive solid has inconsistent edge lists")
     for e in range(len(poly.edge_a)):
@@ -310,8 +312,10 @@ struct PhysicsQuerySnapshot(Movable):
         for i in range(len(world.bodies)):
             ref body = world.bodies[i]
             body.validate()
-            if not body.shape.kind.is_valid():
-                raise Error("A query snapshot requires a valid shape kind")
+            require_valid(
+                body.shape.kind.is_valid(),
+                "A query snapshot requires a valid shape kind",
+            )
             body.material.check()
             self._materials.append(body.material)
             self._enabled.append(body.collides)
@@ -322,10 +326,10 @@ struct PhysicsQuerySnapshot(Movable):
             _rotation(body.rotation)
             _rotation(body.shape_rotation)
             if body.shape.kind == SPHERE or body.shape.kind == CAPSULE:
-                if not (isfinite(body.shape.radius) and body.shape.radius > 0):
-                    raise Error(
-                        "A query snapshot requires a finite positive radius"
-                    )
+                require_positive_finite(
+                    Float64(body.shape.radius),
+                    "A query snapshot requires a finite positive radius",
+                )
                 if body.shape.kind == CAPSULE:
                     if not (
                         isfinite(body.shape.half_height)
@@ -352,8 +356,11 @@ struct PhysicsQuerySnapshot(Movable):
             raise Error("Registered mesh triangle owners are inconsistent")
         for i in range(len(world._triangles)):
             var owner = world._triangle_body[i]
-            if owner < 0 or owner >= len(world.bodies):
-                raise Error("A registered mesh owner is out of range")
+            require_index_in_count(
+                owner,
+                len(world.bodies),
+                "A registered mesh owner is out of range",
+            )
             if world.bodies[owner].shape.kind != MESH:
                 raise Error("A registered mesh owner is no longer a mesh")
             var triangle = world._triangles[i]
@@ -434,33 +441,8 @@ struct PhysicsQuerySnapshot(Movable):
             raise Error("The historical owner belongs to another capture")
 
     def _shape_hit(self, ray: Ray, entry: Int) -> Optional[RaycastHit]:
-        ref shape = self._shapes[entry]
         var i = self._owners[entry]
-        var material = self._materials[i]
-        if not shape.is_round():
-            return _polyhedron_hit(ray, shape.polyhedron, i, material)
-        var best = _sphere_hit(ray, shape.start, shape.radius)
-        var other = _sphere_hit(ray, shape.end, shape.radius)
-        if other < best:
-            best = other
-        other = _cylinder_hit(ray, shape.start, shape.end, shape.radius)
-        if other < best:
-            best = other
-        if best == inf[DType.float32]():
-            return None
-        var point = ray.at(best)
-        var on = Vector3(0, 0, 0)
-        var on_ray = Vector3(0, 0, 0)
-        _ = Line3(shape.start, shape.end).closest_points_to_line(
-            Line3(point, point), on, on_ray
-        )
-        return RaycastHit(
-            BodyId(i),
-            point,
-            unit_or(point - on, -ray.direction),
-            best,
-            material,
-        )
+        return _shape_ray_hit(ray, self._shapes[entry], i, self._materials[i])
 
     def _triangle_hit(
         self,
@@ -474,19 +456,14 @@ struct PhysicsQuerySnapshot(Movable):
         if owner == ignore.value or not self._enabled[owner]:
             return best
         ref tri = self._triangles[t]
-        var met = ray.intersect_triangle(tri.a, tri.b, tri.c, True)
-        if not Bool(met):
-            return best
-        var distance = (met.value() - ray.origin).length()
-        if distance > reach:
-            return best
-        if Bool(best) and best.value().distance <= distance:
-            return best
-        return RaycastHit(
-            BodyId(owner),
-            met.value(),
-            unit_or(cross(tri.b - tri.a, tri.c - tri.a), Vector3(0, 0, 1)),
-            distance,
+        return _triangle_ray_hit(
+            ray,
+            tri.a,
+            tri.b,
+            tri.c,
+            reach,
+            best,
+            owner,
             self._materials[owner],
         )
 

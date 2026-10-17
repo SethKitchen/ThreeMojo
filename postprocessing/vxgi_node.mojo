@@ -38,6 +38,8 @@ occlusion, plus the diffuse color times the irradiance over pi. The
 normals are the frame's, or the ones `DepthView` reconstructs.
 """
 
+from core.ordinal import ordinal_valid, require_valid, require_positive
+
 from core.assets import Assets
 from core.scene import Scene
 from lights.vxgi_cone_tracer import (
@@ -56,6 +58,7 @@ from lights.vxgi_cone_tracer import (
 )
 from lights.vxgi_volume import CONE_STEPS, VXGI_PI, VXGIVolume
 from math.matrix4 import Matrix4
+from math.utils import clamp
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
@@ -76,11 +79,7 @@ struct VxgiDebug(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three views."""
-        return (
-            self == VXGI_DEBUG_OFF
-            or self == VXGI_DEBUG_RADIANCE
-            or self == VXGI_DEBUG_OPACITY
-        )
+        return ordinal_valid(self.value, VXGI_DEBUG_OPACITY.value)
 
 
 # The irradiance and the occlusion, three.js's `0`.
@@ -259,6 +258,22 @@ def _debug_view(
     return Vector3(0, 0, 0)
 
 
+def require_vxgi_normals(got: Int, pixels: Int) raises:
+    """Refuse a VXGI normal buffer that is not one normal a pixel.
+
+    Nothing. The call returns when there is one normal a pixel.
+
+    Args:
+        got: How many normals the buffer holds.
+        pixels: How many pixels the view holds.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if got != pixels:
+        raise Error("A VXGI pass needs one normal a pixel")
+
+
 def vxgi_pixel(
     grid: VxgiGrid,
     opacity: Pointer[Float32, Untracked],
@@ -347,7 +362,7 @@ def vxgi_pixel(
     red = red / Float32(count) * scale
     green = green / Float32(count) * scale
     blue = blue / Float32(count) * scale
-    var open = max(Float32(0), min(Float32(1), 1 - occlusion / Float32(count)))
+    var open = clamp(1 - occlusion / Float32(count), 0, 1)
     var low = params[unsafe_offset=PARAM_AO_MIN]
     var ao = low + (1 - low) * pow(
         open, params[unsafe_offset=PARAM_AO_INTENSITY]
@@ -442,8 +457,7 @@ struct VXGINode(Movable):
                 and a half turn, a number is not finite, the distance is
                 negative, or the debug view is none of the three.
         """
-        if self.cone_count < 1:
-            raise Error("A VXGI pass needs at least one cone")
+        require_positive(self.cone_count, "A VXGI pass needs at least one cone")
         var degrees = self.cone_angle.to(DEGREE)
         if not (isfinite(degrees) and degrees > 0 and degrees < 180):
             raise Error("A VXGI cone must open between 0 and 180 degrees")
@@ -460,8 +474,9 @@ struct VXGINode(Movable):
             isfinite(self.ao_distance.value) and self.ao_distance.value >= 0
         ):
             raise Error("A VXGI pass's occlusion distance must be zero or more")
-        if not self.debug.is_valid():
-            raise Error("A VXGI debug view that is none of the three")
+        require_valid(
+            self.debug.is_valid(), "A VXGI debug view that is none of the three"
+        )
 
     def params(
         self,
@@ -530,8 +545,7 @@ struct VXGINode(Movable):
                 not one normal a pixel.
         """
         self.validate()
-        if len(normals) != view.width * view.height:
-            raise Error("A VXGI pass needs one normal a pixel")
+        require_vxgi_normals(len(normals), view.width * view.height)
         var numbers = self.params(view, camera_world, frame_id)
         var frame = VxgiFrame(view.width, view.height)
         var seen = floats_of(self.volume.opacity)

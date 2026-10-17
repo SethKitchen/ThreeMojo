@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     Palette,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import (
@@ -31,14 +32,24 @@ from extensions.animals.parts import (
     TEETH,
 )
 from extensions.sdf.sculpt import ell_y
+from math.utils import rec709_luminance
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     is_limb,
+    lid_unless_behind,
     mirrored_blob,
-    aperture_local,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import (
+    cells3,
+    centered_fbm,
+    centered_value,
+    offset_fbm,
+)
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, add_sided, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -61,8 +72,9 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
 from std.math import cos, exp, pi, pow, sin, sqrt
-from extensions.sdf.distance import almond_distance, rect_distance
+from extensions.sdf.distance import rect_distance
 
 comptime TAIL_SEGS = 10
 # The head's origin, mid cranium between the eyes and the ears.
@@ -186,7 +198,7 @@ def lion_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
             mane = min(1.0, 0.3 + 0.75 * prime * (0.8 + 0.2 * r.next()))
     var mane_dark = 0.0
     if male:
-        mane_dark = min(1.0, max(0.0, 0.1 + 0.65 * prime + 0.3 * _tri(r)))
+        mane_dark = clamp(0.1 + 0.65 * prime + 0.3 * _tri(r), 0.0, 1.0)
     var size = (
         (1.075 if male else 0.935)
         * (1.0 + 0.06 * _tri(r))
@@ -204,7 +216,7 @@ def lion_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var nose_dark = 0.0
     var leg_spots = 1.0
     if juv == 0.0:
-        nose_dark = min(1.0, max(0.0, 0.15 + 0.6 * prime + 0.15 * _tri(r)))
+        nose_dark = clamp(0.15 + 0.6 * prime + 0.15 * _tri(r), 0.0, 1.0)
         leg_spots = max(0.0, 0.15 + 0.2 * _tri(r))
     t.set("noseDark", nose_dark)
     t.set("legSpots", leg_spots)
@@ -366,7 +378,7 @@ def _ear_tip() -> V3:
 def _tail_radius(t: Float64) -> Float64:
     # A smooth round tail, tapering a little.
     if t < 0.3:
-        return 0.05 + (0.034 - 0.05) * (t / 0.3)
+        return mix(0.05, 0.034, t / 0.3)
     return 0.034 - 0.012 * ((t - 0.3) / 0.7)
 
 
@@ -981,7 +993,7 @@ def _sculpt_head(
         )
     # The upper lip's edge, deep inside the lip, on the lip bone.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _ = m.ell(
             "lipedge",
             rig.bone("lip" + side),
@@ -1085,10 +1097,7 @@ def _sculpt_ears(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
     # a stack of discs leaning toward the midline, narrowing to a round
     # tip, with a shallow bowl carved in front.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(V3(0.7 * s, 0.05, 1))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
@@ -1168,19 +1177,10 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
     var toe_x: List[Float64] = [-0.033, -0.011, 0.011, 0.033]
     var toe_z: List[Float64] = [-0.018, 0, 0, -0.018]
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scaptop",
@@ -1278,15 +1278,9 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
                 k=0.012,
             )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "thigh",
@@ -1549,16 +1543,12 @@ def lion_palette(t: Traits) -> Palette:
     for i in range(len(names)):  # pragma: no branch
         var c = srgb(hexes[i])
         if not _bare(i):
+            c = shade_swatch(c, k, l, 0.18, 0.04, -0.2)
+            var y = rec709_luminance(c.x, c.y, c.z)
             c = V3(
-                c.x * (1.0 + 0.18 * k + l),
-                c.y * (1.0 + 0.04 * k + l),
-                c.z * (1.0 - 0.2 * k + l),
-            )
-            var y = 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z
-            c = V3(
-                max(0.0, y + (c.x - y) * 1.15),
-                max(0.0, y + (c.y - y) * 1.15),
-                max(0.0, y + (c.z - y) * 1.15),
+                max(0.0, mix(y, c.x, 1.15)),
+                max(0.0, mix(y, c.y, 1.15)),
+                max(0.0, mix(y, c.z, 1.15)),
             )
         var natal = (
             i == DORSAL
@@ -1642,7 +1632,7 @@ def _rbox(
 
 def _smin(a: Float64, b: Float64, k: Float64) -> Float64:
     var h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
-    return b + (a - b) * h - k * h * (1.0 - h)
+    return mix(b, a, h) - k * h * (1.0 - h)
 
 
 def _tail_along(p: V3) -> Tuple[Float64, V3]:
@@ -1727,8 +1717,8 @@ def lion_paint(
     var white = t.variant == WHITE
     var seed = Int(t.get("coatSeed", 0.0))
     var off = Float64(seed % 997)
-    var nz = fbm3(V3(p.x * 5.0 + off, p.y * 5.0, p.z * 5.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 30.0 + off, p.y * 30.0, p.z * 30.0)) - 0.5
+    var nz = centered_fbm(p, 5.0, 3, off)
+    var nz2 = centered_value(p, 30.0, off)
     if tag == "canine":
         return Paint(c[TOOTH], KERATIN)
     if tag == "tongue":
@@ -1778,16 +1768,8 @@ def lion_paint(
         var hair = (
             0.56
             + 0.1 * axc * axc
-            + 0.26
-            * (
-                fbm3(V3(p.x * 12.0 + 3.3 + off, p.y * 12.0, p.z * 12.0), 2)
-                - 0.5
-            )
-            + 0.22
-            * (
-                vnoise3(V3(p.x * 30.0 + 1.9 + off, p.y * 30.0, p.z * 30.0))
-                - 0.5
-            )
+            + 0.26 * (centered_fbm(p, 12.0, 2, 3.3 + off))
+            + 0.22 * (centered_value(p, 30.0, 1.9 + off))
         )
         var tc = f.y - hair + 0.8 * max(0.0, -0.3 - f.z)
         var cw = (
@@ -1828,7 +1810,7 @@ def lion_paint(
         ) if juv > 0.0 else 0.22 * spots_k / 0.2
         sp = 0.0 if on_head else sp
         col = mix3(col, c[CUB_SPOT], clamp(sp * k, 0.0, 1.0))
-    var cvh = fbm3(V3(p.x * 3.0 + 5.0 + off, p.y * 3.0, p.z * 3.0), 2) - 0.5
+    var cvh = centered_fbm(p, 3.0, 2, 5.0 + off)
     col = V3(
         col.x * (1.0 + 0.12 * nz + 0.08 * cvh + 0.06 * nz2),
         col.y * (1.0 + 0.1 * nz + 0.06 * nz2),
@@ -1888,7 +1870,7 @@ def _mane_color(
     var fall = V3(0, -0.85, -0.5)
     var across = V3(0, 0.5, -0.85)
     var q = V3(p.x * 40.0, dot(p, fall) * 6.0, dot(p, across) * 40.0)
-    var lock = fbm3(q, 3) - 0.5
+    var lock = offset_fbm(q, 3)
     return mc * (1.0 + 1.1 * lock)
 
 
@@ -1944,7 +1926,7 @@ def _paint_body(
             inner * 0.75 * smoothstep(0.12, 0.4, p.y)
             + smoothstep(-0.3, -0.85, up) * 0.5
         )
-        w = w + (wl - w) * legness
+        w = mix(w, wl, legness)
     var maned = male and mane_k > 0.0
     if maned:
         # No pale bib just below a mane: the chest there is mane colored.
@@ -2020,17 +2002,6 @@ def _paint_ear(c: List[V3], t: Traits, p: V3, n: V3, male: Bool) -> V3:
             * (1.0 - back_w),
         )
     return mix3(col, c[CROWN], smoothstep(0.16, 0.04, ht))
-
-
-def _lid_distance(t: Traits, p: V3) -> Float64:
-    # The distance from a point to the nearer eye's aperture rim, in the
-    # aperture's plane, or far when the point is behind the eye.
-    var e = lion_eye(t)
-    var s = 1.0 if p.x > HEAD_O.x else -1.0
-    var ef = eye_frame_of(e, HEAD_O, s)
-    var q = aperture_local(e, ef, p)
-    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
-    return de if q.z > -0.3 * e.r else 1.0
 
 
 def _paint_face(
@@ -2188,7 +2159,9 @@ def _paint_face(
                 var y = -0.98 - 0.086 * Float64(row) - 0.1 * (x - 0.13)
                 var dx = (ax - x) * FACE_X * hw * HS
                 var dy = (f.y - y) * FACE_E * HS
-                dd = min(dd, sqrt(dx * dx + dy * dy) - 0.0025)
+                dd = min(
+                    dd, sqrt(squared_length2[DType.float64](dx, dy)) - 0.0025
+                )
         col = mix3(col, c[WHISKER_DOT], smoothstep(0.0012, -0.0006, dd) * 0.9)
     # The black spot at the corner of the mouth.
     var corner = V3(ax - 0.55, f.y + 1.37, f.z - 0.1)
@@ -2200,7 +2173,7 @@ def _paint_face(
     var ruff = 0.0 if jaw else _ruff_pale(f, male)
     col = mix3(col, ruff_col, ruff * (0.45 if male else 0.7))
     # The eye rims: black lid margins, a pale crescent under the lower lid.
-    var de = _lid_distance(t, p)
+    var de = lid_unless_behind(lion_eye(t), HEAD_O, p, -0.3)
     var lm = 1.0 - 0.6 * juv
     var crescent = de < 0.014 and f.y < -0.02
     if crescent:

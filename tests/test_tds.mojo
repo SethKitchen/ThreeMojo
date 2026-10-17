@@ -12,6 +12,7 @@ compares all of it. Files built inline reach every refusal.
 """
 
 from core.assets import Assets
+from core.binary import append_little_endian_u16, append_little_endian_u32
 from core.buffer_geometry import NORMAL, POSITION, UV
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
@@ -194,11 +195,9 @@ def chunk(id: Int, body: List[UInt8]) -> List[UInt8]:
     """Return a chunk: its id, its size and its body."""
     var out = List[UInt8]()
     var size = len(body) + 6
-    out.append(UInt8(id & 0xFF))
-    out.append(UInt8(id >> 8))
-    for k in range(4):
-        out.append(UInt8((size >> (8 * k)) & 0xFF))
-    out.extend(body.copy())
+    append_little_endian_u16(out, id)
+    append_little_endian_u32(out, size)
+    out.extend(Span(body))
     return out^
 
 
@@ -206,30 +205,28 @@ def join(parts: List[List[UInt8]]) -> List[UInt8]:
     """Return byte lists end to end."""
     var out = List[UInt8]()
     for part in parts:
-        out.extend(part.copy())
+        out.extend(Span(part))
     return out^
 
 
 def text(value: String) -> List[UInt8]:
     """Return a string and its zero."""
-    var out = List[UInt8]()
-    for byte in value.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](value.as_bytes())
     out.append(0)
     return out^
 
 
 def word(value: Int) -> List[UInt8]:
     """Return a little-endian 16-bit value."""
-    return [UInt8(value & 0xFF), UInt8(value >> 8)]
+    var out = List[UInt8]()
+    append_little_endian_u16(out, value)
+    return out^
 
 
 def float(value: Float32) -> List[UInt8]:
     """Return a little-endian float."""
-    var raw = bitcast[DType.uint32](value)
     var out = List[UInt8]()
-    for k in range(4):
-        out.append(UInt8((raw >> UInt32(8 * k)) & 0xFF))
+    append_little_endian_u32(out, Int(bitcast[DType.uint32](value)))
     return out^
 
 
@@ -245,7 +242,7 @@ def triangle(extra: List[List[UInt8]]) -> List[UInt8]:
         pieces.append(float(Float32(value)))
     var points = join(pieces)
     var parts: List[List[UInt8]] = [chunk(0x4110, points)]
-    parts.extend(extra.copy())
+    parts.extend(Span(extra))
     return chunk(0x4000, join([text("T"), chunk(0x4100, join(parts))]))
 
 

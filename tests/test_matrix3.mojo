@@ -159,6 +159,19 @@ def test_identity_resets_a_modified_matrix() raises:
     assert_same(m, Matrix3())
 
 
+def test_diagonal_writes_the_three_axis_elements() raises:
+    var m = Matrix3.diagonal(2, 4, 8)
+    assert_equal(m.elements[0], 2)
+    assert_equal(m.elements[4], 4)
+    assert_equal(m.elements[8], 8)
+    assert_equal(m.elements[1], 0)
+    assert_equal(m.elements[2], 0)
+    assert_equal(m.elements[3], 0)
+    assert_equal(m.elements[5], 0)
+    assert_equal(m.elements[6], 0)
+    assert_equal(m.elements[7], 0)
+
+
 def test_transpose_swaps_rows_and_columns() raises:
     var m = counted()
     m.transpose()

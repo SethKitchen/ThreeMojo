@@ -11,6 +11,7 @@ compression and sample type. The texels come from a xorshift generator
 that is the same here and in node.
 """
 
+from core.binary import little_endian_u32
 from std.math import isnan
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from std.utils.numerics import inf, nan
@@ -208,12 +209,7 @@ def _header_length(bytes: List[UInt8]) -> Int:
         while bytes[at] != 0:
             at += 1
         at += 1
-        var size = (
-            Int(bytes[at])
-            | (Int(bytes[at + 1]) << 8)
-            | (Int(bytes[at + 2]) << 16)
-            | (Int(bytes[at + 3]) << 24)
-        )
+        var size = little_endian_u32(bytes, at)
         at += 4 + size
     return at + 1
 

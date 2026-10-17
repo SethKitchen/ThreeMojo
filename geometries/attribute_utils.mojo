@@ -39,6 +39,12 @@ it. three.js does this for a `Mesh`; here it takes the geometry, the
 weights and, for a skinned mesh, one matrix per vertex. `core.scene_utils`
 has the forms that take a mesh.
 """
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -78,7 +84,7 @@ struct DrawMode(Equatable, ImplicitlyCopyable, Writable):
             True for `TRIANGLES_DRAW_MODE`, `TRIANGLE_STRIP_DRAW_MODE` and
             `TRIANGLE_FAN_DRAW_MODE`.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # Every three vertices are one triangle: three.js's `TrianglesDrawMode`.
@@ -110,8 +116,7 @@ def merge_attributes(
         Error: If no attribute is given, or the item sizes, component types,
             normalization flags, or instance divisors differ.
     """
-    if len(attributes) == 0:
-        raise Error("Merging needs at least one attribute")
+    require_positive(len(attributes), "Merging needs at least one attribute")
     ref first = attributes[0]
     var size = first.item_size
     var data = List[Float32]()
@@ -171,8 +176,9 @@ def interleave_attributes(
             is more than four. three.js writes only the first four numbers
             with `setX` through `setW`, and stops at a fifth.
     """
-    if len(attributes) == 0:
-        raise Error("Interleaving needs at least one attribute")
+    require_positive(
+        len(attributes), "Interleaving needs at least one attribute"
+    )
     var count = attributes[0].count()
     var stride = 0
     for index in range(len(attributes)):  # pragma: no branch
@@ -332,8 +338,9 @@ def to_triangles_draw_mode(
         Error: If the draw mode is not valid, the strip has fewer than
             three entries, or an entry is not a vertex of the geometry.
     """
-    if not draw_mode.is_valid():
-        raise Error("A draw mode must be one of the three there are")
+    require_valid(
+        draw_mode.is_valid(), "A draw mode must be one of the three there are"
+    )
     if draw_mode == TRIANGLES_DRAW_MODE:
         return geometry.clone()
     if len(strip) < 3:
@@ -341,8 +348,11 @@ def to_triangles_draw_mode(
     var count = geometry.vertex_count()
     for entry in range(len(strip)):  # pragma: no branch
         # Three entries at least, so this runs.
-        if strip[entry] < 0 or strip[entry] >= count:
-            raise Error("A strip names a vertex the geometry does not have")
+        require_index_in_count(
+            strip[entry],
+            count,
+            "A strip names a vertex the geometry does not have",
+        )
     var triangles = len(strip) - 2
     var index = List[Int](capacity=triangles * 3)
     if draw_mode == TRIANGLE_FAN_DRAW_MODE:

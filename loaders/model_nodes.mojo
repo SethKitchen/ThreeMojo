@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """What the Collada and FBX loaders share: a node set from a matrix, a
-color read as authored, and a texture read from an image file.
+color read as authored, a texture read from an image file, and a
+default material remembered by name.
 
 Both formats describe a node's transform as a matrix, one built from a
 list of steps. three.js keeps the matrix and splits it into a position,
@@ -21,23 +22,22 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length3, normalized3, _ordinary_squared
-from core.object3d import Object3D
-from loaders.gltf import decode_image
-from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+
+from math.finite import unit_finite
+
+from core.assets import Assets
+from core.object3d import Object3D
+from materials.material import Material, MaterialId
+from loaders.gltf import decode_image
+from math.matrix4 import Matrix4
+from math.vector3 import vector3_from_float64
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
 from render.texture import Alpha, BILINEAR, Texture, Wrap, texture_from
 from std.math import isfinite, sqrt
 from std.pathlib import Path
-
-
-def _column_length(matrix: Matrix4, start: Int) -> Float32:
-    """Return the length of a column's first three entries."""
-    ref e = matrix.elements
-    return length3(e[start], e[start + 1], e[start + 2])
 
 
 def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
@@ -59,9 +59,9 @@ def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
     """
     if not matrix.is_finite():
         raise Error(what + ": a node matrix that is not finite")
-    var sx = _column_length(matrix, 0)
-    var sy = _column_length(matrix, 4)
-    var sz = _column_length(matrix, 8)
+    var sx = matrix.column_length(0)
+    var sy = matrix.column_length(1)
+    var sz = matrix.column_length(2)
     if sx == 0 or sy == 0 or sz == 0:
         raise Error(what + ": a node matrix that flattens an axis")
     var position = Vector3(0, 0, 0)
@@ -118,13 +118,14 @@ def authored_color(
         Error: If a number is not finite or is outside zero to one.
     """
     for channel in [r, g, b]:  # pragma: no branch
-        if not isfinite(channel) or channel < 0 or channel > 1:
+        if not unit_finite(Float64(channel)):
             raise Error(
                 what
                 + ": a color channel must be from zero to one, not "
                 + String(channel)
             )
-    return FloatColor(Float32(r), Float32(g), Float32(b), 1).quantize()
+    var linear = vector3_from_float64(r, g, b)
+    return FloatColor(linear.x, linear.y, linear.z, 1).quantize()
 
 
 def texture_from_bytes(
@@ -171,3 +172,25 @@ def texture_from_file(
             `decode_image` reads.
     """
     return texture_from_bytes(Path(path).read_bytes(), space, wrap, alpha)
+
+
+def remember_material(
+    mut defaults: Dict[String, MaterialId],
+    key: String,
+    material: Material,
+    mut assets: Assets,
+) -> MaterialId:
+    """Return the material stored for `key`, making it the first time.
+
+    Args:
+        defaults: The names already made.
+        key: The name.
+        material: The material to store the first time.
+        assets: The scene's materials.
+
+    Returns:
+        The stored id.
+    """
+    if key not in defaults:
+        defaults[key] = assets.materials.add(material)
+    return defaults.get(key, MaterialId(0))

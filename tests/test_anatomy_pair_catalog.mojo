@@ -33,7 +33,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import FootBoneField
 from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     foot_muscle_dimensions,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import max
 from std.testing import (
     TestSuite,
@@ -128,7 +128,7 @@ def test_catalog_is_complete_canonical_and_in_one_frame() raises:
             elif parts[i].family != "bone":
                 assert_almost_equal(parts[i].origin.length(), 0)
             # Every Variant dispatch arm is exercised at an asymmetric point.
-            var point = (parts[i].low + parts[i].high) * 0.5
+            var point = midpoint(parts[i].low, parts[i].high)
             var local = point - parts[i].origin
             var placed = parts[i].distance(point)
             if parts[i].solid.isa[FemurField]():

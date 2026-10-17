@@ -38,6 +38,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
+from math.cross import wide_dot
 from math.norm import (
     _ordinary_squared,
     length3,
@@ -45,6 +47,7 @@ from math.norm import (
     reciprocal_normalized3,
 )
 from core.buffer_attribute import BufferAttribute
+from core.search import first_match
 from core.buffer_geometry import (
     BufferGeometry,
     COLOR,
@@ -116,11 +119,6 @@ struct _Face(Copyable, Movable):
         return v == self.v1 or v == self.v2 or v == self.v3
 
 
-def _dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
-    """Return the dot product of the first three numbers."""
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
 def _unit3(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
     """Return a three-number vector scaled to unit length, or itself if it
     is zero long, as three.js's `Vector3.normalize` does."""
@@ -138,15 +136,6 @@ def _unit4(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
     return SIMD[DType.float64, 4](unit[0], unit[1], unit[2], unit[3])
 
 
-def _find(list: List[Int], value: Int) -> Int:
-    """Return where `value` first is in `list`, or -1: JavaScript's
-    `indexOf`."""
-    for index in range(len(list)):
-        if list[index] == value:
-            return index
-    return -1
-
-
 def _remove(mut list: List[Int], value: Int):
     """Remove the first `value` from `list`: three.js's `removeFromArray`.
 
@@ -155,15 +144,10 @@ def _remove(mut list: List[Int], value: Int):
     lists, once for each corner, even a corner that repeats. A vertex is
     in the list of vertices until it is removed, once.
     """
-    var at = _find(list, value)
+    var at = first_match(list, value)
     # The value is there; see above.
     if at >= 0:  # pragma: no branch
         _ = list.pop(at)
-
-
-def _contains(list: List[Int], value: Int) -> Bool:
-    """Return True if `value` is in `list`."""
-    return _find(list, value) >= 0
 
 
 struct _Reduction(Movable):
@@ -198,13 +182,13 @@ struct _Reduction(Movable):
 
     def add_unique_neighbor(mut self, v: Int, n: Int):
         """Add `n` to `v`'s neighbors unless it is there already."""
-        if not _contains(self.vertex_data[v].neighbors, n):
+        if first_match(self.vertex_data[v].neighbors, n) < 0:
             self.vertex_data[v].neighbors.append(n)
 
     def remove_if_non_neighbor(mut self, v: Int, n: Int):
         """Take `n` off `v`'s neighbors unless a face of `v` still has it:
         three.js's `removeIfNonNeighbor`."""
-        if not _contains(self.vertex_data[v].neighbors, n):
+        if first_match(self.vertex_data[v].neighbors, n) < 0:
             return
         for index in range(len(self.vertex_data[v].faces)):
             if self.face_data[self.vertex_data[v].faces[index]].has_vertex(n):
@@ -245,7 +229,9 @@ struct _Reduction(Movable):
             var min_curvature = 1.0
             ref normal = self.face_data[faces[index]].normal
             for side in range(len(side_faces)):  # pragma: no branch
-                var dot = _dot(normal, self.face_data[side_faces[side]].normal)
+                var dot = wide_dot(
+                    normal, self.face_data[side_faces[side]].normal
+                )
                 min_curvature = min(min_curvature, (1.001 - dot) / 2)
             curvature = max(curvature, min_curvature)
         if len(side_faces) < 2:
@@ -432,8 +418,9 @@ def simplify(geometry: BufferGeometry, count: Int) raises -> BufferGeometry:
             number of numbers an item, or an index entry points past the
             last vertex.
     """
-    if count < 0:
-        raise Error("A simplification cannot take away a negative count")
+    require_non_negative(
+        count, "A simplification cannot take away a negative count"
+    )
     var kept = BufferGeometry()
     var names: List[String] = [
         String(POSITION),

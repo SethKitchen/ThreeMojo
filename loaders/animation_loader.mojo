@@ -58,6 +58,7 @@ from animation.keyframe_track import (
 )
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from loaders.js_number import is_decimal_text
 from loaders.json import ARRAY, JsonDocument, parse_json
 from std.pathlib import Path
 
@@ -79,16 +80,6 @@ def _find_node(scene: Scene, root: NodeId, name: String) raises -> NodeId:
     if name == "" or name == "." or name == scene.get(root).name:
         return root
     return _named_below(scene, root, name)
-
-
-def _is_count(text: String) -> Bool:
-    """Return True if a text holds decimal digits and nothing else. Every
-    caller has a text of one character or more."""
-    var bytes = text.as_bytes()
-    for at in range(len(bytes)):  # pragma: no branch
-        if bytes[at] < 48 or bytes[at] > 57:
-            return False
-    return True
 
 
 def _morph_target(
@@ -113,7 +104,7 @@ def _slot_of(names: Dict[String, Int], index: String) raises -> Optional[Int]:
     None when no target has the name."""
     if index == "":
         return -1
-    if _is_count(index):
+    if is_decimal_text(index):
         return atol(index)
     return names.get(index)
 

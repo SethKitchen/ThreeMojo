@@ -38,11 +38,14 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from std.math import isfinite
 from math.norm import _ordinary_squared
 from core.layers import Layers
 from core.object3d import NO_PARENT
 from core.scene import Scene
+from lights.fresnel import schlick_weight
+from lights.ggx import ggx_base, ggx_smith_root
 from lights.physical_layers import (
     PhysicalLayers,
     anisotropic_ggx,
@@ -50,6 +53,7 @@ from lights.physical_layers import (
     ibl_sheen,
     sheen_scaling,
 )
+from lights.light_slot import index_of_light
 from lights.shadow import (
     ShadowCascade,
     ShadowMap,
@@ -60,8 +64,10 @@ from lights.shadow import (
     cascade_reach,
     sun_reach,
     shadow_strength,
+    require_shadow_type,
     view_depth,
 )
+from lights.aim import light_target_position
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
@@ -73,6 +79,7 @@ from lights.light import (
     ALL_LIGHTS,
     Light,
     LightMask,
+    require_shadow_light,
 )
 from lights.light_probe_grid import LightProbeGrid
 from lights.ltc import (
@@ -84,9 +91,12 @@ from lights.ltc import (
 )
 from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
+from math.utils import clamp, mix_delta, saturate
 from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.cross import cross_vectors
+from math.vector3 import Vector3, mix_delta3
+from render.color_math import rgb_channels
 from render.framebuffer import Color, FloatColor
 from std.math import cos, exp2, log2, max, min, pi, sqrt
 from units.si import METER
@@ -130,7 +140,7 @@ def falloff(distance: Float32, decay: Float32, cutoff: Float32) -> Float32:
     if cutoff > 0:
         var ratio = distance / cutoff
         var quartic = ratio * ratio * ratio * ratio
-        var edge = max(Float32(0), min(Float32(1), 1 - quartic))
+        var edge = clamp(1 - quartic, 0, 1)
         attenuation *= edge * edge
     return attenuation
 
@@ -160,11 +170,7 @@ def view_direction(direction: Vector3, up: Vector3, back: Vector3) -> Vector3:
     Returns:
         The direction in view space, as long as it was.
     """
-    var right = Vector3(
-        up.y * back.z - up.z * back.y,
-        up.z * back.x - up.x * back.z,
-        up.x * back.y - up.y * back.x,
-    )
+    var right = cross_vectors(up, back)
     return Vector3(direction.dot(right), direction.dot(up), direction.dot(back))
 
 
@@ -190,21 +196,51 @@ def light_vector(
     var distance = offset.length()
     if _ordinary_squared(offset.dot(offset)):
         return offset, distance, distance
-    if not (
-        isfinite(target.x)
-        and isfinite(target.y)
-        and isfinite(target.z)
-        and isfinite(origin.x)
-        and isfinite(origin.y)
-        and isfinite(origin.z)
-    ):
+    if not (target.is_finite() and origin.is_finite()):
         return offset, distance, distance
-    if not (isfinite(offset.x) and isfinite(offset.y) and isfinite(offset.z)):
+    if not offset.is_finite():
         # A finite Float32 subtraction can overflow. Halve BEFORE subtracting;
         # the true distance is already known to be unrepresentable.
         offset = target * Float32(0.5) - origin * Float32(0.5)
     offset.normalize()
     return offset, distance, Float32(1)
+
+
+def light_cosines(
+    normal: Vector3,
+    toward: Vector3,
+    coat_normal: Vector3,
+    clearcoat: Float32,
+    direction_length: Float32,
+) -> Tuple[Float32, Float32]:
+    """Return the diffuse and clear-coat cosines of one light.
+
+    Each cosine is the dot with `toward`, divided by `direction_length`,
+    and held at zero from below. A clear coat of zero gives a coat cosine
+    of zero. A directional light passes a length of one, which leaves the
+    dot unchanged.
+
+    Error: Never.
+
+    Args:
+        normal: The surface normal.
+        toward: The vector toward the light, before it is normalized.
+        coat_normal: The clear-coat normal.
+        clearcoat: How much clear coat there is. Zero skips the coat dot.
+        direction_length: The length of `toward`. One for a directional
+            light.
+
+    Returns:
+        The diffuse cosine, then the coat cosine.
+
+    """
+    var lambert = max(Float32(0), normal.dot(toward) / direction_length)
+    var coat_lambert = Float32(0)
+    if clearcoat > 0:
+        coat_lambert = max(
+            Float32(0), coat_normal.dot(toward) / direction_length
+        )
+    return lambert, coat_lambert
 
 
 def toward_eye_at(
@@ -347,10 +383,6 @@ def toon_tone(dot_nl: Float32, ramp: List[Float32]) -> Float32:
 # three.js's `G_BlinnPhong_Implicit`: the geometric term of the Blinn-Phong
 # BRDF, a constant there and here.
 comptime BLINN_PHONG_G = Float32(0.25)
-# The two numbers in three.js's `F_Schlick`, which approximates how much
-# more a surface reflects at a grazing angle.
-comptime _FRESNEL_SLOPE = Float32(-5.55473)
-comptime _FRESNEL_OFFSET = Float32(-6.98316)
 # The roughness a physical surface is never smoother than: three.js's
 # 0.0525, the base mip of a 256-texel cube map, below which a GGX lobe
 # is narrower than a pixel and sparkles.
@@ -417,14 +449,14 @@ def blinn_phong(
         return Vector3(0, 0, 0)
     if facing > 1:
         facing = 1
-    var grazing = max(Float32(0), min(Float32(1), toward_eye.dot(half)))
+    var grazing = clamp(toward_eye.dot(half), 0, 1)
     # three.js's F_Schlick with an f90 of one: the surface reflects its own
     # color head on and white at a grazing angle.
     var fresnel = f_schlick(specular, 1, grazing)
     # three.js's D_BlinnPhong, without its reciprocal pi.
     var lobe = (shininess * 0.5 + 1) * exp2(shininess * log2(facing))
     var scale = BLINN_PHONG_G * lobe
-    return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)
+    return fresnel * scale
 
 
 def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
@@ -446,18 +478,10 @@ def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
     Returns:
         The reflectance per channel.
     """
-    var fresnel = exp2((_FRESNEL_SLOPE * cos_vh + _FRESNEL_OFFSET) * cos_vh)
+    var fresnel = schlick_weight(cos_vh)
     var keep = 1 - fresnel
-    return Vector3(
-        f0.x * keep + f90 * fresnel,
-        f0.y * keep + f90 * fresnel,
-        f0.z * keep + f90 * fresnel,
-    )
-
-
-def _saturated(value: Float32) -> Float32:
-    """Return `value` clamped to zero through one: GLSL's `saturate`."""
-    return max(Float32(0), min(Float32(1), value))
+    var rise = f90 * fresnel
+    return f0 * keep + Vector3(rise, rise, rise)
 
 
 def ggx(
@@ -511,21 +535,17 @@ def ggx(
         return Vector3(0, 0, 0)
     half.normalize()
     var alpha = roughness * roughness
-    var dot_nl = _saturated(normal.dot(toward_light))
-    var dot_nv = _saturated(normal.dot(toward_eye))
-    var dot_nh = _saturated(normal.dot(half))
-    var dot_vh = _saturated(toward_eye.dot(half))
+    var dot_nl = saturate(normal.dot(toward_light))
+    var dot_nv = saturate(normal.dot(toward_eye))
+    var dot_nh = saturate(normal.dot(half))
+    var dot_vh = saturate(toward_eye.dot(half))
     if dot_nl == 0 or dot_nv == 0:
         return Vector3(0, 0, 0)
     var fresnel = f_schlick(f0, f90, dot_vh)
     if layers.iridescence > 0:
         var film = layers.iridescence_fresnel
         var weight = layers.iridescence
-        fresnel = Vector3(
-            fresnel.x + (film.x - fresnel.x) * weight,
-            fresnel.y + (film.y - fresnel.y) * weight,
-            fresnel.z + (film.z - fresnel.z) * weight,
-        )
+        fresnel = mix_delta3(fresnel, film, weight)
     if layers.anisotropic:
         var stretched = anisotropic_ggx(
             toward_light,
@@ -540,14 +560,14 @@ def ggx(
         return fresnel * stretched
     # three.js's V_GGX_SmithCorrelated.
     var a2 = alpha * alpha
-    var gv = dot_nl * sqrt(a2 + (1 - a2) * dot_nv * dot_nv)
-    var gl = dot_nv * sqrt(a2 + (1 - a2) * dot_nl * dot_nl)
+    var gv = dot_nl * ggx_smith_root(dot_nv, a2)
+    var gl = dot_nv * ggx_smith_root(dot_nl, a2)
     var visibility = 0.5 / max(gv + gl, GGX_EPSILON)
     # three.js's D_GGX, without its reciprocal pi.
-    var denominator = dot_nh * dot_nh * (a2 - 1) + 1
+    var denominator = ggx_base(dot_nh, a2)
     var lobe = a2 / (denominator * denominator)
     var scale = visibility * lobe
-    return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)
+    return fresnel * scale
 
 
 def dfg_approx(dot_nv: Float32, roughness: Float32) -> Vector2:
@@ -586,11 +606,8 @@ def environment_brdf(
         The fraction per channel.
     """
     var fab = dfg_approx(dot_nv, roughness)
-    return Vector3(
-        f0.x * fab.x + f90 * fab.y,
-        f0.y * fab.x + f90 * fab.y,
-        f0.z * fab.x + f90 * fab.y,
-    )
+    var grazing = f90 * fab.y
+    return f0 * fab.x + Vector3(grazing, grazing, grazing)
 
 
 struct Reflected(ImplicitlyCopyable):
@@ -662,14 +679,10 @@ def physical_surface(
         angle.
     """
     var keep = 1 - metalness
-    var f90 = specular_intensity + (1 - specular_intensity) * metalness
+    var f90 = mix_delta(specular_intensity, Float32(1), metalness)
     return Reflected(
-        Vector3(base.x * keep, base.y * keep, base.z * keep),
-        Vector3(
-            f0.x + (base.x - f0.x) * metalness,
-            f0.y + (base.y - f0.y) * metalness,
-            f0.z + (base.z - f0.z) * metalness,
-        ),
+        base * keep,
+        mix_delta3(f0, base, metalness),
         Vector3(f90, 0, 0),
     )
 
@@ -821,11 +834,7 @@ def physical_outgoing(
     Returns:
         The outgoing light, linear.
     """
-    var diffuse = Vector3(
-        direct.diffuse.x + surface.diffuse.x * indirect.x * occlusion,
-        direct.diffuse.y + surface.diffuse.y * indirect.y * occlusion,
-        direct.diffuse.z + surface.diffuse.z * indirect.z * occlusion,
-    )
+    var diffuse = direct.diffuse + surface.diffuse * indirect * occlusion
     var specular = direct.specular
     var coat = direct.clearcoat
     var sheen = direct.sheen
@@ -838,29 +847,15 @@ def physical_outgoing(
         if layers.iridescence > 0:
             var film = layers.iridescence_fresnel
             var weight = layers.iridescence
-            fr = Vector3(
-                fr.x + (film.x - fr.x) * weight,
-                fr.y + (film.y - fr.y) * weight,
-                fr.z + (film.z - fr.z) * weight,
-            )
+            fr = mix_delta3(fr, film, weight)
         var fab = dfg_approx(dot_nv, roughness)
-        var single = Vector3(
-            fr.x * fab.x + f90 * fab.y,
-            fr.y * fab.x + f90 * fab.y,
-            fr.z * fab.x + f90 * fab.y,
-        )
+        var grazing = f90 * fab.y
+        var single = fr * fab.x + Vector3(grazing, grazing, grazing)
         var ess = fab.x + fab.y
         var ems = 1 - ess
-        var average = Vector3(
-            fr.x + (1 - fr.x) * MULTISCATTER_MEAN,
-            fr.y + (1 - fr.y) * MULTISCATTER_MEAN,
-            fr.z + (1 - fr.z) * MULTISCATTER_MEAN,
-        )
-        var multi = Vector3(
-            single.x * average.x / (1 - ems * average.x) * ems,
-            single.y * average.y / (1 - ems * average.y) * ems,
-            single.z * average.z / (1 - ems * average.z) * ems,
-        )
+        var white = Vector3(Float32(1), Float32(1), Float32(1))
+        var average = mix_delta3(fr, white, MULTISCATTER_MEAN)
+        var multi = single * average / (white - average * ems) * ems
         var total = max(
             max(single.x + multi.x, single.y + multi.y), single.z + multi.z
         )
@@ -868,71 +863,35 @@ def physical_outgoing(
         # three.js's `computeSpecularOcclusion`, which dims a reflection
         # less than the diffuse where the surface faces the eye.
         var shade = specular_occlusion(dot_nv, occlusion, roughness)
-        specular = Vector3(
-            specular.x
-            + radiance.x * single.x * shade
-            + multi.x * irradiance.x * shade,
-            specular.y
-            + radiance.y * single.y * shade
-            + multi.y * irradiance.y * shade,
-            specular.z
-            + radiance.z * single.z * shade
-            + multi.z * irradiance.z * shade,
+        specular = (
+            specular + radiance * single * shade + multi * irradiance * shade
         )
-        diffuse = Vector3(
-            diffuse.x + surface.diffuse.x * kept * irradiance.x * occlusion,
-            diffuse.y + surface.diffuse.y * kept * irradiance.y * occlusion,
-            diffuse.z + surface.diffuse.z * kept * irradiance.z * occlusion,
-        )
+        diffuse = diffuse + surface.diffuse * kept * irradiance * occlusion
         if clearcoat > 0:
             var gloss = environment_brdf(
                 dot_nv_coat.x, CLEARCOAT_F0, 1, clearcoat_roughness
             )
-            coat = Vector3(
-                coat.x + coat_radiance.x * gloss.x * occlusion,
-                coat.y + coat_radiance.y * gloss.y * occlusion,
-                coat.z + coat_radiance.z * gloss.z * occlusion,
-            )
+            coat = coat + coat_radiance * gloss * occlusion
         if layers.sheen:
             # three.js's `sheenSpecularIndirect`: its irradiance is pi
             # times the one here, and `aomap_fragment` occludes it.
             var cloth = ibl_sheen(dot_nv, layers.sheen_roughness) * Float32(pi)
-            sheen = Vector3(
-                sheen.x
-                + irradiance.x * layers.sheen_color.x * cloth * occlusion,
-                sheen.y
-                + irradiance.y * layers.sheen_color.y * cloth * occlusion,
-                sheen.z
-                + irradiance.z * layers.sheen_color.z * cloth * occlusion,
-            )
+            sheen = sheen + irradiance * layers.sheen_color * cloth * occlusion
     if transmission > 0:
         # three.js's `transmission_fragment`: the diffuse light, direct and
         # indirect together, gives way to what the surface shows through
         # itself. The reflection and the glow are untouched.
-        diffuse = Vector3(
-            diffuse.x + (transmitted.x - diffuse.x) * transmission,
-            diffuse.y + (transmitted.y - diffuse.y) * transmission,
-            diffuse.z + (transmitted.z - diffuse.z) * transmission,
-        )
-    var outgoing = Vector3(
-        diffuse.x + specular.x + glow.x,
-        diffuse.y + specular.y + glow.y,
-        diffuse.z + specular.z + glow.z,
-    )
+        diffuse = mix_delta3(diffuse, transmitted, transmission)
+    var outgoing = diffuse + specular + glow
     if layers.sheen:
         var kept = sheen_scaling(layers.sheen_color)
-        outgoing = Vector3(
-            outgoing.x * kept + sheen.x,
-            outgoing.y * kept + sheen.y,
-            outgoing.z * kept + sheen.z,
-        )
+        outgoing = outgoing * kept + sheen
     if clearcoat > 0:
         var fresnel = f_schlick(CLEARCOAT_F0, 1, dot_nv_coat.x)
-        outgoing = Vector3(
-            outgoing.x * (1 - clearcoat * fresnel.x) + coat.x * clearcoat,
-            outgoing.y * (1 - clearcoat * fresnel.y) + coat.y * clearcoat,
-            outgoing.z * (1 - clearcoat * fresnel.z) + coat.z * clearcoat,
+        var open = (
+            Vector3(Float32(1), Float32(1), Float32(1)) - fresnel * clearcoat
         )
+        outgoing = outgoing * open + coat * clearcoat
     return outgoing
 
 
@@ -979,7 +938,7 @@ def specular_occlusion(
     """
     var base = max(Float32(0), dot_nv + occlusion)
     var power = exp2(exp2(-16 * roughness - 1) * log2(base))
-    return _saturated(power - 1 + occlusion)
+    return saturate(power - 1 + occlusion)
 
 
 def scattering_through(
@@ -1009,19 +968,42 @@ def scattering_through(
     Returns:
         The light's share that shows through, before its color.
     """
-    var half = Vector3(
-        toward_light.x + normal.x * distortion,
-        toward_light.y + normal.y * distortion,
-        toward_light.z + normal.z * distortion,
-    )
+    var half = toward_light + normal * distortion
     half.normalize()
-    var facing = max(Float32(0), min(Float32(1), -toward_eye.dot(half)))
+    var facing = clamp(-toward_eye.dot(half), 0, 1)
     # The power as `exp2` of `log2`, as `blinn_phong` spells it, with zero
     # kept off `log2`.
     var lit = Float32(0)
     if facing > 0:
         lit = exp2(power * log2(facing))
     return lit * scale + ambient
+
+
+def _opaque(rgb: Vector3) -> FloatColor:
+    """Return an opaque color from linear red, green, and blue.
+
+    Args:
+        rgb: The three channels.
+
+    Returns:
+        The color. Alpha is one.
+    """
+    return FloatColor(rgb.x, rgb.y, rgb.z)
+
+
+def _add_rgb(base: FloatColor, added: Vector3) -> FloatColor:
+    """Return `base` with `added` summed into red, green, and blue.
+
+    Alpha stays one, as a lit sum keeps it.
+
+    Args:
+        base: The color so far.
+        added: The light to add.
+
+    Returns:
+        The sum.
+    """
+    return _opaque(rgb_channels(base) + added)
 
 
 def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
@@ -1040,11 +1022,7 @@ def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
     Returns:
         The color, linear.
     """
-    return Vector3(
-        light.x * reach * through.x * through.x,
-        light.y * reach * through.y * through.y,
-        light.z * reach * through.z * through.z,
-    )
+    return ((light * reach) * through) * through
 
 
 def rect_volume_light(
@@ -1113,11 +1091,7 @@ def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
     Returns:
         The arriving light, linear.
     """
-    return Vector3(
-        direct.x * mask + indirect.x,
-        direct.y * mask + indirect.y,
-        direct.z * mask + indirect.z,
-    )
+    return direct * mask + indirect
 
 
 def occluded_light(
@@ -1144,11 +1118,7 @@ def occluded_light(
     Returns:
         The arriving light, linear.
     """
-    return Vector3(
-        arriving.x - indirect.x + (indirect.x + baked.x) * occlusion,
-        arriving.y - indirect.y + (indirect.y + baked.y) * occlusion,
-        arriving.z - indirect.z + (indirect.z + baked.z) * occlusion,
-    )
+    return arriving - indirect + (indirect + baked) * occlusion
 
 
 def physical_light(
@@ -1197,9 +1167,7 @@ def physical_light(
     var coat = sum.clearcoat
     var sheen = sum.sheen
     if lambert > 0:
-        var irradiance = Vector3(
-            light.x * lambert, light.y * lambert, light.z * lambert
-        )
+        var irradiance = light * lambert
         if layers.sheen:
             var cloth = charlie_sheen(
                 toward_light,
@@ -1208,11 +1176,7 @@ def physical_light(
                 layers.sheen_color,
                 layers.sheen_roughness,
             )
-            sheen = Vector3(
-                sheen.x + irradiance.x * cloth.x,
-                sheen.y + irradiance.y * cloth.y,
-                sheen.z + irradiance.z * cloth.z,
-            )
+            sheen = sheen + irradiance * cloth
         var lobe = ggx(
             toward_light,
             toward_eye,
@@ -1222,16 +1186,8 @@ def physical_light(
             roughness,
             layers,
         )
-        specular = Vector3(
-            specular.x + irradiance.x * lobe.x,
-            specular.y + irradiance.y * lobe.y,
-            specular.z + irradiance.z * lobe.z,
-        )
-        diffuse = Vector3(
-            diffuse.x + irradiance.x * surface.diffuse.x,
-            diffuse.y + irradiance.y * surface.diffuse.y,
-            diffuse.z + irradiance.z * surface.diffuse.z,
-        )
+        specular = specular + irradiance * lobe
+        diffuse = diffuse + irradiance * surface.diffuse
     if coat_lambert > 0:
         var lobe = ggx(
             toward_light,
@@ -1241,24 +1197,8 @@ def physical_light(
             1,
             clearcoat_roughness,
         )
-        coat = Vector3(
-            coat.x + light.x * coat_lambert * lobe.x,
-            coat.y + light.y * coat_lambert * lobe.y,
-            coat.z + light.z * coat_lambert * lobe.z,
-        )
+        coat = coat + light * coat_lambert * lobe
     return Reflected(diffuse, specular, coat, sheen)
-
-
-def _aimed_at(scene: Scene, light: Light) raises -> Vector3:
-    """Return where `light` points, in world space: its target node's
-    position, or the origin when it names none.
-
-    Raises:
-        Error: If the target is a node the scene does not have.
-    """
-    if light.target == NO_PARENT:
-        return Vector3(0, 0, 0)
-    return scene.world_position(light.target)
 
 
 struct Lighting(Movable):
@@ -1503,8 +1443,11 @@ struct Lighting(Movable):
         self.grid = probe_grid.scaled()
         for slot in range(len(self.spot_profiles)):
             var owner = self.spot_profiles[slot].light
-            if owner < 0 or owner >= len(scene.lights):
-                raise Error("A spot profile names a light that is not there")
+            require_index_in_count(
+                owner,
+                len(scene.lights),
+                "A spot profile names a light that is not there",
+            )
             ref shaped = scene.lights[owner]
             if (
                 shaped.kind != SPOT
@@ -1516,10 +1459,8 @@ struct Lighting(Movable):
                 )
         for slot in range(len(self.shadows)):
             var owner = self.shadows[slot].light
-            if owner < 0 or owner >= len(scene.lights):
-                raise Error("A shadow map names a light that is not there")
-            if not self.shadows[slot].shadow_type.is_valid():
-                raise Error("A shadow map type that is none of the four")
+            require_shadow_light(owner, len(scene.lights))
+            require_shadow_type(self.shadows[slot].shadow_type)
             var kind = scene.lights[owner].kind
             if kind != DIRECTIONAL and kind != POINT and kind != SPOT:
                 raise Error(
@@ -1533,8 +1474,11 @@ struct Lighting(Movable):
                 )
         for slot in range(len(self.spot_maps)):
             var owner = self.spot_maps[slot].light
-            if owner < 0 or owner >= len(scene.lights):
-                raise Error("A spot light map names a light that is not there")
+            require_index_in_count(
+                owner,
+                len(scene.lights),
+                "A spot light map names a light that is not there",
+            )
             if scene.lights[owner].kind != SPOT:
                 raise Error("A spot light map names a light that is not a spot")
         for index in range(len(scene.lights)):
@@ -1554,12 +1498,7 @@ struct Lighting(Movable):
                 continue
             if light.kind == AMBIENT:
                 var fill = light.radiance()
-                self.ambient = FloatColor(
-                    self.ambient.r + fill.r,
-                    self.ambient.g + fill.g,
-                    self.ambient.b + fill.b,
-                    1.0,
-                )
+                self.ambient = _add_rgb(self.ambient, rgb_channels(fill))
             elif light.kind == LIGHT_PROBE:
                 # Summed as three.js sums them: each coefficient times the
                 # probe's intensity, the color unread.
@@ -1567,9 +1506,9 @@ struct Lighting(Movable):
             elif light.kind == DIRECTIONAL:
                 # Where the node ended up after every transform above it,
                 # seen from what it shines at.
-                var pointing = scene.world_position(light.node) - _aimed_at(
-                    scene, light
-                )
+                var pointing = scene.world_position(
+                    light.node
+                ) - light_target_position(scene, light)
                 # A node on its target leaves a zero direction, as three.js's
                 # `normalize` leaves it. Every surface then meets the light
                 # edge-on: a dot product of zero, as three.js's shader gets.
@@ -1602,7 +1541,7 @@ struct Lighting(Movable):
                 # From the target toward the bulb, as three.js holds it.
                 # A node on its target leaves a zero axis, as in three.js:
                 # every surface is then at a right angle to it.
-                var axis = at - _aimed_at(scene, light)
+                var axis = at - light_target_position(scene, light)
                 axis.normalize()
                 self.spot_positions.append(at)
                 self.spot_directions.append(axis)
@@ -1709,24 +1648,15 @@ struct Lighting(Movable):
 
     def _shadow_of(self, light: Int) -> Int:
         """Return which of the shadow maps `light` drew, or -1 for none."""
-        for slot in range(len(self.shadows)):
-            if self.shadows[slot].light == light:
-                return slot
-        return -1
+        return index_of_light(self.shadows, light)
 
     def _map_of(self, light: Int) -> Int:
         """Return which of the spot light maps `light` projects, or -1."""
-        for slot in range(len(self.spot_maps)):
-            if self.spot_maps[slot].light == light:
-                return slot
-        return -1
+        return index_of_light(self.spot_maps, light)
 
     def _profile_of(self, light: Int) -> Int:
         """Return which of the spot profiles shapes `light`, or -1."""
-        for slot in range(len(self.spot_profiles)):
-            if self.spot_profiles[slot].light == light:
-                return slot
-        return -1
+        return index_of_light(self.spot_profiles, light)
 
     def spot_attenuation(
         self, index: Int, angle_cos: Float32, position: Vector3
@@ -1777,6 +1707,195 @@ struct Lighting(Movable):
         if slot < 0:
             return Vector3(1, 1, 1)
         return self.spot_maps[slot].tint(position, normal)
+
+    def _spot_reach(
+        self, index: Int, position: Vector3
+    ) -> Tuple[Vector3, Float32, Float32, Float32]:
+        """Return one spot light's offset, distance, divisor, and cone weight.
+
+        The offset points from the surface to the bulb. The divisor is the
+        length of that offset for an ordinary light, and one when the offset
+        is already a unit direction. A surface on the bulb has distance zero.
+        The cone weight is then zero, and `spot_attenuation` is not called.
+        Otherwise the cone cosine is the offset's dot with the axis, divided
+        by the divisor, and the weight is `spot_attenuation` of that cosine.
+        That is three.js's `getSpotAttenuation`.
+
+        Args:
+            index: Which spot light, in the order they were resolved.
+            position: Where the surface is, in world space.
+
+        Returns:
+            The offset, the distance, the divisor, and the cone weight.
+        """
+        var ray = light_vector(self.spot_positions[index], position)
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
+        if distance == 0:
+            return toward, distance, direction_length, Float32(0)
+        var angle_cos = (
+            toward.dot(self.spot_directions[index]) / direction_length
+        )
+        return (
+            toward,
+            distance,
+            direction_length,
+            self.spot_attenuation(index, angle_cos, position),
+        )
+
+    def _point_weight(
+        self, index: Int, normal: Vector3, position: Vector3
+    ) -> Tuple[Bool, Vector3, Float32]:
+        """Return whether a point light faces the surface, its offset, and
+        the Lambert term times the distance falloff.
+
+        A surface on the bulb has no direction, so it is unlit and the
+        cosine is not read. Otherwise the cosine is the normal's dot with
+        the offset, divided by the offset's length afterwards: the order
+        the kernel uses, so the two round alike. A cosine of zero or below
+        is unlit. A cosine that is not an ordered number stays, and the
+        falloff still multiplies it.
+
+        Args:
+            index: Which point light, in the order they were resolved.
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+
+        Returns:
+            Whether the light faces the surface, the offset from the
+            surface to the bulb, and the weighted Lambert term.
+        """
+        var toward, distance, direction_length = light_vector(
+            self.positions[index], position
+        )
+        if distance == 0:
+            return False, toward, Float32(0)
+        var lambert = normal.dot(toward) / direction_length
+        if lambert <= 0:
+            return False, toward, Float32(0)
+        return (
+            True,
+            toward,
+            lambert
+            * falloff(distance, self.decays[index], self.cutoffs[index]),
+        )
+
+    def _direction_weight[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        index: Int,
+        normal: Vector3,
+        position: Vector3,
+        receives: Bool,
+        shape: R,
+    ) -> Tuple[Bool, Float32, Vector3]:
+        """Return whether a directional light faces the surface, its Lambert
+        cosine, and what its shadow lets through.
+
+        The cosine is held at zero. A cosine of zero is unlit, and the
+        shadow is not read.
+
+        Args:
+            index: Which directional light, in the order they were resolved.
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+            receives: Whether shadows fall on this surface.
+            shape: What the surface makes of the shadow.
+
+        Returns:
+            Whether the light faces the surface, the held cosine, and the
+            shadow weight.
+        """
+        var lambert = max(Float32(0), normal.dot(self.directions[index]))
+        if lambert == 0:
+            return False, Float32(0), Vector3(0, 0, 0)
+        return (
+            True,
+            lambert,
+            self.direction_through(index, position, normal, receives, shape),
+        )
+
+    def _spot_weight[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        index: Int,
+        normal: Vector3,
+        position: Vector3,
+        receives: Bool,
+        shape: R,
+    ) -> Tuple[Bool, Vector3, Float32, Vector3]:
+        """Return whether a spot light faces the surface, its offset, the
+        weighted Lambert term, and what its shadow lets through.
+
+        A surface on the bulb has no direction. A surface outside the cone,
+        or whose cosine is zero or below, is unlit. Otherwise the cosine is
+        the normal's dot with the offset, divided by the offset's length
+        afterwards, then multiplied by the cone weight and the distance
+        falloff.
+
+        Args:
+            index: Which spot light, in the order they were resolved.
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+            receives: Whether shadows fall on this surface.
+            shape: What the surface makes of the shadow.
+
+        Returns:
+            Whether the light faces the surface, the offset from the
+            surface to the bulb, the weighted Lambert term, and the shadow
+            weight.
+        """
+        var toward, distance, direction_length, rim = self._spot_reach(
+            index, position
+        )
+        if distance == 0:
+            return False, toward, Float32(0), Vector3(0, 0, 0)
+        if rim <= 0:
+            return False, toward, Float32(0), Vector3(0, 0, 0)
+        var lambert = normal.dot(toward) / direction_length
+        if lambert <= 0:
+            return False, toward, Float32(0), Vector3(0, 0, 0)
+        return (
+            True,
+            toward,
+            lambert
+            * rim
+            * falloff(
+                distance, self.spot_decays[index], self.spot_cutoffs[index]
+            ),
+            self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
+            ),
+        )
+
+    def _add_hemisphere(self, total: FloatColor, normal: Vector3) -> FloatColor:
+        """Add every hemisphere light's ground-to-sky mix.
+
+        The weight is one when the surface faces the sky, zero when it
+        faces the ground, and a half when it is edge-on. three.js's
+        `getHemisphereLightIrradiance` mixes ground toward sky by that
+        weight. A toon ramp does not step this term.
+
+        Args:
+            total: The light summed so far.
+            normal: The surface's unit normal, in world space.
+
+        Returns:
+            `total` plus each hemisphere light, in index order.
+        """
+        var sum = total
+        for index in range(len(self.sky_directions)):
+            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
+            ref sky = self.skies[index]
+            ref ground = self.grounds[index]
+            sum = _add_rgb(
+                sum,
+                mix_delta3(rgb_channels(ground), rgb_channels(sky), weight),
+            )
+        return sum
 
     def shadow_at(
         self, slot: Int, position: Vector3, normal: Vector3, receives: Bool
@@ -2001,98 +2120,33 @@ struct Lighting(Movable):
         """
         var total = self.ambient_at(normal, position)
         for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            if lambert == 0:
-                continue
-            var through = self.direction_through(
-                index, position, normal, receives, shape
+            var lit, lambert, through = self._direction_weight(
+                index, normal, position, receives, shape
             )
+            if not lit:
+                continue
             ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * (lambert * through.x),
-                total.g + light.g * (lambert * through.y),
-                total.b + light.b * (lambert * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, rgb_channels(light) * (through * lambert))
         for index in range(len(self.positions)):
-            # From the surface to the bulb: how far, and which way.
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
-            # A surface exactly on the bulb has no direction to be lit from.
-            if distance == 0:
+            var lit, _, bare = self._point_weight(index, normal, position)
+            if not lit:
                 continue
-            # The dot and then the divide, in that order, because it is the
-            # order the kernel uses and the two must round alike.
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
-            )
             var through = self.shadow_through(
                 self.point_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.point_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * (bare * through.x),
-                total.g + bulb.g * (bare * through.y),
-                total.b + bulb.b * (bare * through.z),
-                1.0,
-            )
-        for index in range(len(self.sky_directions)):
-            # How far the surface is turned toward the sky: one facing it,
-            # zero facing the ground, a half edge-on. three.js's
-            # `getHemisphereLightIrradiance`, ground to sky by that weight.
-            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
-            ref sky = self.skies[index]
-            ref ground = self.grounds[index]
-            var lift = FloatColor(
-                ground.r + (sky.r - ground.r) * weight,
-                ground.g + (sky.g - ground.g) * weight,
-                ground.b + (sky.b - ground.b) * weight,
-                1.0,
-            )
-            total = FloatColor(
-                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
-            )
+            total = _add_rgb(total, rgb_channels(bulb) * (through * bare))
+        total = self._add_hemisphere(total, normal)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
-            if distance == 0:
-                continue
-            # The cosine of the angle between the way to the bulb and the
-            # cone's axis, and from it how far inside the cone this is:
-            # three.js's `getSpotAttenuation`.
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
+            var lit, _, bare, through = self._spot_weight(
+                index, normal, position, receives, shape
             )
-            var rim = self.spot_attenuation(index, angle_cos, position)
-            if rim <= 0:
+            if not lit:
                 continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = (
-                lambert
-                * rim
-                * falloff(
-                    distance, self.spot_decays[index], self.spot_cutoffs[index]
-                )
-            )
-            var through = self.shadow_through(
-                self.spot_shadows[index], position, normal, receives, shape
-            )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            total = FloatColor(
-                total.r + bulb.r * tint.x * (bare * through.x),
-                total.g + bulb.g * tint.y * (bare * through.y),
-                total.b + bulb.b * tint.z * (bare * through.z),
-                1.0,
+            total = _add_rgb(
+                total, (rgb_channels(bulb) * tint) * (through * bare)
             )
         return total.scaled(self.scale)
 
@@ -2148,17 +2202,11 @@ struct Lighting(Movable):
                 index, position, normal, receives, shape
             )
             ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * (tone * through.x),
-                total.g + light.g * (tone * through.y),
-                total.b + light.b * (tone * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, rgb_channels(light) * (through * tone))
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             # A surface exactly on the bulb has no direction to be lit from.
             if distance == 0:
                 continue
@@ -2170,37 +2218,15 @@ struct Lighting(Movable):
                 self.point_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.point_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * (bare * through.x),
-                total.g + bulb.g * (bare * through.y),
-                total.b + bulb.b * (bare * through.z),
-                1.0,
-            )
-        for index in range(len(self.sky_directions)):
-            # Indirect, so it is not stepped: the same sum as `intensity_at`.
-            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
-            ref sky = self.skies[index]
-            ref ground = self.grounds[index]
-            var lift = FloatColor(
-                ground.r + (sky.r - ground.r) * weight,
-                ground.g + (sky.g - ground.g) * weight,
-                ground.b + (sky.b - ground.b) * weight,
-                1.0,
-            )
-            total = FloatColor(
-                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
-            )
+            total = _add_rgb(total, rgb_channels(bulb) * (through * bare))
+        # Indirect, so it is not stepped: the same sum as `intensity_at`.
+        total = self._add_hemisphere(total, normal)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var tone = toon_tone(normal.dot(toward) / direction_length, ramp)
@@ -2216,11 +2242,8 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            total = FloatColor(
-                total.r + bulb.r * tint.x * (bare * through.x),
-                total.g + bulb.g * tint.y * (bare * through.y),
-                total.b + bulb.b * tint.z * (bare * through.z),
-                1.0,
+            total = _add_rgb(
+                total, (rgb_channels(bulb) * tint) * (through * bare)
             )
         return total.scaled(self.scale)
 
@@ -2273,16 +2296,13 @@ struct Lighting(Movable):
         # seen along.
         if toward_eye.length() == 0:
             return FloatColor(0.0, 0.0, 0.0, 1.0)
-        var red = Float32(0)
-        var green = Float32(0)
-        var blue = Float32(0)
+        var sum = Vector3(0, 0, 0)
         for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            if lambert == 0:
-                continue
-            var through = self.direction_through(
-                index, position, normal, receives, shape
+            var lit, lambert, through = self._direction_weight(
+                index, normal, position, receives, shape
             )
+            if not lit:
+                continue
             var sent = blinn_phong(
                 self.directions[index],
                 toward_eye,
@@ -2291,22 +2311,11 @@ struct Lighting(Movable):
                 shininess,
             )
             ref light = self.radiances[index]
-            red += light.r * (lambert * through.x) * sent.x
-            green += light.g * (lambert * through.y) * sent.y
-            blue += light.b * (lambert * through.z) * sent.z
+            sum = sum + (rgb_channels(light) * (through * lambert)) * sent
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
-            if distance == 0:
+            var lit, toward, bare = self._point_weight(index, normal, position)
+            if not lit:
                 continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
-            )
             var through = self.shadow_through(
                 self.point_shadows[index], position, normal, receives, shape
             )
@@ -2315,45 +2324,21 @@ struct Lighting(Movable):
                 toward, toward_eye, normal, specular, shininess
             )
             ref bulb = self.point_radiances[index]
-            red += bulb.r * (bare * through.x) * sent.x
-            green += bulb.g * (bare * through.y) * sent.y
-            blue += bulb.b * (bare * through.z) * sent.z
+            sum = sum + (rgb_channels(bulb) * (through * bare)) * sent
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
-            if distance == 0:
-                continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
+            var lit, toward, bare, through = self._spot_weight(
+                index, normal, position, receives, shape
             )
-            var rim = self.spot_attenuation(index, angle_cos, position)
-            if rim <= 0:
+            if not lit:
                 continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = (
-                lambert
-                * rim
-                * falloff(
-                    distance, self.spot_decays[index], self.spot_cutoffs[index]
-                )
-            )
-            var through = self.shadow_through(
-                self.spot_shadows[index], position, normal, receives, shape
-            )
             toward.normalize()
             var sent = blinn_phong(
                 toward, toward_eye, normal, specular, shininess
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            red += bulb.r * tint.x * (bare * through.x) * sent.x
-            green += bulb.g * tint.y * (bare * through.y) * sent.y
-            blue += bulb.b * tint.z * (bare * through.z) * sent.z
-        return FloatColor(red, green, blue, 1.0).scaled(self.scale)
+            sum = sum + ((rgb_channels(bulb) * tint) * (through * bare)) * sent
+        return _opaque(sum).scaled(self.scale)
 
     def ambient_at(self, normal: Vector3, position: Vector3) -> FloatColor:
         """Return the ambient term, the light probes' irradiance and the
@@ -2376,18 +2361,11 @@ struct Lighting(Movable):
             The light, linear and unscaled. Alpha is one.
         """
         var lift = self.probe.get_irradiance_at(normal)
-        var total = FloatColor(
-            self.ambient.r + lift.x,
-            self.ambient.g + lift.y,
-            self.ambient.b + lift.z,
-            1.0,
-        )
+        var total = _add_rgb(self.ambient, lift)
         if self.grid.is_empty():
             return total
         var grid = self.grid.irradiance_at(position, normal)
-        return FloatColor(
-            total.r + grid.x, total.g + grid.y, total.b + grid.z, 1.0
-        )
+        return _add_rgb(total, grid)
 
     def scattered_at[
         R: ShadowShape = Unshaped
@@ -2427,9 +2405,7 @@ struct Lighting(Movable):
         var toward_eye = toward_eye_at(self.eye, self.toward_eye, position)
         if toward_eye.length() == 0:
             return FloatColor(0.0, 0.0, 0.0, 1.0)
-        var red = Float32(0)
-        var green = Float32(0)
-        var blue = Float32(0)
+        var sum = Vector3(0, 0, 0)
         for index in range(len(self.directions)):
             var sent = scattering_through(
                 self.directions[index],
@@ -2444,13 +2420,11 @@ struct Lighting(Movable):
                 index, position, normal, receives, shape
             )
             ref light = self.radiances[index]
-            red += light.r * (sent * shadowed.x)
-            green += light.g * (sent * shadowed.y)
-            blue += light.b * (sent * shadowed.z)
+            sum = sum + rgb_channels(light) * (shadowed * sent)
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
+            var toward, distance, _ = light_vector(
+                self.positions[index], position
+            )
             if distance == 0:
                 continue
             var bare = falloff(
@@ -2470,20 +2444,11 @@ struct Lighting(Movable):
                 ambient,
             )
             ref bulb = self.point_radiances[index]
-            red += bulb.r * (sent * (bare * shadowed.x))
-            green += bulb.g * (sent * (bare * shadowed.y))
-            blue += bulb.b * (sent * (bare * shadowed.z))
+            sum = sum + rgb_channels(bulb) * ((shadowed * bare) * sent)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, _, rim = self._spot_reach(index, position)
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             var bare = rim * falloff(
@@ -2504,10 +2469,8 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            red += bulb.r * tint.x * (sent * (bare * shadowed.x))
-            green += bulb.g * tint.y * (sent * (bare * shadowed.y))
-            blue += bulb.b * tint.z * (sent * (bare * shadowed.z))
-        return FloatColor(red, green, blue, 1.0)
+            sum = sum + (rgb_channels(bulb) * tint) * ((shadowed * bare) * sent)
+        return _opaque(sum)
 
     def volume_light_at(
         self, position: Vector3, normal: Vector3, receives: Bool
@@ -2535,32 +2498,25 @@ struct Lighting(Movable):
         for index in range(len(self.positions)):
             # A step on the bulb is lit by `falloff`'s floor, as three.js's
             # `getDistanceAttenuation` lights it: no direction is read.
-            var distance = light_vector(self.positions[index], position)[1]
+            var _, distance, _ = light_vector(self.positions[index], position)
             ref bulb = self.point_radiances[index]
             total = total + shadowed_twice(
-                Vector3(bulb.r, bulb.g, bulb.b),
+                rgb_channels(bulb),
                 falloff(distance, self.decays[index], self.cutoffs[index]),
                 self.shadow_through(
                     self.point_shadows[index], position, normal, receives
                 ),
             )
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var _, distance, _, rim = self._spot_reach(index, position)
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
             total = total + shadowed_twice(
-                Vector3(bulb.r * tint.x, bulb.g * tint.y, bulb.b * tint.z),
+                rgb_channels(bulb) * tint,
                 rim
                 * falloff(
                     distance, self.spot_decays[index], self.spot_cutoffs[index]
@@ -2576,7 +2532,7 @@ struct Lighting(Movable):
                 self.rect_positions[index],
                 self.rect_half_widths[index],
                 self.rect_half_heights[index],
-                Vector3(glow.r, glow.g, glow.b),
+                rgb_channels(glow),
                 self.up,
                 self.back,
             )
@@ -2599,36 +2555,17 @@ struct Lighting(Movable):
         """
         var total = FloatColor(0.0, 0.0, 0.0, 1.0)
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
-            if distance == 0:
+            var lit, _, reach = self._point_weight(index, normal, position)
+            if not lit:
                 continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var reach = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
-            )
             ref bulb = self.point_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
-                1.0,
-            )
+            total = _add_rgb(total, rgb_channels(bulb) * reach)
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             var lambert = normal.dot(toward) / direction_length
             if rim <= 0 or lambert <= 0:
                 continue
@@ -2640,21 +2577,11 @@ struct Lighting(Movable):
                 )
             )
             ref bulb = self.spot_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
-                1.0,
-            )
+            total = _add_rgb(total, rgb_channels(bulb) * reach)
         for index in range(len(self.directions)):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * lambert,
-                total.g + light.g * lambert,
-                total.b + light.b * lambert,
-                1.0,
-            )
+            total = _add_rgb(total, rgb_channels(light) * lambert)
         return total.scaled(self.scale)
 
     def indirect_at(self, normal: Vector3, position: Vector3) -> FloatColor:
@@ -2676,20 +2603,9 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient_at(normal, position)
-        for index in range(len(self.sky_directions)):
-            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
-            ref sky = self.skies[index]
-            ref ground = self.grounds[index]
-            var lift = FloatColor(
-                ground.r + (sky.r - ground.r) * weight,
-                ground.g + (sky.g - ground.g) * weight,
-                ground.b + (sky.b - ground.b) * weight,
-                1.0,
-            )
-            total = FloatColor(
-                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
-            )
+        var total = self._add_hemisphere(
+            self.ambient_at(normal, position), normal
+        )
         return total.scaled(self.scale)
 
     def physical_at[
@@ -2748,12 +2664,13 @@ struct Lighting(Movable):
             return none
         var sum = none
         for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            var coat_lambert = Float32(0)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(self.directions[index])
-                )
+            var lambert, coat_lambert = light_cosines(
+                normal,
+                self.directions[index],
+                coat_normal,
+                clearcoat,
+                Float32(1),
+            )
             if lambert == 0 and coat_lambert == 0:
                 continue
             ref light = self.radiances[index]
@@ -2762,11 +2679,7 @@ struct Lighting(Movable):
             )
             sum = physical_light(
                 sum,
-                Vector3(
-                    light.r * through.x,
-                    light.g * through.y,
-                    light.b * through.z,
-                ),
+                rgb_channels(light) * through,
                 lambert,
                 coat_lambert,
                 self.directions[index],
@@ -2779,18 +2692,14 @@ struct Lighting(Movable):
                 layers,
             )
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             if distance == 0:
                 continue
-            var lambert = max(Float32(0), normal.dot(toward) / direction_length)
-            var coat_lambert = Float32(0)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / direction_length
-                )
+            var lambert, coat_lambert = light_cosines(
+                normal, toward, coat_normal, clearcoat, direction_length
+            )
             if lambert == 0 and coat_lambert == 0:
                 continue
             var bare = falloff(
@@ -2803,11 +2712,7 @@ struct Lighting(Movable):
             ref bulb = self.point_radiances[index]
             sum = physical_light(
                 sum,
-                Vector3(
-                    bulb.r * (bare * through.x),
-                    bulb.g * (bare * through.y),
-                    bulb.b * (bare * through.z),
-                ),
+                rgb_channels(bulb) * (through * bare),
                 lambert,
                 coat_lambert,
                 toward,
@@ -2820,24 +2725,16 @@ struct Lighting(Movable):
                 layers,
             )
         for index in range(len(self.spot_positions)):
-            var ray = light_vector(self.spot_positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length, rim = self._spot_reach(
+                index, position
+            )
             if distance == 0:
                 continue
-            var angle_cos = (
-                toward.dot(self.spot_directions[index]) / direction_length
-            )
-            var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
-            var lambert = max(Float32(0), normal.dot(toward) / direction_length)
-            var coat_lambert = Float32(0)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / direction_length
-                )
+            var lambert, coat_lambert = light_cosines(
+                normal, toward, coat_normal, clearcoat, direction_length
+            )
             if lambert == 0 and coat_lambert == 0:
                 continue
             var bare = rim * falloff(
@@ -2851,11 +2748,7 @@ struct Lighting(Movable):
             var tint = self.spot_tint(index, position, normal)
             sum = physical_light(
                 sum,
-                Vector3(
-                    bulb.r * tint.x * (bare * through.x),
-                    bulb.g * tint.y * (bare * through.y),
-                    bulb.b * tint.z * (bare * through.z),
-                ),
+                (rgb_channels(bulb) * tint) * (through * bare),
                 lambert,
                 coat_lambert,
                 toward,
@@ -2879,9 +2772,7 @@ struct Lighting(Movable):
         # The tables are looked up once per fragment, by the roughness
         # and the angle to the eye, and serve every rectangle.
         if len(self.rect_positions) > 0:
-            var dot_nv = max(
-                Float32(0), min(Float32(1), normal.dot(toward_eye))
-            )
+            var dot_nv = clamp(normal.dot(toward_eye), 0, 1)
             var uv = ltc_uv(dot_nv, roughness)
             var minv = ltc_lookup(self.ltc.first, uv)
             var fresnel = ltc_lookup(self.ltc.second, uv)
@@ -2901,16 +2792,9 @@ struct Lighting(Movable):
                     fresnel,
                 )
                 ref glow = self.rect_radiances[index]
-                diffuse = Vector3(
-                    diffuse.x + added.diffuse.x * glow.r,
-                    diffuse.y + added.diffuse.y * glow.g,
-                    diffuse.z + added.diffuse.z * glow.b,
-                )
-                specular = Vector3(
-                    specular.x + added.specular.x * glow.r,
-                    specular.y + added.specular.y * glow.g,
-                    specular.z + added.specular.z * glow.b,
-                )
+                var tint = rgb_channels(glow)
+                diffuse = diffuse + added.diffuse * tint
+                specular = specular + added.specular * tint
             scaled = Reflected(
                 diffuse, specular, scaled.clearcoat, scaled.sheen
             )
@@ -2940,9 +2824,5 @@ struct Lighting(Movable):
         """
         var total = self.intensity_at(normal, position)
         var surface = FloatColor(srgb=base)
-        return FloatColor(
-            surface.r * total.r,
-            surface.g * total.g,
-            surface.b * total.b,
-            surface.a,
-        )
+        var rgb = rgb_channels(surface) * rgb_channels(total)
+        return FloatColor(rgb.x, rgb.y, rgb.z, surface.a)

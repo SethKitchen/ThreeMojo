@@ -20,6 +20,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 from extensions.humanoid.skeleton.foot.chain import tube_set_volume
 from extensions.humanoid.skeleton.foot.nerves.dimensions import (
     FootNerve,
+    require_foot_nerve,
     FootNerveField,
     nerve_distance,
 )
@@ -95,8 +96,7 @@ def foot_nerve_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot nerve must be a named nerve")
+    require_foot_nerve(part)
     tissue.validate()
     var field = FootNerveField(dimensions, part)
     var volume = tube_set_volume(field.tubes)

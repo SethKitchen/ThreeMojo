@@ -20,34 +20,39 @@ integer past 2 to the 53 is summed a digit at a time, so it can round
 differently.
 """
 
+from loaders.bytes import (
+    ascii_digit,
+    ascii_digit_at,
+    ascii_space,
+    ascii_space_at,
+    hex_digit_value,
+    is_exponent_mark,
+    is_sign_mark,
+)
 from std.math import inf, isfinite, isnan, nan
 from std.ffi import external_call
 from std.memory import bitcast
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII white space byte."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
+def is_decimal_text(text: String) -> Bool:
+    """Return True when a text holds decimal digits and nothing else.
 
+    Args:
+        text: The text. Every caller passes one character or more.
 
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for `0` to `9`."""
-    return byte >= 48 and byte <= 57
-
-
-def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and _is_space(bytes[i])
-
-
-def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a digit at `i`."""
-    return i < len(bytes) and _is_digit(bytes[i])
+    Returns:
+        True when every byte is `0` to `9`.
+    """
+    var bytes = text.as_bytes()
+    for at in range(len(bytes)):  # pragma: no branch
+        if not ascii_digit(bytes[at]):
+            return False
+    return True
 
 
 def _sign_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a `+` or a `-` at `i`."""
-    return i < len(bytes) and (bytes[i] == 43 or bytes[i] == 45)
+    return i < len(bytes) and is_sign_mark(bytes[i])
 
 
 def js_parse_float(text: String) -> Float64:
@@ -63,7 +68,7 @@ def js_parse_float(text: String) -> Float64:
     var b = text.as_bytes()
     var n = len(b)
     var i = 0
-    while _space_at(b, i):
+    while ascii_space_at(b, i):
         i += 1
     var start = i
     if _sign_at(b, i):
@@ -71,25 +76,25 @@ def js_parse_float(text: String) -> Float64:
     if String(text[byte=i:]).startswith("Infinity"):
         return -inf[DType.float64]() if b[start] == 45 else inf[DType.float64]()
     var digits = 0
-    while _digit_at(b, i):
+    while ascii_digit_at(b, i):
         i += 1
         digits += 1
     var point = i < n and b[i] == 46
     if point:
         i += 1
-        while _digit_at(b, i):
+        while ascii_digit_at(b, i):
             i += 1
             digits += 1
     if digits == 0:
         return nan[DType.float64]()
     var end = i
-    var exp = i < n and (b[i] == 101 or b[i] == 69)
+    var exp = i < n and is_exponent_mark(b[i])
     if exp:
         i += 1
         if _sign_at(b, i):
             i += 1
         var exponent = 0
-        while _digit_at(b, i):
+        while ascii_digit_at(b, i):
             i += 1
             exponent += 1
         if exponent > 0:
@@ -113,13 +118,13 @@ def js_parse_int(text: String) -> Float64:
     """
     var b = text.as_bytes()
     var i = 0
-    while _space_at(b, i):
+    while ascii_space_at(b, i):
         i += 1
     var start = i
     if _sign_at(b, i):
         i += 1
     var first = i
-    while _digit_at(b, i):
+    while ascii_digit_at(b, i):
         i += 1
     if i == first:
         return nan[DType.float64]()
@@ -139,13 +144,7 @@ def _digit_value(byte: UInt8, radix: Int) -> Int:
     Returns:
         The value, or -1 when the character is not a digit of the radix.
     """
-    var value = -1
-    if byte >= 48 and byte <= 57:
-        value = Int(byte) - 48
-    elif byte >= 97 and byte <= 102:
-        value = Int(byte) - 87
-    elif byte >= 65 and byte <= 70:
-        value = Int(byte) - 55
+    var value = hex_digit_value(Int(byte))
     return value if value < radix else -1
 
 
@@ -164,9 +163,9 @@ def js_string_to_number(text: String) -> Float64:
     var b = text.as_bytes()
     var start = 0
     var end = len(b)
-    while _space_at(b, start):
+    while ascii_space_at(b, start):
         start += 1
-    while end > start and _is_space(b[end - 1]):
+    while end > start and ascii_space(b[end - 1]):
         end -= 1
     if start == end:
         return 0
@@ -190,22 +189,22 @@ def js_string_to_number(text: String) -> Float64:
     if String(body[byte=i:]) == "Infinity":
         return js_parse_float(body)
     var digits = 0
-    while _digit_at(bytes, i):
+    while ascii_digit_at(bytes, i):
         i += 1
         digits += 1
     if i < n and bytes[i] == 46:
         i += 1
-        while _digit_at(bytes, i):
+        while ascii_digit_at(bytes, i):
             i += 1
             digits += 1
     if digits == 0:
         return nan[DType.float64]()
-    if i < n and (bytes[i] | 32) == 101:
+    if i < n and is_exponent_mark(bytes[i]):
         i += 1
         if _sign_at(bytes, i):
             i += 1
         var exponent = 0
-        while _digit_at(bytes, i):
+        while ascii_digit_at(bytes, i):
             i += 1
             exponent += 1
         if exponent == 0:

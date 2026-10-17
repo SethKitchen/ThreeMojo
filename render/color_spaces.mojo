@@ -38,9 +38,11 @@ rounds it: Mojo fuses a multiply and an add by default, which rounds once.
 XYZ times the source's matrix to XYZ, the matrix that `convert` applies.
 three.js's internal `_getMatrix` multiplies the two the other way round.
 """
+from core.ordinal import ordinal_valid
 
-from render.framebuffer import Color, FloatColor, SrgbBytes
 from std.benchmark import black_box
+from math.vector3 import vector3_from_float64
+from render.framebuffer import Color, FloatColor, SrgbBytes
 from std.math import pow
 
 
@@ -60,7 +62,7 @@ struct ColorTransfer(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a transfer function.
         """
-        return self == LINEAR_TRANSFER or self == SRGB_TRANSFER
+        return ordinal_valid(self.value, SRGB_TRANSFER.value)
 
 
 # The number is the amount of light.
@@ -86,7 +88,7 @@ struct ColorSpaceId(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a color space.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # three.js's `NoColorSpace`: numbers that are not color.
@@ -553,7 +555,8 @@ def convert(
         r = linear_to_srgb_three(r)
         g = linear_to_srgb_three(g)
         b = linear_to_srgb_three(b)
-    return FloatColor(Float32(r), Float32(g), Float32(b), color.a)
+    var linear = vector3_from_float64(r, g, b)
+    return FloatColor(linear.x, linear.y, linear.z, color.a)
 
 
 # How many floats an `OutputEncoding` crosses to the device as: the nine

@@ -33,15 +33,18 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative, require_positive
 from std.math import isfinite
 
+from math.matrix_inverse import adjugate3
 from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
+from math.curve_checks import require_at_least_one
 from math.path import Path, Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from render.framebuffer import FloatColor
 from std.math import atan2, cos, nan, pi, sin, sqrt
-from units.si import Angle, Length, METER, RADIAN
+from units.measure import angle_radians, length_meters
 
 # A point or a direction in the plane, in user units: x, then y.
 comptime SvgVector = SIMD[DType.float64, 2]
@@ -241,8 +244,9 @@ struct SvgCurve(Copyable, Movable):
             Error: If `divisions` is below one, or `check` refuses the
                 curve.
         """
-        if divisions < 1:
-            raise Error("SVG: a curve needs at least one division")
+        require_at_least_one(
+            divisions, "SVG: a curve needs at least one division"
+        )
         var out = List[SvgVector]()
         for d in range(divisions + 1):  # pragma: no branch
             out.append(self.point(Float64(d) / Float64(divisions)))
@@ -264,18 +268,18 @@ struct SvgCurve(Copyable, Movable):
         if self.kind == ELLIPSE:
             var center = self.points[0]
             return Curve(
-                center=Vector2(Float32(center[0]), Float32(center[1])),
-                x_radius=Length(Float32(self.x_radius), METER),
-                y_radius=Length(Float32(self.y_radius), METER),
-                start=Angle(Float32(self.start_angle), RADIAN),
-                end=Angle(Float32(self.end_angle), RADIAN),
+                center=vector2_from_float64(center[0], center[1]),
+                x_radius=length_meters(self.x_radius),
+                y_radius=length_meters(self.y_radius),
+                start=angle_radians(self.start_angle),
+                end=angle_radians(self.end_angle),
                 clockwise=self.clockwise,
-                rotation=Angle(Float32(self.rotation), RADIAN),
+                rotation=angle_radians(self.rotation),
             )
         var points = List[Vector2]()
         # `check` has passed, so there are two points or more.
         for p in self.points:  # pragma: no branch
-            points.append(Vector2(Float32(p[0]), Float32(p[1])))
+            points.append(vector2_from_float64(p[0], p[1]))
         return Curve(self.kind, points^)
 
 
@@ -497,8 +501,9 @@ struct SvgSubPath(Copyable, Movable):
                 path.down = True
             path.last = made.point(1)
             path.curves.append(made^)
-        if len(path.curves) == 0:
-            raise Error("SVG: an outline with nothing drawn on it")
+        require_positive(
+            len(path.curves), "SVG: an outline with nothing drawn on it"
+        )
         if not path.is_closed():
             path.close_path()
         return path^
@@ -583,8 +588,7 @@ struct SvgShapePath(Copyable, Movable):
         Raises:
             Error: If no outline has been started.
         """
-        if self.current < 0:
-            raise Error("SVG: a path draws before it moves")
+        require_non_negative(self.current, "SVG: a path draws before it moves")
 
     def move_to(mut self, x: Float64, y: Float64):
         """Start a new outline, three.js's `ShapePath.moveTo`.
@@ -741,23 +745,22 @@ struct SvgMatrix(Copyable, Movable):
         var n13 = self.e[6]
         var n23 = self.e[7]
         var n33 = self.e[8]
-        var t11 = n33 * n22 - n32 * n23
-        var t12 = n32 * n13 - n33 * n12
-        var t13 = n23 * n12 - n22 * n13
-        var det = n11 * t11 + n21 * t12 + n31 * t13
+        var c0, c1, c2, c3, c4, c5, c6, c7, c8, det = adjugate3[DType.float64](
+            n11, n21, n31, n12, n22, n32, n13, n23, n33
+        )
         var out = SvgMatrix(0, 0, 0, 0, 0, 0, 0, 0, 0)
         if det == 0:
             return out^
         var inv = 1 / det
-        out.e[0] = t11 * inv
-        out.e[1] = (n31 * n23 - n33 * n21) * inv
-        out.e[2] = (n32 * n21 - n31 * n22) * inv
-        out.e[3] = t12 * inv
-        out.e[4] = (n33 * n11 - n31 * n13) * inv
-        out.e[5] = (n31 * n12 - n32 * n11) * inv
-        out.e[6] = t13 * inv
-        out.e[7] = (n21 * n13 - n23 * n11) * inv
-        out.e[8] = (n22 * n11 - n21 * n12) * inv
+        out.e[0] = c0 * inv
+        out.e[1] = c1 * inv
+        out.e[2] = c2 * inv
+        out.e[3] = c3 * inv
+        out.e[4] = c4 * inv
+        out.e[5] = c5 * inv
+        out.e[6] = c6 * inv
+        out.e[7] = c7 * inv
+        out.e[8] = c8 * inv
         return out^
 
     def transposed(self) -> SvgMatrix:

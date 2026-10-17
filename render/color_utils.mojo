@@ -18,7 +18,8 @@ Reference: https://tannerhelland.com/2012/09/18/convert-temperature-rgb-algorith
 
 from render.framebuffer import FloatColor
 from render.srgb import srgb_to_linear
-from std.math import isfinite, log, pow
+from math.finite import require_finite
+from std.math import log, pow
 from units.temperature import KELVIN, Temperature
 
 # The range the fit holds for. A temperature outside it is clamped to it,
@@ -46,8 +47,7 @@ def set_kelvin(mut color: FloatColor, temperature: Temperature) raises:
         Error: If the temperature is not a number.
     """
     var kelvin = Float64(temperature.to(KELVIN))
-    if not isfinite(kelvin):
-        raise Error("A color temperature must be a number")
+    require_finite(Float64(kelvin), "A color temperature must be a number")
     var temp = min(max(kelvin, COLDEST_KELVIN), HOTTEST_KELVIN) / 100
     var red = Float64(255)
     var green: Float64

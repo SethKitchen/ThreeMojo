@@ -51,6 +51,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid, require_non_negative
 
 from math.norm import length2
 from cameras.camera import Camera
@@ -59,6 +60,9 @@ from cameras.perspective_camera import PerspectiveCamera
 from controls.input import (
     InputEvent,
     NO_BUTTON,
+    require_named,
+    require_viewport_size,
+    require_input,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -84,8 +88,9 @@ from helpers.segments import Segments
 from math.matrix4 import Matrix4, scaling, translation
 from math.projection import look_at
 from math.quaternion import Quaternion
+from math.utils import clamp
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
 from std.math import acos, atan, atan2, cos, inf, pi, sin, sqrt, tan
 from units.si import (
@@ -152,7 +157,7 @@ struct ArcballState(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a state.
         """
-        return self.value >= 0 and self.value <= 7
+        return ordinal_valid(self.value, 7)
 
 
 comptime STATE_IDLE = ArcballState(0)
@@ -179,7 +184,7 @@ struct ArcballOperation(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an operation.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 # No operation. three.js: `null`.
@@ -203,7 +208,7 @@ struct ArcballMouse(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a button or the wheel.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 comptime MOUSE_PRIMARY = ArcballMouse(0)
@@ -225,7 +230,7 @@ struct ArcballModifier(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a modifier.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime NO_MODIFIER = ArcballModifier(0)
@@ -306,33 +311,6 @@ def _moved(offset: Vector3) -> Matrix4:
         The matrix.
     """
     return translation(offset.x, offset.y, offset.z)
-
-
-def _clamp(value: Float32, low: Float32, high: Float32) -> Float32:
-    """Return a value limited to a range. three.js: `MathUtils.clamp`.
-
-    Args:
-        value: The value.
-        low: The least it can be.
-        high: The most it can be.
-
-    Returns:
-        The value within the range.
-    """
-    return max(low, min(high, value))
-
-
-def _angle_to(a: Vector3, b: Vector3) -> Float32:
-    """Return the angle between two vectors. three.js: `angleTo`.
-
-    Args:
-        a: One vector.
-        b: The other.
-
-    Returns:
-        The angle in radians, or a quarter turn if either has no length.
-    """
-    return a.angle_to(b).to(RADIAN)
 
 
 def _distance(a: Vector3, b: Vector3) -> Float32:
@@ -531,6 +509,21 @@ struct _Lens(ImplicitlyCopyable):
         return Vector3(
             ndc.x * top * self.aspect + self.shift, ndc.y * top, -self.near
         )
+
+
+def require_radius_factor(value: Float32) raises:
+    """Refuse a radius factor that is not positive.
+
+    Nothing. The call returns when the factor is positive.
+
+    Args:
+        value: The factor.
+
+    Raises:
+        Error: If the factor is not positive.
+    """
+    if not (value > 0):
+        raise Error("The radius factor must be positive")
 
 
 struct ArcballControls(Copyable, Movable):
@@ -1021,8 +1014,7 @@ struct ArcballControls(Copyable, Movable):
         """
         for action in self.mouse_actions:
             _check_action(action.operation, action.mouse, action.key)
-        if not (self.radius_factor > 0):
-            raise Error("The radius factor must be positive")
+        require_radius_factor(self.radius_factor)
         if not (self.scale_factor > 0):
             raise Error("The scale factor must be positive")
         if not (self.focus_animation_time.value > 0):
@@ -1150,14 +1142,8 @@ struct ArcballControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, a setting
                 is refused, or a size is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
-        if width <= 0 or height <= 0:
-            raise Error("A viewport's size must be positive")
+        require_input(event)
+        require_viewport_size(width, height)
         self.check()
         self._width = width
         self._height = height
@@ -1440,7 +1426,7 @@ struct ArcballControls(Copyable, Movable):
         var start = self._start_cursor
         var current = self._current_cursor
         var distance = _distance(start, current)
-        var angle = _angle_to(start, current)
+        var angle = radians_between(start, current)
         var amount = max(distance / self._tb_radius, angle) * self.rotate_speed
         self._apply(
             lens, self._rotate(self._rotation_axis(start, current), amount)
@@ -1503,13 +1489,13 @@ struct ArcballControls(Copyable, Movable):
         """
         var center = self.center()
         var x = _distance(_position(self._camera_state), center)
-        var x_new = _clamp(
+        var x_new = clamp(
             x / size,
             self.min_distance.to(METER),
             self.max_distance.to(METER),
         )
         var y = x * tan(fov * 0.5)
-        var new_fov = _clamp(
+        var new_fov = clamp(
             atan(y / x_new) * 2,
             self.min_fov.to(RADIAN),
             self.max_fov.to(RADIAN),
@@ -1791,11 +1777,11 @@ struct ArcballControls(Copyable, Movable):
         Returns:
             The scale.
         """
-        ref e = self._gizmo.elements
-        var sx = Vector3(e[0], e[1], e[2]).length()
-        var sy = Vector3(e[4], e[5], e[6]).length()
-        var sz = Vector3(e[8], e[9], e[10]).length()
-        return (sx + sy + sz) / 3
+        return (
+            self._gizmo.column_length(0)
+            + self._gizmo.column_length(1)
+            + self._gizmo.column_length(2)
+        ) / 3
 
     def _make_gizmos(mut self, lens: _Lens, center: Vector3, radius: Float32):
         """Build the gizmo about a center, dim, at a scale that undoes an
@@ -1974,7 +1960,7 @@ struct ArcballControls(Copyable, Movable):
             lens: The camera, perspective.
             value: The field of view, in radians.
         """
-        lens.fov = _clamp(
+        lens.fov = clamp(
             value, self.min_fov.to(RADIAN), self.max_fov.to(RADIAN)
         )
 
@@ -2093,8 +2079,7 @@ struct ArcballControls(Copyable, Movable):
         Raises:
             Error: If the factor is not positive.
         """
-        if not (value > 0):
-            raise Error("The radius factor must be positive")
+        require_radius_factor(value)
         self.radius_factor = value
         self._tb_radius = self._calculate_tb_radius(lens)
         self._curve_radius = self._tb_radius
@@ -2171,8 +2156,7 @@ struct ArcballControls(Copyable, Movable):
             Error: If the time is negative, a setting is refused, or the
                 camera's placement is refused.
         """
-        if delta.value < 0:
-            raise Error("A frame cannot take a negative time")
+        require_non_negative(delta.value, "A frame cannot take a negative time")
         self.check()
         self._now += Float64(delta.to(MILLISECOND))
         if self._frame:
@@ -2282,7 +2266,7 @@ struct ArcballControls(Copyable, Movable):
             self._current_target = target
         if not lens.perspective:
             if lens.zoom > self.max_zoom or lens.zoom < self.min_zoom:
-                var zoom = _clamp(lens.zoom, self.min_zoom, self.max_zoom)
+                var zoom = clamp(lens.zoom, self.min_zoom, self.max_zoom)
                 self._apply(
                     lens, self._scale(lens, zoom / lens.zoom, self.center())
                 )
@@ -2291,7 +2275,7 @@ struct ArcballControls(Copyable, Movable):
             var low = self.min_distance.to(METER)
             var high = self.max_distance.to(METER)
             if distance > high + EPSILON or distance < low - EPSILON:
-                var reach = _clamp(distance, low, high)
+                var reach = clamp(distance, low, high)
                 self._apply(
                     lens, self._scale(lens, reach / distance, self.center())
                 )
@@ -2507,8 +2491,10 @@ struct ArcballControls(Copyable, Movable):
                 plane is not beyond the near, or its zoom is not positive.
                 Also if the camera rides a node.
         """
-        if snapshot.camera_near.value < 0:
-            raise Error("A snapshot's near plane cannot be behind the camera")
+        require_non_negative(
+            snapshot.camera_near.value,
+            "A snapshot's near plane cannot be behind the camera",
+        )
         var lens = _Lens(camera)
         self._paste_state(lens, snapshot)
         lens.put(camera, self.center())
@@ -2689,12 +2675,9 @@ def _check_action(
     Raises:
         Error: If one is invalid.
     """
-    if not operation.is_valid():
-        raise Error("Invalid arcball operation: ", operation.value)
-    if not mouse.is_valid():
-        raise Error("Invalid arcball mouse input: ", mouse.value)
-    if not key.is_valid():
-        raise Error("Invalid arcball modifier: ", key.value)
+    require_named(operation.is_valid(), "arcball operation", operation.value)
+    require_named(mouse.is_valid(), "arcball mouse input", mouse.value)
+    require_named(key.is_valid(), "arcball modifier", key.value)
 
 
 def _state_of(operation: ArcballOperation) -> ArcballState:

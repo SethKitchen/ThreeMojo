@@ -39,7 +39,8 @@ triangle shades and maps as though it were never cut.
 """
 
 from math.bounds import Plane
-from math.vector3 import Vector3
+from math.utils import mix_delta
+from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import FloatColor
 from std.math import isfinite
 
@@ -138,14 +139,6 @@ struct ClipVertex(ImplicitlyCopyable):
         self.previous = Vector3(0, 0, 0)
 
 
-def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
-    """Return one color channel a fraction `t` of the way from `a` to `b`."""
-    # Done in floats and kept there. Rounding to a byte at each cut, as this
-    # used to, spent a level of precision every time a triangle crossed a
-    # plane — and a triangle can cross two.
-    return a + (b - a) * t
-
-
 @fieldwise_init
 struct _DepthClipSide(ImplicitlyCopyable):
     """The kept side of a camera-space depth plane, selected at compile time."""
@@ -216,68 +209,35 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     """Return the vertex a fraction `t` of the way from `a` to `b`, every
     varying interpolated with the position."""
     var mixed = ClipVertex(
-        Vector3(
-            _mix(a.position.x, b.position.x, t),
-            _mix(a.position.y, b.position.y, t),
-            _mix(a.position.z, b.position.z, t),
-        ),
-        FloatColor(
-            _mix(a.color.r, b.color.r, t),
-            _mix(a.color.g, b.color.g, t),
-            _mix(a.color.b, b.color.b, t),
-            _mix(a.color.a, b.color.a, t),
-        ),
+        mix_delta3(a.position, b.position, t),
+        a.color.mix(b.color, t),
         # Not renormalized here: a cut vertex is about to be interpolated
         # across a triangle anyway, and the fragment normalizes what it gets.
-        Vector3(
-            _mix(a.normal.x, b.normal.x, t),
-            _mix(a.normal.y, b.normal.y, t),
-            _mix(a.normal.z, b.normal.z, t),
-        ),
-        _mix(a.u, b.u, t),
-        _mix(a.v, b.v, t),
-        Vector3(
-            _mix(a.world.x, b.world.x, t),
-            _mix(a.world.y, b.world.y, t),
-            _mix(a.world.z, b.world.z, t),
-        ),
-        FloatColor(
-            _mix(a.emissive.r, b.emissive.r, t),
-            _mix(a.emissive.g, b.emissive.g, t),
-            _mix(a.emissive.b, b.emissive.b, t),
-            _mix(a.emissive.a, b.emissive.a, t),
-        ),
-        _mix(a.line_distance, b.line_distance, t),
-        _mix(a.u1, b.u1, t),
-        _mix(a.v1, b.v1, t),
+        # The channels stay floats. Rounding to a byte at each cut spent a
+        # level of precision every time a triangle crossed a plane.
+        mix_delta3(a.normal, b.normal, t),
+        mix_delta(a.u, b.u, t),
+        mix_delta(a.v, b.v, t),
+        mix_delta3(a.world, b.world, t),
+        a.emissive.mix(b.emissive, t),
+        mix_delta(a.line_distance, b.line_distance, t),
+        mix_delta(a.u1, b.u1, t),
+        mix_delta(a.v1, b.v1, t),
     )
     mixed.custom = a.custom + (b.custom - a.custom) * t
-    mixed.gouraud_direct = _mix_vector(a.gouraud_direct, b.gouraud_direct, t)
-    mixed.gouraud_indirect = _mix_vector(
+    mixed.gouraud_direct = mix_delta3(a.gouraud_direct, b.gouraud_direct, t)
+    mixed.gouraud_indirect = mix_delta3(
         a.gouraud_indirect, b.gouraud_indirect, t
     )
-    mixed.gouraud_back_direct = _mix_vector(
+    mixed.gouraud_back_direct = mix_delta3(
         a.gouraud_back_direct, b.gouraud_back_direct, t
     )
-    mixed.gouraud_back_indirect = _mix_vector(
+    mixed.gouraud_back_indirect = mix_delta3(
         a.gouraud_back_indirect, b.gouraud_back_indirect, t
     )
-    mixed.current = Vector3(
-        _mix(a.current.x, b.current.x, t),
-        _mix(a.current.y, b.current.y, t),
-        _mix(a.current.z, b.current.z, t),
-    )
-    mixed.previous = Vector3(
-        _mix(a.previous.x, b.previous.x, t),
-        _mix(a.previous.y, b.previous.y, t),
-        _mix(a.previous.z, b.previous.z, t),
-    )
+    mixed.current = mix_delta3(a.current, b.current, t)
+    mixed.previous = mix_delta3(a.previous, b.previous, t)
     return mixed^
-
-
-def _mix_vector(a: Vector3, b: Vector3, t: Float32) -> Vector3:
-    """Return a vector a fraction `t` of the way from `a` to `b`."""
-    return Vector3(_mix(a.x, b.x, t), _mix(a.y, b.y, t), _mix(a.z, b.z, t))
 
 
 def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
@@ -422,6 +382,24 @@ def _clip_plane[
     return kept^
 
 
+def require_depth_planes(near: Float32, far: Float32) raises:
+    """Refuse depth planes that are not finite and ordered.
+
+    Nothing. The call returns when both planes are finite and far lies
+    beyond near.
+
+    Args:
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+
+    Raises:
+        Error: If either plane is not finite, or far does not lie beyond
+            near.
+    """
+    if not isfinite(near) or not isfinite(far) or far <= near:
+        raise Error("The depth planes must be finite, with far beyond near")
+
+
 def clip_depth(
     a: ClipVertex,
     b: ClipVertex,
@@ -473,8 +451,7 @@ def clip_depth(
             prohibition lives in `math.projection.perspective` and
             `PerspectiveCamera`, which both still refuse it.
     """
-    if not isfinite(near) or not isfinite(far) or far <= near:
-        raise Error("The depth planes must be finite, with far beyond near")
+    require_depth_planes(near, far)
     return clip_ordered(a, b, c, near, far, sides, any_of)
 
 
@@ -624,8 +601,7 @@ def clip_segment(
             frustum inside out; see `clip_depth` on a near plane behind
             the camera.
     """
-    if not isfinite(near) or not isfinite(far) or far <= near:
-        raise Error("The depth planes must be finite, with far beyond near")
+    require_depth_planes(near, far)
 
     var first = a
     var second = b

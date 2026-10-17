@@ -47,6 +47,8 @@ host and the device compute them from intrinsics both have, as `falloff`
 is.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 from materials.nodes import (
     OUTPUT_NODE,
     NodeContext,
@@ -55,9 +57,12 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.finite import require_non_negative_finite
+from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor
-from std.math import exp2, isfinite, log2, max, min
+from render.color_math import rgb_channels
+from render.framebuffer import FloatColor, OPAQUE_WHITE
+from std.math import exp2, log2, max, min
 
 
 @fieldwise_init
@@ -74,16 +79,7 @@ struct ToneMapping(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is one of the seven named curves or the
         custom one."""
-        return (
-            self == NO_TONE_MAPPING
-            or self == LINEAR_TONE_MAPPING
-            or self == REINHARD_TONE_MAPPING
-            or self == CINEON_TONE_MAPPING
-            or self == ACES_FILMIC_TONE_MAPPING
-            or self == AGX_TONE_MAPPING
-            or self == NEUTRAL_TONE_MAPPING
-            or self == CUSTOM_TONE_MAPPING
-        )
+        return ordinal_valid(self.value, CUSTOM_TONE_MAPPING.value)
 
 
 # Light is clamped at the end and nothing else. three.js's `NoToneMapping`,
@@ -129,15 +125,11 @@ def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
         Error: If the curve is not a named one, or the exposure is
             negative or not finite.
     """
-    if not mode.is_valid():
-        raise Error("A tone mapping that is none of the eight")
-    if not isfinite(exposure) or exposure < 0:
-        raise Error("A tone mapping exposure must be finite and not negative")
-
-
-def _saturate(value: Float32) -> Float32:
-    """Return `value` clamped to zero to one, GLSL's `saturate`."""
-    return max(Float32(0), min(Float32(1), value))
+    require_valid(mode.is_valid(), "A tone mapping that is none of the eight")
+    require_non_negative_finite(
+        Float64(exposure),
+        "A tone mapping exposure must be finite and not negative",
+    )
 
 
 def _pow(base: Float32, exponent: Float32) -> Float32:
@@ -158,9 +150,9 @@ def _linear(
 ) -> FloatColor:
     """three.js's `LinearToneMapping`: the exposure, then the clamp."""
     return FloatColor(
-        _saturate(exposure * r),
-        _saturate(exposure * g),
-        _saturate(exposure * b),
+        saturate(exposure * r),
+        saturate(exposure * g),
+        saturate(exposure * b),
     )
 
 
@@ -172,9 +164,9 @@ def _reinhard(
     var eg = g * exposure
     var eb = b * exposure
     return FloatColor(
-        _saturate(er / (1 + er)),
-        _saturate(eg / (1 + eg)),
-        _saturate(eb / (1 + eb)),
+        saturate(er / (1 + er)),
+        saturate(eg / (1 + eg)),
+        saturate(eb / (1 + eb)),
     )
 
 
@@ -224,9 +216,9 @@ def _aces(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     var fg = _rrt_and_odt_fit(ig)
     var fb = _rrt_and_odt_fit(ib)
     return FloatColor(
-        _saturate(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
-        _saturate(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
-        _saturate(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
+        saturate(1.60475 * fr - 0.53108 * fg - 0.07367 * fb),
+        saturate(-0.10208 * fr + 1.10813 * fg - 0.00605 * fb),
+        saturate(-0.00327 * fr - 0.07276 * fg + 1.07602 * fb),
     )
 
 
@@ -255,7 +247,7 @@ def _agx_encode(value: Float32) -> Float32:
     """One channel's log2 encoding into zero to one, then the sigmoid."""
     var floored = max(value, Float32(1e-10))
     var ev = (log2(floored) - AGX_MIN_EV) / (AGX_MAX_EV - AGX_MIN_EV)
-    return _agx_contrast(_saturate(ev))
+    return _agx_contrast(saturate(ev))
 
 
 def _agx(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
@@ -309,9 +301,9 @@ def _agx(r: Float32, g: Float32, b: Float32, exposure: Float32) -> FloatColor:
     var lb = _pow(max(Float32(0), xb), Float32(2.2))
     # LINEAR_REC2020_TO_LINEAR_SRGB.
     return FloatColor(
-        _saturate(1.6605 * lr - 0.5876 * lg - 0.0728 * lb),
-        _saturate(-0.1246 * lr + 1.1329 * lg - 0.0083 * lb),
-        _saturate(-0.0182 * lr - 0.1006 * lg + 1.1187 * lb),
+        saturate(1.6605 * lr - 0.5876 * lg - 0.0728 * lb),
+        saturate(-0.1246 * lr + 1.1329 * lg - 0.0083 * lb),
+        saturate(-0.0182 * lr - 0.1006 * lg + 1.1187 * lb),
     )
 
 
@@ -333,14 +325,14 @@ def _neutral(
     var er = r * exposure
     var eg = g * exposure
     var eb = b * exposure
-    var darkest = min(er, min(eg, eb))
+    var darkest = min3(er, eg, eb)
     var offset = Float32(0.04)
     if darkest < 0.08:
         offset = darkest - 6.25 * darkest * darkest
     er -= offset
     eg -= offset
     eb -= offset
-    var peak = max(er, max(eg, eb))
+    var peak = max3(er, eg, eb)
     if peak < NEUTRAL_START:
         return FloatColor(er, eg, eb)
     var d = 1 - NEUTRAL_START
@@ -351,9 +343,9 @@ def _neutral(
     eb *= scale
     var gray = 1 - 1 / (NEUTRAL_DESATURATION * (peak - new_peak) + 1)
     return FloatColor(
-        er + (new_peak - er) * gray,
-        eg + (new_peak - eg) * gray,
-        eb + (new_peak - eb) * gray,
+        mix_delta(er, new_peak, gray),
+        mix_delta(eg, new_peak, gray),
+        mix_delta(eb, new_peak, gray),
     )
 
 
@@ -436,7 +428,7 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         Returns:
             Opaque white, what a texture node reads where no texture opens.
         """
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
@@ -452,7 +444,7 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: a curve reads no texture.
@@ -466,7 +458,7 @@ struct ProgramCurve[origin: Origin[mut=False]](NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return zeros: a curve reads no texture.
@@ -535,9 +527,7 @@ def custom_tone_map[S: NodeSource](color: FloatColor, curve: S) -> FloatColor:
     """
     if not has_output(curve, OUTPUT_NODE):
         return color
-    var mapped = run_nodes(
-        curve, OUTPUT_NODE, _no_inputs(Vector3(color.r, color.g, color.b))
-    )
+    var mapped = run_nodes(curve, OUTPUT_NODE, _no_inputs(rgb_channels(color)))
     return FloatColor(mapped[0], mapped[1], mapped[2], color.a)
 
 

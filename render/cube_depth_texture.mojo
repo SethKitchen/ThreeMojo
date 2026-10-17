@@ -17,6 +17,7 @@ the far plane, as a gray texel read nearest. The six faces make a
 Draw the six faces with the six cameras of a `CubeCamera`.
 """
 
+from core.ordinal import require_positive
 from render.cube_texture import FACE_COUNT, CubeTexture
 from render.framebuffer import Framebuffer
 from render.raster_state import STANDARD_DEPTH, DepthMode
@@ -43,8 +44,9 @@ def cube_depth_texture(
         Error: If the size is not positive, the buffers do not hold six
             faces of that size, or the depth mode is none of the three.
     """
-    if size <= 0:
-        raise Error("A cube depth texture needs a face of one texel at least")
+    require_positive(
+        size, "A cube depth texture needs a face of one texel at least"
+    )
     var face_length = size * size
     if len(depths) != FACE_COUNT * face_length:
         raise Error("A cube depth texture needs six square depth buffers")

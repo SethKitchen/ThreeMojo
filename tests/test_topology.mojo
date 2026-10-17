@@ -805,5 +805,15 @@ def test_split_bridged_loops() raises:
     assert_equal(vector_area(List[Vec3d]()).z, 0)
 
 
+def test_a_corner_matches_when_every_component_matches() raises:
+    var origin = Vec3d(0, 0, 0)
+    assert_true(origin == Vec3d(0, 0, 0))
+    assert_false(origin != Vec3d(0, 0, 0))
+    assert_false(origin == Vec3d(1, 0, 0))
+    assert_true(origin != Vec3d(1, 0, 0))
+    assert_false(Vec3d(0, 1, 0) == origin)
+    assert_false(Vec3d(0, 0, 1) == origin)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

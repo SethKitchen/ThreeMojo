@@ -49,11 +49,19 @@ This is not a three.js port. See Extensions.
     var strand = style.strand(dims.head, 0)
 """
 
+from std.math import isfinite
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    ordinal_label,
+    require_valid,
+)
+
 from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
+from math.cross import cross_vectors
 from math.vector3 import Vector3
-from std.math import isfinite
 
 comptime _VERSION = 1
 comptime _HEADER = 20
@@ -79,7 +87,7 @@ struct HairStyle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named style."""
-        return self.value >= 0 and self.value <= PIXIE.value
+        return ordinal_valid(self.value, PIXIE.value)
 
     def is_scanned(self) -> Bool:
         """Return True for a style an artist groomed, kept in a file."""
@@ -126,6 +134,20 @@ comptime BOB = HairStyle(11)
 comptime PIXIE = HairStyle(12)
 
 
+def require_hair_style(style: HairStyle) raises:
+    """Refuse a hair style that is not named.
+
+    Nothing. The call returns when the style is named.
+
+    Args:
+        style: The style.
+
+    Raises:
+        Error: If the style is not named.
+    """
+    require_valid(style.is_valid(), "A hair style must be a named style")
+
+
 def hair_style_label(style: HairStyle) -> String:
     """Return the name of `style` for error text and tables.
 
@@ -151,9 +173,7 @@ def hair_style_label(style: HairStyle) -> String:
         "bob",
         "pixie",
     ]
-    if not style.is_valid():
-        return "hair style"
-    return names[style.value]
+    return ordinal_label(style.is_valid(), style.value, names, "hair style")
 
 
 def named_hair_styles() -> List[HairStyle]:
@@ -181,8 +201,7 @@ def hair_style_path(style: HairStyle) raises -> String:
         Error: If `style` is not named, or is grown or designed, and so
             has no file.
     """
-    if not style.is_valid():
-        raise Error("A hair style must be a named style")
+    require_hair_style(style)
     if not style.is_scanned():
         raise Error("A grown or designed hair style has no file")
     return humanoid_asset_path(
@@ -215,16 +234,12 @@ def cranium_frame(
     Returns:
         The three unit directions.
     """
-    var up = _unit(Vector3(q.x / radii.x, q.y / radii.y, q.z / radii.z))
+    var up = _unit(q / radii)
     var across = Vector3(1, 0, 0) - up * up.x
     if across.dot(across) < Float32(1e-6):
         across = Vector3(0, 0, 1) - up * up.z
     across = _unit(across)
-    var along = Vector3(
-        up.y * across.z - up.z * across.y,
-        up.z * across.x - up.x * across.z,
-        up.x * across.y - up.y * across.x,
-    )
+    var along = cross_vectors(up, across)
     return (across, up, along)
 
 
@@ -285,7 +300,7 @@ struct HairStyleFile(Movable):
         var scale = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
             unsafe_offset=4
         ]
-        if not isfinite(scale):
+        if not isfinite(Float64(scale)):
             raise Error("The hair style scale must be finite: " + path)
         if scale < 0 or scale > Float32(1e30):
             raise Error("The hair style scale is out of range: " + path)
@@ -331,8 +346,9 @@ struct HairStyleFile(Movable):
         Raises:
             Error: If `index` names no strand.
         """
-        if index < 0 or index >= self.count:
-            raise Error("The hair style has no such strand")
+        require_index_in_count(
+            index, self.count, "The hair style has no such strand"
+        )
         var q = self.roots[index]
         var root = h.at(
             q.x * CRANIUM_X_RADIUS,

@@ -36,10 +36,13 @@ area with the formula SMAA's `AreaTex.py` fills the texture with. See
 """
 
 from cameras.camera import Camera
+from core.extent import require_positive_extent
 from core.layers import Layers
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from math.matrix4 import Matrix4, translation
-from math.projection import viewport
+from math.utils import clamped_texel, mix_delta
+from math.projection import view_to_screen
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from postprocessing.sampling import LightView, u_of, v_of
@@ -79,11 +82,6 @@ def fxaa_luminance(color: FloatColor) -> Float32:
     return color.r * 0.3 + color.g * 0.59 + color.b * 0.11
 
 
-def _luma(source: LightView, u: Float32, v: Float32) -> Float32:
-    """Return `SampleLuminance`: the luminance of a bilinear read."""
-    return fxaa_luminance(source.sample(u, v))
-
-
 def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     """Return `FXAAShader`'s `ApplyFXAA` at one texture coordinate.
 
@@ -98,15 +96,15 @@ def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     var du = 1 / Float32(source.width)
     var dv = 1 / Float32(source.height)
     # `SampleLuminanceNeighborhood`. North is up, where `v` grows.
-    var m = _luma(source, u, v)
-    var n = _luma(source, u, v + dv)
-    var e = _luma(source, u + du, v)
-    var s = _luma(source, u, v - dv)
-    var w = _luma(source, u - du, v)
-    var ne = _luma(source, u + du, v + dv)
-    var nw = _luma(source, u - du, v + dv)
-    var se = _luma(source, u + du, v - dv)
-    var sw = _luma(source, u - du, v - dv)
+    var m = fxaa_luminance(source.sample(u, v))
+    var n = fxaa_luminance(source.sample(u, v + dv))
+    var e = fxaa_luminance(source.sample(u + du, v))
+    var s = fxaa_luminance(source.sample(u, v - dv))
+    var w = fxaa_luminance(source.sample(u - du, v))
+    var ne = fxaa_luminance(source.sample(u + du, v + dv))
+    var nw = fxaa_luminance(source.sample(u - du, v + dv))
+    var se = fxaa_luminance(source.sample(u + du, v - dv))
+    var sw = fxaa_luminance(source.sample(u - du, v - dv))
     var highest = max(max(max(max(n, e), s), w), m)
     var lowest = min(min(min(min(n, e), s), w), m)
     var contrast = highest - lowest
@@ -157,13 +155,13 @@ def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     var gradient_threshold = gradient * 0.25
     var pu = edge_u + step_u * FXAA_EDGE_STEPS[0]
     var pv = edge_v + step_v * FXAA_EDGE_STEPS[0]
-    var p_delta = _luma(source, pu, pv) - edge_luminance
+    var p_delta = fxaa_luminance(source.sample(pu, pv)) - edge_luminance
     var p_at_end = abs(p_delta) >= gradient_threshold
     var index = 1
     while index < FXAA_EDGE_STEP_COUNT and not p_at_end:
         pu += step_u * FXAA_EDGE_STEPS[index]
         pv += step_v * FXAA_EDGE_STEPS[index]
-        p_delta = _luma(source, pu, pv) - edge_luminance
+        p_delta = fxaa_luminance(source.sample(pu, pv)) - edge_luminance
         p_at_end = abs(p_delta) >= gradient_threshold
         index += 1
     if not p_at_end:
@@ -171,13 +169,13 @@ def fxaa_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
         pv += step_v * FXAA_EDGE_GUESS
     var nu = edge_u - step_u * FXAA_EDGE_STEPS[0]
     var nv = edge_v - step_v * FXAA_EDGE_STEPS[0]
-    var n_delta = _luma(source, nu, nv) - edge_luminance
+    var n_delta = fxaa_luminance(source.sample(nu, nv)) - edge_luminance
     var n_at_end = abs(n_delta) >= gradient_threshold
     index = 1
     while index < FXAA_EDGE_STEP_COUNT and not n_at_end:
         nu -= step_u * FXAA_EDGE_STEPS[index]
         nv -= step_v * FXAA_EDGE_STEPS[index]
-        n_delta = _luma(source, nu, nv) - edge_luminance
+        n_delta = fxaa_luminance(source.sample(nu, nv)) - edge_luminance
         n_at_end = abs(n_delta) >= gradient_threshold
         index += 1
     if not n_at_end:
@@ -244,14 +242,6 @@ comptime SMAA_MAX_DISTANCE_RIGHT = 2 * SMAA_MAX_SEARCH_STEPS
 comptime SMAA_SMOOTH_MAX_DISTANCE = Float32(32)
 
 
-def _clamped(x: Int, y: Int, width: Int, height: Int) -> Int:
-    """Return the index of a pixel, held inside the frame as a clamped
-    texture read holds it."""
-    var cx = min(max(x, 0), width - 1)
-    var cy = min(max(y, 0), height - 1)
-    return cy * width + cx
-
-
 struct EdgeMap(Movable):
     """Which pixels differ from the pixel to their left and from the pixel
     above: the red and green of SMAA's edges texture.
@@ -286,7 +276,7 @@ struct EdgeMap(Movable):
         Returns:
             True if the pixel differs from the one to its left.
         """
-        return self.left[_clamped(x, y, self.width, self.height)]
+        return self.left[clamped_texel(x, y, self.width, self.height)]
 
     def top_at(self, x: Int, y: Int) -> Bool:
         """Return whether a pixel has an edge above it.
@@ -298,7 +288,7 @@ struct EdgeMap(Movable):
         Returns:
             True if the pixel differs from the one above it.
         """
-        return self.top[_clamped(x, y, self.width, self.height)]
+        return self.top[clamped_texel(x, y, self.width, self.height)]
 
     def transposed(self) -> EdgeMap:
         """Return the map mirrored across its diagonal, so a column of left
@@ -348,12 +338,12 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
     while y < height:
         var x = 0
         while x < width:
-            var here = colors[_clamped(x, y, width, height)]
+            var here = colors[clamped_texel(x, y, width, height)]
             var to_left = _color_step(
-                here, colors[_clamped(x - 1, y, width, height)]
+                here, colors[clamped_texel(x - 1, y, width, height)]
             )
             var to_top = _color_step(
-                here, colors[_clamped(x, y - 1, width, height)]
+                here, colors[clamped_texel(x, y - 1, width, height)]
             )
             var left = to_left >= SMAA_THRESHOLD
             var top = to_top >= SMAA_THRESHOLD
@@ -363,10 +353,10 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
                     max(to_left, to_top),
                     max(
                         _color_step(
-                            here, colors[_clamped(x + 1, y, width, height)]
+                            here, colors[clamped_texel(x + 1, y, width, height)]
                         ),
                         _color_step(
-                            here, colors[_clamped(x, y + 1, width, height)]
+                            here, colors[clamped_texel(x, y + 1, width, height)]
                         ),
                     ),
                 )
@@ -374,10 +364,10 @@ def smaa_edges(colors: List[FloatColor], width: Int, height: Int) -> EdgeMap:
                     largest,
                     max(
                         _color_step(
-                            here, colors[_clamped(x - 2, y, width, height)]
+                            here, colors[clamped_texel(x - 2, y, width, height)]
                         ),
                         _color_step(
-                            here, colors[_clamped(x, y - 2, width, height)]
+                            here, colors[clamped_texel(x, y - 2, width, height)]
                         ),
                     ),
                 )
@@ -589,7 +579,7 @@ struct BlendWeights(Movable):
         Returns:
             The red, green, blue and alpha of SMAA's blend texture.
         """
-        return self.rgba[_clamped(x, y, self.width, self.height)]
+        return self.rgba[clamped_texel(x, y, self.width, self.height)]
 
 
 def smaa_weights(edges: EdgeMap) -> BlendWeights:
@@ -677,21 +667,18 @@ def smaa_blend(
                     # Up in `v` is up the frame, one row less.
                     oy = -1 if up > 0 else (1 if up < 0 else 0)
                 var here = colors[y * width + x]
-                var there = colors[_clamped(x + ox, y + oy, width, height)]
+                var there = colors[clamped_texel(x + ox, y + oy, width, height)]
                 out[y * width + x] = FloatColor(
                     _degamma(
-                        _gamma(here.r)
-                        + (_gamma(there.r) - _gamma(here.r)) * amount
+                        mix_delta(_gamma(here.r), _gamma(there.r), amount)
                     ),
                     _degamma(
-                        _gamma(here.g)
-                        + (_gamma(there.g) - _gamma(here.g)) * amount
+                        mix_delta(_gamma(here.g), _gamma(there.g), amount)
                     ),
                     _degamma(
-                        _gamma(here.b)
-                        + (_gamma(there.b) - _gamma(here.b)) * amount
+                        mix_delta(_gamma(here.b), _gamma(there.b), amount)
                     ),
-                    here.a + (there.a - here.a) * amount,
+                    mix_delta(here.a, there.a, amount),
                 )
             x += 1
         y += 1
@@ -714,6 +701,24 @@ def smaa_light(mut frame: RenderTarget):
 
 # The highest sample level; level `n` has two to the `n` samples.
 comptime JITTER_LEVELS = 6
+
+
+def require_sample_level(level: Int) raises:
+    """Refuse a sample level outside zero through five.
+
+    Nothing. The call returns when the level is zero through five.
+
+    Args:
+        level: The level. Zero is one sample. Five is 32 samples.
+
+    Raises:
+        Error: If the level is outside zero through five.
+    """
+    require_index_in_count(
+        level, JITTER_LEVELS, "A sample level runs from zero to five"
+    )
+
+
 # `SSAARenderPass`'s `_JitterVectors`, every level in order, each pair an
 # x and a y in sixteenths of a pixel: one sample, then 2, 4, 8, 16 and 32.
 comptime _JITTER = SIMD[DType.int8, 128](
@@ -869,8 +874,7 @@ def jitter_offsets(level: Int) raises -> List[Vector2]:
     Raises:
         Error: If the level is outside zero through five.
     """
-    if level < 0 or level >= JITTER_LEVELS:
-        raise Error("A sample level runs from zero to five")
+    require_sample_level(level)
     var count = 1 << level
     var first = count - 1
     var offsets = List[Vector2](capacity=count)
@@ -937,8 +941,9 @@ struct JitteredCamera(Camera, ImplicitlyCopyable):
         """
         if not (isfinite(offset_x) and isfinite(offset_y)):
             raise Error("A view offset must be finite")
-        if width <= 0 or height <= 0:
-            raise Error("A view offset's image must have a positive size")
+        require_positive_extent(
+            width, height, "A view offset's image must have a positive size"
+        )
         self.view = camera.view_matrix_in(scene)
         self.projection = translation(
             -2 * offset_x / Float32(width), 2 * offset_y / Float32(height), 0
@@ -988,9 +993,7 @@ struct JitteredCamera(Camera, ImplicitlyCopyable):
         Raises:
             Error: If either dimension is not positive.
         """
-        var combined = viewport(width, height)
-        combined.multiply(self.projection)
-        return combined^
+        return view_to_screen(self.projection, width, height)
 
     def near_distance(self) -> Float32:
         """Return the wrapped camera's near clipping distance, in meters."""

@@ -27,6 +27,7 @@ and ISO 17772-1 Annex. They are typical values, not design values. A
 project must use its own.
 """
 
+from math.finite import require_positive_finite
 from std.math import isfinite
 from extensions.building.construction import (
     Construction,
@@ -36,8 +37,8 @@ from extensions.building.construction import (
     UPWARD_FLOW,
     inside_film,
 )
-from extensions.building.ids import ConstructionId
-from extensions.building.kinds import SpaceUse
+from extensions.building.ids import ConstructionId, require_construction
+from extensions.building.kinds import SpaceUse, require_space_use
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Site
 from extensions.energy.ids import (
@@ -46,6 +47,7 @@ from extensions.energy.ids import (
     SurfaceId,
     WindowId,
     ZoneId,
+    require_zone,
 )
 from generators.utils import Vec3d
 
@@ -70,6 +72,7 @@ from units.si import (
     WATT_PER_SQUARE_METER_KELVIN,
 )
 from units.temperature import Temperature64
+from core.ordinal import require_valid, require_positive
 
 # One air change per hour.
 comptime AIR_CHANGE_PER_HOUR = FrequencyUnit(1.0 / 3600.0, "1/h")
@@ -86,13 +89,10 @@ def _nonnegative(value: Float64, message: String) raises:
         raise Error(message)
 
 
-def _positive(value: Float64, message: String) raises:
-    if not (value > 0 and isfinite(value)):
-        raise Error(message)
-
-
 def _check_normal(normal: Vec3d) raises:
-    _positive(normal.length(), "A normal must be nonzero and finite")
+    require_positive_finite(
+        normal.length(), "A normal must be nonzero and finite"
+    )
 
 
 @fieldwise_init
@@ -158,8 +158,7 @@ def typical_gains(use: SpaceUse) raises -> InternalGains:
     Raises:
         Error: If the use is not valid.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_space_use(use)
     var people: List[Float64] = [7, 1, 0, 3, 6, 3, 2, 3, 1, 0, 0, 20]
     var lighting: List[Float64] = [8, 5, 3, 8, 12, 5, 4, 7, 6, 4, 5, 10]
     var equipment: List[Float64] = [10, 0, 0, 1, 3, 4, 1, 25, 2, 0, 10, 5]
@@ -193,8 +192,7 @@ def gain_fraction(use: SpaceUse, hour: Int) raises -> Float64:
     Raises:
         Error: If the use is not valid or the hour is out of range.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_space_use(use)
     if hour < 0 or hour > 23:
         raise Error("An hour of the day must be 0 to 23")
     # The profile of each use: 0 work, 1 shop, 2 home, 3 always.
@@ -268,8 +266,7 @@ def exterior_film(
     """
     var v = wind_speed.to(METER_PER_SECOND)
     _nonnegative(v, "A wind speed must be zero or more and finite")
-    if not air.is_valid():
-        raise Error("An air temperature must be valid")
+    require_valid(air.is_valid(), "An air temperature must be valid")
     if not (emissivity >= 0 and emissivity <= 1):
         raise Error("An emissivity must be zero to one")
     var t = air.kelvin
@@ -336,9 +333,10 @@ struct Zone(Copyable, Movable):
                 negative or not finite, a setpoint is not valid, or the
                 heating setpoint is above the cooling setpoint.
         """
-        if not self.use.is_valid():
-            raise Error("A space use is not valid")
-        _positive(self.volume.value, "A zone volume must be positive")
+        require_space_use(self.use)
+        require_positive_finite(
+            self.volume.value, "A zone volume must be positive"
+        )
         _nonnegative(self.floor_area.value, "A floor area must be zero or more")
         _nonnegative(
             self.infiltration.value, "An infiltration must be zero or more"
@@ -520,8 +518,7 @@ struct ZoneModel(Movable):
         Raises:
             Error: If it is negative or past the last zone.
         """
-        if not id.is_valid() or id.value >= len(self.zones):
-            raise Error("A zone id is out of range")
+        require_zone(id, len(self.zones))
 
     def check_surface(self, id: SurfaceId) raises:
         """Refuse a surface id that is not in range.
@@ -549,10 +546,10 @@ struct ZoneModel(Movable):
 
     def _check_surface(self, surface: Surface) raises:
         var c = surface.construction
-        if not c.is_valid() or c.value >= len(self.constructions):
-            raise Error("A construction id is out of range")
-        if not surface.boundary.is_valid():
-            raise Error("A boundary kind is not valid")
+        require_construction(c, len(self.constructions))
+        require_valid(
+            surface.boundary.is_valid(), "A boundary kind is not valid"
+        )
         self.check_zone(surface.inside)
         if surface.boundary == INTERZONE:
             if not surface.outside:
@@ -560,14 +557,22 @@ struct ZoneModel(Movable):
             self.check_zone(surface.outside.value())
         elif surface.outside:
             raise Error("Only an interzone surface has an outside zone")
-        _positive(surface.area.value, "A surface area must be positive")
+        require_positive_finite(
+            surface.area.value, "A surface area must be positive"
+        )
         _check_normal(surface.normal)
-        _positive(surface.inside_film.value, "A film must be positive")
-        _positive(surface.outside_film.value, "A film must be positive")
+        require_positive_finite(
+            surface.inside_film.value, "A film must be positive"
+        )
+        require_positive_finite(
+            surface.outside_film.value, "A film must be positive"
+        )
 
     def _check_window(self, window: Window) raises:
         self.check_zone(window.zone)
-        _positive(window.area.value, "A window area must be positive")
+        require_positive_finite(
+            window.area.value, "A window area must be positive"
+        )
         window.glazing.check()
         _check_normal(window.normal)
 
@@ -675,8 +680,7 @@ struct ZoneModel(Movable):
             Error: If it has no zone, or a zone, a surface or a window is
                 not valid. The lists are public, so this checks each again.
         """
-        if len(self.zones) == 0:
-            raise Error("A zone model needs a zone")
+        require_positive(len(self.zones), "A zone model needs a zone")
         for i in range(len(self.zones)):  # pragma: no branch
             self.zones[i].check()
         for i in range(len(self.surfaces)):

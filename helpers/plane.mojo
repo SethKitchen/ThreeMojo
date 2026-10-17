@@ -19,6 +19,7 @@ is not a line and is not built here.
 
 from core.buffer_geometry import BufferGeometry
 from core.object3d import facing
+from core.ordinal import require_positive
 from helpers.segments import Segments
 from math.bounds import Plane
 from math.matrix4 import scaling, translation
@@ -53,8 +54,7 @@ def plane_helper(
         Error: If `size` is not positive.
     """
     var side = size.to(METER)
-    if side <= 0:
-        raise Error("A plane helper needs a positive size")
+    require_positive(side, "A plane helper needs a positive size")
     # three.js's `translateZ(-constant)` along the turned z, which is the
     # normal: the plane's point nearest the origin.
     var center = plane.normal * -plane.constant

@@ -20,7 +20,8 @@ minimum radius.
     var d = hand_lymph_distance(dims, PALMAR_PLEXUS, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.hand.bones.dimensions import (
@@ -53,9 +54,7 @@ struct HandLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic."""
-        if self.value < 0:
-            return False
-        return self.value <= DORSAL_LYMPHATICS.value
+        return ordinal_valid(self.value, DORSAL_LYMPHATICS.value)
 
 
 comptime PALMAR_PLEXUS = HandLymph(0)
@@ -110,10 +109,8 @@ def hand_lymph_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand lymphatic must be a named part")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_valid(part.is_valid(), "A hand lymphatic must be a named part")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == DORSAL_LYMPHATICS:

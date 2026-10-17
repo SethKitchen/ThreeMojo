@@ -33,18 +33,24 @@ triangle of each inner cell has two corners there and no area. A rasterizer
 draws nothing for such a triangle, so the disk looks as `circle` draws it.
 """
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     CIRCLE_GEOMETRY,
-    NORMAL,
-    POSITION,
     RING_GEOMETRY,
-    UV,
 )
-from core.user_data import UserData
-from std.math import cos, isfinite, sin
-from units.si import Angle, Length, METER, RADIAN, TURN
+from core.ordinal import require_non_negative, require_positive
+from geometries.grid import append_cell
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    record_sweep,
+    require_positive_radius,
+    require_three_segments,
+)
+from math.curve_checks import require_at_least_one
+from math.finite import require_finite
+from std.math import cos, sin
+from units.si import Angle, Length, RADIAN, TURN
 
 # A whole circle: the default sweep, and the most a sweep can be, because
 # more than a turn lays the rim over itself.
@@ -64,10 +70,8 @@ def check_sweep(sweep: Angle) raises:
         Error: If the sweep is not finite, zero or negative, or more than
             one turn, which would lay the shape over itself.
     """
-    if not isfinite(sweep.value):
-        raise Error("A sweep must be finite")
-    if sweep.value <= 0:
-        raise Error("A sweep must be positive")
+    require_finite(Float64(sweep.value), "A sweep must be finite")
+    require_positive(sweep.value, "A sweep must be positive")
     if sweep.value > FULL_TURN.value:
         raise Error("A sweep cannot be more than a full turn")
 
@@ -119,10 +123,8 @@ def circle(
         Error: If the radius is not positive, there are fewer than three
             segments, or the sweep is not positive or is more than a turn.
     """
-    if radius.value <= 0:
-        raise Error("A circle needs a positive radius")
-    if segments < 3:
-        raise Error("A circle needs at least three segments")
+    require_positive_radius(radius.value, "circle")
+    require_three_segments(segments, "A circle needs at least three segments")
     check_sweep(theta_length)
 
     var r = radius.value
@@ -151,20 +153,11 @@ def circle(
         index.append(0)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    geometry.kind = CIRCLE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
+    record_kind(geometry, CIRCLE_GEOMETRY)
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("segments", Float64(segments))
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    record_sweep(geometry, theta_start, theta_length)
     return geometry^
 
 
@@ -199,14 +192,17 @@ def ring(
             more than it, either segment count is too small, or the sweep
             is not positive or is more than a turn.
     """
-    if inner_radius.value < 0:
-        raise Error("A ring's inner radius cannot be negative")
+    require_non_negative(
+        inner_radius.value, "A ring's inner radius cannot be negative"
+    )
     if outer_radius.value <= inner_radius.value:
         raise Error("A ring's outer radius must be more than its inner radius")
-    if theta_segments < 3:
-        raise Error("A ring needs at least three segments around")
-    if phi_segments < 1:
-        raise Error("A ring needs at least one segment across")
+    require_three_segments(
+        theta_segments, "A ring needs at least three segments around"
+    )
+    require_at_least_one(
+        phi_segments, "A ring needs at least one segment across"
+    )
     check_sweep(theta_length)
 
     var outer = outer_radius.value
@@ -243,32 +239,14 @@ def ring(
             var d = a + 1
             # Two triangles per cell, each counter-clockwise from the front:
             # inner, outer, next inner, then outer, next outer, next inner.
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
+            append_cell(index, a, b, c, d)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    geometry.kind = RING_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number(
-        "innerRadius", Float64(inner_radius.to(METER))
-    )
-    geometry.parameters.set_number(
-        "outerRadius", Float64(outer_radius.to(METER))
-    )
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
+    record_kind(geometry, RING_GEOMETRY)
+    geometry.parameters.set_meters("innerRadius", inner_radius)
+    geometry.parameters.set_meters("outerRadius", outer_radius)
     geometry.parameters.set_number("thetaSegments", Float64(theta_segments))
     geometry.parameters.set_number("phiSegments", Float64(phi_segments))
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    record_sweep(geometry, theta_start, theta_length)
     return geometry^

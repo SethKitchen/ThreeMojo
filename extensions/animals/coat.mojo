@@ -10,7 +10,9 @@ it lies on, and its position and normal in the reference animal's bind
 pose. Painting in reference space keeps every mark on the skin as the
 animal moves. The painter returns a linear color and a surface class.
 """
+from core.ordinal import ordinal_valid
 
+from extensions.animals.parts import JAW
 from extensions.sdf.ids import SurfacePart
 from extensions.animals.noise import fbm3
 from extensions.sdf.vector import (
@@ -19,6 +21,8 @@ from extensions.sdf.vector import (
     mix,
     smoothstep,
 )
+from math.norm import squared_length2
+from math.utils import mix_delta
 from render.srgb import srgb_to_linear
 from std.collections import Dict
 
@@ -45,7 +49,7 @@ struct SurfaceClass(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to `SURFACE_CLASS_COUNT - 1`.
         """
-        return self.value >= 0 and self.value < SURFACE_CLASS_COUNT
+        return ordinal_valid(self.value, SURFACE_CLASS_COUNT - 1)
 
 
 comptime FUR = SurfaceClass(0)
@@ -112,7 +116,9 @@ def mix3(a: V3, b: V3, t: Float64) -> V3:
     Returns:
         The blend.
     """
-    return a + (b - a) * t
+    return V3(
+        mix_delta(a.x, b.x, t), mix_delta(a.y, b.y, t), mix_delta(a.z, b.z, t)
+    )
 
 
 def grizzle(c: V3, p: V3, scale: Float64, amount: Float64) -> V3:
@@ -204,7 +210,7 @@ def paint_eye(
     var squash = -look.slit if look.slit < 0.0 else 1.0
     var px = local.x * stretch
     var py = local.y * squash
-    var across = (px * px + py * py) ** 0.5 / iris_r
+    var across = squared_length2[DType.float64](px, py) ** 0.5 / iris_r
     var plain = (local.x * local.x + local.y * local.y) ** 0.5 / iris_r
     var front = smoothstep(0.0, 0.35 * radius, local.z)
     var pupil_edge = smoothstep(look.pupil * 0.85, look.pupil * 1.05, across)
@@ -282,3 +288,117 @@ def palette_of(names: List[String], hexes: List[Int]) raises -> Palette:
     for i in range(len(names)):
         out.set(names[i], srgb(hexes[i]))
     return out^
+
+
+def shade_swatch(
+    color: V3,
+    shade: Float64,
+    light: Float64,
+    red: Float64,
+    green: Float64,
+    blue: Float64,
+) -> V3:
+    """Return a swatch scaled by shade and lightness on each channel.
+
+    Each channel is multiplied by one plus its weight times `shade`,
+    plus `light`. The weight product is formed before either add.
+
+    Args:
+        color: The swatch, in linear light.
+        shade: The individual's shade or warmth.
+        light: The individual's lightness.
+        red: The shade weight of red.
+        green: The shade weight of green.
+        blue: The shade weight of blue.
+
+    Returns:
+        The scaled swatch.
+    """
+    return V3(
+        color.x * (1.0 + red * shade + light),
+        color.y * (1.0 + green * shade + light),
+        color.z * (1.0 + blue * shade + light),
+    )
+
+
+def channel_gain(
+    color: V3, amount: Float64, red: Float64, green: Float64, blue: Float64
+) -> V3:
+    """Return a color with each channel scaled by one plus a weight.
+
+    The weight times `amount` is formed before it is added to one.
+
+    Args:
+        color: The color, in linear light.
+        amount: The variation. Noise centered on zero is the usual value.
+        red: The weight of red.
+        green: The weight of green.
+        blue: The weight of blue.
+
+    Returns:
+        The scaled color.
+    """
+    return V3(
+        color.x * (1.0 + red * amount),
+        color.y * (1.0 + green * amount),
+        color.z * (1.0 + blue * amount),
+    )
+
+
+def channel_pair(
+    color: V3,
+    first: Float64,
+    second: Float64,
+    red_first: Float64,
+    green_first: Float64,
+    blue_first: Float64,
+    red_second: Float64,
+    green_second: Float64,
+    blue_second: Float64,
+) -> V3:
+    """Return a color scaled by two weighted amounts on each channel.
+
+    Each channel is multiplied by one plus its first weight times
+    `first`, plus its second weight times `second`. Each weight product
+    is formed before the adds.
+
+    Args:
+        color: The color, in linear light.
+        first: The first amount.
+        second: The second amount.
+        red_first: The first weight of red.
+        green_first: The first weight of green.
+        blue_first: The first weight of blue.
+        red_second: The second weight of red.
+        green_second: The second weight of green.
+        blue_second: The second weight of blue.
+
+    Returns:
+        The scaled color.
+    """
+    return V3(
+        color.x * (1.0 + red_first * first + red_second * second),
+        color.y * (1.0 + green_first * first + green_second * second),
+        color.z * (1.0 + blue_first * first + blue_second * second),
+    )
+
+
+def body_region(part: SurfacePart, bone: String) -> Int:
+    """Return the coat region of one vertex.
+
+    Args:
+        part: The surface part.
+        bone: The bone the vertex rides.
+
+    Returns:
+        0 torso, 1 neck, 2 head, 4 tail, or 5 ear.
+    """
+    var head = part == JAW or bone == "head" or bone == "snout"
+    var neck = bone == "neck1" or bone == "neck2"
+    if head:
+        return 2
+    if bone.startswith("ear"):
+        return 5
+    if bone.startswith("tail"):
+        return 4
+    return 1 if neck else 0

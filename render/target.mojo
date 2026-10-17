@@ -84,8 +84,14 @@ and `light_at` premultiply it first, where they read it as light. The
 kernel keeps its running color the same way.
 """
 
+from core.extent import require_positive_extent
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+
+from math.curve_checks import require_at_least_one
+from math.utils import clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from render.packing import packed_normal
 from render.blend import NORMAL_MODE, Rgba, blend_fragment
 from render.color_spaces import OutputEncoding
 from render.float_image import FloatImage
@@ -93,13 +99,22 @@ from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
     FragmentTest,
+    require_depth_mode,
     RasterState,
     cleared_depth,
     is_nearer,
     test_fragment,
     window_depth,
 )
-from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    pixel_slot,
+    require_downsample_factor,
+    SrgbBytes,
+)
 from render.rect import Rect
 from render.texture import (
     BILINEAR,
@@ -147,11 +162,7 @@ struct TargetType(Equatable, ImplicitlyCopyable, Writable):
             True for `UNSIGNED_BYTE_TARGET`, `HALF_FLOAT_TARGET` and
             `FLOAT_TARGET`.
         """
-        return (
-            self == UNSIGNED_BYTE_TARGET
-            or self == HALF_FLOAT_TARGET
-            or self == FLOAT_TARGET
-        )
+        return ordinal_valid(self.value, FLOAT_TARGET.value)
 
 
 # Eight bits a channel, zero to one: three.js's `UnsignedByteType`, the
@@ -163,6 +174,23 @@ comptime HALF_FLOAT_TARGET = TargetType(1)
 # Thirty-two-bit floats: three.js's `FloatType`. A readout is the light as
 # it is, above one included.
 comptime FLOAT_TARGET = TargetType(2)
+
+
+def require_target_type(type: TargetType) raises:
+    """Refuse a render target type that is none of the three.
+
+    Nothing. The call returns when the type is named.
+
+    Args:
+        type: The attachment storage.
+
+    Raises:
+        Error: If the type is none of the three.
+    """
+    require_valid(
+        type.is_valid(), "A render target type must be one of the three"
+    )
+
 
 # The largest finite half: what a half float target holds for anything
 # brighter, where a GPU writing one would round it to infinity. A texture
@@ -190,12 +218,7 @@ struct TargetOutput(Equatable, ImplicitlyCopyable, Writable):
             True for `OUTPUT_COLOR`, `OUTPUT_NORMAL`, `OUTPUT_VELOCITY` and
             `OUTPUT_METAL_ROUGH`.
         """
-        return (
-            self == OUTPUT_COLOR
-            or self == OUTPUT_NORMAL
-            or self == OUTPUT_VELOCITY
-            or self == OUTPUT_METAL_ROUGH
-        )
+        return ordinal_valid(self.value, OUTPUT_METAL_ROUGH.value)
 
 
 # The lit color, what a single-attachment target holds: `pc_fragColor`.
@@ -238,14 +261,14 @@ def check_target(type: TargetType, outputs: List[TargetOutput]) raises:
             first output is not `OUTPUT_COLOR`, an output is none of the
             four, or an output repeats.
     """
-    if not type.is_valid():
-        raise Error("A render target type must be one of the three")
+    require_target_type(type)
     if len(outputs) == 0 or outputs[0] != OUTPUT_COLOR:
         raise Error("A render target's first output must be the color")
     for index in range(1, len(outputs)):
         var output = outputs[index]
-        if not output.is_valid():
-            raise Error("A render target output must be one of the four")
+        require_valid(
+            output.is_valid(), "A render target output must be one of the four"
+        )
         # An output written twice is one attachment too many. `index` is
         # at least one, so this loop always runs.
         for earlier in range(index):  # pragma: no branch
@@ -267,10 +290,10 @@ def stored(value: Float32, type: TargetType) -> Float32:
         itself for `FLOAT_TARGET`.
     """
     if type == UNSIGNED_BYTE_TARGET:
-        var held = max(Float32(0), min(Float32(1), value))
+        var held = clamp(value, 0, 1)
         return Float32(Int(held * 255 + 0.5)) / 255
     if type == HALF_FLOAT_TARGET:
-        var held = max(-HALF_MAX, min(HALF_MAX, value))
+        var held = clamp(value, -HALF_MAX, HALF_MAX)
         return held.cast[DType.float16]().cast[DType.float32]()
     return value
 
@@ -318,6 +341,22 @@ def check_samples(samples: Int) raises:
     var side = sample_grid(samples)
     if samples > 1 and side * side != samples:
         raise Error("A render target's samples must be a square: 4, 9 or 16")
+
+
+def require_rect(rect: Rect, width: Int, height: Int, name: String) raises:
+    """Refuse a rectangle that does not lie inside the target.
+
+    Args:
+        rect: The rectangle.
+        width: The target width in pixels.
+        height: The target height in pixels.
+        name: The noun in the error, such as "scissor".
+
+    Raises:
+        Error: If the rectangle is empty or reaches outside the target.
+    """
+    if not rect.fits(width, height):
+        raise Error("A " + name + " must lie inside the target")
 
 
 trait SampleSource:
@@ -496,7 +535,7 @@ def resolve_block[
     Returns:
         The resolved pixel.
     """
-    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var total = TRANSPARENT_BLACK
     var nearest = cleared_depth(depth_mode)
     # Counted rather than flagged: a `Bool` raised in a nested loop and
     # read after it hangs codegen; see `docs/wiki/The-Mojo-compiler-hang.md`.
@@ -511,12 +550,7 @@ def resolve_block[
         var column = sample % factor
         var slot = (y * factor + row) * width + x * factor + column
         var sampled = source.light_at(slot)
-        total = FloatColor(
-            total.r + sampled.r,
-            total.g + sampled.g,
-            total.b + sampled.b,
-            total.a + sampled.a,
-        )
+        total = total + sampled
         var z = source.depth_in(slot)
         if is_nearer(depth_mode, z, nearest):
             nearest = z
@@ -525,9 +559,7 @@ def resolve_block[
         if normals:
             normal = normal + source.normal_in(slot)
     var share = 1 / Float32(factor * factor)
-    var color = FloatColor(
-        total.r * share, total.g * share, total.b * share, total.a * share
-    )
+    var color = total * share
     var data = datas == factor * factor
     # A data pixel is stored straight; see the module docstring.
     if data:
@@ -715,8 +747,9 @@ struct RenderTarget(Movable, SampleSource):
                 refuses the type or the outputs, or `check_samples`
                 refuses the sample count.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Render target dimensions must be positive")
+        require_positive_extent(
+            width, height, "Render target dimensions must be positive"
+        )
         check_target(type, outputs)
         check_samples(samples)
         self.samples = samples
@@ -764,8 +797,7 @@ struct RenderTarget(Movable, SampleSource):
         Raises:
             Error: If the rectangle is empty or reaches outside the target.
         """
-        if not rect.fits(self.width, self.height):
-            raise Error("A scissor must lie inside the target")
+        require_rect(rect, self.width, self.height, "scissor")
         self.scissor = rect
 
     def clear_inside(
@@ -808,10 +840,8 @@ struct RenderTarget(Movable, SampleSource):
             Error: If the rectangle is empty or reaches outside the target,
                 or the depth mode is none of the three.
         """
-        if not rect.fits(self.width, self.height):
-            raise Error("A clear must lie inside the target")
-        if not depth_mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_rect(rect, self.width, self.height, "clear")
+        require_depth_mode(depth_mode)
         if color:
             self.clear = FloatColor(srgb=clear).premultiplied()
         if depth:
@@ -868,9 +898,7 @@ struct RenderTarget(Movable, SampleSource):
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return y * self.width + x
+        return pixel_slot(x, y, self.width, self.height)
 
     def depth_at(self, x: Int, y: Int) raises -> Float32:
         """Return the depth recorded at pixel (x, y)."""
@@ -1322,8 +1350,7 @@ struct RenderTarget(Movable, SampleSource):
             Error: If the factor is less than one or does not divide both
                 dimensions.
         """
-        if factor < 1:
-            raise Error("A downsample factor is at least one")
+        require_downsample_factor(factor)
         if self.width % factor != 0 or self.height % factor != 0:
             raise Error("A downsample factor must divide the target's size")
         var small = RenderTarget(
@@ -1430,8 +1457,7 @@ struct RenderTarget(Movable, SampleSource):
             or buffer.has_metal_roughs() != self.has_metal_roughs()
         ):
             raise Error("A multisample buffer must have the target's outputs")
-        if not rect.fits(self.width, self.height):
-            raise Error("A resolve must lie inside the target")
+        require_rect(rect, self.width, self.height, "resolve")
         self._resolve_blocks(buffer, grid, rect)
 
     def _resolve_blocks(
@@ -1528,8 +1554,7 @@ struct RenderTarget(Movable, SampleSource):
                 eight, the exposure is negative or not finite, or the
                 framebuffer cannot be built.
         """
-        if workers < 1:
-            raise Error("Resolving needs at least one worker")
+        require_at_least_one(workers, "Resolving needs at least one worker")
         check_tone_mapping(tone_mapping, exposure)
         var count = self.width * self.height
         var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)
@@ -1667,8 +1692,7 @@ struct RenderTarget(Movable, SampleSource):
             Error: If the wrap mode is none of the named values, or the
                 type is none of the three.
         """
-        if not type.is_valid():
-            raise Error("A render target type must be one of the three")
+        require_target_type(type)
         if type == UNSIGNED_BYTE_TARGET:
             return depth_texture_of_buffer(
                 self.width, self.height, self.depth, wrap, self.depth_mode
@@ -1812,8 +1836,11 @@ struct RenderTarget(Movable, SampleSource):
         Raises:
             Error: If the index is outside the attachments.
         """
-        if index < 0 or index >= self.count():
-            raise Error("A render target attachment index is out of range")
+        require_index_in_count(
+            index,
+            self.count(),
+            "A render target attachment index is out of range",
+        )
         var total = self.width * self.height
         var pixels = List[Float32](capacity=total * FloatImage.CHANNELS)
         var packs = self.type == UNSIGNED_BYTE_TARGET
@@ -1833,11 +1860,10 @@ struct RenderTarget(Movable, SampleSource):
                 var n = self.normals[slot]
                 value = FloatColor(n.x, n.y, n.z, 1)
                 if n.length() == 0:
-                    value = FloatColor(0, 0, 0, 0)
+                    value = TRANSPARENT_BLACK
                 elif packs:
-                    value = FloatColor(
-                        n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1
-                    )
+                    var shown = packed_normal(n)
+                    value = FloatColor(shown.x, shown.y, shown.z, 1)
             else:
                 value = self.straight_at(slot)
                 if self.data[slot]:

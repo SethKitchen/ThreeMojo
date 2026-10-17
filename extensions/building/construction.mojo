@@ -18,8 +18,9 @@ gain coefficient and its visible transmittance. These are the three
 numbers of the simple glazing model that thermal programs use for a
 window without a layer-by-layer description.
 """
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
-from std.math import isfinite
+from math.finite import require_positive_finite
 from extensions.building.ids import MaterialId
 from extensions.building.material import BuildingMaterial
 from units.si import (
@@ -47,7 +48,7 @@ struct FlowDirection(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 comptime HORIZONTAL_FLOW = FlowDirection(0)
@@ -67,8 +68,10 @@ def inside_film(direction: FlowDirection) raises -> ThermalResistance64:
     Raises:
         Error: If the direction is not valid.
     """
-    if not direction.is_valid():
-        raise Error("A flow direction must be horizontal, upward or downward")
+    require_valid(
+        direction.is_valid(),
+        "A flow direction must be horizontal, upward or downward",
+    )
     var values: List[Float64] = [0.13, 0.10, 0.17]
     return ThermalResistance64(
         values[direction.value], SQUARE_METER_KELVIN_PER_WATT
@@ -118,8 +121,7 @@ struct Construction(Copyable, Movable):
             Error: If it has no layers, a layer names a material that is
                 not in the list, or a thickness is not positive and finite.
         """
-        if len(self.layers) == 0:
-            raise Error("A construction needs a layer")
+        require_positive(len(self.layers), "A construction needs a layer")
         for i in range(len(self.layers)):  # pragma: no branch
             ref layer = self.layers[i]
             if not layer.material.is_valid() or layer.material.value >= len(
@@ -127,8 +129,7 @@ struct Construction(Copyable, Movable):
             ):
                 raise Error("A layer's material id is out of range")
             var t = layer.thickness.to(METER)
-            if not (t > 0 and isfinite(t)):
-                raise Error("A layer must be positive and finite")
+            require_positive_finite(t, "A layer must be positive and finite")
 
     def thickness(self) -> Length64:
         """Return the sum of the layer thicknesses.
@@ -235,8 +236,9 @@ struct Glazing(ImplicitlyCopyable):
                 outside zero to one.
         """
         var u = self.u_value.to(WATT_PER_SQUARE_METER_KELVIN)
-        if not (u > 0 and isfinite(u)):
-            raise Error("A glazing U-value must be positive and finite")
+        require_positive_finite(
+            u, "A glazing U-value must be positive and finite"
+        )
         if not (self.solar_heat_gain >= 0 and self.solar_heat_gain <= 1):
             raise Error("A solar heat gain coefficient must be zero to one")
         if not (

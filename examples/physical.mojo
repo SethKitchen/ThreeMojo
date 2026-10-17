@@ -14,7 +14,8 @@ reflects; the sky's faces carry a mip chain, which is what a rough
 sphere reads. The last sphere of each row has a clear coat over it.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import example_destination, gallery_camera
+
 from core.assets import Assets
 from core.background import cube_background
 from core.clock import Clock
@@ -37,7 +38,7 @@ from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from std.sys import argv, stderr
+from std.sys import stderr
 from units.si import Angle, DEGREE, Length, METER, MILLISECOND
 
 comptime DEFAULT_OUTPUT = "out/physical.png"
@@ -80,11 +81,8 @@ def sky_face(face: Int) raises -> Texture:
             var tint = ground
             if direction.y >= 0:
                 var lean = direction.y
-                tint = FloatColor(
-                    horizon.r + (zenith.r - horizon.r) * lean,
-                    horizon.g + (zenith.g - horizon.g) * lean,
-                    horizon.b + (zenith.b - horizon.b) * lean,
-                )
+                var mixed = horizon.mix(zenith, lean)
+                tint = FloatColor(mixed.r, mixed.g, mixed.b)
             var shown = tint.encode()
             pixels.append(shown.r)
             pixels.append(shown.g)
@@ -94,10 +92,7 @@ def sky_face(face: Int) raises -> Texture:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     var assets = Assets()
@@ -145,13 +140,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.3))
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(32.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.3, 6.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(32.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.3, 6.2), Vector3(0, 0, 0))
 
     var frame_clock = Clock()
     frame_clock.start()

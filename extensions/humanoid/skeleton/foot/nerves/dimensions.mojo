@@ -21,6 +21,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, MEDIAL_PLANTAR_NERVE, dims.navicular)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -34,9 +35,9 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.chain import (
     TubeSet,
-    enlarge_tube_set,
+    display_tube_set,
     one_tube,
-    tube_set_bounds,
+    tube_set_soft_bounds,
     tube_set_distance,
     two_tubes,
 )
@@ -56,9 +57,21 @@ struct FootNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named foot nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= SAPHENOUS_NERVE.value
+        return ordinal_valid(self.value, SAPHENOUS_NERVE.value)
+
+
+def require_foot_nerve(part: FootNerve) raises:
+    """Refuse a foot nerve that is not named.
+
+    Nothing. The call returns when the nerve is named.
+
+    Args:
+        part: The nerve.
+
+    Raises:
+        Error: If the nerve is not named.
+    """
+    require_valid(part.is_valid(), "A foot nerve must be a named nerve")
 
 
 comptime TIBIAL_NERVE = FootNerve(0)
@@ -94,13 +107,12 @@ struct FootNerveField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot nerve must be a named nerve")
+        require_foot_nerve(part)
         self.tubes = _tubes(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.00030 * S
         self.epsilon = 0.00018 * S
-        var box = tube_set_bounds(self.tubes, 0.003)
+        var box = tube_set_soft_bounds(self.tubes)
         self.low = box.low
         self.high = box.high
 
@@ -134,11 +146,14 @@ def display_nerve_field(
     """
     var field = FootNerveField(dimensions, part)
     var least = 0.0015 * dimensions.stature.value
-    field.tubes = enlarge_tube_set(field.tubes, least)
-    field.k = 0.0008 * dimensions.stature.value
-    var box = tube_set_bounds(field.tubes, 0.004)
-    field.low = box.low
-    field.high = box.high
+    display_tube_set(
+        field.tubes,
+        field.k,
+        field.low,
+        field.high,
+        least,
+        0.0008 * dimensions.stature.value,
+    )
     return field
 
 

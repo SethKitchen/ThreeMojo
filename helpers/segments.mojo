@@ -16,8 +16,8 @@ them into the `BufferGeometry` a `Line` names.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
-from render.framebuffer import FloatColor
+from math.vector3 import Vector3, append_vector3
+from render.framebuffer import FloatColor, append_float_rgb
 
 
 struct Segments(Movable):
@@ -34,12 +34,8 @@ struct Segments(Movable):
 
     def _point(mut self, point: Vector3, color: FloatColor):
         """Append one point and its color."""
-        self.positions.append(point.x)
-        self.positions.append(point.y)
-        self.positions.append(point.z)
-        self.colors.append(color.r)
-        self.colors.append(color.g)
-        self.colors.append(color.b)
+        append_vector3(self.positions, point)
+        append_float_rgb(self.colors, color)
 
     def add(mut self, start: Vector3, end: Vector3, color: FloatColor):
         """Append one segment in one color.

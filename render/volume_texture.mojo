@@ -47,6 +47,7 @@ neither kind: three.js reads them only from a custom shader or from
 `DecodedVolume` through the same `filter_volume` as the host.
 """
 
+from core.extent import require_closed_count, require_positive_extent
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import (
@@ -57,10 +58,13 @@ from render.texture import (
     Filter,
     TexelType,
     Wrap,
-    mix,
+    mix_straight,
+    require_float_linear,
     wrap_index,
 )
-from std.math import floor, isfinite
+from math.finite import require_finite
+from std.math import floor
+from core.ordinal import require_valid
 
 
 # How many numbers a stored texel holds: red, green, blue and alpha.
@@ -80,10 +84,15 @@ def _check_extent(width: Int, height: Int, depth: Int, channels: Int) raises:
         Error: If a dimension is not positive or `channels` is not one
             through four, or the stored RGBA size cannot fit in Int.
     """
-    if width <= 0 or height <= 0 or depth <= 0:
-        raise Error("A volume texture's dimensions must be positive")
-    if channels < 1 or channels > VOLUME_CHANNELS:
-        raise Error("A volume texture holds one through four numbers a texel")
+    require_positive_extent(
+        width, height, "A volume texture's dimensions must be positive", depth
+    )
+    require_closed_count(
+        channels,
+        1,
+        VOLUME_CHANNELS,
+        "A volume texture holds one through four numbers a texel",
+    )
     # Stored images always expand to RGBA. Bound the element count before
     # multiplying dimensions, including when the input has fewer channels.
     var length = width
@@ -91,6 +100,23 @@ def _check_extent(width: Int, height: Int, depth: Int, channels: Int) raises:
         if length > Int.MAX // factor:
             raise Error("A volume texture's size cannot fit in Int")
         length *= factor
+
+
+def require_volume_length(held: Int, expected: Int) raises:
+    """Refuse a volume whose texel list is a different length from its
+    dimensions.
+
+    Nothing. The call returns when the two lengths are equal.
+
+    Args:
+        held: How many numbers the list holds.
+        expected: How many numbers the dimensions require.
+
+    Raises:
+        Error: If the lengths differ.
+    """
+    if held != expected:
+        raise Error("A volume texture's length does not match its dimensions")
 
 
 struct VolumeImage(Movable):
@@ -182,10 +208,7 @@ struct VolumeImage(Movable):
         """
         _check_extent(width, height, depth, channels)
         var count = width * height * depth
-        if len(pixels) != count * channels:
-            raise Error(
-                "A volume texture's length does not match its dimensions"
-            )
+        require_volume_length(len(pixels), count * channels)
         var stored = List[UInt8]()
         stored.reserve(count * VOLUME_CHANNELS)
         # The dimensions are positive, so neither loop runs zero times.
@@ -239,10 +262,7 @@ struct VolumeImage(Movable):
         """
         _check_extent(width, height, depth, channels)
         var count = width * height * depth
-        if len(data) != count * channels:
-            raise Error(
-                "A volume texture's length does not match its dimensions"
-            )
+        require_volume_length(len(data), count * channels)
         var stored = List[Float32]()
         stored.reserve(count * VOLUME_CHANNELS)
         # The dimensions are positive, so neither loop runs zero times.
@@ -255,10 +275,10 @@ struct VolumeImage(Movable):
                     value = data[texel * channels + channel]
                     # An infinity or a NaN poisons every blend that
                     # reaches it.
-                    if not isfinite(value):
-                        raise Error(
-                            "A float volume texture holds finite numbers"
-                        )
+                    require_finite(
+                        Float64(value),
+                        "A float volume texture holds finite numbers",
+                    )
                 stored.append(value)
         return VolumeImage(
             width, height, depth, FLOAT_TYPE, List[UInt8](), stored^
@@ -277,19 +297,18 @@ struct VolumeImage(Movable):
                 four numbers a texel.
         """
         _check_extent(self.width, self.height, self.depth, VOLUME_CHANNELS)
-        if not self.texel_type.is_valid():
-            raise Error(
+        require_valid(
+            self.texel_type.is_valid(),
+            (
                 "A volume texture's texel type must be UNSIGNED_BYTE_TYPE or"
                 " FLOAT_TYPE"
-            )
+            ),
+        )
         var length = self.width * self.height * self.depth * VOLUME_CHANNELS
         var held = len(self.pixels)
         if self.texel_type == FLOAT_TYPE:
             held = len(self.data)
-        if held != length:
-            raise Error(
-                "A volume texture's length does not match its dimensions"
-            )
+        require_volume_length(held, length)
 
     def _offset(self, x: Int, y: Int, z: Int) -> Int:
         """Return where texel `(x, y, z)` starts, all three inside."""
@@ -374,12 +393,7 @@ def mix_straight_texels(
     Returns:
         The blend, straight.
     """
-    return FloatColor(
-        mix(near.r, far.r, t),
-        mix(near.g, far.g, t),
-        mix(near.b, far.b, t),
-        mix(near.a, far.a, t),
-    )
+    return mix_straight(near, far, t)
 
 
 def _check_modes(
@@ -409,8 +423,7 @@ def _check_modes(
             "A volume texture needs a color space it can decode: SRGB or LINEAR"
         )
     image.validate()
-    if image.texel_type == FLOAT_TYPE and space != LINEAR:
-        raise Error("A float texture holds linear light: it must be LINEAR")
+    require_float_linear(image.texel_type, space)
 
 
 struct Data3DTexture(Movable, VolumeSampler, VolumeTexels):

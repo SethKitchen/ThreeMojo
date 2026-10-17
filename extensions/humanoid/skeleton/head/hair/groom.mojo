@@ -34,6 +34,7 @@ This is not a three.js port. See Extensions.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
+from core.ordinal import require_positive
 from extensions.humanoid.genome import HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.side import RIGHT
 from extensions.humanoid.skeleton.field import DistanceField, smin
@@ -60,6 +61,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     PONYTAIL,
     SPACE_BUNS,
     HairStyle,
+    require_hair_style,
     HairStyleFile,
     hair_style_path,
 )
@@ -71,7 +73,9 @@ from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.surface_nets import surface_gradient
 from extensions.humanoid.skeleton.torso.body import BodySkinField
 from extensions.humanoid.spec import HumanoidSpec
-from math.vector3 import Vector3
+from math.cross import cross_vectors
+from math.utils import mix_delta
+from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import acos, cos, max, min, pi, pow, sin, sqrt
 
 # The most guides one groom has.
@@ -171,13 +175,6 @@ def _unit(key: Int, salt: Int) -> Float32:
 def _signed(key: Int, salt: Int) -> Float32:
     """Return a value in -1 through 1 hashed from a key and a salt."""
     return 2 * _unit(key, salt) - 1
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product of `a` and `b`."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
 
 
 def _unit_vector(v: Vector3, fallback: Vector3) -> Vector3:
@@ -561,7 +558,7 @@ def follower_across(
     Returns:
         The unit vector square to the normal and to the strand.
     """
-    return _unit_vector(_cross(normal, after - before), Vector3(1, 0, 0))
+    return _unit_vector(cross_vectors(normal, after - before), Vector3(1, 0, 0))
 
 
 def _strand_of(starts: List[Int], index: Int) -> Int:
@@ -621,7 +618,7 @@ def _root(
     for attempt in range(tries):
         var salt = attempt * 7 + 11
         var turn = Float32(2 * pi) * _unit(key, salt)
-        var up = lowest + (1 - lowest) * _unit(key, salt + 1)
+        var up = mix_delta(lowest, Float32(1), _unit(key, salt + 1))
         var flat = sqrt(max(Float32(0), 1 - up * up))
         var ray = Vector3(flat * cos(turn), up, flat * sin(turn))
         var p = center + ray * Float32(0.25)
@@ -673,7 +670,7 @@ struct _Comb(ImplicitlyCopyable):
         if n < Float32(1e-5):
             return Vector3(0, 0, 0)
         t = t / n
-        var across = _cross(normal, t)
+        var across = cross_vectors(normal, t)
         var sway = self.sway * sin(phase + travelled / self.wavelength)
         return _unit_vector(t + across * sway, t)
 
@@ -709,7 +706,7 @@ def _grow_guide(
     mut levels: List[Float32],
 ):
     """Grow one guide from `root` along the comb, on the field's level."""
-    var target = spec.shortest + (spec.longest - spec.shortest) * _unit(key, 2)
+    var target = mix_delta(spec.shortest, spec.longest, _unit(key, 2))
     var phase = Float32(2 * pi) * _unit(key, 3)
     # A root at the front of the scalp may fall past the hair's edge
     # onto the forehead, down to the fringe's ragged line.
@@ -744,6 +741,21 @@ def _grow_guide(
         levels.append(lift)
 
 
+def require_hair_roots(count: Int) raises:
+    """Refuse a groom that grew no strand.
+
+    Nothing. The call returns when the groom holds a strand.
+
+    Args:
+        count: How many strands the groom holds.
+
+    Raises:
+        Error: If the groom holds no strand.
+    """
+    if count == 0:
+        raise Error("No guide found a root on the scalp's hair")
+
+
 def groom_hair(
     dimensions: HeadMuscleDimensions,
     spec: GroomSpec,
@@ -767,8 +779,7 @@ def groom_hair(
             not named or its file cannot be read, or if no guide finds a
             root.
     """
-    if not style.is_valid():
-        raise Error("A hair style must be a named style")
+    require_hair_style(style)
     if style == LAYERED or style == MOHAWK:
         return _laid(dimensions, spec, seed, style)
     if style != GROWN:
@@ -821,8 +832,7 @@ def groom_hair(
             _follow(
                 groom, spec, points, normals, depths, key, follower + 1, lead
             )
-    if len(groom) == 0:
-        raise Error("No guide found a root on the scalp's hair")
+    require_hair_roots(len(groom))
     return groom^
 
 
@@ -1070,8 +1080,7 @@ def _designed(
         # Hair gathered to a tie is pulled straight over the scalp.
         var taut = travelled if tied else Float32(0)
         _finish(groom, strand, field, body, spec, probe, key, False, taut, True)
-    if len(groom) == 0:
-        raise Error("No guide found a root on the scalp's hair")
+    require_hair_roots(len(groom))
     return groom^
 
 
@@ -1117,7 +1126,9 @@ def _braid(
     The braid narrows a little toward its tip.
     """
     var lane = Float32(key % 3)
-    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
+    var across = _unit_vector(
+        cross_vectors(away, Vector3(0, 1, 0)), Vector3(1, 0, 0)
+    )
     var angle = Float32(2 * pi) * _unit(key, 71)
     var spread = width * Float32(0.2) * sqrt(_unit(key, 73))
     var core = tie
@@ -1127,7 +1138,7 @@ def _braid(
         going = _unit_vector(going * Float32(0.8) + Vector3(0, -0.45, 0), going)
         core = core + going * step
         along += step
-        var back = _unit_vector(_cross(across, going), away)
+        var back = _unit_vector(cross_vectors(across, going), away)
         var a = Float32(2 * pi) * (lane / 3 + along / twist)
         var w = width * (1 - Float32(0.35) * along / length)
         strand.append(
@@ -1175,7 +1186,7 @@ def _arc(
         )
         var q = _onto(
             field,
-            middle + d * (ra + (rb - ra) * t),
+            middle + d * mix_delta(ra, rb, t),
             spec.lift,
             probe,
             spec.step,
@@ -1227,8 +1238,10 @@ def _tail(
     ponytail: out from the head at first, then down, fanning a little
     wider toward its tip."""
     var angle = Float32(2 * pi) * _unit(key, 51)
-    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
-    var up = _cross(across, away)
+    var across = _unit_vector(
+        cross_vectors(away, Vector3(0, 1, 0)), Vector3(1, 0, 0)
+    )
+    var up = cross_vectors(across, away)
     var fan = _unit(key, 53)
     var along = Float32(0)
     var core = tie
@@ -1258,8 +1271,10 @@ def _coil(
     it winds round, so it never cuts through the ball.
     """
     var middle = tie + away * (radius * BUN_FLOAT)
-    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
-    var up = _cross(across, away)
+    var across = _unit_vector(
+        cross_vectors(away, Vector3(0, 1, 0)), Vector3(1, 0, 0)
+    )
+    var up = cross_vectors(across, away)
     var lean = Float32(-0.9) + Float32(1.8) * _unit(key, 61)
     var start = Float32(2 * pi) * _unit(key, 63)
     var turns = Float32(1.2) + _unit(key, 65)
@@ -1320,11 +1335,11 @@ def _curl(
             j += 1
         var span = max(along[j + 1] - along[j], Float32(1e-9))
         var t = min(Float32(1), max(Float32(0), (s - along[j]) / span))
-        var p = points[j] + (points[j + 1] - points[j]) * t
+        var p = mix_delta3(points[j], points[j + 1], t)
         var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
         var n = normals[j]
         var outward = _unit_vector(n - tangent * n.dot(tangent), n)
-        var across = _cross(outward, tangent)
+        var across = cross_vectors(outward, tangent)
         var angle = phase + Float32(2 * pi) * s / spec.curl_length
         var swing = spec.curl * min(
             Float32(1), max(Float32(0), 2 * (s - taut) / spec.curl_length)
@@ -1335,7 +1350,7 @@ def _curl(
             + outward * (swing * Float32(0.5) * (1 + sin(angle)))
         )
         ups.append(n)
-        deep.append(depths[j] + (depths[j + 1] - depths[j]) * t)
+        deep.append(mix_delta(depths[j], depths[j + 1], t))
     points = fine^
     normals = ups^
     depths = deep^
@@ -1409,8 +1424,7 @@ def groom_lines(groom: HairGroom) raises -> BufferGeometry:
     Raises:
         Error: If the groom has no strands.
     """
-    if len(groom) == 0:
-        raise Error("A groom with no strands has no lines")
+    require_positive(len(groom), "A groom with no strands has no lines")
     var positions = List[Float32]()
     for strand in range(len(groom)):  # pragma: no branch
         for index in range(
@@ -1418,9 +1432,7 @@ def groom_lines(groom: HairGroom) raises -> BufferGeometry:
         ):  # pragma: no branch
             for end in range(2):  # pragma: no branch
                 var p = groom.points[index + end]
-                positions.append(p.x)
-                positions.append(p.y)
-                positions.append(p.z)
+                append_vector3(positions, p)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     return geometry^

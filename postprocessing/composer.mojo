@@ -47,11 +47,14 @@ composer can run with its frame on the GPU; see
 `docs/wiki/GPU-backend.md`.
 """
 
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from postprocessing.sample_math import gaussian_pdf
 from cameras.camera import Camera
 from core.assets import Assets
 from core.layers import Layers
 from core.scene import Scene
+from math.norm import squared_length2
+from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.utils import SeededRandom
 from math.vector2 import Vector2
@@ -61,6 +64,7 @@ from postprocessing.antialiasing import (
     JitteredCamera,
     fxaa_light,
     jitter_offsets,
+    require_sample_level,
     smaa_light,
 )
 from postprocessing.display_nodes import (
@@ -73,6 +77,7 @@ from postprocessing.display_nodes import (
     dof_light,
     hash_blur_light,
     lensflare_light,
+    luminance_of,
     motion_blur_light,
 )
 from postprocessing.denoise import (
@@ -221,7 +226,12 @@ from materials.material import MaterialId
 from materials.nodes import NodeProgramId
 from render.antialias import SUPERSAMPLE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+)
 from render.raster_state import cleared_depth, is_nearer
 from render.target import (
     OUTPUT_COLOR,
@@ -236,6 +246,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from render.volume_texture_store import NO_DATA_3D_TEXTURE, Data3DTextureId
 from renderers.renderer import Renderer
+from math.finite import require_positive_finite, require_non_negative_finite
 from std.math import ceil, cos, exp, floor, isfinite, sin
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
@@ -715,8 +726,9 @@ def check_pass(step: Pass) raises:
             `check_transition`, `check_effect` and `check_god_rays`
             raise, and `check_shader` for a shader pass.
     """
-    if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the named kinds")
+    require_valid(
+        step.kind.is_valid(), "A pass kind must be one of the named kinds"
+    )
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -725,8 +737,7 @@ def check_pass(step: Pass) raises:
         and isfinite(step.scale)
         and isfinite(step.angle.value)
         and isfinite(step.time)
-        and isfinite(step.center.x)
-        and isfinite(step.center.y)
+        and step.center.is_finite()
     ):
         raise Error("A pass setting must be finite")
     if (
@@ -741,8 +752,7 @@ def check_pass(step: Pass) raises:
         raise Error("A bloom's radius runs from zero to one")
     if step.kind == AFTERIMAGE and step.strength > 1:
         raise Error("An afterimage's damp runs from zero to one")
-    if step.sample_level < 0 or step.sample_level >= JITTER_LEVELS:
-        raise Error("A sample level runs from zero to five")
+    require_sample_level(step.sample_level)
     if step.accumulate_index < -1 or step.accumulate_index > TAA_SAMPLES:
         raise Error("An accumulate index runs from minus one to 32")
     check_ssao(step.ssao)
@@ -790,11 +800,12 @@ def check_pass(step: Pass) raises:
         if not (value >= 0 and value <= 1):
             raise Error("A render pass's clear alpha runs from zero to one")
     if step.kind == CLASSIC_BLOOM:
-        if step.kernel_size < 1:
-            raise Error("A bloom's kernel needs at least one tap")
-        # A NaN is not above zero, so this refuses it as well.
-        if not (step.sigma > 0 and isfinite(step.sigma)):
-            raise Error("A bloom's sigma must be positive and finite")
+        require_positive(
+            step.kernel_size, "A bloom's kernel needs at least one tap"
+        )
+        require_positive_finite(
+            Float64(step.sigma), "A bloom's sigma must be positive and finite"
+        )
 
 
 def render_pass(
@@ -2838,6 +2849,21 @@ struct EffectComposer(Movable):
         self.memories.insert(index, List[FloatColor]())
         self.accumulations.insert(index, TaaMemory())
 
+    def _require_pass(self, index: Int) raises:
+        """Refuse a pass index the composer does not have.
+
+        Nothing. The call returns when the index names a pass.
+
+        Args:
+            index: Which pass.
+
+        Raises:
+            Error: If the index is outside the passes.
+        """
+        require_index_in_count(
+            index, len(self.passes), "There is no pass at that index"
+        )
+
     def remove_pass(mut self, index: Int) raises:
         """Take a pass out: three.js's `removePass`.
 
@@ -2847,8 +2873,7 @@ struct EffectComposer(Movable):
         Raises:
             Error: If the index is outside the passes.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("There is no pass at that index")
+        self._require_pass(index)
         _ = self.passes.pop(index)
         _ = self.memories.pop(index)
         _ = self.accumulations.pop(index)
@@ -2871,8 +2896,7 @@ struct EffectComposer(Movable):
         Raises:
             Error: If the index names no save pass.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("There is no pass at that index")
+        self._require_pass(index)
         if self.passes[index].kind != SAVE:
             raise Error("Only a save pass keeps an image")
         if index >= len(self.memories):
@@ -3029,8 +3053,11 @@ struct EffectComposer(Movable):
                 `Renderer.render_into` raises, or if a texture or a table
                 a pass names is not in the assets or fails its `validate`.
         """
-        if index < 0 or index >= len(self.passes):
-            raise Error("A composer step must name one of its passes")
+        require_index_in_count(
+            index,
+            len(self.passes),
+            "A composer step must name one of its passes",
+        )
         # `passes` is open, so a pass appended since the last `render` has
         # no memory yet. `render` fits them too; a step run alone must.
         self.fit_memories()
@@ -3398,8 +3425,9 @@ def check_frame_time(delta_time: Float32) raises:
     Raises:
         Error: If the time is negative or not finite.
     """
-    if not isfinite(delta_time) or delta_time < 0:
-        raise Error("A frame time is a non-negative number of seconds")
+    require_non_negative_finite(
+        Float64(delta_time), "A frame time is a non-negative number of seconds"
+    )
 
 
 def depth_view[
@@ -3953,7 +3981,7 @@ def supersample[
     # the nearest of them is the nearest in that mode.
     frame.depth_mode = renderer.depth_mode_for(camera)
     for slot in range(pixels):  # pragma: no branch
-        frame.colors[slot] = FloatColor(0, 0, 0, 0)
+        frame.colors[slot] = TRANSPARENT_BLACK
         frame.data[slot] = True
         frame.depth[slot] = cleared_depth(frame.depth_mode)
     for index in range(count):  # pragma: no branch
@@ -4086,9 +4114,7 @@ def taa_render[
             memory.hold.append(held.light_at(slot))
         memory.hold_data = held.data.copy()
         memory.hold_depth = held.depth.copy()
-        memory.sum = List[FloatColor](
-            length=pixels, fill=FloatColor(0, 0, 0, 0)
-        )
+        memory.sum = List[FloatColor](length=pixels, fill=TRANSPARENT_BLACK)
         step.accumulate_index = 0
     var weight = 1 / Float32(TAA_SAMPLES)
     var offsets = jitter_offsets(JITTER_LEVELS - 1)
@@ -4135,7 +4161,7 @@ def luminance(color: FloatColor) -> Float32:
     Returns:
         The weighted sum of red, green and blue.
     """
-    return 0.2126729 * color.r + 0.7151522 * color.g + 0.0721750 * color.b
+    return luminance_of(color.r, color.g, color.b)
 
 
 def copy_pixel(color: FloatColor, opacity: Float32) -> FloatColor:
@@ -4184,7 +4210,7 @@ def blur_pixel(
     Returns:
         The weighted sum of the nine taps.
     """
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var tap = 0
     while tap < 9:
         var weight = BLUR_LAST_WEIGHT
@@ -4498,7 +4524,7 @@ def convolution_pixel(
     var size = Float32(len(kernel))
     var u = u_of(x, source.width) - (size - 1) / 2 * step_u
     var v = v_of(y, source.height) - (size - 1) / 2 * step_v
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     for i in range(len(kernel)):  # pragma: no branch
         var tap = source.sample(u, v)
         var weight = kernel[i]
@@ -4596,9 +4622,7 @@ def bloom_light(
     """
     var width = frame.width
     var height = frame.height
-    var bright = List[FloatColor](
-        length=width * height, fill=FloatColor(0, 0, 0, 0)
-    )
+    var bright = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     for index in range(len(frame.colors)):  # pragma: no branch
         bright[index] = bright_pixel(frame.colors[index], threshold)
     # Each level blurs the one before it into half its size, the first
@@ -4645,7 +4669,7 @@ def bloom_light(
         while x < width:
             var u = u_of(x, width)
             var v = v_of(y, height)
-            var glow = FloatColor(0, 0, 0, 0)
+            var glow = TRANSPARENT_BLACK
             var level = 0
             while level < BLOOM_LEVELS:
                 glow = bloom_glow(
@@ -4666,11 +4690,6 @@ def bloom_light(
         y += 1
     # The views do not keep the levels alive; this does.
     _ = levels^
-
-
-def _fract(value: Float32) -> Float32:
-    """Return GLSL's `fract`: what is left above the floor."""
-    return value - floor(value)
 
 
 def film_pixel(
@@ -4703,7 +4722,7 @@ def film_pixel(
     # the grain repeats each whole second, and `rand` takes its dot modulo
     # pi before the sine.
     var noise = glsl_rand(
-        _fract(u_of(x, width) + time), _fract(v_of(y, height) + time)
+        fraction(u_of(x, width) + time), fraction(v_of(y, height) + time)
     )
     var grain = noise + 0.1
     if grain > 1:
@@ -4906,7 +4925,7 @@ def vignette_pixel(
     var base = color.unpremultiplied()
     var u = (u_of(x, width) - 0.5) * offset
     var v = (v_of(y, height) - 0.5) * offset
-    var mixed = mix(base, edge, u * u + v * v)
+    var mixed = mix(base, edge, squared_length2[DType.float32](u, v))
     return FloatColor(mixed.r, mixed.g, mixed.b, base.a).premultiplied()
 
 

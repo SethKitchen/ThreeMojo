@@ -18,7 +18,13 @@ how many frames to draw, one or more. The default draws the whole
 speech, twenty frames a second.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
+from tools._example_preview import turn_about_vertical
+
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -53,7 +59,7 @@ from extensions.humanoid.skeleton.head.hair.strands import add_groom
 from extensions.humanoid.skeleton.head.hair.styles import BUN
 from extensions.humanoid.skeleton.head.speech import Speech
 from extensions.humanoid.skeleton.look import add_complexion
-from extensions.humanoid.skeleton.morph import smoothstep
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.spec import HumanoidSpec
 from lights.light import directional_light
 from math.bounds import Plane
@@ -62,11 +68,11 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
+from renderers.renderer import available_workers
+from std.math import sin
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/talking.png"
 comptime DEFAULT_QUALITY = "high"
@@ -136,26 +142,9 @@ def _speaker() raises -> HumanoidSpec:
     return HumanoidSpec(Length(5.6, FOOT), FEMALE, UNTONED, genome)
 
 
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
-
-
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var level = quality_named(String(DEFAULT_QUALITY))
     if len(args) > 2:
         level = quality_named(String(args[2]))
@@ -181,8 +170,7 @@ def main() raises:
     if len(args) > 3:
         count = max(1, Int(String(args[3])))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.local_clipping_enabled = True
@@ -252,13 +240,7 @@ def main() raises:
     var rim_node = scene.add(rim^)
     scene.add_light(directional_light(Color(200, 214, 255), rim_node, 0.9))
     var eye = Vector3(0.0, 0.04, 0.74)
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
-    )
-    camera.place(eye, Vector3(0.0, 0.025, 0.0))
+    var camera = gallery_camera(WIDTH, HEIGHT, eye, Vector3(0.0, 0.025, 0.0))
     var key_toward = Vector3(1.0, 1.4, 2.4)
     key_toward.normalize()
     var rim_toward = Vector3(-1.4, 1.0, -1.2)
@@ -275,9 +257,9 @@ def main() raises:
             var end = length
             if k + 1 < len(phrases):
                 end = starts[k + 1]
-            var mood = smoothstep(
+            var mood = clamped_smoothstep(
                 starts[k] - MOOD_TIME, starts[k] + MOOD_TIME, t
-            ) * (1 - smoothstep(end - MOOD_TIME, end + MOOD_TIME, t))
+            ) * (1 - clamped_smoothstep(end - MOOD_TIME, end + MOOD_TIME, t))
             if mood > 0:
                 face.add_expression(moods[k], mood * strengths[k])
             speeches[k].speak(face, t - starts[k])
@@ -292,9 +274,15 @@ def main() raises:
         scene.node(pivot_id).rotate_y(Angle(angle - previous, RADIAN))
         previous = angle
         var lights = List[HairLight]()
-        lights.append(HairLight(_turned(key_toward, -angle), KEY_RADIANCE))
-        lights.append(HairLight(_turned(rim_toward, -angle), RIM_RADIANCE))
-        hair.shade(assets, lights, _turned(eye, -angle) + center, AMBIENT)
+        lights.append(
+            HairLight(turn_about_vertical(key_toward, -angle), KEY_RADIANCE)
+        )
+        lights.append(
+            HairLight(turn_about_vertical(rim_toward, -angle), RIM_RADIANCE)
+        )
+        hair.shade(
+            assets, lights, turn_about_vertical(eye, -angle) + center, AMBIENT
+        )
         scene.update()
         frames.append(renderer.render(scene, assets, camera))
     Path(destination).write_bytes(encode(frames, delay_ms=1000 // FPS))

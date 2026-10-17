@@ -33,13 +33,21 @@ undefined. A ray that travels no distance is not dimmed at all, where
 three.js's Beer's law divides zero by zero for a black attenuation color.
 """
 
+from core.extent import require_texel_count
+from core.ordinal import require_positive
 from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
+from math.sine import fraction
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    FloatColor,
+    append_float_color,
+)
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture, float_texture
+from math.finite import require_finite
 from std.math import (
     exp,
     exp2,
@@ -56,6 +64,7 @@ from render.raster_state import (
     LOGARITHMIC_DEPTH,
     REVERSED_DEPTH,
     log_depth_factor,
+    require_depth_mode,
 )
 from units.si import Length, METER
 
@@ -208,10 +217,7 @@ struct TransmissionTarget(Movable):
         var data = List[Float32](capacity=target.width * target.height * 4)
         for slot in range(len(target.colors)):  # pragma: no branch
             var straight = target.straight_at(slot)
-            data.append(straight.r)
-            data.append(straight.g)
-            data.append(straight.b)
-            data.append(straight.a)
+            append_float_color(data, straight)
         self.image = float_texture(
             target.width,
             target.height,
@@ -247,15 +253,22 @@ struct TransmissionTarget(Movable):
             raise Error("Volume scene depth must match the captured image")
         if target.width <= 0 or target.height <= 0:
             raise Error("Volume scene depth needs positive raster dimensions")
-        if len(target.depth) != target.width * target.height:
-            raise Error("Volume scene depth needs one depth per raster pixel")
-        if not target.depth_mode.is_valid():
-            raise Error("A depth mode that is none of the three")
-        if not isfinite(far.value):
-            raise Error("Volume scene depth needs a finite far distance")
+        require_texel_count(
+            len(target.depth),
+            target.width,
+            target.height,
+            1,
+            "Volume scene depth needs one depth per raster pixel",
+        )
+        require_depth_mode(target.depth_mode)
+        require_finite(
+            Float64(far.value), "Volume scene depth needs a finite far distance"
+        )
         for index in range(VIEW_FLOATS):  # pragma: no branch
-            if not isfinite(to_screen.elements[index]):
-                raise Error("Volume scene depth needs a finite projection")
+            require_finite(
+                Float64(to_screen.elements[index]),
+                "Volume scene depth needs a finite projection",
+            )
         if to_screen._determinant_wide() == 0:
             raise Error("Volume scene depth needs an invertible projection")
         var inverse = to_screen
@@ -279,10 +292,10 @@ struct TransmissionTarget(Movable):
                         ).z
                 elif not isinf(stored):
                     raise Error("Volume scene depth cannot contain NaN")
-                if not isfinite(distance):
-                    raise Error(
-                        "Volume scene depth must reconstruct a finite distance"
-                    )
+                require_finite(
+                    Float64(distance),
+                    "Volume scene depth must reconstruct a finite distance",
+                )
                 values.append(distance)
         self.volume_depth = values^
 
@@ -301,8 +314,10 @@ struct TransmissionTarget(Movable):
         """
         if not requested:
             return
-        if len(self.volume_depth) == 0:
-            raise Error("A volume needs scene depth at the raster target size")
+        require_positive(
+            len(self.volume_depth),
+            "A volume needs scene depth at the raster target size",
+        )
         if (
             self.image.width != width
             or self.image.height != height
@@ -310,8 +325,10 @@ struct TransmissionTarget(Movable):
         ):
             raise Error("A volume needs scene depth at the raster target size")
         for index in range(len(self.volume_depth)):  # pragma: no branch
-            if not isfinite(self.volume_depth[index]):
-                raise Error("Volume scene depth must contain finite distances")
+            require_finite(
+                Float64(self.volume_depth[index]),
+                "Volume scene depth must contain finite distances",
+            )
 
     def volume_depth_at(self, x: Int, y: Int) -> Length:
         """Return a checked snapshot's exact raster sample, without filtering.
@@ -351,11 +368,7 @@ def refracted(incident: Vector3, normal: Vector3, eta: Float32) -> Vector3:
     if k < 0:
         return Vector3(0, 0, 0)
     var along = eta * cosine + sqrt(k)
-    return Vector3(
-        incident.x * eta - normal.x * along,
-        incident.y * eta - normal.y * along,
-        incident.z * eta - normal.z * along,
-    )
+    return incident * eta - normal * along
 
 
 def transmission_ray(
@@ -552,7 +565,7 @@ def bicubic[
     var right = (ix + h1x - 0.5) / size.x
     var low = (iy + h0y - 0.5) / size.y
     var high = (iy + h1y - 0.5) / size.y
-    var none = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var none = TRANSPARENT_BLACK
     var bottom = _weighted(
         _weighted(none, source.fetch_level(left, low, level), g0x),
         source.fetch_level(right, low, level),
@@ -586,16 +599,11 @@ def texture_bicubic[
     var last = source.level_count() - 1
     var lower = min(Int(floor(lod)), last)
     var fine = bicubic(source, uv, lower)
-    var fraction = lod - floor(lod)
-    if fraction == 0:
+    var blend = fraction(lod)
+    if blend == 0:
         return fine
     var coarse = bicubic(source, uv, min(lower + 1, last))
-    return FloatColor(
-        fine.r + (coarse.r - fine.r) * fraction,
-        fine.g + (coarse.g - fine.g) * fraction,
-        fine.b + (coarse.b - fine.b) * fraction,
-        fine.a + (coarse.a - fine.a) * fraction,
-    )
+    return fine.mix(coarse, blend)
 
 
 def _transmission_sample[
@@ -704,9 +712,7 @@ def volume_refraction[
         var through = volume_attenuation(
             ray.length(), attenuation_color, attenuation_distance
         )
-        transmittance = Vector3(
-            diffuse.x * through.x, diffuse.y * through.y, diffuse.z * through.z
-        )
+        transmittance = diffuse * through
     var dot_nv = min(max(normal.dot(toward_eye), Float32(0)), Float32(1))
     var reflected = environment_brdf(dot_nv, specular, f90, roughness)
     var factor = (transmittance.x + transmittance.y + transmittance.z) / 3

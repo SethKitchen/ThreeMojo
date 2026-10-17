@@ -128,6 +128,17 @@ level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
 
+from core.ordinal import index_in_count
+from core.extent import require_closed_count
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
+from core.search import first_match
+
 from lights.shadow import ShadowShape
 from materials.compute_ids import (
     ComputeBuiltin,
@@ -138,11 +149,13 @@ from materials.compute_ids import (
 from math.arc_tangent import atan2_float32, atan_float32
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
+from math.square_matrix import copy_elements, store_elements
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.norm import squared_length3
+from math.vector3 import Vector3, weighted_sum3
 from math.vector4 import Vector4
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, OPAQUE_WHITE
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.volume_texture_store import (
     NO_DATA_3D_TEXTURE,
@@ -200,6 +213,22 @@ comptime NODE_OUTPUT_COUNT = 25
 comptime PROGRAM_TIME = NODE_OUTPUT_COUNT * 2
 comptime PROGRAM_VIEW = PROGRAM_TIME + 1
 comptime PROGRAM_HEADER = PROGRAM_VIEW + 16
+
+
+def require_program_code(size: Int) raises:
+    """Refuse a node program whose code is shorter than its header.
+
+    Nothing. The call returns when the code holds a header.
+
+    Args:
+        size: How many numbers the code holds.
+
+    Raises:
+        Error: If the code is shorter than `PROGRAM_HEADER`.
+    """
+    if size < PROGRAM_HEADER:
+        raise Error("Object JSON: a node program's code is too short")
+
 
 comptime Lanes = SIMD[DType.float32, 4]
 
@@ -655,6 +684,22 @@ def _int_kind(kind: NodeKind) -> NodeKind:
     ) if mapped.is_valid() else mapped
 
 
+def _refuse_integer_operation(operation: NodeKind, verb: String) raises:
+    """Refuse an integer operation this graph does not have.
+
+    Nothing. The call returns when the kind is named.
+
+    Args:
+        operation: The kind chosen for the integer form.
+        verb: The operation's name in the error.
+
+    Raises:
+        Error: If the kind is not named.
+    """
+    if not operation.is_valid():
+        raise Error("A node graph cannot " + verb + " an exact integer")
+
+
 @fieldwise_init
 struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
     """Which part of the shading a graph replaces, as a type rather than a
@@ -668,7 +713,7 @@ struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names an output.
         """
-        return self.value >= 0 and self.value < NODE_OUTPUT_COUNT
+        return ordinal_valid(self.value, NODE_OUTPUT_COUNT - 1)
 
     def value_type(self) -> ValueType:
         """Return the type a node given this output must have.
@@ -734,6 +779,22 @@ comptime SCATTERING_NODE = NodeOutput(23)
 comptime OFFSET_NODE = NodeOutput(24)
 
 
+def require_node_output(output: NodeOutput) raises:
+    """Refuse a node output that is none of the twenty-five.
+
+    Nothing. The call returns when the output is named.
+
+    Args:
+        output: The output.
+
+    Raises:
+        Error: If the output is none of the twenty-five.
+    """
+    require_valid(
+        output.is_valid(), "A node output that is none of the twenty-five"
+    )
+
+
 @fieldwise_init
 struct NodeContext(Equatable, ImplicitlyCopyable, Writable):
     """Where a node reads the surface's attributes, as a type rather than a
@@ -749,7 +810,7 @@ struct NodeContext(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero to six.
         """
-        return self.value >= 0 and self.value < NODE_CONTEXT_COUNT
+        return ordinal_valid(self.value, NODE_CONTEXT_COUNT - 1)
 
     def is_corner(self) -> Bool:
         """Return True if this is one of the triangle's three corners.
@@ -858,17 +919,15 @@ def _lane_of(letter: UInt8) -> Int:
 
 def _note_texture(mut textures: List[TextureId], map: TextureId):
     """Append a texture to a program's list, once."""
-    for index in range(len(textures)):
-        if textures[index] == map:
-            return
+    if first_match(textures, map) >= 0:
+        return
     textures.append(map)
 
 
 def _note_place(mut places: List[Int], place: Int):
     """Append a place to a list, once."""
-    for index in range(len(places)):
-        if places[index] == place:
-            return
+    if first_match(places, place) >= 0:
+        return
     places.append(place)
 
 
@@ -1071,6 +1130,37 @@ struct Fn(Copyable, Movable):
         return answer
 
 
+def require_unsigned_width(width: Int) raises:
+    """Refuse an unsigned uniform wider than four components.
+
+    Nothing. The call returns when the width is four or less.
+
+    Args:
+        width: How many components the uniform has.
+
+    Raises:
+        Error: If the width is above four.
+    """
+    if width > 4:
+        raise Error("An unsigned uniform has one to four components")
+
+
+def _require_noise_point(type: ValueType, name: String) raises:
+    """Refuse a noise point that is neither a vec2 nor a vec3.
+
+    Nothing. The call returns when the point is a vec2 or a vec3.
+
+    Args:
+        type: The point's type.
+        name: Which noise reads the point.
+
+    Raises:
+        Error: If the point is another type.
+    """
+    if type != NODE_VEC2 and type != NODE_VEC3:
+        raise Error(name + " reads a vec2 or a vec3, not a " + type.name())
+
+
 struct NodeGraph(Copyable, Movable):
     """A graph of nodes being built, three.js's TSL expressions.
 
@@ -1164,8 +1254,7 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the output is none of the twenty-five.
         """
-        if not output.is_valid():
-            raise Error("A node output that is none of the twenty-five")
+        require_node_output(output)
         return NodeRef(self._outputs[output.value])
 
     def _check(self, node: NodeRef) raises:
@@ -1174,8 +1263,11 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the ref is negative or past the last node.
         """
-        if node.value < 0 or node.value >= self.count():
-            raise Error("A node graph has no node with that ref")
+        require_index_in_count(
+            node.value,
+            self.count(),
+            "A node graph has no node with that ref",
+        )
 
     def _add(
         mut self,
@@ -1490,8 +1582,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If the width is outside one through four, or the name
                 is empty or already used.
         """
-        if width > 4:
-            raise Error("An unsigned uniform has one to four components")
+        require_unsigned_width(width)
         var lanes = Lanes(0)
         for lane in range(width):  # pragma: no branch
             lanes[lane] = bitcast[DType.float32](value[lane])
@@ -1590,7 +1681,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If the name is empty or already taken.
         """
         var at = len(self._matrices)
-        self._matrices.extend(elements.copy())
+        self._matrices.extend(Span(elements))
         return self._uniform(name, type, Lanes(Float32(at), 0, 0, 0))
 
     def uniform(mut self, name: String, value: Matrix3) raises -> NodeRef:
@@ -1607,10 +1698,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the name is empty or already taken.
         """
-        var elements = List[Float32]()
-        for index in range(9):  # pragma: no branch
-            elements.append(value.elements[index])
-        return self._matrix_uniform(name, NODE_MAT3, elements)
+        return self._matrix_uniform(
+            name, NODE_MAT3, copy_elements(value.elements)
+        )
 
     def uniform(mut self, name: String, value: Matrix4) raises -> NodeRef:
         """Return a named `mat4` the caller can change between frames. Only
@@ -1626,10 +1716,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the name is empty or already taken.
         """
-        var elements = List[Float32]()
-        for index in range(16):  # pragma: no branch
-            elements.append(value.elements[index])
-        return self._matrix_uniform(name, NODE_MAT4, elements)
+        return self._matrix_uniform(
+            name, NODE_MAT4, copy_elements(value.elements)
+        )
 
     def texture_uniform(
         mut self, name: String, map: TextureId = NO_TEXTURE
@@ -2100,6 +2189,53 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._add(NODE_VIEW_MATRIX, NODE_MAT4)
 
+    def _require_texture_uv(self, uv: NodeRef) raises:
+        """Refuse a texture coordinate that is not a vec2.
+
+        Nothing. The call returns when the node is a vec2.
+
+        Args:
+            uv: The coordinate node.
+
+        Raises:
+            Error: If the node is not a vec2.
+        """
+        if self._types[uv.value] != NODE_VEC2:
+            raise Error(
+                "A texture node reads at a vec2, not a "
+                + self._types[uv.value].name()
+            )
+
+    def _require_texture_level(self, level: NodeRef) raises:
+        """Refuse a mip level that is not a float.
+
+        Nothing. The call returns when the node is a float.
+
+        Args:
+            level: The level node.
+
+        Raises:
+            Error: If the node is not a float.
+        """
+        if self._types[level.value] != NODE_FLOAT:
+            raise Error(
+                "A texture's level is a float, not a "
+                + self._types[level.value].name()
+            )
+
+    def _require_blocks_closed(self) raises:
+        """Refuse a graph that still has an open If or Loop.
+
+        Nothing. The call returns when every block is closed.
+
+        Raises:
+            Error: If an If or a Loop is still open.
+        """
+        if len(self._blocks) > 0:
+            raise Error(
+                "A node graph has an If or a Loop that End never closed"
+            )
+
     def texture(mut self, map: TextureId, uv: NodeRef) raises -> NodeRef:
         """Return a texture read at a coordinate, a linear `vec4` with
         straight alpha, three.js's `texture(map, uv)`. A shading mode that
@@ -2117,14 +2253,9 @@ struct NodeGraph(Copyable, Movable):
             Error: If `map` is `NO_TEXTURE` or negative, or `uv` is not a
                 `vec2` of this graph.
         """
-        if map.value < 0:
-            raise Error("A texture node needs a texture")
+        require_non_negative(map.value, "A texture node needs a texture")
         self._check(uv)
-        if self._types[uv.value] != NODE_VEC2:
-            raise Error(
-                "A texture node reads at a vec2, not a "
-                + self._types[uv.value].name()
-            )
+        self._require_texture_uv(uv)
         return self._add(
             NODE_TEXTURE,
             NODE_VEC4,
@@ -2155,11 +2286,7 @@ struct NodeGraph(Copyable, Movable):
                 "A texture node reads a texture, not a "
                 + self._types[sampler.value].name()
             )
-        if self._types[uv.value] != NODE_VEC2:
-            raise Error(
-                "A texture node reads at a vec2, not a "
-                + self._types[uv.value].name()
-            )
+        self._require_texture_uv(uv)
         return self._add(NODE_TEXTURE, NODE_VEC4, uv.value, sampler.value)
 
     def texture_level(
@@ -2345,11 +2472,7 @@ struct NodeGraph(Copyable, Movable):
                 "A texture's size is a texture's, not a "
                 + self._types[sampler.value].name()
             )
-        if self._types[level.value] != NODE_FLOAT:
-            raise Error(
-                "A texture's level is a float, not a "
-                + self._types[level.value].name()
-            )
+        self._require_texture_level(level)
         return self._add(
             NODE_TEXTURE_SIZE, NODE_VEC2, level.value, sampler.value
         )
@@ -2362,11 +2485,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If `level` is not a `float` of this graph.
         """
         self._check(level)
-        if self._types[level.value] != NODE_FLOAT:
-            raise Error(
-                "A texture's level is a float, not a "
-                + self._types[level.value].name()
-            )
+        self._require_texture_level(level)
         self._kinds[texel.value] = NODE_TEXTURE_LEVEL
         self._inputs[texel.value * 3 + 2] = level.value
         return texel
@@ -2511,8 +2630,7 @@ struct NodeGraph(Copyable, Movable):
             operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
                 kind
             )
-            if not operation.is_valid():
-                raise Error("A node graph cannot " + verb + " an exact integer")
+            _refuse_integer_operation(operation, verb)
             if (
                 kind.value >= NODE_LESS_THAN.value
                 and kind.value <= NODE_NOT_EQUAL.value
@@ -2688,7 +2806,7 @@ struct NodeGraph(Copyable, Movable):
         """
         self._square(m, "take a column of")
         var columns = self._columns(m)
-        if index < 0 or index >= len(columns):
+        if not index_in_count(index, len(columns)):
             raise Error(
                 "A "
                 + self._types[m.value].name()
@@ -3158,8 +3276,7 @@ struct NodeGraph(Copyable, Movable):
             operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
                 kind
             )
-            if not operation.is_valid():
-                raise Error("A node graph cannot " + verb + " an exact integer")
+            _refuse_integer_operation(operation, verb)
         return self._add(
             operation, type, first.value, second.value, third.value
         )
@@ -4238,14 +4355,15 @@ struct NodeGraph(Copyable, Movable):
         """
         self._vector(a, "swizzle")
         var letters = components.as_bytes()
-        if len(letters) < 1 or len(letters) > 4:
-            raise Error("A swizzle picks one to four components")
+        require_closed_count(
+            len(letters), 1, 4, "A swizzle picks one to four components"
+        )
         var width = self._types[a.value].width()
         var packed = 0
         var scale = 1
         for index in range(len(letters)):  # pragma: no branch
             var lane = _lane_of(letters[index])
-            if lane < 0 or lane >= width:
+            if not index_in_count(lane, width):
                 raise Error(
                     "A swizzle names a component a "
                     + self._types[a.value].name()
@@ -4276,8 +4394,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If `parts` is empty, a part is not a `float` or a vector
                 of this graph, or the widths add up to more than four.
         """
-        if len(parts) == 0:
-            raise Error("A join needs at least one part")
+        require_positive(len(parts), "A join needs at least one part")
         var total = 0
         for index in range(len(parts)):  # pragma: no branch
             self._vector(parts[index], "join")
@@ -4332,10 +4449,7 @@ struct NodeGraph(Copyable, Movable):
         """
         self._check(p)
         var type = self._types[p.value]
-        if type != NODE_VEC2 and type != NODE_VEC3:
-            raise Error(
-                "Perlin noise reads a vec2 or a vec3, not a " + type.name()
-            )
+        _require_noise_point(type, "Perlin noise")
         return self._add(
             NODE_NOISE, NODE_FLOAT, p.value, value=Lanes(Float32(type.value))
         )
@@ -4571,10 +4685,7 @@ struct NodeGraph(Copyable, Movable):
         """
         self._check(position)
         var type = self._types[position.value]
-        if type != NODE_VEC2 and type != NODE_VEC3:
-            raise Error(
-                "Fractal noise reads a vec2 or a vec3, not a " + type.name()
-            )
+        _require_noise_point(type, "Fractal noise")
         var p = position
         if type == NODE_VEC2:
             p = self.join([position, self.float(0)])
@@ -4605,8 +4716,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If `which` is not one of the numbers.
         """
-        if not which.is_valid():
-            raise Error("A compute builtin names no number there is")
+        require_valid(
+            which.is_valid(), "A compute builtin names no number there is"
+        )
         return self._add(
             NODE_COMPUTE_BUILTIN,
             NODE_FLOAT,
@@ -4658,8 +4770,9 @@ struct NodeGraph(Copyable, Movable):
             Error: If `buffer` is negative, `index` is not a `float` of this
                 graph, or `type` is not a `float` or a vector.
         """
-        if not buffer.is_valid():
-            raise Error("A storage element names no buffer there can be")
+        require_valid(
+            buffer.is_valid(), "A storage element names no buffer there can be"
+        )
         return self._storage_element(buffer.value, index, type)
 
     def storage_element(
@@ -4680,8 +4793,9 @@ struct NodeGraph(Copyable, Movable):
             Error: If `array` is negative, `index` is not a `float` of this
                 graph, or `type` is not a `float` or a vector.
         """
-        if not array.is_valid():
-            raise Error("A storage element names no array there can be")
+        require_valid(
+            array.is_valid(), "A storage element names no array there can be"
+        )
         return self._storage_element(-1 - array.value, index, type)
 
     def compute_result(
@@ -4702,8 +4816,10 @@ struct NodeGraph(Copyable, Movable):
             Error: If `statement` is negative, or `type` is not a `float`
                 or a vector.
         """
-        if not statement.is_valid():
-            raise Error("A compute result names no statement there can be")
+        require_valid(
+            statement.is_valid(),
+            "A compute result names no statement there can be",
+        )
         if not type.is_vector() or type.is_integer():
             raise Error("A compute result is a float or a vector")
         return self._add(
@@ -4739,8 +4855,11 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If `v` is negative or past the last variable.
         """
-        if v.value < 0 or v.value >= len(self._versions):
-            raise Error("A node graph has no variable with that ref")
+        require_index_in_count(
+            v.value,
+            len(self._versions),
+            "A node graph has no variable with that ref",
+        )
 
     def get(self, v: NodeVar) raises -> NodeRef:
         """Return the node a variable holds here, as reading a TSL `Var`.
@@ -4843,8 +4962,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If no call is open, or `answer` is not a node of the
                 call's type when a `Return` ran.
         """
-        if len(self._returns) == 0:
-            raise Error("A close_call needs an open_call")
+        require_positive(len(self._returns), "A close_call needs an open_call")
         var frame = self._returns.pop()
         self._retired[frame.returned] = True
         self._retired[frame.result] = True
@@ -4918,8 +5036,7 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If no `Fn` is being built, or the value's type is another.
         """
-        if len(self._returns) == 0:
-            raise Error("A Return needs a Fn to be in")
+        require_positive(len(self._returns), "A Return needs a Fn to be in")
         self._check(value)
         var frame = self._returns[len(self._returns) - 1].copy()
         var type = self._var_types[frame.result]
@@ -5220,8 +5337,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If no block is open.
         """
-        if len(self._blocks) == 0:
-            raise Error("An End needs an If or a Loop to close")
+        require_positive(
+            len(self._blocks), "An End needs an If or a Loop to close"
+        )
         if self._blocks[len(self._blocks) - 1].kind == _BLOCK_LOOP:
             self._end_loop()
         else:
@@ -5366,8 +5484,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If the output is none of the twenty-five, the node is not in
                 this graph, or its type is not the output's.
         """
-        if not output.is_valid():
-            raise Error("A node output that is none of the twenty-five")
+        require_node_output(output)
         self._check(node)
         var wanted = output.value_type()
         if self._types[node.value] != wanted:
@@ -5482,15 +5599,7 @@ struct NodeGraph(Copyable, Movable):
         if output == POSITION_NODE:
             var fragment = (
                 (_is_attribute(kind) and not local)
-                or kind == NODE_TEXTURE
-                or kind == NODE_TEXTURE_LEVEL
-                or kind == NODE_TEXTURE_GRAD
-                or kind == NODE_TEXEL_FETCH
-                or kind == NODE_TEXTURE_SIZE
-                or kind == NODE_TEXTURE_CUBE
-                or kind == NODE_TEXTURE_3D
-                or kind == NODE_TEXTURE_ARRAY
-                or kind == NODE_VIEWPORT_TEXTURE
+                or _image_sample(kind)
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -5503,15 +5612,7 @@ struct NodeGraph(Copyable, Movable):
                 )
             return
         if output == SIZE_NODE and (
-            kind == NODE_TEXTURE
-            or kind == NODE_TEXTURE_LEVEL
-            or kind == NODE_TEXTURE_GRAD
-            or kind == NODE_TEXEL_FETCH
-            or kind == NODE_TEXTURE_SIZE
-            or kind == NODE_TEXTURE_CUBE
-            or kind == NODE_TEXTURE_3D
-            or kind == NODE_TEXTURE_ARRAY
-            or kind == NODE_VIEWPORT_TEXTURE
+            _image_sample(kind)
             or kind == NODE_DFDX
             or kind == NODE_DFDY
             or kind == NODE_FRAG_COORD
@@ -5561,10 +5662,7 @@ struct NodeGraph(Copyable, Movable):
                 than `MAX_INSTRUCTIONS` instructions or `MAX_REGISTERS`
                 values at once.
         """
-        if len(self._blocks) > 0:
-            raise Error(
-                "A node graph has an If or a Loop that End never closed"
-            )
+        self._require_blocks_closed()
         var work = self.copy()
         # The mask, with every discard joined to it.
         var mask = work._outputs[MASK_NODE.value]
@@ -5621,10 +5719,7 @@ struct NodeGraph(Copyable, Movable):
                 `MAX_INSTRUCTIONS` instructions or `MAX_REGISTERS` values
                 at once.
         """
-        if len(self._blocks) > 0:
-            raise Error(
-                "A node graph has an If or a Loop that End never closed"
-            )
+        self._require_blocks_closed()
         if len(self._discards) > 0:
             raise Error("A compute program has no fragment to Discard")
         var work = self.copy()
@@ -5718,7 +5813,7 @@ struct NodeGraph(Copyable, Movable):
                 if layout.ops[index] == NODE_VIEWPORT_TEXTURE.value:
                     program.reads_scene = True
                 at += INSTRUCTION_FLOATS
-        program.code.extend(pool.values.copy())
+        program.code.extend(Span(pool.values))
         for index in range(len(pool.names)):
             program.uniform_names.append(pool.names[index])
             program.uniform_offsets.append(base + pool.offsets[index])
@@ -6006,6 +6101,25 @@ def _visit(children: List[Int], mode: Int, need: List[Int]) -> List[Int]:
     return out^
 
 
+def _image_sample(kind: NodeKind) -> Bool:
+    """Return whether a node reads an image.
+
+    A texture, a level, a gradient, a texel fetch, a size, a cube, a
+    volume, an array, and a viewport texture all do.
+    """
+    return (
+        kind == NODE_TEXTURE
+        or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXTURE_GRAD
+        or kind == NODE_TEXEL_FETCH
+        or kind == NODE_TEXTURE_SIZE
+        or kind == NODE_TEXTURE_CUBE
+        or kind == NODE_TEXTURE_3D
+        or kind == NODE_TEXTURE_ARRAY
+        or kind == NODE_VIEWPORT_TEXTURE
+    )
+
+
 def _children(
     graph: NodeGraph,
     node: Int,
@@ -6032,17 +6146,7 @@ def _children(
             " shadow: only the fragment has them"
         )
     if corner and (
-        kind == NODE_TEXTURE
-        or kind == NODE_TEXTURE_LEVEL
-        or kind == NODE_TEXTURE_GRAD
-        or kind == NODE_TEXEL_FETCH
-        or kind == NODE_TEXTURE_SIZE
-        or kind == NODE_TEXTURE_CUBE
-        or kind == NODE_TEXTURE_3D
-        or kind == NODE_TEXTURE_ARRAY
-        or kind == NODE_VIEWPORT_TEXTURE
-        or kind == NODE_DFDX
-        or kind == NODE_DFDY
+        _image_sample(kind) or kind == NODE_DFDX or kind == NODE_DFDY
     ):
         raise Error(
             "A varying runs once per corner: it reads no texture and no"
@@ -6195,6 +6299,25 @@ def _allocate(reads: List[Int], mut layout: _Layout) raises:
                     layout.c[index] = written
 
 
+def _uniform_index(names: List[String], name: String) raises -> Int:
+    """Return the index of a uniform named `name`.
+
+    Args:
+        names: The program's uniform names.
+        name: The uniform's name.
+
+    Returns:
+        The index in `names`.
+
+    Raises:
+        Error: If no uniform has that name.
+    """
+    var index = first_match(names, name)
+    if index < 0:
+        raise Error("A node program has no uniform named " + name)
+    return index
+
+
 struct NodeProgram(Copyable, Movable):
     """A compiled `NodeGraph`: the bytecode both rasterizers interpret, and
     where its uniforms are in it.
@@ -6286,8 +6409,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the output is none of the twenty-five.
         """
-        if not output.is_valid():
-            raise Error("A node output that is none of the twenty-five")
+        require_node_output(output)
         return self.code[output.value * 2 + 1] > 0
 
     def _find(self, name: String, type: ValueType) raises -> Int:
@@ -6296,19 +6418,17 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name, or its type is not `type`.
         """
-        for index in range(len(self.uniform_names)):
-            if self.uniform_names[index] == name:
-                if self.uniform_types[index] != type:
-                    raise Error(
-                        "The uniform "
-                        + name
-                        + " is a "
-                        + self.uniform_types[index].name()
-                        + ", not a "
-                        + type.name()
-                    )
-                return self.uniform_offsets[index]
-        raise Error("A node program has no uniform named " + name)
+        var index = _uniform_index(self.uniform_names, name)
+        if self.uniform_types[index] != type:
+            raise Error(
+                "The uniform "
+                + name
+                + " is a "
+                + self.uniform_types[index].name()
+                + ", not a "
+                + type.name()
+            )
+        return self.uniform_offsets[index]
 
     def _set(mut self, name: String, type: ValueType, value: Lanes) raises:
         """Write a uniform's four floats.
@@ -6400,8 +6520,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the name, width, or unsigned type does not match.
         """
-        if width > 4:
-            raise Error("An unsigned uniform has one to four components")
+        require_unsigned_width(width)
         var lanes = Lanes(0)
         for lane in range(width):  # pragma: no branch
             lanes[lane] = bitcast[DType.float32](value[lane])
@@ -6478,9 +6597,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name, or it is not a `mat3`.
         """
-        var at = self._find(name, NODE_MAT3)
-        for index in range(9):  # pragma: no branch
-            self.code[at + index] = value.elements[index]
+        store_elements(self.code, self._find(name, NODE_MAT3), value.elements)
 
     def set_uniform(mut self, name: String, value: Matrix4) raises:
         """Change a `mat4` uniform.
@@ -6492,9 +6609,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name, or it is not a `mat4`.
         """
-        var at = self._find(name, NODE_MAT4)
-        for index in range(16):  # pragma: no branch
-            self.code[at + index] = value.elements[index]
+        store_elements(self.code, self._find(name, NODE_MAT4), value.elements)
 
     def _list_cubes(mut self):
         """List every cube, 3D texture and array texture the reads read
@@ -6517,11 +6632,7 @@ struct NodeProgram(Copyable, Movable):
         var ids = List[Int]()
         for index in range(len(offsets)):
             var id = Int(self.code[offsets[index]])
-            var seen = False
-            for other in range(len(ids)):
-                if ids[other] == id:
-                    seen = True
-            if not seen:
+            if first_match(ids, id) < 0:
                 ids.append(id)
         return ids^
 
@@ -6538,8 +6649,7 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not a 3D texture.
         """
-        if map.value < 0:
-            raise Error("A 3D texture uniform needs a texture")
+        require_non_negative(map.value, "A 3D texture uniform needs a texture")
         self.code[self._find(name, NODE_SAMPLER_3D)] = Float32(map.value)
         self._list_cubes()
 
@@ -6556,8 +6666,9 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not an array texture.
         """
-        if map.value < 0:
-            raise Error("An array texture uniform needs a texture")
+        require_non_negative(
+            map.value, "An array texture uniform needs a texture"
+        )
         self.code[self._find(name, NODE_SAMPLER_ARRAY)] = Float32(map.value)
         self._list_cubes()
 
@@ -6573,8 +6684,7 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not a cube texture.
         """
-        if map.value < 0:
-            raise Error("A cube uniform needs a cube")
+        require_non_negative(map.value, "A cube uniform needs a cube")
         var at = self._find(name, NODE_SAMPLER_CUBE)
         self.code[at] = Float32(map.value)
         self._list_cubes()
@@ -6592,8 +6702,7 @@ struct NodeProgram(Copyable, Movable):
             Error: If `map` is negative, no uniform has that name, or it is
                 not a texture.
         """
-        if map.value < 0:
-            raise Error("A texture uniform needs a texture")
+        require_non_negative(map.value, "A texture uniform needs a texture")
         var at = self._find(name, NODE_SAMPLER)
         self.code[at] = Float32(map.value)
         self._list_textures()
@@ -6613,16 +6722,14 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name.
         """
-        for index in range(len(self.uniform_names)):
-            if self.uniform_names[index] == name:
-                var at = self.uniform_offsets[index]
-                return Lanes(
-                    self.code[at],
-                    self.code[at + 1],
-                    self.code[at + 2],
-                    self.code[at + 3],
-                )
-        raise Error("A node program has no uniform named " + name)
+        var index = _uniform_index(self.uniform_names, name)
+        var at = self.uniform_offsets[index]
+        return Lanes(
+            self.code[at],
+            self.code[at + 1],
+            self.code[at + 2],
+            self.code[at + 3],
+        )
 
     def read_unsigned(self, name: String) raises -> SIMD[DType.uint32, 4]:
         """Read all bits of an exact unsigned uniform.
@@ -6636,12 +6743,10 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the uniform is missing or is not unsigned.
         """
-        for index in range(len(self.uniform_names)):
-            if self.uniform_names[index] == name:
-                if not self.uniform_types[index].is_unsigned():
-                    raise Error("read_unsigned requires an unsigned uniform")
-                return bitcast[DType.uint32, 4](self.uniform(name))
-        raise Error("A node program has no uniform named " + name)
+        var index = _uniform_index(self.uniform_names, name)
+        if not self.uniform_types[index].is_unsigned():
+            raise Error("read_unsigned requires an unsigned uniform")
+        return bitcast[DType.uint32, 4](self.uniform(name))
 
     def set_frame(mut self, time: Duration, view: Matrix4):
         """Write the frame's time and view, what the `time`, view position
@@ -6652,8 +6757,7 @@ struct NodeProgram(Copyable, Movable):
             view: The world-to-camera matrix.
         """
         self.code[PROGRAM_TIME] = time.to(SECOND)
-        for index in range(16):  # pragma: no branch
-            self.code[PROGRAM_VIEW + index] = view.elements[index]
+        store_elements(self.code, PROGRAM_VIEW, view.elements)
 
 
 struct NodeProgramStore(Copyable, Movable):
@@ -6701,8 +6805,9 @@ struct NodeProgramStore(Copyable, Movable):
         Raises:
             Error: If no program has that id.
         """
-        if id.value < 0 or id.value >= len(self.programs):
-            raise Error("No node program has that id")
+        require_index_in_count(
+            id.value, len(self.programs), "No node program has that id"
+        )
         return self.programs[id.value]
 
     def set_frame(mut self, time: Duration, view: Matrix4):
@@ -6961,7 +7066,7 @@ trait NodeSource:
             The linear color, straight alpha. A source with no scene
             behind reads opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def point_coord(self, context: NodeContext) -> Lanes:
         """Return where a fragment is in its point, GLSL's `gl_PointCoord`:
@@ -6989,7 +7094,7 @@ trait NodeSource:
         Returns:
             The linear color, straight alpha.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read at a coordinate, GLSL's `texture` of a
@@ -7003,7 +7108,7 @@ trait NodeSource:
         Returns:
             The linear color, straight alpha.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read at a coordinate and a layer,
@@ -7017,7 +7122,7 @@ trait NodeSource:
         Returns:
             The linear color, straight alpha.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def seen_from_behind(self) -> Bool:
         """Return whether the fragment's triangle is seen from its back,
@@ -7174,7 +7279,7 @@ struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
@@ -7190,7 +7295,7 @@ struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: there is no surface to read a texture on.
@@ -7204,7 +7309,7 @@ struct ProgramSource[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             Opaque white.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> Lanes:
         """Return zeros: there is no texture here.
@@ -7259,7 +7364,7 @@ def _lanes(v: Vector3) -> Lanes:
 
 def _unit(v: Vector3) -> Vector3:
     """Return a vector at a length of one, or zero for a zero vector."""
-    var size = sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+    var size = sqrt(squared_length3[DType.float32](v.x, v.y, v.z))
     return Vector3(v.x / size, v.y / size, v.z / size) if size != 0 else v
 
 
@@ -7298,23 +7403,9 @@ def node_attributes[
     return NodeInputs(
         a.u * s[0] + b.u * s[1] + c.u * s[2],
         a.v * s[0] + b.v * s[1] + c.v * s[2],
-        Vector3(
-            a.position.x * s[0] + b.position.x * s[1] + c.position.x * s[2],
-            a.position.y * s[0] + b.position.y * s[1] + c.position.y * s[2],
-            a.position.z * s[0] + b.position.z * s[1] + c.position.z * s[2],
-        ),
-        _unit(
-            Vector3(
-                a.normal.x * s[0] + b.normal.x * s[1] + c.normal.x * s[2],
-                a.normal.y * s[0] + b.normal.y * s[1] + c.normal.y * s[2],
-                a.normal.z * s[0] + b.normal.z * s[1] + c.normal.z * s[2],
-            )
-        ),
-        Vector3(
-            a.color.x * s[0] + b.color.x * s[1] + c.color.x * s[2],
-            a.color.y * s[0] + b.color.y * s[1] + c.color.y * s[2],
-            a.color.z * s[0] + b.color.z * s[1] + c.color.z * s[2],
-        ),
+        weighted_sum3(a.position, b.position, c.position, s[0], s[1], s[2]),
+        _unit(weighted_sum3(a.normal, b.normal, c.normal, s[0], s[1], s[2])),
+        weighted_sum3(a.color, b.color, c.color, s[0], s[1], s[2]),
         none,
         textured,
         a.custom * s[0] + b.custom * s[1] + c.custom * s[2],
@@ -8500,7 +8591,7 @@ def offset_normal(normal: Vector3, offset: Lanes) -> Vector3:
     var x = normal.x + offset[0]
     var y = normal.y + offset[1]
     var z = normal.z + offset[2]
-    var size = sqrt(x * x + y * y + z * z)
+    var size = sqrt(squared_length3[DType.float32](x, y, z))
     return Vector3(x / size, y / size, z / size) if size != 0 else Vector3(
         x, y, z
     )

@@ -69,6 +69,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
 from math.norm import normalized3, _ordinary_squared
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -76,6 +77,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.vrml_geometry import (
     SurfaceData,
@@ -128,20 +130,22 @@ from materials.material import (
     Side,
     points_material,
 )
-from math.quaternion import Quaternion
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.quaternion import quaternion_from_float64
+from math.vector2 import Vector2, vector2_from_float64
+from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
 from objects.points import Points
 from render.framebuffer import Color, FloatColor
-from render.srgb import SRGB, linear_to_srgb
+from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, NEAREST, REPEAT, Texture, Wrap
 from render.texture_store import NO_TEXTURE, TextureId
 from std.collections import Dict
 from std.math import cos, pi, sin, sqrt, trunc
 from std.pathlib import Path
-from units.si import METER, RADIAN, Angle, Length
+from units.measure import angle_radians
+from units.si import METER, Length
+from core.ordinal import require_valid, require_positive
 
 # three.js's `Loader.DEFAULT_MATERIAL_NAME`.
 comptime VRML_DEFAULT_MATERIAL_NAME = "__DEFAULT"
@@ -350,20 +354,20 @@ struct VrmlMaterial(Copyable, Movable):
         var material: Material
         if self.kind == PHONG:
             material = Material(
-                _authored(self.color),
+                self.color.encode_opaque(),
                 map=texture,
                 side=self.side,
                 opacity=Float32(self.opacity),
                 kind=PHONG,
-                emissive=_authored(self.emissive),
+                emissive=self.emissive.encode_opaque(),
                 vertex_colors=self.vertex_colors,
-                specular=_authored(self.specular),
+                specular=self.specular.encode_opaque(),
                 shininess=Float32(self.shininess),
                 transparent=self.transparent,
             )
         else:
             material = Material(
-                _authored(self.color),
+                self.color.encode_opaque(),
                 map=texture,
                 side=self.side,
                 opacity=Float32(self.opacity),
@@ -375,16 +379,6 @@ struct VrmlMaterial(Copyable, Movable):
         material.depth_write = self.depth_write
         material.depth_test = self.depth_test
         return material^
-
-
-def _authored(color: FloatColor) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(color.r),
-        linear_to_srgb(color.g),
-        linear_to_srgb(color.b),
-        1,
-    ).quantize()
 
 
 def _linear(r: Float64, g: Float64, b: Float64) -> FloatColor:
@@ -492,8 +486,7 @@ struct VrmlModel(Movable):
         Raises:
             Error: If the kind is not valid.
         """
-        if not kind.is_valid():
-            raise Error("VRML: an object kind that is not valid")
+        require_valid(kind.is_valid(), "VRML: an object kind that is not valid")
         var total = 0
         for o in self.objects:
             if o.kind == kind:
@@ -775,8 +768,9 @@ struct _Builder(Movable):
         if self.building[node]:
             raise Error("VRML: a node that uses itself")
         for field in self.model.tree.nodes[node].fields:
-            if not field.kind.is_valid():
-                raise Error("VRML: a field whose kind is not valid")
+            require_valid(
+                field.kind.is_valid(), "VRML: a field whose kind is not valid"
+            )
         self.building[node] = True
         var result = self.build_node(node, scene, assets)
         self.building[node] = False
@@ -877,20 +871,19 @@ struct _Builder(Movable):
                         product(v[2], inverse),
                     )
                 var s = sin(v[3] / 2)
-                object.quaternion = Quaternion(
-                    Float32(product(unit[0], s)),
-                    Float32(product(unit[1], s)),
-                    Float32(product(unit[2], s)),
-                    Float32(cos(v[3] / 2)),
+                object.quaternion = quaternion_from_float64(
+                    product(unit[0], s),
+                    product(unit[1], s),
+                    product(unit[2], s),
+                    cos(v[3] / 2),
                 )
             elif field.name == "scale":
                 var v = _first_numbers(field, 3)
-                object.scale = Vector3(
-                    Float32(v[0]), Float32(v[1]), Float32(v[2])
-                )
+                object.scale = vector3_from_float64(v[0], v[1], v[2])
             elif field.name == "translation":
                 var v = _first_numbers(field, 3)
-                object.set_position(Float32(v[0]), Float32(v[1]), Float32(v[2]))
+                var place = vector3_from_float64(v[0], v[1], v[2])
+                object.set_position(place.x, place.y, place.z)
         var index = self.add_object(object^, VRML_GROUP, -1, -1, scene)
         var id = self.model.objects[index].node
         for f in kids:
@@ -1079,7 +1072,7 @@ struct _Builder(Movable):
         var built: Material
         if kind == VRML_POINTS:
             built = points_material(
-                _authored(drawn_with.color),
+                drawn_with.color.encode_opaque(),
                 opacity=Float32(drawn_with.opacity),
                 transparent=drawn_with.transparent,
                 vertex_colors=drawn_with.vertex_colors,
@@ -1323,8 +1316,9 @@ struct _Builder(Movable):
         for field in self.model.tree.nodes[node].fields:
             if field.name == "title":
                 var titles = _strings(field)
-                if len(titles) == 0:
-                    raise Error("VRML: field `title` needs a string")
+                require_positive(
+                    len(titles), "VRML: field `title` needs a string"
+                )
                 title = titles[0]
             elif field.name == "info":
                 info = _strings(field)
@@ -1348,7 +1342,7 @@ struct _Builder(Movable):
                 + field.name
                 + "` needs a Color, Coordinate, Normal or TextureCoordinate"
             )
-        if len(property.fields) == 0:
+        if len(property.fields) <= 0:
             raise Error("VRML: a `" + property.name + "` with no values")
         return _numbers(property.fields[0])
 
@@ -1672,7 +1666,7 @@ struct _Builder(Movable):
             return to_non_indexed(indices, values, 3)
         var rounded = List[Float64]()
         for v in values:
-            rounded.append(Float64(Float32(v)))
+            rounded.append(stored_float32(v))
         return rounded^
 
     def extrusion(
@@ -1794,7 +1788,7 @@ def _surface(
 
 def _first(field: VrmlField) raises -> VrmlValue:
     """Return the first value of a field."""
-    if len(field.values) == 0:
+    if len(field.values) <= 0:
         raise Error("VRML: field `" + field.name + "` needs a value")
     return field.values[0].copy()
 
@@ -1802,7 +1796,7 @@ def _first(field: VrmlField) raises -> VrmlValue:
 def _pair(field: VrmlField) raises -> Vector2:
     """Return the first two numbers of a field."""
     var v = _first_numbers(field, 2)
-    return Vector2(Float32(v[0]), Float32(v[1]))
+    return vector2_from_float64(v[0], v[1])
 
 
 def _spread(
@@ -1931,7 +1925,7 @@ def vrml_scene(
         if texture.id != NO_TEXTURE:
             ref image = assets.textures.textures[texture.id.value]
             image.center = texture.center
-            image.rotation = Angle(Float32(texture.rotation), RADIAN)
+            image.rotation = angle_radians(texture.rotation)
             image.repeat = texture.repeat
             image.offset = texture.offset
     return model^
@@ -1989,6 +1983,6 @@ def read_vrml(
         Error: If the file cannot be read, and for anything `parse_vrml`
             refuses.
     """
-    var slash = path.rfind("/")
-    var directory = String(path[byte = : slash + 1])
-    return parse_vrml(Path(path).read_text(), scene, assets, directory, parent)
+    return parse_vrml(
+        Path(path).read_text(), scene, assets, path_directory(path), parent
+    )

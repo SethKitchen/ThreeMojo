@@ -32,16 +32,29 @@ toward a pointer that rests.
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
-from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
+from controls.held_keys import (
+    HOLD_TIMEOUT,
+    HeldKeys,
+    physical_key,
+    require_frame_time,
+)
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
     ARROW_RIGHT,
     ARROW_UP,
     InputEvent,
+    KEY_A,
+    KEY_D,
     KEY_DOWN,
+    KEY_F,
+    KEY_R,
+    KEY_S,
     KEY_UP,
+    KEY_W,
     Key,
+    require_input,
+    require_viewport_size,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -49,6 +62,7 @@ from controls.input import (
     SECONDARY,
 )
 from math.spherical import Spherical
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import pi
 from units.si import (
@@ -67,12 +81,6 @@ from units.si import (
     Velocity,
 )
 
-comptime KEY_W = Key(119)
-comptime KEY_S = Key(115)
-comptime KEY_A = Key(97)
-comptime KEY_D = Key(100)
-comptime KEY_R = Key(114)
-comptime KEY_F = Key(102)
 # How far above or below level the camera can look. three.js: 85 degrees.
 comptime LATITUDE_LIMIT = Float32(85 * pi / 180)
 comptime HALF_TURN = Float32(pi)
@@ -254,14 +262,8 @@ struct FirstPersonControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or a size
                 is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
-        if viewport_width <= 0 or viewport_height <= 0:
-            raise Error("A viewport's size must be positive")
+        require_input(event)
+        require_viewport_size(viewport_width, viewport_height)
         if not self.enabled:
             return
         if event.kind == KEY_DOWN:
@@ -362,8 +364,7 @@ struct FirstPersonControls(Copyable, Movable):
             Error: If the time is negative, the key timeout or the vertical
                 range is not positive.
         """
-        if delta.value < 0:
-            raise Error("A frame's time must not be negative")
+        require_frame_time(delta)
         if self.constrain_vertical and not (
             self.vertical_max.value > self.vertical_min.value
         ):
@@ -376,7 +377,7 @@ struct FirstPersonControls(Copyable, Movable):
         var extra = Float32(0)
         if self.height_speed:
             var floor = self.height_min.to(METER)
-            var y = max(floor, min(self.height_max.to(METER), frame.position.y))
+            var y = clamp(frame.position.y, floor, self.height_max.to(METER))
             extra = seconds * (y - floor) * self.height_coef.to(PER_SECOND)
         var step = seconds * self.movement_speed.to(METER_PER_SECOND)
         var ahead = self._move_forward or (
@@ -406,7 +407,7 @@ struct FirstPersonControls(Copyable, Movable):
         self._lon -= self._pointer_x * look
         if self.look_vertical:
             self._lat -= self._pointer_y * look * ratio
-        self._lat = max(-LATITUDE_LIMIT, min(LATITUDE_LIMIT, self._lat))
+        self._lat = clamp(self._lat, -LATITUDE_LIMIT, LATITUDE_LIMIT)
         var phi = HALF_TURN / 2 - self._lat
         if self.constrain_vertical:
             # three.js: `MathUtils.mapLinear(phi, 0, PI, min, max)`.

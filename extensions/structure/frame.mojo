@@ -20,6 +20,7 @@ Structural Analysis", 1968, sections 5.6 and 11.3. The element has no
 shear deformation and no end releases.
 """
 
+from math.finite import require_finite, require_positive_finite
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Section
@@ -106,8 +107,9 @@ def member_axes(start: Vec3d, end: Vec3d, reference: Vec3d) raises -> LocalAxes:
         reference.z,
     ]
     for i in range(len(values)):  # pragma: no branch
-        if not isfinite(values[i]):
-            raise Error("A member's ends and reference must be finite")
+        require_finite(
+            Float64(values[i]), "A member's ends and reference must be finite"
+        )
     var axis = end - start
     var length = axis.length()
     if not (length > 0):
@@ -124,13 +126,28 @@ def member_axes(start: Vec3d, end: Vec3d, reference: Vec3d) raises -> LocalAxes:
     return LocalAxes(x, z.cross(x), z)
 
 
+def require_member_length(length: Float64) raises:
+    """Refuse a member length that is not positive and finite.
+
+    Nothing. The call returns when the length is positive and finite.
+
+    Args:
+        length: The length, in meters.
+
+    Raises:
+        Error: If the length is not positive and finite.
+    """
+    require_positive_finite(
+        length, "A member length must be positive and finite"
+    )
+
+
 def _check(
     length: Length64, section: Section, material: BuildingMaterial
 ) raises:
     """Refuse a member length, section or material that cannot be used."""
     var l = length.to(METER)
-    if not (l > 0 and isfinite(l)):
-        raise Error("A member length must be positive and finite")
+    require_member_length(l)
     section.check()
     material.check()
 
@@ -366,8 +383,7 @@ def uniform_load_vector(
             finite.
     """
     var l = length.to(METER)
-    if not (l > 0 and isfinite(l)):
-        raise Error("A member length must be positive and finite")
+    require_member_length(l)
     var x = wx.to(NEWTON_PER_METER)
     var y = wy.to(NEWTON_PER_METER)
     var z = wz.to(NEWTON_PER_METER)

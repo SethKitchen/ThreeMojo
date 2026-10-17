@@ -32,8 +32,11 @@ refuse. A file that cannot be read is refused too.
 """
 
 from core.assets import Assets
+from core.binary import copy_bytes
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from loaders.file_path import path_directory
+from loaders.utf8 import leading_utf8_bom
 from loaders.usd_composer import (
     USD_IMAGE,
     USD_LAYER,
@@ -74,18 +77,8 @@ def decode_text(bytes: List[UInt8]) -> String:
     Returns:
         The text.
     """
-    var start = 0
-    var marked = (
-        len(bytes) >= 3
-        and bytes[0] == 0xEF
-        and bytes[1] == 0xBB
-        and bytes[2] == 0xBF
-    )
-    if marked:
-        start = 3
-    var rest = List[UInt8](capacity=len(bytes) - start)
-    for k in range(start, len(bytes)):
-        rest.append(bytes[k])
+    var start = leading_utf8_bom(Span(bytes))
+    var rest = copy_bytes(bytes, start, len(bytes) - start)
     return String(from_utf8_lossy=Span(rest))
 
 
@@ -102,7 +95,7 @@ def _layer(bytes: List[UInt8]) raises -> UsdLayer:
         Error: If the parser refuses it.
     """
     if is_crate(bytes):
-        return parse_usdc(bytes.copy())
+        return parse_usdc(Span(bytes))
     return parse_usda_layer(decode_text(bytes))
 
 
@@ -213,7 +206,7 @@ def parse_usd(
     """
     if is_crate(bytes):
         return compose_usd(
-            parse_usdc(bytes.copy()), UsdAssets(), path, scene, assets, parent
+            parse_usdc(Span(bytes)), UsdAssets(), path, scene, assets, parent
         )
     if len(bytes) >= 2 and bytes[0] == 0x50 and bytes[1] == 0x4B:
         return _archive(bytes, scene, assets, parent)
@@ -236,10 +229,10 @@ def url_base(url: String) -> String:
     Returns:
         Its folder with the last `/`, or `./` when it has none.
     """
-    var slash = url.rfind("/")
-    if slash < 0:
+    var directory = path_directory(url)
+    if directory == "":
         return "./"
-    return String(url[byte = : slash + 1])
+    return directory
 
 
 def read_usd(

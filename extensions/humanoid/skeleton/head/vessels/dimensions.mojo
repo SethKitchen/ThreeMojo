@@ -23,7 +23,8 @@ authored in template centimeters. They are not a cited lumen table.
     var d = head_vessel_distance(dims, COMMON_CAROTID_ARTERY, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     append_template_tube,
@@ -50,9 +51,7 @@ struct HeadVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= VERTEBRAL_ARTERY.value
+        return ordinal_valid(self.value, VERTEBRAL_ARTERY.value)
 
 
 comptime COMMON_CAROTID_ARTERY = HeadVessel(0)
@@ -61,6 +60,22 @@ comptime EXTERNAL_CAROTID_ARTERY = HeadVessel(2)
 comptime INTERNAL_JUGULAR_VEIN = HeadVessel(3)
 comptime EXTERNAL_JUGULAR_VEIN = HeadVessel(4)
 comptime VERTEBRAL_ARTERY = HeadVessel(5)
+
+
+def require_head_vessel(part: HeadVessel) raises:
+    """Refuse a head vessel that is not named.
+
+    Nothing. The call returns when the vessel is named.
+
+    Args:
+        part: The vessel.
+
+    Raises:
+        Error: If the vessel is not named.
+    """
+    require_valid(
+        part.is_valid(), "A head vessel must be a named artery or vein"
+    )
 
 
 def is_head_artery(part: HeadVessel) raises -> Bool:
@@ -75,8 +90,7 @@ def is_head_artery(part: HeadVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head vessel must be a named artery or vein")
+    require_head_vessel(part)
     return not (part == INTERNAL_JUGULAR_VEIN or part == EXTERNAL_JUGULAR_VEIN)
 
 
@@ -98,9 +112,7 @@ def head_vessel_label(part: HeadVessel) -> String:
         "external jugular vein",
         "vertebral artery",
     ]
-    if not part.is_valid():
-        return "head vessel"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head vessel")
 
 
 def named_head_vessels() -> List[HeadVessel]:
@@ -133,10 +145,8 @@ def head_vessel_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A head vessel must be a named artery or vein")
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_head_vessel(part)
+    require_side(side, "A head")
     var f = dimensions.head.frame
     var sweeps = List[Sweep]()
     # fmt: off

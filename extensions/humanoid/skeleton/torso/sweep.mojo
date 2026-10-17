@@ -27,7 +27,11 @@ from extensions.humanoid.skeleton.field import (
     smax,
     smin,
 )
-from math.vector3 import Vector3
+from math.box_extent import box_exterior
+from math.catmull import catmull_rom_point
+from math.norm import squared_length2
+from math.utils import clamp, mix_delta
+from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import max, min, pi, sqrt
 
 # A value larger than any distance a torso part can hold.
@@ -81,16 +85,9 @@ struct Sweep(Copyable, Movable):
         """
         self.stations.append(Station(p, ml, ap))
         var r = max(ml, ap)
-        self.low = Vector3(
-            min(self.low.x, p.x - r),
-            min(self.low.y, p.y - r),
-            min(self.low.z, p.z - r),
-        )
-        self.high = Vector3(
-            max(self.high.x, p.x + r),
-            max(self.high.y, p.y + r),
-            max(self.high.z, p.z + r),
-        )
+        var span = Vector3(r, r, r)
+        self.low = component_min(self.low, p - span)
+        self.high = component_max(self.high, p + span)
 
     def round(mut self, p: Vector3, r: Float32):
         """Append one round station.
@@ -122,15 +119,13 @@ struct Sweep(Copyable, Movable):
                 var span = b.p.y - a.p.y
                 if span == 0:
                     continue
-                var t = max(
-                    Float32(0), min(Float32(1), (point.y - a.p.y) / span)
-                )
-                var center = a.p + (b.p - a.p) * t
-                var ml = a.ml + (b.ml - a.ml) * t
-                var ap = a.ap + (b.ap - a.ap) * t
+                var t = clamp((point.y - a.p.y) / span, 0, 1)
+                var center = mix_delta3(a.p, b.p, t)
+                var ml = mix_delta(a.ml, b.ml, t)
+                var ap = mix_delta(a.ap, b.ap, t)
                 var u = (point.x - center.x) / ml
                 var v = (point.z - center.z) / ap
-                var q = sqrt(u * u + v * v)
+                var q = sqrt(squared_length2[DType.float32](u, v))
                 var radial = -min(ml, ap)
                 if q > 0:
                     radial = (
@@ -172,10 +167,8 @@ struct Sweep(Copyable, Movable):
         Returns:
             Zero inside the box, else the distance to it, in meters.
         """
-        var dx = max(max(self.low.x - point.x, point.x - self.high.x), 0)
-        var dy = max(max(self.low.y - point.y, point.y - self.high.y), 0)
-        var dz = max(max(self.low.z - point.z, point.z - self.high.z), 0)
-        return sqrt(dx * dx + dy * dy + dz * dz)
+        var outside = box_exterior(self.low, self.high, point)
+        return sqrt(outside.length_sq())
 
     def volume(self) -> Float32:
         """Return the sweep's analytic volume, in cubic meters.
@@ -289,10 +282,7 @@ struct SweepField(Copyable, DistanceField, Movable):
             )
         box = box.padded(pad)
         if self.mirror:
-            box = Bounds(
-                Vector3(-box.high.x, box.low.y, box.low.z),
-                Vector3(-box.low.x, box.high.y, box.high.z),
-            )
+            box = box.mirrored_on_x()
         self.low = box.low
         self.high = box.high
 
@@ -454,13 +444,7 @@ def spline_points(points: List[Vector3], steps: Int) -> List[Vector3]:
         var p3 = points[min(span + 2, last)]
         for step in range(1, steps + 1):  # pragma: no branch
             var t = Float32(step) / Float32(steps)
-            var t2 = t * t
-            var t3 = t2 * t
-            var w0 = Float32(0.5) * (-t3 + 2 * t2 - t)
-            var w1 = Float32(0.5) * (3 * t3 - 5 * t2 + 2)
-            var w2 = Float32(0.5) * (-3 * t3 + 4 * t2 + t)
-            var w3 = Float32(0.5) * (t3 - t2)
-            out.append(p0 * w0 + p1 * w1 + p2 * w2 + p3 * w3)
+            out.append(catmull_rom_point(p0, p1, p2, p3, t))
     return out^
 
 
@@ -479,5 +463,5 @@ def tube(points: List[Vector3], first: Float32, last: Float32) -> Sweep:
     var count = len(points)
     for index in range(count):  # pragma: no branch
         var t = Float32(index) / Float32(max(count - 1, 1))
-        sweep.round(points[index], first + (last - first) * t)
+        sweep.round(points[index], mix_delta(first, last, t))
     return sweep^

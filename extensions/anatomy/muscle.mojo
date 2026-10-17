@@ -37,15 +37,22 @@ Every input and output carries its unit. The curves are dimensionless
 and take and return `Float64`.
 """
 
+from math.finite import (
+    stored_float32,
+    require_finite,
+    require_finite_group,
+    require_positive_finite,
+    require_non_negative_finite,
+)
+from math.norm import squared_length2
 from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
+from units.measure import angle_radians, length_meters
 from units.si import (
     KILOGRAM_PER_CUBIC_METER,
     DEGREE,
-    METER,
     MEGAPASCAL,
     PER_SECOND,
-    RADIAN,
     SQUARE_METER,
     Angle,
     Area,
@@ -85,8 +92,10 @@ comptime SOLVE_STEPS = 60
 
 
 def _check_normalized_length(value: Float64) raises:
-    if not (isfinite(value) and value >= 0.0):
-        raise Error("A normalized fiber length must be finite and nonnegative")
+    require_non_negative_finite(
+        Float64(value),
+        "A normalized fiber length must be finite and nonnegative",
+    )
 
 
 def _check_activation(value: Float64) raises:
@@ -95,8 +104,9 @@ def _check_activation(value: Float64) raises:
 
 
 def _finite_force(value: Float64) raises -> Float64:
-    if not isfinite(value):
-        raise Error("The muscle force is outside the finite numeric range")
+    require_finite(
+        Float64(value), "The muscle force is outside the finite numeric range"
+    )
     return value
 
 
@@ -151,8 +161,7 @@ def force_velocity(v: Float64) raises -> Float64:
     Raises:
         Error: If the normalized velocity is not finite.
     """
-    if not isfinite(v):
-        raise Error("A normalized fiber velocity must be finite")
+    require_finite(Float64(v), "A normalized fiber velocity must be finite")
     if v <= -1.0:
         return 0.0
     if v <= 0.0:
@@ -173,8 +182,7 @@ def tendon_force(strain: Float64) raises -> Float64:
     Raises:
         Error: If the strain is not finite or the force overflows.
     """
-    if not isfinite(strain):
-        raise Error("A tendon strain must be finite")
+    require_finite(Float64(strain), "A tendon strain must be finite")
     if strain <= 0.0:
         return 0.0
     var toe = 0.609 * TENDON_STRAIN
@@ -209,6 +217,22 @@ def activation_rate(
     if excitation > activation:
         tau = ACTIVATION_TIME * scale
     return Frequency(Float32((excitation - activation) / tau), PER_SECOND)
+
+
+def require_fiber_length(length: Float64) raises:
+    """Refuse a fiber length that is not finite and positive.
+
+    Nothing. The call returns when the length is finite and positive.
+
+    Args:
+        length: The fiber length, in meters.
+
+    Raises:
+        Error: If the length is not finite and positive.
+    """
+    require_positive_finite(
+        length, "A fiber length must be finite and positive"
+    )
 
 
 @fieldwise_init
@@ -246,8 +270,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             self.density.value,
         ]
         for v in values:  # pragma: no branch
-            if not isfinite(v):
-                raise Error("A muscle's architecture must be finite")
+            require_finite(Float64(v), "A muscle's architecture must be finite")
         if self.mass.value <= 0.0:
             raise Error("A muscle's mass must be positive")
         if self.fiber_length.value <= 0.0:
@@ -286,8 +309,10 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             Error: If the architecture or the SI result is invalid.
         """
         var area = self.volume_m3() / Float64(self.fiber_length.value)
-        if not (isfinite(Float32(area)) and Float32(area) > 0.0):
-            raise Error("Muscle PCSA must fit a finite positive SI quantity")
+        require_positive_finite(
+            stored_float32(area),
+            "Muscle PCSA must fit a finite positive SI quantity",
+        )
         return Area(Float32(area), SQUARE_METER)
 
     def max_force(self) raises -> Force:
@@ -300,8 +325,10 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             Error: If the architecture or the SI result is invalid.
         """
         var force = self.specific_tension * self.pcsa()
-        if not (isfinite(force.value) and force.value > 0.0):
-            raise Error("Maximum muscle force must be finite and positive")
+        require_positive_finite(
+            Float64(force.value),
+            "Maximum muscle force must be finite and positive",
+        )
         return force
 
     def thickness(self) raises -> Float64:
@@ -330,8 +357,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         Raises:
             Error: If the architecture or fiber length is invalid.
         """
-        if not (isfinite(fiber_m) and fiber_m > 0.0):
-            raise Error("A fiber length must be finite and positive")
+        require_fiber_length(fiber_m)
         var s = self.thickness() / fiber_m
         if s >= 1.0:
             return asin(1.0)
@@ -358,10 +384,10 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         """
         self.check()
         _check_activation(activation)
-        if not (isfinite(fiber.value) and fiber.value > 0.0):
-            raise Error("A fiber length must be finite and positive")
-        if not isfinite(velocity.value):
-            raise Error("A fiber velocity must be finite")
+        require_fiber_length(Float64(fiber.value))
+        require_finite(
+            Float64(velocity.value), "A fiber velocity must be finite"
+        )
         var l0 = Float64(self.fiber_length.value)
         var l = Float64(fiber.value) / l0
         var top = (0.25 + 0.75 * activation) * MAX_VELOCITY * l0
@@ -392,7 +418,7 @@ def _fiber_from_reach(
     arch: MuscleArchitecture, reach: Float64
 ) raises -> Float64:
     var h = arch.thickness()
-    return sqrt(reach * reach + h * h)
+    return sqrt(squared_length2[DType.float64](reach, h))
 
 
 def _mismatch(
@@ -465,10 +491,10 @@ def isometric_equilibrium(
     if value != 0.0 and force.value == 0.0:
         raise Error("Equilibrium force must fit a finite SI quantity")
     _ = _finite_force(Float64(force.value))
-    if not (isfinite(Float32(fiber)) and Float32(fiber) > 0.0):
-        raise Error(
-            "Equilibrium fiber length must fit a positive finite SI length"
-        )
+    require_positive_finite(
+        stored_float32(fiber),
+        "Equilibrium fiber length must fit a positive finite SI length",
+    )
     # The bisection bounds keep this at most the finite SI unit length.
     # Cancellation can still collapse it to zero.
     if not (Float32(unit - reach) > 0.0):
@@ -477,9 +503,9 @@ def isometric_equilibrium(
         )
     return MuscleEquilibrium(
         force,
-        Length(Float32(fiber), METER),
-        Length(Float32(unit - reach), METER),
-        Angle(Float32(asin(arch.thickness() / fiber)), RADIAN),
+        length_meters(fiber),
+        length_meters(unit - reach),
+        angle_radians(asin(arch.thickness() / fiber)),
     )
 
 
@@ -506,21 +532,46 @@ def moment_arm(
             length.
     """
     for p in [origin, insertion, center, axis]:  # pragma: no branch
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
-            raise Error("Muscle moment-arm points and axis must be finite")
+        require_finite_group(
+            p.is_finite(),
+            "Muscle moment-arm points and axis must be finite",
+        )
     var line = origin - insertion
     var reach = line.length()
     var size = axis.length()
-    if not (isfinite(reach) and reach > 0.0):
-        raise Error("A muscle's origin and insertion must differ")
-    if not (isfinite(size) and size > 0.0):
-        raise Error("A joint axis must have a direction")
+    require_positive_finite(
+        Float64(reach), "A muscle's origin and insertion must differ"
+    )
+    require_positive_finite(Float64(size), "A joint axis must have a direction")
     var lever = insertion - center
     var pull = line * (1.0 / reach)
-    var arm = lever.cross(pull).dot(axis * (1.0 / size))
-    if not isfinite(Float32(arm)):
-        raise Error("A muscle moment arm must fit a finite SI length")
-    return Length(Float32(arm), METER)
+    return stored_moment_arm(lever, pull, axis * (1.0 / size))
+
+
+def stored_moment_arm(
+    lever: Vec3d, pull: Vec3d, unit_axis: Vec3d
+) raises -> Length:
+    """Return `(lever x pull) . unit_axis` as a finite length.
+
+    `pull` and `unit_axis` are unit vectors. The cross product is formed
+    before the dot product.
+
+    Args:
+        lever: From the joint center to the insertion, in meters.
+        pull: The unit direction of the pull.
+        unit_axis: The unit joint axis.
+
+    Returns:
+        The signed moment arm, in meters.
+
+    Raises:
+        Error: If the result does not fit a finite SI length.
+    """
+    var arm = lever.cross(pull).dot(unit_axis)
+    require_finite(
+        stored_float32(arm), "A muscle moment arm must fit a finite SI length"
+    )
+    return length_meters(arm)
 
 
 def default_tension() -> Pressure:

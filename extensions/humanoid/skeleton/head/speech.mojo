@@ -48,7 +48,7 @@ from extensions.humanoid.skeleton.head.expression import (
     FaceWeights,
     Viseme,
 )
-from extensions.humanoid.skeleton.morph import smoothstep
+from math.smoothstep import clamped_smoothstep
 
 # How long each kind of sound is held, at a rate of one, in seconds.
 comptime VOWEL_TIME = Float32(0.13)
@@ -264,12 +264,12 @@ struct Speech(Copyable, Movable):
             Zero through one: up over a ramp into its time and down over
             one out of it.
         """
-        var rise = smoothstep(
+        var rise = clamped_smoothstep(
             self.starts[index] - BLEND_TIME,
             self.starts[index] + BLEND_TIME,
             time,
         )
-        var fall = smoothstep(
+        var fall = clamped_smoothstep(
             self.ends[index] - BLEND_TIME, self.ends[index] + BLEND_TIME, time
         )
         return rise * (1 - fall)

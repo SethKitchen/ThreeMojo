@@ -6,8 +6,24 @@
 """Finite Float32 box extents, midpoints and conservative radii."""
 
 from math.matrix_determinant import _sum_products
+from math.vector3 import Vector3
 from std.math import sqrt
 from std.memory import bitcast
+
+
+def require_nearest_box(empty: Bool) raises:
+    """Refuse an empty box, which has no nearest point.
+
+    Nothing. The call returns when the box holds a point.
+
+    Args:
+        empty: Whether the box is empty.
+
+    Raises:
+        Error: If the box is empty.
+    """
+    if empty:
+        raise Error("An empty box has no nearest point")
 
 
 def _midpoint(low: Float32, high: Float32) -> Float32:
@@ -119,3 +135,24 @@ def _shrink_exceeds_extent(
     var low_part = (first - (width - virtual)) + (second - virtual)
     var contraction = -2 * Float64(amount)
     return contraction > width or (contraction == width and low_part < 0)
+
+
+def box_exterior(low: Vector3, high: Vector3, point: Vector3) -> Vector3:
+    """Return how far `point` lies outside a box on each axis.
+
+    A component is zero when `point` is between the corners on that axis.
+    The vector's length is the distance to the box, and zero inside it.
+
+    Args:
+        low: The least corner.
+        high: The greatest corner.
+        point: The point, in the same units as the corners.
+
+    Returns:
+        The outside distance on x, y, and z.
+    """
+    return Vector3(
+        max(max(low.x - point.x, point.x - high.x), Float32(0)),
+        max(max(low.y - point.y, point.y - high.y), Float32(0)),
+        max(max(low.z - point.z, point.z - high.z), Float32(0)),
+    )

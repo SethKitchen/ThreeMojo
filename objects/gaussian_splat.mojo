@@ -36,6 +36,7 @@ through `render.splatrule`.
 
 from core.gaussian_splat_utils import GaussianSplatGeometry
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from math.ray_query import RayQuery
 from math.ray import (
     _distance_sq_ratio,
@@ -46,8 +47,10 @@ from math.ray import (
 from math.bounds import Box3, Sphere
 from math.box_extent import _max_radius_encloses_box
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
-from std.math import floor, inf, isfinite, max, min, sqrt
+from math.norm import squared_length3
+from math.utils import max3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
+from std.math import floor, inf, max, min, sqrt
 from std.memory import bitcast
 from units.si import Length, METER
 
@@ -172,8 +175,9 @@ struct GaussianSplat(Copyable, Movable):
         Raises:
             Error: If the node id is negative.
         """
-        if node.value < 0:
-            raise Error("A Gaussian splat must name a scene node")
+        require_non_negative(
+            node.value, "A Gaussian splat must name a scene node"
+        )
         var count = geometry.count()
         self.splat_geometry = geometry^
         self.node = node
@@ -239,7 +243,7 @@ struct GaussianSplat(Copyable, Movable):
         var x = abs(Float64(c[index * 6]) + regularizer) + xy + xz
         var y = abs(Float64(c[index * 6 + 3]) + regularizer) + xy + yz
         var z = abs(Float64(c[index * 6 + 5]) + regularizer) + xz + yz
-        return _sqrt_bound(max(x, max(y, z)))
+        return _sqrt_bound(max3(x, y, z))
 
     def _center(self, index: Int) -> Vector3:
         """Return a splat's center.
@@ -287,9 +291,7 @@ struct GaussianSplat(Copyable, Movable):
         """
         self.compute_bounding_box()
         var middle = self.bounding_box.value().center()
-        if not (
-            isfinite(middle.x) and isfinite(middle.y) and isfinite(middle.z)
-        ):
+        if not middle.is_finite():
             # A finite center plus a positive extent can need an infinite
             # Float32 box endpoint. The center-only box still has a midpoint.
             # The empty box has a finite origin center, so this path has splats.
@@ -330,18 +332,14 @@ struct GaussianSplat(Copyable, Movable):
         replacing infinity; positive reaches and outside points fail.
         An empty set is enclosed, as for any universal point predicate.
         """
-        if not (
-            isfinite(middle.x) and isfinite(middle.y) and isfinite(middle.z)
-        ):
+        if not middle.is_finite():
             return False
         var stored_middle: Array[Float32, 3] = [middle.x, middle.y, middle.z]
         for index in range(self.count()):
             if self._sphere_extent(index) != 0:
                 return False
             var point = self._center(index)
-            if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
-            ):
+            if not point.is_finite():
                 return False
             var coordinate: Array[Float32, 3] = [point.x, point.y, point.z]
             if not _max_radius_encloses_box(
@@ -424,7 +422,7 @@ struct GaussianSplat(Copyable, Movable):
         var c11 = Float64(c[index * 6 + 3])
         var c12 = Float64(c[index * 6 + 4])
         var c22 = Float64(c[index * 6 + 5])
-        var largest = max(c00, max(c11, c22))
+        var largest = max3(c00, c11, c22)
         if not largest > 0:
             return None
         var center = self._center(index)
@@ -490,10 +488,10 @@ struct GaussianSplat(Copyable, Movable):
             return None
         # Preserve the surface offset even when the distance from the ray
         # origin is too large for that offset to survive in its parameter.
-        return Vector3(
-            Float32(Float64(center.x) + fx + offset * dx),
-            Float32(Float64(center.y) + fy + offset * dy),
-            Float32(Float64(center.z) + fz + offset * dz),
+        return vector3_from_float64(
+            Float64(center.x) + fx + offset * dx,
+            Float64(center.y) + fy + offset * dy,
+            Float64(center.z) + fz + offset * dz,
         )
 
     def sort_direction(self, model_view: Matrix4) -> Vector3:
@@ -661,9 +659,7 @@ struct GaussianSplat(Copyable, Movable):
                 rgb = rgb + _band_sum(g.sh2, index, 2, direction)
             if degree >= 3:
                 rgb = rgb + _band_sum(g.sh3, index, 3, direction)
-            out.append(rgb.x)
-            out.append(rgb.y)
-            out.append(rgb.z)
+            append_vector3(out, rgb)
         return out^
 
 
@@ -681,7 +677,7 @@ def _length(x: Float32, y: Float32, z: Float32) -> Float64:
     var fx = Float64(x)
     var fy = Float64(y)
     var fz = Float64(z)
-    return sqrt(fx * fx + fy * fy + fz * fz)
+    return sqrt(squared_length3[DType.float64](fx, fy, fz))
 
 
 def _weights(degree: Int, d: Vector3) -> List[Float32]:

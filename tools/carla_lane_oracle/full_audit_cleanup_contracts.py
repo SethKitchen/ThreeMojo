@@ -51,6 +51,7 @@ try:
         from . import scaled_float32_contracts as scaled_float32
         from . import typed_boundary_contracts as typed_boundary
         from . import conditioned_cubic_contracts as conditioned_cubic
+        from . import pr760_arithmetic_stage as pr760_stage
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
@@ -63,6 +64,7 @@ try:
         import scaled_float32_contracts as scaled_float32
         import typed_boundary_contracts as typed_boundary
         import conditioned_cubic_contracts as conditioned_cubic
+        import pr760_arithmetic_stage as pr760_stage
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -143,7 +145,15 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
+PR760_STAGE_SHA256 = '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb'
+PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'
+PR760_IMAGE_SHA256 = '2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50'
+PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'
+PR760_OWNER_PREDECESSOR_SHA256 = '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',
+ 'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
+ 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,
+ 'tools/carla_lane_oracle/scaled_float32_contracts.py': 'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/conditioned_cubic_contracts.py': 'df99ea0826d5efa936c56e4ece9aa79b41806b60e52121c4f564a8de5d5b0198',
@@ -152,13 +162,13 @@ DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py':
  'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/runtime_view_contracts.py': '67316129402fac643be3c6e49ceef94bcb25c1ef92f81fd764a6abb583f89e34',
  'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
- 'tools/carla_lane_oracle/source_contracts.py': '83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',
+ 'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': 'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',
  'tools/carla_lane_oracle/typed_boundary_contracts.py': 'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',
  'tools/carla_lane_oracle/witness_format_contracts.py': 'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',
  'tools/carla_lane_oracle/cache_key_contracts.py': '87233ebca3701e3a79b57b324afd48fcffb38b87cb3988859b6ae36bd63d919f',
  'tools/carla_lane_oracle/rounded_line_selector_contracts.py': 'e47ff613bc198bc5cb629940fc0bcbe3c9517a153cd8e799e65ff0215f7b12bb',
- 'tools/carla_lane_oracle/seed_count_contracts.py': 'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345'}
+ 'tools/carla_lane_oracle/seed_count_contracts.py': 'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -230,7 +240,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/witness_format_contracts.py',
                  'tools/carla_lane_oracle/typed_boundary_contracts.py',
                  'tools/carla_lane_oracle/conditioned_cubic_contracts.py',
-                 'tools/carla_lane_oracle/scaled_float32_contracts.py')
+                 'tools/carla_lane_oracle/scaled_float32_contracts.py',
+                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py')
 
 
 def _center_require(ok, message):
@@ -701,7 +712,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, typed_boundary, conditioned_cubic, scaled_float32, pr760_stage):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -754,7 +765,7 @@ def executing_checker_bindings(root=None):
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
                vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view),
                vars(deviation), vars(witness_format), vars(typed_boundary), vars(conditioned_cubic),
-               vars(scaled_float32))
+               vars(scaled_float32), vars(pr760_stage))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -791,6 +802,8 @@ def executing_checker_bindings(root=None):
         result[relative] = captured
     typed_boundary.verify_authority()
     conditioned_cubic.verify_authority()
+    pr760_stage.verify_stage_data()
+    _pr760_authority_data()
     return result
 
 
@@ -902,7 +915,7 @@ def _native_dependency_inventory(root, *, witnesses, _known=None, _snapshots=Non
 
 
 def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
-                        math_entries=None):
+                        math_entries=None, example_entries=None):
     """Refuse alternate qualified-module and namespace lookup surfaces.
 
     Every reviewed import begins at a protected top-level namespace. Guard
@@ -930,6 +943,13 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
     if math_entries is not None and (type(math_entries) is not frozenset
             or '.' not in math_entries or any(type(path) is not str or not path
             or Path(path).is_absolute() or '..' in Path(path).parts for path in math_entries)):
+        return False
+    # PR760 examples add tools/generators providers and example roots. These
+    # namespaces compete only at freshly censused compiled lookup directories;
+    # exact consumed module/package coordinates remain unconditional below.
+    if example_entries is not None and (type(example_entries) is not frozenset
+            or '.' not in example_entries or any(type(path) is not str or not path
+            or Path(path).is_absolute() or '..' in Path(path).parts for path in example_entries)):
         return False
     if typed_entries is not None and (type(typed_entries) is not frozenset
             or '.' not in typed_entries or any(type(path) is not str or not path
@@ -986,6 +1006,8 @@ def resolver_unshadowed(root, paths, *, render_entries=None, typed_entries=None,
                                      or relative_dir.casefold() in render_entries)
                                 and (scoped_name != 'math' or math_entries is None
                                      or relative_dir.casefold() in math_entries)
+                                and (scoped_name not in ('tools', 'examples', 'generators') or example_entries is None
+                                     or relative_dir.casefold() in example_entries)
                                 and (scoped_name not in typed_families or typed_entries is None
                                      or relative_dir.casefold() in typed_entries))
                             or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
@@ -1030,6 +1052,106 @@ def _render_lookup_args(paths, entries):
     return {**({'render_entries': roots} if render else {}),
             **({'typed_entries': typed_roots} if typed else {})}
 
+
+
+def _pr760_image_selected(image):
+    """Identify one complete cohort inside an already observed byte image."""
+    current = tuple(image.get(path) is not None and
+        sha(image[path]) == pr760_stage.EDGES[path]['after_sha256']
+        for path in pr760_stage.EXAMPLE_PATHS)
+    require(not any(current) or all(current), 'mixed PR760 example source image')
+    return all(current)
+
+
+def _pr760_select(root, *, _snapshots=None, _operation=None, _inputs=None, _input_owner=None):
+    image = {}
+    for path in pr760_stage.EXAMPLE_PATHS:
+        raw = (_observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+               if _inputs is None else _inputs.raw(_input_owner, root, path))
+        require(type(raw) is bytes, 'PR760 cohort is not physical bytes: ' + path)
+        if _snapshots is not None:
+            require(_snapshots.setdefault(path, raw) == raw, 'PR760 cohort changed: ' + path)
+        image[path] = raw
+    return _pr760_image_selected(image)
+
+
+def _image_lookup_args(paths, entries, image):
+    args = _render_lookup_args(paths, entries)
+    if _pr760_image_selected(image):
+        roots = frozenset(('.', *entries,
+            *(str(Path(path).parent) for path in pr760_stage.REGISTRY_INPUT_SHA256
+              if path.endswith('.mojo') and path.startswith(('tests/', 'examples/', 'bench/')))))
+        args.update(math_entries=roots, example_entries=roots)
+    return args
+
+
+def _pr760_admit(root, *, _inputs=None, _input_owner=None, _operation=None, _selection=None):
+    """Reuse only the current concrete owner's admitted immutable image."""
+    if _selection is not None:
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals() and caller.f_code in
+                (_live_function_code(_shared_helper_bindings),
+                 _live_function_code(_scaled_float32_bindings)),
+                'unowned PR760 selection')
+        parent = caller.f_back
+        require(parent is not None and parent.f_globals is globals()
+                and parent.f_code is _live_function_code(verify)
+                and parent.f_locals.get('pr760') is _selection,
+                'PR760 selection must come from the complete physical gate')
+        return
+    if _inputs is not None:
+        _inputs._check(_input_owner, root)
+        require(_pr760_image_selected(_inputs._raw), 'owned image is not PR760')
+    elif _operation is not None:
+        _operation_record(_operation, root, exact=True)
+        require(_pr760_image_selected(_operation._raw), 'operation image is not PR760')
+    else:
+        verify(root, exact=True)
+    pr760_stage.verify_stage_data()
+
+
+def _pr760_composed_edges(leaf, bindings):
+    selected = tuple(path for path in leaf.SOURCE_PATHS
+        if bindings.get(path) == leaf.AFTER_SHA256[path]
+        or (path in pr760_stage.CARLA_REGISTRY_PATHS and
+            bindings.get(path) == pr760_stage.EDGES[path]['after_sha256']))
+    edges = leaf.edges(selected)
+    for path in selected:
+        if bindings[path] != leaf.AFTER_SHA256[path]:
+            edge = pr760_stage.EDGES[path]
+            require(edge['before_sha256'] == leaf.AFTER_SHA256[path],
+                    'PR760 historical helper join changed: ' + path)
+            edges[path] = {**edges[path], 'after_sha256': edge['after_sha256'],
+                          'after_token_sha256': edge['after_token_sha256'],
+                          'provenance_after_sha256': edge['before_sha256']}
+    return edges
+
+
+def provenance_after_sha256(edge):
+    """Authenticate the historical comparison target separately from physical bytes."""
+    require(type(edge) is dict and type(edge.get('path')) is str,
+            'invalid provenance edge')
+    if 'provenance_after_sha256' not in edge:
+        return edge['after_sha256']
+    pr760_stage.verify_stage_data()
+    path = edge['path']
+    require(path in pr760_stage.CARLA_REGISTRY_PATHS,
+            'unregistered provenance edge')
+    leaf = (shared_helpers if path in shared_helpers.SOURCE_PATHS else
+            scaled_float32 if path in scaled_float32.SOURCE_PATHS else None)
+    require(leaf is not None, 'provenance field is not a historical helper edge')
+    prior = leaf.edges((path,))[path]
+    current = pr760_stage.EDGES[path]
+    require(current['before_sha256'] == prior['after_sha256']
+            and edge['provenance_after_sha256'] == current['before_sha256']
+            and all(edge[field] == current[field] for field in
+                    ('after_sha256', 'after_token_sha256'))
+            and edge['before_sha256'] == prior['before_sha256']
+            and ('before_token_sha256' in edge) == ('before_token_sha256' in prior)
+            and ('before_token_sha256' not in prior or
+                 edge['before_token_sha256'] == prior['before_token_sha256']),
+            'provenance edge does not compose exact physical and historical endpoints')
+    return current['before_sha256']
 
 def _helper_entry_census(root, *, _operation=None):
     """Observe actual source bytes that determine the compiled entry contexts."""
@@ -1347,7 +1469,7 @@ class _CacheInputs:
                      for path in guard.production_mojo_paths(Path(root))} == self._production,
                     'production path inventory changed during owned verification')
             require(resolver_unshadowed(root, self._resolver_paths,
-                        **_render_lookup_args(self._resolver_paths, self._entries))
+                        **_image_lookup_args(self._resolver_paths, self._entries, self._raw))
                     and all(resolver_unshadowed(location, self._resolver_paths)
                             for location in self._include_roots),
                     'resolver surface changed during owned verification')
@@ -2384,7 +2506,7 @@ class _InvariantInputs(_CacheInputs):
             self._include_raw = types.MappingProxyType(dict(stage_image))
             self._include_entries = tuple(_sibling('affected').entry_directories(
                 {path: _physical_text(raw) for path, raw in stage_image.items()}))
-            require(stage_args == _render_lookup_args(resolver_paths, self._include_entries),
+            require(stage_args == _image_lookup_args(resolver_paths, self._include_entries, self._raw),
                     'generated resolver entry context changed')
             self._include_production = frozenset(path.relative_to(location).as_posix()
                 for path in guard.production_mojo_paths(Path(location)))
@@ -2548,10 +2670,10 @@ class _InvariantInputs(_CacheInputs):
         require({path.relative_to(location).as_posix() for path in guard.production_mojo_paths(location)}
                 == self._include_production, 'generated production path census changed')
         require(resolver_unshadowed(root, self._resolver_paths,
-                    **_render_lookup_args(self._resolver_paths, self._entries))
+                    **_image_lookup_args(self._resolver_paths, self._entries, self._raw))
                 and resolver_unshadowed(location, self._resolver_paths | {path + '.cov-origin'
                     for path in self._resolver_paths if path.endswith('.mojo')},
-                    **_render_lookup_args(self._resolver_paths, self._include_entries)),
+                    **_image_lookup_args(self._resolver_paths, self._include_entries, self._raw)),
                 'generated resolver surface changed during verification')
         if self._scaled_resolver_paths:
             require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE
@@ -2639,7 +2761,7 @@ class _InvariantInputs(_CacheInputs):
                                  if path.suffix == '.mojo'} == self._known,
                                 'render entry path census changed during historical operation')
                     require(resolver_unshadowed(root, self._resolver_paths,
-                                **_render_lookup_args(self._resolver_paths, self._entries)),
+                                **_image_lookup_args(self._resolver_paths, self._entries, self._raw)),
                             'supplemental resolver surface changed during historical operation')
                     if self._scaled_resolver_paths:
                         require(self._scaled_resolver_paths == scaled_float32.NATIVE_CLOSURE,
@@ -2814,7 +2936,7 @@ def _cache_lane_inputs(root, supplied_text, owner, *, _operation=None):
 
 
 def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
-                            _input_owner=None, _operation=None):
+                            _input_owner=None, _operation=None, _pr760=None):
     """Bind exact helper sources and tests in the owner's original byte image."""
     _operation_check(_operation, root)
     require((_inputs is None) == (_input_owner is None), 'incomplete helper input ownership')
@@ -2834,8 +2956,23 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
             and len(set(selected)) == len(selected)
             and set(selected) <= set(shared_helpers.SOURCE_PATHS), 'invalid helper input scope')
     sources = {path: observe(path) for path in selected}
+    current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS
+        and sha(raw) == pr760_stage.EDGES[name]['after_sha256']
+        for name, raw in sources.items())
+    if not current:
+        for name in {name for path in selected for name in shared_helpers.PROVIDER_PATHS[path]}:
+            raw = observe(name)
+            if name in pr760_stage.CARLA_REGISTRY_PATHS and sha(raw) == pr760_stage.EDGES[name]['after_sha256']:
+                current = True
+    if current:
+        _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,
+                    _operation=_operation, _selection=_pr760)
     active = []
     for path, raw in sources.items():
+        prior = (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
+                 else pr760_stage.predecessor_source(path, raw.decode('utf-8'))
+                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))
+        raw = prior.encode('utf-8')
         require(sha(raw) in (shared_helpers.BEFORE_SHA256[path], shared_helpers.AFTER_SHA256[path]),
                 'unknown shared-helper endpoint: ' + path)
         if sha(raw) == shared_helpers.AFTER_SHA256[path]:
@@ -2853,6 +2990,9 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
     typed_fixtures = {}
     for path, raw in bound.items():
         historical = raw
+        if current and path in pr760_stage.CARLA_REGISTRY_PATHS:
+            historical = (_pr760['predecessors'][path] if _pr760 else
+                pr760_stage.predecessor_source(path, raw.decode('utf-8'))).encode('utf-8')
         if path in tests and typed_boundary.is_current(path, raw):
             # Arithmetic capture has no typed fixture edge. Supplemental native
             # fixtures use the complete current graph before exact provenance;
@@ -2864,6 +3004,17 @@ def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         require(sha(historical) == expected[path], 'shared-helper fixture changed: ' + path)
     texts = {path: raw.decode('utf-8') for path, raw in sources.items()}
     texts.update({path: bound[path].decode('utf-8') for path in providers})
+    if current:
+        texts = {path: (_pr760['predecessors'][path] if _pr760 and path in _pr760['predecessors']
+            else pr760_stage.predecessor_source(path, text)
+            if path in pr760_stage.CARLA_REGISTRY_PATHS else text) for path, text in texts.items()}
+        for path in ('tools/carla_lane_oracle/pr760_arithmetic_stage.py', PR760_IMAGE,
+                     PR760_OWNER_PREDECESSOR):
+            bound[path] = observe(path)
+        require(sha(bound[PR760_IMAGE]) == PR760_IMAGE_SHA256
+                and sha(bound[PR760_OWNER_PREDECESSOR]) == PR760_OWNER_PREDECESSOR_SHA256
+                and sha(bound['tools/carla_lane_oracle/pr760_arithmetic_stage.py']) == PR760_STAGE_SHA256,
+                'PR760 shared-helper authority changed')
     require(set(shared_helpers.verify_correspondence(texts)) == set(active),
             'shared-helper active endpoints differ')
     if typed_fixtures and _inputs is None and _operation is None:
@@ -2964,8 +3115,7 @@ def shared_helper_edges(root, *, paths=None, include_roots=(), _inputs=None,
     """Return only live, physically admitted helper extraction descriptors."""
     bindings = shared_helper_proof_bindings(root, paths=paths, include_roots=include_roots,
         _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)
-    return shared_helpers.edges(tuple(path for path in shared_helpers.SOURCE_PATHS
-        if bindings.get(path) == shared_helpers.AFTER_SHA256[path]))
+    return _pr760_composed_edges(shared_helpers, bindings)
 
 
 def _scaled_known_paths(root, *, _operation=None):
@@ -2989,7 +3139,7 @@ def _scaled_lookup_args():
 
 
 def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
-                             _input_owner=None, _operation=None, _context=None):
+                             _input_owner=None, _operation=None, _context=None, _pr760=None):
     """Bind the exact math edge and its own native witness, not caller roots."""
     _operation_check(_operation, root)
     require((_inputs is None) == (_input_owner is None), 'incomplete scaled input ownership')
@@ -3013,14 +3163,26 @@ def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
     require(type(selected) is tuple and selected == scaled_float32.SOURCE_PATHS,
             'invalid scaled input scope')
     sources = {name: observe(name) for name in selected}
-    active = scaled_float32.verify_sources({name: raw.decode('utf-8') for name, raw in sources.items()})
+    current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS
+        and sha(raw) == pr760_stage.EDGES[name]['after_sha256']
+        for name, raw in sources.items())
+    if current:
+        _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,
+                    _operation=_operation, _selection=_pr760)
+    def historical(name, raw):
+        if current and name == 'tools/carla_lane_oracle/test_scaled_float32_contracts.py':
+            return qualification_predecessor_bytes(name, raw).decode('utf-8')
+        return (_pr760['predecessors'][name] if _pr760 and name in _pr760['predecessors']
+                else pr760_stage.predecessor_source(name, raw.decode('utf-8'))
+                if current and name in pr760_stage.CARLA_REGISTRY_PATHS else raw.decode('utf-8'))
+    active = scaled_float32.verify_sources({name: historical(name, raw) for name, raw in sources.items()})
     if not active:
         return {}
     expected = {scaled_float32.LEAF: DEPENDENCY_TOOL_SHA256[scaled_float32.LEAF],
                 **scaled_float32.PACKAGE_INPUTS, **scaled_float32.PROVIDER_INPUTS,
                 **scaled_float32.TESTS}
     for name, digest in expected.items():
-        require(sha(observe(name)) == digest, 'scaled correctness input changed: ' + name)
+        require(sha(historical(name, observe(name))) == digest, 'scaled correctness input changed: ' + name)
     # Source identity and its actual main declaration jointly establish the
     # fixed witness entry context. No production entry census is inferred.
     affected = _sibling('affected')
@@ -3046,6 +3208,11 @@ def _scaled_float32_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
         require(observe(name) == raw, 'scaled input changed during admission: ' + name)
     final_known = _scaled_known_paths(root, _operation=_operation)
     require(final_known == known, 'scaled source path census changed during admission')
+    if current:
+        for name, digest in (('tools/carla_lane_oracle/pr760_arithmetic_stage.py', PR760_STAGE_SHA256),
+                             (PR760_IMAGE, PR760_IMAGE_SHA256),
+                             (PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256)):
+            require(sha(observe(name)) == digest, 'PR760 scaled authority changed: ' + name)
     if _context is not None:
         require(type(_context) is dict and not _context, 'invalid scaled source context output')
         _context['known'] = frozenset(known)
@@ -3129,8 +3296,7 @@ def scaled_float32_edges(root, *, paths=None, _inputs=None, _input_owner=None, _
     """Return only the live math edge admitted through the same physical owner."""
     bindings = scaled_float32_proof_bindings(root, paths=paths, _inputs=_inputs,
         _input_owner=_input_owner, _operation=_operation)
-    return scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS
-        if bindings.get(name) == scaled_float32.AFTER_SHA256[name]))
+    return _pr760_composed_edges(scaled_float32, bindings)
 
 
 def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
@@ -3245,15 +3411,28 @@ def _witness_format_bindings(root, *, _snapshots=None, _operation=None):
         _operation_fail(_operation, error)
 
 
-def _historical_typed_text(path, text):
+def _historical_typed_text(path, text, *, pr760=False):
     """Pure named provenance projection; never replace a captured input."""
+    if pr760 and path in pr760_stage.CARLA_REGISTRY_PATHS:
+        text = pr760_stage.predecessor_source(path, text)
     return typed_boundary.historical_source(str(path), text)
 
 
-def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
+def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None, _selection=None):
     """Bind the complete new source graph and current native closure once."""
     try:
         _operation_check(_operation, root)
+        if _pr760_select(root, _snapshots=_snapshots, _operation=_operation):
+            if (type(_operation) is _InvariantInputs and _operation._state == 'active'
+                    and not _operation._capturing):
+                pr760_stage.verify_stage_data()
+                require(_pr760_image_selected(_operation._raw), 'operation cohort changed')
+                return {path: sha(raw) for path, raw in _operation._raw.items()}
+            candidate = _pr760_candidate_bindings(root, _snapshots=_snapshots, _operation=_operation)
+            if _selection is not None:
+                require(type(_selection) is dict and not _selection, 'invalid PR760 selection output')
+                _selection.update(candidate)
+            return candidate['bindings']
         marker = 'extensions/carla/polynomial.mojo'
         marker_raw = _observe_bytes(root, marker, _regular(root, marker).read_bytes(),
                                     _operation=_operation)
@@ -3318,7 +3497,8 @@ def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):
 def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _input_owner=None):
     """Admit physical current bytes before returning historical provenance."""
     path = str(path)
-    edge = typed_boundary.EDGES.get(path)
+    edge = (pr760_stage.EDGES.get(path) if path in pr760_stage.CARLA_REGISTRY_PATHS
+            else typed_boundary.EDGES.get(path))
     if edge is None:
         return text
     _public_admission = None
@@ -3337,12 +3517,13 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 require(explicit_operation is None or explicit_operation is _operation,
                         'typed source operation differs from borrowed owner')
         require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
-        if not (typed_boundary.is_current(path, text) or
+        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and source.token_sha256(text) == edge['after_token_sha256']
+        if not (new_endpoint or typed_boundary.is_current(path, text) or
                 source.token_sha256(text) == edge['after_token_sha256']):
             return text
         _operation_check(_operation, root)
         raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
-        require(typed_boundary.is_current(path, raw),
+        require((sha(raw) == edge['after_sha256']) if new_endpoint else typed_boundary.is_current(path, raw),
                 'typed physical input is not the exact reviewed endpoint: ' + path)
         physical_text = raw.decode('utf-8')
         require(type(text) is str and source.token_sha256(text) == source.token_sha256(physical_text),
@@ -3361,7 +3542,10 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
         require(_observe_bytes(root, path, _regular(root, path).read_bytes(),
                                _operation=_operation) == raw,
                 'typed source changed during provenance reconstruction: ' + path)
-        return _historical_typed_text(path, physical_text)
+        if new_endpoint:
+            require(_pr760_select(root, _operation=_operation,
+                _inputs=_inputs, _input_owner=_input_owner), 'new endpoint lacks complete PR760 image')
+        return _historical_typed_text(path, physical_text, pr760=new_endpoint)
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
         if _public_admission is not None:
             _public_admission.fail()
@@ -3401,7 +3585,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                     snapshots[path] = physical.read_bytes()
                 require(snapshots[path] == expected,
                         'supplied source observation changed before admission: ' + path)
-        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots,
+        pr760 = {}
+        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots, _selection=pr760,
             _operation=_capture if type(_capture) is _InvariantInputs else None)
         for path in SOURCE_PATHS:
             raw = snapshots[path]
@@ -3424,13 +3609,10 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             # Fixed exact inverse objects are not a normalization API. Only
             # sealed recorded endpoints may be inverted, after live checks.
             reverse_exact(path, item['after_source'], item)
-        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)
-        scaled_edges = scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS
-            if scaled_bindings.get(name) == scaled_float32.AFTER_SHA256[name]))
-        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots)
-        helper_edges = shared_helpers.edges(tuple(
-            path for path in shared_helpers.SOURCE_PATHS
-            if helper_bindings.get(path) == shared_helpers.AFTER_SHA256[path]))
+        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots, _pr760=pr760 or None)
+        scaled_edges = _pr760_composed_edges(scaled_float32, scaled_bindings)
+        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots, _pr760=pr760 or None)
+        helper_edges = _pr760_composed_edges(shared_helpers, helper_bindings)
         helper_closure = ({'loaders/utf8.mojo'} if 'loaders/xml.mojo' in helper_edges else set())
         resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
                           | set(record['native_dependency_inventory']) | helper_closure
@@ -3438,57 +3620,71 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                           | {path for path in scaled_bindings if path.endswith('.mojo')}
                           | (set(typed_boundary.CURRENT_DEPENDENCIES) if typed_bindings else set())
                           | (set(_capture._resolver_paths) if _capture is not None else set()))
+        if pr760:
+            resolver_paths |= set().union(*pr760['closures'].values())
         # Coverage origin files cannot enter Mojo module lookup. Admit only
         # exact sidecar coordinates of reviewed Mojo inputs at include roots;
         # generation_origins and capture verification still bind their bytes.
         include_resolver_paths = resolver_paths | {path + '.cov-origin'
             for path in resolver_paths if path.endswith('.mojo')}
         require(resolver_unshadowed(root, resolver_paths,
-                    **_render_lookup_args(resolver_paths, record['entry_directories'])),
+                    **_image_lookup_args(resolver_paths, record['entry_directories'], snapshots)),
                 'unreviewed alternate, compiled, package, symlink or std resolver surface')
-        known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'}
-        # #720 resolves from actual compiled entrypoint directories. Bind all
-        # maintained production entry contexts and each witness's own root.
-        live_sources = {}
-        for path in sorted(known):
-            raw = _regular(root, path).read_bytes()
-            previous = snapshots.setdefault(path, raw)
-            require(previous == raw, 'source changed before entrypoint census: ' + path)
-            live_sources[path] = _physical_text(raw)
-        entries = _sibling('affected').entry_directories(live_sources)
-        require(entries == record['entry_directories'], 'maintained entrypoint directories changed')
+        if pr760:
+            # The private whole-image check already consumed these exact bytes.
+            # Reuse only this call's pure census/closure results; final physical
+            # sweeps and include-root checks below remain mandatory.
+            known = set(pr760['known'])
+            entries = pr760['entries']
+        else:
+            known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'}
+            # #720 resolves from actual compiled entrypoint directories. Bind all
+            # maintained production entry contexts and each witness's own root.
+            live_sources = {}
+            for path in sorted(known):
+                raw = _regular(root, path).read_bytes()
+                previous = snapshots.setdefault(path, raw)
+                require(previous == raw, 'source changed before entrypoint census: ' + path)
+                live_sources[path] = _physical_text(raw)
+            entries = _sibling('affected').entry_directories(live_sources)
+            require(entries == record['entry_directories'], 'maintained entrypoint directories changed')
         include_images = []
         for location in include_roots:
             stage_entries, stage_image = _include_entry_context(
                 location, {path: snapshots[path] for path in known})
-            stage_args = _render_lookup_args(resolver_paths, stage_entries)
+            stage_args = _image_lookup_args(resolver_paths, stage_entries, snapshots)
             require(resolver_unshadowed(location, include_resolver_paths, **stage_args),
                     'unreviewed include resolver surface')
             include_images.append((location, stage_image, stage_args))
-        require(dependency_inventory(root, roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,
-                                     _known=known, _snapshots=snapshots)
-                == (set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings else
-                    set(record['dependency_inventory']) | helper_closure), 'production import inventory changed')
-        native_found = _native_dependency_inventory(root, witnesses=NATIVE_WITNESSES,
-            _known=known, _snapshots=snapshots)
-        require(native_found == (set(typed_boundary.NATIVE_CLOSURE) if typed_bindings else
-                set(record['native_dependency_inventory']) | helper_closure),
-                'native witness import inventory changed')
-        if typed_bindings:
-            current_native = set()
-            test_paths = tuple(path for path in typed_boundary.TESTS if path.endswith('.mojo'))
-            for parent in sorted({str(Path(path).parent) for path in test_paths}):
-                current_native.update(dependency_inventory(root,
-                    roots=tuple(path for path in test_paths if str(Path(path).parent) == parent),
-                    entries=(parent,), _known=known, _snapshots=snapshots))
-            require(current_native == set(typed_boundary.TYPED_NATIVE_CLOSURE),
-                    'typed native test import inventory changed')
-            current_production = dependency_inventory(root,
-                roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, *typed_boundary.NEW_INPUTS)
-                    if path.endswith('.mojo') and not path.startswith(('tests/', 'tools/', 'examples/', 'bench/'))),
-                entries=entries, _known=known, _snapshots=snapshots)
-            require(current_production == set(typed_boundary.TYPED_PRODUCTION_CLOSURE),
-                    'typed production import inventory changed')
+        if not pr760:
+            require(dependency_inventory(root, roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,
+                                         _known=known, _snapshots=snapshots)
+                    == (pr760['closures']['PRODUCTION_CLOSURE'] if pr760 else
+                        set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings else
+                        set(record['dependency_inventory']) | helper_closure), 'production import inventory changed')
+            native_found = _native_dependency_inventory(root, witnesses=NATIVE_WITNESSES,
+                _known=known, _snapshots=snapshots)
+            require(native_found == (pr760['closures']['NATIVE_CLOSURE'] if pr760 else
+                    set(typed_boundary.NATIVE_CLOSURE) if typed_bindings else
+                    set(record['native_dependency_inventory']) | helper_closure),
+                    'native witness import inventory changed')
+            if typed_bindings:
+                current_native = set()
+                test_paths = tuple(path for path in typed_boundary.TESTS if path.endswith('.mojo'))
+                for parent in sorted({str(Path(path).parent) for path in test_paths}):
+                    current_native.update(dependency_inventory(root,
+                        roots=tuple(path for path in test_paths if str(Path(path).parent) == parent),
+                        entries=(parent,), _known=known, _snapshots=snapshots))
+                require(current_native == (pr760['closures']['TYPED_NATIVE_CLOSURE'] if pr760 else
+                                          set(typed_boundary.TYPED_NATIVE_CLOSURE)),
+                        'typed native test import inventory changed')
+                current_production = dependency_inventory(root,
+                    roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, *typed_boundary.NEW_INPUTS)
+                        if path.endswith('.mojo') and not path.startswith(('tests/', 'tools/', 'examples/', 'bench/'))),
+                    entries=entries, _known=known, _snapshots=snapshots)
+                require(current_production == (pr760['closures']['TYPED_PRODUCTION_CLOSURE'] if pr760 else
+                                              set(typed_boundary.TYPED_PRODUCTION_CLOSURE)),
+                        'typed production import inventory changed')
         ledger_raw = _regular(root, CONSUMER_LEDGER).read_bytes()
         require(sha(ledger_raw) == CONSUMER_LEDGER_SHA256, 'unreviewed consumer ledger')
         snapshots[CONSUMER_LEDGER] = ledger_raw
@@ -3523,15 +3719,23 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                             and expected == witness_format.BEFORE_SHA256[path],
                             'format edge does not extend immutable witness: ' + path)
                     expected = witness_bindings[path]
-                historical = _historical_typed_text(path, raw.decode('utf-8')).encode('utf-8') if path in typed_boundary.EDGES and typed_bindings else raw
+                historical = raw
+                if pr760 and path in pr760['predecessors'] and path not in helper_edges and path not in scaled_edges:
+                    historical = pr760['predecessors'][path].encode('utf-8')
+                if path in typed_boundary.EDGES and typed_bindings:
+                    historical = _historical_typed_text(path, historical.decode('utf-8')).encode('utf-8')
                 if historical != raw and expected == sha(raw):
                     expected = sha(historical)
                 require(sha(historical) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
-        production = set() if _capture is not None or _public_admission is not None else None
-        observed_inventory = (inventory(root, _snapshots=snapshots) if production is None else
-                              inventory(root, _snapshots=snapshots, _production=production))
+        if pr760:
+            production = set(pr760['production'])
+            observed_inventory = pr760['inventory']
+        else:
+            production = set() if _capture is not None or _public_admission is not None else None
+            observed_inventory = (inventory(root, _snapshots=snapshots) if production is None else
+                                  inventory(root, _snapshots=snapshots, _production=production))
         expected_inventory = dict(record['inventory'])
         if station_bindings:
             require(expected_inventory.get(station.MODULE) ==
@@ -3547,10 +3751,13 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             require(_regular(root, path).read_bytes() == raw, 'input changed during verification: ' + path)
         require({p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'} == known,
                 'source path inventory changed during verification')
+        if pr760:
+            require({path.relative_to(root).as_posix() for path in guard.production_mojo_paths(root)}
+                    == production, 'PR760 production path inventory changed during verification')
         for location, image, _ in include_images:
             _helper_entry_census_finish(location, image)
         require(resolver_unshadowed(root, resolver_paths,
-                    **_render_lookup_args(resolver_paths, record['entry_directories']))
+                    **_image_lookup_args(resolver_paths, record['entry_directories'], snapshots))
                 and all(resolver_unshadowed(location, include_resolver_paths, **stage_args)
                         for location, _, stage_args in include_images),
                 'resolver surface changed during verification')
@@ -3682,8 +3889,10 @@ def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
 
 def reviewed_sources(root, texts):
     """Project one supplied operation; historical pass-through grants no admission."""
-    changed = {p for p, text in texts.items() if p in SOURCE_PATHS
-               and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p]}
+    changed = {p for p, text in texts.items() if
+               (p in SOURCE_PATHS and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p])
+               or (p in pr760_stage.CARLA_REGISTRY_PATHS and
+                   source.token_sha256(text) == pr760_stage.EDGES[p]['after_token_sha256'])}
     if not changed:
         return dict(texts)
     physical_inputs = {}
@@ -3693,6 +3902,7 @@ def reviewed_sources(root, texts):
                 'supplied successor source differs from physical input: ' + path)
         physical_inputs[path] = raw
     record = verify(root, _expected_sources=physical_inputs)
+    pr760 = bool(_pr760_select(root))
     result = dict(texts)
     # A successor operation may not mix a historical supplied endpoint with
     # current ones, or smuggle an unrelated fabricated supplied source view.
@@ -3704,7 +3914,7 @@ def reviewed_sources(root, texts):
                 'supplied successor source differs from physical input: ' + path)
         # Only canonical physical bytes enter the exact typed inverse; caller
         # comments have already been compared by the public supplied-view rule.
-        text = _historical_typed_text(path, _physical_text(physical))
+        text = _historical_typed_text(path, _physical_text(physical), pr760=pr760)
         if path in SOURCE_PATHS:
             item = record['sources'][path]
             require(source.token_sha256(text) == item['after_token_sha256'],
@@ -3712,7 +3922,7 @@ def reviewed_sources(root, texts):
             result[path] = reverse_exact(path, item['after_source'], item)
         else:
             raw = _regular(root, path).read_bytes()
-            require(raw == physical and source.token_sha256(text) == source.token_sha256(_historical_typed_text(path, _physical_text(raw))),
+            require(raw == physical and source.token_sha256(text) == source.token_sha256(_historical_typed_text(path, _physical_text(raw), pr760=pr760)),
                     'unreviewed unrelated supplied source: ' + path)
             result[path] = text
     return result
@@ -3799,13 +4009,19 @@ def typed_successor_edges(root, *, _operation=None):
             verify(root, exact=True)
         else:
             _operation_record(_operation, root, exact=True)
+        current_image = _pr760_select(root, _operation=_operation)
         result = {}
         for path in typed_boundary.SOURCE_PATHS:
             current = _observe_bytes(root, path, _regular(root, path).read_bytes(),
                                      _operation=_operation)
-            require(typed_boundary.is_current(path, current),
+            projected = (pr760_stage.predecessor_source(path, current.decode('utf-8'))
+                if current_image and path in pr760_stage.EXAMPLE_PATHS else current.decode('utf-8'))
+            require(typed_boundary.is_current(path, projected),
                     'typed successor physical endpoint changed: ' + path)
             edge = typed_boundary.edge(path)
+            if current_image and path in pr760_stage.EXAMPLE_PATHS:
+                edge.update(after_sha256=sha(current),
+                            after_token_sha256=source.token_sha256(current.decode('utf-8')))
             edge['scope'] = 'explicit historical provenance; current typed API admission'
             if path in conditioned_cubic.SOURCE_PATHS:
                 edge['conditioned_graph'] = {
@@ -3895,6 +4111,614 @@ def _absolute_root_text(root):
                     and '//' not in text and '/./' not in text and '/../' not in text):
                 return text
     return str(Path(root).absolute())
+
+
+PR760_IMPLEMENTATION_PREDECESSORS = {'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': 'd7a638dcf4d5cadabd183be03cbea08945e9bb5351f4b96dd24803d42fa5626e',
+ 'tools/carla_lane_oracle/pr760-seed_count-predecessor.txt': 'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345',
+ 'tools/carla_lane_oracle/pr760-source-adapter-predecessor.txt': '83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',
+ 'tools/carla_lane_oracle/pr760-winner_sign-predecessor.txt': '2ed96052d6568fee1bb7700515b7ad03bd38edafc7ca413fc1c03bb9ad5f6aad'}
+PR760_IMPLEMENTATION_SUCCESSORS = {'tools/carla_lane_oracle/border_parser_contracts.py': '734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',
+ 'tools/carla_lane_oracle/seed_count_contracts.py': 'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90',
+ 'tools/carla_lane_oracle/source_contracts.py': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
+ 'tools/carla_lane_oracle/winner_sign_contracts.py': 'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f'}
+
+
+def _pr760_authority_data():
+    """Bind successor data selectors to literal executing-code constants."""
+    require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (
+        '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',
+        'tools/carla_lane_oracle/pr760-source-image.json',
+        '2d9dabe923754c01ed178af0a2ced95ce28058bab38821dfdb25a8197889dc50',
+        'tools/carla_lane_oracle/pr760-owner-predecessor.txt',
+        '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
+    ), 'PR760 authority selectors changed')
+
+
+def qualification_predecessor_bytes(path, raw):
+    """Pure exact comparison for five reviewed Python witness successors only.
+
+    Physical owners still consume and return actual bytes. This function grants
+    neither source-image admission nor a receipt, and never reads projected files.
+    """
+    executing_checker_bindings()
+    require(type(path) is str and type(raw) is bytes,
+            'qualification predecessor requires builtin source bytes')
+    rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': ('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',
+                                                                     'bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4',
+                                                                     ((13,
+                                                                       14,
+                                                                       (),
+                                                                       ('import _full_audit_test_fixtures as '
+                                                                        'fixtures\n',)),
+                                                                      (84,
+                                                                       90,
+                                                                       (),
+                                                                       ('    @classmethod\n',
+                                                                        '    def setUpClass(cls):\n',
+                                                                        '        baseline = '
+                                                                        'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                        '        cls.current = {name: '
+                                                                        'baseline[name] for name in '
+                                                                        'typed.SOURCE_PATHS}\n',
+                                                                        '        '
+                                                                        'typed.verify_sources(dict(cls.current))\n',
+                                                                        '\n')),
+                                                                      (110,
+                                                                       111,
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[SELF], '
+                                                                        '_sha((ROOT/SELF).read_bytes()))\n',),
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[SELF], '
+                                                                        '_sha(audit.qualification_predecessor_bytes(SELF, '
+                                                                        '(ROOT/SELF).read_bytes())))\n',)),
+                                                                      (112,
+                                                                       113,
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[conditioned], '
+                                                                        '_sha((ROOT/conditioned).read_bytes()))\n',),
+                                                                       ('        '
+                                                                        'self.assertEqual(typed.BINDING_INPUTS[conditioned], '
+                                                                        '_sha(audit.qualification_predecessor_bytes(conditioned, '
+                                                                        '(ROOT/conditioned).read_bytes())))\n',)),
+                                                                      (121,
+                                                                       123,
+                                                                       ('        current = {p: '
+                                                                        '(ROOT/p).read_text() for p in '
+                                                                        'typed.SOURCE_PATHS}\n',),
+                                                                       ('        current = dict(self.current)\n',
+                                                                        '        '
+                                                                        'typed.verify_sources(current)\n')),
+                                                                      (135,
+                                                                       137,
+                                                                       ('        current = {p: '
+                                                                        '(ROOT/p).read_text() for p in '
+                                                                        'typed.SOURCE_PATHS}\n',),
+                                                                       ('        current = dict(self.current)\n',
+                                                                        '        '
+                                                                        'typed.verify_sources(current)\n')),
+                                                                      (184,
+                                                                       206,
+                                                                       ('        # Map is observed during source '
+                                                                        'admission, exact dependency binding,\n',
+                                                                        '        # and the final image reread. '
+                                                                        'Exercise the first and final '
+                                                                        'observations.\n',
+                                                                        '        for at_read in (1, 3):\n'),
+                                                                       ("        # PR760's exact candidate has "
+                                                                        'one first and one terminal map read.\n',
+                                                                        '        # Authenticate the actual '
+                                                                        'nested observer and establish a passing '
+                                                                        'image\n',
+                                                                        '        # with exactly those two reads '
+                                                                        'before injecting either returned '
+                                                                        'value.\n',
+                                                                        '        candidate = '
+                                                                        'audit._pr760_candidate_bindings\n',
+                                                                        '        observers = [code for code in '
+                                                                        'candidate.__code__.co_consts\n',
+                                                                        '                     if '
+                                                                        'isinstance(code, '
+                                                                        'type(candidate.__code__)) and '
+                                                                        "code.co_name == 'observe']\n",
+                                                                        '        '
+                                                                        'self.assertEqual(len(observers), 1)\n',
+                                                                        '        observed_code = observers[0]\n',
+                                                                        '        baseline_reads = []\n',
+                                                                        '        def observe(path, *args, '
+                                                                        '**kwargs):\n',
+                                                                        '            frame = sys._getframe(1)\n',
+                                                                        '            if path == target and '
+                                                                        'frame.f_code is observed_code:\n',
+                                                                        '                '
+                                                                        'self.assertIs(frame.f_globals, '
+                                                                        'vars(audit))\n',
+                                                                        '                '
+                                                                        'self.assertIs(frame.f_back.f_code, '
+                                                                        'candidate.__code__)\n',
+                                                                        '                '
+                                                                        "self.assertEqual(frame.f_back.f_locals['root'], "
+                                                                        'ROOT)\n',
+                                                                        '                '
+                                                                        "self.assertEqual(frame.f_locals['path'], "
+                                                                        "'extensions/carla/map.mojo')\n",
+                                                                        '                '
+                                                                        'baseline_reads.append(path)\n',
+                                                                        '            return original(path, '
+                                                                        '*args, **kwargs)\n',
+                                                                        '        with patch.object(Path, '
+                                                                        "'read_bytes', observe):\n",
+                                                                        '            '
+                                                                        'audit._typed_boundary_bindings(ROOT)\n',
+                                                                        '        '
+                                                                        'self.assertEqual(len(baseline_reads), '
+                                                                        '2)\n',
+                                                                        '        for at_read in (1, 2):\n')),
+                                                                      (209,
+                                                                       214,
+                                                                       ('                        '
+                                                                        'audit._typed_boundary_bindings.__code__):\n',),
+                                                                       ('                        '
+                                                                        'observed_code):\n',
+                                                                        '                    frame = '
+                                                                        'sys._getframe(1)\n',
+                                                                        '                    '
+                                                                        'self.assertIs(frame.f_globals, '
+                                                                        'vars(audit))\n',
+                                                                        '                    '
+                                                                        'self.assertIs(frame.f_back.f_code, '
+                                                                        'candidate.__code__)\n',
+                                                                        '                    '
+                                                                        "self.assertEqual(frame.f_back.f_locals['root'], "
+                                                                        'ROOT)\n')))),
+     'tools/carla_lane_oracle/test_scaled_float32_contracts.py': ('86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931',
+                                                                  'dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6',
+                                                                  ((22,
+                                                                    24,
+                                                                    ('        cls.after = {name: '
+                                                                     '(ROOT/name).read_text() for name in '
+                                                                     'scaled.SOURCE_PATHS}\n',),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                     '        cls.after = {name: baseline[name] '
+                                                                     'for name in scaled.SOURCE_PATHS}\n')),
+                                                                   (185,
+                                                                    186,
+                                                                    ('                with patch.object(Path, '
+                                                                     "'read_bytes', denied), "
+                                                                     'self.assertRaises(OSError) as caught:\n',),
+                                                                    ('                with patch.object(Path, '
+                                                                     "'read_bytes', denied), "
+                                                                     'self.assertRaises((OSError, ValueError)) '
+                                                                     'as caught:\n',)),
+                                                                   (187,
+                                                                    191,
+                                                                    ('                '
+                                                                     'self.assertIs(caught.exception, '
+                                                                     'failure)\n',),
+                                                                    ('                cause = caught.exception\n',
+                                                                     '                while cause.__cause__ is '
+                                                                     'not None:\n',
+                                                                     '                    cause = '
+                                                                     'cause.__cause__\n',
+                                                                     '                self.assertIs(cause, '
+                                                                     'failure)\n')),
+                                                                   (477,
+                                                                    483,
+                                                                    ('        self.original = {name: (ROOT / '
+                                                                     'name).read_bytes() for name in '
+                                                                     'self.paths}\n',),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                     '        self.original = {name: '
+                                                                     "(baseline[name].encode('utf-8') if name in "
+                                                                     'baseline\n',
+                                                                     '                         else '
+                                                                     '(ROOT/name).read_bytes()) for name in '
+                                                                     'self.paths}\n',
+                                                                     '        witness = '
+                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py'\n",
+                                                                     '        self.original[witness] = '
+                                                                     'cleanup.qualification_predecessor_bytes(\n',
+                                                                     '            witness, '
+                                                                     'self.original[witness])\n')))),
+     'tools/carla_lane_oracle/test_shared_helper_contracts.py': ('c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',
+                                                                 'e14bee90aaa9cc0f5a6a062890905c1bd772381d6351fe0198c5d677100adb78',
+                                                                 ((25,
+                                                                   27,
+                                                                   ('        cls.texts = {path: '
+                                                                    '(ROOT/path).read_text()\n',),
+                                                                   ('        baseline = '
+                                                                    'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                    '        cls.texts = {path: '
+                                                                    'baseline[path]\n')),
+                                                                  (126,
+                                                                   130,
+                                                                   ('        '
+                                                                    "self.assertEqual(bindings['render/color_math.mojo'],\n",
+                                                                    '                         '
+                                                                    "cleanup.typed_boundary.CURRENT_DEPENDENCIES['render/color_math.mojo'])\n"),
+                                                                   ("        color = 'render/color_math.mojo'\n",
+                                                                    '        self.assertEqual(bindings[color], '
+                                                                    'cleanup.sha((self.root/color).read_bytes()))\n',
+                                                                    '        '
+                                                                    'self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
+                                                                    '            color, '
+                                                                    '(self.root/color).read_text())), '
+                                                                    'cleanup.typed_boundary.CURRENT_DEPENDENCIES[color])\n')),
+                                                                  (177,
+                                                                   179,
+                                                                   ('        for root, typed in ((self.root, '
+                                                                    'True), (historical, False)):\n',),
+                                                                   ('        common = '
+                                                                    'fixtures.copy_common758_boundary_root(self, '
+                                                                    'ROOT)\n',
+                                                                    '        for root, typed in ((common, True), '
+                                                                    '(historical, False)):\n')),
+                                                                  (196,
+                                                                   213,
+                                                                   (),
+                                                                   ('\n',
+                                                                    '    def '
+                                                                    'test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):\n',
+                                                                    '        baseline = '
+                                                                    'fixtures.common758_leaf_texts(self.root)\n',
+                                                                    '        old = '
+                                                                    'helpers.predecessor_source(XML, '
+                                                                    "baseline[XML]).encode('utf-8')\n",
+                                                                    '        with self.changed(XML, old):\n',
+                                                                    '            with '
+                                                                    'self.assertRaises(ValueError):\n',
+                                                                    '                '
+                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
+                                                                    'paths=helpers.SOURCE_PATHS)\n',
+                                                                    '            utf8 = self.root/UTF8\n',
+                                                                    '            raw = utf8.read_bytes()\n',
+                                                                    '            utf8.unlink()\n',
+                                                                    '            try:\n',
+                                                                    '                with '
+                                                                    'self.assertRaises(FileNotFoundError) as '
+                                                                    'caught:\n',
+                                                                    '                    '
+                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
+                                                                    'paths=helpers.SOURCE_PATHS)\n',
+                                                                    '                '
+                                                                    'self.assertEqual(caught.exception.filename, '
+                                                                    'str(utf8))\n',
+                                                                    '            finally:\n',
+                                                                    '                utf8.write_bytes(raw)\n',
+                                                                    '        '
+                                                                    'cleanup.shared_helper_proof_bindings(self.root, '
+                                                                    'paths=helpers.SOURCE_PATHS)\n')),
+                                                                  (234,
+                                                                   235,
+                                                                   ('                with patch.object(Path, '
+                                                                    "'read_bytes', unreadable), "
+                                                                    'self.assertRaises(OSError) as caught:\n',),
+                                                                   ('                with patch.object(Path, '
+                                                                    "'read_bytes', unreadable), "
+                                                                    'self.assertRaises((OSError, ValueError)) as '
+                                                                    'caught:\n',)),
+                                                                  (236,
+                                                                   240,
+                                                                   ('                '
+                                                                    'self.assertIs(caught.exception, '
+                                                                    'failure)\n',),
+                                                                   ('                cause = caught.exception\n',
+                                                                    '                while cause.__cause__ is '
+                                                                    'not None:\n',
+                                                                    '                    cause = '
+                                                                    'cause.__cause__\n',
+                                                                    '                self.assertIs(cause, '
+                                                                    'failure)\n')),
+                                                                  (314,
+                                                                   318,
+                                                                   ('        '
+                                                                    "self.assertEqual(bindings['render/color_math.mojo'], "
+                                                                    "helpers.PROVIDERS['render/color_math.mojo'])\n",),
+                                                                   ("        color = 'render/color_math.mojo'\n",
+                                                                    '        self.assertEqual(bindings[color], '
+                                                                    'cleanup.sha((self.root/color).read_bytes()))\n',
+                                                                    '        '
+                                                                    'self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\n',
+                                                                    '            color, '
+                                                                    '(self.root/color).read_text())), '
+                                                                    'helpers.PROVIDERS[color])\n')))),
+     'tools/carla_lane_oracle/test_typed_boundary_contracts.py': ('7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5',
+                                                                  '62998e42c4e27f9e8c8bccddf585d2aecc8a7926c8089400f595e206c104a04c',
+                                                                  ((18,
+                                                                    20,
+                                                                    (),
+                                                                    ('import full_audit_cleanup_contracts as '
+                                                                     'audit\n',
+                                                                     'import _full_audit_test_fixtures as '
+                                                                     'fixtures\n')),
+                                                                   (27,
+                                                                    30,
+                                                                    ('        cls.current = {path: '
+                                                                     '(ROOT/path).read_text() for path in '
+                                                                     'typed.SOURCE_PATHS}\n',),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',
+                                                                     '        cls.current = {path: '
+                                                                     'baseline[path] for path in '
+                                                                     'typed.SOURCE_PATHS}\n',
+                                                                     '        '
+                                                                     'typed.verify_sources(dict(cls.current))\n')),
+                                                                   (190,
+                                                                    191,
+                                                                    (),
+                                                                    ('        baseline = '
+                                                                     'fixtures.common758_leaf_texts(ROOT)\n',)),
+                                                                   (196,
+                                                                    201,
+                                                                    ('                '
+                                                                     'path.write_bytes((ROOT/name).read_bytes())\n',),
+                                                                    ('                raw = '
+                                                                     "(baseline[name].encode('utf-8') if name in "
+                                                                     'baseline\n',
+                                                                     '                       else '
+                                                                     '(ROOT/name).read_bytes())\n',
+                                                                     '                if name in '
+                                                                     "('tools/test_conditioned_coverage_loops.py', "
+                                                                     "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
+                                                                     '                    raw = '
+                                                                     'audit.qualification_predecessor_bytes(name, '
+                                                                     'raw)\n',
+                                                                     '                path.write_bytes(raw)\n')),
+                                                                   (443,
+                                                                    447,
+                                                                    ('                '
+                                                                     'self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), '
+                                                                     'expected)\n',),
+                                                                    ('                raw = '
+                                                                     'target.read_bytes()\n',
+                                                                     '                if path in '
+                                                                     "('tools/test_conditioned_coverage_loops.py', "
+                                                                     "'tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+                                                                     "'tools/carla_lane_oracle/test_common758_current_successor.py'):\n",
+                                                                     '                    raw = '
+                                                                     'audit.qualification_predecessor_bytes(path, '
+                                                                     'raw)\n',
+                                                                     '                '
+                                                                     'self.assertEqual(hashlib.sha256(raw).hexdigest(), '
+                                                                     'expected)\n')))),
+     'tools/test_conditioned_coverage_loops.py': ('633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',
+                                                  '1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc',
+                                                  ((167,
+                                                    169,
+                                                    ('        original = audit._InvariantInputs.finish\n',),
+                                                    ('        original = audit._CacheInputs.checkpoint\n',
+                                                     '        finish = audit._InvariantInputs.finish\n')),
+                                                   (171,
+                                                    181,
+                                                    ('        def finish(operation, root):\n',),
+                                                    ('        def checkpoint(operation, owner, root):\n',
+                                                     '            result = original(operation, owner, root)\n',
+                                                     '            frame = audit.sys._getframe(1)\n',
+                                                     '            if frame.f_code is not finish.__code__:\n',
+                                                     '                return result\n',
+                                                     '            self.assertIs(frame.f_globals, vars(audit))\n',
+                                                     "            self.assertIs(frame.f_locals['self'], "
+                                                     'operation)\n',
+                                                     '            self.assertIs(owner, operation._owner)\n',
+                                                     '            self.assertEqual(root, self.root)\n',
+                                                     '            self.assertEqual(operation._state, '
+                                                     "'active')\n")),
+                                                   (184,
+                                                    185,
+                                                    ('            self.assertNotIn(name, operation._raw)\n',),
+                                                    ('            self.assertEqual(operation._raw[name], '
+                                                     'physical)\n',)),
+                                                   (187,
+                                                    190,
+                                                    (),
+                                                    ('            # PR760 also observes checker copies as data. '
+                                                     'Mutate after the real\n',
+                                                     '            # data checkpoint so the unchanged later '
+                                                     'checker-receipt comparison\n',
+                                                     '            # retains its distinct finalization '
+                                                     'obligation.\n')),
+                                                   (191,
+                                                    192,
+                                                    ('            return original(operation, root)\n',),
+                                                    ('            return result\n',)),
+                                                   (193,
+                                                    194,
+                                                    ('            with patch.object(audit._InvariantInputs, '
+                                                     "'finish', finish):\n",),
+                                                    ('            with patch.object(audit._CacheInputs, '
+                                                     "'checkpoint', checkpoint):\n",))))}
+    require(path in rows, 'unregistered qualification witness: ' + path)
+    before_sha, after_sha, edits = rows[path]
+    expected = (scaled_float32.TESTS[path] if path ==
+        'tools/carla_lane_oracle/test_scaled_float32_contracts.py'
+        else typed_boundary.BINDING_INPUTS[path])
+    require(before_sha == expected, 'qualification historical authority changed: ' + path)
+    if sha(raw) == before_sha:
+        result = raw
+    else:
+        require(sha(raw) == after_sha, 'unreviewed qualification endpoint: ' + path)
+        lines = raw.decode('utf-8').splitlines(keepends=True)
+        previous = len(lines) + 1
+        for start, stop, before, after in reversed(edits):
+            require(0 <= start <= stop < previous and tuple(lines[start:stop]) == after,
+                    'qualification inverse span changed: ' + path)
+            lines[start:stop] = before
+            previous = start
+        result = ''.join(lines).encode('utf-8')
+        require(sha(result) == before_sha, 'qualification inverse misses predecessor: ' + path)
+    executing_checker_bindings()
+    return result
+
+
+def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):
+    """Complete physical image comparison; the enclosing owner grants admission.
+
+    The fixed PR760 inverse runs once on immutable observed bytes. Historical
+    texts exist only in memory for the preserved authorities' pure comparisons.
+    All observations, terminal checks and returned digests remain physical.
+    Its return value alone is never an owner, publication token or receipt.
+    """
+    root = Path(root)
+    try:
+        _operation_check(_operation, root)
+        require(_snapshots is None or type(_snapshots) is dict,
+                'invalid PR760 snapshot owner')
+        executing = executing_checker_bindings(root)
+        image = {} if _snapshots is None else _snapshots
+
+        def observe(path):
+            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                                 _operation=_operation)
+            require(type(raw) is bytes, 'PR760 source is not physical bytes: ' + path)
+            require(image.setdefault(path, raw) == raw,
+                    'PR760 source changed after consumption: ' + path)
+            return raw
+
+        for path, digest in executing.items():
+            require(sha(observe(path)) == digest, 'PR760 executing source differs from owner: ' + path)
+        data_raw = observe(PR760_IMAGE)
+        require(sha(data_raw) == PR760_IMAGE_SHA256,
+                'PR760 physical-image authority changed')
+        data = json.loads(data_raw)
+        require(type(data) is dict and data.get('status') == 'closed-candidate'
+                and data.get('public_admission') is False
+                and data.get('stage_sha256') == PR760_STAGE_SHA256,
+                'PR760 image is not the fixed closed candidate')
+        before_owner = observe(PR760_OWNER_PREDECESSOR)
+        require(sha(before_owner) == PR760_OWNER_PREDECESSOR_SHA256
+                == pr760_stage.PROTECTED_AUTHORITY_SHA256[CHECKER_PATHS[0]],
+                'PR760 predecessor owner evidence changed')
+        for path, digest in {**PR760_IMPLEMENTATION_PREDECESSORS, **PR760_IMPLEMENTATION_SUCCESSORS}.items():
+            require(sha(observe(path)) == digest, 'PR760 implementation source changed: ' + path)
+        observe(MIGRATION)
+        record = read_record(root)
+        entries, source_image = _helper_entry_census(root, _operation=_operation)
+        require(list(entries) == record['entry_directories'],
+                'PR760 maintained entry directories changed')
+        for path, raw in source_image.items():
+            require(image.setdefault(path, raw) == raw,
+                    'PR760 source changed before entry census: ' + path)
+        expected = data['inputs']
+        require(type(expected) is dict and all(type(path) is str and type(digest) is str
+                for path, digest in expected.items()), 'malformed PR760 source-image pins')
+        for path, digest in expected.items():
+            require(sha(observe(path)) == digest, 'PR760 physical input changed: ' + path)
+        require(all(expected.get(path) == digest
+                    for path, digest in pr760_stage.REGISTRY_INPUT_SHA256.items()),
+                'PR760 physical image misses reviewed registry input')
+        for path, archive in (('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), ('tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), ('tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt')):
+            require(qualification_predecessor_bytes(path, image[path]) == image[archive],
+                    'PR760 qualification archive differs from exact predecessor: ' + path)
+        # One complete fixed image, with no per-file old/new fallback.
+        previous = pr760_stage.verify_registry_sources(
+            {path: image[path] for path in pr760_stage.REGISTRY_INPUT_SHA256})
+        typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS
+                              else image[path].decode('utf-8'))
+                       for path in typed_boundary.SOURCE_PATHS}
+        typed_previous = typed_boundary.verify_sources(typed_texts)
+        for path in pr760_stage.CARLA_REGISTRY_PATHS:
+            if path in pr760_stage.EXAMPLE_PATHS:
+                require(sha(previous[path]) == typed_boundary.EDGES[path]['after_sha256'],
+                        'PR760 example misses existing typed endpoint: ' + path)
+            elif path in typed_boundary.CURRENT_DEPENDENCIES:
+                require(sha(previous[path]) == typed_boundary.CURRENT_DEPENDENCIES[path],
+                        'PR760 dependency misses existing typed endpoint: ' + path)
+            else:
+                require(sha(previous[path]) == data['supplemental_predecessors'][path],
+                        'PR760 supplemental example predecessor changed: ' + path)
+        # #738 sees its original exact source/provider bytes solely as pure
+        # comparison inputs. Nothing is published as a synthetic filesystem.
+        helper_paths = set(shared_helpers.SOURCE_PATHS) | set(shared_helpers.PROVIDERS)
+        helper_texts = {path: previous.get(path, image[path].decode('utf-8'))
+                        for path in helper_paths}
+        active = shared_helpers.verify_correspondence(helper_texts)
+        require(set(active) == set(shared_helpers.SOURCE_PATHS),
+                'PR760 shared-helper composition changed')
+        shared_edges = shared_helpers.edges(active)
+        for path in active:
+            if path in previous:
+                require(sha(previous[path]) == shared_edges[path]['after_sha256'],
+                        'PR760 shared-helper predecessor join changed: ' + path)
+                shared_edges[path] = {**shared_edges[path],
+                    'after_sha256': sha(image[path]),
+                    'after_token_sha256': source.token_sha256(image[path].decode('utf-8'))}
+        known = set(source_image)
+        found = {}
+        found['PRODUCTION_CLOSURE'] = dependency_inventory(root,
+            roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,
+            _known=known, _snapshots=image)
+        found['NATIVE_CLOSURE'] = _native_dependency_inventory(root,
+            witnesses=NATIVE_WITNESSES, _known=known, _snapshots=image)
+        test_paths = tuple(path for path in typed_boundary.TESTS if path.endswith('.mojo'))
+        found['TYPED_NATIVE_CLOSURE'] = set()
+        for parent in sorted({str(Path(path).parent) for path in test_paths}):
+            found['TYPED_NATIVE_CLOSURE'].update(dependency_inventory(root,
+                roots=tuple(path for path in test_paths if str(Path(path).parent) == parent),
+                entries=(parent,), _known=known, _snapshots=image))
+        found['TYPED_PRODUCTION_CLOSURE'] = dependency_inventory(root,
+            roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, *typed_boundary.NEW_INPUTS)
+                if path.endswith('.mojo') and not path.startswith(('tests/', 'tools/', 'examples/', 'bench/'))),
+            entries=entries, _known=known, _snapshots=image)
+        found['EXAMPLE_CLOSURE'] = dependency_inventory(root,
+            roots=pr760_stage.EXAMPLE_PATHS, entries=pr760_stage.EXAMPLE_ENTRIES,
+            _known=known, _snapshots=image)
+        require(set(data['closures']) == set(found)
+                and all(set(data['closures'][name]) == paths for name, paths in found.items()),
+                'PR760 exact dependency closure changed')
+        pr760_stage.verify_example_closure(found['EXAMPLE_CLOSURE'], pr760_stage.EXAMPLE_ENTRIES)
+        resolver_paths = set().union(*found.values())
+        # Registry-wide diagnostic pins also contain the separately owned hair
+        # scope and qualification-only tests. They are observed bytes, not new
+        # CARLA import roots or a grant of their own caller/theorem contracts.
+        carla_providers = set(pr760_stage.REGISTRY_PROVIDER_SHA256) - {
+            'extensions/humanoid/skeleton/head/hair/styles.mojo'}
+        require(set(pr760_stage.CARLA_REGISTRY_PATHS) <= resolver_paths
+                and carla_providers <= resolver_paths
+                and resolver_paths <= set(expected), 'PR760 transitive provider is unbound')
+        lookup = _render_lookup_args(resolver_paths, entries)
+        lookup['math_entries'] = frozenset(('.', *entries,
+            *(str(Path(path).parent) for path in expected
+              if path.endswith('.mojo') and path.startswith(('tests/', 'examples/', 'bench/')))))
+        lookup['example_entries'] = lookup['math_entries']
+        require(resolver_unshadowed(root, resolver_paths, **lookup),
+                'PR760 alternate, compiled, package, symlink or std resolver surface')
+        production = set()
+        observed = inventory(root, _snapshots=image, _production=production)
+        require(observed == typed_boundary.INVENTORY,
+                'PR760 production caller/use inventory changed')
+        # Fresh physical reads close both all source-classifying reads and every
+        # non-Mojo input. No authorization/result cache survives this call.
+        _helper_entry_census_finish(root, source_image, _operation=_operation)
+        for path, raw in tuple(image.items()):
+            require(observe(path) == raw, 'PR760 input changed during verification: ' + path)
+        require(resolver_unshadowed(root, resolver_paths, **lookup),
+                'PR760 resolver surface changed during verification')
+        require(executing_checker_bindings(root) == executing,
+                'PR760 executing checker changed during verification')
+        return {'image': 'pr760-closed-candidate', 'public_admission': False,
+                'bindings': {path: sha(raw) for path, raw in image.items()},
+                'predecessors': previous, 'typed_predecessors': typed_previous,
+                'shared_edges': shared_edges,
+                'closures': {name: frozenset(paths) for name, paths in found.items()},
+                'known': frozenset(known), 'entries': tuple(entries),
+                'production': frozenset(production),
+                'inventory': types.MappingProxyType({path: types.MappingProxyType(row)
+                    for path, row in observed.items()})}
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        if isinstance(error, ContractError):
+            _operation_fail(_operation, error)
+        try:
+            _operation_fail(_operation, ContractError(
+                'full-audit cleanup successor: malformed or unreadable PR760 candidate: ' + str(error)))
+        except ContractError as failure:
+            raise failure from error
 
 
 if __name__ == '__main__':

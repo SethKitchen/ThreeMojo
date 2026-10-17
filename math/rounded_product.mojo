@@ -7,7 +7,9 @@
 
 JavaScript rounds each `*` before it adds. A compiler may fuse
 `a * b + c` into one multiply-add. `@no_inline` keeps the product as
-its own rounding. Earcut, IES and SVG use it so they match three.js.
+its own rounding. Earcut, IES, SVG, noise, a convex cut, a color
+matrix and a lookup table use it so they match three.js. A lerp of
+that form is `rounded_lerp`.
 """
 
 
@@ -23,3 +25,22 @@ def rounded_product(a: Float64, b: Float64) -> Float64:
         The product, as JavaScript rounds a `*` before a `+`.
     """
     return a * b
+
+
+def rounded_lerp(x: Float64, y: Float64, t: Float64) -> Float64:
+    """Return `(1 - t) * x + t * y`, each product rounded before the sum.
+
+    This is three.js's `MathUtils.lerp`.
+
+    Error: Never.
+
+    Args:
+        x: The start.
+        y: The end.
+        t: The fraction.
+
+    Returns:
+        The mix.
+
+    """
+    return rounded_product(1 - t, x) + rounded_product(t, y)

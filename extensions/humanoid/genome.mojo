@@ -18,6 +18,8 @@ The genes are authored controls. They are not a model of the loci that
 set the traits in people. Many small genes set each of these traits,
 and development and environment change them too.
 """
+from core.ordinal import ordinal_valid, ordinal_label
+from math.utils import clamp_unit
 
 from std.math import isfinite
 
@@ -38,7 +40,7 @@ struct Gene(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named gene."""
-        return self.value >= 0 and self.value < GENE_COUNT
+        return ordinal_valid(self.value, GENE_COUNT - 1)
 
 
 # Skin. Eumelanin in the epidermis: -1 is very fair, 1 is very dark.
@@ -156,8 +158,6 @@ def gene_label(gene: Gene) -> String:
         A lowercase name such as `"melanin"`, or `"gene"` when `gene` is
         not named.
     """
-    if not gene.is_valid():
-        return "gene"
     var names: List[String] = [
         "melanin",
         "undertone",
@@ -203,7 +203,7 @@ def gene_label(gene: Gene) -> String:
         "face shape 8",
         "hair curl",
     ]
-    return names[gene.value]
+    return ordinal_label(gene.is_valid(), gene.value, names, "gene")
 
 
 def named_genes() -> List[Gene]:
@@ -216,6 +216,21 @@ def named_genes() -> List[Gene]:
     for index in range(GENE_COUNT):  # pragma: no branch
         genes.append(Gene(index))
     return genes^
+
+
+def require_named_gene(gene: Gene) raises:
+    """Refuse a gene that is not named.
+
+    Nothing. The call returns when the gene is named.
+
+    Args:
+        gene: The gene.
+
+    Raises:
+        Error: If the gene is not named.
+    """
+    if not gene.is_valid():
+        raise Error("A genome has no " + gene_label(gene))
 
 
 struct Genome(Equatable, ImplicitlyCopyable, Writable):
@@ -250,8 +265,7 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If `gene` is not named.
         """
-        if not gene.is_valid():
-            raise Error("A genome has no " + gene_label(gene))
+        require_named_gene(gene)
         return self.expressions[gene.value]
 
     def with_gene(self, gene: Gene, expression: Expression) raises -> Genome:
@@ -268,8 +282,7 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
             Error: If `gene` is not named, or `expression` is not finite
                 or lies outside -1 through 1.
         """
-        if not gene.is_valid():
-            raise Error("A genome has no " + gene_label(gene))
+        require_named_gene(gene)
         if not expression.is_valid():
             raise Error(
                 "The " + gene_label(gene) + " expression must lie in -1 to 1"
@@ -288,6 +301,24 @@ struct Genome(Equatable, ImplicitlyCopyable, Writable):
             Whether the two genomes are the same.
         """
         return self.expressions == other.expressions
+
+
+def genome_from_values(values: List[Float32]) raises -> Genome:
+    """Return a genome whose genes 0, 1, 2, ... take `values` in order.
+
+    Args:
+        values: One expression per gene, from `MELANIN` on.
+
+    Returns:
+        The genome.
+
+    Raises:
+        Error: If a value lies outside -1 through 1, or past the last gene.
+    """
+    var genome = Genome()
+    for index in range(len(values)):
+        genome = genome.with_gene(Gene(index), Expression(values[index]))
+    return genome
 
 
 def check_genome(genome: Genome, part: String) raises:
@@ -328,7 +359,7 @@ def _normal(seed: Int, index: Int) -> Float32:
     for k in range(4):  # pragma: no branch
         total += _unit(seed, index * 4 + k)
     var value = (total - 2) * Float32(0.78)
-    return max(Float32(-1), min(Float32(1), value))
+    return clamp_unit(value)
 
 
 def random_genome(seed: Int) -> Genome:
@@ -397,5 +428,5 @@ def offspring(mother: Genome, father: Genome, seed: Int) raises -> Genome:
             + father.expressions[index] * t
             + mutation
         )
-        child.expressions[index] = max(Float32(-1), min(Float32(1), value))
+        child.expressions[index] = clamp_unit(value)
     return child

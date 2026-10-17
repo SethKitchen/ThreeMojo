@@ -20,6 +20,8 @@ from coverage.mcdc import (
     find_trace,
     is_mcdc_covered,
 )
+from core.binary import copy_byte_range
+from core.search import first_match
 from coverage.runtime import BRANCH_PREFIX, EVALUATION_PREFIX, LINE_PREFIX
 from std.collections import Set
 
@@ -341,7 +343,7 @@ def absorb_capture(
                 var line = String(raw)
                 record_hit(hits, line)
                 parser.feed(line)
-            carried = List[UInt8](Span(carried)[end:])
+            carried = copy_byte_range(carried, end, len(carried))
     if len(carried) > 0:
         var line = String(unsafe_from_utf8=carried)
         if line.strip().startswith(EVALUATION_PREFIX):
@@ -371,12 +373,7 @@ def _modules_in_order(entries: List[Entry]) raises -> List[String]:
     """Return each distinct module name, in first-seen order."""
     var names = List[String]()
     for entry in entries:
-        var seen = False
-        for name in names:
-            if name == entry.module:
-                seen = True
-                break
-        if not seen:
+        if first_match(names, entry.module) < 0:
             names.append(entry.module)
     return names^
 

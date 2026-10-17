@@ -37,6 +37,7 @@ geometric normal prediction with the wrap transform, which Draco decodes
 with an octahedron that was never set up.
 """
 
+from core.binary import little_endian_uint, store_little_endian
 from loaders.draco_buffer import (
     MASK32,
     DracoBuffer,
@@ -46,7 +47,7 @@ from loaders.draco_buffer import (
     to_int32,
     truncated_divide,
 )
-from loaders.draco_mesh import NONE, DracoCornerTable
+from loaders.draco_mesh import NONE, DracoCornerTable, next_parallelogram_corner
 from std.math import sqrt
 from std.memory import bitcast
 
@@ -303,8 +304,7 @@ struct DracoAttribute(Copyable, Movable):
             bits: The value; the bytes past the type's size are dropped.
         """
         var size = self.data_type.size()
-        for k in range(size):  # pragma: no branch
-            self.bytes[index * size + k] = UInt8((bits >> (8 * k)) & 0xFF)
+        store_little_endian(self.bytes, index * size, bits, size)
 
     def set_float32(mut self, index: Int, value: Float32):
         """Store a float as component `index` of a float attribute.
@@ -325,10 +325,7 @@ struct DracoAttribute(Copyable, Movable):
             The bytes of the component as an unsigned integer.
         """
         var size = self.data_type.size()
-        var bits = 0
-        for k in range(size):  # pragma: no branch
-            bits |= Int(self.bytes[index * size + k]) << (8 * k)
-        return bits
+        return little_endian_uint(self.bytes, index * size, size)
 
     def float32_at(self, value: Int, component: Int) -> Float32:
         """Return a component as a `Float32`.
@@ -1041,15 +1038,9 @@ struct PredictionScheme(Copyable, Movable):
                 found.append(one.value().copy())
                 if len(found) == 4:
                     break
-            if first_pass:
-                corner = data.table.swing_left(corner)
-            else:
-                corner = data.table.swing_right(corner)
-            if corner == start:
-                break
-            if corner == NONE and first_pass:
-                first_pass = False
-                corner = data.table.swing_right(start)
+            corner = next_parallelogram_corner(
+                data.table, corner, start, first_pass
+            )
         return found^
 
     def _tex_coords(
@@ -1089,68 +1080,17 @@ struct PredictionScheme(Copyable, Movable):
             var tip = reader.position(p)
             var next_pos = reader.position(next)
             var prev_pos = reader.position(prev)
-            var pn = _sub(prev_pos, next_pos)
-            var pn_norm2 = _dot(pn, pn)
-            if pn_norm2 != 0:
-                var cn = _sub(tip, next_pos)
-                var cn_dot_pn = _dot(pn, cn)
-                var pn_u = p_u - n_u
-                var pn_v = p_v - n_v
-                var limit = 0x7FFFFFFFFFFFFFFF
-                draco_require(
-                    max(abs(n_u), abs(n_v)) <= limit // pn_norm2,
-                    "a texture coordinate prediction overflows",
-                )
-                # Draco 1.5.6 compares the dot product itself, not its size,
-                # here and below.
-                draco_require(
-                    cn_dot_pn <= limit // max(abs(pn_u), abs(pn_v)),
-                    "a texture coordinate prediction overflows",
-                )
-                var x_u = n_u * pn_norm2 + cn_dot_pn * pn_u
-                var x_v = n_v * pn_norm2 + cn_dot_pn * pn_v
-                var pn_max = max(max(abs(pn[0]), abs(pn[1])), abs(pn[2]))
-                draco_require(
-                    cn_dot_pn <= limit // pn_max,
-                    "a texture coordinate prediction overflows",
-                )
-                var x_pos = List[Int](capacity=3)
-                for k in range(3):  # pragma: no branch
-                    x_pos.append(
-                        next_pos[k]
-                        + truncated_divide(cn_dot_pn * pn[k], pn_norm2)
-                    )
-                var cx = _sub(tip, x_pos)
-                var cx_norm2 = _dot(cx, cx)
-                var norm = _int_sqrt(UInt64(cx_norm2) * UInt64(pn_norm2))
-                var cx_u = pn_v * norm
-                var cx_v = -pn_u * norm
+            var ready, u0, v0, u1, v1 = _predicted_tex_sides(
+                n_u, n_v, p_u, p_v, tip, next_pos, prev_pos
+            )
+            if ready:
                 draco_require(
                     len(self.orientations) > 0, "the orientations run out"
                 )
-                var orientation = self.orientations.pop()
-                var u: Int
-                var v: Int
-                if orientation:
-                    u = x_u + cx_u
-                    v = x_v + cx_v
-                else:
-                    u = x_u - cx_u
-                    v = x_v - cx_v
-                return [
-                    to_int32(truncated_divide(u, pn_norm2)),
-                    to_int32(truncated_divide(v, pn_norm2)),
-                ]
-        # Draco first takes the previous vertex's value here, then always
-        # replaces it; that dead store is left out.
-        var offset: Int
-        if next < p:
-            offset = next * 2
-        elif p > 0:
-            offset = (p - 1) * 2
-        else:
-            return [0, 0]
-        return [values[offset], values[offset + 1]]
+                if self.orientations.pop():
+                    return [to_int32(u0), to_int32(v0)]
+                return [to_int32(u1), to_int32(v1)]
+        return _tex_neighbor(values, next, p)
 
     def _normals(
         mut self,
@@ -1175,15 +1115,8 @@ struct PredictionScheme(Copyable, Movable):
                 var prev = reader.position(
                     data.vertex_values[table.vertex(table.previous(c))]
                 )
-                var cross = _cross(_sub(next, center), _sub(prev, center))
-                for k in range(3):  # pragma: no branch
-                    normal[k] += cross[k]
-            var sum = _abs_sum(normal)
-            var upper = 1 << 29
-            if sum > upper:
-                var quotient = sum // upper
-                for k in range(3):  # pragma: no branch
-                    normal[k] = truncated_divide(normal[k], quotient)
+                _add_face_normal(normal, center, next, prev)
+            _limit_normal(normal)
             var canonical = o.canonicalize_vector(
                 to_int32(normal[0]), to_int32(normal[1]), to_int32(normal[2])
             )
@@ -1228,6 +1161,42 @@ struct _Positions(Movable):
         ]
 
 
+def _mirrored_values(
+    o: Int,
+    n: Int,
+    r: Int,
+    p: Int,
+    values: List[Int],
+    components: Int,
+) -> Optional[List[Int]]:
+    """Return the mirrored prediction `n + r - o`, or none before value `p`.
+
+    Args:
+        o: The value across the opposite edge.
+        n: The next value around that face.
+        r: The previous value around that face.
+        p: The value being predicted. Earlier values are below it.
+        values: The stored components.
+        components: How many components each value has.
+
+    Returns:
+        The prediction, or none when one of the three values is not yet
+        stored.
+    """
+    if o >= p or n >= p or r >= p:
+        return None
+    var out = List[Int](capacity=components)
+    for c in range(components):  # pragma: no branch
+        out.append(
+            to_int32(
+                values[n * components + c]
+                + values[r * components + c]
+                - values[o * components + c]
+            )
+        )
+    return out^
+
+
 def _parallelogram(
     p: Int,
     corner: Int,
@@ -1244,18 +1213,98 @@ def _parallelogram(
     var o = data.vertex_values[data.table.vertex(opposite)]
     var n = data.vertex_values[data.table.vertex(data.table.next(opposite))]
     var r = data.vertex_values[data.table.vertex(data.table.previous(opposite))]
-    if o >= p or n >= p or r >= p:
-        return None
-    var out = List[Int](capacity=components)
-    for c in range(components):  # pragma: no branch
-        out.append(
-            to_int32(
-                values[n * components + c]
-                + values[r * components + c]
-                - values[o * components + c]
-            )
+    return _mirrored_values(o, n, r, p, values, components)
+
+
+def _tex_neighbor(values: List[Int], next: Int, p: Int) -> List[Int]:
+    """Return the texture value used when the edge prediction is unset.
+
+    The next vertex's value is used when that vertex comes first. Otherwise
+    the previous value is used. The first value is zero. Draco's decoder
+    stores the previous value and then replaces it; this returns the value
+    that remains.
+    """
+    if next < p:
+        return [values[next * 2], values[next * 2 + 1]]
+    if p > 0:
+        var offset = (p - 1) * 2
+        return [values[offset], values[offset + 1]]
+    return [0, 0]
+
+
+def _predicted_tex_sides(
+    n_u: Int,
+    n_v: Int,
+    p_u: Int,
+    p_v: Int,
+    tip: List[Int],
+    next_pos: List[Int],
+    prev_pos: List[Int],
+) raises -> Tuple[Bool, Int, Int, Int, Int]:
+    """Return both sides of Draco's portable texture prediction.
+
+    The positive orientation is the first pair. The negative orientation
+    is the second. A zero edge leaves the prediction unset, and the
+    caller uses the previous value instead.
+
+    Args:
+        n_u: The next corner's u.
+        n_v: The next corner's v.
+        p_u: The previous corner's u.
+        p_v: The previous corner's v.
+        tip: The predicted vertex, as three integers.
+        next_pos: The next corner's position.
+        prev_pos: The previous corner's position.
+
+    Returns:
+        Whether the edge has a length, then the positive u and v and the
+        negative u and v. Those four are the quotients before they are
+        narrowed to 32 bits.
+
+    Raises:
+        Error: If a product overflows a 64-bit integer.
+    """
+    var pn = _sub(prev_pos, next_pos)
+    var pn_norm2 = _dot(pn, pn)
+    if pn_norm2 == 0:
+        return (False, 0, 0, 0, 0)
+    var cn = _sub(tip, next_pos)
+    var cn_dot_pn = _dot(pn, cn)
+    var pn_u = p_u - n_u
+    var pn_v = p_v - n_v
+    var limit = 0x7FFFFFFFFFFFFFFF
+    draco_require(
+        max(abs(n_u), abs(n_v)) <= limit // pn_norm2,
+        "a texture coordinate prediction overflows",
+    )
+    draco_require(
+        cn_dot_pn <= limit // max(abs(pn_u), abs(pn_v)),
+        "a texture coordinate prediction overflows",
+    )
+    var x_u = n_u * pn_norm2 + cn_dot_pn * pn_u
+    var x_v = n_v * pn_norm2 + cn_dot_pn * pn_v
+    var pn_max = max(max(abs(pn[0]), abs(pn[1])), abs(pn[2]))
+    draco_require(
+        cn_dot_pn <= limit // pn_max,
+        "a texture coordinate prediction overflows",
+    )
+    var x_pos = List[Int](capacity=3)
+    for k in range(3):  # pragma: no branch
+        x_pos.append(
+            next_pos[k] + truncated_divide(cn_dot_pn * pn[k], pn_norm2)
         )
-    return out^
+    var cx = _sub(tip, x_pos)
+    var cx_norm2 = _dot(cx, cx)
+    var norm = _int_sqrt(UInt64(cx_norm2) * UInt64(pn_norm2))
+    var cx_u = pn_v * norm
+    var cx_v = -pn_u * norm
+    return (
+        True,
+        truncated_divide(x_u + cx_u, pn_norm2),
+        truncated_divide(x_v + cx_v, pn_norm2),
+        truncated_divide(x_u - cx_u, pn_norm2),
+        truncated_divide(x_v - cx_v, pn_norm2),
+    )
 
 
 def _sub(a: List[Int], b: List[Int]) -> List[Int]:
@@ -1275,6 +1324,25 @@ def _cross(u: List[Int], v: List[Int]) -> List[Int]:
         u[2] * v[0] - u[0] * v[2],
         u[0] * v[1] - u[1] * v[0],
     ]
+
+
+def _add_face_normal(
+    mut normal: List[Int], center: List[Int], next: List[Int], prev: List[Int]
+):
+    """Add one corner's area to `normal`."""
+    var cross = _cross(_sub(next, center), _sub(prev, center))
+    for k in range(3):  # pragma: no branch
+        normal[k] += cross[k]
+
+
+def _limit_normal(mut normal: List[Int]):
+    """Scale `normal` so its absolute sum fits below 2^29."""
+    var sum = _abs_sum(normal)
+    var upper = 1 << 29
+    if sum > upper:
+        var quotient = sum // upper
+        for k in range(3):  # pragma: no branch
+            normal[k] = truncated_divide(normal[k], quotient)
 
 
 def _abs_sum(v: List[Int]) -> Int:

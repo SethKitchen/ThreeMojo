@@ -30,6 +30,8 @@ The wall is per square meter of area. The first node is on the outside
 face, the side of the first layer.
 """
 
+from core.ordinal import require_index_in_count, require_valid
+from math.finite import require_finite, require_positive_finite
 from std.math import ceil, isfinite, sqrt
 from extensions.building.construction import Construction
 from extensions.building.material import BuildingMaterial
@@ -47,6 +49,23 @@ from units.si import (
     WATT_PER_SQUARE_METER_KELVIN,
 )
 from units.temperature import KELVIN, Temperature64
+
+
+def require_fourier(fourier: Float64) raises:
+    """Refuse a Fourier number that is not positive and finite.
+
+    Nothing. The call returns when the number is positive and finite.
+
+    Args:
+        fourier: The smallest Fourier number an element may have.
+
+    Raises:
+        Error: If the number is not positive and finite.
+    """
+    require_positive_finite(
+        fourier, "A Fourier number must be positive and finite"
+    )
+
 
 # The most elements one layer gets, however fine the criterion asks.
 comptime MAX_ELEMENTS_PER_LAYER = 64
@@ -101,12 +120,13 @@ struct LayeredWall(Copyable, Movable):
         """
         construction.check(materials)
         var dt = step.to(SECOND)
-        if not (dt > 0 and isfinite(dt)):
-            raise Error("A conduction step must be positive and finite")
-        if not (fourier > 0 and isfinite(fourier)):
-            raise Error("A Fourier number must be positive and finite")
-        if not initial.is_valid():
-            raise Error("A wall's initial temperature must be valid")
+        require_positive_finite(
+            dt, "A conduction step must be positive and finite"
+        )
+        require_fourier(fourier)
+        require_valid(
+            initial.is_valid(), "A wall's initial temperature must be valid"
+        )
         self.step = dt
         self.capacity = [0.0]
         self.conductance = List[Float64]()
@@ -143,8 +163,9 @@ struct LayeredWall(Copyable, Movable):
         return len(self.capacity)
 
     def _check_node(self, node: Int) raises:
-        if node < 0 or node >= len(self.capacity):
-            raise Error("A wall node is out of range")
+        require_index_in_count(
+            node, len(self.capacity), "A wall node is out of range"
+        )
 
     def node_depth(self, node: Int) raises -> Length64:
         """Return the depth of a node from the outside face.
@@ -240,8 +261,10 @@ struct LayeredWall(Copyable, Movable):
             inside.absorbed.to(WATT_PER_SQUARE_METER),
         ]
         for i in range(len(forcing)):  # pragma: no branch
-            if not isfinite(forcing[i]):
-                raise Error("A face temperature and flux must be finite")
+            require_finite(
+                Float64(forcing[i]),
+                "A face temperature and flux must be finite",
+            )
         var n = len(self.capacity)
         var lower = List[Float64](length=n, fill=0.0)
         var diagonal = List[Float64](length=n, fill=0.0)

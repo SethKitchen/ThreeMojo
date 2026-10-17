@@ -44,21 +44,29 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
 
 from std.math import isfinite
 
 from math.norm import normalized_difference2, _ordinary_product
 
-from math.norm import length2
+from math.norm import length2, squared_length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
+from math.utils import glsl_mod, mix_delta
 from math.vector3 import Vector3
+from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.target import RenderTarget
-from std.math import cos, floor, isfinite, pow, sin, sqrt
+from std.math import cos, isfinite, pow, sin, sqrt
 from units.si import Angle, RADIAN
 
 
@@ -79,7 +87,7 @@ struct ShaderEffect(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero through seventeen.
         """
-        return self.value >= 0 and self.value <= 17
+        return ordinal_valid(self.value, 17)
 
 
 # `RGBShiftShader`: red and blue shifted apart.
@@ -137,7 +145,7 @@ struct MirrorSide(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero through three.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 # `side` 0: the left half is kept and mirrored onto the right.
@@ -263,11 +271,6 @@ struct EffectSettings(ImplicitlyCopyable):
         self.screen_height = 1024
 
 
-def _finite(v: Vector3) -> Bool:
-    """Return True if every component of `v` is finite."""
-    return isfinite(v.x) and isfinite(v.y) and isfinite(v.z)
-
-
 def check_effect(settings: EffectSettings) raises:
     """Refuse effect settings no shader could run.
 
@@ -280,10 +283,13 @@ def check_effect(settings: EffectSettings) raises:
             the shader divides by zero; the saturation is above one, where
             its weight changes sign; or the sides are not positive.
     """
-    if not settings.effect.is_valid():
-        raise Error("A shader effect must be one of the eighteen named")
-    if not settings.side.is_valid():
-        raise Error("A mirror side must be one of the four named")
+    require_valid(
+        settings.effect.is_valid(),
+        "A shader effect must be one of the eighteen named",
+    )
+    require_valid(
+        settings.side.is_valid(), "A mirror side must be one of the four named"
+    )
     var scalars = (
         isfinite(settings.amount)
         and isfinite(settings.angle.value)
@@ -303,9 +309,9 @@ def check_effect(settings: EffectSettings) raises:
         and isfinite(settings.wave_factor)
     )
     var vectors = (
-        _finite(settings.pow_rgb)
-        and _finite(settings.mul_rgb)
-        and _finite(settings.add_rgb)
+        settings.pow_rgb.is_finite()
+        and settings.mul_rgb.is_finite()
+        and settings.add_rgb.is_finite()
     )
     if not (scalars and vectors):
         raise Error("A shader effect's uniforms must be finite")
@@ -313,8 +319,9 @@ def check_effect(settings: EffectSettings) raises:
         raise Error("A contrast must be below one")
     if settings.saturation > 1:
         raise Error("A saturation must not be above one")
-    if settings.sides <= 0:
-        raise Error("A kaleidoscope needs a positive number of sides")
+    require_positive(
+        settings.sides, "A kaleidoscope needs a positive number of sides"
+    )
     var sizes = (
         settings.resolution_x > 0
         and settings.resolution_y > 0
@@ -445,12 +452,7 @@ def effect_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     Returns:
         The weighted sum.
     """
-    return 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
-
-
-def _glsl_mod(x: Float32, y: Float32) -> Float32:
-    """Return GLSL's `mod`: `x - y * floor(x / y)`."""
-    return x - y * floor(x / y)
+    return luminance_of(r, g, b)
 
 
 def _straight(source: LightView, u: Float32, v: Float32) -> FloatColor:
@@ -548,9 +550,9 @@ def hue_saturation_color(
     if saturation > 0:
         k = 1 - 1 / (Float32(1.001) - saturation)
     return FloatColor(
-        r + (average - r) * k,
-        g + (average - g) * k,
-        b + (average - b) * k,
+        mix_delta(r, average, k),
+        mix_delta(g, average, k),
+        mix_delta(b, average, k),
         color.a,
     )
 
@@ -925,7 +927,7 @@ def kaleido_pixel(
     var r = length2(px, py)
     var a = atan2_float32(py, px) + angle.value
     var wedge = KALEIDO_TAU / sides
-    a = _glsl_mod(a, wedge)
+    a = glsl_mod(a, wedge)
     a = abs(a - wedge / 2)
     return source.sample(r * cos(a) + 0.5, r * sin(a) + 0.5)
 
@@ -988,7 +990,7 @@ def tilt_shift_pixel(
         The weighted sum of the taps, premultiplied.
     """
     var step = spread * abs(focus - v)
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var tap = 0
     while tap < 9:
         var weight = TILT_LAST_WEIGHT
@@ -1091,7 +1093,7 @@ def triangle_blur_pixel(
     Returns:
         The weighted mean of the taps.
     """
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var total = Float32(0)
     var offset = glsl_rand(u, v)
     var t = -TRIANGLE_ITERATIONS
@@ -1166,7 +1168,7 @@ def focus_pixel(
     var add = org
     var vin_x = (u - 0.5) * 1.4
     var vin_y = (v - 0.5) * 1.4
-    var sample_dist = (vin_x * vin_x + vin_y * vin_y) * 2
+    var sample_dist = squared_length2[DType.float32](vin_x, vin_y) * 2
     var f = (
         (settings.wave_factor * 100 + sample_dist)
         * settings.sample_distance
@@ -1191,12 +1193,7 @@ def focus_pixel(
         color.a * 2 - mean.a,
     )
     var keep = 1 - sample_dist * 0.5
-    color = FloatColor(
-        color.r + (mean.r - color.r) * keep,
-        color.g + (mean.g - color.g) * keep,
-        color.b + (mean.b - color.b) * keep,
-        color.a + (mean.a - color.a) * keep,
-    )
+    color = color.mix(mean, keep)
     return FloatColor(
         color.r * color.r * 0.95 + color.r,
         color.g * color.g * 0.95 + color.g,
@@ -1349,16 +1346,18 @@ def check_god_rays(settings: GodRaysSettings) raises:
             above zero and at most one.
     """
     if not (
-        _finite(settings.sun)
+        settings.sun.is_finite()
         and isfinite(settings.intensity)
         and isfinite(settings.filter_length)
         and isfinite(settings.resolution_scale)
     ):
         raise Error("A god-ray setting must be finite")
-    if settings.intensity < 0:
-        raise Error("A god-ray intensity must not be negative")
-    if settings.filter_length <= 0:
-        raise Error("A god-ray filter length must be positive")
+    require_non_negative(
+        settings.intensity, "A god-ray intensity must not be negative"
+    )
+    require_positive(
+        settings.filter_length, "A god-ray filter length must be positive"
+    )
     if settings.resolution_scale <= 0 or settings.resolution_scale > 1:
         raise Error("A god-ray resolution scale runs above zero to one")
 
@@ -1511,12 +1510,8 @@ def fake_sun_color(
     var k = 1 - prop
     prop = GOD_RAYS_SUN_PEAK * k * k * k
     var t = 1 - prop
-    return FloatColor(
-        sun_color.r + (bg_color.r - sun_color.r) * t,
-        sun_color.g + (bg_color.g - sun_color.g) * t,
-        sun_color.b + (bg_color.b - sun_color.b) * t,
-        1,
-    )
+    var mixed = sun_color.mix(bg_color, t)
+    return FloatColor(mixed.r, mixed.g, mixed.b, 1)
 
 
 def god_rays_combine_pixel(

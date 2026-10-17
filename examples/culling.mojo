@@ -12,23 +12,27 @@ vertex of it is transformed. The cube vanishes at the edge and comes back.
 That is frustum culling, not clipping.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.math import cos, pi
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/culling.png"
 comptime WIDTH = 240
@@ -67,13 +71,9 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var block = assets.geometries.add(cube(Length(0.7, METER)))
@@ -83,19 +83,26 @@ def main() raises:
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(block, paint, node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.3, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.69))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
-
-    var camera = PerspectiveCamera(
-        Angle(22.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    fill_and_key(
+        scene,
+        0.3,
+        0.8,
+        0.5,
+        Color(255, 255, 255),
+        0.69,
+        Color(255, 255, 255),
+        2.51,
     )
-    camera.place(Vector3(0, 0.2, 4.2), Vector3(0, 0, 0))
+
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.2, 4.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(22.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
+    )
 
     var frame_clock = Clock()
     frame_clock.start()
@@ -105,12 +112,4 @@ def main() raises:
         var x = Float32(2.6) * cos(turn)
         frames.append(frame_at(renderer, camera, assets, scene, node, x))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

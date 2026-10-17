@@ -27,19 +27,32 @@ Differences from three.js: Shift does not set a speed multiplier, which
 three.js sets and never reads. A terminal sends no key for Shift alone.
 """
 
+from core.extent import positive_extent
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
-from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
+from controls.held_keys import (
+    HOLD_TIMEOUT,
+    HeldKeys,
+    physical_key,
+    require_frame_time,
+)
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
     ARROW_RIGHT,
     ARROW_UP,
     InputEvent,
+    KEY_A,
+    KEY_D,
     KEY_DOWN,
+    KEY_F,
+    KEY_R,
+    KEY_S,
     KEY_UP,
+    KEY_W,
     Key,
+    require_input,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -57,13 +70,6 @@ from units.si import (
     Velocity,
 )
 
-# The keys, as three.js's `event.code` names them.
-comptime KEY_W = Key(119)
-comptime KEY_S = Key(115)
-comptime KEY_A = Key(97)
-comptime KEY_D = Key(100)
-comptime KEY_R = Key(114)
-comptime KEY_F = Key(102)
 comptime KEY_Q = Key(113)
 comptime KEY_E = Key(101)
 # A move or a turn smaller than this, squared, is no change. three.js:
@@ -81,7 +87,7 @@ def _check_size(width: Int, height: Int) raises:
     Raises:
         Error: If a size is not positive.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error(
             "A viewport's size must be positive, got ", width, "x", height
         )
@@ -193,12 +199,7 @@ struct FlyControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or a size
                 is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         _check_size(viewport_width, viewport_height)
         if not self.enabled:
             return
@@ -334,8 +335,7 @@ struct FlyControls(Copyable, Movable):
             Error: If the time is negative or the key timeout is not
                 positive.
         """
-        if delta.value < 0:
-            raise Error("A frame's time must not be negative")
+        require_frame_time(delta)
         if not self.enabled:
             return False
         var seconds = delta.to(SECOND)

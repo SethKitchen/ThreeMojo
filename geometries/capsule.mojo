@@ -19,15 +19,18 @@ capsule of no length keeps its two rims and the side between them, which
 has no height.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import (
-    BufferGeometry,
-    CAPSULE_GEOMETRY,
-    NORMAL,
-    POSITION,
-    UV,
+from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
+from core.ordinal import require_non_negative
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    record_shaft_segments,
+    require_positive_radius,
+    require_three_segments,
 )
-from core.user_data import UserData
+from math.curve_checks import require_at_least_one
+from math.utils import clamp
+from math.norm import squared_length3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
 
@@ -61,16 +64,17 @@ def capsule(
         Error: If the radius is not positive, the length is negative, or
             any segment count is too small.
     """
-    if radius.value <= 0:
-        raise Error("A capsule needs a positive radius")
-    if length.value < 0:
-        raise Error("A capsule's length cannot be negative")
-    if cap_segments < 1:
-        raise Error("A capsule needs at least one segment on each cap")
-    if radial_segments < 3:
-        raise Error("A capsule needs at least three segments around")
-    if height_segments < 1:
-        raise Error("A capsule needs at least one segment up its side")
+    require_positive_radius(radius.value, "capsule")
+    require_non_negative(length.value, "A capsule's length cannot be negative")
+    require_at_least_one(
+        cap_segments, "A capsule needs at least one segment on each cap"
+    )
+    require_three_segments(
+        radial_segments, "A capsule needs at least three segments around"
+    )
+    require_at_least_one(
+        height_segments, "A capsule needs at least one segment up its side"
+    )
 
     var r = Float64(radius.to(METER))
     var height = Float64(length.to(METER))
@@ -111,7 +115,7 @@ def capsule(
             profile_radius = r * cos(angle)
             normal_y = r * sin(angle)
             arc = cap_arc + height + progress * cap_arc
-        var v = max(Float64(0), min(Float64(1), arc / total))
+        var v = clamp(arc / total, Float64(0), Float64(1))
         # The poles' vertices sit half a step round, as three.js's do.
         var u_offset = Float64(0)
         if iy == 0:
@@ -130,7 +134,7 @@ def capsule(
             data.append(Float32(z))
             # three.js's `normalize`: divided by its length. A normal is
             # never of no length: a pole's points straight along y.
-            var scale = 1 / sqrt(x * x + normal_y * normal_y + z * z)
+            var scale = 1 / sqrt(squared_length3[DType.float64](x, normal_y, z))
             normals.append(Float32(x * scale))
             normals.append(Float32(normal_y * scale))
             normals.append(Float32(z * scale))
@@ -151,15 +155,10 @@ def capsule(
                 index.append(i3)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
-    geometry.kind = CAPSULE_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("height", Float64(length.to(METER)))
+    indexed_surface(geometry, data^, normals^, uvs^, index^)
+    record_kind(geometry, CAPSULE_GEOMETRY)
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_meters("height", length)
     geometry.parameters.set_number("capSegments", Float64(cap_segments))
-    geometry.parameters.set_number("radialSegments", Float64(radial_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    record_shaft_segments(geometry, radial_segments, height_segments)
     return geometry^

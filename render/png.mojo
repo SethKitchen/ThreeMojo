@@ -18,8 +18,15 @@ Byte order is big-endian throughout, as PNG requires, except inside DEFLATE's
 own stored-block lengths, which are little-endian.
 """
 
+from core.binary import (
+    append_big_endian,
+    append_little_endian_u16,
+    big_endian_u32,
+)
+from core.extent import require_positive_extent
+from core.ordinal import require_positive
 from render.checksum import Crc32, adler32
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, Framebuffer, pixel_slot
 from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, ColorSpace
 from render.inflate import zlib_inflate
 
@@ -32,18 +39,12 @@ comptime BIT_DEPTH = UInt8(8)
 
 def push_be32(mut out: List[UInt8], value: UInt32):
     """Append `value` as four big-endian bytes."""
-    out.append(UInt8((value >> 24) & 0xFF))
-    out.append(UInt8((value >> 16) & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-    out.append(UInt8(value & 0xFF))
+    append_big_endian(out, Int(value), 4)
 
 
 def _push_ascii(mut out: List[UInt8], text: String):
     """Append the bytes of an ASCII string such as a chunk type."""
-    var bytes = text.as_bytes()
-    # A chunk type is always four characters.
-    for index in range(len(bytes)):  # pragma: no branch
-        out.append(bytes[index])
+    out.extend(text.as_bytes())
 
 
 def push_chunk(mut out: List[UInt8], kind: String, data: List[UInt8]) raises:
@@ -129,10 +130,8 @@ def zlib_stream(
         # Block header: BFINAL in bit 0, BTYPE 00 (stored) in bits 1-2.
         out.append(1) if final else out.append(0)
         # LEN then its one's complement, both little-endian.
-        out.append(UInt8(size & 0xFF))
-        out.append(UInt8((size >> 8) & 0xFF))
-        out.append(UInt8((~size) & 0xFF))
-        out.append(UInt8(((~size) >> 8) & 0xFF))
+        append_little_endian_u16(out, size)
+        append_little_endian_u16(out, ~size)
         out.extend(Span(raw)[position : position + size])
 
         position += size
@@ -269,31 +268,13 @@ struct DecodedImage(Movable):
         Raises:
             Error: If the coordinate is outside the image.
         """
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        var at = (y * self.width + x) * Self.CHANNELS
+        var at = pixel_slot(x, y, self.width, self.height) * Self.CHANNELS
         return Color(
             self.pixels[at],
             self.pixels[at + 1],
             self.pixels[at + 2],
             self.pixels[at + 3],
         )
-
-
-def _be32(bytes: List[UInt8], at: Int) raises -> Int:
-    """Return the big-endian 32-bit integer at `at`.
-
-    The caller has already checked there are four bytes there: the chunk loop
-    will not start a chunk without eight bytes of header, and will not reach a
-    CRC it has not confirmed is present. A guard here would be a branch no
-    file could take -- coverage says so.
-    """
-    return (
-        Int(bytes[at]) << 24
-        | Int(bytes[at + 1]) << 16
-        | Int(bytes[at + 2]) << 8
-        | Int(bytes[at + 3])
-    )
 
 
 def _paeth(left: Int, above: Int, corner: Int) -> Int:
@@ -385,6 +366,22 @@ def _unfilter(
 # fails. Refused up front, by name, rather than discovered as a bad_alloc.
 comptime MAX_DIMENSION = 1 << 16
 comptime MAX_PIXELS = 1 << 28
+
+
+def require_image_pixels(width: Int, height: Int) raises:
+    """Refuse an image whose pixel count passes the decoder limit.
+
+    Nothing. The call returns when the count is within the limit.
+
+    Args:
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+
+    Raises:
+        Error: If the width times the height passes `MAX_PIXELS`.
+    """
+    if width * height > MAX_PIXELS:
+        raise Error("Image has too many pixels")
 
 
 def _channels_for(color_type: Int) raises -> Int:
@@ -513,7 +510,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         # a negative one would be a branch no file could take -- coverage says
         # so. What actually bounds it is the check below that the chunk fits
         # inside the file, which a four-billion-byte length fails at once.
-        var length = _be32(bytes, at)
+        var length = big_endian_u32(bytes, at)
         var kind = String()
         for index in range(4):  # pragma: no branch
             kind += chr(Int(bytes[at + 4 + index]))
@@ -529,7 +526,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         var checked = Crc32()
         checked.update(Span(bytes)[at + 4 : at + 8])
         checked.update(Span(body))
-        if UInt32(_be32(bytes, start + length)) != checked.finish():
+        if UInt32(big_endian_u32(bytes, start + length)) != checked.finish():
             raise Error("A PNG chunk failed its CRC")
 
         if kind == "IHDR":
@@ -537,10 +534,11 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 raise Error("A PNG has more than one header chunk")
             if length != 13:
                 raise Error("A PNG header chunk is the wrong size")
-            width = _be32(body, 0)
-            height = _be32(body, 4)
-            if width <= 0 or height <= 0:
-                raise Error("A PNG's dimensions must be positive")
+            width = big_endian_u32(body, 0)
+            height = big_endian_u32(body, 4)
+            require_positive_extent(
+                width, height, "A PNG's dimensions must be positive"
+            )
             if width > MAX_DIMENSION or height > MAX_DIMENSION:
                 raise Error("A PNG larger than this decoder will build")
             if width * height > MAX_PIXELS:
@@ -585,8 +583,9 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                     "A PNG with an alpha channel cannot also carry tRNS"
                 )
             if color_type == 3:
-                if len(palette) == 0:
-                    raise Error("A palette tRNS must follow its palette")
+                require_positive(
+                    len(palette), "A palette tRNS must follow its palette"
+                )
                 if length > len(palette) // 3:
                     raise Error("A PNG tRNS is longer than its palette")
                 alphas = body^
@@ -616,7 +615,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             # it, so a gamma that could override the profile turned every
             # profiled export with a gamma of 1/2.2 into a plain sRGB one.
             if not stated_srgb and not stated_profile:
-                color_space = _space_from_gamma(_be32(body, 0))
+                color_space = _space_from_gamma(big_endian_u32(body, 0))
         elif kind == "iCCP":
             if seen_data:
                 raise Error("A PNG iCCP chunk must come before its pixel data")

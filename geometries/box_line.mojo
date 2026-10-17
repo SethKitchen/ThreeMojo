@@ -18,15 +18,15 @@ face by a rounding error, as in three.js.
 """
 
 from core.buffer_attribute import BufferAttribute
+from geometries.surface import require_finite_extents, require_positive_extents
 from core.buffer_geometry import BufferGeometry, POSITION
-from std.math import isfinite
 from units.si import Length, METER
 
 
 def _push(mut out: List[Float64], a: List[Float64], b: List[Float64]):
     """Append one stick, from `a` to `b`, three numbers each."""
-    out.extend(a.copy())
-    out.extend(b.copy())
+    out.extend(Span(a))
+    out.extend(Span(b))
 
 
 def box_line(
@@ -56,14 +56,12 @@ def box_line(
         Error: If an extent is not finite and positive, or a segment count is less
             than one. three.js divides by zero for no segments.
     """
-    if (
-        not isfinite(width.value)
-        or not isfinite(height.value)
-        or not isfinite(depth.value)
-    ):
-        raise Error("A box of lines needs finite extents")
-    if width.value <= 0 or height.value <= 0 or depth.value <= 0:
-        raise Error("A box of lines needs positive extents")
+    require_finite_extents(
+        width.value, height.value, depth.value, "box of lines"
+    )
+    require_positive_extents(
+        width.value, height.value, depth.value, "box of lines"
+    )
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box of lines needs one segment each way")
     var w = Float64(width.value)

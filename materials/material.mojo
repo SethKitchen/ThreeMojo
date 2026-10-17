@@ -189,6 +189,14 @@ rasterizers read them from `raster_state`. See
 `docs/wiki/Renderer-hooks-and-material-flags.md`.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
+
 from render.cube_texture import check_rotation, is_turned
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
@@ -202,7 +210,7 @@ from render.blend import (
     is_valid_custom,
     pack_custom,
 )
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, rgb_is_black
 from render.packing import (
     BASIC_DEPTH_PACKING,
     DepthPacking,
@@ -226,6 +234,14 @@ from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.euler import XYZ, Euler
+from math.finite import (
+    positive_finite,
+    require_finite,
+    require_finite_group,
+    require_non_negative_finite,
+    require_unit_finite,
+    require_unit_range,
+)
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
@@ -293,7 +309,7 @@ struct PointSize(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a finite size above zero."""
-        return isfinite(self.pixels) and self.pixels > 0
+        return positive_finite(Float64(self.pixels))
 
 
 # One pixel across: three.js's `PointsMaterial` default.
@@ -342,7 +358,7 @@ struct LineWidth(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a finite width above zero."""
-        return isfinite(self.size) and self.size > 0
+        return positive_finite(Float64(self.size))
 
 
 # One pixel across, on the image: three.js's `LineMaterial` default.
@@ -366,7 +382,7 @@ struct Side(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three sides there are."""
-        return self == FRONT_SIDE or self == BACK_SIDE or self == DOUBLE_SIDE
+        return ordinal_valid(self.value, DOUBLE_SIDE.value)
 
 
 # Draw only surfaces turned towards the camera. three.js's default.
@@ -459,10 +475,10 @@ def custom_blending(
     var mode = Blending(
         pack_custom(src, dst, equation, alpha_src, alpha_dst, alpha_equation)
     )
-    if not mode.is_valid():
-        raise Error(
-            "A custom blending names a factor or an equation that is not one"
-        )
+    require_valid(
+        mode.is_valid(),
+        "A custom blending names a factor or an equation that is not one",
+    )
     return mode
 
 
@@ -481,11 +497,7 @@ struct Combine(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three operations there are."""
-        return (
-            self == MULTIPLY_OPERATION
-            or self == MIX_OPERATION
-            or self == ADD_OPERATION
-        )
+        return ordinal_valid(self.value, ADD_OPERATION.value)
 
 
 # The surface's light times the reflection, faded in by the reflectivity:
@@ -577,9 +589,7 @@ struct NormalMapType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two named frames."""
-        return (
-            self == TANGENT_SPACE_NORMAL_MAP or self == OBJECT_SPACE_NORMAL_MAP
-        )
+        return ordinal_valid(self.value, OBJECT_SPACE_NORMAL_MAP.value)
 
 
 # Normals relative to the surface's tangent frame: three.js's
@@ -712,8 +722,78 @@ def check_steps(steps: Int) raises:
     Raises:
         Error: If `steps` is below one: three.js divides the ray by it.
     """
-    if steps < 1:
-        raise Error("A volume's ray takes at least one step")
+    require_positive(steps, "A volume's ray takes at least one step")
+
+
+def require_dash_size(size: Float32) raises:
+    """Refuse a dash length that is negative or not finite.
+
+    Nothing. The call returns when the length is finite and not
+    negative.
+
+    Args:
+        size: The dash length, in meters.
+
+    Raises:
+        Error: If the length is negative or not finite.
+    """
+    require_non_negative_finite(Float64(size), "A dash size cannot be negative")
+
+
+def require_gap_size(size: Float32) raises:
+    """Refuse a gap length that is negative or not finite.
+
+    Nothing. The call returns when the length is finite and not
+    negative.
+
+    Args:
+        size: The gap length, in meters.
+
+    Raises:
+        Error: If the length is negative or not finite.
+    """
+    require_non_negative_finite(Float64(size), "A gap size cannot be negative")
+
+
+def require_unmixed_data(is_data: Bool, mixes: Bool) raises:
+    """Refuse a data material that blends into the light behind it.
+
+    A normal or a depth material holds bytes. A blend would mix those
+    bytes with the scene's light.
+
+    Nothing. The call returns when the material shows light, or it
+    does not blend.
+
+    Args:
+        is_data: Whether the material shows data rather than light.
+        mixes: Whether its blending mixes with the pixel behind it.
+
+    Raises:
+        Error: If a data material blends.
+    """
+    if is_data and mixes:
+        raise Error(
+            "A normal or depth material cannot blend: a pixel holds its"
+            " bytes or the scene's light, not a mixture of the two"
+        )
+
+
+def require_strand_opacity(opacity: Float32) raises:
+    """Refuse a strand opacity outside zero through one.
+
+    Nothing. The call returns when the opacity is finite and inside
+    that range.
+
+    Args:
+        opacity: The coverage, from zero through one.
+
+    Raises:
+        Error: If the opacity is not finite or is outside zero through one.
+    """
+    require_unit_finite(
+        Float64(opacity),
+        "Strand opacity must be finite and between zero and one",
+    )
 
 
 @fieldwise_init
@@ -729,21 +809,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the thirteen kinds there are."""
-        return (
-            self == BASIC
-            or self == LAMBERT
-            or self == GOURAUD
-            or self == VOLUME
-            or self == NORMALS
-            or self == DEPTH
-            or self == PHONG
-            or self == TOON
-            or self == MATCAP
-            or self == STANDARD
-            or self == PHYSICAL
-            or self == SHADOW
-            or self == DISTANCE
-        )
+        return ordinal_valid(self.value, VOLUME.value)
 
     def is_unlit(self) -> Bool:
         """Return True if the scene's lights leave a surface of this kind
@@ -1758,18 +1824,19 @@ struct Material(ImplicitlyCopyable):
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
-        if opacity < 0 or opacity > 1:
-            raise Error("Opacity must be between zero and one")
-        if not side.is_valid():
-            raise Error(
-                "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
-            )
-        if not kind.is_valid():
-            raise Error(
+        require_unit_range(opacity, "Opacity must be between zero and one")
+        require_valid(
+            side.is_valid(),
+            "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE",
+        )
+        require_valid(
+            kind.is_valid(),
+            (
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
                 " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW, DISTANCE,"
                 " GOURAUD or VOLUME"
-            )
+            ),
+        )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
         if kind != TOON and gradient_map != NO_TEXTURE:
@@ -1788,17 +1855,20 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's emissive map id cannot be negative")
         if alpha_map.value < 0 and alpha_map != NO_TEXTURE:
             raise Error("A material's alpha map id cannot be negative")
-        if not isfinite(alpha_test) or alpha_test < 0 or alpha_test > 1:
-            raise Error("An alpha test must be between zero and one")
-        if not isfinite(shininess) or shininess < 0:
-            raise Error("A shininess cannot be negative")
+        require_unit_finite(
+            Float64(alpha_test), "An alpha test must be between zero and one"
+        )
+        require_non_negative_finite(
+            Float64(shininess), "A shininess cannot be negative"
+        )
         if kind != PHONG and (_gives_off_light(specular, 1.0) or shininess > 0):
             raise Error(
                 "Only a phong material has a highlight: give it kind=PHONG,"
                 " or build it with phong_material"
             )
-        if emissive_intensity < 0:
-            raise Error("An emissive intensity cannot be negative")
+        require_non_negative(
+            emissive_intensity, "An emissive intensity cannot be negative"
+        )
         if (kind.is_unlit() or kind == VOLUME) and (
             emissive_map != NO_TEXTURE
             or _gives_off_light(emissive, emissive_intensity)
@@ -1869,12 +1939,9 @@ struct Material(ImplicitlyCopyable):
         self.transparent = transparent
         var dash = dash_size.to(METER)
         var gap = gap_size.to(METER)
-        if not isfinite(dash) or dash < 0:
-            raise Error("A dash size cannot be negative")
-        if not isfinite(gap) or gap < 0:
-            raise Error("A gap size cannot be negative")
-        if not isfinite(dash_scale):
-            raise Error("A dash scale must be finite")
+        require_dash_size(dash)
+        require_gap_size(gap)
+        require_finite(Float64(dash_scale), "A dash scale must be finite")
         if gap > 0 and dash == 0:
             raise Error(
                 "A dashed line needs a dash: a gap with no dash before it"
@@ -1901,10 +1968,13 @@ struct Material(ImplicitlyCopyable):
         # wide line reads a width or an offset, and a wide line is unlit.
         # A wireframe is drawn by the one-pixel line pass, which cannot
         # draw any wider.
-        if not line_width.is_valid():
-            raise Error("A line width must be a positive, finite number")
-        if not isfinite(dash_offset.to(METER)):
-            raise Error("A dash offset must be finite")
+        require_valid(
+            line_width.is_valid(),
+            "A line width must be a positive, finite number",
+        )
+        require_finite(
+            Float64(dash_offset.to(METER)), "A dash offset must be finite"
+        )
         var widened = line_width != DEFAULT_LINE_WIDTH or dash_offset != NO_DASH
         if widened and kind != BASIC:
             raise Error(
@@ -1923,10 +1993,13 @@ struct Material(ImplicitlyCopyable):
         # drawn unlit. The default size and attenuation are what every
         # other material carries without reading, so only a change is a
         # mistake.
-        if not point_size.is_valid():
-            raise Error("A point size must be a positive number of pixels")
-        if not isfinite(rotation.to(RADIAN)):
-            raise Error("A sprite rotation must be finite")
+        require_valid(
+            point_size.is_valid(),
+            "A point size must be a positive number of pixels",
+        )
+        require_finite(
+            Float64(rotation.to(RADIAN)), "A sprite rotation must be finite"
+        )
         if kind != BASIC and (
             point_size != DEFAULT_POINT_SIZE or not size_attenuation
         ):
@@ -1953,13 +2026,16 @@ struct Material(ImplicitlyCopyable):
             and env_map != SCENE_ENVIRONMENT
         ):
             raise Error("A material's env map id cannot be negative")
-        if not isfinite(reflectivity) or reflectivity < 0 or reflectivity > 1:
-            raise Error("A reflectivity must be between zero and one")
-        if not combine.is_valid():
-            raise Error(
-                "A material's combine must be MULTIPLY_OPERATION,"
-                " MIX_OPERATION or ADD_OPERATION"
-            )
+        require_unit_finite(
+            Float64(reflectivity), "A reflectivity must be between zero and one"
+        )
+        require_valid(
+            combine.is_valid(),
+            (
+                "A material's combine must be MULTIPLY_OPERATION, MIX_OPERATION"
+                " or ADD_OPERATION"
+            ),
+        )
         if not kind.reflects() and (
             env_map != NO_CUBE_TEXTURE
             or reflectivity != 1
@@ -1980,16 +2056,20 @@ struct Material(ImplicitlyCopyable):
         # The physical terms, refused where nothing reads them: only the
         # two physical shaders read a roughness or a metalness, and only
         # the physical one an index, a specular color or a clear coat.
-        if not _is_unit_fraction(roughness):
-            raise Error("A roughness must be between zero and one")
-        if not _is_unit_fraction(metalness):
-            raise Error("A metalness must be between zero and one")
+        require_unit_finite(
+            Float64(roughness), "A roughness must be between zero and one"
+        )
+        require_unit_finite(
+            Float64(metalness), "A metalness must be between zero and one"
+        )
         if roughness_map.value < 0 and roughness_map != NO_TEXTURE:
             raise Error("A material's roughness map id cannot be negative")
         if metalness_map.value < 0 and metalness_map != NO_TEXTURE:
             raise Error("A material's metalness map id cannot be negative")
-        if not isfinite(env_map_intensity) or env_map_intensity < 0:
-            raise Error("An env map intensity cannot be negative")
+        require_non_negative_finite(
+            Float64(env_map_intensity),
+            "An env map intensity cannot be negative",
+        )
         if not kind.is_physical() and (
             roughness != 1
             or metalness != 0
@@ -2011,12 +2091,17 @@ struct Material(ImplicitlyCopyable):
             )
         if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
             raise Error("An index of refraction must be between one and 2.333")
-        if not _is_unit_fraction(specular_intensity):
-            raise Error("A specular intensity must be between zero and one")
-        if not _is_unit_fraction(clearcoat):
-            raise Error("A clearcoat must be between zero and one")
-        if not _is_unit_fraction(clearcoat_roughness):
-            raise Error("A clearcoat roughness must be between zero and one")
+        require_unit_finite(
+            Float64(specular_intensity),
+            "A specular intensity must be between zero and one",
+        )
+        require_unit_finite(
+            Float64(clearcoat), "A clearcoat must be between zero and one"
+        )
+        require_unit_finite(
+            Float64(clearcoat_roughness),
+            "A clearcoat roughness must be between zero and one",
+        )
         if kind != PHYSICAL and (
             ior != DEFAULT_IOR
             or not _is_opaque_white(specular_color)
@@ -2042,15 +2127,18 @@ struct Material(ImplicitlyCopyable):
         # The volume, refused where nothing reads it: only the physical
         # shader transmits. An infinite attenuation distance is the
         # default and dims nothing; not-a-number is not above zero.
-        if not _is_unit_fraction(transmission):
-            raise Error("A transmission must be between zero and one")
+        require_unit_finite(
+            Float64(transmission), "A transmission must be between zero and one"
+        )
         var deep = thickness.to(METER)
-        if not isfinite(deep) or deep < 0:
-            raise Error("A thickness cannot be negative")
+        require_non_negative_finite(
+            Float64(deep), "A thickness cannot be negative"
+        )
         if not (attenuation_distance.to(METER) > 0):
             raise Error("An attenuation distance must be above zero")
-        if not isfinite(dispersion) or dispersion < 0:
-            raise Error("A dispersion cannot be negative")
+        require_non_negative_finite(
+            Float64(dispersion), "A dispersion cannot be negative"
+        )
         if transmission_map.value < 0 and transmission_map != NO_TEXTURE:
             raise Error("A material's transmission map id cannot be negative")
         if thickness_map.value < 0 and thickness_map != NO_TEXTURE:
@@ -2078,12 +2166,16 @@ struct Material(ImplicitlyCopyable):
         # The three layers, refused where nothing reads them: only the
         # physical shader has a sheen, a film or a stretch, and a map with
         # no amount to multiply does nothing.
-        if not _is_unit_fraction(sheen):
-            raise Error("A sheen must be between zero and one")
-        if not _is_unit_fraction(sheen_roughness):
-            raise Error("A sheen roughness must be between zero and one")
-        if not _is_unit_fraction(iridescence):
-            raise Error("An iridescence must be between zero and one")
+        require_unit_finite(
+            Float64(sheen), "A sheen must be between zero and one"
+        )
+        require_unit_finite(
+            Float64(sheen_roughness),
+            "A sheen roughness must be between zero and one",
+        )
+        require_unit_finite(
+            Float64(iridescence), "An iridescence must be between zero and one"
+        )
         if (
             not isfinite(iridescence_ior)
             or iridescence_ior < MIN_IOR
@@ -2097,10 +2189,13 @@ struct Material(ImplicitlyCopyable):
         var thickest = iridescence_thickness_maximum.to(NANOMETER)
         if not isfinite(thinnest + thickest) or min(thinnest, thickest) < 0:
             raise Error("A film thickness cannot be negative")
-        if not _is_unit_fraction(anisotropy):
-            raise Error("An anisotropy must be between zero and one")
-        if not isfinite(anisotropy_rotation.to(RADIAN)):
-            raise Error("An anisotropy rotation must be finite")
+        require_unit_finite(
+            Float64(anisotropy), "An anisotropy must be between zero and one"
+        )
+        require_finite(
+            Float64(anisotropy_rotation.to(RADIAN)),
+            "An anisotropy rotation must be finite",
+        )
         var lowest = min(
             min(sheen_color_map.value, sheen_roughness_map.value),
             min(
@@ -2123,7 +2218,7 @@ struct Material(ImplicitlyCopyable):
             raise Error("An anisotropy map needs an anisotropy to turn")
         var layered = (
             sheen != 0
-            or not _is_black(sheen_color)
+            or not rgb_is_black(sheen_color)
             or sheen_roughness != 1
             or iridescence != 0
             or iridescence_ior != DEFAULT_IRIDESCENCE_IOR
@@ -2168,8 +2263,10 @@ struct Material(ImplicitlyCopyable):
                 "A material's specular or clearcoat map id cannot be negative"
             )
         var coat_scale = clearcoat_normal_scale
-        if not isfinite(coat_scale.x) or not isfinite(coat_scale.y):
-            raise Error("A clearcoat normal scale must be finite")
+        require_finite_group(
+            coat_scale.is_finite(),
+            "A clearcoat normal scale must be finite",
+        )
         var coat_scaled = coat_scale.x != 1 or coat_scale.y != 1
         if clearcoat_normal_map == NO_TEXTURE and coat_scaled:
             raise Error(
@@ -2201,8 +2298,9 @@ struct Material(ImplicitlyCopyable):
         # A node graph replaces parts of a surface's shading, so a kind that
         # shows data or a shadow has nothing for it to replace. A wireframe
         # is drawn as lines, which run no graph.
-        if not nodes.is_valid():
-            raise Error("A material's node program id cannot be negative")
+        require_valid(
+            nodes.is_valid(), "A material's node program id cannot be negative"
+        )
         if nodes != NO_NODES and not kind.takes_nodes():
             raise Error(
                 "A data or shadow material runs no node graph: it"
@@ -2222,19 +2320,22 @@ struct Material(ImplicitlyCopyable):
                 "Only a material that reflects an environment turns one:"
                 " basic, lambert, phong, standard or physical"
             )
-        if not isfinite(refraction_ratio) or refraction_ratio < 0:
-            raise Error("A refraction ratio cannot be negative")
+        require_non_negative_finite(
+            Float64(refraction_ratio), "A refraction ratio cannot be negative"
+        )
         var bends = kind.reflects() and not kind.is_physical()
         if not bends and refraction_ratio != DEFAULT_REFRACTION_RATIO:
             raise Error(
                 "Only a basic, lambert or phong material refracts its"
                 " environment: a physical surface reflects it by roughness"
             )
-        if not normal_map_type.is_valid():
-            raise Error(
+        require_valid(
+            normal_map_type.is_valid(),
+            (
                 "A normal map type must be TANGENT_SPACE_NORMAL_MAP or"
                 " OBJECT_SPACE_NORMAL_MAP"
-            )
+            ),
+        )
         if (
             normal_map_type == OBJECT_SPACE_NORMAL_MAP
             and normal_map == NO_TEXTURE
@@ -2273,10 +2374,11 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's normal map id cannot be negative")
         if bump_map.value < 0 and bump_map != NO_TEXTURE:
             raise Error("A material's bump map id cannot be negative")
-        if not isfinite(normal_scale.x) or not isfinite(normal_scale.y):
-            raise Error("A normal scale must be finite")
-        if not isfinite(bump_scale):
-            raise Error("A bump scale must be finite")
+        require_finite_group(
+            normal_scale.is_finite(),
+            "A normal scale must be finite",
+        )
+        require_finite(Float64(bump_scale), "A bump scale must be finite")
         if normal_map != NO_TEXTURE and bump_map != NO_TEXTURE:
             raise Error(
                 "A material names a normal map or a bump map, not both:"
@@ -2308,10 +2410,13 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's ao map id cannot be negative")
         if light_map.value < 0 and light_map != NO_TEXTURE:
             raise Error("A material's light map id cannot be negative")
-        if not isfinite(ao_map_intensity) or ao_map_intensity < 0:
-            raise Error("An ao map intensity cannot be negative")
-        if not isfinite(light_map_intensity) or light_map_intensity < 0:
-            raise Error("A light map intensity cannot be negative")
+        require_non_negative_finite(
+            Float64(ao_map_intensity), "An ao map intensity cannot be negative"
+        )
+        require_non_negative_finite(
+            Float64(light_map_intensity),
+            "A light map intensity cannot be negative",
+        )
         if ao_map == NO_TEXTURE and ao_map_intensity != 1:
             raise Error("An ao map intensity needs an ao map to scale")
         if light_map == NO_TEXTURE and light_map_intensity != 1:
@@ -2366,11 +2471,13 @@ struct Material(ImplicitlyCopyable):
         var stated = Bool(blending)
         if stated:
             var chosen = blending.value()
-            if not chosen.is_valid():
-                raise Error(
+            require_valid(
+                chosen.is_valid(),
+                (
                     "A material's blending must be OPAQUE, one of the four"
                     " named modes, or a custom one"
-                )
+                ),
+            )
             self.blending = chosen
         elif transparent or kind == SHADOW:
             # A shadow material is transparent wherever no shadow falls,
@@ -2398,11 +2505,7 @@ struct Material(ImplicitlyCopyable):
         # refused along with a policy stated outright -- see
         # `render.target`. A map's own alpha is another matter: an opaque
         # write keeps it, and the bytes come back exact.
-        if kind.is_data() and self.blending.mixes():
-            raise Error(
-                "A normal or depth material cannot blend: a pixel holds its"
-                " bytes or the scene's light, not a mixture of the two"
-            )
+        require_unmixed_data(kind.is_data(), self.blending.mixes())
         self.depth_packing = depth_packing
         self.reference_position = reference_position
         self.near_distance = near_distance
@@ -2444,11 +2547,13 @@ struct Material(ImplicitlyCopyable):
                 `check_distance_range` refuses. If `fog` is on on a data
                 kind, whose shaders read no fog.
         """
-        if not self.depth_packing.is_valid():
-            raise Error(
+        require_valid(
+            self.depth_packing.is_valid(),
+            (
                 "A material's depth packing must be BASIC_DEPTH_PACKING,"
                 " RGBA_DEPTH_PACKING, RGB_DEPTH_PACKING or RG_DEPTH_PACKING"
-            )
+            ),
+        )
         var packed = self.depth_packing != BASIC_DEPTH_PACKING
         if packed and self.kind != DEPTH:
             raise Error(
@@ -2463,7 +2568,7 @@ struct Material(ImplicitlyCopyable):
         var near = self.near_distance.to(METER)
         var far = self.far_distance.to(METER)
         var ranged = (
-            not _is_origin(self.reference_position)
+            self.reference_position != Vector3(0, 0, 0)
             or self.near_distance != DEFAULT_NEAR_DISTANCE
             or self.far_distance != DEFAULT_FAR_DISTANCE
         )
@@ -2858,10 +2963,10 @@ struct Material(ImplicitlyCopyable):
         if not stated:
             return self.side
         var face = self.shadow_side.value()
-        if not face.is_valid():
-            raise Error(
-                "A shadow side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
-            )
+        require_valid(
+            face.is_valid(),
+            "A shadow side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE",
+        )
         return face
 
     def depth_offset(self) raises -> PolygonOffset:
@@ -2881,8 +2986,10 @@ struct Material(ImplicitlyCopyable):
         var offset = PolygonOffset(
             self.polygon_offset_factor, self.polygon_offset_units
         )
-        if not offset.is_valid():
-            raise Error("A polygon offset factor and units must be finite")
+        require_valid(
+            offset.is_valid(),
+            "A polygon offset factor and units must be finite",
+        )
         return offset
 
     def clipping_planes(self) raises -> List[Plane]:
@@ -3712,8 +3819,9 @@ def shader_material(
         Error: If `fragment` is `NO_NODES` or negative, or `side` is none
             of its named values.
     """
-    if fragment.value < 0:
-        raise Error("A shader material needs a node program to run")
+    require_non_negative(
+        fragment.value, "A shader material needs a node program to run"
+    )
     return Material(
         _WHITE,
         side=side,
@@ -3887,22 +3995,6 @@ def distance_material(
     )
 
 
-def _is_origin(point: Vector3) -> Bool:
-    """Return True if `point` is the origin, three.js's default
-    `referencePosition`."""
-    return point.x == 0 and point.y == 0 and point.z == 0
-
-
-def _is_black(color: Color) -> Bool:
-    """Return True if a color has no red, green or blue, whatever its alpha."""
-    return color.r == 0 and color.g == 0 and color.b == 0
-
-
-def _is_unit_fraction(value: Float32) -> Bool:
-    """Return True if `value` is finite and between zero and one."""
-    return isfinite(value) and value >= 0 and value <= 1
-
-
 def _has_volume(
     transmission: Float32,
     transmission_map: TextureId,
@@ -3978,6 +4070,7 @@ struct MaterialStore(Movable):
         Raises:
             Error: If no material has that id.
         """
-        if id.value < 0 or id.value >= len(self.materials):
-            raise Error("No material has that id")
+        require_index_in_count(
+            id.value, len(self.materials), "No material has that id"
+        )
         return self.materials[id.value]

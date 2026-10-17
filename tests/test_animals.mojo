@@ -30,6 +30,7 @@ from extensions.animals.gait import spine_count
 from extensions.animals.kit import (
     EyeSpec,
     aperture_tilt_along,
+    coat_place,
     eye_frame_of,
     head_local,
     pick_cumulative,
@@ -562,6 +563,30 @@ def test_kit_helpers() raises:
         V3(0, 1, -0.2),
         1e-12,
     )
+    var head_region, head_limb = coat_place("head")
+    assert_equal(head_region, 2)
+    assert_false(head_limb)
+    var jaw_region, jaw_limb = coat_place("jaw")
+    assert_equal(jaw_region, 6)
+    assert_false(jaw_limb)
+    var ear_region, ear_limb = coat_place("earL")
+    assert_equal(ear_region, 5)
+    assert_false(ear_limb)
+    var tail_region, tail_limb = coat_place("tail2")
+    assert_equal(tail_region, 4)
+    assert_false(tail_limb)
+    var neck_region, neck_limb = coat_place("neck1")
+    assert_equal(neck_region, 1)
+    assert_false(neck_limb)
+    var neck2_region, neck2_limb = coat_place("neck2")
+    assert_equal(neck2_region, 1)
+    assert_false(neck2_limb)
+    var body_region, body_limb = coat_place("spine")
+    assert_equal(body_region, 0)
+    assert_false(body_limb)
+    var leg_region, leg_limb = coat_place("femurL")
+    assert_equal(leg_region, 0)
+    assert_true(leg_limb)
 
 
 def test_empty_inputs() raises:

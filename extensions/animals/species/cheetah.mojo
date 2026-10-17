@@ -22,11 +22,16 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     add_orbit_lid_and_socket,
     eye_frame_of,
@@ -34,7 +39,7 @@ from extensions.animals.kit import (
     mirrored_blob,
     aperture_local,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import cells3, centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -56,6 +61,8 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.sine import fraction
+from math.utils import clamp_unit, max3
 from std.math import cos, floor, log, pi, pow, sin
 from extensions.sdf.distance import almond_distance
 
@@ -255,9 +262,9 @@ def _hl(x: Float64, y: Float64, z: Float64) -> V3:
 
 def _tail_radius(t: Float64) -> Float64:
     if t < 0.4:
-        return 0.034 + (0.024 - 0.034) * (t / 0.4)
+        return mix(0.034, 0.024, t / 0.4)
     if t < 0.8:
-        return 0.024 + (0.021 - 0.024) * ((t - 0.4) / 0.4)
+        return mix(0.024, 0.021, (t - 0.4) / 0.4)
     return 0.021 - 0.002 * ((t - 0.8) / 0.2)
 
 
@@ -498,10 +505,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: small and round, set low and wide.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(V3(1.0 * s, 0.1, 1))
         var c = lerp(base, tip, 0.3)
         var lat = normalize(cross(up, facing))
@@ -558,19 +562,10 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
     var toe_x: List[Float64] = [-0.019, -0.0065, 0.0065, 0.019]
     var toe_z: List[Float64] = [-0.009, 0, 0, -0.009]
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
@@ -635,15 +630,9 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
                 k=0.007,
             )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "thigh",
@@ -809,11 +798,7 @@ def cheetah_palette(t: Traits) -> Palette:
             or i == FACE
         )
         if tawny:
-            c = V3(
-                c.x * (1.0 + 0.1 * k + l),
-                c.y * (1.0 + 0.02 * k + l),
-                c.z * (1.0 - 0.12 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.1, 0.02, -0.12)
         pal.set(names[i], c)
     return pal^
 
@@ -889,7 +874,7 @@ def _spot_layer(
     # out spot by spot rather than fading.
     var cell = 2.7 * radius
     var c = cells3(p * (1.0 / cell), seed)
-    var draw = c.id * 7.31 - floor(c.id * 7.31)
+    var draw = fraction(c.id * 7.31)
     if draw >= keep:
         return 0.0
     var r = (0.78 + 0.44 * c.id) * wob / 2.7 * 1.1
@@ -995,15 +980,15 @@ def cheetah_paint(
         col = body[0]
         ventral = body[1]
         radius = body[2]
-    var cv = fbm3(p * 9.0, 3) - 0.5
-    var cvh = fbm3(V3(p.x * 4.0 + 5.0, p.y * 4.0, p.z * 4.0), 2) - 0.5
+    var cv = centered_fbm(p, 9.0, 3)
+    var cvh = centered_fbm(p, 4.0, 2, 5.0)
     col = V3(
         col.x * (1.0 + 0.16 * cv + 0.1 * cvh),
         col.y * (1.0 + 0.14 * cv),
         col.z * (1.0 + 0.1 * cv - 0.08 * cvh),
     )
     if radius > 0.0:
-        var wob = 1.0 + 0.22 * (vnoise3(p * 180.0) - 0.5)
+        var wob = 1.0 + 0.22 * (centered_value(p, 180.0))
         var spot = _spot(p, radius, seed % 4093, wob)
         var pale = (
             smoothstep(0.45, 0.95, ventral)
@@ -1022,7 +1007,7 @@ def _paint_body(
     var neck = bone == "neck1" or bone == "neck2"
     var limb = is_limb(bone)
     var legness = smoothstep(0.55, 0.38, p.y) if limb else 0.0
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var w: Float64
     if neck:
         w = smoothstep(0.15, -0.55, up)
@@ -1043,7 +1028,7 @@ def _paint_body(
             inner * 0.45 * smoothstep(0.15, 0.45, p.y)
             + smoothstep(-0.3, -0.85, up) * 0.45
         )
-        w = w + (wl - w) * legness
+        w = mix(w, wl, legness)
     w = clamp(w, 0.0, 1.0)
     var col = mix3(c[LOW_FLANK], c[FLANK], smoothstep(-0.2, 0.4, up))
     col = mix3(col, c[DORSAL], smoothstep(0.55, 0.95, up) * 0.85)
@@ -1099,7 +1084,7 @@ def _paint_face(c: List[V3], tag: String, bone: String, p: V3, n: V3) -> Paint:
     var w = clamp(
         max(
             max(max(whisker, moustache), max(lip, under_eye)),
-            max(above_eye, max(chin_w, throat_w)),
+            max3(above_eye, chin_w, throat_w),
         ),
         0.0,
         1.0,

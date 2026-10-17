@@ -23,6 +23,7 @@ small pixel's area, weighted by their alpha, so the result does not depend
 on a browser.
 """
 
+from core.extent import positive_extent, require_positive_extent
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
@@ -137,7 +138,11 @@ def shrink(image: Framebuffer, width: Int, height: Int) raises -> List[Color]:
         Error: If the small size is not positive or is larger than the
             image.
     """
-    if width < 1 or height < 1 or width > image.width or height > image.height:
+    if (
+        not positive_extent(width, height)
+        or width > image.width
+        or height > image.height
+    ):
         raise Error("A shrunk image must be from one pixel to the image's size")
     var small = List[Color](capacity=width * height)
     for y in range(height):  # pragma: no branch
@@ -340,8 +345,9 @@ struct AsciiEffect(Movable):
         """
         var width = ascii_size(image.width, self.resolution)
         var height = ascii_size(image.height, self.resolution)
-        if width < 1 or height < 1:
-            raise Error("The image is too small for that ASCII resolution")
+        require_positive_extent(
+            width, height, "The image is too small for that ASCII resolution"
+        )
         var small = shrink(image, width, height)
         var rows = (height + 1) // 2
         var characters = List[String](capacity=width * rows)

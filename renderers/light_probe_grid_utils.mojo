@@ -30,6 +30,7 @@ It is here, beside the renderer, and not in `lights/`, because it draws.
 
 from core.assets import Assets
 from core.object3d import NodeId
+from core.ordinal import require_non_negative, require_positive
 from core.scene import Scene
 from lights.light import DIRECTIONAL, Light
 from lights.light_probe_grid import LightProbeGrid
@@ -73,6 +74,20 @@ def fibonacci_direction(index: Int, sample_count: Int) -> Vector3:
     return Vector3(r * cos(phi), z, r * sin(phi))
 
 
+def require_probe_samples(sample_count: Int) raises:
+    """Refuse a probe bake that reads no direction.
+
+    Nothing. The call returns when the count is one or more.
+
+    Args:
+        sample_count: How many directions to read.
+
+    Raises:
+        Error: If the count is below one.
+    """
+    require_positive(sample_count, "A probe bake reads one direction or more")
+
+
 def project_sh(
     cube: CubeTexture, sample_count: Int
 ) raises -> SphericalHarmonics3:
@@ -92,8 +107,7 @@ def project_sh(
         Error: If the sample count is below one, or the cube is refused by
             `CubeTexture.validate`.
     """
-    if sample_count < 1:
-        raise Error("A probe bake reads one direction or more")
+    require_probe_samples(sample_count)
     cube.validate()
     var sh = SphericalHarmonics3()
     for sample in range(sample_count):  # pragma: no branch
@@ -296,14 +310,14 @@ def bake_light_probe_grid(
     var end = start + amount
     if start < 0 or amount < 0 or end > total:
         raise Error("A light probe grid bake names probes the grid lacks")
-    if bounces < 0:
-        raise Error("A light probe grid bake's bounces cannot be negative")
+    require_non_negative(
+        bounces, "A light probe grid bake's bounces cannot be negative"
+    )
     if bounces > 0 and amount != total:
         raise Error(
             "A light probe grid bakes every probe when the light bounces"
         )
-    if sample_count < 1:
-        raise Error("A probe bake reads one direction or more")
+    require_probe_samples(sample_count)
     if amount == 0:
         return
     var saved = replace_sun_lights(scene, assets)

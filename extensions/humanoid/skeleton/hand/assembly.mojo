@@ -15,22 +15,27 @@ the arm's wrist.
 """
 
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
-    place_mesh,
+    place_mesh_node,
     resolved_paint,
 )
 from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
+from extensions.humanoid.skeleton.place import place_root
 from extensions.humanoid.skeleton.hand.bones.dimensions import (
     named_hand_bones,
 )
 from extensions.humanoid.skeleton.hand.bones.geometry import (
     hand_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.hand.contents import BOTH, HandContents
+from extensions.humanoid.skeleton.hand.contents import (
+    BOTH,
+    HandContents,
+    require_hand_contents,
+)
 from extensions.humanoid.skeleton.hand.hair.dimensions import named_hand_hair
 from extensions.humanoid.skeleton.hand.hair.geometry import (
     hand_hair_from_dimensions,
@@ -141,18 +146,14 @@ def add_hand(
         Error: If the spec, `side`, a mesh, `contents` or the scene is
             invalid.
     """
-    if not contents.is_valid():
-        raise Error("Hand contents must be a named layer set")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_hand_contents(contents)
+    require_side(side, "A hand")
     var dims = arm_muscle_dimensions(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     if contents.includes_bones():
         var bones = named_hand_bones()
         for index in range(len(bones)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -168,7 +169,7 @@ def add_hand(
                 or parts[index] == TRIANGULAR_FIBROCARTILAGE
             ):
                 paint = cartilage_paint
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -184,7 +185,7 @@ def add_hand(
             var paint = muscle_paint
             if is_hand_tendon(parts[index]):
                 paint = tendon
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -199,7 +200,7 @@ def add_hand(
             var paint = vein
             if is_hand_artery(parts[index]):
                 paint = artery
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -210,7 +211,7 @@ def add_hand(
         var lymph = resolved_paint(assets, lymph_paint, lymph_phong())
         var parts = named_hand_lymph()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -221,7 +222,7 @@ def add_hand(
         var nerve = resolved_paint(assets, nerve_paint, nerve_phong())
         var parts = named_hand_nerves()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -232,7 +233,7 @@ def add_hand(
         var skin = resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -243,7 +244,7 @@ def add_hand(
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var parts = named_hand_hair()
         for index in range(len(parts)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,

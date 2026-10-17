@@ -30,15 +30,39 @@ so degrees cannot be passed where radians are meant.
 """
 
 from math.matrix4 import Matrix4
+from math.square_matrix import (
+    _elements_equal,
+    _post_multiply,
+    _scale_elements,
+    _transpose_square,
+)
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.matrix_inverse import (
     _inverse_needs_wide,
     _determinant_needs_wide,
     _inverse_wide,
+    adjugate3,
 )
+from math.finite import require_finite
 from std.math import cos, sin, isfinite
 from units.si import Angle
+
+
+def _require_matrix3(row: Int, column: Int) raises:
+    """Refuse a matrix index outside 0 to 2.
+
+    Nothing. The call returns when both indexes are inside 0 to 2.
+
+    Args:
+        row: The row.
+        column: The column.
+
+    Raises:
+        Error: If either index is outside 0 to 2.
+    """
+    if row < 0 or row > 2 or column < 0 or column > 2:
+        raise Error("Matrix3 index out of range")
 
 
 struct Matrix3(Equatable, ImplicitlyCopyable):
@@ -76,10 +100,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Returns:
             Whether the nine elements match.
         """
-        for index in range(9):  # pragma: no branch
-            if self.elements[index] != other.elements[index]:
-                return False
-        return True
+        return _elements_equal[3](self.elements, other.elements)
 
     def __ne__(self, other: Self) -> Bool:
         """Return True if any element differs.
@@ -139,17 +160,18 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         var out = Matrix3.from_matrix4(matrix)
         # A Matrix3 always has nine entries.
         for index in range(9):  # pragma: no branch
-            if not isfinite(out.elements[index]):
-                raise Error(
-                    "A normal matrix requires a finite linear transform"
-                )
+            require_finite(
+                Float64(out.elements[index]),
+                "A normal matrix requires a finite linear transform",
+            )
         out.invert()
         var nonzero = False
         # A Matrix3 always has nine entries.
         for index in range(9):  # pragma: no branch
             var value = out.elements[index]
-            if not isfinite(value):
-                raise Error("A normal matrix inverse must fit in Float32")
+            require_finite(
+                Float64(value), "A normal matrix inverse must fit in Float32"
+            )
             nonzero = nonzero or value != 0
         if not nonzero:
             raise Error(
@@ -188,6 +210,25 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         """
         var out = Matrix3()
         out.set(x, 0, 0, 0, y, 0, 0, 0, 1)
+        return out^
+
+    @staticmethod
+    def diagonal(x: Float32, y: Float32, z: Float32) -> Matrix3:
+        """Return a matrix with `x`, `y` and `z` on its diagonal.
+
+        The other elements are zero. A new matrix is the identity, and
+        `set` replaces that diagonal.
+
+        Args:
+            x: The first diagonal element.
+            y: The second diagonal element.
+            z: The third diagonal element.
+
+        Returns:
+            The matrix.
+        """
+        var out = Matrix3()
+        out.set(x, 0, 0, 0, y, 0, 0, 0, z)
         return out^
 
     @staticmethod
@@ -269,8 +310,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If either index is outside 0 to 2.
         """
-        if row < 0 or row > 2 or column < 0 or column > 2:
-            raise Error("Matrix3 index out of range")
+        _require_matrix3(row, column)
         return self.elements[column * 3 + row]
 
     def put(mut self, row: Int, column: Int, value: Float32) raises:
@@ -284,8 +324,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If either index is outside 0 to 2.
         """
-        if row < 0 or row > 2 or column < 0 or column > 2:
-            raise Error("Matrix3 index out of range")
+        _require_matrix3(row, column)
         self.elements[column * 3 + row] = value
 
     def set(
@@ -332,13 +371,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
 
     def transpose(mut self):
         """Swap this matrix's rows and columns in place."""
-        for row in range(3):  # pragma: no branch
-            for column in range(row + 1, 3):
-                var high = self.elements[column * 3 + row]
-                self.elements[column * 3 + row] = self.elements[
-                    row * 3 + column
-                ]
-                self.elements[row * 3 + column] = high
+        _transpose_square[3](self.elements)
 
     def multiply(mut self, other: Self):
         """Post-multiply by `other`, giving `self * other`.
@@ -348,18 +381,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Args:
             other: The matrix to apply first.
         """
-        var result = Array[Float32, 9](fill=0.0)
-        # Fixed 3x3, so none of these can run zero times.
-        for row in range(3):  # pragma: no branch
-            for column in range(3):  # pragma: no branch
-                var total = Float32(0)
-                for k in range(3):  # pragma: no branch
-                    total += (
-                        self.elements[k * 3 + row]
-                        * other.elements[column * 3 + k]
-                    )
-                result[column * 3 + row] = total
-        self.elements = result^
+        _post_multiply[3](self.elements, other.elements)
 
     def premultiply(mut self, other: Self):
         """Pre-multiply by `other`, giving `other * self`.
@@ -390,8 +412,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Args:
             factor: The number.
         """
-        for index in range(9):  # pragma: no branch
-            self.elements[index] *= factor
+        _scale_elements[3](self.elements, factor)
 
     def extract_basis(
         self, mut x_axis: Vector3, mut y_axis: Vector3, mut z_axis: Vector3
@@ -453,11 +474,9 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         var n23 = e[7]
         var n33 = e[8]
 
-        var t11 = n33 * n22 - n32 * n23
-        var t12 = n32 * n13 - n33 * n12
-        var t13 = n23 * n12 - n22 * n13
-
-        var det = n11 * t11 + n21 * t12 + n31 * t13
+        var c0, c1, c2, c3, c4, c5, c6, c7, c8, det = adjugate3[DType.float32](
+            n11, n21, n31, n12, n22, n32, n13, n23, n33
+        )
         # Bound cancellation with every unsigned determinant product. Using
         # the rounded cofactors here can hide cancellation inside each one.
         var terms = (
@@ -472,15 +491,15 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
 
         var inv = Float32(1) / det
         var out = Array[Float32, 9](fill=0.0)
-        out[0] = t11 * inv
-        out[1] = (n31 * n23 - n33 * n21) * inv
-        out[2] = (n32 * n21 - n31 * n22) * inv
-        out[3] = t12 * inv
-        out[4] = (n33 * n11 - n31 * n13) * inv
-        out[5] = (n31 * n12 - n32 * n11) * inv
-        out[6] = t13 * inv
-        out[7] = (n21 * n13 - n23 * n11) * inv
-        out[8] = (n22 * n11 - n21 * n12) * inv
+        out[0] = c0 * inv
+        out[1] = c1 * inv
+        out[2] = c2 * inv
+        out[3] = c3 * inv
+        out[4] = c4 * inv
+        out[5] = c5 * inv
+        out[6] = c6 * inv
+        out[7] = c7 * inv
+        out[8] = c8 * inv
         self.elements = out^
 
     def transform(self, vector: Vector3) -> Vector3:

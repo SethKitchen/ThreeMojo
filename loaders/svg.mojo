@@ -58,7 +58,19 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import normalized2, _ordinary_squared
+from math.norm import normalized2, _ordinary_squared, squared_length2
+from math.utils import clamp, clamp_unit
+from loaders.bytes import (
+    ascii_digit,
+    ascii_digit_at,
+    ascii_letter,
+    ascii_space,
+    is_exponent_mark,
+    is_sign_mark,
+    js_float_byte_at,
+    space_tab_line,
+)
+from loaders.js_text import split_fields
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -77,6 +89,7 @@ from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
 from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
+from core.ordinal import require_valid, require_positive
 
 # The namespace an `xlink:href` attribute is in.
 comptime XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
@@ -165,26 +178,6 @@ def svg_unit_scale(
     return _inches(default_unit) / _inches(unit)
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII white space byte, as `\\s` takes it."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
-
-
-def _is_digit(byte: UInt8) -> Bool:
-    """Return True for `0` to `9`."""
-    return byte >= 48 and byte <= 57
-
-
-def _digit_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a digit at `i`."""
-    return i < len(bytes) and _is_digit(bytes[i])
-
-
-def _in_number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a byte a number can hold at `i`."""
-    return i < len(bytes) and _in_number(bytes[i])
-
-
 def _number(text: String) raises -> Float64:
     """Return JavaScript's `Number(text)` for the text a number of
     `parse_floats` collects.
@@ -209,6 +202,21 @@ def _new_number(
             result.append(_number(number) * 10.0 ** _number(exponent))
     number = String()
     exponent = String()
+
+
+def _unexpected_svg(current: String, index: Int) raises:
+    """Refuse one unexpected SVG number character.
+
+    Nothing. The call does not return.
+
+    Args:
+        current: The character.
+        index: Its place in the text.
+
+    Raises:
+        Error: The character cannot appear there.
+    """
+    raise Error("SVG: unexpected `" + current + "` at index " + String(index))
 
 
 def parse_floats(
@@ -249,9 +257,9 @@ def parse_floats(
     for i in range(len(bytes)):
         var c = bytes[i]
         var current = String(chr(Int(c)))
-        var is_space = c == 32 or c == 9 or c == 13 or c == 10
-        var is_sign = c == 43 or c == 45
-        var is_exp = c == 101 or c == 69
+        var is_space = space_tab_line(c)
+        var is_sign = is_sign_mark(c)
+        var is_exp = is_exponent_mark(c)
         var is_flag = c == 48 or c == 49
         var at_flag = (
             len(flags) > 0 and is_flag and (len(result) % stride) in flags
@@ -264,7 +272,7 @@ def parse_floats(
         if state == SEP:
             if is_space:
                 continue
-            var starts = _is_digit(c) or is_sign
+            var starts = ascii_digit(c) or is_sign
             if starts:
                 state = INT
                 number = current
@@ -278,7 +286,7 @@ def parse_floats(
                     raise Error("SVG: unexpected `,` at index " + String(i))
                 seen_comma = True
         if state == INT:
-            if _is_digit(c):
+            if ascii_digit(c):
                 number += current
                 continue
             if c == 46:
@@ -291,16 +299,11 @@ def parse_floats(
             var lone_sign = is_sign and number.byte_length() == 1
             if lone_sign:
                 var first = number.as_bytes()[0]
-                var doubled = first == 43 or first == 45
+                var doubled = is_sign_mark(first)
                 if doubled:
-                    raise Error(
-                        "SVG: unexpected `"
-                        + current
-                        + "` at index "
-                        + String(i)
-                    )
+                    _unexpected_svg(current, i)
         if state == FLOAT:
-            if _is_digit(c):
+            if ascii_digit(c):
                 number += current
                 continue
             if is_exp:
@@ -310,7 +313,7 @@ def parse_floats(
             if second_point:
                 raise Error("SVG: unexpected `.` at index " + String(i))
         if state == EXP:
-            if _is_digit(c):
+            if ascii_digit(c):
                 exponent += current
                 continue
             if is_sign:
@@ -319,14 +322,9 @@ def parse_floats(
                     continue
                 if exponent.byte_length() == 1:
                     var first = exponent.as_bytes()[0]
-                    var doubled = first == 43 or first == 45
+                    var doubled = is_sign_mark(first)
                     if doubled:
-                        raise Error(
-                            "SVG: unexpected `"
-                            + current
-                            + "` at index "
-                            + String(i)
-                        )
+                        _unexpected_svg(current, i)
         if is_space:
             _new_number(result, number, exponent)
             state = SEP
@@ -354,44 +352,33 @@ def parse_floats(
     return result^
 
 
-def _in_number(byte: UInt8) -> Bool:
-    """Return True for a byte `[+-]?\\d*\\.?\\d+(?:e[+-]?\\d+)?` can hold."""
-    return (
-        _is_digit(byte)
-        or byte == 46
-        or byte == 43
-        or byte == 45
-        or (byte == 101)
-    )
-
-
 def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
     """Return where the longest match of `[+-]?\\d*\\.?\\d+(?:e[+-]?\\d+)?`
     from `start` ends, or -1 for none."""
     var n = len(bytes)
     var i = start
-    var signed = i < n and (bytes[i] == 43 or bytes[i] == 45)
+    var signed = i < n and (is_sign_mark(bytes[i]))
     if signed:
         i += 1
     var digits = 0
-    while _digit_at(bytes, i):
+    while ascii_digit_at(bytes, i):
         i += 1
         digits += 1
-    var fraction = i + 1 < n and bytes[i] == 46 and _is_digit(bytes[i + 1])
+    var fraction = i + 1 < n and bytes[i] == 46 and ascii_digit(bytes[i + 1])
     if fraction:
         i += 1
-        while _digit_at(bytes, i):
+        while ascii_digit_at(bytes, i):
             i += 1
     elif digits == 0:
         return -1
     var exp = i < n and bytes[i] == 101
     if exp:
         var j = i + 1
-        var exp_signed = j < n and (bytes[j] == 43 or bytes[j] == 45)
+        var exp_signed = j < n and (is_sign_mark(bytes[j]))
         if exp_signed:
             j += 1
         var exponent = j
-        while _digit_at(bytes, j):
+        while ascii_digit_at(bytes, j):
             j += 1
         if j > exponent:
             i = j
@@ -418,12 +405,12 @@ def svg_point_pairs(text: String) -> List[String]:
     var s = 0
     while s < n:
         var run = s
-        while _in_number_at(bytes, run):
+        while js_float_byte_at(bytes, run):
             run += 1
         var no_pair = (
             run == s
             or run >= n
-            or not (_is_space(bytes[run]) or bytes[run] == 44)
+            or not (ascii_space(bytes[run]) or bytes[run] == 44)
         )
         if no_pair:
             s += 1
@@ -600,8 +587,8 @@ def _reflection(a: Float64, b: Float64) -> Float64:
 def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
     """Return the signed angle from one vector to another, three.js's
     `svgAngle`."""
-    var first_squared = ux * ux + uy * uy
-    var second_squared = vx * vx + vy * vy
+    var first_squared = squared_length2[DType.float64](ux, uy)
+    var second_squared = squared_length2[DType.float64](vx, vy)
     var dot = ux * vx + uy * vy
     var length = sqrt(first_squared) * sqrt(second_squared)
     var cosine = dot / length
@@ -616,7 +603,7 @@ def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
             var v = normalized2(vx, vy)
             cosine = u[0] * v[0] + u[1] * v[1]
             cross = u[0] * v[1] - u[1] * v[0]
-    var ang = acos(max(Float64(-1), min(Float64(1), cosine)))
+    var ang = acos(clamp_unit(cosine))
     if cross < 0:
         ang = -ang
     return ang
@@ -696,8 +683,7 @@ def parse_arc_command(
 def _command_start(byte: UInt8) -> Bool:
     """Return True for a letter that starts a path command: any ASCII
     letter but `e` and `E`."""
-    var lower = byte | 32
-    return lower >= 97 and lower <= 122 and lower != 101
+    return ascii_letter(Int(byte)) and (Int(byte) | 32) != 101
 
 
 def _check_stride(numbers: List[Float64], stride: Int, command: String) raises:
@@ -741,8 +727,7 @@ def parse_path_data(d: String) raises -> SvgShapePath:
     for i in range(len(bytes)):  # pragma: no branch
         if _command_start(bytes[i]):
             starts.append(i)
-    if len(starts) == 0:
-        raise Error("SVG: path data with no command")
+    require_positive(len(starts), "SVG: path data with no command")
     starts.append(len(bytes))
 
     # There is a command: the loop always runs.
@@ -984,8 +969,8 @@ struct _Parser(Movable):
         var style = parent.copy()
         var sheet = CssRule(String())
         if self.doc.has_attribute(node, "class"):
-            for cls in self.doc.attribute(node, "class").split():
-                self._merge(sheet, "." + String(cls))
+            for cls in split_fields(self.doc.attribute(node, "class")):
+                self._merge(sheet, "." + cls)
         if self.doc.has_attribute(node, "id"):
             self._merge(sheet, "#" + self.doc.attribute(node, "id"))
         var inline = parse_css_declarations(self.doc.attribute(node, "style"))
@@ -1044,7 +1029,7 @@ struct _Parser(Movable):
 
     def _clamp(self, value: String) raises -> Float64:
         """Return a number clamped to zero through one."""
-        return max(Float64(0), min(Float64(1), self.length(value)))
+        return clamp(self.length(value), Float64(0), Float64(1))
 
     def _merge(self, mut into: CssRule, selector: String):
         """Add the declarations of every rule for a selector."""
@@ -1228,7 +1213,7 @@ struct _Parser(Movable):
             Error: If it has no points, or a number is not one.
         """
         var pairs = svg_point_pairs(self.doc.attribute(node, "points"))
-        if len(pairs) == 0:
+        if len(pairs) <= 0:
             raise Error("SVG: a `" + self.doc.name(node) + "` with no points")
         var path = SvgShapePath()
         for i in range(0, len(pairs), 2):  # pragma: no branch
@@ -1427,8 +1412,9 @@ def parse_svg(
         Error: If the unit is not valid, the text is not well-formed XML,
             or for anything the module docstring lists.
     """
-    if not default_unit.is_valid():
-        raise Error("SVG: a default unit that is not valid")
+    require_valid(
+        default_unit.is_valid(), "SVG: a default unit that is not valid"
+    )
     var parser = _Parser(parse_xml(text), default_unit, default_dpi)
     parser.parse_node(parser.doc.root(), SvgStyle())
     return parser^.result()

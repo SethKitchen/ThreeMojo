@@ -34,39 +34,30 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count, require_non_negative
+from geometries.surface import (
+    record_kind,
+    require_positive_radius,
+    textured_surface,
+)
 from math.norm import length2
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     DODECAHEDRON_GEOMETRY,
     ICOSAHEDRON_GEOMETRY,
-    NORMAL,
     OCTAHEDRON_GEOMETRY,
     POLYHEDRON_GEOMETRY,
-    POSITION,
     TETRAHEDRON_GEOMETRY,
-    UV,
+    GeometryType,
 )
-from core.user_data import UserData, json_number_text
-from math.vector3 import Vector3
+from core.user_data import json_number_text
+from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
 from std.math import atan2, pi, sqrt
-from units.si import Length, METER
+from units.si import Length
 
 # The golden ratio, (1 + root 5) / 2, which the icosahedron and the
 # dodecahedron are built on.
 comptime GOLDEN = Float32(1.618034)
-
-
-def _lerp(a: Vector3, b: Vector3, t: Float32) -> Vector3:
-    """Return the point a fraction `t` of the way from `a` to `b`."""
-    return a + (b - a) * t
-
-
-def _push(mut data: List[Float32], point: Vector3):
-    """Append a point's three components."""
-    data.append(point.x)
-    data.append(point.y)
-    data.append(point.z)
 
 
 def _subdivide_face(
@@ -84,8 +75,8 @@ def _subdivide_face(
     var rows = List[List[Vector3]]()
     for i in range(columns + 1):  # pragma: no branch
         var fraction = Float32(i) / Float32(columns)
-        var along_a = _lerp(a, c, fraction)
-        var along_b = _lerp(b, c, fraction)
+        var along_a = mix_delta3(a, c, fraction)
+        var along_b = mix_delta3(b, c, fraction)
         var length = columns - i
         var row = List[Vector3]()
         for j in range(length + 1):  # pragma: no branch
@@ -93,20 +84,20 @@ def _subdivide_face(
                 row.append(along_a)
             else:
                 row.append(
-                    _lerp(along_a, along_b, Float32(j) / Float32(length))
+                    mix_delta3(along_a, along_b, Float32(j) / Float32(length))
                 )
         rows.append(row^)
     for i in range(columns):  # pragma: no branch
         for j in range(2 * (columns - i) - 1):  # pragma: no branch
             var k = j // 2
             if j % 2 == 0:
-                _push(data, rows[i][k + 1])
-                _push(data, rows[i + 1][k])
-                _push(data, rows[i][k])
+                append_vector3(data, rows[i][k + 1])
+                append_vector3(data, rows[i + 1][k])
+                append_vector3(data, rows[i][k])
             else:
-                _push(data, rows[i][k + 1])
-                _push(data, rows[i + 1][k + 1])
-                _push(data, rows[i + 1][k])
+                append_vector3(data, rows[i][k + 1])
+                append_vector3(data, rows[i + 1][k + 1])
+                append_vector3(data, rows[i + 1][k])
 
 
 def _azimuth(point: Vector3) -> Float32:
@@ -196,18 +187,19 @@ def polyhedron(
             vertices are not whole triples, the indices are not whole
             triangles, either list is empty, or an index names no vertex.
     """
-    if radius.value <= 0:
-        raise Error("A polyhedron needs a positive radius")
-    if detail < 0:
-        raise Error("A polyhedron's detail cannot be negative")
+    require_positive_radius(radius.value, "polyhedron")
+    require_non_negative(detail, "A polyhedron's detail cannot be negative")
     if len(vertices) == 0 or len(vertices) % 3 != 0:
         raise Error("A polyhedron's vertices come three floats at a time")
     if len(indices) == 0 or len(indices) % 3 != 0:
         raise Error("A polyhedron's faces come three indices at a time")
     var given = len(vertices) // 3
     for slot in range(len(indices)):  # pragma: no branch
-        if indices[slot] < 0 or indices[slot] >= given:
-            raise Error("A polyhedron's face names a vertex that is not there")
+        require_index_in_count(
+            indices[slot],
+            given,
+            "A polyhedron's face names a vertex that is not there",
+        )
 
     var data = List[Float32]()
     for face in range(len(indices) // 3):  # pragma: no branch
@@ -231,7 +223,7 @@ def polyhedron(
         )
         direction.normalize()
         points.append(direction)
-        _push(normals, direction)
+        append_vector3(normals, direction)
         data[vertex * 3] = direction.x * radius.value
         data[vertex * 3 + 1] = direction.y * radius.value
         data[vertex * 3 + 2] = direction.z * radius.value
@@ -242,11 +234,11 @@ def polyhedron(
 
     # The seam repairs, per face, in three.js's order.
     for triangle in range(count // 3):  # pragma: no branch
-        var middle = (
-            points[triangle * 3]
-            + points[triangle * 3 + 1]
-            + points[triangle * 3 + 2]
-        ) * (Float32(1) / 3)
+        var middle = centroid(
+            points[triangle * 3],
+            points[triangle * 3 + 1],
+            points[triangle * 3 + 2],
+        )
         var face_azimuth = _azimuth(middle)
         for corner in range(3):  # pragma: no branch
             var index = triangle * 3 + corner
@@ -255,16 +247,13 @@ def polyhedron(
         _correct_seam(uvs, triangle)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, data^, normals^, uvs^)
     if detail == 0:
         geometry.compute_vertex_normals()
-    geometry.kind = POLYHEDRON_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, POLYHEDRON_GEOMETRY)
     geometry.parameters.set_json("vertices", _numbers_json(vertices))
     geometry.parameters.set_json("indices", _integers_json(indices))
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -274,6 +263,25 @@ def _vertex(vertices: List[Float32], index: Int) -> Vector3:
     return Vector3(
         vertices[index * 3], vertices[index * 3 + 1], vertices[index * 3 + 2]
     )
+
+
+def _regular_solid(
+    vertices: List[Float32],
+    indices: List[Int],
+    radius: Length,
+    detail: Int,
+    kind: GeometryType,
+) raises -> BufferGeometry:
+    """Return a regular solid with its radius and detail recorded.
+
+    The four named solids share this finish. The kind is the three.js
+    class, and the parameters are the radius and the detail.
+    """
+    var geometry = polyhedron(vertices, indices, radius, detail)
+    record_kind(geometry, kind)
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_number("detail", Float64(detail))
+    return geometry^
 
 
 def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -291,12 +299,9 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     """
     var vertices: List[Float32] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
     var indices: List[Int] = [2, 1, 0, 0, 3, 2, 1, 3, 0, 2, 3, 1]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = TETRAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, TETRAHEDRON_GEOMETRY
+    )
 
 
 def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -358,12 +363,9 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         4,
         2,
     ]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = OCTAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, OCTAHEDRON_GEOMETRY
+    )
 
 
 def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -482,12 +484,9 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         8,
         1,
     ]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = ICOSAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, ICOSAHEDRON_GEOMETRY
+    )
 
 
 def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -678,9 +677,6 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         5,
         9,
     ]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = DODECAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, DODECAHEDRON_GEOMETRY
+    )

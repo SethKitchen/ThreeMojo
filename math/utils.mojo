@@ -19,10 +19,12 @@ inputs before rounding. They avoid an overflowing period or add-divisor
 step, retain small phases, and clamp Euclidean endpoint rounding toward
 zero. See the Math wiki page for the finite and exceptional contracts.
 """
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from math.quaternion import Quaternion
 from math.random import mulberry32_step
 from math.remainder import remainder_float64
+from math.sine import fraction
 from math.smoothstep import smoothstep
 from std.math import cos, exp, floor, isfinite, sin
 from std.memory import bitcast
@@ -43,6 +45,210 @@ def clamp(value: Float32, low: Float32, high: Float32) -> Float32:
     return max(low, min(high, value))
 
 
+def clamp(value: Float64, low: Float64, high: Float64) -> Float64:
+    """Return `value` limited to the range from `low` to `high`.
+
+    Args:
+        value: The value.
+        low: The smallest answer.
+        high: The largest answer.
+
+    Returns:
+        The value within the range.
+    """
+    return max(low, min(high, value))
+
+
+def clamp(value: Int, low: Int, high: Int) -> Int:
+    """Return `value` limited to the range from `low` to `high`.
+
+    Error: Never.
+
+    Args:
+        value: The value.
+        low: The smallest answer.
+        high: The largest answer.
+
+    Returns:
+        The value within the range.
+
+    """
+    return max(low, min(high, value))
+
+
+def clamp_lower_first(value: Float32, low: Float32, high: Float32) -> Float32:
+    """Return `value` limited by the lower bound before the upper bound.
+
+    Keep the order `min(max(value, low), high)`. Under the pinned
+    arithmetic, a NaN value with finite ordered bounds returns `low`.
+    `clamp` tests the upper bound first and returns `high` for that case.
+
+    Args:
+        value: The value.
+        low: The lower bound.
+        high: The upper bound.
+
+    Returns:
+        The result of the ordered lower-bound and upper-bound operations.
+    """
+    return min(max(value, low), high)
+
+
+def clamp_lower_first(value: Float64, low: Float64, high: Float64) -> Float64:
+    """Return `value` limited by the lower bound before the upper bound.
+
+    Keep the order `min(max(value, low), high)`. Under the pinned
+    arithmetic, a NaN value with finite ordered bounds returns `low`.
+    `clamp` tests the upper bound first and returns `high` for that case.
+
+    Args:
+        value: The value.
+        low: The lower bound.
+        high: The upper bound.
+
+    Returns:
+        The result of the ordered lower-bound and upper-bound operations.
+    """
+    return min(max(value, low), high)
+
+
+def edge_index(index: Int, count: Int) -> Int:
+    """Return an index held inside a row or a column.
+
+    An index before zero reads the first place. An index at `count` or
+    past it reads the last place.
+
+    Error: Never.
+
+    Args:
+        index: The requested index.
+        count: How many places there are. One or more.
+
+    Returns:
+        The index from zero through `count - 1`.
+
+    """
+    return clamp(index, 0, count - 1)
+
+
+def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
+    """Return a texel's place in a row-major image, held inside the image.
+
+    A column or a row before zero reads the first place. One at the
+    width or the height, or past it, reads the last place.
+
+    Error: Never.
+
+    Args:
+        column: The column.
+        row: The row.
+        width: How many columns. One or more.
+        height: How many rows. One or more.
+
+    Returns:
+        The place `row * width + column`, with both indexes held inside
+        the image.
+
+    """
+    return edge_index(row, height) * width + edge_index(column, width)
+
+
+def min3(x: Float32, y: Float32, z: Float32) -> Float32:
+    """Return the smallest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The smallest.
+    """
+    return min(x, min(y, z))
+
+
+def min3(x: Float64, y: Float64, z: Float64) -> Float64:
+    """Return the smallest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The smallest.
+    """
+    return min(x, min(y, z))
+
+
+def min3(x: Int, y: Int, z: Int) -> Int:
+    """Return the smallest of three whole numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The smallest.
+    """
+    return min(x, min(y, z))
+
+
+def max3(x: Float32, y: Float32, z: Float32) -> Float32:
+    """Return the largest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The largest.
+    """
+    return max(x, max(y, z))
+
+
+def max3(x: Float64, y: Float64, z: Float64) -> Float64:
+    """Return the largest of three numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The largest.
+    """
+    return max(x, max(y, z))
+
+
+def max3(x: Int, y: Int, z: Int) -> Int:
+    """Return the largest of three whole numbers.
+
+    The second and third are compared, then that result with the first.
+
+    Args:
+        x: The first number.
+        y: The second number.
+        z: The third number.
+
+    Returns:
+        The largest.
+    """
+    return max(x, max(y, z))
+
+
 def lerp(x: Float32, y: Float32, t: Float32) -> Float32:
     """Return the value a fraction `t` of the way from `x` to `y`.
 
@@ -55,6 +261,346 @@ def lerp(x: Float32, y: Float32, t: Float32) -> Float32:
         `(1 - t) x + t y`.
     """
     return (1 - t) * x + t * y
+
+
+def mix_delta(start: Float32, end: Float32, t: Float32) -> Float32:
+    """Return `start` moved toward `end` by `t`.
+
+    The difference is formed first, then scaled, then added. `lerp`
+    multiplies each end before the sum.
+
+    Args:
+        start: The value at zero.
+        end: The value at one.
+        t: The fraction.
+
+    Returns:
+        `start + (end - start) * t`.
+    """
+    return start + (end - start) * t
+
+
+def mix_delta(start: Float64, end: Float64, t: Float64) -> Float64:
+    """Return `start` moved toward `end` by `t`.
+
+    The difference is formed first, then scaled, then added.
+
+    Args:
+        start: The value at zero.
+        end: The value at one.
+        t: The fraction.
+
+    Returns:
+        `start + (end - start) * t`.
+    """
+    return start + (end - start) * t
+
+
+def mix_bilinear(
+    a: Float32,
+    b: Float32,
+    c: Float32,
+    d: Float32,
+    across: Float32,
+    down: Float32,
+) -> Float32:
+    """Return four samples blended, across then down.
+
+    Args:
+        a: The sample at the low column and low row.
+        b: The sample at the high column and low row.
+        c: The sample at the low column and high row.
+        d: The sample at the high column and high row.
+        across: How far from the low column toward the high column.
+        down: How far from the low row toward the high row.
+
+    Returns:
+        The blend. Each edge is mixed by `across`, then the two results
+        by `down`.
+    """
+    var top = mix_delta(a, b, across)
+    var bottom = mix_delta(c, d, across)
+    return mix_delta(top, bottom, down)
+
+
+def mix_bilinear(
+    a: Float64,
+    b: Float64,
+    c: Float64,
+    d: Float64,
+    across: Float64,
+    down: Float64,
+) -> Float64:
+    """Return four samples blended, across then down.
+
+    Args:
+        a: The sample at the low column and low row.
+        b: The sample at the high column and low row.
+        c: The sample at the low column and high row.
+        d: The sample at the high column and high row.
+        across: How far from the low column toward the high column.
+        down: How far from the low row toward the high row.
+
+    Returns:
+        The blend. Each edge is mixed by `across`, then the two results
+        by `down`.
+    """
+    var top = mix_delta(a, b, across)
+    var bottom = mix_delta(c, d, across)
+    return mix_delta(top, bottom, down)
+
+
+def mix_trilinear[
+    dtype: DType, width: Int
+](
+    c000: SIMD[dtype, width],
+    c100: SIMD[dtype, width],
+    c010: SIMD[dtype, width],
+    c110: SIMD[dtype, width],
+    c001: SIMD[dtype, width],
+    c101: SIMD[dtype, width],
+    c011: SIMD[dtype, width],
+    c111: SIMD[dtype, width],
+    x: SIMD[dtype, 1],
+    y: SIMD[dtype, 1],
+    z: SIMD[dtype, 1],
+) -> SIMD[dtype, width]:
+    """Return eight samples blended, across, then down, then deep.
+
+    Parameters:
+        dtype: The sample type.
+        width: How many lanes each sample holds.
+
+    Args:
+        c000: The sample at the low column, low row and low layer.
+        c100: The sample at the high column, low row and low layer.
+        c010: The sample at the low column, high row and low layer.
+        c110: The sample at the high column, high row and low layer.
+        c001: The sample at the low column, low row and high layer.
+        c101: The sample at the high column, low row and high layer.
+        c011: The sample at the low column, high row and high layer.
+        c111: The sample at the high column, high row and high layer.
+        x: How far from the low column toward the high column.
+        y: How far from the low row toward the high row.
+        z: How far from the low layer toward the high layer.
+
+    Returns:
+        The blend. Each edge is mixed by `x`, then those results by
+        `y`, then those results by `z`.
+    """
+    var x00 = c000 + (c100 - c000) * x
+    var x10 = c010 + (c110 - c010) * x
+    var x01 = c001 + (c101 - c001) * x
+    var x11 = c011 + (c111 - c011) * x
+    var y0 = x00 + (x10 - x00) * y
+    var y1 = x01 + (x11 - x01) * y
+    return y0 + (y1 - y0) * z
+
+
+def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
+    """Return Jimenez's interleaved gradient noise.
+
+    three.js's `interleavedGradientNoise`: the fraction of `52.9829189`
+    times the fraction of `x * 0.06711056 + y * 0.00583715`.
+
+    Args:
+        x: The column, in pixels.
+        y: The row, in pixels.
+
+    Returns:
+        A number from zero up to one.
+    """
+    var inner = fraction(x * Float32(0.06711056) + y * Float32(0.00583715))
+    return fraction(Float32(52.9829189) * inner)
+
+
+def rec709_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
+    """Return rec. 709 luminance to four decimal places.
+
+    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+
+    Args:
+        r: Red.
+        g: Green.
+        b: Blue.
+
+    Returns:
+        `0.2126 r + 0.7152 g + 0.0722 b`.
+    """
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def rec709_luminance(r: Float64, g: Float64, b: Float64) -> Float64:
+    """Return rec. 709 luminance to four decimal places.
+
+    three.js's `colorToLuminance`. `luminance_of` uses the longer weights.
+
+    Args:
+        r: Red.
+        g: Green.
+        b: Blue.
+
+    Returns:
+        `0.2126 r + 0.7152 g + 0.0722 b`.
+    """
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def js_round(value: Float32) -> Float32:
+    """Return `value` rounded to the nearest whole number, a half up.
+
+    JavaScript's `Math.round`: -2.5 gives -2. The fraction is compared,
+    so a `Float32` just below a half does not round up.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The whole number.
+    """
+    var whole = floor(value)
+    return whole + Float32(1) if value - whole >= 0.5 else whole
+
+
+def js_round(value: Float64) -> Float64:
+    """Return `value` rounded to the nearest whole number, a half up.
+
+    JavaScript's `Math.round`: -2.5 gives -2.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The whole number.
+    """
+    var whole = floor(value)
+    return whole + 1 if value - whole >= 0.5 else whole
+
+
+def js_round_int(value: Float64) -> Int:
+    """Return `value` rounded to the nearest whole number, a half up.
+
+    JavaScript's `Math.round`, stored as an `Int`. -2.5 gives -2.
+
+    Error: Never.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The whole number.
+
+    """
+    return Int(js_round(value))
+
+
+def saturate(value: Float32) -> Float32:
+    """Return `value` held from zero to one.
+
+    GLSL's `saturate`.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value within zero and one.
+    """
+    return clamp(value, 0, 1)
+
+
+def clamp_unit(value: Float32) -> Float32:
+    """Return `value` held from minus one to one.
+
+    An `acos` or `asin` argument uses this hold.
+
+    Error: Never.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value within minus one and one.
+
+    """
+    return clamp(value, -1, 1)
+
+
+def clamp_unit(value: Float64) -> Float64:
+    """Return `value` held from minus one to one.
+
+    An `acos` or `asin` argument uses this hold.
+
+    Error: Never.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value within minus one and one.
+
+    """
+    return clamp(value, -1.0, 1.0)
+
+
+def nearest_distance(value: Float64) -> Float64:
+    """Return how far `value` lies from the nearest whole number.
+
+    The answer is zero at a whole number and one half halfway between.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The distance, from zero to one half.
+    """
+    return abs(value - floor(value + 0.5))
+
+
+def glsl_mod(x: Float32, y: Float32) -> Float32:
+    """Return GLSL's `mod`: `x` minus `y` times the floor of their ratio.
+
+    Args:
+        x: The value.
+        y: The modulus.
+
+    Returns:
+        The remainder.
+    """
+    return x - y * floor(x / y)
+
+
+def glsl_sign(x: Float32) -> Float32:
+    """Return GLSL's `sign`.
+
+    Args:
+        x: The number.
+
+    Returns:
+        One when `x` is positive, minus one when it is negative, and zero
+        for zero and NaN.
+    """
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
+
+
+def glsl_sign(x: Float64) -> Float64:
+    """Return GLSL's `sign`.
+
+    Args:
+        x: The number.
+
+    Returns:
+        One when `x` is positive, minus one when it is negative, and zero
+        for zero and NaN.
+    """
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
 
 
 def inverse_lerp(x: Float32, y: Float32, value: Float32) -> Float32:
@@ -223,8 +769,9 @@ def ceil_power_of_two(value: Int) raises -> Int:
     Raises:
         Error: If the value is not positive or its ceiling does not fit in Int.
     """
-    if value <= 0:
-        raise Error("Only a positive number has a power of two above it")
+    require_positive(
+        value, "Only a positive number has a power of two above it"
+    )
     var power = 1
     while power < value:
         if power > Int.MAX // 2:
@@ -245,8 +792,9 @@ def floor_power_of_two(value: Int) raises -> Int:
     Raises:
         Error: If the value is not positive.
     """
-    if value <= 0:
-        raise Error("Only a positive number has a power of two below it")
+    require_positive(
+        value, "Only a positive number has a power of two below it"
+    )
     var power = 1
     # Divide the bound first so the comparison cannot overflow.
     while power <= value // 2:
@@ -410,7 +958,7 @@ struct ProperEulerOrder(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is `XYX`, `YZY`, `ZXZ`, `XZX`, `YXY` or `ZYZ`.
         """
-        return self.value >= 0 and self.value <= 5
+        return ordinal_valid(self.value, 5)
 
 
 comptime PROPER_XYX = ProperEulerOrder(0)
@@ -440,8 +988,10 @@ def quaternion_from_proper_euler(
         Error: If the order is not one of the six. three.js warns and
             leaves the quaternion unchanged.
     """
-    if not order.is_valid():
-        raise Error("A proper Euler order is XYX, YZY, ZXZ, XZX, YXY or ZYZ")
+    require_valid(
+        order.is_valid(),
+        "A proper Euler order is XYX, YZY, ZXZ, XZX, YXY or ZYZ",
+    )
     var c2 = cos(b.value / 2)
     var s2 = sin(b.value / 2)
     var c13 = cos((a.value + c.value) / 2)
@@ -478,7 +1028,7 @@ struct ComponentType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether it is one of the `*_COMPONENT` constants.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 comptime FLOAT32_COMPONENT = ComponentType(0)
@@ -502,8 +1052,7 @@ def _component_scale(component: ComponentType) raises -> Float64:
     Raises:
         Error: If the component type is not one of the seven.
     """
-    if not component.is_valid():
-        raise Error("Invalid component type")
+    require_valid(component.is_valid(), "Invalid component type")
     var scales: List[Float64] = [
         1.0,
         4294967295.0,

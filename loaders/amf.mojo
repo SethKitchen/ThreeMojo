@@ -44,20 +44,22 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import normalized3, _ordinary_squared
+from core.ordinal import require_positive
+from math.norm import normalized3, _ordinary_squared, squared_length3
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match, last_match
 from loaders.three_mf import js_key_order
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import unzip
 from materials.material import PHONG, Material, MaterialId
 from objects.mesh import Mesh
-from render.framebuffer import Color, FloatColor
-from render.srgb import linear_to_srgb, srgb_to_linear
+from render.framebuffer import Color, opaque_from_linear
+from math.vector3 import append_float64_xyz
 from std.math import isfinite, sqrt
 from std.pathlib import Path
 
@@ -97,7 +99,7 @@ def _number(text: String, what: String) raises -> Float64:
         value = Float64(trimmed)
     except:
         raise Error("AMF: " + what + " is not a number: `" + text + "`")
-    if not isfinite(value):
+    if not isfinite(Float64(value)):
         raise Error("AMF: " + what + " is not a number: `" + text + "`")
     return value
 
@@ -175,16 +177,6 @@ def _color(doc: XmlDocument, element: Int) raises -> AmfColor:
     return color^
 
 
-def _authored(color: AmfColor) -> Color:
-    """Return a linear color as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(Float32(color.r)),
-        linear_to_srgb(Float32(color.g)),
-        linear_to_srgb(Float32(color.b)),
-        1,
-    ).quantize()
-
-
 def amf_material(color: AmfColor) raises -> Material:
     """Return the flat-shaded `PHONG` material of a color, as three.js
     makes one.
@@ -199,7 +191,7 @@ def amf_material(color: AmfColor) raises -> Material:
         Error: If `Material` refuses the opacity, such as one above one.
     """
     return Material(
-        _authored(color),
+        opaque_from_linear(color.r, color.g, color.b),
         opacity=Float32(color.a) if color.has_alpha else 1,
         kind=PHONG,
         specular=Color(17, 17, 17),
@@ -292,8 +284,7 @@ def _amf_text(bytes: List[UInt8]) raises -> String:
     if not zipped:
         return String(from_utf8_lossy=Span(bytes))
     var entries = unzip(bytes)
-    if len(entries) == 0:
-        raise Error("AMF: an archive with no files")
+    require_positive(len(entries), "AMF: an archive with no files")
     var chosen = len(entries) - 1
     for index in range(len(entries)):  # pragma: no branch
         if entries[index].name.lower().endswith(".amf"):
@@ -374,10 +365,7 @@ def parse_amf(
                     color = _color(doc, part)
                 elif kind == "mesh":
                     meshes.append(_read_mesh(doc, part, color))
-            var slot = -1
-            for index in range(len(object_order)):
-                if object_order[index] == id:
-                    slot = index
+            var slot = first_match(object_order, id)
             if slot < 0:
                 object_order.append(id)
                 object_names.append(object_name^)
@@ -488,7 +476,7 @@ def _scaled_normal(
     var sz = z / scale
     var unit = normalized3(sx, sy, sz)
     if (
-        not _ordinary_squared(sx * sx + sy * sy + sz * sz)
+        not _ordinary_squared(squared_length3[DType.float64](sx, sy, sz))
         and isfinite(x)
         and isfinite(y)
         and isfinite(z)
@@ -524,9 +512,7 @@ def _place_mesh(
         var unit = _scaled_normal(
             mesh.normals[k], mesh.normals[k + 1], mesh.normals[k + 2], scale
         )
-        normals.append(Float32(unit[0]))
-        normals.append(Float32(unit[1]))
-        normals.append(Float32(unit[2]))
+        append_float64_xyz(normals, unit[0], unit[1], unit[2])
     var count = len(mesh.vertices) // 3
     var mismatched = len(normals) > 0 and len(normals) != len(mesh.vertices)
     if mismatched:
@@ -546,9 +532,7 @@ def _place_mesh(
         geometry.set_index(volume.triangles.copy())
         var found = -1
         if volume.has_material:
-            for index in range(len(material_ids)):
-                if material_ids[index] == volume.material_id:
-                    found = index
+            found = last_match(material_ids, volume.material_id)
         var material: Material
         var name: String
         if found >= 0:

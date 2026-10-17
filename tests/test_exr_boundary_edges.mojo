@@ -3,6 +3,7 @@
 
 """Small EXR guard fixtures; refused dimensions never allocate image storage."""
 
+from core.binary import store_little_endian
 from render.exr import (
     ExrChannel,
     HALF_SAMPLES,
@@ -20,7 +21,6 @@ from render.exr import (
     _dwa_lower,
     _dwa_group,
     _dwa_decode,
-    _store_word,
 )
 from render.png import MAX_PIXELS, zlib_stream
 from tests.test_exr import channel
@@ -95,7 +95,7 @@ def test_empty_dwa_names_and_zero_width_store_are_noops() raises:
     assert_equal(parts[1], "")
     assert_equal(_dwa_lower(""), "")
     var bytes: List[UInt8] = [17]
-    _store_word(bytes, 1, 255, 0)
+    store_little_endian(bytes, 1, 255, 0)
     assert_equal(bytes[0], UInt8(17))
 
 

@@ -47,6 +47,7 @@ map. It is not morphed and not skinned, as a line is not.
 
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
+from core.ordinal import require_draw_ids
 from materials.material import MaterialId
 
 
@@ -103,12 +104,7 @@ struct Points(ImplicitlyCopyable):
         Raises:
             Error: If any id is negative.
         """
-        if node.value < 0:
-            raise Error("Points must name a scene node")
-        if geometry.value < 0:
-            raise Error("Points must name a geometry")
-        if material.value < 0:
-            raise Error("Points must name a material")
+        require_draw_ids(node.value, geometry.value, material.value, "Points")
         self.geometry = geometry
         self.material = material
         self.node = node

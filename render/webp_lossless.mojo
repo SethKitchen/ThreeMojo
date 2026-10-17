@@ -28,6 +28,8 @@ which tile.
 pixel or past the last, a transform named twice, and data that ends too
 soon are refused, as libwebp refuses them.
 """
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from math.utils import clamp
 
 # The first byte of a VP8L stream.
 comptime VP8L_SIGNATURE = 0x2F
@@ -202,7 +204,7 @@ struct WebpTransform(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `PREDICTOR_TRANSFORM`, `CROSS_COLOR_TRANSFORM`,
             `SUBTRACT_GREEN_TRANSFORM` or `COLOR_INDEXING_TRANSFORM`.
         """
-        return self.value >= 0 and self.value <= 3
+        return ordinal_valid(self.value, 3)
 
 
 # Each pixel less a prediction from its neighbors.
@@ -296,8 +298,9 @@ struct _Code(Copyable, Movable):
         var open = 1
         for length in range(1, _MAX_LENGTH + 1):  # pragma: no branch
             open = open * 2 - self.counts[length]
-            if open < 0:
-                raise Error("WebP: a Huffman code is over-subscribed")
+            require_non_negative(
+                open, "WebP: a Huffman code is over-subscribed"
+            )
         if open != 0:
             raise Error("WebP: a Huffman code is not complete")
         for length in range(1, _MAX_LENGTH + 1):  # pragma: no branch
@@ -578,11 +581,6 @@ def _average2(a: UInt32, b: UInt32) -> UInt32:
     return (((a ^ b) & 0xFEFEFEFE) >> 1) + (a & b)
 
 
-def _clip255(value: Int) -> UInt32:
-    """Clamp to 0 to 255."""
-    return UInt32(min(max(value, 0), 255))
-
-
 def _channel(pixel: UInt32, shift: Int) -> Int:
     return Int((pixel >> UInt32(shift)) & 0xFF)
 
@@ -592,7 +590,7 @@ def _add_subtract_full(a: UInt32, b: UInt32, c: UInt32) -> UInt32:
     var out = UInt32(0)
     for shift in range(0, 32, 8):  # pragma: no branch
         var v = _channel(a, shift) + _channel(b, shift) - _channel(c, shift)
-        out |= _clip255(v) << UInt32(shift)
+        out |= UInt32(clamp(v, 0, 255)) << UInt32(shift)
     return out
 
 
@@ -606,7 +604,7 @@ def _add_subtract_half(a: UInt32, b: UInt32, c: UInt32) -> UInt32:
         var x = _channel(average, shift)
         var d = x - _channel(c, shift)
         var half = d // 2 if d >= 0 else -((-d) // 2)
-        out |= _clip255(x + half) << UInt32(shift)
+        out |= UInt32(clamp(x + half, 0, 255)) << UInt32(shift)
     return out
 
 
@@ -772,8 +770,7 @@ def apply_inverse(
     Raises:
         If the kind is not one of the four.
     """
-    if not kind.is_valid():
-        raise Error("WebP: a transform that is not known")
+    require_valid(kind.is_valid(), "WebP: a transform that is not known")
     var t = _Transform(kind, bits, width, data.copy())
     if kind == PREDICTOR_TRANSFORM:
         _undo_predictor(t, pixels, height)

@@ -18,6 +18,7 @@ A walk at `Fr = 0.25` is a design choice: a comfortable walk below the
 transition for every size.
 """
 
+from math.finite import require_finite, require_positive_finite
 from std.math import isfinite, pow, sqrt
 from units.si import (
     METER,
@@ -37,8 +38,7 @@ comptime TROT_FROUDE = 0.5
 
 def _height(hip: Length) raises -> Float64:
     var h = Float64(hip.to(METER))
-    if not (h > 0.0 and isfinite(h)):
-        raise Error("A hip height must be positive and finite")
+    require_positive_finite(h, "A hip height must be positive and finite")
     return h
 
 
@@ -58,8 +58,7 @@ def froude(speed: Velocity, hip: Length) raises -> Float64:
     """
     var h = _height(hip)
     var u = Float64(speed.to(METER_PER_SECOND))
-    if not isfinite(u):
-        raise Error("A speed must be finite")
+    require_finite(Float64(u), "A speed must be finite")
     return u * u / (Float64(STANDARD_GRAVITY.value) * h)
 
 
@@ -101,11 +100,11 @@ def stride_length(fr: Float64, hip: Length) raises -> Length:
             hip height is not positive and finite.
     """
     var h = _height(hip)
-    if not (fr > 0.0 and isfinite(fr)):
-        raise Error("A stride needs a positive Froude number")
+    require_positive_finite(fr, "A stride needs a positive Froude number")
     var stride = Float32(2.3 * pow(fr, 0.3) * h)
-    if not (isfinite(stride) and stride > 0.0):
-        raise Error("A stride must fit a positive finite SI quantity")
+    require_positive_finite(
+        Float64(stride), "A stride must fit a positive finite SI quantity"
+    )
     return Length(stride, METER)
 
 
@@ -128,6 +127,8 @@ def stride_frequency(fr: Float64, hip: Length) raises -> Frequency:
     var frequency = Float32(u / stride)
     # Accepted positive speed and stride share the same Froude/height
     # inputs; their ratio stays above the Float32 zero-rounding boundary.
-    if not isfinite(frequency):
-        raise Error("A stride frequency must fit a positive finite SI quantity")
+    require_finite(
+        Float64(frequency),
+        "A stride frequency must fit a positive finite SI quantity",
+    )
     return Frequency(frequency, PER_SECOND)

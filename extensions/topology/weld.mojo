@@ -12,7 +12,26 @@ the tolerance are one point; two points farther apart than twice the
 tolerance are never merged.
 """
 
-from std.math import floor, isfinite
+from math.finite import require_finite_group, require_positive_finite
+from std.math import floor
+
+
+def require_weld_tolerance(tolerance: Float64) raises:
+    """Refuse a weld tolerance that is not positive and finite.
+
+    Nothing. The call returns when the tolerance is positive and finite.
+
+    Args:
+        tolerance: The merge distance, in meters.
+
+    Raises:
+        Error: If the tolerance is not positive and finite.
+    """
+    require_positive_finite(
+        tolerance, "A weld tolerance must be positive and finite"
+    )
+
+
 from generators.utils import Vec3d
 
 
@@ -42,8 +61,7 @@ struct Welder(Movable):
         Raises:
             Error: If the tolerance is not positive and finite.
         """
-        if not (tolerance > 0 and isfinite(tolerance)):
-            raise Error("A weld tolerance must be positive and finite")
+        require_weld_tolerance(tolerance)
         self.points = List[Vec3d]()
         self.tolerance = tolerance
         self._grid = Dict[Int, List[Int]]()
@@ -93,8 +111,10 @@ struct Welder(Movable):
         Raises:
             Error: If a coordinate is not finite.
         """
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
-            raise Error("A point must have finite coordinates")
+        require_finite_group(
+            p.is_finite(),
+            "A point must have finite coordinates",
+        )
         var found = self.find(p)
         if found >= 0:
             return found

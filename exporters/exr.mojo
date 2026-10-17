@@ -40,6 +40,13 @@ no texels, or data of the wrong length, is refused. three.js writes a
 file with a data window of minus one.
 """
 
+from core.binary import (
+    append_little_endian,
+    append_little_endian_u32,
+    copy_byte_range,
+    store_little_endian,
+)
+from core.extent import require_positive_extent
 from geometries.curve_modifier import to_half_float
 from render.deflate import zlib_deflate
 from render.exr import (
@@ -57,18 +64,9 @@ from std.math import isnan
 from std.memory import bitcast
 
 
-def _push_u32(mut out: List[UInt8], value: Int):
-    """Append four little-endian bytes."""
-    # Four bytes. The loop always runs.
-    for k in range(4):  # pragma: no branch
-        out.append(UInt8((value >> (8 * k)) & 255))
-
-
 def _push_string(mut out: List[UInt8], text: String):
     """Append a string and its zero byte."""
-    # Each name has letters. The loop always runs.
-    for b in text.as_bytes():  # pragma: no branch
-        out.append(b)
+    out.extend(text.as_bytes())
     out.append(0)
 
 
@@ -76,7 +74,7 @@ def _attribute(mut out: List[UInt8], name: String, kind: String, size: Int):
     """Append an attribute's name, type and size."""
     _push_string(out, name)
     _push_string(out, kind)
-    _push_u32(out, size)
+    append_little_endian_u32(out, size)
 
 
 def _check(
@@ -88,8 +86,9 @@ def _check(
 ) raises:
     """Refuse a size, a compression or a sample type that three.js does
     not write."""
-    if width < 1 or height < 1:
-        raise Error("EXR export: an image needs a width and a height")
+    require_positive_extent(
+        width, height, "EXR export: an image needs a width and a height"
+    )
     if count != width * height * 4:
         raise Error(
             "EXR export: the data must hold four values for each of the "
@@ -144,9 +143,7 @@ def _write(
                     bits = 0x7FC00000
                 else:
                     bits = Int(bitcast[DType.uint32](Float32(value)))
-                # Two or four bytes. The loop always runs.
-                for k in range(size):  # pragma: no branch
-                    raw[at + k] = UInt8((bits >> (8 * k)) & 255)
+                store_little_endian(raw, at, bits, size)
     var chunks = List[List[UInt8]]()
     var block_size = width * 4 * lines * size
     # There is one block or more. The loop always runs.
@@ -154,7 +151,7 @@ def _write(
         var start = block_size * b
         var end = min(start + block_size, len(raw))
         if compression == NO_COMPRESSION:
-            chunks.append(List[UInt8](raw[start:end]))
+            chunks.append(copy_byte_range(raw, start, end))
             continue
         # Even bytes, then odd bytes, then each byte less the one before.
         var n = end - start
@@ -178,52 +175,50 @@ def _write(
         var packed = zlib_deflate(tmp)
         # A block that zlib does not make smaller is read as raw lines.
         if len(packed) >= n:
-            chunks.append(List[UInt8](raw[start:end]))
+            chunks.append(copy_byte_range(raw, start, end))
         else:
             chunks.append(packed^)
     var out = List[UInt8]()
-    _push_u32(out, 20000630)
-    _push_u32(out, 2)
+    append_little_endian_u32(out, 20000630)
+    append_little_endian_u32(out, 2)
     _attribute(out, "compression", "compression", 1)
     out.append(UInt8(compression.value))
     _attribute(out, "screenWindowCenter", "v2f", 8)
-    _push_u32(out, 0)
-    _push_u32(out, 0)
+    append_little_endian_u32(out, 0)
+    append_little_endian_u32(out, 0)
     _attribute(out, "screenWindowWidth", "float", 4)
-    _push_u32(out, Int(bitcast[DType.uint32](Float32(1))))
+    append_little_endian_u32(out, Int(bitcast[DType.uint32](Float32(1))))
     _attribute(out, "pixelAspectRatio", "float", 4)
-    _push_u32(out, Int(bitcast[DType.uint32](Float32(1))))
+    append_little_endian_u32(out, Int(bitcast[DType.uint32](Float32(1))))
     _attribute(out, "lineOrder", "lineOrder", 1)
     out.append(0)
     # Two windows. The loop always runs.
     for name in ["dataWindow", "displayWindow"]:  # pragma: no branch
         _attribute(out, name, "box2i", 16)
-        _push_u32(out, 0)
-        _push_u32(out, 0)
-        _push_u32(out, width - 1)
-        _push_u32(out, height - 1)
+        append_little_endian_u32(out, 0)
+        append_little_endian_u32(out, 0)
+        append_little_endian_u32(out, width - 1)
+        append_little_endian_u32(out, height - 1)
     _attribute(out, "channels", "chlist", 4 * 18 + 1)
     # Four channels. The loop always runs.
     for name in ["A", "B", "G", "R"]:  # pragma: no branch
         _push_string(out, name)
-        _push_u32(out, type.value)
-        _push_u32(out, 0)
-        _push_u32(out, 1)
-        _push_u32(out, 1)
+        append_little_endian_u32(out, type.value)
+        append_little_endian_u32(out, 0)
+        append_little_endian_u32(out, 1)
+        append_little_endian_u32(out, 1)
     out.append(0)
     out.append(0)
     var offset = len(out) + blocks * 8
     # There is one block or more. The loop always runs.
     for chunk in chunks:  # pragma: no branch
-        # Eight bytes. The loop always runs.
-        for k in range(8):  # pragma: no branch
-            out.append(UInt8((offset >> (8 * k)) & 255))
+        append_little_endian(out, offset, 8)
         offset += len(chunk) + 8
     # There is one block or more. The loop always runs.
     for b in range(blocks):  # pragma: no branch
-        _push_u32(out, b * lines)
-        _push_u32(out, len(chunks[b]))
-        out.extend(chunks[b].copy())
+        append_little_endian_u32(out, b * lines)
+        append_little_endian_u32(out, len(chunks[b]))
+        out.extend(Span(chunks[b]))
     return out^
 
 

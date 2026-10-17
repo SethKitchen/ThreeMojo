@@ -8,6 +8,7 @@ halves, and crates built here, one value type and one quirk of three.js
 r186's `USDCParser` at a time. `tests/test_usd.mojo` compares whole files
 with three.js."""
 
+from core.binary import append_little_endian, store_little_endian
 from loaders.usd_specs import (
     SPEC_PRIM,
     USD_BOOLEAN,
@@ -89,8 +90,7 @@ def _put(mut out: List[UInt8], value: Int, width: Int):
         value: The integer.
         width: Its bytes.
     """
-    for b in range(width):
-        out.append(UInt8((value >> (8 * b)) & 0xFF))
+    append_little_endian(out, value, width)
 
 
 def _f32(mut out: List[UInt8], value: Float64):
@@ -131,7 +131,7 @@ def _lz4(data: List[UInt8]) -> List[UInt8]:
             out.append(255)
             rest -= 255
         out.append(UInt8(rest))
-    out.extend(data.copy())
+    out.extend(Span(data))
     return out^
 
 
@@ -164,7 +164,7 @@ def _sized(mut out: List[UInt8], data: List[UInt8]):
         data: What to append.
     """
     _put(out, len(data), 8)
-    out.extend(data.copy())
+    out.extend(Span(data))
 
 
 def _rep(
@@ -309,7 +309,7 @@ struct _Builder(Movable):
         if name == "TOKENS":
             var text = List[UInt8]()
             for t in self.tokens:
-                text.extend(List[UInt8](t.as_bytes()))
+                text.extend(t.as_bytes())
                 text.append(0)
             if self.open_end:
                 _ = text.pop()
@@ -389,7 +389,7 @@ struct _Builder(Movable):
             out.append(0)
         var toc_at = len(out)
         _put(out, 0, 8)
-        out.extend(self.data.copy())
+        out.extend(Span(self.data))
         var names: List[String] = [
             "TOKENS",
             "STRINGS",
@@ -419,8 +419,7 @@ struct _Builder(Movable):
             out.extend(name^)
             _put(out, starts[k], 8)
             _put(out, self.fake_size if kept[k] == self.fake else sizes[k], 8)
-        for b in range(8):
-            out[toc_at + b] = UInt8((toc >> (8 * b)) & 0xFF)
+        store_little_endian(out, toc_at, toc, 8)
         return out^
 
 

@@ -14,10 +14,11 @@ y: `u` around, `v` up.
 Twenty-four is the default. Sixty-four is the most.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
-from math.vector3 import Vector3
+from math.utils import clamp, max3
+from math.vector3 import Vector3, centroid, midpoint, mix_delta3, append_vector3
 from std.math import atan2, max, min, pi
 
 comptime MIN_DETAIL = 8
@@ -75,7 +76,7 @@ def make_grid(low: Vector3, high: Vector3, detail: Int) -> SampleGrid:
     var span_x = high.x - low.x
     var span_y = high.y - low.y
     var span_z = high.z - low.z
-    var cell = max(span_y, max(span_x, span_z)) / Float32(_long_cells(detail))
+    var cell = max3(span_y, span_x, span_z) / Float32(_long_cells(detail))
     var nx = _axis_cells(span_x, cell, MIN_CROSS_CELLS)
     var ny = _axis_cells(span_y, cell, MIN_CROSS_CELLS)
     var nz = _axis_cells(span_z, cell, MIN_CROSS_CELLS)
@@ -160,14 +161,11 @@ def mesh_samples(
         var u = atan2(px, pz) / two_pi
         if u < 0:
             u = u + Float32(1)
-        var v = _clamp01((py - low.y) / grid.span_y)
+        var v = clamp((py - low.y) / grid.span_y, 0, 1)
         uvs.append(u)
         uvs.append(v)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
 
 
@@ -195,13 +193,29 @@ def mesh_field[
     return mesh_samples(sample_field(field, low, grid), low, grid, bone)
 
 
-def _clamp01(value: Float32) -> Float32:
-    """Return `value` held to 0 through 1."""
-    if value < 0:
-        return 0
-    if value > 1:
-        return 1
-    return value
+def mesh_checked[
+    F: DistanceField
+](
+    field: F, low: Vector3, high: Vector3, detail: Int, bone: String
+) raises -> BufferGeometry:
+    """Return the marching-tetrahedra surface of `field` at `detail`.
+
+    Args:
+        field: The implicit solid.
+        low: Minimum corner of the solid.
+        high: Maximum corner of the solid.
+        detail: Cells along the solid, eight through sixty-four.
+        bone: Name used in a density or empty-surface error.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes.
+
+    Raises:
+        Error: If `detail` is out of range, or the field produces no
+            surface.
+    """
+    check_detail(detail, bone)
+    return mesh_field(field, low, high, detail, bone)
 
 
 def _long_cells(detail: Int) -> Int:
@@ -222,7 +236,7 @@ def _axis_cells(span: Float32, cell: Float32, least: Int) -> Int:
 
 def _require_triangles(indices: List[Int], bone: String) raises:
     """Refuse an empty isosurface."""
-    if len(indices) == 0:
+    if len(indices) <= 0:
         raise Error("A " + bone + " field produced no surface")
 
 
@@ -250,9 +264,9 @@ def _sampled_normals(
         var gx = (positions[vertex * 3] - low.x) / grid.dx
         var gy = (positions[vertex * 3 + 1] - low.y) / grid.dy
         var gz = (positions[vertex * 3 + 2] - low.z) / grid.dz
-        gx = max(Float32(0), min(Float32(grid.nx), gx))
-        gy = max(Float32(0), min(Float32(grid.ny), gy))
-        gz = max(Float32(0), min(Float32(grid.nz), gz))
+        gx = clamp(gx, Float32(0), Float32(grid.nx))
+        gy = clamp(gy, Float32(0), Float32(grid.ny))
+        gz = clamp(gz, Float32(0), Float32(grid.nz))
         var ix = min(Int(gx), grid.nx - 1)
         var iy = min(Int(gy), grid.ny - 1)
         var iz = min(Int(gz), grid.nz - 1)
@@ -290,9 +304,7 @@ def _sampled_normals(
         ) / grid.dz
         var normal = Vector3(dx, dy, dz)
         normal.normalize()
-        normals.append(normal.x)
-        normals.append(normal.y)
-        normals.append(normal.z)
+        append_vector3(normals, normal)
     var corner = 0
     while corner < len(indices):
         var i0 = indices[corner]
@@ -405,11 +417,7 @@ def _lerp_ordered(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
             t = 0
         if t > 1:
             t = 1
-    return Vector3(
-        a.x + (b.x - a.x) * t,
-        a.y + (b.y - a.y) * t,
-        a.z + (b.z - a.z) * t,
-    )
+    return mix_delta3(a, b, t)
 
 
 def _emit_triangle(
@@ -422,22 +430,13 @@ def _emit_triangle(
 ):
     """Append one triangle, wound so its geometric normal faces out."""
     var i0 = len(positions) // 3
-    positions.append(p0.x)
-    positions.append(p0.y)
-    positions.append(p0.z)
-    positions.append(p1.x)
-    positions.append(p1.y)
-    positions.append(p1.z)
-    positions.append(p2.x)
-    positions.append(p2.y)
-    positions.append(p2.z)
+    append_vector3(positions, p0)
+    append_vector3(positions, p1)
+    append_vector3(positions, p2)
     var e1 = p1 - p0
     var e2 = p2 - p0
     e1.cross(e2)
-    var cx = (p0.x + p1.x + p2.x) * Float32(1.0 / 3.0)
-    var cy = (p0.y + p1.y + p2.y) * Float32(1.0 / 3.0)
-    var cz = (p0.z + p1.z + p2.z) * Float32(1.0 / 3.0)
-    var to_inside = Vector3(inside.x - cx, inside.y - cy, inside.z - cz)
+    var to_inside = inside - centroid(p0, p1, p2)
     if e1.dot(to_inside) > 0:
         indices.append(i0)
         indices.append(i0 + 2)
@@ -446,20 +445,6 @@ def _emit_triangle(
     indices.append(i0)
     indices.append(i0 + 1)
     indices.append(i0 + 2)
-
-
-def _mid2(a: Vector3, b: Vector3) -> Vector3:
-    """Return the midpoint of `a` and `b`."""
-    return Vector3((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5)
-
-
-def _mid3(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
-    """Return the centroid of `a`, `b` and `c`."""
-    return Vector3(
-        (a.x + b.x + c.x) * Float32(1.0 / 3.0),
-        (a.y + b.y + c.y) * Float32(1.0 / 3.0),
-        (a.z + b.z + c.z) * Float32(1.0 / 3.0),
-    )
 
 
 def _clip_tetrahedron(
@@ -501,7 +486,7 @@ def _clip_tetrahedron(
         _emit_triangle(positions, indices, ab, bd, bc, b)
         return
     if mask == 3:
-        var ab_in = _mid2(a, b)
+        var ab_in = midpoint(a, b)
         _emit_triangle(positions, indices, ac, ad, bd, ab_in)
         _emit_triangle(positions, indices, ac, bd, bc, ab_in)
         return
@@ -509,40 +494,40 @@ def _clip_tetrahedron(
         _emit_triangle(positions, indices, ac, bc, cd, c)
         return
     if mask == 5:
-        var ac_in = _mid2(a, c)
+        var ac_in = midpoint(a, c)
         _emit_triangle(positions, indices, ab, cd, ad, ac_in)
         _emit_triangle(positions, indices, ab, bc, cd, ac_in)
         return
     if mask == 6:
-        var bc_in = _mid2(b, c)
+        var bc_in = midpoint(b, c)
         _emit_triangle(positions, indices, ab, bd, cd, bc_in)
         _emit_triangle(positions, indices, ab, cd, ac, bc_in)
         return
     if mask == 7:
-        _emit_triangle(positions, indices, ad, bd, cd, _mid3(a, b, c))
+        _emit_triangle(positions, indices, ad, bd, cd, centroid(a, b, c))
         return
     if mask == 8:
         _emit_triangle(positions, indices, ad, cd, bd, d)
         return
     if mask == 9:
-        var ad_in = _mid2(a, d)
+        var ad_in = midpoint(a, d)
         _emit_triangle(positions, indices, ab, ac, cd, ad_in)
         _emit_triangle(positions, indices, ab, cd, bd, ad_in)
         return
     if mask == 10:
-        var bd_in = _mid2(b, d)
+        var bd_in = midpoint(b, d)
         _emit_triangle(positions, indices, ab, cd, bc, bd_in)
         _emit_triangle(positions, indices, ab, ad, cd, bd_in)
         return
     if mask == 11:
-        _emit_triangle(positions, indices, ac, cd, bc, _mid3(a, b, d))
+        _emit_triangle(positions, indices, ac, cd, bc, centroid(a, b, d))
         return
     if mask == 12:
-        var cd_in = _mid2(c, d)
+        var cd_in = midpoint(c, d)
         _emit_triangle(positions, indices, ac, bc, bd, cd_in)
         _emit_triangle(positions, indices, ac, bd, ad, cd_in)
         return
     if mask == 13:
-        _emit_triangle(positions, indices, ab, bc, bd, _mid3(a, c, d))
+        _emit_triangle(positions, indices, ab, bc, bd, centroid(a, c, d))
         return
-    _emit_triangle(positions, indices, ab, ad, ac, _mid3(b, c, d))
+    _emit_triangle(positions, indices, ab, ad, ac, centroid(b, c, d))

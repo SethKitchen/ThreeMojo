@@ -17,7 +17,8 @@ separate diagrammatic radius; see
     var d = hand_hair_distance(dims, FINGER_HAIR, RIGHT, p)
 """
 
-from extensions.humanoid.side import RIGHT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.hair.dimensions import (
     shaft,
@@ -31,7 +32,7 @@ from extensions.humanoid.skeleton.hand.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.hand.skin.dimensions import HandSkinField
 from extensions.humanoid.skeleton.torso.sweep import Dome, Sweep, SweepField
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 
 
 @fieldwise_init
@@ -47,9 +48,7 @@ struct HandHair(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hair group."""
-        if self.value < 0:
-            return False
-        return self.value <= FINGER_HAIR.value
+        return ordinal_valid(self.value, FINGER_HAIR.value)
 
 
 comptime HAND_HAIR = HandHair(0)
@@ -103,10 +102,10 @@ def hand_hair_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand hair part must be a named hair group")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_valid(
+        part.is_valid(), "A hand hair part must be a named hair group"
+    )
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     var skin = HandSkinField(dimensions, RIGHT)
@@ -123,7 +122,7 @@ def hand_hair_field(
     else:
         for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
             var joints = finger_joints(arm, Finger(k))
-            var middle = (joints[1] + joints[2]) * Float32(0.5)
+            var middle = midpoint(joints[1], joints[2])
             var root = surface_root(skin, middle, back, reach)
             sweeps.append(shaft(root, back, down, 0.004, 0.000008))
     var r = sweeps[0].stations[0].ml

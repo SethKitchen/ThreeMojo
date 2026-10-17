@@ -19,11 +19,13 @@ left.
     var d = pelvis_lymph_distance(dims, SACRAL_NODES, RIGHT, p)
 """
 
-from extensions.humanoid.side import LEFT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
     empty_bounds,
+    enlarge_tube_chain,
     field_gradient,
     flip_x,
     mix_point,
@@ -60,9 +62,7 @@ struct PelvisLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named node group or trunk."""
-        if self.value < 0:
-            return False
-        return self.value <= ILIAC_LYMPHATICS.value
+        return ordinal_valid(self.value, ILIAC_LYMPHATICS.value)
 
 
 comptime EXTERNAL_ILIAC_NODES = PelvisLymph(0)
@@ -111,10 +111,11 @@ struct PelvisLymphField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic lymph part must be a named group or trunk")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_valid(
+            part.is_valid(),
+            "A pelvic lymph part must be a named group or trunk",
+        )
+        require_side(side, "A pelvis")
         var p = dimensions.pelvis
         var f = pelvis_frame(p)
         var S = p.stature.value
@@ -250,11 +251,7 @@ struct PelvisLymphField(DistanceField, ImplicitlyCopyable):
             A wider copy. Nodes are already large enough to show.
         """
         var field = self
-        field.chain.r0 = max(field.chain.r0, least)
-        field.chain.r1 = max(field.chain.r1, least)
-        field.chain.r2 = max(field.chain.r2, least)
-        field.chain.r3 = max(field.chain.r3, least)
-        field.chain.r4 = max(field.chain.r4, least)
+        field.chain = enlarge_tube_chain(field.chain, least)
         field.k = max(field.k, Float32(0.4) * least)
         field.low = field.low - Vector3(least, least, least)
         field.high = field.high + Vector3(least, least, least)

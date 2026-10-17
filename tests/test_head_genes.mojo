@@ -94,14 +94,14 @@ from extensions.humanoid.skeleton.morph import (
     IDENTITY_SPREAD,
     HeadMorph,
     bump,
-    smoothstep,
 )
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     shoulder_girdle,
     torso_dimensions,
 )
 from materials.material import MaterialId
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -132,9 +132,15 @@ def _moved(gene: Gene, value: Float32, point: Vector3) raises -> Vector3:
 
 
 def test_helpers() raises:
-    assert_equal(smoothstep(0, 1, -1), 0)
-    assert_equal(smoothstep(0, 1, 2), 1)
-    assert_equal(smoothstep(0, 1, 0.5), 0.5)
+    assert_equal(
+        clamped_smoothstep(Float32(0), Float32(1), Float32(-1)), Float32(0)
+    )
+    assert_equal(
+        clamped_smoothstep(Float32(0), Float32(1), Float32(2)), Float32(1)
+    )
+    assert_equal(
+        clamped_smoothstep(Float32(0), Float32(1), Float32(0.5)), Float32(0.5)
+    )
     assert_equal(bump(Vector3(0, 0, 0), Vector3(0, 0, 0), 1), 1)
     assert_equal(bump(Vector3(2, 0, 0), Vector3(0, 0, 0), 1), 0)
 
@@ -489,7 +495,7 @@ def test_add_head_draws_the_eyes() raises:
 def test_brow_box_rejects_each_side() raises:
     var dims = head_muscle_dimensions(_person())
     var brows = _Brows(dims, HeadSkinField(dims))
-    var middle = (brows.low + brows.high) * 0.5
+    var middle = midpoint(brows.low, brows.high)
     assert_equal(brows.weight(Vector3(brows.low.x - 1, middle.y, middle.z)), 0)
     assert_equal(brows.weight(Vector3(brows.high.x + 1, middle.y, middle.z)), 0)
 

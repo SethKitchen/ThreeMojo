@@ -40,9 +40,13 @@ Where the port differs:
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, COLOR, UV
+from geometries.surface import position_normal_surface
 from core.geometry_store import GeometryId
+from core.ordinal import index_in_count, require_positive
+from math.norm import squared_length3
 from render.framebuffer import FloatColor
+from math.finite import require_finite
 from std.math import floor, isfinite, sqrt
 
 # three.js's `maxPolyCount` default.
@@ -123,10 +127,12 @@ struct MarchingCubes(Movable):
         Raises:
             Error: If the resolution or the triangle count is not positive.
         """
-        if resolution <= 0:
-            raise Error("A marching cubes field needs a positive resolution")
-        if max_poly_count <= 0:
-            raise Error("A marching cubes field needs room for a triangle")
+        require_positive(
+            resolution, "A marching cubes field needs a positive resolution"
+        )
+        require_positive(
+            max_poly_count, "A marching cubes field needs room for a triangle"
+        )
         self.resolution = resolution
         self.isolation = DEFAULT_ISOLATION
         self.enable_uvs = enable_uvs
@@ -266,7 +272,10 @@ struct MarchingCubes(Movable):
                         var dx = Float64(x) - xs
                         var dy = Float64(y) - ys
                         var dz = Float64(z) - zs
-                        var ratio = sqrt(dx * dx + dy * dy + dz * dz) / radius
+                        var ratio = (
+                            sqrt(squared_length3[DType.float64](dx, dy, dz))
+                            / radius
+                        )
                         var contrib = 1 - ratio * ratio * ratio * (
                             ratio * (ratio * 6 - 15) + 10
                         )
@@ -381,8 +390,7 @@ struct MarchingCubes(Movable):
         Raises:
             Error: If the intensity is not finite.
         """
-        if not isfinite(intensity):
-            raise Error("A blur's intensity must be finite")
+        require_finite(Float64(intensity), "A blur's intensity must be finite")
         var copy = self.field.copy()
         var size = self.resolution
         var size2 = size * size
@@ -394,15 +402,15 @@ struct MarchingCubes(Movable):
                     var count = 1
                     for x2 in range(-1, 2, 2):  # pragma: no branch
                         var x3 = x2 + x
-                        if not _inside(x3, size):
+                        if not index_in_count(x3, size):
                             continue
                         for y2 in range(-1, 2, 2):  # pragma: no branch
                             var y3 = y2 + y
-                            if not _inside(y3, size):
+                            if not index_in_count(y3, size):
                                 continue
                             for z2 in range(-1, 2, 2):  # pragma: no branch
                                 var z3 = z2 + z
-                                if not _inside(z3, size):
+                                if not index_in_count(z3, size):
                                     continue
                                 var val2 = Float64(
                                     copy[size2 * z3 + size * y3 + x3]
@@ -663,11 +671,8 @@ struct MarchingCubes(Movable):
         if self.count == 0:
             raise Error("A marching cubes surface with no triangle")
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
-        )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
+        position_normal_surface(
+            geometry, self.positions.copy(), self.normals.copy()
         )
         if self.enable_uvs:
             geometry.set_attribute(
@@ -694,14 +699,13 @@ struct MarchingCubes(Movable):
         assets.geometries.geometries[id.value] = self.geometry()
 
 
-def _inside(index: Int, size: Int) -> Bool:
-    """Return True if a cell index lies in the cube."""
-    return index >= 0 and index < size
-
-
 def _in_cube(x: Int, y: Int, z: Int, size: Int) -> Bool:
     """Return True if a cell lies in the cube."""
-    return _inside(x, size) and _inside(y, size) and _inside(z, size)
+    return (
+        index_in_count(x, size)
+        and index_in_count(y, size)
+        and index_in_count(z, size)
+    )
 
 
 def _finite_pair(a: Float64, b: Float64) -> Bool:

@@ -19,7 +19,8 @@ table. Geometry applies a separate diagrammatic minimum radius.
     var d = arm_lymph_distance(dims, CUBITAL_NODES, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.torso.sweep import SweepField, floats
@@ -39,9 +40,7 @@ struct ArmLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic."""
-        if self.value < 0:
-            return False
-        return self.value <= LATERAL_LYMPHATICS.value
+        return ordinal_valid(self.value, LATERAL_LYMPHATICS.value)
 
 
 comptime CUBITAL_NODES = ArmLymph(0)
@@ -62,14 +61,12 @@ def arm_lymph_label(part: ArmLymph) -> String:
         A short American English label, or `"arm lymph"` when `part` is
         not named.
     """
-    if not part.is_valid():
-        return "arm lymph"
     var names = List[String]()
     names.append("cubital nodes")
     names.append("deltopectoral nodes")
     names.append("medial lymphatics")
     names.append("lateral lymphatics")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm lymph")
 
 
 def named_arm_lymph() -> List[ArmLymph]:
@@ -99,8 +96,7 @@ def arm_lymph_paths(part: ArmLymph) raises -> List[List[Float32]]:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm lymphatic must be a named part")
+    require_valid(part.is_valid(), "An arm lymphatic must be a named part")
     var paths = List[List[Float32]]()
     # fmt: off
     if part == CUBITAL_NODES:
@@ -159,8 +155,7 @@ def arm_lymph_field(
     """
     dimensions.validate()
     var paths = arm_lymph_paths(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     return paths_field(dimensions.arm, paths, 1, side, 0.03)
 
 

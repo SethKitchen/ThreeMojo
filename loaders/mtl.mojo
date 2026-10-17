@@ -75,9 +75,12 @@ image that cannot be read or decoded are refused, with the line they were
 found on. Text before the first `newmtl` is skipped, as three.js skips it.
 """
 
+from std.math import isfinite
+
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
+from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.obj import ObjModel, read_obj
 from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side
@@ -94,9 +97,11 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import isfinite
+from loaders.js_text import split_fields
+from loaders.text_number import file_line
 from std.pathlib import Path
 from units.si import METER, Length
+from core.ordinal import require_valid
 
 # What three.js's `MeshPhongMaterial` starts from.
 comptime _WHITE = Color(255, 255, 255)
@@ -158,10 +163,12 @@ struct MtlOptions(ImplicitlyCopyable):
         Raises:
             Error: If `side` or `wrap` is not valid.
         """
-        if not self.side.is_valid():
-            raise Error("MTL: a side that is none of the three")
-        if not self.wrap.is_valid():
-            raise Error("MTL: a wrap that is none of the three")
+        require_valid(
+            self.side.is_valid(), "MTL: a side that is none of the three"
+        )
+        require_valid(
+            self.wrap.is_valid(), "MTL: a wrap that is none of the three"
+        )
 
 
 struct MtlLibrary(Movable):
@@ -438,7 +445,7 @@ struct _TextureLine(Copyable, Movable):
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "MTL line " + String(line) + ": "
+    return file_line("MTL", line)
 
 
 def _number(field: String, line: Int) raises -> Float32:
@@ -512,9 +519,7 @@ def _channels(
         Error: If there are not exactly three numbers, or one is not a
             number or is outside zero to one once divided.
     """
-    var fields = List[String]()
-    for piece in value.split():  # pragma: no branch
-        fields.append(String(piece))
+    var fields = split_fields(value)
     if len(fields) != 3:
         raise Error(_where(line) + "a color needs three numbers: " + value)
     var out = List[Float32]()
@@ -627,9 +632,7 @@ def _texture_line(value: String, line: Int) raises -> _TextureLine:
         Error: If an option is not known or lacks its values, or no file
             is named.
     """
-    var tokens = List[String]()
-    for piece in value.split():  # pragma: no branch
-        tokens.append(String(piece))
+    var tokens = split_fields(value)
     var file = String()
     var repeat = Vector2(1, 1)
     var offset = Vector2(0, 0)
@@ -987,11 +990,8 @@ def _read_infos(text: String) raises -> List[_Info]:
             stripped = data^
         if stripped == "":
             continue
-        var first = String()
         # The line is not empty, so it has a first field.
-        for piece in stripped.split():  # pragma: no branch
-            first = String(piece)
-            break
+        var first = split_fields(stripped)[0]
         var key = first.lower()
         var value = String(stripped[byte = first.byte_length() :].strip())
         if key == "newmtl":
@@ -1054,18 +1054,6 @@ def parse_mtl(
     return library^
 
 
-def _directory_of(path: String) -> String:
-    """Return a path's directory, ending in `/`, or empty for none.
-
-    Args:
-        path: A file's path.
-
-    Returns:
-        The directory.
-    """
-    return String(path[byte = 0 : path.rfind("/") + 1])
-
-
 def read_mtl(
     path: String, mut assets: Assets, options: MtlOptions = MtlOptions()
 ) raises -> MtlLibrary:
@@ -1086,7 +1074,7 @@ def read_mtl(
             refuses.
     """
     return parse_mtl(
-        Path(path).read_text(), _directory_of(path), assets, options
+        Path(path).read_text(), path_directory(path), assets, options
     )
 
 
@@ -1200,7 +1188,7 @@ def read_obj_with_materials(
     """
     options.validate()
     var model = read_obj(path)
-    var directory = _directory_of(path)
+    var directory = path_directory(path)
     var library = MtlLibrary(options.side)
     for index in range(len(model.material_libraries)):
         library.merge(

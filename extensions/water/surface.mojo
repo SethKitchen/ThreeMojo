@@ -17,7 +17,11 @@ runs on a `SurfaceField` and on a packed copy in device memory.
 """
 
 from extensions.water.field import ComplexField, fft2
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import (
+    anisotropic_step,
+    lod_blend,
+    major_axis_offset,
+)
 from extensions.water.resolution import SpectrumResolution
 from extensions.water.spectrum import (
     build_spectrum,
@@ -25,6 +29,7 @@ from extensions.water.spectrum import (
     clearwater_slope,
     evolve_spectrum,
 )
+from math.norm import squared_length2
 from std.math import floor
 from units.si import SECOND, Duration, Length
 
@@ -37,6 +42,44 @@ struct SurfaceSample(ImplicitlyCopyable):
     var slope_x: Float32
     var slope_z: Float32
     var slope_sq: Float32
+
+    def __add__(self, other: Self) -> Self:
+        """Return the sum of two samples.
+
+        Error: Never.
+
+        Args:
+            other: The sample to add.
+
+        Returns:
+            Each field added.
+
+        """
+        return SurfaceSample(
+            self.height + other.height,
+            self.slope_x + other.slope_x,
+            self.slope_z + other.slope_z,
+            self.slope_sq + other.slope_sq,
+        )
+
+    def __mul__(self, weight: Float32) -> Self:
+        """Return this sample scaled by a weight.
+
+        Error: Never.
+
+        Args:
+            weight: The scale.
+
+        Returns:
+            Each field scaled.
+
+        """
+        return SurfaceSample(
+            self.height * weight,
+            self.slope_x * weight,
+            self.slope_z * weight,
+            self.slope_sq * weight,
+        )
 
 
 trait SurfaceTexels:
@@ -172,7 +215,7 @@ def resolve_surface(spatial: ComplexField) -> ComplexField:
             out.put(x, y, 0, h)
             out.put(x, y, 1, sx)
             out.put(x, y, 2, sz)
-            out.put(x, y, 3, sx * sx + sz * sz)
+            out.put(x, y, 3, squared_length2[DType.float32](sx, sz))
     return out^
 
 
@@ -264,9 +307,9 @@ def sample_surface[
     var s10 = surface.surface_texel(0, x1, z0)
     var s01 = surface.surface_texel(0, x0, z1)
     var s11 = surface.surface_texel(0, x1, z1)
-    var a = _mix_sample(s00, s10, fx)
-    var b = _mix_sample(s01, s11, fx)
-    return _mix_sample(a, b, fz)
+    var a = s00 * (1.0 - fx) + s10 * fx
+    var b = s01 * (1.0 - fx) + s11 * fx
+    return a * (1.0 - fz) + b * fz
 
 
 def sample_surface_smooth[
@@ -321,9 +364,9 @@ def sample_surface_smooth[
     var s01 = sample_surface(surface, h0x, h1z)
     var s11 = sample_surface(surface, h1x, h1z)
     # The four taps use the cubic weights. They are not a unit mix.
-    var top = _add_sample(_scale_sample(s00, gx0), _scale_sample(s10, gx1))
-    var bottom = _add_sample(_scale_sample(s01, gx0), _scale_sample(s11, gx1))
-    return _add_sample(_scale_sample(top, gz0), _scale_sample(bottom, gz1))
+    var top = s00 * gx0 + s10 * gx1
+    var bottom = s01 * gx0 + s11 * gx1
+    return top * gz0 + bottom * gz1
 
 
 def _texel(field: ComplexField, x: Int, y: Int) -> SurfaceSample:
@@ -332,36 +375,6 @@ def _texel(field: ComplexField, x: Int, y: Int) -> SurfaceSample:
         field.channel(x, y, 1),
         field.channel(x, y, 2),
         field.channel(x, y, 3),
-    )
-
-
-def _mix_sample(
-    a: SurfaceSample, b: SurfaceSample, t: Float32
-) -> SurfaceSample:
-    var s = 1.0 - t
-    return SurfaceSample(
-        a.height * s + b.height * t,
-        a.slope_x * s + b.slope_x * t,
-        a.slope_z * s + b.slope_z * t,
-        a.slope_sq * s + b.slope_sq * t,
-    )
-
-
-def _scale_sample(sample: SurfaceSample, weight: Float32) -> SurfaceSample:
-    return SurfaceSample(
-        sample.height * weight,
-        sample.slope_x * weight,
-        sample.slope_z * weight,
-        sample.slope_sq * weight,
-    )
-
-
-def _add_sample(a: SurfaceSample, b: SurfaceSample) -> SurfaceSample:
-    return SurfaceSample(
-        a.height + b.height,
-        a.slope_x + b.slope_x,
-        a.slope_z + b.slope_z,
-        a.slope_sq + b.slope_sq,
     )
 
 
@@ -422,26 +435,22 @@ def sample_surface_filtered[
     var acc = SurfaceSample(0.0, 0.0, 0.0, 0.0)
     var count = step.taps
     for i in range(count):  # pragma: no branch
-        var o = (Float32(i) + 0.5) / Float32(count) - 0.5
+        var o = major_axis_offset(i, count)
         var sample = _trilinear_uv(
             surface, u + step.du * o, v + step.dv * o, step.lod
         )
-        acc = _add_sample(acc, sample)
-    return _scale_sample(acc, 1.0 / Float32(count))
+        acc = acc + sample
+    return acc * (1.0 / Float32(count))
 
 
 def _trilinear_uv[
     S: SurfaceTexels
 ](surface: S, u: Float32, v: Float32, lod: Float32) -> SurfaceSample:
     var levels = surface.surface_levels()
-    var i0 = Int(floor(lod))
-    var i1 = i0 + 1
-    if i1 > levels:
-        i1 = levels
-    var frac = lod - Float32(i0)
+    var i0, i1, frac = lod_blend(lod, levels)
     var a = _sample_level(surface, i0, u, v)
     var b = _sample_level(surface, i1, u, v)
-    return _mix_sample(a, b, frac)
+    return a * (1.0 - frac) + b * frac
 
 
 def _sample_level[
@@ -462,9 +471,9 @@ def _sample_level[
     var s10 = surface.surface_texel(level, x1, z0)
     var s01 = surface.surface_texel(level, x0, z1)
     var s11 = surface.surface_texel(level, x1, z1)
-    var a = _mix_sample(s00, s10, fx)
-    var b = _mix_sample(s01, s11, fx)
-    return _mix_sample(a, b, fz)
+    var a = s00 * (1.0 - fx) + s10 * fx
+    var b = s01 * (1.0 - fx) + s11 * fx
+    return a * (1.0 - fz) + b * fz
 
 
 def _mip_chain(field: ComplexField) raises -> List[ComplexField]:

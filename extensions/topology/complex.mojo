@@ -21,10 +21,20 @@ information modeling of buildings using non-manifold topology with ASM
 and DesignScript" (2013).
 """
 
-from std.math import isfinite, sqrt
-from extensions.topology.ids import CellId, EdgeId, FaceId, VertexId
-from extensions.topology.weld import Welder
+from core.search import first_match
+from math.finite import require_finite_group
+from std.math import sqrt
+from extensions.topology.ids import (
+    CellId,
+    EdgeId,
+    FaceId,
+    VertexId,
+    require_cell,
+    require_face,
+)
+from extensions.topology.weld import Welder, require_weld_tolerance
 from generators.utils import Vec3d
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -81,6 +91,50 @@ struct Edge(ImplicitlyCopyable):
 
     var a: VertexId
     var b: VertexId
+
+
+def require_face_kind(kind: FaceKind) raises:
+    """Refuse a face that is neither vertical nor horizontal.
+
+    Nothing. The call returns when the kind is valid.
+
+    Args:
+        kind: Whether the face is vertical or horizontal.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    require_valid(kind.is_valid(), "A face kind must be vertical or horizontal")
+
+
+def require_face_corners(count: Int) raises:
+    """Refuse a face with fewer than three corners.
+
+    Nothing. The call returns when the face has three corners or more.
+
+    Args:
+        count: How many corners the face has.
+
+    Raises:
+        Error: If the count is below three.
+    """
+    if count < 3:
+        raise Error("A face needs three corners or more")
+
+
+def require_distinct_corner(repeated: Bool) raises:
+    """Refuse a face that repeats a corner.
+
+    Nothing. The call returns when the corners differ.
+
+    Args:
+        repeated: Whether two neighboring corners are the same vertex.
+
+    Raises:
+        Error: If the corners are the same vertex.
+    """
+    if repeated:
+        raise Error("A face must not repeat a corner")
 
 
 struct CellComplex(Movable):
@@ -159,14 +213,11 @@ struct CellComplex(Movable):
                 vertex or cell is out of range, both sides are the same
                 cell, or the kind is not valid.
         """
-        if not kind.is_valid():
-            raise Error("A face kind must be vertical or horizontal")
-        if len(loop) < 3:
-            raise Error("A face needs three corners or more")
+        require_face_kind(kind)
+        require_face_corners(len(loop))
         for i in range(len(loop)):  # pragma: no branch
             self._check_vertex(loop[i])
-            if loop[i] == loop[(i + 1) % len(loop)]:
-                raise Error("A face must not repeat a corner")
+            require_distinct_corner(loop[i] == loop[(i + 1) % len(loop)])
         if positive:
             self._check_cell(positive.value())
         if negative:
@@ -206,13 +257,11 @@ struct CellComplex(Movable):
 
     def _check_cell(self, c: CellId) raises:
         """Refuse a cell id that is not in range."""
-        if not c.is_valid() or c.value >= len(self.cell_faces):
-            raise Error("A cell id is out of range")
+        require_cell(c, len(self.cell_faces))
 
     def _check_face(self, f: FaceId) raises:
         """Refuse a face id that is not in range."""
-        if not f.is_valid() or f.value >= len(self.faces):
-            raise Error("A face id is out of range")
+        require_face(f, len(self.faces))
 
     # --- queries ----------------------------------------------------------
 
@@ -322,11 +371,7 @@ struct CellComplex(Movable):
             var other = self.other_side(faces[i], c)
             if not other:
                 continue
-            var seen = False
-            for k in range(len(out)):
-                if out[k] == other.value():
-                    seen = True
-            if not seen:
+            if first_match(out, other.value()) < 0:
                 out.append(other.value())
         return out^
 
@@ -503,14 +548,13 @@ struct CellComplex(Movable):
         """
         # Public arrays can be edited after construction. Check every
         # reference before the closure walk indexes it.
-        if not (self.welder.tolerance > 0 and isfinite(self.welder.tolerance)):
-            raise Error("A weld tolerance must be positive and finite")
+        require_weld_tolerance(self.welder.tolerance)
         for i in range(len(self.welder.points)):
             var point = self.welder.points[i]
-            if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
-            ):
-                raise Error("A vertex must have finite coordinates")
+            require_finite_group(
+                point.is_finite(),
+                "A vertex must have finite coordinates",
+            )
         if len(self.edge_faces) != len(self.edges):
             raise Error("Each edge needs an incident-face list")
         for i in range(len(self.edges)):
@@ -522,15 +566,14 @@ struct CellComplex(Movable):
                 self._check_face(self.edge_faces[i][k])
         for i in range(len(self.faces)):
             ref face = self.faces[i]
-            if not face.kind.is_valid():
-                raise Error("A face kind must be vertical or horizontal")
-            if len(face.loop) < 3:
-                raise Error("A face needs three corners or more")
+            require_face_kind(face.kind)
+            require_face_corners(len(face.loop))
             # The preceding guard guarantees at least three corners.
             for k in range(len(face.loop)):  # pragma: no branch
                 self._check_vertex(face.loop[k])
-                if face.loop[k] == face.loop[(k + 1) % len(face.loop)]:
-                    raise Error("A face must not repeat a corner")
+                require_distinct_corner(
+                    face.loop[k] == face.loop[(k + 1) % len(face.loop)]
+                )
             if face.positive:
                 self._check_cell(face.positive.value())
             if face.negative:

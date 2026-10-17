@@ -18,6 +18,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = ligament_distance(dims, ANTERIOR_TALOFIBULAR, dims.talar_head)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -48,9 +49,21 @@ struct FootLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named ligament."""
-        if self.value < 0:
-            return False
-        return self.value <= LISFRANC.value
+        return ordinal_valid(self.value, LISFRANC.value)
+
+
+def require_foot_ligament(part: FootLigament) raises:
+    """Refuse a foot ligament that is not named.
+
+    Nothing. The call returns when the ligament is named.
+
+    Args:
+        part: The ligament.
+
+    Raises:
+        Error: If the ligament is not named.
+    """
+    require_valid(part.is_valid(), "A foot ligament must be a named ligament")
 
 
 comptime ANTERIOR_TALOFIBULAR = FootLigament(0)
@@ -88,8 +101,7 @@ struct FootLigamentField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot ligament must be a named ligament")
+        require_foot_ligament(part)
         self.segments = _segments(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.0008 * S

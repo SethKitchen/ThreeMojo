@@ -11,6 +11,13 @@ The cube is the only mesh. As it recedes it takes the fog color. That is
 `scene.fog`, mixed after shading, in linear light.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -18,17 +25,13 @@ from core.fog import linear_fog
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/fog.png"
 comptime WIDTH = 240
@@ -67,10 +70,7 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var fog_color = Color(160, 170, 190)
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
@@ -85,19 +85,26 @@ def main() raises:
     scene.add_mesh(Mesh(block, paint, node))
     scene.fog = linear_fog(fog_color, Length(3.0, METER), Length(14.0, METER))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.8, 0.6)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.94))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
-
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    fill_and_key(
+        scene,
+        0.5,
+        0.8,
+        0.6,
+        Color(255, 255, 255),
+        0.94,
+        Color(255, 255, 255),
+        2.36,
     )
-    camera.place(Vector3(0, 0.4, 4.5), Vector3(0, 0, -6))
+
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.4, 4.5),
+        Vector3(0, 0, -6),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
+    )
 
     var frame_clock = Clock()
     frame_clock.start()
@@ -109,12 +116,4 @@ def main() raises:
         )
         frames.append(frame_at(renderer, camera, assets, scene, node, depth))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

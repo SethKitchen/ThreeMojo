@@ -20,8 +20,10 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -33,6 +35,10 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -41,11 +47,12 @@ from extensions.animals.kit import (
     is_front_limb,
     imul32,
     is_limb,
+    is_upper_limb,
     pick_weighted,
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import vnoise3, centered_fbm, centered_value
 from extensions.animals.options import (
     ADULT,
     FEMALE,
@@ -61,9 +68,15 @@ from extensions.animals.species.hoofed import (
     HeadFrame,
     head_frame,
     hoofed_bones,
+    ClovenHoof,
+    HornPoint,
+    add_cloven_hoof,
     dewclaw_balls,
+    horn_parameter,
 )
 from extensions.animals.traits import Traits
+from math.sine import fraction
+from math.utils import clamp_unit, rec709_luminance
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -152,7 +165,7 @@ def _hl(v: V3) -> V3:
 
 def _face_z(z: Float64, kid: Bool) -> Float64:
     var short = kid and z > 0.02
-    return 0.02 + (z - 0.02) * KID_FACE if short else z
+    return mix(0.02, z, KID_FACE) if short else z
 
 
 def _un_face_z(z: Float64, kid: Bool) -> Float64:
@@ -317,7 +330,7 @@ def goat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var lop = _lop(variant)
     if kid:
         var occ = _hl(V3(0.0, -0.045, -0.1))
-        var nb = NECK_BASE_J + (occ - NECK_BASE_J) * 0.15
+        var nb = lerp(NECK_BASE_J, occ, 0.15)
         t.warps.add(shift_warp(nb, occ, _kid_neck(lop)))
     var hc = HEAD_O + _kid_neck(lop) if kid else HEAD_O
     var head_k = (
@@ -434,7 +447,7 @@ def goat_rig(t: Traits) raises -> Rig:
             )
         )
         if kid:
-            tip = eb + (tip - eb) * 1.15
+            tip = lerp(eb, tip, 1.15)
     rig.set("earTipL", tip)
     var bt = _hlk(V3(0.0, -0.094, 0.115), kid)
     rig.set("beardTop", bt)
@@ -449,15 +462,6 @@ def goat_rig(t: Traits) raises -> Rig:
     _ = rig.add_bone("udder", "udderTop", "udderBot", "pelvis")
     _ = rig.add_bone("beard", "beardTop", "beardTip", "jaw")
     return rig^
-
-
-@fieldwise_init
-struct HornPoint(ImplicitlyCopyable):
-    """One station of a horn's center line: where, how thick, how far."""
-
-    var p: V3
-    var r: Float64
-    var t: Float64
 
 
 def _horn_cell(t: Traits, res: Float64) -> Float64:
@@ -508,7 +512,7 @@ def _horn_at(pth: List[HornPoint], sarc: Float64, hlen: Float64) -> HornPoint:
     var f = u - Float64(i)
     return HornPoint(
         lerp(pth[i].p, pth[i + 1].p, f),
-        pth[i].r + (pth[i + 1].r - pth[i].r) * f,
+        mix(pth[i].r, pth[i + 1].r, f),
         u / Float64(n),
     )
 
@@ -1091,10 +1095,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # broad drape with a rolled rim (lop).
     var lop = t.get("lop", 0.0) > 0.5
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var ln = length(tip - base)
         var facing = _ear_facing(lop, s)
         var lat = normalize(cross(up, facing))
@@ -1342,19 +1343,11 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: slender, with long cannons and cloven hooves.
     var lk = 1.0 + 0.12 * heavy
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         var cf = rig.j("fcoffin" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
         _ = ell_y(
             m,
             "scapmuscle",
@@ -1445,20 +1438,14 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var fpaw = rig.bone("fpaw" + side)
         dewclaw_balls(m, fpaw, mc, s, -0.021, 0.0055)
         _ = m.cone("pastern", fpaw, mc, cf, 0.0155, 0.0165, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 1.0)
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         var chf = rig.j("hcoffin" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
         _ = ell_y(
             m,
             "thigh",
@@ -1561,7 +1548,6 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var hpaw = rig.bone("hpaw" + side)
         dewclaw_balls(m, hpaw, mt, s, -0.021, 0.0055)
         _ = m.cone("pastern", hpaw, mt, chf, 0.015, 0.016, k=0.01)
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.95)
@@ -1620,51 +1606,30 @@ def _skin(m: SdfModel, body: List[Int], p: V3, d: V3) -> V3:
 
 
 def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
-    # Two claws with a cleft between them, the wall parallel to the
-    # pastern, heel bulbs behind, flat on the ground.
-    var zc = (c.z + toe_j.z) * 0.5
-    for k in [1.0, -1.0]:  # pragma: no branch
-        var x = c.x + 0.0105 * k * w
-        var top = V3(x, c.y + 0.008, c.z - 0.004)
-        var toe = V3(x - 0.002 * k, 0.006, toe_j.z - 0.004)
-        var heel = V3(x, 0.008, c.z - 0.016)
-        _ = m.cone("hoof", bone, top, toe, 0.0115 * w, 0.0055 * w, k=0.006)
-        _ = m.cone(
-            "hoof",
-            bone,
-            heel,
-            V3(toe.x, 0.006, zc + 0.004),
-            0.011 * w,
-            0.009 * w,
-            k=0.008,
-        )
-        _ = m.sphere(
-            "heelbulb", bone, V3(x, 0.013, c.z - 0.02), 0.0105 * w, k=0.008
-        )
-    _ = m.cone(
-        "coronet",
+    add_cloven_hoof(
+        m,
         bone,
-        c + V3(0, 0.012, -0.01),
-        c + V3(0, 0.006, 0.008),
-        0.017 * w,
-        0.017 * w,
-        k=0.008,
-    )
-    _ = m.ell(
-        "cleft",
-        bone,
-        V3(c.x, 0.006, zc + 0.012),
-        V3(0.0022, 0.02, 0.03),
-        k=0.002,
-        carve=True,
-    )
-    _ = m.ell(
-        "sole",
-        bone,
-        V3(c.x, -0.1 + 0.001, zc),
-        V3(0.1, 0.1, 0.1),
-        k=0.002,
-        carve=True,
+        c,
+        toe_j,
+        w,
+        ClovenHoof(
+            spread=0.0105,
+            toe_inset=0.002,
+            toe_height=0.006,
+            toe_back=0.004,
+            wall_root=0.0115,
+            wall_tip=0.0055,
+            heel_back=0.016,
+            heel_root=0.011,
+            heel_tip=0.009,
+            heel_forward=0.004,
+            bulb_height=0.013,
+            bulb_back=0.02,
+            bulb_radius=0.0105,
+            coronet_radius=0.017,
+            cleft_forward=0.012,
+            cleft_length=0.03,
+        ),
     )
 
 
@@ -1790,11 +1755,7 @@ def goat_palette(t: Traits) raises -> Palette:
         var c = srgb(hexes[i])
         out.set(
             names[i],
-            V3(
-                c.x * (1.0 + 0.06 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.06 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.06, 0.0, -0.06),
         )
     out.set("mark", srgb(hexes[4]))
     out.set("horn", srgb(Int(t.get("hornColor", 0.0))))
@@ -1883,7 +1844,7 @@ def _mark_sd(
     # The breed's second color as a signed distance, inside below zero.
     var face = region == 2 or region == 6
     var head_like = face or region == 5
-    var jag = (fbm3(p * 45.0, 2) - 0.5) * (0.005 if head_like else 0.02)
+    var jag = (centered_fbm(p, 45.0, 2)) * (0.005 if head_like else 0.02)
     var d = 1.0
     var ax = abs(h.x)
     if head_like:
@@ -1941,7 +1902,7 @@ def _mark_sd(
         var nl = length(NECK_MID_J - NECK_BASE_J)
         d = min(
             d,
-            (0.5 - u) * nl + (fbm3(p * 20.0, 2) - 0.5) * 0.05,
+            (0.5 - u) * nl + (centered_fbm(p, 20.0, 2)) * 0.05,
         )
     var trunk = region == 0 or region == 1
     if trunk:
@@ -1964,8 +1925,8 @@ def _mark_sd(
             d = min(
                 d,
                 (p.z + 0.02 + 0.22 * (p.y - 0.6)) * 0.9
-                + (fbm3(p * 6.0, 3) - 0.5) * 0.12
-                + (vnoise3(p * 90.0) - 0.5) * 0.012,
+                + (centered_fbm(p, 6.0, 3)) * 0.12
+                + (centered_value(p, 90.0)) * 0.012,
             )
         if (masks & M_TAILPATCH) != 0:
             var zt = -0.4
@@ -1998,9 +1959,9 @@ def _mark_sd(
     var count = Int(pal.get("patches").x)
     var patched = count > 0 and region != 5
     if patched:
-        var wob = (fbm3(p * 9.0, 3) - 0.5) * 0.08
-        var lobe = (fbm3(p * 4.5 + V3(3.1, 0, 0), 3) - 0.5) * 0.12 + (
-            fbm3(p * 28.0, 2) - 0.5
+        var wob = (centered_fbm(p, 9.0, 3)) * 0.08
+        var lobe = (centered_fbm(p, 4.5, 3, 3.1)) * 0.12 + (
+            centered_fbm(p, 28.0, 2)
         ) * 0.02
         # Inside `patched`, `count` is positive.
         for i in range(count):  # pragma: no branch
@@ -2051,28 +2012,12 @@ def _region(part_horn: Bool, part_jaw: Bool, tag: String, bone: String) -> Int:
 def _legness(bone: String, p: V3) -> Float64:
     if not is_limb(bone):
         return 0.0
-    var upper = (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("femur")
-    )
-    return smoothstep(0.58, 0.42, p.y) if upper else 1.0
+    return smoothstep(0.58, 0.42, p.y) if is_upper_limb(bone) else 1.0
 
 
 def _horn_t(t: Traits, p: V3) -> Float64:
     # How far along the nearer horn, 0 at its base and 1 at its tip.
-    var pth = _horn_path(t, 1.0 if p.x >= 0.0 else -1.0)
-    var best = 1e9
-    var bt = 0.0
-    for i in range(len(pth) - 1):
-        var a = pth[i].p
-        var ab = pth[i + 1].p - a
-        var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
-        var dd = length(p - (a + ab * u))
-        if dd < best:
-            best = dd
-            bt = pth[i].t + (pth[i + 1].t - pth[i].t) * u
-    return bt
+    return horn_parameter(_horn_path(t, 1.0 if p.x >= 0.0 else -1.0), p)
 
 
 def _lid_distance(t: Traits, p: V3) -> Float64:
@@ -2121,7 +2066,7 @@ def goat_paint(
     var msd = _mark_sd(pal, t, masks, region, tag, bone, legness, h, p, n)
     var white = pink > 0.0 and msd > 0.0
     var mark = pal.get("mark")
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var c: V3
     var surface = FUR
     var takes_mark = True
@@ -2171,7 +2116,7 @@ def goat_paint(
                 V3(0.8, 0.78, 0.75),
                 0.2 if pink > 0.0 else 0.0,
             )
-            var border = 0.56 + (fbm3(p * 26.0 + V3(7.7, 0, 0), 2) - 0.5) * 0.24
+            var border = 0.56 + (centered_fbm(p, 26.0, 2, 7.7)) * 0.24
             var bare = smoothstep(border - 0.04, border + 0.14, ut)
             var in_pat = smoothstep(0.004, -0.004, msd)
             var hair = mix3(c, mark, in_pat)
@@ -2289,13 +2234,9 @@ def goat_paint(
         var in_mark = smoothstep(0.004, -0.004, msd)
         c = mix3(c, mark, in_mark)
     # Low-frequency variation, and lock-to-lock streaks in long hair.
-    var cv = fbm3(p * 7.0, 3) - 0.5
+    var cv = centered_fbm(p, 7.0, 3)
     if surface == FUR:
-        c = V3(
-            c.x * (1.0 + 0.12 * cv),
-            c.y * (1.0 + 0.1 * cv),
-            c.z * (1.0 + 0.08 * cv),
-        )
+        c = channel_gain(c, cv, 0.12, 0.1, 0.08)
         var shag = t.get("shaggy", 0.0) > 0.3 and region <= 1
         if long_hair or shag:
             var st = vnoise3(V3(p.x * 160.0, p.y * 40.0, p.z * 160.0))
@@ -2320,16 +2261,14 @@ def _paint_horn(pal: Palette, t: Traits, p: V3) -> Paint:
         var s0 = 0.012 + 0.5 * spacing
         var t_end = 0.62 if hb > 0.02 else 0.5
         var u = (hlen - s0) / spacing
-        var fr = u - floor(u)
+        var fr = fraction(u)
         var fade = (1.0 if u > -0.6 else 0.0) * (
             1.0 - smoothstep(0.55 * t_end, t_end + 0.08, bt)
         )
         var groove = exp(-(((fr - 0.66) / 0.11) ** 2))
         var crest = exp(-((min(fr, 1.0 - fr) / 0.12) ** 2))
-        var lum = (
-            0.2126 * pal.get("horn").x
-            + 0.7152 * pal.get("horn").y
-            + 0.0722 * pal.get("horn").z
+        var lum = rec709_luminance(
+            pal.get("horn").x, pal.get("horn").y, pal.get("horn").z
         )
         var dark = 1.0 - smoothstep(0.12, 0.3, lum)
         c = c * (1.0 + fade * (0.06 * crest - mix(0.16, 0.3, dark) * groove))

@@ -40,9 +40,11 @@ a `Length`, as every camera's are.
 from cameras.perspective_camera import PerspectiveCamera
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
+from core.ordinal import require_positive
 from core.scene import Scene
 from math.vector3 import Vector3
-from render.cube_texture import FACE_COUNT, face_forward, face_up
+from render.cube_texture import face_forward, face_up, require_cube_face
+from math.finite import require_positive_finite
 from std.math import isfinite
 from units.si import Angle, DEGREE, Length
 
@@ -79,10 +81,11 @@ struct CubeCamera(ImplicitlyCopyable):
                 front of the camera, the far plane is not beyond it, or
                 either plane is not finite.
         """
-        if size <= 0:
-            raise Error("A cube camera's faces need a positive size")
-        if not (near.value > 0 and isfinite(near.value)):
-            raise Error("The near plane must be in front of the camera")
+        require_positive(size, "A cube camera's faces need a positive size")
+        require_positive_finite(
+            Float64(near.value),
+            "The near plane must be in front of the camera",
+        )
         if not (isfinite(far.value) and far.value > near.value):
             raise Error("The far plane must be beyond the near plane")
         self.near = near
@@ -147,8 +150,7 @@ struct CubeCamera(ImplicitlyCopyable):
             Error: If the face is none of the six, the node is not in the
                 scene, or the scene is stale.
         """
-        if face < 0 or face >= FACE_COUNT:
-            raise Error("A cube has six faces")
+        require_cube_face(face)
         var camera = PerspectiveCamera(FACE_FOV, 1.0, self.near, self.far)
         var stand = self.eye(scene)
         camera.up = face_up(face)

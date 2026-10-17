@@ -25,7 +25,8 @@ diagrammatic minimum radius so the current isosurface can show them.
     var d = pelvis_vessel_distance(dims, EXTERNAL_ILIAC_ARTERY, RIGHT, p)
 """
 
-from extensions.humanoid.side import LEFT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
@@ -33,8 +34,9 @@ from extensions.humanoid.skeleton.field import (
     flip_x,
     mix_point,
     tapered_tube,
-    tube_chain_bounds,
-    tube_chain_distance,
+    mirrored_tube_distance,
+    tube_root_bounds,
+    widen_for_display,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisDimensions,
@@ -47,7 +49,6 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscleDimensions,
 )
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -63,9 +64,7 @@ struct PelvisVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= INTERNAL_ILIAC_VEIN.value
+        return ordinal_valid(self.value, INTERNAL_ILIAC_VEIN.value)
 
 
 comptime ABDOMINAL_AORTA = PelvisVessel(0)
@@ -81,6 +80,22 @@ comptime INFERIOR_VENA_CAVA = PelvisVessel(9)
 comptime COMMON_ILIAC_VEIN = PelvisVessel(10)
 comptime EXTERNAL_ILIAC_VEIN = PelvisVessel(11)
 comptime INTERNAL_ILIAC_VEIN = PelvisVessel(12)
+
+
+def require_pelvis_vessel(part: PelvisVessel) raises:
+    """Refuse a pelvic vessel that is not named.
+
+    Nothing. The call returns when the vessel is named.
+
+    Args:
+        part: The vessel.
+
+    Raises:
+        Error: If the vessel is not named.
+    """
+    require_valid(
+        part.is_valid(), "A pelvic vessel must be a named artery or vein"
+    )
 
 
 struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
@@ -111,15 +126,13 @@ struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic vessel must be a named artery or vein")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_pelvis_vessel(part)
+        require_side(side, "A pelvis")
         self.chain = _chain(dimensions, part, side)
         self.mirror = side == LEFT and not _unpaired(part)
         self.k = Float32(0.00025)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(self.chain, Float32(0.003) + self.chain.r0)
+        var box = tube_root_bounds(self.chain)
         if self.mirror:
             box = sided_bounds(box.low, box.high, side)
         self.low = box.low
@@ -130,9 +143,7 @@ struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        if self.mirror:
-            return tube_chain_distance(self.chain, flip_x(point), self.k)
-        return tube_chain_distance(self.chain, point, self.k)
+        return mirrored_tube_distance(self.chain, self.mirror, self.k, point)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
@@ -148,15 +159,9 @@ struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
             A wider copy with a larger blend and box.
         """
         var field = self
-        field.chain.r0 = max(field.chain.r0, least)
-        field.chain.r1 = max(field.chain.r1, least)
-        field.chain.r2 = max(field.chain.r2, least)
-        field.chain.r3 = max(field.chain.r3, least)
-        field.chain.r4 = max(field.chain.r4, least)
-        field.k = Float32(0.4) * least
-        field.epsilon = Float32(0.25) * least
-        field.low = field.low - Vector3(least, least, least)
-        field.high = field.high + Vector3(least, least, least)
+        widen_for_display(
+            field.chain, field.k, field.epsilon, field.low, field.high, least
+        )
         return field
 
 
@@ -237,8 +242,7 @@ def is_pelvic_artery(part: PelvisVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic vessel must be a named artery or vein")
+    require_pelvis_vessel(part)
     return part.value <= MEDIAN_SACRAL_ARTERY.value
 
 
@@ -255,8 +259,7 @@ def is_unpaired_vessel(part: PelvisVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic vessel must be a named artery or vein")
+    require_pelvis_vessel(part)
     return _unpaired(part)
 
 

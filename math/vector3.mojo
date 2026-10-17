@@ -14,31 +14,38 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.matrix_determinant import _sum_products
+from math.polyline import (
+    PolylineVertex,
+    add_scaled,
+    angle_between,
+    clamp_to_length,
+    distance_between,
+    distance_between_squared,
+    lerp_between,
+    lerp_in_place,
+    scale_to_length,
+)
 
 from std.math import isfinite
 from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
-from math.utils import SeededRandom
-from math.norm import _ordinary_product, length3, normalized3, _ordinary_squared
-from std.math import acos, ceil, cos, floor, pi, sin, sqrt, trunc
+from math.utils import SeededRandom, clamp, js_round, mix_delta
+from math.norm import (
+    _ordinary_product,
+    dot3,
+    length3,
+    normalized3,
+    reciprocal_normalized3,
+    _ordinary_squared,
+)
+from std.math import ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
 
-def _js_round(value: Float32) -> Float32:
-    """Return `value` rounded to the nearest whole number, a half rounded
-    up, as JavaScript's `Math.round` rounds: -2.5 gives -2.
-
-    Adding a half and taking the floor rounds 0.49999997 up in Float32,
-    so the fraction is compared instead. It is exact for every float.
-    """
-    var whole = floor(value)
-    return whole + Float32(1) if value - whole >= 0.5 else whole
-
-
 @fieldwise_init
-struct Vector3(Equatable, ImplicitlyCopyable):
+struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
     """A point or direction in 3D space.
 
     Like three.js, the mutating methods change the vector in place rather than
@@ -58,11 +65,21 @@ struct Vector3(Equatable, ImplicitlyCopyable):
 
     def dot(self, other: Self) -> Float32:
         """Return the dot product of `self` and `other`."""
-        return self.x * other.x + self.y * other.y + self.z * other.z
+        return dot3[DType.float32](
+            self.x, self.y, self.z, other.x, other.y, other.z
+        )
 
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""
         return length3(self.x, self.y, self.z)
+
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x`, `y`, and `z` are all finite.
+        """
+        return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
 
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise."""
@@ -106,6 +123,18 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         """Return this vector scaled by a number."""
         return Vector3(self.x * factor, self.y * factor, self.z * factor)
 
+    def __mul__(self, other: Self) -> Self:
+        """Return the product of each component, three.js's `multiply`.
+
+        Args:
+            other: The factors.
+
+        Returns:
+            Each component of this vector times the same component of
+            `other`.
+        """
+        return Vector3(self.x * other.x, self.y * other.y, self.z * other.z)
+
     def __neg__(self) -> Self:
         """Return this vector pointing the other way."""
         return Vector3(-self.x, -self.y, -self.z)
@@ -122,6 +151,19 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             The divided vector.
         """
         return self * (1 / divisor)
+
+    def __truediv__(self, other: Self) -> Self:
+        """Return each component divided by `other`'s, three.js's `divide`.
+
+        A zero divisor gives an infinity or a not-a-number, as there.
+
+        Args:
+            other: The divisors.
+
+        Returns:
+            The quotient.
+        """
+        return Vector3(self.x / other.x, self.y / other.y, self.z / other.z)
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if every component is exactly equal, three.js's
@@ -197,7 +239,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             other: The vector to add.
             factor: What to scale it by first.
         """
-        self = self + other * factor
+        add_scaled(self, other, factor)
 
     def add_scalar(mut self, value: Float32):
         """Add one number to every component, three.js's `addScalar`.
@@ -240,8 +282,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             length: The new length.
         """
-        self.normalize()
-        self = self * length
+        scale_to_length(self, length)
 
     def distance_to(self, other: Self) -> Float32:
         """Return the distance between two points, three.js's `distanceTo`.
@@ -252,7 +293,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Returns:
             The Euclidean distance.
         """
-        return (self - other).length()
+        return distance_between(self, other)
 
     def distance_to_squared(self, other: Self) -> Float32:
         """Return the squared distance between two points, three.js's
@@ -264,7 +305,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Returns:
             The squared Euclidean distance.
         """
-        return (self - other).length_sq()
+        return distance_between_squared(self, other)
 
     def manhattan_distance_to(self, other: Self) -> Float32:
         """Return the distance between two points along the axes,
@@ -288,27 +329,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             From zero to a half turn. A right angle if either vector is
             zero, as in three.js: a zero vector has no direction.
         """
-        var first_squared = self.length_sq()
-        var second_squared = other.length_sq()
-        var product = first_squared * second_squared
-        var theta: Float32
-        if (
-            _ordinary_squared(first_squared)
-            and _ordinary_squared(second_squared)
-            and _ordinary_squared(product)
-        ):
-            theta = self.dot(other) / sqrt(product)
-        else:
-            var first = self
-            var second = other
-            first.normalize()
-            second.normalize()
-            if (first.x == 0 and first.y == 0 and first.z == 0) or (
-                second.x == 0 and second.y == 0 and second.z == 0
-            ):
-                return Angle(Float32(pi / 2), RADIAN)
-            theta = first.dot(second)
-        return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
+        return angle_between(self, other)
 
     def lerp(mut self, other: Self, alpha: Float32):
         """Move this vector toward `other` by `alpha`, three.js's `lerp`.
@@ -317,9 +338,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             other: The vector to move toward.
             alpha: Zero stays, one arrives. Values outside run on.
         """
-        self.x += (other.x - self.x) * alpha
-        self.y += (other.y - self.y) * alpha
-        self.z += (other.z - self.z) * alpha
+        lerp_in_place(self, other, alpha)
 
     def lerp_vectors(mut self, start: Self, end: Self, alpha: Float32):
         """Set this vector a fraction of the way from `start` to `end`,
@@ -330,11 +349,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             end: The vector at an `alpha` of one.
             alpha: How far along.
         """
-        self = Vector3(
-            start.x + (end.x - start.x) * alpha,
-            start.y + (end.y - start.y) * alpha,
-            start.z + (end.z - start.z) * alpha,
-        )
+        lerp_between(self, start, end, alpha)
 
     def reflect(mut self, normal: Self):
         """Reflect this vector off a plane with the given normal, three.js's
@@ -344,7 +359,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             normal: The plane's normal. It must be unit length, as in
                 three.js; it is used as given.
         """
-        self = self - normal * (2 * self.dot(normal))
+        self = reflect_vector(self, normal)
 
     def apply_matrix4(mut self, matrix: Matrix4):
         """Transform this point by `matrix` with `w = 1`, and divide by the
@@ -383,7 +398,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         var y = wide[1]
         var z = wide[2]
         var unit = normalized3(x, y, z)
-        self = Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+        self = vector3_from_float64(unit[0], unit[1], unit[2])
 
     def apply_quaternion(mut self, quaternion: Quaternion):
         """Turn this vector by a rotation, three.js's `applyQuaternion`.
@@ -433,7 +448,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         var y = wide[1]
         var z = wide[2]
         var unit = normalized3(x, y, z)
-        self = Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+        self = vector3_from_float64(unit[0], unit[1], unit[2])
 
     def project(mut self, view: Matrix4, projection: Matrix4):
         """Carry this world-space point into normalized device space,
@@ -474,9 +489,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             other: The other vector.
         """
-        self = Vector3(
-            min(self.x, other.x), min(self.y, other.y), min(self.z, other.z)
-        )
+        self = component_min(self, other)
 
     def max(mut self, other: Self):
         """Keep the larger of each pair of components, three.js's `max`.
@@ -484,9 +497,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             other: The other vector.
         """
-        self = Vector3(
-            max(self.x, other.x), max(self.y, other.y), max(self.z, other.z)
-        )
+        self = component_max(self, other)
 
     def clamp(mut self, low: Self, high: Self):
         """Hold each component between the two vectors' components,
@@ -498,9 +509,9 @@ struct Vector3(Equatable, ImplicitlyCopyable):
                 three.js.
         """
         self = Vector3(
-            max(low.x, min(high.x, self.x)),
-            max(low.y, min(high.y, self.y)),
-            max(low.z, min(high.z, self.z)),
+            clamp(self.x, low.x, high.x),
+            clamp(self.y, low.y, high.y),
+            clamp(self.z, low.z, high.z),
         )
 
     def clamp_scalar(mut self, low: Float32, high: Float32):
@@ -521,12 +532,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             low: The shortest length.
             high: The longest.
         """
-        var length = self.length()
-        if _ordinary_squared(self.length_sq()):
-            self = self / length * max(low, min(high, length))
-        else:
-            self.normalize()
-            self = self * max(low, min(high, length))
+        clamp_to_length(self, low, high)
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.
@@ -534,7 +540,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             other: The factors.
         """
-        self = Vector3(self.x * other.x, self.y * other.y, self.z * other.z)
+        self = self * other
 
     def divide(mut self, other: Self):
         """Divide each component by `other`'s, three.js's `divide`. A zero
@@ -543,7 +549,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             other: The divisors.
         """
-        self = Vector3(self.x / other.x, self.y / other.y, self.z / other.z)
+        self = self / other
 
     def floor(mut self):
         """Round each component down, three.js's `floor`."""
@@ -556,7 +562,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
     def round(mut self):
         """Round each component to the nearest whole number, a half up,
         three.js's `round`."""
-        self = Vector3(_js_round(self.x), _js_round(self.y), _js_round(self.z))
+        self = Vector3(js_round(self.x), js_round(self.y), js_round(self.z))
 
     def round_to_zero(mut self):
         """Drop each component's fraction, three.js's `roundToZero`."""
@@ -570,7 +576,7 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             other: The vector to project onto. A zero vector gives a zero
                 vector, as in three.js.
         """
-        if other.x == 0 and other.y == 0 and other.z == 0:
+        if other == Vector3(0, 0, 0):
             self = Vector3(0, 0, 0)
             return
         var denominator = other.length_sq()
@@ -589,10 +595,8 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             + Float64(self.y) * unit[1]
             + Float64(self.z) * unit[2]
         )
-        self = Vector3(
-            Float32(unit[0] * along),
-            Float32(unit[1] * along),
-            Float32(unit[2] * along),
+        self = vector3_from_float64(
+            unit[0] * along, unit[1] * along, unit[2] * along
         )
 
     def project_on_plane(mut self, normal: Self):
@@ -675,11 +679,10 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Returns:
             The scale along x, y and z.
         """
-        ref e = matrix.elements
         return Vector3(
-            Vector3(e[0], e[1], e[2]).length(),
-            Vector3(e[4], e[5], e[6]).length(),
-            Vector3(e[8], e[9], e[10]).length(),
+            matrix.column_length(0),
+            matrix.column_length(1),
+            matrix.column_length(2),
         )
 
     @staticmethod
@@ -712,9 +715,231 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         var theta = generator.next() * pi * 2
         var u = generator.next() * 2 - 1
         var c = sqrt(1 - u * u)
-        return Vector3(
-            Float32(c * cos(theta)), Float32(u), Float32(c * sin(theta))
-        )
+        return vector3_from_float64(c * cos(theta), u, c * sin(theta))
+
+
+def component_min(a: Vector3, b: Vector3) -> Vector3:
+    """Return the smaller of each component, three.js's `min`.
+
+    Args:
+        a: One vector.
+        b: The other vector.
+
+    Returns:
+        The smaller components.
+    """
+    return Vector3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z))
+
+
+def component_max(a: Vector3, b: Vector3) -> Vector3:
+    """Return the larger of each component, three.js's `max`.
+
+    Args:
+        a: One vector.
+        b: The other vector.
+
+    Returns:
+        The larger components.
+    """
+    return Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z))
+
+
+def radians_between(a: Vector3, b: Vector3) -> Float32:
+    """Return the angle between two vectors, in radians.
+
+    Error: Never.
+
+    Args:
+        a: One vector.
+        b: The other.
+
+    Returns:
+        From zero to pi. A quarter turn if either vector has no length.
+
+    """
+    return a.angle_to(b).to(RADIAN)
+
+
+def reflect_vector(incident: Vector3, normal: Vector3) -> Vector3:
+    """Return `incident` reflected by a unit `normal`.
+
+    GLSL's `reflect`: `incident - 2 * dot(incident, normal) * normal`.
+    `Vector3.reflect` calls it.
+
+    Args:
+        incident: The vector to reflect.
+        normal: The plane's unit normal, used as given.
+
+    Returns:
+        The reflected vector.
+    """
+    return incident - normal * (2 * incident.dot(normal))
+
+
+def reciprocal_unit(value: Vector3) -> Vector3:
+    """Return `value` at unit length with ordinary reciprocal rounding.
+
+    Args:
+        value: The vector.
+
+    Returns:
+        The unit direction. A zero vector stays zero. An ordinary
+        nonzero vector is scaled by `1 / length`. A finite vector whose
+        squared length is not ordinary uses the scale-safe direction.
+    """
+    var unit = reciprocal_normalized3[DType.float32](value.x, value.y, value.z)
+    return Vector3(unit[0], unit[1], unit[2])
+
+
+def midpoint(a: Vector3, b: Vector3) -> Vector3:
+    """Return the point halfway from `a` to `b`.
+
+    Error: Never.
+
+    Args:
+        a: One end.
+        b: The other end.
+
+    Returns:
+        Each component is the average of the two.
+
+    """
+    return (a + b) * Float32(0.5)
+
+
+def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+    """Return the average of three points.
+
+    Error: Never.
+
+    Args:
+        a: The first point.
+        b: The second point.
+        c: The third point.
+
+    Returns:
+        Each component is the average of the three.
+
+    """
+    return (a + b + c) * (Float32(1) / 3)
+
+
+def append_vector3(mut values: List[Float32], point: Vector3):
+    """Append `point`'s three components.
+
+    Nothing. Three numbers are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives x, y, and z.
+        point: The vector.
+
+    """
+    values.append(point.x)
+    values.append(point.y)
+    values.append(point.z)
+
+
+def vector3_from_float64(x: Float64, y: Float64, z: Float64) -> Vector3:
+    """Return a `Vector3` from three `Float64` components.
+
+    Each component is rounded to `Float32`.
+
+    Error: Never.
+
+    Args:
+        x: The first component.
+        y: The second component.
+        z: The third component.
+
+    Returns:
+        The rounded vector.
+
+    """
+    return Vector3(Float32(x), Float32(y), Float32(z))
+
+
+def append_float64_xyz(
+    mut values: List[Float32], x: Float64, y: Float64, z: Float64
+):
+    """Append three `Float64` components as `Float32`.
+
+    Nothing. Three numbers are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives the components.
+        x: The first component.
+        y: The second component.
+        z: The third component.
+
+    """
+    append_vector3(values, vector3_from_float64(x, y, z))
+
+
+def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
+    """Return `start` moved toward `end` by `t`.
+
+    Each component forms the difference first, then scales it, then adds
+    it, as `mix_delta` does.
+
+    Args:
+        start: The vector at zero.
+        end: The vector at one.
+        t: The fraction.
+
+    Returns:
+        The blend.
+    """
+    return Vector3(
+        mix_delta(start.x, end.x, t),
+        mix_delta(start.y, end.y, t),
+        mix_delta(start.z, end.z, t),
+    )
+
+
+def weighted_sum3(
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    weight_a: Float32,
+    weight_b: Float32,
+    weight_c: Float32,
+) -> Vector3:
+    """Return three vectors mixed by their weights.
+
+    Each product is formed, then added, in `a`, `b`, `c` order.
+
+    Args:
+        a: The first vector.
+        b: The second vector.
+        c: The third vector.
+        weight_a: The first weight.
+        weight_b: The second weight.
+        weight_c: The third weight.
+
+    Returns:
+        `a * weight_a + b * weight_b + c * weight_c`.
+    """
+    return a * weight_a + b * weight_b + c * weight_c
+
+
+def require_nonzero_scale(scale: Vector3, message: String) raises:
+    """Refuse a scale whose components multiply to zero.
+
+    Nothing. The call returns when the product is nonzero.
+
+    Args:
+        scale: The three axis scales.
+        message: The error text for this caller.
+
+    Raises:
+        Error: If the product is zero.
+    """
+    if scale.x * scale.y * scale.z == 0:
+        raise Error(message)
 
 
 def _ordinary_transform[

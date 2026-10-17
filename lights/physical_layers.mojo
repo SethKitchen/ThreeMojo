@@ -42,9 +42,11 @@ factor for the reason `lights.lighting.blinn_phong` drops it: the lit sum
 is scaled by `Lighting.scale` once, at the end.
 """
 
+from lights.fresnel import schlick_weight
 from math.smoothstep import smoothstep
+from math.utils import clamp_lower_first, mix_delta, saturate
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from std.math import cos, exp, exp2, log2, max, min, pi, sqrt
 
 # The smallest sheen roughness three.js lets the Charlie lobe see:
@@ -63,20 +65,11 @@ comptime OUTSIDE_IOR = Float32(1)
 # of one along the tangent at full strength, which turns the material's
 # own vector by nothing and scales it by one, exactly. See `layers_of`.
 comptime NO_ANISOTROPY_TEXEL = Vector3(1, 0.5, 1)
-# The two numbers in three.js's `F_Schlick`, as `lights.lighting` holds
-# them. Held here as well, because that module imports this one.
-comptime _FRESNEL_SLOPE = Float32(-5.55473)
-comptime _FRESNEL_OFFSET = Float32(-6.98316)
-
-
-def _saturated(value: Float32) -> Float32:
-    """Return `value` clamped to zero through one: GLSL's `saturate`."""
-    return max(Float32(0), min(Float32(1), value))
 
 
 def _schlick(f0: Float32, f90: Float32, cosine: Float32) -> Float32:
     """Return three.js's scalar `F_Schlick`, spelled as `f_schlick` is."""
-    var fresnel = exp2((_FRESNEL_SLOPE * cosine + _FRESNEL_OFFSET) * cosine)
+    var fresnel = schlick_weight(cosine)
     return f0 * (1 - fresnel) + f90 * fresnel
 
 
@@ -163,9 +156,9 @@ def charlie_sheen(
     if alpha == 0 or half.length() == 0:
         return Vector3(0, 0, 0)
     half.normalize()
-    var dot_nl = _saturated(normal.dot(toward_light))
-    var dot_nv = _saturated(normal.dot(toward_eye))
-    var dot_nh = _saturated(normal.dot(half))
+    var dot_nl = saturate(normal.dot(toward_light))
+    var dot_nv = saturate(normal.dot(toward_eye))
+    var dot_nh = saturate(normal.dot(half))
     var inverse = 1 / alpha
     var sin2h = max(1 - dot_nh * dot_nh, SHEEN_SINE_FLOOR)
     # three.js's D_Charlie, without its reciprocal pi.
@@ -175,7 +168,7 @@ def charlie_sheen(
     var denominator = 4 * (dot_nl + dot_nv - dot_nl * dot_nv)
     var visibility = Float32(1)
     if denominator > 0:
-        visibility = _saturated(1 / denominator)
+        visibility = saturate(1 / denominator)
     return color * (lobe * visibility)
 
 
@@ -203,7 +196,7 @@ def ibl_sheen(dot_nv: Float32, roughness: Float32) -> Float32:
         b = 44.0 * r2 - 23.7 * roughness + 3.26
         rise = 0
     var dg = exp(a * dot_nv + b) + rise
-    return _saturated(dg * (1 / Float32(pi)))
+    return saturate(dg * (1 / Float32(pi)))
 
 
 def sheen_scaling(color: Vector3) -> Float32:
@@ -264,7 +257,7 @@ def clearcoat_of(authored: Float32, texel: Float32) -> Float32:
     Returns:
         The clear coat, from zero to one.
     """
-    return _saturated(authored * texel)
+    return saturate(authored * texel)
 
 
 def sheen_roughness_of(authored: Float32, texel: Float32) -> Float32:
@@ -279,7 +272,9 @@ def sheen_roughness_of(authored: Float32, texel: Float32) -> Float32:
     Returns:
         The sheen roughness.
     """
-    return min(max(authored, SHEEN_ROUGHNESS_FLOOR), Float32(1)) * texel
+    return (
+        clamp_lower_first(authored, SHEEN_ROUGHNESS_FLOOR, Float32(1)) * texel
+    )
 
 
 def iridescence_thickness(
@@ -395,9 +390,7 @@ def iridescence_fresnel(
     Returns:
         The reflectance per channel, never below zero.
     """
-    var ior = outside_ior + (film_ior - outside_ior) * smoothstep(
-        0, 0.03, thickness
-    )
+    var ior = mix_delta(outside_ior, film_ior, smoothstep(0, 0.03, thickness))
     var ratio = outside_ior / ior
     var sin_theta2_sq = ratio * ratio * (1 - cos_theta1 * cos_theta1)
     var cos_theta2_sq = 1 - sin_theta2_sq
@@ -444,7 +437,7 @@ def iridescence_fresnel(
     var cm = Vector3(rs.x - t121, rs.y - t121, rs.z - t121)
     # Two orders, always, so the loop never runs zero times.
     for order in range(1, 3):  # pragma: no branch
-        cm = Vector3(cm.x * root.x, cm.y * root.y, cm.z * root.z)
+        cm = cm * root
         var sm = _sensitivity(Float32(order) * opd, phi * Float32(order))
         total = Vector3(
             total.x + cm.x * 2 * sm.x,
@@ -496,7 +489,7 @@ def anisotropic_ggx(
     var dot_bh = layers.bitangent.dot(half)
     var gv = dot_nl * Vector3(alpha_t * dot_tv, alpha * dot_bv, dot_nv).length()
     var gl = dot_nv * Vector3(alpha_t * dot_tl, alpha * dot_bl, dot_nl).length()
-    var visibility = _saturated(0.5 / (gv + gl))
+    var visibility = saturate(0.5 / (gv + gl))
     var a2 = alpha_t * alpha
     var v = Vector3(alpha * dot_th, alpha_t * dot_bh, a2 * dot_nh)
     var w2 = a2 / v.dot(v)
@@ -540,11 +533,7 @@ def bent_normal(
     var fade = 1 - layers.anisotropy * (1 - roughness)
     fade = fade * fade
     fade = fade * fade
-    var bent = Vector3(
-        across.x + (normal.x - across.x) * fade,
-        across.y + (normal.y - across.y) * fade,
-        across.z + (normal.z - across.z) * fade,
-    )
+    var bent = mix_delta3(across, normal, fade)
     bent.normalize()
     return bent
 
@@ -604,9 +593,9 @@ def layers_of(
     layers.sheen_roughness = sheen_roughness
     layers.sheen = max(max(sheen_color.x, sheen_color.y), sheen_color.z) > 0
     if thickness > 0:
-        layers.iridescence = _saturated(iridescence)
+        layers.iridescence = saturate(iridescence)
     if layers.iridescence > 0:
-        var dot_nv = _saturated(normal.dot(toward_eye))
+        var dot_nv = saturate(normal.dot(toward_eye))
         layers.iridescence_fresnel = iridescence_fresnel(
             OUTSIDE_IOR, iridescence_ior, dot_nv, thickness, specular
         )
@@ -628,7 +617,7 @@ def layers_of(
             direction = Vector2(1, 0)
         else:
             direction = Vector2(direction.x / strength, direction.y / strength)
-            strength = _saturated(strength)
+            strength = saturate(strength)
         layers.anisotropy = strength
         var alpha = roughness * roughness
         var weight = strength * strength

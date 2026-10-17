@@ -25,6 +25,7 @@ from extensions.sdf.ids import (
     TagId,
     require_part,
     require_kind,
+    require_tag,
 )
 from extensions.sdf.vector import (
     Rigid,
@@ -35,8 +36,12 @@ from extensions.sdf.vector import (
     length,
     normalize,
 )
+from math.norm import squared_length2, squared_length3
+from math.utils import glsl_sign, max3, min3
+from math.finite import require_finite_group
 from std.collections import Dict
-from std.math import isfinite, sqrt
+from std.math import sqrt
+from core.ordinal import require_valid
 
 # The value of an empty field: far outside everything.
 comptime FAR = 1e9
@@ -117,18 +122,14 @@ def _ellipsoid(p: Primitive, q: V3) -> Float64:
     var qx = dot(d, p.ax) / p.r.x
     var qy = dot(d, p.ay) / p.r.y
     var qz = dot(d, p.az) / p.r.z
-    var k0 = sqrt(qx * qx + qy * qy + qz * qz)
+    var k0 = sqrt(squared_length3[DType.float64](qx, qy, qz))
     var sx = qx / p.r.x
     var sy = qy / p.r.y
     var sz = qz / p.r.z
-    var k1 = sqrt(sx * sx + sy * sy + sz * sz)
+    var k1 = sqrt(squared_length3[DType.float64](sx, sy, sz))
     if k1 < 1e-12:
-        return -min(p.r.x, min(p.r.y, p.r.z))
+        return -min3(p.r.x, p.r.y, p.r.z)
     return k0 * (k0 - 1.0) / k1
-
-
-def _sign(x: Float64) -> Float64:
-    return 1.0 if x > 0.0 else (-1.0 if x < 0.0 else 0.0)
 
 
 def _cone(p: Primitive, q: V3) -> Float64:
@@ -145,10 +146,10 @@ def _cone(p: Primitive, q: V3) -> Float64:
     var x2 = dot(v, v)
     var y2 = y * y * l2
     var z2 = z * z * l2
-    var k = _sign(rr) * rr * rr * x2
-    if _sign(z) * a2 * z2 > k:
+    var k = glsl_sign(rr) * rr * rr * x2
+    if glsl_sign(z) * a2 * z2 > k:
         return sqrt(x2 + z2) * il2 - p.r.y
-    if _sign(y) * a2 * y2 < k:
+    if glsl_sign(y) * a2 * y2 < k:
         return sqrt(x2 + y2) * il2 - p.r.x
     return (sqrt(x2 * a2 * il2) + y * rr) * il2 - p.r.x
 
@@ -180,7 +181,7 @@ def outline_distance(
     var at = first * 2
     var dx = px - outline[at]
     var dy = py - outline[at + 1]
-    var best = dx * dx + dy * dy
+    var best = squared_length2[DType.float64](dx, dy)
     var s = 1.0
     var j = count - 1
     for i in range(count):
@@ -190,11 +191,11 @@ def outline_distance(
         var ey = outline[at + j * 2 + 1] - iy
         var wx = px - ix
         var wy = py - iy
-        var ee = ex * ex + ey * ey
+        var ee = squared_length2[DType.float64](ex, ey)
         var t = min(max((wx * ex + wy * ey) / max(ee, 1e-18), 0.0), 1.0)
         var bx = wx - ex * t
         var by = wy - ey * t
-        best = min(best, bx * bx + by * by)
+        best = min(best, squared_length2[DType.float64](bx, by))
         # The crossing test of the winding rule, as one count: the sign
         # flips when all three tests agree.
         var agree = Int(py >= iy) + Int(py < iy + ey) + Int(ex * wy > ey * wx)
@@ -304,8 +305,7 @@ struct SdfModel(Movable):
         Raises:
             Error: If `id` names no tag of this sculpt.
         """
-        if not id.is_valid() or id.value >= len(self.tags):
-            raise Error("Tag id names no tag of this sculpt")
+        require_tag(id, len(self.tags))
         return self.tags[id.value]
 
     def _push(
@@ -324,8 +324,9 @@ struct SdfModel(Movable):
         part: SurfacePart,
         thin: Bool,
     ) raises -> Int:
-        if not bone.is_valid():
-            raise Error("A primitive's bone must not be negative")
+        require_valid(
+            bone.is_valid(), "A primitive's bone must not be negative"
+        )
         require_part(part)
         if not k >= 0.0:
             raise Error("A blend radius must not be negative")
@@ -388,14 +389,18 @@ struct SdfModel(Movable):
                 negative, `part` is not named, the axis is zero or
                 nonfinite, or the up hint is nonfinite.
         """
-        if not min(r.x, min(r.y, r.z)) > 0.0:
+        if not min3(r.x, r.y, r.z) > 0.0:
             raise Error("An ellipsoid's radii must be positive")
-        if not (isfinite(axis.x) and isfinite(axis.y) and isfinite(axis.z)):
+        require_finite_group(
+            axis.is_finite(),
+            "An ellipsoid axis must be finite and nonzero",
+        )
+        if max3(abs(axis.x), abs(axis.y), abs(axis.z)) == 0.0:
             raise Error("An ellipsoid axis must be finite and nonzero")
-        if max(abs(axis.x), max(abs(axis.y), abs(axis.z))) == 0.0:
-            raise Error("An ellipsoid axis must be finite and nonzero")
-        if not (isfinite(up.x) and isfinite(up.y) and isfinite(up.z)):
-            raise Error("An ellipsoid up hint must be finite")
+        require_finite_group(
+            up.is_finite(),
+            "An ellipsoid up hint must be finite",
+        )
         var f = frame_zy(axis, up)
         return self._push(
             ELLIPSOID, tag, bone, c, c, f.x, f.y, f.z, r, k, carve, part, thin
@@ -863,8 +868,7 @@ struct SdfModel(Movable):
         for p in self.prims:
             require_kind(p.kind)
             require_part(p.part)
-            if not p.tag.is_valid() or p.tag.value >= len(self.tags):
-                raise Error("Tag id names no tag of this sculpt")
+            require_tag(p.tag, len(self.tags))
             if not p.bone.is_valid() or p.bone.value >= len(transforms):
                 raise Error("A primitive's bone has no transform")
             out.prims.append(p.moved(transforms[p.bone.value]))

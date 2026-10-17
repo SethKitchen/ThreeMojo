@@ -11,7 +11,8 @@ filter aliases. The level is the OpenGL choice: `log2` of the long texel
 derivative divided by the anisotropy.
 """
 
-from std.math import log, sqrt
+from math.norm import squared_length2
+from std.math import floor, log, sqrt
 
 
 @fieldwise_init
@@ -59,8 +60,8 @@ def anisotropic_step(
     var ay = dv_dx * height
     var bx = du_dy * width
     var by = dv_dy * height
-    var len_x = sqrt(ax * ax + ay * ay)
-    var len_y = sqrt(bx * bx + by * by)
+    var len_x = sqrt(squared_length2[DType.float32](ax, ay))
+    var len_y = sqrt(squared_length2[DType.float32](bx, by))
     var major = len_x
     var minor = len_y
     var du = du_dx
@@ -83,3 +84,34 @@ def anisotropic_step(
     if lod > max_lod:
         lod = max_lod
     return FilterStep(lod, Int(ratio), du, dv)
+
+
+def lod_blend(lod: Float32, levels: Int) -> Tuple[Int, Int, Float32]:
+    """Return the two mip levels a sample blends, and the blend.
+
+    Args:
+        lod: The mip level.
+        levels: The coarsest level in the chain.
+
+    Returns:
+        The finer level, the coarser level held at `levels`, and how far
+        the sample is from the finer level toward the coarser one.
+    """
+    var finer = Int(floor(lod))
+    var coarser = finer + 1
+    if coarser > levels:
+        coarser = levels
+    return finer, coarser, lod - Float32(finer)
+
+
+def major_axis_offset(index: Int, count: Int) -> Float32:
+    """Return one tap's place on the major axis, from minus one half to one half.
+
+    Args:
+        index: The tap, from zero.
+        count: How many taps. It is at least one.
+
+    Returns:
+        `(index + 0.5) / count - 0.5`.
+    """
+    return (Float32(index) + 0.5) / Float32(count) - 0.5

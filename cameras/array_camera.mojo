@@ -27,6 +27,7 @@ rectangle whatever its shape.
 
 from cameras.perspective_camera import PerspectiveCamera
 from render.rect import Rect
+from core.ordinal import require_valid
 
 
 struct ArrayCamera(Movable):
@@ -57,8 +58,9 @@ struct ArrayCamera(Movable):
         Raises:
             Error: If the rectangle holds no pixel.
         """
-        if not viewport.is_valid():
-            raise Error("A sub camera's viewport needs a positive size")
+        require_valid(
+            viewport.is_valid(), "A sub camera's viewport needs a positive size"
+        )
         self.cameras.append(camera)
         self.viewports.append(viewport)
 

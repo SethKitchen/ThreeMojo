@@ -94,26 +94,68 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.extent import (
+    require_closed_count,
+    require_positive_extent,
+    require_texel_count,
+)
+from core.ordinal import ordinal_valid, require_valid, require_positive
+
+from math.finite import require_finite, require_finite_group
+from math.utils import clamp, edge_index
 from std.math import exp2
-from math.norm import length2, _ordinary_squared
+from math.norm import length2, _ordinary_squared, squared_length2
+from math.sine import fraction
+from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    OPAQUE_WHITE,
+    append_color,
+    unit_byte,
+    require_depth_length,
+)
 from render.png import DecodedImage
 from render.srgb import (
     LINEAR,
     SRGB,
-    UNKNOWN_SPACE,
     ColorSpace,
     decode_ramp,
     linear_to_srgb,
+    require_known_color_space,
 )
 from render.float_image import FloatImage
 from render.texture_buffer import TextureBuffer
-from render.raster_state import STANDARD_DEPTH, DepthMode, window_depth
+from render.raster_state import (
+    STANDARD_DEPTH,
+    DepthMode,
+    require_depth_mode,
+    window_depth,
+)
 from std.math import ceil, floor, fma, isfinite, log2, sqrt
 from std.memory import bitcast
 from units.si import Angle, RADIAN
+
+
+def require_texture_size(width: Int, height: Int) raises:
+    """Refuse a texture whose size is not positive.
+
+    Nothing. The call returns when both sizes are positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    require_positive_extent(
+        width, height, "Texture dimensions must be positive"
+    )
 
 
 @fieldwise_init
@@ -130,7 +172,7 @@ struct Wrap(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `REPEAT`, `CLAMP` or `MIRROR`."""
-        return self == REPEAT or self == CLAMP or self == MIRROR
+        return ordinal_valid(self.value, MIRROR.value)
 
 
 # Tile the image; 1.5 reads the same texel as 0.5. three.js's
@@ -327,7 +369,7 @@ struct Alpha(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `COVERAGE` or `IGNORED`."""
-        return self == COVERAGE or self == IGNORED
+        return ordinal_valid(self.value, IGNORED.value)
 
 
 # Alpha is coverage: it weights every filter and every mip average, so a
@@ -357,7 +399,7 @@ struct TexelType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `UNSIGNED_BYTE_TYPE` or `FLOAT_TYPE`."""
-        return self == UNSIGNED_BYTE_TYPE or self == FLOAT_TYPE
+        return ordinal_valid(self.value, FLOAT_TYPE.value)
 
 
 # Eight bits a channel, in `Texture.pixels`: three.js's `UnsignedByteType`.
@@ -368,6 +410,41 @@ comptime UNSIGNED_BYTE_TYPE = TexelType(0)
 # loaders default to `HalfFloatType`; a half here is widened to a float,
 # which holds every half exactly.
 comptime FLOAT_TYPE = TexelType(1)
+
+
+def require_texel_type(texel_type: TexelType) raises:
+    """Refuse a texel type that is neither bytes nor floats.
+
+    Nothing. The call returns when the type is `UNSIGNED_BYTE_TYPE`
+    or `FLOAT_TYPE`.
+
+    Args:
+        texel_type: What one channel is stored as.
+
+    Raises:
+        Error: If the type is neither of those.
+    """
+    require_valid(
+        texel_type.is_valid(),
+        "A texture's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE",
+    )
+
+
+def require_float_linear(texel_type: TexelType, space: ColorSpace) raises:
+    """Refuse a float texture whose color space is not linear.
+
+    Nothing. The call returns when the texture is not a float, or its
+    color space is linear.
+
+    Args:
+        texel_type: What one channel is stored as.
+        space: The color space the texture decodes with.
+
+    Raises:
+        Error: If a float texture is not linear.
+    """
+    if texel_type == FLOAT_TYPE and space != LINEAR:
+        raise Error("A float texture holds linear light: it must be LINEAR")
 
 
 @fieldwise_init
@@ -384,7 +461,7 @@ struct UvChannel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `UV_CHANNEL_0` or `UV_CHANNEL_1`."""
-        return self == UV_CHANNEL_0 or self == UV_CHANNEL_1
+        return ordinal_valid(self.value, UV_CHANNEL_1.value)
 
 
 # The geometry's `uv`: three.js's default channel.
@@ -392,6 +469,24 @@ comptime UV_CHANNEL_0 = UvChannel(0)
 # The geometry's `uv1`, or its `uv` when it has no `uv1`. What a baked
 # ambient occlusion map or light map usually reads.
 comptime UV_CHANNEL_1 = UvChannel(1)
+
+
+def require_uv_channel(channel: UvChannel) raises:
+    """Refuse a texture channel that is neither of the two sets.
+
+    Nothing. The call returns when the channel is `UV_CHANNEL_0` or
+    `UV_CHANNEL_1`.
+
+    Args:
+        channel: Which coordinate set the texture reads.
+
+    Raises:
+        Error: If the channel is neither of those.
+    """
+    require_valid(
+        channel.is_valid(),
+        "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1",
+    )
 
 
 @fieldwise_init
@@ -510,8 +605,17 @@ def float_texel(
 
 
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
-    """Return one channel a fraction `t` of the way from `near` to `far`."""
-    return near + (far - near) * t
+    """Return a channel partway from one value to another.
+
+    Args:
+        near: The first value.
+        far: The second value.
+        t: The fraction between them.
+
+    Returns:
+        The difference-first blend.
+    """
+    return mix_delta(near, far, t)
 
 
 def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
@@ -523,12 +627,7 @@ def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     """
     var one = near.premultiplied()
     var two = far.premultiplied()
-    return FloatColor(
-        mix(one.r, two.r, t),
-        mix(one.g, two.g, t),
-        mix(one.b, two.b, t),
-        mix(one.a, two.a, t),
-    ).unpremultiplied()
+    return one.mix(two, t).unpremultiplied()
 
 
 def mix_straight(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
@@ -555,12 +654,7 @@ def mix_straight(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     Returns:
         The interpolated color, straight rather than premultiplied.
     """
-    return FloatColor(
-        mix(near.r, far.r, t),
-        mix(near.g, far.g, t),
-        mix(near.b, far.b, t),
-        mix(near.a, far.a, t),
-    )
+    return near.mix(far, t)
 
 
 def blend_texels(
@@ -633,24 +727,9 @@ def blend(
     Returns:
         The blended color.
     """
-    var top = FloatColor(
-        mix(lower_left.r, lower_right.r, across),
-        mix(lower_left.g, lower_right.g, across),
-        mix(lower_left.b, lower_right.b, across),
-        mix(lower_left.a, lower_right.a, across),
-    )
-    var bottom = FloatColor(
-        mix(upper_left.r, upper_right.r, across),
-        mix(upper_left.g, upper_right.g, across),
-        mix(upper_left.b, upper_right.b, across),
-        mix(upper_left.a, upper_right.a, across),
-    )
-    return FloatColor(
-        mix(top.r, bottom.r, down),
-        mix(top.g, bottom.g, down),
-        mix(top.b, bottom.b, down),
-        mix(top.a, bottom.a, down),
-    )
+    var top = lower_left.mix(lower_right, across)
+    var bottom = upper_left.mix(upper_right, across)
+    return top.mix(bottom, down)
 
 
 def _to_byte(value: Float32, space: ColorSpace) -> UInt8:
@@ -735,7 +814,7 @@ def wrap_index(coordinate: Int, extent: Int, mode: Wrap) -> Int:
     if mode == CLAMP:
         # One statement and no decisions: every bilinear read makes four
         # of these calls, and a coverage run writes a record per statement.
-        return min(max(coordinate, 0), extent - 1)
+        return edge_index(coordinate, extent)
 
     # Mojo's `%` is floored, as Python's is, so a negative coordinate already
     # comes back inside [0, extent) and needs no correcting afterwards: -1 % 4
@@ -804,7 +883,7 @@ def fetch_level(level: Int, levels: Int) -> Int:
     Returns:
         The level read.
     """
-    return max(0, min(level, levels - 1))
+    return edge_index(level, levels)
 
 
 def level_filter(level: Int, mag_filter: Filter, min_filter: Filter) -> Filter:
@@ -1035,10 +1114,14 @@ struct Texture(Movable):
                 mode is none of the named values, or the filter is not
                 `NEAREST` or `BILINEAR` -- see `validate`.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Texture dimensions must be positive")
-        if len(pixels) != width * height * Self.CHANNELS:
-            raise Error("Texture buffer length does not match the dimensions")
+        require_texture_size(width, height)
+        require_texel_count(
+            len(pixels),
+            width,
+            height,
+            Self.CHANNELS,
+            "Texture buffer length does not match the dimensions",
+        )
         self.color_space = color_space
         if color_space == SRGB:
             self.ramp = decode_ramp()
@@ -1107,39 +1190,36 @@ struct Texture(Movable):
             raise Error(
                 "A texture's magnification filter must be NEAREST or BILINEAR"
             )
-        if not self.min_filter.is_valid():
-            raise Error(
-                "A texture's minification filter must be one of the six"
-            )
-        if not self.mapping.is_valid():
-            raise Error("A texture's mapping must be one of the six")
+        require_valid(
+            self.min_filter.is_valid(),
+            "A texture's minification filter must be one of the six",
+        )
+        require_valid(
+            self.mapping.is_valid(),
+            "A texture's mapping must be one of the six",
+        )
         if not self.color_space.is_decodable():
             raise Error(
                 "A texture needs a color space it can decode: SRGB or LINEAR"
             )
-        if not self.alpha.is_valid():
-            raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
-        if not self.texel_type.is_valid():
-            raise Error(
-                "A texture's texel type must be UNSIGNED_BYTE_TYPE or"
-                " FLOAT_TYPE"
-            )
+        require_valid(
+            self.alpha.is_valid(),
+            "A texture's alpha mode must be COVERAGE or IGNORED",
+        )
+        require_texel_type(self.texel_type)
         # A float holds linear light as it is. The sRGB curve is a way to
         # spend 256 steps where the eye sees them, and a float has no steps
         # to spend: three.js's HDR loaders mark their textures linear.
-        if self.texel_type == FLOAT_TYPE and self.color_space != LINEAR:
-            raise Error("A float texture holds linear light: it must be LINEAR")
-        if self.anisotropy < 1:
-            raise Error("A texture's anisotropy is at least one")
+        require_float_linear(self.texel_type, self.color_space)
+        require_positive(
+            self.anisotropy, "A texture's anisotropy is at least one"
+        )
         if self.anisotropy > MAX_ANISOTROPY:
             raise Error(
                 "A texture's anisotropy is at most MAX_ANISOTROPY: every"
                 " tap is work a fragment pays for"
             )
-        if not self.channel.is_valid():
-            raise Error(
-                "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1"
-            )
+        require_uv_channel(self.channel)
 
     def __init__(out self, *, copy: Self, share_data: Bool = False):
         """Copy a texture with independent sampling and transform state.
@@ -1435,7 +1515,7 @@ struct Texture(Movable):
                 for x in range(next_wide):  # pragma: no branch
                     var left = x * wide
                     var right = left + wide
-                    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+                    var total = TRANSPARENT_BLACK
                     var first_row = top // next_tall
                     var past_row = _ceiling(bottom, next_tall)
                     var first_col = left // next_wide
@@ -1458,21 +1538,11 @@ struct Texture(Movable):
                             # changes nothing and the color averages as it
                             # is; the level then stores an opaque alpha.
                             var texel = self._texel_at(at).premultiplied()
-                            total = FloatColor(
-                                total.r + texel.r * weight,
-                                total.g + texel.g * weight,
-                                total.b + texel.b * weight,
-                                total.a + texel.a * weight,
-                            )
+                            total = total + texel * weight
                             sx += 1
                         sy += 1
                     var share = 1 / Float32(wide * tall)
-                    var mixed = FloatColor(
-                        total.r * share,
-                        total.g * share,
-                        total.b * share,
-                        total.a * share,
-                    ).unpremultiplied()
+                    var mixed = (total * share).unpremultiplied()
                     self._store(mixed)
             level += 1
             self.levels = level + 1
@@ -1532,6 +1602,20 @@ struct Texture(Movable):
         """Return True if `level` names an image this texture actually holds."""
         return level >= 0 and level < self.levels
 
+    def _require_level(self, level: Int) raises:
+        """Refuse a mip level this texture does not hold.
+
+        Nothing. The call returns when the texture holds that level.
+
+        Args:
+            level: The mip level.
+
+        Raises:
+            Error: If the texture has no such level.
+        """
+        if not self._has_level(level):
+            raise Error("No such mip level")
+
     def wrapped_texel(
         self, x: Int, y: Int, level: Int = 0
     ) raises -> FloatColor:
@@ -1560,9 +1644,8 @@ struct Texture(Movable):
             Error: If the texture is not blank and has no such level.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
-        if not self._has_level(level):
-            raise Error("No such mip level")
+            return OPAQUE_WHITE
+        self._require_level(level)
         return self._wrapped_texel(x, y, level)
 
     def fetch(self, x: Int, y: Int, level: Int) -> FloatColor:
@@ -1579,7 +1662,7 @@ struct Texture(Movable):
             The color there, or opaque white if the texture is blank.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
         var at = fetch_level(level, self.levels)
         return self._wrapped_texel(
             x, fetch_row(y, self.level_height(at), self.flip_y), at
@@ -1649,9 +1732,8 @@ struct Texture(Movable):
             Error: If the texture is not blank and has no such level.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
-        if not self._has_level(level):
-            raise Error("No such mip level")
+            return OPAQUE_WHITE
+        self._require_level(level)
         return self._sample_at(u, v, level, self.filter_at(level))
 
     def filter_at(self, level: Int) -> Filter:
@@ -1677,7 +1759,7 @@ struct Texture(Movable):
         which `plan_levels` chose.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
         var wide = self.level_width(level)
         var tall = self.level_height(level)
         var from_top = row_coordinate(v, self.flip_y)
@@ -1791,9 +1873,9 @@ struct Texture(Movable):
         Invalid runtime inputs return transparent black without a sample.
         """
         if not texture_grad_finite(u, v, dx, dy):
-            return FloatColor(0, 0, 0, 0)
+            return TRANSPARENT_BLACK
         if self.is_blank():
-            return FloatColor(1, 1, 1, 1)
+            return OPAQUE_WHITE
         var footprint = anisotropic_footprint(
             dx, dy, self.width, self.height, self.anisotropy
         )
@@ -1853,12 +1935,8 @@ struct Texture(Movable):
             The color found there, or opaque white if the texture is blank.
         """
         if explicit:
-            if (
-                not isfinite(footprint.level)
-                or not isfinite(footprint.step.x)
-                or not isfinite(footprint.step.y)
-            ):
-                return FloatColor(0, 0, 0, 0)
+            if not isfinite(footprint.level) or not footprint.step.is_finite():
+                return TRANSPARENT_BLACK
         if footprint.taps == 1:
             if explicit:
                 return self.sample_level(
@@ -1867,29 +1945,22 @@ struct Texture(Movable):
                     footprint.level,
                 )
             return self.sample_level(u, v, footprint.level)
-        var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+        var total = TRANSPARENT_BLACK
         for tap in range(footprint.taps):  # pragma: no branch
             var along = Float32(tap) - Float32(footprint.taps - 1) / 2
             var tap_u = u + footprint.step.x * along
             var tap_v = v + footprint.step.y * along
             if explicit:
                 if not isfinite(tap_u) or not isfinite(tap_v):
-                    return FloatColor(0, 0, 0, 0)
+                    return TRANSPARENT_BLACK
                 tap_u = gradient_sample_coordinate(tap_u, self.wrap_s)
                 tap_v = gradient_sample_coordinate(tap_v, self.wrap_t)
             var sampled = self.sample_level(
                 tap_u, tap_v, footprint.level
             ).premultiplied()
-            total = FloatColor(
-                total.r + sampled.r,
-                total.g + sampled.g,
-                total.b + sampled.b,
-                total.a + sampled.a,
-            )
+            total = total + sampled
         var share = 1 / Float32(footprint.taps)
-        return FloatColor(
-            total.r * share, total.g * share, total.b * share, total.a * share
-        ).unpremultiplied()
+        return (total * share).unpremultiplied()
 
     def sample(self, u: Float32, v: Float32) -> FloatColor:
         """Return the color at a texture coordinate, from the full-size
@@ -1924,7 +1995,7 @@ struct Texture(Movable):
             The color found there, or opaque white if the texture is blank.
         """
         if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
+            return OPAQUE_WHITE
 
         return self._sample_at(u, v, 0, self.mag_filter)
 
@@ -1956,14 +2027,7 @@ def texture_grad_finite(
     Returns:
         Whether all six components are finite.
     """
-    return (
-        isfinite(u)
-        and isfinite(v)
-        and isfinite(dx.x)
-        and isfinite(dx.y)
-        and isfinite(dy.x)
-        and isfinite(dy.y)
-    )
+    return isfinite(u) and isfinite(v) and dx.is_finite() and dy.is_finite()
 
 
 def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
@@ -1987,8 +2051,57 @@ def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
         return Float32(0) if value < 0 else Float32(1)
     if mode == MIRROR:
         var half = value * Float32(0.5)
-        return (half - floor(half)) * 2
-    return value - floor(value)
+        return fraction(half) * 2
+    return fraction(value)
+
+
+@fieldwise_init
+struct GradientPlace(ImplicitlyCopyable):
+    """Where an explicit-gradient tap reads, after the finite check.
+
+    `ready` is false when a coordinate or a gradient is not finite.
+    """
+
+    var ready: Bool
+    var u: Float32
+    var v: Float32
+
+
+def gradient_place(
+    u: Float32,
+    v: Float32,
+    dx: Vector2,
+    dy: Vector2,
+    wrap_u: Wrap,
+    wrap_v: Wrap,
+) -> GradientPlace:
+    """Return the coordinates an explicit-gradient tap reads.
+
+    A nonfinite coordinate or gradient is refused before the wrap. A
+    finite coordinate is reduced by `gradient_sample_coordinate`.
+
+    Error: Never.
+
+    Args:
+        u: Horizontal coordinate.
+        v: Vertical coordinate.
+        dx: Coordinate change per screen pixel across.
+        dy: Coordinate change per screen pixel up.
+        wrap_u: How `u` repeats.
+        wrap_v: How `v` repeats.
+
+    Returns:
+        `ready` is false when an input is not finite. Otherwise `u` and
+        `v` are the reduced coordinates.
+
+    """
+    if not texture_grad_finite(u, v, dx, dy):
+        return GradientPlace(False, 0, 0)
+    return GradientPlace(
+        True,
+        gradient_sample_coordinate(u, wrap_u),
+        gradient_sample_coordinate(v, wrap_v),
+    )
 
 
 @fieldwise_init
@@ -2020,17 +2133,19 @@ struct Footprint(ImplicitlyCopyable):
             Error: If the tap count is below one or above `MAX_ANISOTROPY`,
                 or the level or either component of the step is not finite.
         """
-        if self.taps < 1:
-            raise Error("A footprint takes at least one tap")
+        require_positive(self.taps, "A footprint takes at least one tap")
         if self.taps > MAX_ANISOTROPY:
             raise Error(
                 "A footprint takes at most MAX_ANISOTROPY taps: a fragment"
                 " pays for every one of them"
             )
-        if not isfinite(self.level):
-            raise Error("A footprint's level must be finite")
-        if not isfinite(self.step.x) or not isfinite(self.step.y):
-            raise Error("A footprint's step must be finite")
+        require_finite(
+            Float64(self.level), "A footprint's level must be finite"
+        )
+        require_finite_group(
+            self.step.is_finite(),
+            "A footprint's step must be finite",
+        )
 
 
 def _binade(value: Float32) -> Float32:
@@ -2076,7 +2191,7 @@ def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
     var c = v.x * v.x + v.y * v.y
     var half_sum = (a + c) / 2
     var half_difference = (a - c) / 2
-    var spread_squared = half_difference * half_difference + b * b
+    var spread_squared = squared_length2[DType.float32](half_difference, b)
     var scale = Float32(1)
     var largest_component = max(
         max(abs(u.x), abs(u.y)), max(abs(v.x), abs(v.y))
@@ -2327,7 +2442,7 @@ def anisotropic_footprint(
     # guard has a reachable second side. They are here against a rounding
     # that could put `ceil` one over the cap, which must not happen:
     # `Footprint.validate` refuses more taps than the cap allows.
-    var taps = max(1, min(Int(ceil(major / effective_minor)), allowed))
+    var taps = clamp(Int(ceil(major / effective_minor)), 1, allowed)
     if taps == 1:
         # One tap is the trilinear read, and the trilinear read of a round
         # footprint is the level the longer derivative wants: the same
@@ -2406,11 +2521,7 @@ def texture_from(
             and none was given.
     """
     var space = color_space.or_else(image.color_space)
-    if space == UNKNOWN_SPACE:
-        raise Error(
-            "This image declares a color space that cannot be interpreted;"
-            " pass SRGB or LINEAR to say how to read it"
-        )
+    require_known_color_space(space)
     return Texture(
         image.width,
         image.height,
@@ -2476,12 +2587,20 @@ def data_texture(
             through four, the data holds any number that is not finite,
             or its length is not `width * height * channels`.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Texture dimensions must be positive")
-    if channels < 1 or channels > 4:
-        raise Error("A data texture holds one through four numbers a texel")
-    if len(data) != width * height * channels:
-        raise Error("Data texture length does not match the dimensions")
+    require_texture_size(width, height)
+    require_closed_count(
+        channels,
+        1,
+        4,
+        "A data texture holds one through four numbers a texel",
+    )
+    require_texel_count(
+        len(data),
+        width,
+        height,
+        channels,
+        "Data texture length does not match the dimensions",
+    )
     var pixels = List[UInt8]()
     pixels.reserve(width * height * Texture.CHANNELS)
     # Both dimensions are positive, so the loop cannot run zero times.
@@ -2540,16 +2659,21 @@ def float_texture(
             not `width * height * 4`, a number is not finite, or the
             wrap, filter or alpha mode is none of the named values.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Texture dimensions must be positive")
-    if len(data) != width * height * Texture.CHANNELS:
-        raise Error("Float texture length does not match the dimensions")
+    require_texture_size(width, height)
+    require_texel_count(
+        len(data),
+        width,
+        height,
+        Texture.CHANNELS,
+        "Float texture length does not match the dimensions",
+    )
     # Both dimensions are positive, so the loop cannot run zero times.
     for index in range(len(data)):  # pragma: no branch
         # An infinity or a NaN poisons every filter that reaches it, and
         # every level of the chain above it: refused, not sampled.
-        if not isfinite(data[index]):
-            raise Error("A float texture holds finite numbers")
+        require_finite(
+            Float64(data[index]), "A float texture holds finite numbers"
+        )
     var image = Texture()
     image.width = width
     image.height = height
@@ -2610,14 +2734,13 @@ def _fraction_byte(value: Float32) raises -> UInt8:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A data texture holds finite numbers")
+    require_finite(Float64(value), "A data texture holds finite numbers")
     var held = value
     if held < 0:
         held = 0
     if held > 1:
         held = 1
-    return UInt8(Int(held * 255 + 0.5))
+    return unit_byte(held)
 
 
 def texture_of(
@@ -2737,12 +2860,9 @@ def depth_texture_of_buffer(
             does not match them, the wrap mode is none of the named
             values, or the depth mode is none of the three.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Texture dimensions must be positive")
-    if len(depth) != width * height:
-        raise Error("Depth buffer length does not match the dimensions")
-    if not mode.is_valid():
-        raise Error("A depth mode that is none of the three")
+    require_texture_size(width, height)
+    require_depth_length(len(depth), width, height)
+    require_depth_mode(mode)
     var pixels = List[UInt8]()
     pixels.reserve(width * height * Texture.CHANNELS)
     # Both dimensions are positive, so the loop always runs.
@@ -2796,10 +2916,8 @@ def checkerboard(
             not divide the image evenly — which would put a half square at
             one edge and make a tiled image visibly discontinuous.
     """
-    if size <= 0:
-        raise Error("A checkerboard needs a positive size")
-    if squares <= 0:
-        raise Error("A checkerboard needs at least one square")
+    require_positive(size, "A checkerboard needs a positive size")
+    require_positive(squares, "A checkerboard needs at least one square")
     if size % squares != 0:
         raise Error("A checkerboard's squares must divide its size evenly")
 
@@ -2810,10 +2928,7 @@ def checkerboard(
             var shade = light
             if (x // step + y // step) % 2 == 1:
                 shade = dark
-            pixels.append(shade.r)
-            pixels.append(shade.g)
-            pixels.append(shade.b)
-            pixels.append(shade.a)
+            append_color(pixels, shade)
     return Texture(
         size, size, pixels^, wrap, filter, color_space, mipmapped, alpha
     )

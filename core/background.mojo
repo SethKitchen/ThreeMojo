@@ -48,6 +48,8 @@ three.js's plane does.
 and multiplied by `Scene.environment_intensity`. See `core.scene`.
 """
 
+from core.ordinal import ordinal_valid, require_non_negative, require_valid
+
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureId
@@ -66,12 +68,7 @@ struct BackgroundKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four kinds there are."""
-        return (
-            self == NO_BACKGROUND
-            or self == COLOR_BACKGROUND
-            or self == TEXTURE_BACKGROUND
-            or self == CUBE_BACKGROUND
-        )
+        return ordinal_valid(self.value, CUBE_BACKGROUND.value)
 
 
 # The scene says nothing: the renderer clears to its own color. What a
@@ -141,12 +138,13 @@ struct Background(ImplicitlyCopyable):
                 names `NO_TEXTURE` or a negative id, or a cube background
                 names `NO_CUBE_TEXTURE` or a negative id.
         """
-        if not self.kind.is_valid():
-            raise Error("A background's kind is none of the four")
-        if self.kind == TEXTURE_BACKGROUND and self.texture.value < 0:
-            raise Error("A texture background must name a texture")
-        if self.kind == CUBE_BACKGROUND and self.cube.value < 0:
-            raise Error("A cube background must name a cube texture")
+        require_valid(
+            self.kind.is_valid(), "A background's kind is none of the four"
+        )
+        if self.kind == TEXTURE_BACKGROUND:
+            require_texture_background(self.texture)
+        if self.kind == CUBE_BACKGROUND:
+            require_cube_background(self.cube)
 
 
 def no_background() -> Background:
@@ -172,6 +170,34 @@ def color_background(color: Color) -> Background:
     return Background(COLOR_BACKGROUND, color=color)
 
 
+def require_texture_background(id: TextureId) raises:
+    """Refuse a texture background that names no texture.
+
+    Nothing. The call returns when the id is not negative.
+
+    Args:
+        id: The texture.
+
+    Raises:
+        Error: If the id is `NO_TEXTURE` or negative.
+    """
+    require_non_negative(id.value, "A texture background must name a texture")
+
+
+def require_cube_background(id: CubeTextureId) raises:
+    """Refuse a cube background that names no cube texture.
+
+    Nothing. The call returns when the id is not negative.
+
+    Args:
+        id: The cube texture.
+
+    Raises:
+        Error: If the id is `NO_CUBE_TEXTURE` or negative.
+    """
+    require_non_negative(id.value, "A cube background must name a cube texture")
+
+
 def texture_background(texture: TextureId) raises -> Background:
     """Return a background that stretches a texture over the viewport,
     three.js's `scene.background = texture`.
@@ -186,8 +212,7 @@ def texture_background(texture: TextureId) raises -> Background:
         Error: If the id is `NO_TEXTURE` or negative: a texture background
             with no texture is `no_background`, and says so.
     """
-    if texture.value < 0:
-        raise Error("A texture background must name a texture")
+    require_texture_background(texture)
     return Background(TEXTURE_BACKGROUND, texture=texture)
 
 
@@ -205,6 +230,5 @@ def cube_background(cube: CubeTextureId) raises -> Background:
         Error: If the id is `NO_CUBE_TEXTURE`, `SCENE_ENVIRONMENT` or
             otherwise negative: a sky must name six images of its own.
     """
-    if cube.value < 0:
-        raise Error("A cube background must name a cube texture")
+    require_cube_background(cube)
     return Background(CUBE_BACKGROUND, cube=cube)

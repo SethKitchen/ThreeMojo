@@ -95,6 +95,8 @@ is split along is part of the surface. Both forms split it as three.js's
 """
 
 from core.buffer_attribute import BufferAttribute
+from core.ordinal import require_positive
+from geometries.surface import record_kind, textured_surface
 from core.buffer_geometry import (
     BufferGeometry,
     EXTRUDE_GEOMETRY,
@@ -103,14 +105,15 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
-from core.user_data import UserData
 from exporters.json_writer import JsonWriter
 from geometries.earcut import triangulate_shape
+from math.curve_checks import require_at_least_one
 from loaders.curve_json import write_curve3, write_curve_path3
 from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
+from math.norm import squared_length2
 from math.path import Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, append_vector2, vector2_from_float64
 from math.vector3 import Vector3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
@@ -142,9 +145,9 @@ def world_top_uv(
         The three coordinates, in the vertices' order.
     """
     return [
-        Vector2(Float32(vertices[a * 3]), Float32(vertices[a * 3 + 1])),
-        Vector2(Float32(vertices[b * 3]), Float32(vertices[b * 3 + 1])),
-        Vector2(Float32(vertices[c * 3]), Float32(vertices[c * 3 + 1])),
+        vector2_from_float64(vertices[a * 3], vertices[a * 3 + 1]),
+        vector2_from_float64(vertices[b * 3], vertices[b * 3 + 1]),
+        vector2_from_float64(vertices[c * 3], vertices[c * 3 + 1]),
     ]
 
 
@@ -174,9 +177,8 @@ def world_side_wall_uv(
     var out = List[Vector2](capacity=4)
     for corner in [a, b, c, d]:  # pragma: no branch
         out.append(
-            Vector2(
-                Float32(vertices[corner * 3 + lane]),
-                Float32(1 - vertices[corner * 3 + 2]),
+            vector2_from_float64(
+                vertices[corner * 3 + lane], 1 - vertices[corner * 3 + 2]
             )
         )
     return out^
@@ -245,14 +247,14 @@ def bevel_vector(point: Vector2, before: Vector2, after: Vector2) -> _Offset:
     var prev_y = y - by
     var next_x = ax - x
     var next_y = ay - y
-    var prev_lensq = prev_x * prev_x + prev_y * prev_y
+    var prev_lensq = squared_length2[DType.float64](prev_x, prev_y)
     var collinear = prev_x * next_y - prev_y * next_x
     var trans_x: Float64
     var trans_y: Float64
     var shrink_by: Float64
     if abs(collinear) > _EPSILON:
         var prev_len = sqrt(prev_lensq)
-        var next_len = sqrt(next_x * next_x + next_y * next_y)
+        var next_len = sqrt(squared_length2[DType.float64](next_x, next_y))
         var prev_shift_x = bx - prev_y / prev_len
         var prev_shift_y = by + prev_x / prev_len
         var next_shift_x = ax - next_y / next_len
@@ -263,7 +265,7 @@ def bevel_vector(point: Vector2, before: Vector2, after: Vector2) -> _Offset:
         ) / (prev_x * next_y - prev_y * next_x)
         trans_x = prev_shift_x + prev_x * sf - x
         trans_y = prev_shift_y + prev_y * sf - y
-        var trans_lensq = trans_x * trans_x + trans_y * trans_y
+        var trans_lensq = squared_length2[DType.float64](trans_x, trans_y)
         if trans_lensq <= 2:
             return _Offset(trans_x, trans_y)
         shrink_by = sqrt(trans_lensq / 2)
@@ -327,7 +329,10 @@ def merge_overlapping_points(mut points: List[Vector2]):
             max(abs(Float64(here.x)), abs(Float64(here.y))),
             max(abs(Float64(before.x)), abs(Float64(before.y))),
         )
-        if dx * dx + dy * dy <= threshold_sq * scale * scale:
+        if (
+            squared_length2[DType.float64](dx, dy)
+            <= threshold_sq * scale * scale
+        ):
             _ = points.pop(at)
             continue
         before = here
@@ -505,8 +510,7 @@ def _faces(
                 if len(wall) != 4:
                     raise Error("A side wall UV generator must give four")
                 for pick in [0, 1, 3, 1, 2, 3]:  # pragma: no branch
-                    uvs.append(wall[pick].x)
-                    uvs.append(wall[pick].y)
+                    append_vector2(uvs, wall[pick])
 
     var walls = len(data) // 3 - lids
     # Rounded once, as three.js's `Float32BufferAttribute` rounds them.
@@ -550,6 +554,22 @@ def _sweep(
     return _faces(cut, placed, len(spine), uv_generator)
 
 
+def _begin_options(curve_segments: Int, steps: Int) raises -> JsonWriter:
+    """Start an extrusion options object with the curve count and the step
+    count.
+
+    A straight extrusion and a swept extrusion both start this way. Each
+    one writes its own later keys.
+    """
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.key("curveSegments")
+    writer.integer(curve_segments)
+    writer.key("steps")
+    writer.integer(steps)
+    return writer^
+
+
 def _options(
     curve_segments: Int,
     steps: Int,
@@ -562,12 +582,7 @@ def _options(
 ) raises -> JsonWriter:
     """Return three.js's `options` for an extrusion along z, every one of
     them, in an object that `_extruded` closes."""
-    var writer = JsonWriter()
-    writer.begin_object()
-    writer.key("curveSegments")
-    writer.integer(curve_segments)
-    writer.key("steps")
-    writer.integer(steps)
+    var writer = _begin_options(curve_segments, steps)
     writer.key("depth")
     writer.number(depth.to(METER))
     writer.key("bevelEnabled")
@@ -586,12 +601,7 @@ def _options(
 def _swept_options(curve_segments: Int, steps: Int) raises -> JsonWriter:
     """Return three.js's `options` for a sweep, up to its `extrudePath`,
     for the caller to write the path into."""
-    var writer = JsonWriter()
-    writer.begin_object()
-    writer.key("curveSegments")
-    writer.integer(curve_segments)
-    writer.key("steps")
-    writer.integer(steps)
+    var writer = _begin_options(curve_segments, steps)
     writer.key("extrudePath")
     return writer^
 
@@ -604,8 +614,7 @@ def _extruded(
     """Return `geometry` as three.js's `ExtrudeGeometry` of `shapes`, with
     its `options`, which this closes."""
     options.end_object()
-    geometry.kind = EXTRUDE_GEOMETRY
-    geometry.parameters = UserData()
+    record_kind(geometry, EXTRUDE_GEOMETRY)
     geometry.parameters.set_json("options", options.finish())
     geometry.shapes = shapes^
     return geometry^
@@ -613,8 +622,22 @@ def _extruded(
 
 def _check_sweep(steps: Int) raises:
     """Refuse a sweep of fewer than one step."""
-    if steps < 1:
-        raise Error("An extrusion needs at least one step")
+    require_at_least_one(steps, "An extrusion needs at least one step")
+
+
+def require_extrusion_shapes(count: Int) raises:
+    """Refuse an extrusion that has no shape.
+
+    Nothing. The call returns when there is at least one shape.
+
+    Args:
+        count: How many shapes the extrusion holds.
+
+    Raises:
+        Error: If there is no shape.
+    """
+    if count == 0:
+        raise Error("An extrusion needs at least one shape")
 
 
 def extrude(
@@ -737,8 +760,7 @@ def extrude(
         Error: If there is no shape, or for anything the one-shape form
             raises for.
     """
-    if len(shapes) == 0:
-        raise Error("An extrusion needs at least one shape")
+    require_extrusion_shapes(len(shapes))
     var parts = List[BufferGeometry]()
     for shape in shapes:  # pragma: no branch
         parts.append(extrude(shape, path, steps, curve_segments, uv_generator))
@@ -771,8 +793,7 @@ def extrude(
         Error: If there is no shape, or for anything the one-shape form
             raises for.
     """
-    if len(shapes) == 0:
-        raise Error("An extrusion needs at least one shape")
+    require_extrusion_shapes(len(shapes))
     var parts = List[BufferGeometry]()
     for shape in shapes:  # pragma: no branch
         parts.append(extrude(shape, path, steps, curve_segments, uv_generator))
@@ -811,12 +832,11 @@ def check_extrusion(
     Raises:
         Error: If any option is outside the range given above.
     """
-    if depth.value <= 0:
-        raise Error("An extrusion needs a positive depth")
-    if steps < 1:
-        raise Error("An extrusion needs at least one step")
-    if curve_segments < 1:
-        raise Error("An extrusion needs at least one curve segment")
+    require_positive(depth.value, "An extrusion needs a positive depth")
+    _check_sweep(steps)
+    require_at_least_one(
+        curve_segments, "An extrusion needs at least one curve segment"
+    )
     if bevel_enabled and bevel_segments < 1:
         raise Error("A bevel needs at least one band")
     if bevel_enabled and bevel_thickness.value <= 0:
@@ -835,8 +855,7 @@ def _cap_uvs(
     if len(cap) != 3:
         raise Error("A top UV generator must give three")
     for point in cap:  # pragma: no branch
-        uvs.append(point.x)
-        uvs.append(point.y)
+        append_vector2(uvs, point)
 
 
 def _joined(parts: List[BufferGeometry]) raises -> BufferGeometry:
@@ -860,9 +879,7 @@ def _joined(parts: List[BufferGeometry]) raises -> BufferGeometry:
             counts.append(group.count)
             materials.append(group.material_index.value)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, data^, normals^, uvs^)
     for at in range(len(starts)):  # pragma: no branch
         geometry.add_group(starts[at], counts[at], MaterialIndex(materials[at]))
     return geometry^
@@ -1027,8 +1044,7 @@ def extrude(
         Error: If there is no shape, or for anything the one-shape form
             raises for.
     """
-    if len(shapes) == 0:
-        raise Error("An extrusion needs at least one shape")
+    require_extrusion_shapes(len(shapes))
     var parts = List[BufferGeometry]()
     for shape in shapes:  # pragma: no branch
         parts.append(

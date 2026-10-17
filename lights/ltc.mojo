@@ -47,6 +47,7 @@ zero-height rectangle has zero area and returns zero before edge evaluation.
 This avoids backend-dependent cancellation residue without a near-zero cutoff.
 """
 
+from core.binary import little_endian_u32
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import sqrt
@@ -141,13 +142,7 @@ def load_ltc_tables(path: String = LTC_PATH) raises -> LtcTables:
     var first = List[Float32]()
     var second = List[Float32]()
     for index in range(2 * LTC_FLOATS):  # pragma: no branch
-        var at = index * 4
-        var bits = (
-            UInt32(bytes[at])
-            | (UInt32(bytes[at + 1]) << 8)
-            | (UInt32(bytes[at + 2]) << 16)
-            | (UInt32(bytes[at + 3]) << 24)
-        )
+        var bits = UInt32(little_endian_u32(bytes, index * 4))
         var value = bitcast[DType.float32](bits)
         if index < LTC_FLOATS:
             first.append(value)
@@ -363,6 +358,26 @@ def _transformed(
     )
 
 
+def _quad_form(
+    mut c0: Vector3, mut c1: Vector3, mut c2: Vector3, mut c3: Vector3
+) -> Vector3:
+    """Project four corners onto the unit sphere and sum the four edges.
+
+    `normalize` leaves a zero vector alone, so a corner on the surface
+    stays there. The edges run `c0` to `c1`, `c1` to `c2`, `c2` to `c3`,
+    and `c3` to `c0`.
+    """
+    c0.normalize()
+    c1.normalize()
+    c2.normalize()
+    c3.normalize()
+    var total = ltc_edge_vector_form_factor(c0, c1)
+    total = total + ltc_edge_vector_form_factor(c1, c2)
+    total = total + ltc_edge_vector_form_factor(c2, c3)
+    total = total + ltc_edge_vector_form_factor(c3, c0)
+    return total
+
+
 def ltc_evaluate(
     normal: Vector3,
     toward_eye: Vector3,
@@ -409,11 +424,7 @@ def ltc_evaluate(
     # any tangent serves then, since the lobe is symmetric about the
     # normal, and the axis least along it is taken.
     var along = normal.dot(toward_eye)
-    var t1 = Vector3(
-        toward_eye.x - normal.x * along,
-        toward_eye.y - normal.y * along,
-        toward_eye.z - normal.z * along,
-    )
+    var t1 = toward_eye - normal * along
     if t1.length() < 1e-6:
         t1 = normal
         if normal.x * normal.x < 0.5:
@@ -423,22 +434,12 @@ def ltc_evaluate(
     t1.normalize()
     var t2 = normal
     t2.cross(t1)
-    t2 = Vector3(-t2.x, -t2.y, -t2.z)
+    t2 = -t2
     var c0 = _transformed(minv, t1, t2, normal, corner0 - position)
     var c1 = _transformed(minv, t1, t2, normal, corner1 - position)
     var c2 = _transformed(minv, t1, t2, normal, corner2 - position)
     var c3 = _transformed(minv, t1, t2, normal, corner3 - position)
-    # `normalize` leaves a zero vector alone: a corner the transform
-    # squashes onto the surface stays where it is.
-    c0.normalize()
-    c1.normalize()
-    c2.normalize()
-    c3.normalize()
-    var total = ltc_edge_vector_form_factor(c0, c1)
-    total = total + ltc_edge_vector_form_factor(c1, c2)
-    total = total + ltc_edge_vector_form_factor(c2, c3)
-    total = total + ltc_edge_vector_form_factor(c3, c0)
-    return ltc_clipped_sphere_form_factor(total)
+    return ltc_clipped_sphere_form_factor(_quad_form(c0, c1, c2, c3))
 
 
 def ltc_evaluate_volume(
@@ -482,14 +483,7 @@ def ltc_evaluate_volume(
     var c1 = corner1 - position
     var c2 = corner2 - position
     var c3 = corner3 - position
-    c0.normalize()
-    c1.normalize()
-    c2.normalize()
-    c3.normalize()
-    var total = ltc_edge_vector_form_factor(c0, c1)
-    total = total + ltc_edge_vector_form_factor(c1, c2)
-    total = total + ltc_edge_vector_form_factor(c2, c3)
-    total = total + ltc_edge_vector_form_factor(c3, c0)
+    var total = _quad_form(c0, c1, c2, c3)
     return ltc_clipped_sphere_form_factor(
         Vector3(abs(total.x), abs(total.y), abs(total.z))
     )
@@ -558,7 +552,5 @@ def rect_area_light(
         (specular_color.z * fresnel[0] + (1 - specular_color.z) * fresnel[1])
         * lobe,
     )
-    var diffuse = Vector3(
-        diffuse_color.x * flat, diffuse_color.y * flat, diffuse_color.z * flat
-    )
+    var diffuse = diffuse_color * flat
     return RectLight(diffuse, specular)

@@ -135,7 +135,7 @@ def _file(header: String, data: List[UInt8] = []) -> List[UInt8]:
         The bytes.
     """
     var out = List[UInt8](header.as_bytes())
-    out.extend(data.copy())
+    out.extend(Span(data))
     return out^
 
 
@@ -247,13 +247,13 @@ def test_words_are_read_as_parseint_and_parsefloat_read_them() raises:
         String("f: 1/ " + String("9") * 400 + " ").as_bytes()
     )
     data.append(0xA0)
-    data.extend(List[UInt8](String(" +").as_bytes()))
+    data.extend(String(" +").as_bytes())
     var words = parse_nrrd(_file(header, data))
     # `f:` is 15; `1/` is 1; four hundred nines are Infinity, stored as
     # zero; a no-break space alone, or a sign alone, is NaN, also zero.
     _same(words.data, [15, 1, 0, 0, 0])
     var floats_data: List[UInt8] = [0xA0]
-    floats_data.extend(List[UInt8](String("0.1 2 ").as_bytes()))
+    floats_data.extend(String("0.1 2 ").as_bytes())
     floats_data.append(0xA0)
     var floats = parse_nrrd(
         _file(

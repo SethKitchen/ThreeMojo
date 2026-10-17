@@ -8,11 +8,11 @@
 from extensions.humanoid.skeleton.bone import (
     MAX_LOOK,
     MIN_LOOK,
-    _byte,
     bone_albedo,
     bone_phong,
     bone_roughness,
 )
+from render.framebuffer import rounded_byte
 from extensions.anatomy.tissue import (
     CORTICAL,
     TRABECULAR,
@@ -225,12 +225,12 @@ def test_refuses_a_poisson_ratio_outside_zero_to_one() raises:
 
 
 def test_byte_clamps_and_rounds() raises:
-    assert_equal(_byte(Float32(-1)), UInt8(0))
-    assert_equal(_byte(Float32(0)), UInt8(0))
-    assert_equal(_byte(Float32(10.2)), UInt8(10))
-    assert_equal(_byte(Float32(10.7)), UInt8(11))
-    assert_equal(_byte(Float32(255)), UInt8(255))
-    assert_equal(_byte(Float32(300)), UInt8(255))
+    assert_equal(rounded_byte(Float32(-1)), UInt8(0))
+    assert_equal(rounded_byte(Float32(0)), UInt8(0))
+    assert_equal(rounded_byte(Float32(10.2)), UInt8(10))
+    assert_equal(rounded_byte(Float32(10.7)), UInt8(11))
+    assert_equal(rounded_byte(Float32(255)), UInt8(255))
+    assert_equal(rounded_byte(Float32(300)), UInt8(255))
 
 
 def test_albedo_is_srgb_ivory() raises:

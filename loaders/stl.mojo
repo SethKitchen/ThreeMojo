@@ -41,16 +41,21 @@ and three corners, and a keyword out of place are refused, naming the
 face or the line.
 """
 
+from std.math import isfinite
+
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     COLOR,
-    NORMAL,
-    POSITION,
     BufferGeometry,
     MaterialIndex,
 )
+from core.ordinal import require_positive
+from geometries.surface import position_normal_surface
+from loaders.bytes import bytes_match
+from loaders.js_text import split_fields
+from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
-from std.math import isfinite
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -123,38 +128,6 @@ struct StlModel(Movable):
         return taken^
 
 
-def _u32(bytes: List[UInt8], at: Int) -> UInt32:
-    """Return the little-endian 32-bit word at `at`, which the caller has
-    checked is in the file."""
-    return (
-        UInt32(bytes[at])
-        | (UInt32(bytes[at + 1]) << 8)
-        | (UInt32(bytes[at + 2]) << 16)
-        | (UInt32(bytes[at + 3]) << 24)
-    )
-
-
-def _holds(bytes: List[UInt8], at: Int, word: String) -> Bool:
-    """Return True if the file holds `word` at byte `at`.
-
-    Args:
-        bytes: The file.
-        at: Where to look.
-        word: The ASCII text to look for.
-
-    Returns:
-        Whether every byte of the word is there.
-    """
-    var text = word.as_bytes()
-    if at + len(text) > len(bytes):
-        return False
-    # The words looked for are never empty: the loop always runs.
-    for index in range(len(text)):  # pragma: no branch
-        if bytes[at + index] != text[index]:
-            return False
-    return True
-
-
 def is_binary_stl(bytes: List[UInt8]) -> Bool:
     """Return True if a file is binary STL, as three.js's `isBinary`
     decides.
@@ -171,12 +144,12 @@ def is_binary_stl(bytes: List[UInt8]) -> Bool:
         Whether to read it as binary.
     """
     if len(bytes) >= _PREAMBLE:
-        var faces = Int(_u32(bytes, _HEADER))
+        var faces = little_endian_u32(bytes, _HEADER)
         if _PREAMBLE + faces * _FACE == len(bytes):
             return True
     # Five offsets: the loop always runs.
     for offset in range(5):  # pragma: no branch
-        if _holds(bytes, offset, "solid"):
+        if bytes_match(Span(bytes), offset, len(bytes), "solid"):
             return False
     return True
 
@@ -195,7 +168,7 @@ def _float(bytes: List[UInt8], at: Int, face: Int) raises -> Float32:
     Raises:
         Error: If it is not finite.
     """
-    var value = bitcast[DType.float32](_u32(bytes, at))
+    var value = bitcast[DType.float32](UInt32(little_endian_u32(bytes, at)))
     if not isfinite(value):
         raise Error(
             "STL face "
@@ -204,19 +177,6 @@ def _float(bytes: List[UInt8], at: Int, face: Int) raises -> Float32:
             + String(value)
         )
     return value
-
-
-def _channel(value: Int, scale: Float32) -> Float32:
-    """Return one sRGB channel as a linear one.
-
-    Args:
-        value: The channel as stored.
-        scale: The largest value it can have.
-
-    Returns:
-        The channel, from zero to one, in linear light.
-    """
-    return srgb_to_linear(Float32(value) / scale)
 
 
 def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
@@ -239,7 +199,7 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
             + " bytes of header and face count, and this one has only "
             + String(len(bytes))
         )
-    var faces = Int(_u32(bytes, _HEADER))
+    var faces = little_endian_u32(bytes, _HEADER)
     var needed = _PREAMBLE + faces * _FACE
     if len(bytes) < needed:
         raise Error(
@@ -259,11 +219,11 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
     var alpha = Float32(1)
     # Seventy places: the loop always runs.
     for at in range(_HEADER - 10):  # pragma: no branch
-        if _holds(bytes, at, "COLOR="):
+        if bytes_match(Span(bytes), at, len(bytes), "COLOR="):
             colored = True
-            default_r = _channel(Int(bytes[at + 6]), 255)
-            default_g = _channel(Int(bytes[at + 7]), 255)
-            default_b = _channel(Int(bytes[at + 8]), 255)
+            default_r = srgb_to_linear(Float32(bytes[at + 6]) / Float32(255))
+            default_g = srgb_to_linear(Float32(bytes[at + 7]) / Float32(255))
+            default_b = srgb_to_linear(Float32(bytes[at + 8]) / Float32(255))
             alpha = Float32(Int(bytes[at + 9])) / 255
     var positions = List[Float32](capacity=faces * 9)
     var normals = List[Float32](capacity=faces * 9)
@@ -278,9 +238,9 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
         var b = default_b
         var packed = Int(bytes[start + 48]) | (Int(bytes[start + 49]) << 8)
         if packed & 0x8000 == 0:
-            r = _channel(packed & 0x1F, 31)
-            g = _channel((packed >> 5) & 0x1F, 31)
-            b = _channel((packed >> 10) & 0x1F, 31)
+            r = srgb_to_linear(Float32(packed & 0x1F) / Float32(31))
+            g = srgb_to_linear(Float32((packed >> 5) & 0x1F) / Float32(31))
+            b = srgb_to_linear(Float32((packed >> 10) & 0x1F) / Float32(31))
         # Three corners and three axes: both loops always run.
         for corner in range(1, 4):  # pragma: no branch
             for axis in range(3):  # pragma: no branch
@@ -295,8 +255,7 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
                 colors.append(g)
                 colors.append(b)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     if colored:
         geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))
     var solids = List[StlSolid]()
@@ -325,8 +284,8 @@ struct _Words:
         # always runs.
         for raw in text.split("\n"):  # pragma: no branch
             line += 1
-            for word in String(raw).split():
-                self.words.append(String(word))
+            for word in split_fields(String(raw)):
+                self.words.append(word)
                 self.lines.append(line)
 
     def done(self) -> Bool:
@@ -430,7 +389,7 @@ struct _Words:
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "STL line " + String(line) + ": "
+    return file_line("STL", line)
 
 
 def parse_stl_text(text: String) raises -> StlModel:
@@ -528,11 +487,9 @@ def parse_stl_text(text: String) raises -> StlModel:
             raise Error(_where(line) + "a word STL does not have: " + word)
     if in_solid:
         raise Error("STL: the file ends inside a solid, before `endsolid`")
-    if len(solids) == 0:
-        raise Error("STL: the text has no solid")
+    require_positive(len(solids), "STL: the text has no solid")
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     for index in range(len(solids)):  # pragma: no branch
         geometry.add_group(
             solids[index].start, solids[index].count, MaterialIndex(index)

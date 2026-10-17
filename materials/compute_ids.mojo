@@ -11,6 +11,7 @@ numbers, which statement, and which atomic operation.
 `materials.compute_nodes` builds its programs from them. They live apart
 so that neither module imports the other.
 """
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -76,7 +77,7 @@ struct ComputeBuiltin(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero to six.
         """
-        return self.value >= 0 and self.value <= 6
+        return ordinal_valid(self.value, 6)
 
 
 # The invocation's place among all of them, three.js's `instanceIndex` and
@@ -109,7 +110,7 @@ struct AtomicOp(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero to eight.
         """
-        return self.value >= 0 and self.value <= 8
+        return ordinal_valid(self.value, 8)
 
 
 comptime ATOMIC_LOAD = AtomicOp(0)

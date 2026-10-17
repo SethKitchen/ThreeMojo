@@ -9,7 +9,12 @@ The shapes are boxes, hulls, rotation-locked capsules and turning capsules.
 Each expected value comes by hand from the geometry or from the impulse law.
 """
 
-from extensions.physics.body import DYNAMIC, STATIC, RigidBody
+from extensions.physics.body import (
+    DYNAMIC,
+    STATIC,
+    RigidBody,
+    locked_inverse_inertia,
+)
 from extensions.physics.ccd import (
     DISCRETE,
     SPHERE_MESH_CCD,
@@ -94,14 +99,6 @@ def _mesh(
     return body^
 
 
-def _lock(mut body: RigidBody) raises:
-    var locked = Matrix3()
-    locked.elements[0] = 0
-    locked.elements[4] = 0
-    locked.elements[8] = 0
-    body.set_inverse_inertia(locked)
-
-
 def _tilt() -> Quaternion:
     # 0.6 rad about x.
     return Quaternion(Float32(sin(0.3)), 0, 0, Float32(cos(0.3)))
@@ -142,7 +139,7 @@ def _shape(
         inverse.elements[8] = 200
         body.set_inverse_inertia(inverse)
     else:
-        _lock(body)
+        body.set_inverse_inertia(locked_inverse_inertia())
     body.linear_velocity = velocity
     body.material = PhysicsMaterial(friction, bounce)
     return body^

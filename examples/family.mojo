@@ -19,13 +19,15 @@ The optional second argument is the mesh quality: `low`, `medium`,
 how many frames to draw, one or more. The default is 30.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import example_destination, gallery_camera
+from tools._example_preview import turn_about_vertical
+
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from environments.room_environment import room_environment
 from extensions.humanoid.athleticism import TONED, UNTONED
-from extensions.humanoid.genome import Expression, Gene, Genome, offspring
+from extensions.humanoid.genome import genome_from_values, offspring
 from extensions.humanoid.quality import (
     anatomy_detail,
     hand_skin_detail,
@@ -62,7 +64,6 @@ from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
 from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, INCH, Length, METER
@@ -84,39 +85,6 @@ comptime RIM_RADIANCE = Vector3(0.46, 0.54, 0.8)
 comptime AMBIENT = Vector3(0.12, 0.12, 0.13)
 
 
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
-
-
-def _genome(values: List[Float32]) raises -> Genome:
-    """Return a genome whose genes 0, 1, 2, ... take `values` in order.
-
-    Args:
-        values: One expression per gene, from `MELANIN` on.
-
-    Returns:
-        The genome.
-
-    Raises:
-        Error: If a value lies outside -1 through 1.
-    """
-    var genome = Genome()
-    for index in range(len(values)):
-        genome = genome.with_gene(Gene(index), Expression(values[index]))
-    return genome
-
-
 def _family() raises -> List[HumanoidSpec]:
     """Return the mother, the father, the son and the daughter.
 
@@ -129,7 +97,7 @@ def _family() raises -> List[HumanoidSpec]:
     # fmt: off
     # Fair and freckled, red-haired and blue-eyed, with narrow
     # shoulders, a small nose and full lips.
-    var mother = _genome([
+    var mother = genome_from_values([
         -0.8, -0.3, 0.7, -0.1, 0.9, -0.9, 0.3, 0.1, 0.2, -0.3,
         0.2, -0.3, 0.4, -0.4, -0.4, 0.1, 0.0, -0.2, 0.4, -0.2,
         0.3, 0.3, -0.4, 0.1, 0.1, -0.5, -0.1, 0.2, -0.4, 0.3,
@@ -137,7 +105,7 @@ def _family() raises -> List[HumanoidSpec]:
     ])
     # Deep brown skin, black hair, dark eyes, a broad nose, broad
     # shoulders, a deep chest and long arms.
-    var father = _genome([
+    var father = genome_from_values([
         0.9, 0.2, -1.0, 1.0, -1.0, 0.9, 0.0, 0.3, 0.0, 0.2,
         -0.2, 0.5, -0.2, 0.0, 0.8, -0.1, -0.4, 0.4, 0.9, 0.1,
         -0.3, 0.0, 0.3, 0.0, 0.0, 0.7, 0.4, 0.3, 0.5, 0.2,
@@ -162,9 +130,7 @@ def _family() raises -> List[HumanoidSpec]:
 
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var level = quality_named(String(DEFAULT_QUALITY))
     if len(args) > 2:
         level = quality_named(String(args[2]))
@@ -291,13 +257,9 @@ def main() raises:
     var rim_node = scene.add(rim^)
     scene.add_light(directional_light(Color(200, 214, 255), rim_node, 0.8))
 
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
+    var camera = gallery_camera(
+        WIDTH, HEIGHT, Vector3(0.0, 1.2, 4.6), Vector3(0.0, 0.95, 0.0)
     )
-    camera.place(Vector3(0.0, 1.2, 4.6), Vector3(0.0, 0.95, 0.0))
 
     var step = Angle(Float32(360) / Float32(count), DEGREE)
     # The lights as the hair sees them: toward each.
@@ -315,10 +277,18 @@ def main() raises:
         for index in range(len(hairs)):
             # Carry the camera and the lights into the body's own frame.
             var lights = List[HairLight]()
-            lights.append(HairLight(_turned(key_toward, -turned), KEY_RADIANCE))
-            lights.append(HairLight(_turned(rim_toward, -turned), RIM_RADIANCE))
+            lights.append(
+                HairLight(
+                    turn_about_vertical(key_toward, -turned), KEY_RADIANCE
+                )
+            )
+            lights.append(
+                HairLight(
+                    turn_about_vertical(rim_toward, -turned), RIM_RADIANCE
+                )
+            )
             var at = places[index]
-            var camera_at = _turned(
+            var camera_at = turn_about_vertical(
                 eye - Vector3(at.x, 0, 0), -turned
             ) - Vector3(0, at.y, 0)
             hairs[index].shade(assets, lights, camera_at, AMBIENT)

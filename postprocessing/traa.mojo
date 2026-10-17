@@ -40,11 +40,13 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
+from math.utils import edge_index, max3
+from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.vector2 import Vector2
+from math.vector2 import Vector2, append_vector2
 from math.vector3 import Vector3
 from postprocessing.antialiasing import JitteredCamera
 from postprocessing.display_nodes import luminance_of
@@ -270,18 +272,11 @@ struct FloatPlane(ImplicitlyCopyable):
         Returns:
             The float.
         """
-        var cx = min(max(x, 0), self.width - 1)
-        var cy = min(max(y, 0), self.height - 1)
+        var cx = edge_index(x, self.width)
+        var cy = edge_index(y, self.height)
         return self.floats[
             unsafe_offset=(cy * self.width + cx) * self.lanes + lane
         ]
-
-
-def _load(view: LightView, x: Int, y: Int) -> FloatColor:
-    """Return a pixel, the edge pixel's past the edge: `textureLoad`."""
-    return view.at(
-        min(max(x, 0), view.width - 1), min(max(y, 0), view.height - 1)
-    )
 
 
 def clip_aabb(
@@ -323,6 +318,132 @@ def clip_aabb(
     return history
 
 
+def sample_inside(history_u: Float32, history_v: Float32) -> Bool:
+    """Return True when a history coordinate lies inside the frame.
+
+    Args:
+        history_u: Across, zero at the left.
+        history_v: Down, zero at the top.
+
+    Returns:
+        Whether both coordinates are from zero through one.
+    """
+    return (
+        history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
+    )
+
+
+def history_is_kept(
+    history_u: Float32,
+    history_v: Float32,
+    closest: Float32,
+    farthest: Float32,
+    then: Float32,
+    edge_depth_diff: Float32,
+    depth_threshold: Float32,
+) -> Bool:
+    """Return True when the history sample may be mixed in.
+
+    It must lie inside the frame. An edge keeps it. Elsewhere it is kept
+    when the closest neighbor is not much nearer than the reprojected depth.
+
+    Args:
+        history_u: The history coordinate across.
+        history_v: The history coordinate down.
+        closest: The closest neighbor depth.
+        farthest: The farthest neighbor depth.
+        then: The reprojected depth.
+        edge_depth_diff: How far apart the neighbors are at an edge.
+        depth_threshold: How much nearer the last surface may be.
+
+    Returns:
+        Whether the history is kept.
+    """
+    var inside = sample_inside(history_u, history_v)
+    var edge = farthest - closest > edge_depth_diff
+    var uncovered = closest - then > depth_threshold
+    return inside and (edge or not uncovered)
+
+
+def sample_motion(
+    u: Float32,
+    history_u: Float32,
+    v_down: Float32,
+    history_v: Float32,
+    width: Float32,
+    height: Float32,
+    max_velocity_length: Float32,
+) -> Float32:
+    """Return how far the sample moved, as a share of the longest motion
+    that still mixes history.
+
+    Args:
+        u: This sample, across.
+        history_u: The history sample, across.
+        v_down: This sample, down.
+        history_v: The history sample, down.
+        width: The width the motion is measured in, in pixels.
+        height: The height the motion is measured in, in pixels.
+        max_velocity_length: The motion, in pixels, at which the new frame
+            takes over.
+
+    Returns:
+        Zero through one.
+    """
+    var moved_x = (u - history_u) * width
+    var moved_y = (v_down - history_v) * height
+    return min(max(length2(moved_x, moved_y) / max_velocity_length, 0), 1)
+
+
+def variance_gamma(motion: Float32) -> Float32:
+    """Return the variance scale: one when the sample is still, one half
+    at full motion.
+
+    Args:
+        motion: How far the sample moved, zero through one.
+
+    Returns:
+        The scale on the color box.
+    """
+    return 0.5 + 0.5 * (1 - motion) * (1 - motion)
+
+
+def variance_box(
+    mean: FloatColor, moment: FloatColor, count: Float32, gamma: Float32
+) -> Tuple[FloatColor, FloatColor]:
+    """Return the low and high corners of the color box around `mean`.
+
+    Args:
+        mean: The neighborhood's mean color.
+        moment: The sum of the squared colors.
+        count: How many colors were summed.
+        gamma: The scale on the standard deviation.
+
+    Returns:
+        The low corner, then the high corner.
+    """
+    var spread = FloatColor(
+        sqrt(max(moment.r / count - mean.r * mean.r, 0)) * gamma,
+        sqrt(max(moment.g / count - mean.g * mean.g, 0)) * gamma,
+        sqrt(max(moment.b / count - mean.b * mean.b, 0)) * gamma,
+        sqrt(max(moment.a / count - mean.a * mean.a, 0)) * gamma,
+    )
+    return (
+        FloatColor(
+            mean.r - spread.r,
+            mean.g - spread.g,
+            mean.b - spread.b,
+            mean.a - spread.a,
+        ),
+        FloatColor(
+            mean.r + spread.r,
+            mean.g + spread.g,
+            mean.b + spread.b,
+            mean.a + spread.a,
+        ),
+    )
+
+
 def flicker_reduction(
     current: FloatColor, history: FloatColor, weight: Float32
 ) -> FloatColor:
@@ -337,8 +458,8 @@ def flicker_reduction(
     Returns:
         The mix.
     """
-    var squeeze_now = 1 / (max(current.r, max(current.g, current.b)) + 1)
-    var squeeze_then = 1 / (max(history.r, max(history.g, history.b)) + 1)
+    var squeeze_now = 1 / (max3(current.r, current.g, current.b) + 1)
+    var squeeze_then = 1 / (max3(history.r, history.g, history.b) + 1)
     var light_now = luminance_of(
         current.r * squeeze_now,
         current.g * squeeze_now,
@@ -377,32 +498,104 @@ def subpixel_correction(
     """
     var tx = offset_u * Float32(width)
     var ty = offset_v * Float32(height)
-    var px = abs(tx - floor(tx))
-    var py = abs(ty - floor(ty))
+    var px = fraction(tx)
+    var py = fraction(ty)
     var wx = max(px, 1 - px)
     var wy = max(py, 1 - py)
     return (1 - wx * wy) / 0.75
 
 
-def _previous_depth(
-    previous: FloatPlane, u: Float32, v_down: Float32, frame: TraaFrame
+def reproject_window_depth(
+    previous: FloatPlane,
+    u: Float32,
+    v_down: Float32,
+    near: Float32,
+    far: Float32,
+    perspective: Bool,
+    previous_projection_inverse: Matrix4,
+    previous_camera_world: Matrix4,
+    view: Matrix4,
 ) -> Float32:
     """Return the last frame's depth at a place, moved into this frame's
-    view: three.js's `samplePreviousDepth`. The depth texture is read at
-    the nearest texel."""
+    view: three.js's `samplePreviousDepth`, reading the nearest texel.
+
+    TRAA and TAAU both read the history this way.
+
+    Args:
+        previous: The last frame's window depth.
+        u: Across, zero at the left.
+        v_down: Down, zero at the top.
+        near: The camera's near distance, in meters.
+        far: Its far distance.
+        perspective: Whether the projection divides by distance.
+        previous_projection_inverse: The last frame's projection inverse.
+        previous_camera_world: The last frame's camera world matrix.
+        view: This frame's view matrix.
+
+    Returns:
+        The depth, in this frame's window depth.
+    """
     var x = Int(floor(u * Float32(previous.width)))
     var y = Int(floor(v_down * Float32(previous.height)))
     var depth = previous.load(x, y, 0)
     # three.js's `getViewPosition`, in WebGL's clip space.
     var clip = Vector3(u * 2 - 1, (1 - v_down) * 2 - 1, depth * 2 - 1)
-    var seen = frame.previous_projection_inverse.transform_point(clip)
-    var world = frame.previous_camera_world.transform_point(seen)
-    var view_z = frame.view.transform_point(world).z
-    if frame.perspective:
-        return ((frame.near + view_z) * frame.far) / (
-            (frame.far - frame.near) * view_z
-        )
-    return (view_z + frame.near) / (frame.near - frame.far)
+    var seen = previous_projection_inverse.transform_point(clip)
+    var world = previous_camera_world.transform_point(seen)
+    var view_z = view.transform_point(world).z
+    if perspective:
+        return ((near + view_z) * far) / ((far - near) * view_z)
+    return (view_z + near) / (near - far)
+
+
+def neighborhood_motion(
+    depth: FloatPlane,
+    velocity: FloatPlane,
+    x: Int,
+    y: Int,
+    origin_x: Int,
+    origin_y: Int,
+) -> Tuple[Float32, Float32, Float32, Float32]:
+    """Return the depth range of a 3 by 3 neighborhood and the velocity at
+    its closest sample.
+
+    The closest sample starts at `(origin_x, origin_y)` and moves to any
+    neighbor whose depth is less than 2. The velocity is three.js's
+    conversion from normalized device coordinates to a texture coordinate
+    that grows down.
+
+    Args:
+        depth: Window depth, one float a pixel.
+        velocity: Velocity, two floats a pixel.
+        x: The neighborhood's center column.
+        y: The neighborhood's center row, down from the top.
+        origin_x: The column kept when every neighbor is at least 2.
+        origin_y: The row kept in that case.
+
+    Returns:
+        The closest depth, the farthest depth, and the velocity across
+        and down.
+    """
+    var closest = Float32(2)
+    var closest_x = origin_x
+    var closest_y = origin_y
+    var farthest = Float32(-1)
+    # Nine neighbors, fixed, across then down.
+    for dx in range(-1, 2):  # pragma: no branch
+        for dy in range(-1, 2):  # pragma: no branch
+            var d = depth.load(x + dx, y + dy, 0)
+            if d < closest:
+                closest = d
+                closest_x = x + dx
+                closest_y = y + dy
+            if d > farthest:
+                farthest = d
+    return (
+        closest,
+        farthest,
+        velocity.load(closest_x, closest_y, 0) * 0.5,
+        velocity.load(closest_x, closest_y, 1) * -0.5,
+    )
 
 
 def traa_pixel(
@@ -436,53 +629,52 @@ def traa_pixel(
     # WebGPU `uv()` runs.
     var u = (Float32(x) + 0.5) / Float32(w)
     var v_down = (Float32(y) + 0.5) / Float32(h)
-    # The closest and farthest depths of the 3 by 3 neighbors.
-    var closest = Float32(2)
-    var closest_x = 0
-    var closest_y = 0
-    var farthest = Float32(-1)
-    # Nine neighbors, fixed.
-    for dx in range(-1, 2):  # pragma: no branch
-        for dy in range(-1, 2):  # pragma: no branch
-            var d = depth.load(x + dx, y + dy, 0)
-            if d < closest:
-                closest = d
-                closest_x = x + dx
-                closest_y = y + dy
-            if d > farthest:
-                farthest = d
-    # The velocity, from normalized device coordinates to a texture
-    # coordinate that grows down.
-    var offset_u = velocity.load(closest_x, closest_y, 0) * 0.5
-    var offset_v = velocity.load(closest_x, closest_y, 1) * -0.5
+    # The closest and farthest depths of the 3 by 3 neighbors, and the
+    # velocity at the closest. A depth of at least 2 keeps column 0.
+    var closest, farthest, offset_u, offset_v = neighborhood_motion(
+        depth, velocity, x, y, 0, 0
+    )
     var history_u = u - offset_u
     var history_v = v_down - offset_v
-    var then = _previous_depth(previous_depth, history_u, history_v, frame)
-    var valid_uv = (
-        history_u >= 0 and history_v >= 0 and history_u <= 1 and history_v <= 1
+    var then = reproject_window_depth(
+        previous_depth,
+        history_u,
+        history_v,
+        frame.near,
+        frame.far,
+        frame.perspective,
+        frame.previous_projection_inverse,
+        frame.previous_camera_world,
+        frame.view,
     )
-    var edge = farthest - closest > frame.edge_depth_diff
-    var uncovered = closest - then > frame.depth_threshold
-    var kept = valid_uv and (edge or not uncovered)
+    var kept = history_is_kept(
+        history_u,
+        history_v,
+        closest,
+        farthest,
+        then,
+        frame.edge_depth_diff,
+        frame.depth_threshold,
+    )
     var current = beauty.at(x, y)
     var past = history.tap(
         history_u * Float32(w) - 0.5, history_v * Float32(h) - 0.5
     )
-    var moved_x = (u - history_u) * Float32(w)
-    var moved_y = (v_down - history_v) * Float32(h)
-    var motion = min(
-        max(
-            length2(moved_x, moved_y) / frame.max_velocity_length,
-            0,
-        ),
-        1,
+    var motion = sample_motion(
+        u,
+        history_u,
+        v_down,
+        history_v,
+        Float32(w),
+        Float32(h),
+        frame.max_velocity_length,
     )
     var weight = Float32(0.05)
     if frame.use_subpixel_correction:
         weight += subpixel_correction(offset_u, offset_v, w, h) * 0.25
     weight = min(max(weight + motion, 0), 1) if kept else Float32(1)
     # Variance clipping, over the pixel and its eight neighbors.
-    var gamma = 0.5 + (1 - 0.5) * (1 - motion) * (1 - motion)
+    var gamma = variance_gamma(motion)
     var m1 = current
     var m2 = FloatColor(
         current.r * current.r,
@@ -495,9 +687,7 @@ def traa_pixel(
     )
     for at in range(8):  # pragma: no branch
         var near = floor_channels(
-            _load(
-                beauty, x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1])
-            )
+            beauty.load(x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
         )
         m1 = FloatColor(
             m1.r + near.r, m1.g + near.g, m1.b + near.b, m1.a + near.a
@@ -510,27 +700,96 @@ def traa_pixel(
         )
     var n = Float32(9)
     var mean = FloatColor(m1.r / n, m1.g / n, m1.b / n, m1.a / n)
-    var spread = FloatColor(
-        sqrt(max(m2.r / n - mean.r * mean.r, 0)) * gamma,
-        sqrt(max(m2.g / n - mean.g * mean.g, 0)) * gamma,
-        sqrt(max(m2.b / n - mean.b * mean.b, 0)) * gamma,
-        sqrt(max(m2.a / n - mean.a * mean.a, 0)) * gamma,
-    )
-    var low = FloatColor(
-        mean.r - spread.r,
-        mean.g - spread.g,
-        mean.b - spread.b,
-        mean.a - spread.a,
-    )
-    var high = FloatColor(
-        mean.r + spread.r,
-        mean.g + spread.g,
-        mean.b + spread.b,
-        mean.a + spread.a,
-    )
+    var low, high = variance_box(mean, m2, n, gamma)
     # The mean clamped into the box is the mean: only its alpha is read.
     var clipped = clip_aabb(mean, past, low, high)
     return flicker_reduction(current, clipped, weight)
+
+
+def render_jittered[
+    C: Camera, D: Camera
+](
+    renderer: Renderer,
+    mut target: RenderTarget,
+    scene: Scene,
+    assets: Assets,
+    velocity_camera: C,
+    draw_camera: D,
+) raises:
+    """Draw `draw_camera` and measure velocity from `velocity_camera`.
+
+    The velocity projection is cleared afterward, including when the draw
+    raises.
+
+    Args:
+        renderer: What the scene is drawn with.
+        target: Where the picture goes.
+        scene: The transform hierarchy, and the meshes and lights in it.
+        assets: The geometry, materials and textures the meshes name.
+        velocity_camera: The camera whose projection measures velocity,
+            before the jitter.
+        draw_camera: The jittered camera.
+
+    Raises:
+        Error: Everything `Renderer.render_into` raises.
+    """
+    renderer.set_velocity_projection(velocity_camera.projection_matrix())
+    try:
+        renderer.render_into(target, scene, assets, draw_camera)
+    finally:
+        renderer.set_velocity_projection(None)
+
+
+def remember_jitter_camera(
+    mut previous_world: Matrix4,
+    mut previous_projection_inverse: Matrix4,
+    mut camera_world: Matrix4,
+    mut projection_inverse: Matrix4,
+    view: Matrix4,
+    projection: Matrix4,
+):
+    """Store the last camera matrices, then this frame's.
+
+    `view` and `projection` are copied and inverted. The camera that owns
+    them is left as it was. The values that were current become the
+    previous ones.
+
+    Args:
+        previous_world: Where the last world matrix is stored.
+        previous_projection_inverse: Where the last projection inverse is
+            stored.
+        camera_world: The current world matrix, replaced.
+        projection_inverse: The current projection inverse, replaced.
+        view: This frame's view matrix.
+        projection: This frame's projection.
+    """
+    previous_world = camera_world
+    previous_projection_inverse = projection_inverse
+    var world = view
+    world.invert()
+    camera_world = world
+    var unprojects = projection
+    unprojects.invert()
+    projection_inverse = unprojects
+
+
+def read_drawn_frame(
+    drawn: RenderTarget,
+    mut beauty: List[FloatColor],
+    mut velocities: List[Float32],
+):
+    """Append a target's straight color and its velocity, x then y.
+
+    Args:
+        drawn: The picture just drawn. Its size is positive.
+        beauty: The colors, appended to.
+        velocities: Two velocity floats a pixel, appended to.
+    """
+    var count = drawn.width * drawn.height
+    # The size is positive, so the loop runs.
+    for slot in range(count):  # pragma: no branch
+        beauty.append(drawn.straight_at(slot))
+        append_vector2(velocities, drawn.velocities[slot])
 
 
 def traa_render[
@@ -570,27 +829,19 @@ def traa_render[
     var drawn = RenderTarget(
         w, h, renderer.background, FLOAT_TARGET, [OUTPUT_COLOR, OUTPUT_VELOCITY]
     )
-    renderer.set_velocity_projection(camera.projection_matrix())
-    try:
-        renderer.render_into(drawn, scene, assets, moved)
-    finally:
-        renderer.set_velocity_projection(None)
+    render_jittered(renderer, drawn, scene, assets, camera, moved)
     # three.js's `updateBefore`: the last frame's matrices, then this one's.
-    settings.previous_camera_world = settings.camera_world
-    settings.previous_projection_inverse = settings.projection_inverse
-    var world = moved.view
-    world.invert()
-    settings.camera_world = world
-    var unprojects = moved.projection
-    unprojects.invert()
-    settings.projection_inverse = unprojects
+    remember_jitter_camera(
+        settings.previous_camera_world,
+        settings.previous_projection_inverse,
+        settings.camera_world,
+        settings.projection_inverse,
+        moved.view,
+        moved.projection,
+    )
     var beauty = List[FloatColor](capacity=w * h)
     var velocities = List[Float32](capacity=w * h * 2)
-    # The renderer's size is positive, so the loop runs.
-    for slot in range(w * h):  # pragma: no branch
-        beauty.append(drawn.straight_at(slot))
-        velocities.append(drawn.velocities[slot].x)
-        velocities.append(drawn.velocities[slot].y)
+    read_drawn_frame(drawn, beauty, velocities)
     # A new size starts the history over from this frame, as three.js
     # copies the beauty into it, and forgets the last depth.
     if settings.history_width != w or settings.history_height != h:

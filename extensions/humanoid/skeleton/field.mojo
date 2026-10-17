@@ -10,11 +10,22 @@ builder takes the zero set. The mass sampler classifies the interior.
 This file holds the arithmetic those solids share.
 """
 
+from std.math import isfinite
+
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
-from math.vector3 import Vector3
-from std.math import isfinite, max, min, pi, sqrt
+from math.cross import cross_vectors
+from math.norm import squared_length3
+from math.utils import clamp, min3, mix_delta
+from math.vector3 import (
+    Vector3,
+    component_max,
+    component_min,
+    midpoint,
+    mix_delta3,
+)
+from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
 
 
@@ -52,16 +63,8 @@ struct Bounds(ImplicitlyCopyable):
             center: Ellipsoid center, in meters.
             radii: Semi-axes, in meters.
         """
-        self.low = Vector3(
-            min(self.low.x, center.x - radii.x),
-            min(self.low.y, center.y - radii.y),
-            min(self.low.z, center.z - radii.z),
-        )
-        self.high = Vector3(
-            max(self.high.x, center.x + radii.x),
-            max(self.high.y, center.y + radii.y),
-            max(self.high.z, center.z + radii.z),
-        )
+        self.low = component_min(self.low, center - radii)
+        self.high = component_max(self.high, center + radii)
 
     def padded(self, pad: Float32) -> Bounds:
         """Return this box grown by `pad` on every side.
@@ -75,6 +78,17 @@ struct Bounds(ImplicitlyCopyable):
         return Bounds(
             Vector3(self.low.x - pad, self.low.y - pad, self.low.z - pad),
             Vector3(self.high.x + pad, self.high.y + pad, self.high.z + pad),
+        )
+
+    def mirrored_on_x(self) -> Bounds:
+        """Return this box reflected through the yz plane.
+
+        Returns:
+            The box with its x corners swapped and negated.
+        """
+        return Bounds(
+            Vector3(-self.high.x, self.low.y, self.low.z),
+            Vector3(-self.low.x, self.high.y, self.high.z),
         )
 
 
@@ -108,12 +122,63 @@ def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
         raise Error("A " + bone + " needs a male or female template")
     if not side.is_valid():
         raise Error("A " + bone + " needs a left or right side")
-    if not isfinite(stature.value):
+    if not isfinite(Float64(stature.value)):
         raise Error("A " + bone + "'s stature must be finite")
     if stature < MIN_STATURE:
         raise Error("A " + bone + "'s stature must be at least 1.2 meters")
     if stature > MAX_STATURE:
         raise Error("A " + bone + "'s stature cannot exceed 2.5 meters")
+
+
+def _finite_measure(value: Float32, name: String, bone: String) raises:
+    """Refuse a measure that is not finite.
+
+    Nothing. The call returns when the measure is finite.
+
+    Args:
+        value: The measure, in its SI unit.
+        name: What it measures.
+        bone: Name used in the error text.
+
+    Raises:
+        Error: If the measure is not finite.
+    """
+    if not isfinite(Float64(value)):
+        raise Error("A " + bone + " " + name + " must be finite")
+
+
+def _positive_measure(value: Float32, name: String, bone: String) raises:
+    """Refuse a measure that is not positive.
+
+    Nothing. The call returns when the measure is positive.
+
+    Args:
+        value: The measure, in its SI unit.
+        name: What it measures.
+        bone: Name used in the error text.
+
+    Raises:
+        Error: If the measure is not positive.
+    """
+    if value <= 0:
+        raise Error("A " + bone + " " + name + " must be positive")
+
+
+def _non_negative_measure(value: Float32, name: String, bone: String) raises:
+    """Refuse a measure that is negative.
+
+    Nothing. The call returns when the measure is zero or more.
+
+    Args:
+        value: The measure, in its SI unit.
+        name: What it measures.
+        bone: Name used in the error text.
+
+    Raises:
+        Error: If the measure is negative.
+    """
+    if value < 0:
+        raise Error("A " + bone + " " + name + " cannot be negative")
 
 
 def positive_length(value: Length, name: String, bone: String) raises:
@@ -127,10 +192,8 @@ def positive_length(value: Length, name: String, bone: String) raises:
     Raises:
         Error: If `value` is not finite or is not positive.
     """
-    if not isfinite(value.value):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if value.value <= 0:
-        raise Error("A " + bone + " " + name + " must be positive")
+    _finite_measure(value.value, name, bone)
+    _positive_measure(value.value, name, bone)
 
 
 def non_negative_length(value: Length, name: String, bone: String) raises:
@@ -144,10 +207,8 @@ def non_negative_length(value: Length, name: String, bone: String) raises:
     Raises:
         Error: If `value` is not finite or is negative.
     """
-    if not isfinite(value.value):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if value.value < 0:
-        raise Error("A " + bone + " " + name + " cannot be negative")
+    _finite_measure(value.value, name, bone)
+    _non_negative_measure(value.value, name, bone)
 
 
 def finite_angle(value: Angle, name: String, bone: String) raises:
@@ -161,8 +222,7 @@ def finite_angle(value: Angle, name: String, bone: String) raises:
     Raises:
         Error: If `value` is not finite.
     """
-    if not isfinite(value.value):
-        raise Error("A " + bone + " " + name + " must be finite")
+    _finite_measure(value.value, name, bone)
 
 
 def open_angle(value: Angle, name: String, bone: String) raises:
@@ -177,8 +237,7 @@ def open_angle(value: Angle, name: String, bone: String) raises:
         Error: If `value` is not finite or is not between 0 and 180 degrees.
     """
     finite_angle(value, name, bone)
-    if value.value <= 0:
-        raise Error("A " + bone + " " + name + " must be positive")
+    _positive_measure(value.value, name, bone)
     if value.value >= pi:
         raise Error("A " + bone + " " + name + " must be less than 180 degrees")
 
@@ -195,8 +254,7 @@ def acute_angle(value: Angle, name: String, bone: String) raises:
         Error: If `value` is not finite, is negative, or is 90 degrees or more.
     """
     finite_angle(value, name, bone)
-    if value.value < 0:
-        raise Error("A " + bone + " " + name + " cannot be negative")
+    _non_negative_measure(value.value, name, bone)
     if value.value >= pi * Float32(0.5):
         raise Error("A " + bone + " " + name + " must be less than 90 degrees")
 
@@ -212,21 +270,8 @@ def finite_point(point: Vector3, name: String, bone: String) raises:
     Raises:
         Error: If any coordinate is not finite.
     """
-    if not isfinite(point.x):
+    if not point.is_finite():
         raise Error("A " + bone + " " + name + " must be finite")
-    if not isfinite(point.y):
-        raise Error("A " + bone + " " + name + " must be finite")
-    if not isfinite(point.z):
-        raise Error("A " + bone + " " + name + " must be finite")
-
-
-def clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`."""
-    if value < -1:
-        return -1
-    if value > 1:
-        return 1
-    return value
 
 
 def flip_x(point: Vector3) -> Vector3:
@@ -240,11 +285,7 @@ def bowed_station(t: Float32, a: Vector3, b: Vector3, bow: Vector3) -> Vector3:
     The bow offset peaks at mid-shaft, where `4 t (1 - t)` is one.
     """
     var s = 4 * t * (1 - t)
-    return Vector3(
-        a.x + t * (b.x - a.x) + s * bow.x,
-        a.y + t * (b.y - a.y) + s * bow.y,
-        a.z + t * (b.z - a.z) + s * bow.z,
-    )
+    return mix_delta3(a, b, t) + bow * s
 
 
 def abs_f(value: Float32) -> Float32:
@@ -286,7 +327,7 @@ def sd_segment(
             t = 0
         if t > 1:
             t = 1
-    var radius = radius_a + (radius_b - radius_a) * t
+    var radius = mix_delta(radius_a, radius_b, t)
     return (from_a - along * t).length() - radius
 
 
@@ -300,9 +341,7 @@ def reject(vector: Vector3, unit: Vector3) -> Vector3:
 
 def cross(a: Vector3, b: Vector3) -> Vector3:
     """Return the cross product of `a` and `b` without mutating them."""
-    var out = a
-    out.cross(b)
-    return out
+    return cross_vectors(a, b)
 
 
 def sd_ellipse_segment(
@@ -331,16 +370,14 @@ def sd_ellipse_segment(
             t = 0
         if t > 1:
             t = 1
-    var ml_r = ml_a + (ml_b - ml_a) * t
-    var ap_r = ap_a + (ap_b - ap_a) * t
-    var center = Vector3(
-        a.x + along.x * t, a.y + along.y * t, a.z + along.z * t
-    )
+    var ml_r = mix_delta(ml_a, ml_b, t)
+    var ap_r = mix_delta(ap_a, ap_b, t)
+    var center = mix_delta3(a, b, t)
     var offset = point - center
     var tangent = Vector3(0, 1, 0)
     if span > 0:
         var inv = Float32(1) / sqrt(span)
-        tangent = Vector3(along.x * inv, along.y * inv, along.z * inv)
+        tangent = along * inv
     var ml_axis = reject(ml_hint, tangent)
     if ml_axis.length() < Float32(0.000001):
         ml_axis = reject(Vector3(0, 0, 1), tangent)
@@ -354,11 +391,11 @@ def sd_ellipse_segment(
     var pz = v / ap_r
     var pr = sqrt(ml_r * ap_r)
     var py = w / pr
-    var k0 = sqrt(px * px + py * py + pz * pz)
+    var k0 = sqrt(squared_length3[DType.float32](px, py, pz))
     var qx = px / ml_r
     var qy = py / pr
     var qz = pz / ap_r
-    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+    var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
     if k1 == 0:
         return -min(ml_r, ap_r)
     return k0 * (k0 - 1) / k1
@@ -369,13 +406,13 @@ def sd_ellipsoid(point: Vector3, center: Vector3, radii: Vector3) -> Float32:
     var px = (point.x - center.x) / radii.x
     var py = (point.y - center.y) / radii.y
     var pz = (point.z - center.z) / radii.z
-    var k0 = sqrt(px * px + py * py + pz * pz)
+    var k0 = sqrt(squared_length3[DType.float32](px, py, pz))
     var qx = px / radii.x
     var qy = py / radii.y
     var qz = pz / radii.z
-    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+    var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
     if k1 == 0:
-        return -min(radii.x, min(radii.y, radii.z))
+        return -min3(radii.x, radii.y, radii.z)
     return k0 * (k0 - 1) / k1
 
 
@@ -417,9 +454,7 @@ def mix_point(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     Returns:
         The interpolated point, in meters.
     """
-    return Vector3(
-        a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t
-    )
+    return mix_delta3(a, b, t)
 
 
 def ud_triangle(point: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Float32:
@@ -467,7 +502,7 @@ def _edge_gap(edge: Vector3, offset: Vector3) -> Float32:
     var span = edge.dot(edge)
     var t = Float32(0)
     if span > 0:
-        t = max(Float32(0), min(Float32(1), edge.dot(offset) / span))
+        t = clamp(edge.dot(offset) / span, 0, 1)
     var gap = edge * t - offset
     return gap.dot(gap)
 
@@ -509,6 +544,25 @@ def tube_chain_distance(
     return smin(d, sd_segment(point, chain.p3, chain.p4, chain.r3, chain.r4), k)
 
 
+def mirrored_tube_distance(
+    chain: TubeChain, mirror: Bool, blend: Float32, point: Vector3
+) -> Float32:
+    """Return the distance to a tube, mirrored on x when `mirror` is set.
+
+    Args:
+        chain: The stations.
+        mirror: Whether the tube is on the left.
+        blend: The blend distance, the field's `k`.
+        point: The sample, in meters.
+
+    Returns:
+        The signed distance. Negative is inside.
+    """
+    if mirror:
+        return tube_chain_distance(chain, flip_x(point), blend)
+    return tube_chain_distance(chain, point, blend)
+
+
 def tube_chain_bounds(chain: TubeChain, pad: Float32) -> Bounds:
     """Return a padded box that holds `chain`.
 
@@ -526,6 +580,20 @@ def tube_chain_bounds(chain: TubeChain, pad: Float32) -> Bounds:
     box.include_sphere(chain.p3, chain.r3)
     box.include_sphere(chain.p4, chain.r4)
     return box.padded(pad)
+
+
+def tube_root_bounds(chain: TubeChain) -> Bounds:
+    """Return the chain's box grown by 3 mm plus the root radius.
+
+    The leg and pelvis vessels and nerves use this margin.
+
+    Args:
+        chain: Five stations.
+
+    Returns:
+        An axis-aligned box around the tube.
+    """
+    return tube_chain_bounds(chain, Float32(0.003) + chain.r0)
 
 
 def tube_chain_volume(chain: TubeChain) -> Float32:
@@ -626,9 +694,9 @@ def tapered_tube(
         mix_point(a, b, 0.75),
         b,
         radius_a,
-        radius_a + (radius_b - radius_a) * 0.25,
-        radius_a + (radius_b - radius_a) * 0.50,
-        radius_a + (radius_b - radius_a) * 0.75,
+        mix_delta(radius_a, radius_b, Float32(0.25)),
+        mix_delta(radius_a, radius_b, Float32(0.50)),
+        mix_delta(radius_a, radius_b, Float32(0.75)),
         radius_b,
     )
 
@@ -754,7 +822,7 @@ def surface_root[
     var low = inside
     var high = inside + direction * (0.16 * stature)
     for _ in range(18):  # pragma: no branch
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if skin.distance(middle) < 0:
             low = middle
         else:
@@ -781,6 +849,67 @@ def enlarge_tube_chain(chain: TubeChain, least: Float32) -> TubeChain:
     return out
 
 
+def display_tube_chain(
+    mut chain: TubeChain,
+    mut blend: Float32,
+    mut epsilon: Float32,
+    mut low: Vector3,
+    mut high: Vector3,
+    least: Float32,
+    stature: Float32,
+):
+    """Hold a tube's radii up so a mesh can show it.
+
+    The blend becomes `0.0008` of `stature`. The gradient step becomes
+    `0.25` of `least`. The box is the tube's box plus `0.008` and the
+    middle radius.
+
+    Args:
+        chain: The stations.
+        blend: The blend distance, the field's `k`.
+        epsilon: The gradient step.
+        low: The box's low corner.
+        high: The box's high corner.
+        least: The smallest radius to keep, in meters.
+        stature: Standing height, in meters.
+    """
+    chain = enlarge_tube_chain(chain, least)
+    blend = 0.0008 * stature
+    epsilon = Float32(0.25) * least
+    var box = tube_chain_bounds(chain, 0.008 + chain.r2)
+    low = box.low
+    high = box.high
+
+
+def widen_for_display(
+    mut chain: TubeChain,
+    mut blend: Float32,
+    mut epsilon: Float32,
+    mut low: Vector3,
+    mut high: Vector3,
+    least: Float32,
+):
+    """Widen a tube so a mesh can show it.
+
+    Each radius becomes at least `least`. The blend becomes `0.4` of
+    `least` and the gradient step `0.25` of it. The box grows by `least`
+    on every side.
+
+    Args:
+        chain: The stations.
+        blend: The blend distance, the field's `k`.
+        epsilon: The gradient step.
+        low: The box's low corner.
+        high: The box's high corner.
+        least: The smallest radius a mesh shows, in meters.
+    """
+    chain = enlarge_tube_chain(chain, least)
+    blend = Float32(0.4) * least
+    epsilon = Float32(0.25) * least
+    low = low - Vector3(least, least, least)
+    high = high + Vector3(least, least, least)
+
+
 def _frustum_volume(
     a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
 ) -> Float32:
@@ -792,3 +921,22 @@ def _frustum_volume(
         * (radius_a * radius_a + radius_a * radius_b + radius_b * radius_b)
         / Float32(3)
     )
+
+
+def clamp_unit(value: Float32) -> Float32:
+    """Return `value` held to minus one through one, for `acos`.
+
+    Error: Never.
+
+    Args:
+        value: The input value.
+
+    Returns:
+        The bounded value. NaN and signed zero keep their input value.
+
+    """
+    if value < -1:
+        return -1
+    if value > 1:
+        return 1
+    return value

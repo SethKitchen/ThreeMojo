@@ -91,7 +91,9 @@ from renderers.render_list import (
     RenderSort,
     _Source,
     _Span,
+    _opaque_then_blended,
     _sort_by,
+    _span_draw_order,
     _sort_with,
     _furthest_first,
     _add_run,
@@ -130,9 +132,11 @@ from core.buffer_geometry import (
     UV1,
     BufferGeometry,
     GeometryGroup,
+    require_vertex_index,
     MaterialIndex,
 )
 from core.assets import Assets
+from core.extent import require_positive_extent
 from core.geometry_store import GeometryId
 from core.fog import FogView
 from lights.light import (
@@ -145,6 +149,7 @@ from lights.light import (
     Light,
     LightMask,
 )
+from lights.light_slot import index_of_light
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import (
     CUBE_FACES,
@@ -152,6 +157,7 @@ from lights.shadow import (
     VSM_SHADOW_MAP,
     ShadowMap,
     ShadowMapType,
+    require_shadow_type,
     SpotLightMap,
     cube_direction,
     cube_stored,
@@ -168,6 +174,7 @@ from core.layers import Layers
 from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from core.search import first_match
 from math.bounds import Plane, Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
@@ -176,7 +183,8 @@ from render.splatrule import ProjectedSplat
 from render.splat_raster import prepare_gaussian_splat
 from render.rasterizer import DRAW_SPLATS
 from math.matrix4 import Matrix4, translation
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
+from math.utils import mix_delta
 from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
 from geometries.edges import triangle_edges
 from objects.line import (
@@ -193,13 +201,15 @@ from objects.line import (
 )
 from objects.line_segments2 import (
     LineCoverage,
+    require_line_coverage,
+    require_unindexed_wide_line,
     STRAND_LINE_COVERAGE,
     cap_steps,
     dash_spans,
     drawn_segments,
 )
 from objects.lod import Lod
-from objects.sprite import SPRITE_RADIUS, Sprite
+from objects.sprite import SPRITE_RADIUS, Sprite, sprite_place, sprite_span
 from objects.skinned_mesh import (
     ATTACHED,
     BONES_PER_VERTEX,
@@ -215,6 +225,7 @@ from materials.material import (
     GOURAUD,
     VOLUME,
     check_steps,
+    require_strand_opacity,
     DEFAULT_IOR,
     MULTIPLY_OPERATION,
     NO_ATTENUATION,
@@ -270,18 +281,30 @@ from materials.nodes import (
     point_size_of,
 )
 from render.pointrule import attenuated_size
-from render.texture import IGNORED, Texture
+from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
-from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.framebuffer import (
+    Color,
+    FloatColor,
+    Framebuffer,
+    SrgbBytes,
+    append_float_color,
+)
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
 from render.srgb import srgb_to_linear
-from render.target import RenderTarget, check_samples, sample_grid
+from render.target import (
+    RenderTarget,
+    check_samples,
+    require_rect,
+    sample_grid,
+)
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
     NO_OFFSET,
     STANDARD_DEPTH,
     DepthMode,
     PolygonOffset,
+    require_depth_mode,
     RasterState,
     log_depth_factor,
 )
@@ -322,6 +345,7 @@ from render.rasterizer import (
     LayerFactors,
     RasterVertex,
     ShadeMode,
+    require_shade_mode,
     TextureFrames,
     check_alpha_data_map,
     check_alpha_map,
@@ -344,9 +368,12 @@ from renderers.clip import (
     within_sides,
 )
 from render.tasks import TaskGroup
+from math.curve_checks import require_at_least_one
+from math.finite import require_positive_finite
 from std.math import cos, floor, isfinite, max, min, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
+from core.ordinal import require_valid, require_positive
 
 
 def _carriers(
@@ -907,6 +934,83 @@ def _in_view(
     if not bound.is_empty():
         bound.radius += slack
     return frustum.intersects_sphere(bound)
+
+
+def _object_place[
+    C: Camera
+](
+    scene: Scene,
+    assets: Assets,
+    node: NodeId,
+    material: MaterialId,
+    geometry: GeometryId,
+    frustum_culled: Bool,
+    cast_shadow: Bool,
+    receive_shadow: Bool,
+    casters_only: Bool,
+    receivers_cast: Bool,
+    camera: C,
+    view: Matrix4,
+    frustum: Frustum,
+    slack: Float32,
+    mut bounds: List[Sphere],
+    mut known: List[Bool],
+) raises -> Tuple[Bool, Matrix4, Float32]:
+    """Return whether the camera keeps one line or one points object, and
+    where it sits.
+
+    A light's view keeps only what casts. A hidden node is left out. A
+    position node moves the object past the bound of its geometry, so
+    that object is not culled by the bound. The depth is the node's
+    origin in view space.
+
+    Args:
+        scene: The transform hierarchy.
+        assets: The geometries and materials.
+        node: The object's node.
+        material: The object's own material, before any override.
+        geometry: The object's geometry.
+        frustum_culled: Whether the bound may leave the object out.
+        cast_shadow: Whether the object casts.
+        receive_shadow: Whether the object receives.
+        casters_only: Whether this is a light's view.
+        receivers_cast: Whether that view also holds receivers.
+        camera: The camera, queried only after the caster filter.
+        view: The world-to-camera transform.
+        frustum: The camera's frustum, in world space.
+        slack: How far past a plane the bound may lie and still count.
+        bounds: One local bound per geometry, filled in as met.
+        known: Which entries of `bounds` have been filled in.
+
+    Returns:
+        Whether the object is kept, its world matrix, and its view depth.
+        The matrix and the depth are unused when it is not kept.
+
+    Raises:
+        Error: If the material or the geometry is not there, or the
+            geometry has no positions.
+    """
+    if casters_only and not _casts(cast_shadow, receive_shadow, receivers_cast):
+        return (False, Matrix4(), 0)
+    if not scene.shows(node, camera.visible_layers()):
+        return (False, Matrix4(), 0)
+    var world = scene.world_matrix(node)
+    var nodes = assets.materials.get(material).nodes
+    var moved = (
+        nodes != NO_NODES
+        and _checked_nodes(assets, nodes) != NO_NODES
+        and assets.programs.get(nodes).has(POSITION_NODE)
+    )
+    if (
+        frustum_culled
+        and not moved
+        and not _in_view(assets, geometry, world, frustum, slack, bounds, known)
+    ):
+        return (False, Matrix4(), 0)
+    var depth = view.transform_point(
+        Vector3(world.elements[12], world.elements[13], world.elements[14])
+    ).z
+    return (True, world^, depth)
 
 
 @fieldwise_init
@@ -1862,8 +1966,7 @@ def _draws(
     # opts into shadow casting; ordinary wide lines do not cast by default.
     for index in range(len(scene.wide_lines)):
         ref line = scene.wide_lines[index]
-        if not line.coverage.is_valid():
-            raise Error("A wide line needs a named coverage rule")
+        require_line_coverage(line.coverage)
         if casters_only and not line.cast_shadow:
             continue
         if not scene.shows(line.node, visible):
@@ -1911,30 +2014,13 @@ def _draws(
             )
         )
 
-    var solid = List[Int]()
-    var solid_depths = List[Float32]()
-    var solid_orders = List[Int]()
-    var see_through = List[Int]()
-    var see_through_depths = List[Float32]()
-    var see_through_orders = List[Int]()
+    var orders = List[Int]()
     for index in range(len(draws)):
-        if clear[index]:
-            see_through.append(index)
-            see_through_depths.append(depths[index])
-            see_through_orders.append(draws[index].order)
-        else:
-            solid.append(index)
-            # Negated, so one ascending sort serves both lists: the nearest
-            # opaque draw has the largest z and must come first.
-            solid_depths.append(-depths[index])
-            solid_orders.append(draws[index].order)
-    _sort_by(solid, solid_depths, solid_orders)
-    _sort_by(see_through, see_through_depths, see_through_orders)
+        orders.append(draws[index].order)
+    var ranked = _opaque_then_blended(clear, depths, orders)
     var ordered = List[_Draw]()
-    for position in range(len(solid)):
-        ordered.append(draws[solid[position]])
-    for position in range(len(see_through)):
-        ordered.append(draws[see_through[position]])
+    for position in range(len(ranked)):
+        ordered.append(draws[ranked[position]])
     # The scene's override draws what the frame draws, each in the list
     # its own material put it in, as three.js's `renderObjects` swaps it
     # in after the lists are made. A light's view keeps the casters' own.
@@ -2054,10 +2140,10 @@ def light_masks(assets: Assets) raises -> List[LightMask]:
 def _mask_place(masks: List[LightMask], mask: LightMask) -> Int:
     """Return which of the frame's lightings a material's mask names: zero
     for every light, and one past its place in `masks` otherwise."""
-    for index in range(len(masks)):
-        if masks[index] == mask:
-            return index + 1
-    return 0
+    var at = first_match(masks, mask)
+    if at < 0:
+        return 0
+    return at + 1
 
 
 def _to_raster(
@@ -2384,6 +2470,49 @@ def _group_clip_sets(
     var groups = scene.clipping(node, casters_only)
     cut.extend(Span(_planes_in_view(groups.union_planes, view)))
     any_of.extend(Span(_planes_in_view(groups.intersection_planes, view)))
+
+
+def _clip_draw(
+    material: Material,
+    scene: Scene,
+    node: NodeId,
+    view: Matrix4,
+    sides: List[Plane],
+    global_planes: List[Plane],
+    local: Bool,
+    casters_only: Bool,
+    mut cut: List[Plane],
+    mut any_of: List[Plane],
+) raises:
+    """Set the planes that cut one draw, then add its clipping groups.
+
+    Args:
+        material: The draw's material.
+        scene: The scene, which holds the groups.
+        node: The draw's node.
+        view: The world-to-camera transform.
+        sides: The camera's side planes, in camera space.
+        global_planes: The renderer's planes, already in camera space.
+        local: Whether the renderer lets a material's planes cut.
+        casters_only: Whether this is a light's view for a shadow map.
+        cut: Set to the planes that each cut, then the groups' union.
+        any_of: Set to the planes of which one is enough, then the
+            groups' intersection.
+
+    Raises:
+        Error: Everything `_clip_sets` and `_group_clip_sets` raise.
+    """
+    _clip_sets(
+        material,
+        view,
+        sides,
+        global_planes,
+        local,
+        casters_only,
+        cut,
+        any_of,
+    )
+    _group_clip_sets(scene, node, view, casters_only, cut, any_of)
 
 
 def _planes_in_view(planes: List[Plane], view: Matrix4) raises -> List[Plane]:
@@ -2865,23 +2994,21 @@ def _draw_offset(
     return offset
 
 
-def _column_length(matrix: Matrix4, axis: Int) -> Float32:
-    """Return the length of one of a matrix's three axis columns: how much
-    it scales along that axis, three.js's `length(modelMatrix[axis].xyz)`.
+def require_named_map(value: Int, count: Int, name: String) raises:
+    """Refuse a map id past the textures the store holds.
+
+    Nothing. The call returns when the id is inside the store.
 
     Args:
-        matrix: The transform.
-        axis: Which column, zero for x through two for z.
+        value: The id's integer.
+        count: How many textures the store has.
+        name: What to call the map in the error.
 
-    Returns:
-        The length.
+    Raises:
+        Error: If the id is past the store.
     """
-    ref e = matrix.elements
-    var start = axis * 4
-    var x = e[start]
-    var y = e[start + 1]
-    var z = e[start + 2]
-    return Vector3(x, y, z).length()
+    if value >= count:
+        raise Error(name + " is named that is not there")
 
 
 def _checked_data_map(
@@ -2904,8 +3031,7 @@ def _checked_data_map(
     """
     if map == NO_TEXTURE:
         return map
-    if map.value >= assets.textures.count():
-        raise Error(name + " is named that is not there")
+    require_named_map(map.value, assets.textures.count(), name)
     check_data_map(assets.textures.get(map), name)
     return map
 
@@ -2921,8 +3047,7 @@ def _stored_map(assets: Assets, map: TextureId, name: String) raises:
     Raises:
         Error: If the id names nothing in the store.
     """
-    if map.value >= assets.textures.count():
-        raise Error(name + " is named that is not there")
+    require_named_map(map.value, assets.textures.count(), name)
 
 
 def _layer_factors(
@@ -3143,6 +3268,52 @@ def _checked_light_map(assets: Assets, map: TextureId) raises -> TextureId:
     return map
 
 
+def require_material_texture(map: TextureId, count: Int) raises:
+    """Refuse a material texture the store does not have.
+
+    Nothing. The call returns when the id is absent or in the store.
+
+    Args:
+        map: The id the material names.
+        count: How many textures the store has.
+
+    Raises:
+        Error: If the id names a texture that is not there.
+    """
+    if map != NO_TEXTURE and map.value >= count:
+        raise Error("A material names a texture that is not there")
+
+
+def require_material_alpha(map: TextureId, count: Int) raises:
+    """Refuse a material alpha map the store does not have.
+
+    Nothing. The call returns when the id is absent or in the store.
+
+    Args:
+        map: The id the material names.
+        count: How many textures the store has.
+
+    Raises:
+        Error: If the id names an alpha map that is not there.
+    """
+    if map != NO_TEXTURE and map.value >= count:
+        raise Error("A material names an alpha map that is not there")
+
+
+def require_renderer_workers(workers: Int) raises:
+    """Refuse a renderer with no worker.
+
+    Nothing. The call returns when there is one worker or more.
+
+    Args:
+        workers: How many threads rasterize a frame.
+
+    Raises:
+        Error: If `workers` is below one.
+    """
+    require_at_least_one(workers, "A renderer needs at least one worker")
+
+
 def _checked_maps(
     assets: Assets, material: Material, shading: ShadeMode
 ) raises -> Tuple[TextureId, TextureId]:
@@ -3168,13 +3339,11 @@ def _checked_maps(
             alpha map is not stored as data -- see `check_alpha_map`.
     """
     var map = material.map
-    if map != NO_TEXTURE and map.value >= assets.textures.count():
-        raise Error("A material names a texture that is not there")
+    require_material_texture(map, assets.textures.count())
     if shading != SHADE_TEXTURE:
         map = NO_TEXTURE
     var mask = material.alpha_map
-    if mask != NO_TEXTURE and mask.value >= assets.textures.count():
-        raise Error("A material names an alpha map that is not there")
+    require_material_alpha(mask, assets.textures.count())
     if mask != NO_TEXTURE:
         check_alpha_map(assets.textures.get(mask))
     if shading != SHADE_TEXTURE:
@@ -3384,14 +3553,13 @@ def _emit_sprite(
         world.elements[12], world.elements[13], world.elements[14]
     )
     var center = view.transform_point(origin)
-    var scale_x = _column_length(world, 0)
-    var scale_y = _column_length(world, 1)
-    if not material.size_attenuation and perspective:
-        scale_x *= -center.z
-        scale_y *= -center.z
-    var turn = material.rotation.to(RADIAN)
-    var turned_x = cos(turn)
-    var turned_y = sin(turn)
+    var scale_x, scale_y, turned_x, turned_y = sprite_span(
+        world,
+        center,
+        material.size_attenuation,
+        perspective,
+        material.rotation,
+    )
     var base = _with_opacity(FloatColor(srgb=material.color), material.opacity)
     # The unit square's corners and their coordinates, counterclockwise
     # from the bottom left: three.js's sprite geometry.
@@ -3399,18 +3567,21 @@ def _emit_sprite(
     var ys: List[Float32] = [-0.5, -0.5, 0.5, 0.5]
     var quad = List[ClipVertex]()
     for corner in range(4):  # pragma: no branch
-        var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
-        var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
         # Raw, on both pairs: each map places them for itself, and a
         # sprite has no `uv1`, so the second pair falls back to the first
         # as a mesh's does.
         var raw = Vector2(xs[corner] + 0.5, ys[corner] + 0.5)
         quad.append(
             ClipVertex(
-                Vector3(
-                    center.x + turned_x * aligned_x - turned_y * aligned_y,
-                    center.y + turned_y * aligned_x + turned_x * aligned_y,
-                    center.z,
+                sprite_place(
+                    center,
+                    sprite.center,
+                    xs[corner],
+                    ys[corner],
+                    scale_x,
+                    scale_y,
+                    turned_x,
+                    turned_y,
                 ),
                 base,
                 Vector3(0, 0, 1),
@@ -3452,20 +3623,17 @@ def _emit_sprite(
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
-        var a = quad[0]
-        var b = quad[thirds[half] - 1]
-        var c = quad[thirds[half]]
-        if _whole_in_view(a, b, c, near, far, sides, any_of):
-            paint.emit(corners, a, b, c)
-            continue
-        var pieces = clip_depth(a, b, c, near, far, sides, any_of)
-        for piece in range(len(pieces) // 3):
-            paint.emit(
-                corners,
-                pieces[piece * 3],
-                pieces[piece * 3 + 1],
-                pieces[piece * 3 + 2],
-            )
+        _emit_clipped(
+            paint,
+            corners,
+            quad[0],
+            quad[thirds[half] - 1],
+            quad[thirds[half]],
+            near,
+            far,
+            sides,
+            any_of,
+        )
 
 
 def _emit_clipped(
@@ -3606,18 +3774,13 @@ def _between(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     That is the perspective-correct mix three.js's varyings get.
     """
     return ClipVertex(
-        a.position + (b.position - a.position) * t,
-        FloatColor(
-            a.color.r + (b.color.r - a.color.r) * t,
-            a.color.g + (b.color.g - a.color.g) * t,
-            a.color.b + (b.color.b - a.color.b) * t,
-            a.color.a + (b.color.a - a.color.a) * t,
-        ),
+        mix_delta3(a.position, b.position, t),
+        a.color.mix(b.color, t),
         Vector3(0, 0, 1),
         0,
         0,
-        a.world + (b.world - a.world) * t,
-        line_distance=a.line_distance + (b.line_distance - a.line_distance) * t,
+        mix_delta3(a.world, b.world, t),
+        line_distance=mix_delta(a.line_distance, b.line_distance, t),
     )
 
 
@@ -4052,15 +4215,10 @@ def _emit_wide_line(
             material's depth, color, stencil or offset state is refused.
     """
     var material = assets.materials.get(draw.material)
-    if not coverage.is_valid():
-        raise Error("A wide line needs a named coverage rule")
+    require_line_coverage(coverage)
     var strand = coverage == STRAND_LINE_COVERAGE
-    if strand and (
-        not isfinite(material.opacity)
-        or material.opacity < 0
-        or material.opacity > 1
-    ):
-        raise Error("Strand opacity must be finite and between zero and one")
+    if strand:
+        require_strand_opacity(material.opacity)
     if strand and (
         material.blending != OPAQUE
         or not material.depth_write
@@ -4097,11 +4255,7 @@ def _emit_wide_line(
             "A wide line cannot be a wireframe: it is already its own lines"
         )
     ref geometry = assets.geometries.get(draw.geometry)
-    if geometry.is_indexed():
-        raise Error(
-            "A wide line geometry cannot be indexed: its points are paired"
-            " in the order they are given"
-        )
+    require_unindexed_wide_line(geometry)
     ref positions = geometry.attribute_view(String(POSITION))
     var count = positions.count()
     var visible = drawn_segments(geometry)
@@ -4782,14 +4936,6 @@ def _panorama_seen(
             at.x, at.y, reflection_level(blurriness, picture.levels)
         )
     return picture.sample(at.x, at.y)
-
-
-def _kept_for(kept: List[ShadowMap], light: Int) -> Int:
-    """Return which of `kept` a light drew, or -1 for none."""
-    for slot in range(len(kept)):
-        if kept[slot].light == light:
-            return slot
-    return -1
 
 
 def _light_aim(scene: Scene, light: Light) raises -> Vector3:
@@ -5662,6 +5808,20 @@ struct Frame(Movable):
         return out^
 
 
+@fieldwise_init
+struct _CameraFrame(Movable):
+    """The view, the clip and the culling planes for one camera."""
+
+    var view: Matrix4
+    var to_screen: Matrix4
+    var near: Float32
+    var far: Float32
+    var clip: Matrix4
+    var frustum: Frustum
+    var sides: List[Plane]
+    var global_planes: List[Plane]
+
+
 struct Renderer(Movable):
     """Renders a scene to a framebuffer of a fixed size."""
 
@@ -5816,10 +5976,10 @@ struct Renderer(Movable):
         Raises:
             Error: If either dimension is not positive, or `workers` is.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Renderer dimensions must be positive")
-        if workers < 1:
-            raise Error("A renderer needs at least one worker")
+        require_positive_extent(
+            width, height, "Renderer dimensions must be positive"
+        )
+        require_renderer_workers(workers)
         self.width = width
         self.height = height
         self.background = Color(16, 18, 26)
@@ -5969,6 +6129,45 @@ struct Renderer(Movable):
         check_samples(samples)
         return self.scaled(sample_grid(samples))
 
+    def _copy_draw_settings(self, mut other: Self):
+        """Copy the draw settings that do not follow the frame size.
+
+        The viewport, the scissor, the scissor test, antialias, and
+        `render_scale` stay with the caller. A supersampled frame scales
+        the rectangles and the scale. A resized frame keeps the whole
+        target and copies antialias.
+        """
+        other.background = self.background
+        other.shading = self.shading
+        other.tone_mapping = self.tone_mapping
+        other.tone_mapping_exposure = self.tone_mapping_exposure
+        other.output_color_space = self.output_color_space
+        other.override_material = self.override_material
+        # The planes cut in camera space, and the shadow filter reads the
+        # light's own map, so neither changes with the frame's size.
+        other.clipping_planes = self.clipping_planes.copy()
+        other.local_clipping_enabled = self.local_clipping_enabled
+        other.shadow_map_type = self.shadow_map_type
+        other.shadow_map_transmitted = self.shadow_map_transmitted
+        other.depth_mode = self.depth_mode
+        other.time = self.time
+        other.auto_clear = self.auto_clear
+        other.auto_clear_color = self.auto_clear_color
+        other.auto_clear_depth = self.auto_clear_depth
+        other.auto_clear_stencil = self.auto_clear_stencil
+        other.custom_tone_mapping = self.custom_tone_mapping
+        other.info_auto_reset = self.info_auto_reset
+        other._opaque_sort = self._opaque_sort
+        other._transparent_sort = self._transparent_sort
+        other.draw_filter = self.draw_filter
+        other.oit_draw = self.oit_draw
+        other.snap_vertices = self.snap_vertices
+        other.uv_space_meshes = self.uv_space_meshes.copy()
+        # Counted into this renderer's info, not a copy of it.
+        other._state = self._state
+        other.ltc = self.ltc.copy()
+        other.probe_grid = self.probe_grid.copy()
+
     def scaled(self, factor: Int) raises -> Renderer:
         """Return a renderer `factor` times this one's size each way, with
         the same settings, its viewport and scissor scaled to match, and
@@ -5992,49 +6191,17 @@ struct Renderer(Movable):
             Error: If the factor is below one, or the larger renderer
                 cannot be built.
         """
-        if factor < 1:
-            raise Error("A renderer is scaled by at least one")
+        require_positive(factor, "A renderer is scaled by at least one")
         var big = Renderer(
             self.width * factor, self.height * factor, self.workers
         )
-        big.background = self.background
-        big.shading = self.shading
-        big.tone_mapping = self.tone_mapping
-        big.tone_mapping_exposure = self.tone_mapping_exposure
-        big.output_color_space = self.output_color_space
-        big.override_material = self.override_material
+        self._copy_draw_settings(big)
         big.viewport = _scaled(self.viewport, factor)
         big.scissor = _scaled(self.scissor, factor)
         big.scissor_test = self.scissor_test
-        # The planes cut in camera space, and the shadow filter reads the
-        # light's own map, so neither changes with the frame's size.
-        big.clipping_planes = self.clipping_planes.copy()
-        big.local_clipping_enabled = self.local_clipping_enabled
-        big.shadow_map_type = self.shadow_map_type
-        big.shadow_map_transmitted = self.shadow_map_transmitted
-        big.depth_mode = self.depth_mode
-        big.time = self.time
-        big.auto_clear = self.auto_clear
-        big.auto_clear_color = self.auto_clear_color
-        big.auto_clear_depth = self.auto_clear_depth
-        big.auto_clear_stencil = self.auto_clear_stencil
-        big.custom_tone_mapping = self.custom_tone_mapping
-        big.info_auto_reset = self.info_auto_reset
-        big._opaque_sort = self._opaque_sort
-        big._transparent_sort = self._transparent_sort
-        big.draw_filter = self.draw_filter
-        big.oit_draw = self.oit_draw
-        big.snap_vertices = self.snap_vertices
-        big.uv_space_meshes = self.uv_space_meshes.copy()
-        # Counted into this renderer's info, not a copy of it.
-        big._state = self._state
-        big.ltc = self.ltc.copy()
-        big.probe_grid = self.probe_grid.copy()
-        # What makes the larger renderer draw a frame that *averages down*
-        # to this one rather than merely one that is bigger: a point's
-        # size and a line's thickness are given in the output pixels this
-        # renderer has, and the larger one converts them once. See
-        # `render_scale`.
+        # A point's size and a line's thickness are given in this
+        # renderer's output pixels. The larger renderer converts them
+        # once, so the averaged frame keeps the size the caller asked for.
         big.render_scale = self.render_scale * factor
         return big^
 
@@ -6056,34 +6223,8 @@ struct Renderer(Movable):
             Error: If a size is not positive.
         """
         var sized = Renderer(width, height, self.workers)
-        sized.background = self.background
-        sized.shading = self.shading
-        sized.tone_mapping = self.tone_mapping
-        sized.tone_mapping_exposure = self.tone_mapping_exposure
-        sized.output_color_space = self.output_color_space
-        sized.override_material = self.override_material
-        sized.clipping_planes = self.clipping_planes.copy()
-        sized.local_clipping_enabled = self.local_clipping_enabled
-        sized.shadow_map_type = self.shadow_map_type
-        sized.shadow_map_transmitted = self.shadow_map_transmitted
-        sized.depth_mode = self.depth_mode
-        sized.time = self.time
-        sized.custom_tone_mapping = self.custom_tone_mapping
-        sized._opaque_sort = self._opaque_sort
-        sized._transparent_sort = self._transparent_sort
-        sized.draw_filter = self.draw_filter
-        sized.oit_draw = self.oit_draw
-        sized.snap_vertices = self.snap_vertices
-        sized.uv_space_meshes = self.uv_space_meshes.copy()
-        sized.auto_clear = self.auto_clear
-        sized.auto_clear_color = self.auto_clear_color
-        sized.auto_clear_depth = self.auto_clear_depth
-        sized.auto_clear_stencil = self.auto_clear_stencil
-        sized.info_auto_reset = self.info_auto_reset
+        self._copy_draw_settings(sized)
         sized.antialias = self.antialias
-        sized._state = self._state
-        sized.ltc = self.ltc.copy()
-        sized.probe_grid = self.probe_grid.copy()
         sized.render_scale = self.render_scale
         return sized^
 
@@ -6103,8 +6244,9 @@ struct Renderer(Movable):
         Raises:
             Error: If the rectangle holds no pixel.
         """
-        if not rect.is_valid():
-            raise Error("A viewport needs a positive width and height")
+        require_valid(
+            rect.is_valid(), "A viewport needs a positive width and height"
+        )
         self.viewport = rect
 
     def set_scissor(mut self, rect: Rect) raises:
@@ -6121,8 +6263,7 @@ struct Renderer(Movable):
         Raises:
             Error: If the rectangle is empty or reaches outside the target.
         """
-        if not rect.fits(self.width, self.height):
-            raise Error("A scissor must lie inside the target")
+        require_rect(rect, self.width, self.height, "scissor")
         self.scissor = rect
 
     def set_scissor_test(mut self, enabled: Bool):
@@ -6171,6 +6312,49 @@ struct Renderer(Movable):
         )
         return to_screen^
 
+    def _camera_frame[
+        C: Camera
+    ](self, scene: Scene, camera: C) raises -> _CameraFrame:
+        """Return the view, the clip and the culling planes for one camera.
+
+        A camera riding a node looks from wherever the scene put that
+        node. The frustum is in world space, where the bounds are:
+        three.js's `_projScreenMatrix`, with the near and far distances
+        the clipper is given. The side planes are in camera space, where
+        the clipper cuts. With a viewport smaller than the target, off
+        the image is still on the target, and only a cut keeps it off.
+        The renderer's clipping planes are carried into camera space once.
+
+        Args:
+            scene: The transform hierarchy.
+            camera: The camera.
+
+        Returns:
+            The world-to-camera transform, the pixel transform, the near
+            and far distances, the clip matrix, the world-space frustum,
+            the camera-space side planes and the renderer's clipping
+            planes in camera space.
+
+        Raises:
+            Error: If a clipping plane cannot be carried into camera space.
+        """
+        var view = camera.view_matrix_in(scene)
+        var screen = self._to_screen(camera)
+        var near = camera.near_distance()
+        var far = camera.far_distance()
+        var clip = camera.projection_matrix()
+        clip.multiply(view)
+        return _CameraFrame(
+            view,
+            screen,
+            near,
+            far,
+            clip,
+            Frustum.from_camera(clip, view, near, far),
+            Frustum.side_planes(camera.projection_matrix()),
+            _planes_in_view(self.clipping_planes, view),
+        )
+
     def set_workers(mut self, workers: Int) raises:
         """Choose how many threads rasterize a frame.
 
@@ -6186,8 +6370,7 @@ struct Renderer(Movable):
         Raises:
             Error: If `workers` is less than one.
         """
-        if workers < 1:
-            raise Error("A renderer needs at least one worker")
+        require_renderer_workers(workers)
         self.workers = workers
 
     def set_background(mut self, color: Color):
@@ -6283,8 +6466,7 @@ struct Renderer(Movable):
             Error: If the mode is none of those three. The type stops a
                 bare integer; it does not stop `DepthMode(7)`.
         """
-        if not mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(mode)
         self.depth_mode = mode
 
     def depth_mode_for[C: Camera](self, camera: C) raises -> DepthMode:
@@ -6364,8 +6546,7 @@ struct Renderer(Movable):
                 shadow pass's. The type stops a bare integer; it does not
                 stop `ShadeMode(99)`.
         """
-        if not mode.is_valid():
-            raise Error("A shading mode that is none of the four")
+        require_shade_mode(mode)
         if mode == SHADE_SHADOW:
             raise Error(
                 "SHADE_SHADOW draws a shadow map's colors, which the"
@@ -6526,26 +6707,14 @@ struct Renderer(Movable):
                 camera's layers or frustum leave out is not read.
         """
         var corners = _Slim()
-        # Asked of the scene as well as the camera: a camera riding a node
-        # looks from wherever the scene put that node.
-        var view = camera.view_matrix_in(scene)
-        var to_screen = self._to_screen(camera)
-        var near = camera.near_distance()
-        var far = camera.far_distance()
-        # What the camera can see, in world space, where the meshes' bounds
-        # are: three.js's `_projScreenMatrix` read as four side planes, and
-        # the near and far distances the clipper below is given, as the
-        # two depth planes.
-        var clip = camera.projection_matrix()
-        clip.multiply(view)
-        var frustum = Frustum.from_camera(clip, view, near, far)
-        # The same four sides in camera space, where the clipper cuts.
-        # With a viewport smaller than the target, "off the image" is
-        # still on the target, and only a cut keeps it off; see
-        # `renderers.clip`.
-        var sides = Frustum.side_planes(camera.projection_matrix())
-        # The renderer's clipping planes, carried into camera space once.
-        var global_planes = _planes_in_view(self.clipping_planes, view)
+        var frame = self._camera_frame(scene, camera)
+        var view = frame.view
+        var to_screen = frame.to_screen
+        var near = frame.near
+        var far = frame.far
+        var frustum = frame.frustum.copy()
+        var sides = frame.sides.copy()
+        var global_planes = frame.global_planes.copy()
 
         # Worked out once, not once per draw, and already without what
         # the camera does not draw: every mesh and every instance, as one
@@ -6601,20 +6770,14 @@ struct Renderer(Movable):
                 var wide_begin = len(corners)
                 var wide_cut = List[Plane]()
                 var wide_any = List[Plane]()
-                _clip_sets(
+                _clip_draw(
                     assets.materials.get(draws[slot].material),
+                    scene,
+                    draws[slot].node,
                     view,
                     sides,
                     global_planes,
                     self.local_clipping_enabled,
-                    casters_only,
-                    wide_cut,
-                    wide_any,
-                )
-                _group_clip_sets(
-                    scene,
-                    draws[slot].node,
-                    view,
                     casters_only,
                     wide_cut,
                     wide_any,
@@ -6659,20 +6822,14 @@ struct Renderer(Movable):
                 var begin = len(corners)
                 var sprite_cut = List[Plane]()
                 var sprite_any = List[Plane]()
-                _clip_sets(
+                _clip_draw(
                     assets.materials.get(draws[slot].material),
+                    scene,
+                    draws[slot].node,
                     view,
                     sides,
                     global_planes,
                     self.local_clipping_enabled,
-                    casters_only,
-                    sprite_cut,
-                    sprite_any,
-                )
-                _group_clip_sets(
-                    scene,
-                    draws[slot].node,
-                    view,
                     casters_only,
                     sprite_cut,
                     sprite_any,
@@ -6746,8 +6903,10 @@ struct Renderer(Movable):
                 side = BACK_SIDE
             var cut = List[Plane]()
             var any_of = List[Plane]()
-            _clip_sets(
+            _clip_draw(
                 material,
+                scene,
+                draws[slot].node,
                 view,
                 sides,
                 global_planes,
@@ -6755,9 +6914,6 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
-            )
-            _group_clip_sets(
-                scene, draws[slot].node, view, casters_only, cut, any_of
             )
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
@@ -6774,8 +6930,7 @@ struct Renderer(Movable):
             # naming nothing is only detectable once both are together. It is
             # checked before rasterization rather than during, so the answer
             # does not depend on which pixels the mesh happened to cover.
-            if map != NO_TEXTURE and map.value >= assets.textures.count():
-                raise Error("A material names a texture that is not there")
+            require_material_texture(map, assets.textures.count())
             if self.shading != SHADE_TEXTURE:
                 map = NO_TEXTURE
             # The emissive map, checked the same way. It multiplies the
@@ -6794,13 +6949,9 @@ struct Renderer(Movable):
             # darken wherever its alpha is low -- see `render.texture.Alpha`.
             # Refused whatever the shading mode: it is a wrong asset, not a
             # wrong frame.
-            if (
-                glow_map != NO_TEXTURE
-                and assets.textures.get(glow_map).alpha != IGNORED
-            ):
-                raise Error(
-                    "A material's emissive map must ignore its alpha; build"
-                    " the texture with alpha=IGNORED"
+            if glow_map != NO_TEXTURE:
+                check_color_map(
+                    assets.textures.get(glow_map), "A material's emissive map"
                 )
             if self.shading != SHADE_TEXTURE or not material.is_emissive():
                 glow_map = NO_TEXTURE
@@ -6810,8 +6961,7 @@ struct Renderer(Movable):
             # means. Refused whatever the shading mode, as the emissive
             # map's alpha mode is: a wrong asset, not a wrong frame.
             var mask = material.alpha_map
-            if mask != NO_TEXTURE and mask.value >= assets.textures.count():
-                raise Error("A material names an alpha map that is not there")
+            require_material_alpha(mask, assets.textures.count())
             if mask != NO_TEXTURE:
                 check_alpha_map(assets.textures.get(mask))
             if self.shading != SHADE_TEXTURE:
@@ -6835,14 +6985,8 @@ struct Renderer(Movable):
             var ball = material.matcap
             if ball != NO_TEXTURE and ball.value >= assets.textures.count():
                 raise Error("A material names a matcap that is not there")
-            if (
-                ball != NO_TEXTURE
-                and assets.textures.get(ball).alpha != IGNORED
-            ):
-                raise Error(
-                    "A matcap must ignore its alpha; build the texture with"
-                    " alpha=IGNORED"
-                )
+            if ball != NO_TEXTURE:
+                check_color_map(assets.textures.get(ball), "A matcap")
             if self.shading == SHADE_UV:
                 ball = NO_TEXTURE
             # The environment the surface reflects, the scene's if the
@@ -6883,9 +7027,9 @@ struct Renderer(Movable):
                 # the geometry's own units, and the slab is as deep along
                 # each world axis as that axis is stretched.
                 Vector3(
-                    material.thickness.to(METER) * _column_length(world, 0),
-                    material.thickness.to(METER) * _column_length(world, 1),
-                    material.thickness.to(METER) * _column_length(world, 2),
+                    material.thickness.to(METER) * world.column_length(0),
+                    material.thickness.to(METER) * world.column_length(1),
+                    material.thickness.to(METER) * world.column_length(2),
                 ),
                 _checked_data_map(
                     assets, material.thickness_map, "A thickness map"
@@ -7100,8 +7244,7 @@ struct Renderer(Movable):
             var indexed = geometry.is_indexed()
             ref indices = geometry.index
             for slot in range(len(indices)):
-                if indices[slot] >= vertex_count:
-                    raise Error("An index entry points past the last vertex")
+                require_vertex_index(indices[slot], vertex_count)
             # The run this draw fills: a group of a mesh that wears a
             # material list, or the whole stream, inside the geometry's
             # draw range. See `drawn_run`.
@@ -7390,19 +7533,15 @@ struct Renderer(Movable):
         """
         if len(self.uv_space_meshes) > 0:
             return List[RasterVertex]()
-        var view = camera.view_matrix_in(scene)
-        var to_screen = self._to_screen(camera)
-        var near = camera.near_distance()
-        var far = camera.far_distance()
-        var clip = camera.projection_matrix()
-        clip.multiply(view)
-        var frustum = Frustum.from_camera(clip, view, near, far)
-        # The same four sides in camera space, where the clipper cuts.
-        # With a viewport smaller than the target, "off the image" is
-        # still on the target, and only a cut keeps it off; see
-        # `renderers.clip`.
-        var sides = Frustum.side_planes(camera.projection_matrix())
-        var global_planes = _planes_in_view(self.clipping_planes, view)
+        var frame = self._camera_frame(scene, camera)
+        var view = frame.view
+        var to_screen = frame.to_screen
+        var near = frame.near
+        var far = frame.far
+        var clip = frame.clip
+        var frustum = frame.frustum.copy()
+        var sides = frame.sides.copy()
+        var global_planes = frame.global_planes.copy()
         # One local bound per geometry, found the first time a line needs
         # it this frame, exactly as `_draws` keeps them for the meshes.
         var bounds = List[Sphere](
@@ -7418,40 +7557,26 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.lines)):
             ref line = scene.lines[index]
-            if casters_only and not _casts(
-                line.cast_shadow, line.receive_shadow, receivers_cast
-            ):
-                continue
-            if not scene.shows(line.node, camera.visible_layers()):
-                continue
-            var world = scene.world_matrix(line.node)
-            # A position node moves the line past the bound of its
-            # geometry, so such a line is not culled by it.
-            var line_nodes = assets.materials.get(line.material).nodes
-            var line_moved = (
-                line_nodes != NO_NODES
-                and _checked_nodes(assets, line_nodes) != NO_NODES
-                and assets.programs.get(line_nodes).has(POSITION_NODE)
+            var kept, world, depth = _object_place(
+                scene,
+                assets,
+                line.node,
+                line.material,
+                line.geometry,
+                line.frustum_culled,
+                line.cast_shadow,
+                line.receive_shadow,
+                casters_only,
+                receivers_cast,
+                camera,
+                view,
+                frustum,
+                slack,
+                bounds,
+                known,
             )
-            if (
-                line.frustum_culled
-                and not line_moved
-                and not _in_view(
-                    assets,
-                    line.geometry,
-                    world,
-                    frustum,
-                    slack,
-                    bounds,
-                    known,
-                )
-            ):
+            if not kept:
                 continue
-            var depth = view.transform_point(
-                Vector3(
-                    world.elements[12], world.elements[13], world.elements[14]
-                )
-            ).z
             var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
             # The line's own material says whether it is drawn and which
@@ -7482,8 +7607,10 @@ struct Renderer(Movable):
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
-            _clip_sets(
+            _clip_draw(
                 material,
+                scene,
+                line.node,
                 view,
                 sides,
                 global_planes,
@@ -7492,7 +7619,6 @@ struct Renderer(Movable):
                 cut,
                 any_of,
             )
-            _group_clip_sets(scene, line.node, view, casters_only, cut, any_of)
             # A line is unlit and untextured, and these refuse the
             # alternatives rather than carrying them and drawing neither.
             # See the module docstring of `objects.line`.
@@ -7757,30 +7883,7 @@ struct Renderer(Movable):
         # Into draw order: opaque runs nearest first, then blended runs
         # furthest first, lines and wireframes together. The same two
         # rules `_draws` applies to the meshes, for the same reasons.
-        var solid = List[Int]()
-        var solid_depths = List[Float32]()
-        var solid_orders = List[Int]()
-        var see_through = List[Int]()
-        var see_through_depths = List[Float32]()
-        var see_through_orders = List[Int]()
-        for position in range(len(unsorted)):
-            if unsorted[position].blends:
-                see_through.append(position)
-                see_through_depths.append(unsorted[position].depth)
-                see_through_orders.append(unsorted[position].order)
-            else:
-                solid.append(position)
-                solid_orders.append(unsorted[position].order)
-                # Negated so one ascending sort serves both lists, as in
-                # `_draws`: the nearest opaque line has the largest z.
-                solid_depths.append(-unsorted[position].depth)
-        _sort_by(solid, solid_depths, solid_orders)
-        _sort_by(see_through, see_through_depths, see_through_orders)
-        var order = List[Int]()
-        for position in range(len(solid)):
-            order.append(solid[position])
-        for position in range(len(see_through)):
-            order.append(see_through[position])
+        var order = _span_draw_order(unsorted)
         var ordered = List[RasterVertex]()
         ordered.reserve(len(corners))
         for position in range(len(order)):
@@ -7894,15 +7997,14 @@ struct Renderer(Movable):
         """
         if len(self.uv_space_meshes) > 0:
             return List[RasterVertex]()
-        var view = camera.view_matrix_in(scene)
-        var to_screen = self._to_screen(camera)
-        var near = camera.near_distance()
-        var far = camera.far_distance()
-        var clip = camera.projection_matrix()
-        clip.multiply(view)
-        var frustum = Frustum.from_camera(clip, view, near, far)
-        var sides = Frustum.side_planes(camera.projection_matrix())
-        var global_planes = _planes_in_view(self.clipping_planes, view)
+        var frame = self._camera_frame(scene, camera)
+        var view = frame.view
+        var to_screen = frame.to_screen
+        var near = frame.near
+        var far = frame.far
+        var frustum = frame.frustum.copy()
+        var sides = frame.sides.copy()
+        var global_planes = frame.global_planes.copy()
         var perspective = not camera.projection_matrix().is_affine()
         # Half the height of the image the caller asked for: three.js's
         # `scale` uniform, which a point's size is measured against at a
@@ -7924,41 +8026,26 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.points)):
             ref points = scene.points[index]
-            if casters_only and not _casts(
-                points.cast_shadow, points.receive_shadow, receivers_cast
-            ):
-                continue
-            if not scene.shows(points.node, camera.visible_layers()):
-                continue
-            var world = scene.world_matrix(points.node)
-            # A position node moves the points past the bound of their
-            # geometry, so such points are not culled by it, as a mesh's
-            # are not.
-            var own_nodes = assets.materials.get(points.material).nodes
-            var moved = (
-                own_nodes != NO_NODES
-                and _checked_nodes(assets, own_nodes) != NO_NODES
-                and assets.programs.get(own_nodes).has(POSITION_NODE)
+            var kept, world, depth = _object_place(
+                scene,
+                assets,
+                points.node,
+                points.material,
+                points.geometry,
+                points.frustum_culled,
+                points.cast_shadow,
+                points.receive_shadow,
+                casters_only,
+                receivers_cast,
+                camera,
+                view,
+                frustum,
+                slack,
+                bounds,
+                known,
             )
-            if (
-                points.frustum_culled
-                and not moved
-                and not _in_view(
-                    assets,
-                    points.geometry,
-                    world,
-                    frustum,
-                    slack,
-                    bounds,
-                    known,
-                )
-            ):
+            if not kept:
                 continue
-            var depth = view.transform_point(
-                Vector3(
-                    world.elements[12], world.elements[13], world.elements[14]
-                )
-            ).z
             var begin = len(corners)
             ref geometry = assets.geometries.get(points.geometry)
             var own = assets.materials.get(points.material)
@@ -7982,8 +8069,10 @@ struct Renderer(Movable):
             var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
-            _clip_sets(
+            _clip_draw(
                 material,
+                scene,
+                points.node,
                 view,
                 sides,
                 global_planes,
@@ -7991,9 +8080,6 @@ struct Renderer(Movable):
                 casters_only,
                 cut,
                 any_of,
-            )
-            _group_clip_sets(
-                scene, points.node, view, casters_only, cut, any_of
             )
             # A point is unlit, and refuses a lit kind rather than being
             # shaded by a normal it does not have. See `objects.points`.
@@ -8121,11 +8207,13 @@ struct Renderer(Movable):
                             customs[vertex],
                         ),
                     ) * Float32(self.render_scale)
-                    if not isfinite(size) or size <= 0:
-                        raise Error(
-                            "A point's size node gave a size that is not"
-                            " above zero"
-                        )
+                    require_positive_finite(
+                        Float64(size),
+                        (
+                            "A point's size node gave a size that is not above"
+                            " zero"
+                        ),
+                    )
                 corners.append(
                     _to_raster(
                         ClipVertex(
@@ -8166,28 +8254,7 @@ struct Renderer(Movable):
             )
 
         # Into draw order, as `_prepared_lines` puts the lines.
-        var solid = List[Int]()
-        var solid_depths = List[Float32]()
-        var solid_orders = List[Int]()
-        var see_through = List[Int]()
-        var see_through_depths = List[Float32]()
-        var see_through_orders = List[Int]()
-        for position in range(len(unsorted)):
-            if unsorted[position].blends:
-                see_through.append(position)
-                see_through_depths.append(unsorted[position].depth)
-                see_through_orders.append(unsorted[position].order)
-            else:
-                solid.append(position)
-                solid_orders.append(unsorted[position].order)
-                solid_depths.append(-unsorted[position].depth)
-        _sort_by(solid, solid_depths, solid_orders)
-        _sort_by(see_through, see_through_depths, see_through_orders)
-        var order = List[Int]()
-        for position in range(len(solid)):
-            order.append(solid[position])
-        for position in range(len(see_through)):
-            order.append(see_through[position])
+        var order = _span_draw_order(unsorted)
         var ordered = List[RasterVertex]()
         ordered.reserve(len(corners))
         for position in range(len(order)):
@@ -8506,6 +8573,20 @@ struct Renderer(Movable):
             self.output_encoding(),
         )
 
+    def _require_target_size(self, target: RenderTarget) raises:
+        """Refuse a target that is not this renderer's size.
+
+        Nothing. The call returns when the target matches.
+
+        Args:
+            target: The target to draw or clear.
+
+        Raises:
+            Error: If the width or the height differs.
+        """
+        if target.width != self.width or target.height != self.height:
+            raise Error("A target must be the renderer's size")
+
     def render_array_into(
         mut self,
         mut target: RenderTarget,
@@ -8538,8 +8619,7 @@ struct Renderer(Movable):
         """
         # Asked here as well as by `render_into`, which an array of no
         # cameras never calls.
-        if target.width != self.width or target.height != self.height:
-            raise Error("A target must be the renderer's size")
+        self._require_target_size(target)
         var viewport = self.viewport
         var scissor = self.scissor
         var scissor_test = self.scissor_test
@@ -8634,8 +8714,7 @@ struct Renderer(Movable):
             Error: If the target is not the renderer's size, or the
                 renderer's depth mode is none of the three.
         """
-        if target.width != self.width or target.height != self.height:
-            raise Error("A target must be the renderer's size")
+        self._require_target_size(target)
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -8846,8 +8925,7 @@ struct Renderer(Movable):
                 which no pixel could resolve; see
                 `render.rasterizer.check_output_kinds`.
         """
-        if target.width != self.width or target.height != self.height:
-            raise Error("A target must be the renderer's size")
+        self._require_target_size(target)
         if target.samples > 1:
             # three.js's multisampled render target: the samples are drawn
             # by a renderer `sample_grid` times the size, which refuses a
@@ -9394,8 +9472,7 @@ struct Renderer(Movable):
                 names a node or a target the scene lacks, or anything
                 `prepare` raises for the casters.
         """
-        if not self.shadow_map_type.is_valid():
-            raise Error("A shadow map type that is none of the four")
+        require_shadow_type(self.shadow_map_type)
         self._state[].shadow_items.clear()
         self._state[].shadow_lights.clear()
         var variance = self.shadow_map_type == VSM_SHADOW_MAP
@@ -9408,7 +9485,7 @@ struct Renderer(Movable):
             if not scene.light_shown(light):
                 continue
             ref shadow = light.shadow
-            var reused = _kept_for(kept, index)
+            var reused = index_of_light(kept, index)
             if shadow.is_frozen() and reused >= 0:
                 maps.append(kept.pop(reused))
                 continue
@@ -9553,10 +9630,7 @@ struct Renderer(Movable):
             return colors^
         for texel in range(len(target.colors)):  # pragma: no branch
             ref seen = target.colors[texel]
-            colors.append(seen.r)
-            colors.append(seen.g)
-            colors.append(seen.b)
-            colors.append(seen.a)
+            append_float_color(colors, seen)
         return colors^
 
     def _projected(

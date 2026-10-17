@@ -21,7 +21,9 @@ ten-thousandth either side; see `math.space_curve.chord_tangent`.
 """
 
 from math.space_curve import Point3, SpaceCurve, chord_tangent, point3
-from std.math import cos, isfinite, pi, sin
+from math.finite import require_finite
+from std.math import cos, pi, sin
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -98,6 +100,22 @@ def _scale_to(x: Float64, y: Float64, t: Float64) -> Float64:
     return t * r + x
 
 
+def require_extra_curve(kind: ExtraCurveKind) raises:
+    """Refuse a named curve that is not one of the fourteen.
+
+    Nothing. The call returns when the kind is valid.
+
+    Args:
+        kind: Which curve.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    require_valid(
+        kind.is_valid(), "A named curve's kind must be one of the fourteen"
+    )
+
+
 struct ExtraCurve(SpaceCurve):
     """One of three.js's named curves in space."""
 
@@ -117,10 +135,8 @@ struct ExtraCurve(SpaceCurve):
         Raises:
             Error: If the kind is not valid, or the scale is not finite.
         """
-        if not kind.is_valid():
-            raise Error("A named curve's kind must be one of the fourteen")
-        if not isfinite(scale):
-            raise Error("A named curve's scale must be finite")
+        require_extra_curve(kind)
+        require_finite(Float64(scale), "A named curve's scale must be finite")
         self.kind = kind
         self.scale = scale
 
@@ -138,8 +154,7 @@ struct ExtraCurve(SpaceCurve):
             Error: If the mutable kind is not valid. The parameter remains
                 unbounded, as in three.js.
         """
-        if not self.kind.is_valid():
-            raise Error("A named curve's kind must be one of the fourteen")
+        require_extra_curve(self.kind)
         var s = self.scale
         if self.kind == GRANNY_KNOT:
             var a = 2 * pi * t

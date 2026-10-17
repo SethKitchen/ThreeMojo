@@ -56,7 +56,7 @@ from extensions.humanoid.skeleton.field import (
     smax,
     smin,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import atan2, cos, max, pi, sin
 from units.si import (
     Angle,
@@ -234,10 +234,8 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         self.lateral_r = Vector3(
             0.22 * W, 0.080 * W, 0.36 * dimensions.proximal_ap.value
         )
-        self.plateau = Vector3(
-            0.5 * (self.medial.x + self.lateral.x),
-            0.5 * (self.medial.y + self.lateral.y) - 0.02 * W,
-            0.5 * (self.medial.z + self.lateral.z),
+        self.plateau = midpoint(self.medial, self.lateral) + Vector3(
+            0, -0.02 * W, 0
         )
         self.plateau_r = Vector3(
             0.44 * W, 0.085 * W, 0.34 * dimensions.proximal_ap.value
@@ -263,15 +261,10 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
             dimensions.fibular_notch.z,
         )
         self.notch_r = 0.16 * D
-        var distal = Vector3(
-            0.5 * (self.plafond.x + self.malleolus.x),
-            self.plafond.y + 0.06 * L,
-            0.5 * (self.plafond.z + self.malleolus.z),
-        )
-        var proximal = Vector3(
-            0.5 * (self.medial.x + self.lateral.x),
-            0.5 * (self.medial.y + self.lateral.y) - 0.06 * L,
-            0.5 * (self.medial.z + self.lateral.z),
+        var ankle = midpoint(self.plafond, self.malleolus)
+        var distal = Vector3(ankle.x, self.plafond.y + 0.06 * L, ankle.z)
+        var proximal = midpoint(self.medial, self.lateral) + Vector3(
+            0, -0.06 * L, 0
         )
         var bow_off = Vector3(0, 0, bow)
         self.s0 = bowed_station(0.0, distal, proximal, bow_off)

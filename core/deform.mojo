@@ -48,22 +48,25 @@ from core.buffer_geometry import (
     UV,
 )
 from core.morph import MorphInfluences
-from core.scene import Scene
+from core.ordinal import require_positive
+from core.scene import Scene, require_skinned_mesh
 from materials.material import Material
 from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from objects.skeleton import blend_bones
+from objects.skeleton import blend_bones, require_bone_index
 from objects.skinned_mesh import (
     ATTACHED,
     BONES_PER_VERTEX,
     SKIN_INDEX,
     SKIN_WEIGHT,
+    require_skin_width,
 )
 from render.rasterizer import check_data_map
 from render.texture_store import NO_TEXTURE, TextureStore
-from std.math import floor, isfinite
+from math.finite import require_finite
+from std.math import floor
 from units.si import METER
 
 
@@ -244,8 +247,7 @@ def sphere_of(points: List[Vector3]) raises -> Sphere:
     Raises:
         Error: If there are no points to bound.
     """
-    if len(points) == 0:
-        raise Error("A bound needs a point to be around")
+    require_positive(len(points), "A bound needs a point to be around")
     var box = box_of(points)
     var center = box.center()
     var reach = Float32(0)
@@ -277,13 +279,11 @@ def whole_bone(named: Float32, count: Int) raises -> Int:
         Error: If the component is not a number, is not whole, or is not a
             bone the skeleton has.
     """
-    if not isfinite(named):
-        raise Error("A bone index must be a number")
+    require_finite(Float64(named), "A bone index must be a number")
     if named != floor(named):
         raise Error("A bone index must be a whole number")
     var bone = Int(named)
-    if bone < 0 or bone >= count:
-        raise Error("A vertex names a bone the skeleton does not have")
+    require_bone_index(bone, count)
     return bone
 
 
@@ -339,8 +339,7 @@ def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
             there, the scene is stale, or the matrix the bones' result is
             carried back out of has no inverse.
     """
-    if index < 0 or index >= len(scene.skinned_meshes):
-        raise Error("No skinned mesh has that index")
+    require_skinned_mesh(index, len(scene.skinned_meshes))
     ref skinned = scene.skinned_meshes[index]
     # The bones' world matrices, then how far each has moved since the
     # bind. Once per mesh, whatever the vertex count.
@@ -393,11 +392,8 @@ def skin_carriers(
         raise Error("A skinned mesh needs skinIndex and skinWeight")
     ref bones = geometry.attribute_view(String(SKIN_INDEX))
     ref weights = geometry.attribute_view(String(SKIN_WEIGHT))
-    if (
-        bones.item_size != BONES_PER_VERTEX
-        or weights.item_size != BONES_PER_VERTEX
-    ):
-        raise Error("A skin attribute holds four numbers a vertex")
+    require_skin_width(bones.item_size)
+    require_skin_width(weights.item_size)
     if bones.count() != vertex_count or weights.count() != vertex_count:
         raise Error("A skin attribute must cover every vertex")
     var count = len(pose.palette)

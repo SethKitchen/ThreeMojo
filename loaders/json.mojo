@@ -27,7 +27,18 @@ needs -- a byte offset, a count, an index -- exactly, up to fifty-three
 bits. `integer` refuses a number with a fraction.
 """
 
+from core.ordinal import ordinal_valid
+
+from loaders.bytes import (
+    ascii_digit,
+    bytes_match,
+    hex_digit_value,
+    is_exponent_mark,
+    is_sign_mark,
+    space_tab_line,
+)
 from loaders.utf8 import append_utf8
+from math.finite import require_finite
 from std.math import isfinite
 
 comptime _HEX = "0123456789abcdef"
@@ -88,17 +99,27 @@ struct JsonKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six kinds there are."""
-        return (
-            self == OBJECT
-            or self == ARRAY
-            or self == STRING
-            or self == NUMBER
-            or self == BOOLEAN
-            or self == NULL
-        )
+        return ordinal_valid(self.value, NULL.value)
 
 
 comptime OBJECT = JsonKind(0)
+
+
+def require_json_object(kind: JsonKind) raises:
+    """Refuse a JSON node that is not an object.
+
+    Nothing. The call returns when the node is an object.
+
+    Args:
+        kind: The node's kind.
+
+    Raises:
+        Error: If the node is not an object.
+    """
+    if kind != OBJECT:
+        raise Error("JSON: only an object has keys")
+
+
 comptime ARRAY = JsonKind(1)
 comptime STRING = JsonKind(2)
 comptime NUMBER = JsonKind(3)
@@ -107,6 +128,26 @@ comptime NULL = JsonKind(5)
 
 # What `JsonDocument.get` returns for a key an object does not have.
 comptime NO_NODE = -1
+
+
+def present(node: Int, complaint: String) raises -> Int:
+    """Return a node, refusing one that was not there.
+
+    Args:
+        node: A node index, or `NO_NODE`.
+        complaint: The error when the node is `NO_NODE`.
+
+    Returns:
+        `node`.
+
+    Raises:
+        Error: If `node` is `NO_NODE`.
+    """
+    if node == NO_NODE:
+        raise Error(complaint)
+    return node
+
+
 # How deep an object or array can sit inside others. A file nested past
 # this is refused rather than read on a stack that has no more room.
 comptime MAX_DEPTH = 256
@@ -172,6 +213,25 @@ struct JsonDocument(Movable):
         self._check(node)
         return self.nodes[node].kind
 
+    def has_kind(self, node: Int, kind: JsonKind) raises -> Bool:
+        """Return True when `node` is present and holds `kind`.
+
+        A missing node is false. It is not an error.
+
+        Args:
+            node: A node index, or `NO_NODE`.
+            kind: The kind it must hold.
+
+        Returns:
+            True when the node exists and its kind is `kind`.
+
+        Raises:
+            Error: If the index is not `NO_NODE` and names no node.
+        """
+        if node == NO_NODE:
+            return False
+        return self.kind(node) == kind
+
     def length(self, node: Int) raises -> Int:
         """Return how many children an object or an array has.
 
@@ -221,8 +281,7 @@ struct JsonDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node]
-        if found.kind != OBJECT:
-            raise Error("JSON: only an object has keys")
+        require_json_object(found.kind)
         var answer = NO_NODE
         for index in range(len(found.keys)):
             if found.keys[index] == key:
@@ -245,8 +304,7 @@ struct JsonDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node]
-        if found.kind != OBJECT:
-            raise Error("JSON: only an object has keys")
+        require_json_object(found.kind)
         if index < 0 or index >= len(found.keys):
             raise Error("JSON: no key at position " + String(index))
         return found.keys[index]
@@ -312,6 +370,98 @@ struct JsonDocument(Movable):
             raise Error("JSON: expected a whole number")
         return whole
 
+    def optional_integer(
+        self, node: Int, key: String, default: Int
+    ) raises -> Int:
+        """Return an object's whole number under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The value when the key is absent.
+
+        Returns:
+            The number, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                whole number.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.integer(found)
+
+    def optional_number(
+        self, node: Int, key: String, default: Float64
+    ) raises -> Float64:
+        """Return an object's number under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The number when the key is absent.
+
+        Returns:
+            The number, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                number.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.number(found)
+
+    def optional_finite(
+        self, node: Int, key: String, default: Float32, label: String
+    ) raises -> Float32:
+        """Return an object's finite number under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The value when the key is absent.
+            label: The file kind named when the number is not finite.
+
+        Returns:
+            The number as `Float32`, or `default`.
+
+        Raises:
+            Error: If the node is not an object, the value is not a
+                number, or the number is not finite.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        var value = Float32(self.number(found))
+        if not isfinite(value):
+            raise Error(label + ": " + key + " must be finite")
+        return value
+
+    def finite_numbers(
+        self, array: Int, complaint: String
+    ) raises -> List[Float32]:
+        """Return every number in an array as a finite `Float32`.
+
+        Args:
+            array: The array's index.
+            complaint: The error when a number is not finite.
+
+        Returns:
+            The numbers, in order.
+
+        Raises:
+            Error: If an entry is not a number, or a number is not finite.
+        """
+        var out = List[Float32]()
+        for index in range(self.length(array)):
+            var value = Float32(self.number(self.at(array, index)))
+            require_finite(Float64(value), complaint)
+            out.append(value)
+        return out^
+
     def string(self, node: Int) raises -> String:
         """Return a string.
 
@@ -348,6 +498,113 @@ struct JsonDocument(Movable):
             raise Error("JSON: expected true or false")
         return found.flag
 
+    def optional_string(
+        self, node: Int, key: String, default: String
+    ) raises -> String:
+        """Return an object's string under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The text when the key is absent.
+
+        Returns:
+            The text, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                string.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.string(found)
+
+    def optional_boolean(
+        self, node: Int, key: String, default: Bool
+    ) raises -> Bool:
+        """Return an object's boolean under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The truth when the key is absent.
+
+        Returns:
+            The truth, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                boolean.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.boolean(found)
+
+    def optional_kind(
+        self, node: Int, key: String, kind: JsonKind, complaint: String
+    ) raises -> Int:
+        """Return an object's child under `key` when it has `kind`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            kind: The kind the child must have.
+            complaint: The error when the child has another kind.
+
+        Returns:
+            The child's index, or `NO_NODE` when the key is absent.
+
+        Raises:
+            Error: If the node is not an object, or the child has another
+                kind.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return NO_NODE
+        if self.kind(found) != kind:
+            raise Error(complaint)
+        return found
+
+    def required_kind(
+        self, node: Int, key: String, kind: JsonKind, complaint: String
+    ) raises -> Int:
+        """Return an object's child under `key`, which must have `kind`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            kind: The kind the child must have.
+            complaint: The error when the key is absent or the child has
+                another kind.
+
+        Returns:
+            The child's index.
+
+        Raises:
+            Error: If the node is not an object, the key is absent, or
+                the child has another kind.
+        """
+        var found = self.optional_kind(node, key, kind, complaint)
+        return present(found, complaint)
+
+    def required(self, node: Int, key: String, complaint: String) raises -> Int:
+        """Return an object's child under `key`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            complaint: The error when the key is absent.
+
+        Returns:
+            The child's index.
+
+        Raises:
+            Error: If the node is not an object, or the key is absent.
+        """
+        return present(self.get(node, key), complaint)
+
     def is_null(self, node: Int) raises -> Bool:
         """Return True if a node is `null`.
 
@@ -379,9 +636,7 @@ def parse_json(text: String) raises -> JsonDocument:
             grammar or beyond a `Float64`, anything after the root value,
             or nesting past `MAX_DEPTH`. The message names the byte offset.
     """
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     var parser = _Parser(bytes^)
     var document = JsonDocument()
     parser.skip_space()
@@ -420,7 +675,7 @@ struct _Parser(Movable):
         """Step over the four whitespace bytes JSON allows."""
         while not self.done():
             var byte = self.peek()
-            if byte == 32 or byte == 9 or byte == 10 or byte == 13:
+            if space_tab_line(byte):
                 self.at += 1
             else:
                 return
@@ -459,7 +714,7 @@ struct _Parser(Movable):
             self.literal("null")
             document.nodes.append(JsonNode(NULL))
             return len(document.nodes) - 1
-        if byte == 45 or (byte >= 48 and byte <= 57):
+        if byte == 45 or ascii_digit(byte):
             var node = JsonNode(NUMBER)
             node.number = self.number()
             document.nodes.append(node^)
@@ -529,26 +784,14 @@ struct _Parser(Movable):
 
     def literal(mut self, word: String) raises:
         """Step over `true`, `false` or `null`, whole."""
-        var expected = word.as_bytes()
-        for offset in range(len(expected)):  # pragma: no branch
-            if (
-                self.at + offset >= len(self.bytes)
-                or self.bytes[self.at + offset] != expected[offset]
-            ):
-                raise Error(self.where() + "expected " + word)
-        self.at += len(expected)
+        if not bytes_match(Span(self.bytes), self.at, len(self.bytes), word):
+            raise Error(self.where() + "expected " + word)
+        self.at += word.byte_length()
 
     def hex_digit(mut self) raises -> Int:
         """Read one hex digit of a `\\u` escape."""
-        var byte = self.peek()
-        var digit: Int
-        if byte >= 48 and byte <= 57:
-            digit = byte - 48
-        elif byte >= 97 and byte <= 102:
-            digit = byte - 87
-        elif byte >= 65 and byte <= 70:
-            digit = byte - 55
-        else:
+        var digit = hex_digit_value(self.peek())
+        if digit < 0:
             raise Error(self.where() + "expected a hex digit")
         self.at += 1
         return digit
@@ -615,7 +858,7 @@ struct _Parser(Movable):
     def digits(mut self) raises -> Int:
         """Step over one or more digits and return how many."""
         var count = 0
-        while self.peek() >= 48 and self.peek() <= 57:
+        while ascii_digit(self.peek()):
             self.at += 1
             count += 1
         if count == 0:
@@ -634,9 +877,9 @@ struct _Parser(Movable):
         if self.peek() == 46:
             self.at += 1
             _ = self.digits()
-        if self.peek() == 101 or self.peek() == 69:
+        if is_exponent_mark(self.peek()):
             self.at += 1
-            if self.peek() == 43 or self.peek() == 45:
+            if is_sign_mark(self.peek()):
                 self.at += 1
             _ = self.digits()
         var text = List[UInt8]()

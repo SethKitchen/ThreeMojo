@@ -29,6 +29,7 @@ numbers for its uuid; a geometry here has no uuid and takes none.
 """
 
 from core.assets import Assets
+from math.curve_checks import require_at_least_one
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
 from core.raycaster import Raycaster
@@ -44,7 +45,7 @@ from math.space_curve import (
     u_to_t,
 )
 from math.utils import SeededRandom
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_float64_xyz
 from render.color_spaces import srgb_to_linear_three
 from std.math import atan2, cos, pi, sin
 
@@ -72,13 +73,6 @@ def _apply(q: Point3, v: Point3) -> Point3:
     )
 
 
-def _push(mut out: List[Float32], v: Point3):
-    """Append a point's three numbers as floats."""
-    out.append(Float32(v[0]))
-    out.append(Float32(v[1]))
-    out.append(Float32(v[2]))
-
-
 def _point_at[
     C: SpaceCurve
 ](curve: C, lengths: List[Float64], u: Float64) raises -> Point3:
@@ -95,8 +89,9 @@ def _tangent_at[
 
 def _check(divisions: Int) raises:
     """Refuse fewer than one division."""
-    if divisions < 1:
-        raise Error("A roller coaster needs one division or more")
+    require_at_least_one(
+        divisions, "A roller coaster needs one division or more"
+    )
 
 
 def _ring(sides: Int, radius: Float64) -> List[Point3]:
@@ -147,7 +142,7 @@ struct _Track(Movable):
     def _color(mut self, color: SIMD[DType.float64, 4], count: Int):
         """Append one color `count` times."""
         for _ in range(count):  # pragma: no branch
-            _push(self.colors, color)
+            append_float64_xyz(self.colors, color[0], color[1], color[2])
 
     def draw_shape(
         mut self, shape: List[Point3], color: SIMD[DType.float64, 4]
@@ -155,12 +150,14 @@ struct _Track(Movable):
         """Append a flat shape's two faces, three.js's `drawShape`."""
         var back = _apply(self.turn, point3(0, 0, -1))
         for j in range(len(shape)):  # pragma: no branch
-            _push(self.positions, _apply(self.turn, shape[j]) + self.point)
-            _push(self.normals, back)
+            var placed = _apply(self.turn, shape[j]) + self.point
+            append_float64_xyz(self.positions, placed[0], placed[1], placed[2])
+            append_float64_xyz(self.normals, back[0], back[1], back[2])
         var front = _apply(self.turn, point3(0, 0, 1))
         for j in range(len(shape) - 1, -1, -1):  # pragma: no branch
-            _push(self.positions, _apply(self.turn, shape[j]) + self.point)
-            _push(self.normals, front)
+            var placed = _apply(self.turn, shape[j]) + self.point
+            append_float64_xyz(self.positions, placed[0], placed[1], placed[2])
+            append_float64_xyz(self.normals, front[0], front[1], front[2])
         self._color(color, 2 * len(shape))
 
     def extrude_shape(
@@ -180,13 +177,13 @@ struct _Track(Movable):
             var v3 = _apply(self.previous_turn, two + offset) + self.previous
             var v4 = _apply(self.previous_turn, one + offset) + self.previous
             for v in [v1, v2, v4, v2, v3, v4]:  # pragma: no branch
-                _push(self.positions, v)
+                append_float64_xyz(self.positions, v[0], v[1], v[2])
             var n1 = normalized3(_apply(self.turn, one))
             var n2 = normalized3(_apply(self.turn, two))
             var n3 = normalized3(_apply(self.previous_turn, two))
             var n4 = normalized3(_apply(self.previous_turn, one))
             for n in [n1, n2, n4, n2, n3, n4]:  # pragma: no branch
-                _push(self.normals, n)
+                append_float64_xyz(self.normals, n[0], n[1], n[2])
             self._color(color, 6)
 
 
@@ -262,11 +259,11 @@ def _extrude_between(
             two + end,
             one + end,
         ]:
-            _push(positions, v)
+            append_float64_xyz(positions, v[0], v[1], v[2])
         var n1 = normalized3(one)
         var n2 = normalized3(two)
         for n in [n1, n2, n1, n2, n2, n1]:  # pragma: no branch
-            _push(normals, n)
+            append_float64_xyz(normals, n[0], n[1], n[2])
 
 
 def roller_coaster_lifters_geometry[
@@ -387,7 +384,7 @@ def roller_coaster_shadow_geometry[
         var v3 = _apply(previous_turn, point3(0.3, 0, 0)) + previous
         var v4 = _apply(previous_turn, point3(-0.3, 0, 0)) + previous
         for v in [v1, v2, v4, v2, v3, v4]:  # pragma: no branch
-            _push(positions, v)
+            append_float64_xyz(positions, v[0], v[1], v[2])
         previous = point
         previous_turn = turn
     return _geometry(positions^, List[Float32](), List[Float32]())
@@ -420,7 +417,7 @@ def sky_geometry(mut random: SeededRandom) raises -> BufferGeometry:
             point3(x + size, y, z + size),
             point3(x - size, y, z + size),
         ]:
-            _push(positions, corner)
+            append_float64_xyz(positions, corner[0], corner[1], corner[2])
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     return geometry^
@@ -470,7 +467,7 @@ def trees_geometry(
                 point3(x, y + height, z),
                 point3(x + sin(angle + pi), y, z + cos(angle + pi)),
             ]:
-                _push(positions, corner)
+                append_float64_xyz(positions, corner[0], corner[1], corner[2])
             angle += pi / 2
         var shade = random.next() * 0.1
         var green = SIMD[DType.float64, 4](
@@ -480,5 +477,5 @@ def trees_geometry(
             0,
         )
         for _ in range(6):  # pragma: no branch
-            _push(colors, green)
+            append_float64_xyz(colors, green[0], green[1], green[2])
     return _geometry(positions^, List[Float32](), colors^)

@@ -12,22 +12,26 @@ face. The mesh wears a list, and each group draws with the material its
 index names. The box turns so every face comes around.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import Material, MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from renderers.renderer import Renderer
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/faces.png"
 comptime WIDTH = 240
@@ -67,13 +71,9 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var assets = Assets()
     var block = assets.geometries.add(cube(Length(1.1, METER)))
     var colors = List[Color]()
@@ -93,19 +93,26 @@ def main() raises:
     posed.rotate_x(Angle(22.0, DEGREE))
     var node = scene.add(posed^)
     scene.add_mesh(Mesh(block, faces^, node))
-    var lamp = Object3D()
-    lamp.set_position(1.2, 1.6, 1.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.4))
-
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    fill_and_key(
+        scene,
+        1.2,
+        1.6,
+        1.8,
+        Color(255, 255, 255),
+        0.4,
+        Color(255, 255, 255),
+        2.4,
     )
-    camera.place(Vector3(0.6, 0.7, 3.1), Vector3(0, 0, 0))
+
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.6, 0.7, 3.1),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
+    )
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
@@ -114,12 +121,4 @@ def main() raises:
     for _ in range(FRAMES):
         frames.append(frame_at(renderer, camera, assets, scene, node, step))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

@@ -36,10 +36,12 @@ Rx * Rx * Ry for it would be a rotation nobody asked for.
 """
 
 from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z
+from math.utils import clamp_unit
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import asin, atan2
 from units.si import Angle, RADIAN
+from core.ordinal import require_valid
 
 # The three axes, as the index each rotation helper answers to.
 comptime AXIS_X = 0
@@ -98,16 +100,11 @@ def _is_axis(axis: Int) -> Bool:
     return axis >= AXIS_X and axis <= AXIS_Z
 
 
-def _clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, so `asin` never sees a
-    rounding error past the edge."""
-    return max(Float32(-1), min(Float32(1), value))
-
-
 def _check_order(order: EulerOrder) raises:
     """Refuse an order that does not name three different axes."""
-    if not order.is_valid():
-        raise Error("An Euler order must name three different axes")
+    require_valid(
+        order.is_valid(), "An Euler order must name three different axes"
+    )
 
 
 # The six orders three.js accepts. `XYZ` is its default and this port's.
@@ -180,7 +177,7 @@ struct Euler(ImplicitlyCopyable):
         if not order.is_cyclic():
             sign = -1
         var middle_sine = sign * matrix.get(i, k)
-        var middle = asin(_clamp_unit(middle_sine))
+        var middle = asin(clamp_unit(middle_sine))
         var first: Float32
         var third: Float32
         if abs(middle_sine) < LOCK_THRESHOLD:

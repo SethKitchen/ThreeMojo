@@ -24,10 +24,12 @@ is anterior.
     var d = pelvis_ligament_distance(dims, INGUINAL, RIGHT, dims.gt)
 """
 
-from extensions.humanoid.side import LEFT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
+    abs_f,
     empty_bounds,
     field_gradient,
     flip_x,
@@ -60,6 +62,7 @@ from extensions.anatomy.soft_tissue import (
     ligament_tissue,
     meniscus_tissue,
 )
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, max, pi, sqrt
 
@@ -81,9 +84,7 @@ struct PelvisLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named ligament or joint tissue."""
-        if self.value < 0:
-            return False
-        return self.value <= INTERPUBIC_DISC.value
+        return ordinal_valid(self.value, INTERPUBIC_DISC.value)
 
 
 comptime ANTERIOR_SACROILIAC = PelvisLigament(0)
@@ -101,6 +102,20 @@ comptime ACETABULAR_LABRUM = PelvisLigament(9)
 comptime ACETABULAR_CARTILAGE = PelvisLigament(10)
 # The fibrocartilage disc of the pubic symphysis, on the midline.
 comptime INTERPUBIC_DISC = PelvisLigament(11)
+
+
+def require_pelvis_ligament(part: PelvisLigament) raises:
+    """Refuse a pelvic ligament that is not named.
+
+    Nothing. The call returns when the ligament is named.
+
+    Args:
+        part: The ligament.
+
+    Raises:
+        Error: If the ligament is not named.
+    """
+    require_valid(part.is_valid(), "A pelvic ligament must be a named ligament")
 
 
 struct PelvisLigamentField(DistanceField, ImplicitlyCopyable):
@@ -146,10 +161,8 @@ struct PelvisLigamentField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic ligament must be a named ligament")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_pelvis_ligament(part)
+        require_side(side, "A pelvis")
         var p = dimensions.pelvis
         var S = p.stature.value
         self.part = part
@@ -202,7 +215,9 @@ struct PelvisLigamentField(DistanceField, ImplicitlyCopyable):
             var height = offset.dot(self.axis)
             var flat = offset - self.axis * height
             var radial = flat.length() - self.ring
-            return sqrt(radial * radial + height * height) - self.tube
+            return (
+                sqrt(squared_length2[DType.float32](radial, height)) - self.tube
+            )
         if self.part == ACETABULAR_CARTILAGE:
             var offset = local - self.hip
             var reach = offset.length()
@@ -267,9 +282,7 @@ def abs_gap(value: Float32) -> Float32:
     Returns:
         Its magnitude.
     """
-    if value < 0:
-        return -value
-    return value
+    return abs_f(value)
 
 
 def pelvis_ligament_distance(
@@ -347,8 +360,7 @@ def is_midline(part: PelvisLigament) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic ligament must be a named ligament")
+    require_pelvis_ligament(part)
     return part == INTERPUBIC_DISC
 
 
@@ -365,8 +377,7 @@ def pelvis_ligament_tissue(part: PelvisLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic ligament must be a named ligament")
+    require_pelvis_ligament(part)
     if part == ACETABULAR_CARTILAGE:
         return cartilage_tissue()
     if part == ACETABULAR_LABRUM or part == INTERPUBIC_DISC:

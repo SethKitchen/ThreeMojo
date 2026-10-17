@@ -10,6 +10,7 @@ x, y and z axes and three rotations about them. A `Dof` names one of
 them. Its value is also its offset in the node's block of the global
 vectors, so the degree of freedom `d` of node `n` is entry `6 n + d`.
 """
+from core.ordinal import ordinal_valid
 
 
 @fieldwise_init
@@ -24,7 +25,7 @@ struct Dof(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 5.
         """
-        return self.value >= 0 and self.value < 6
+        return ordinal_valid(self.value, 6 - 1)
 
     def is_translation(self) -> Bool:
         """Return True if this is a translation.
@@ -32,7 +33,7 @@ struct Dof(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 2.
         """
-        return self.value >= 0 and self.value < 3
+        return ordinal_valid(self.value, 3 - 1)
 
     def is_rotation(self) -> Bool:
         """Return True if this is a rotation.

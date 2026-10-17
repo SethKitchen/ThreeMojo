@@ -17,18 +17,19 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, SCIATIC_NERVE, Vector3(0, 0.2, -0.04))
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
+    display_tube_chain,
     field_gradient,
     mix_point,
-    tube_chain_bounds,
+    tube_root_bounds,
     tube_chain_distance,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -44,9 +45,23 @@ struct NervePart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= SURAL_NERVE.value
+        return ordinal_valid(self.value, SURAL_NERVE.value)
+
+
+def require_nerve_part(part: NervePart) raises:
+    """Refuse a nerve that is not named.
+
+    Nothing. The call returns when the nerve is named.
+
+    Args:
+        part: The nerve.
+
+    Raises:
+        Error: If the nerve is not a named peripheral nerve.
+    """
+    require_valid(
+        part.is_valid(), "A nerve part must be a named peripheral nerve"
+    )
 
 
 comptime FEMORAL_NERVE = NervePart(0)
@@ -82,8 +97,7 @@ struct NerveField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A nerve part must be a named peripheral nerve")
+        require_nerve_part(part)
         var S = dimensions.stature.value
         var chain: TubeChain
         if part == FEMORAL_NERVE:
@@ -101,7 +115,7 @@ struct NerveField(DistanceField, ImplicitlyCopyable):
         self.chain = chain
         self.k = Float32(0.00020)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(chain, Float32(0.003) + chain.r0)
+        var box = tube_root_bounds(chain)
         self.low = box.low
         self.high = box.high
 
@@ -123,16 +137,15 @@ def _display_nerve_field(
     """Return a nerve with a diagrammatic minimum mesh radius."""
     var field = NerveField(dimensions, part)
     var least = 0.0015 * dimensions.stature.value
-    field.chain.r0 = max(field.chain.r0, least)
-    field.chain.r1 = max(field.chain.r1, least)
-    field.chain.r2 = max(field.chain.r2, least)
-    field.chain.r3 = max(field.chain.r3, least)
-    field.chain.r4 = max(field.chain.r4, least)
-    field.k = 0.0008 * dimensions.stature.value
-    field.epsilon = Float32(0.25) * least
-    var box = tube_chain_bounds(field.chain, 0.008 + field.chain.r2)
-    field.low = box.low
-    field.high = box.high
+    display_tube_chain(
+        field.chain,
+        field.k,
+        field.epsilon,
+        field.low,
+        field.high,
+        least,
+        dimensions.stature.value,
+    )
     return field
 
 

@@ -35,6 +35,7 @@ from materials.nodes import (
 )
 from math.euler import AXIS_X, AXIS_Y, EulerOrder, XYZ
 from std.math import pi
+from core.ordinal import require_valid
 
 
 def _or(
@@ -375,8 +376,9 @@ def rotate(
         Error: If `order` does not name three different axes, a node is not
             of this graph, or the types are not a pair above.
     """
-    if not order.is_valid():
-        raise Error("rotate's order must name three different axes")
+    require_valid(
+        order.is_valid(), "rotate's order must name three different axes"
+    )
     var type = g.type_of(position)
     if type == NODE_VEC2:
         _expect(g, rotation, NODE_FLOAT, "rotate of a vec2")

@@ -25,8 +25,12 @@ This is not a three.js port. See Extensions.
     var d = field.distance(Vector3(0, 0.1, 0.2))
 """
 
+from core.ordinal import require_index_in_count
 from extensions.humanoid.skeleton.field import DistanceField, cross
-from math.vector3 import Vector3
+from math.box_extent import box_exterior
+from math.utils import clamp, clamp_unit, max3
+from math.bounds import enclose_point
+from math.vector3 import Vector3, mix_delta3
 from std.collections import Dict
 from std.math import acos, iota, max, min
 from std.atomic import Atomic, Ordering
@@ -64,31 +68,31 @@ def _closest_on_flat_triangle(
     var ab2 = ab.dot(ab)
     var ac2 = ac.dot(ac)
     var bc2 = bc.dot(bc)
-    if max(ab2, max(ac2, bc2)) == 0:
+    if max3(ab2, ac2, bc2) == 0:
         return (a, Float32(0), Float32(0), ON_A)
     if ab2 >= ac2 and ab2 >= bc2:
-        var t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / ab2))
+        var t = clamp((p - a).dot(ab) / ab2, 0, 1)
         var part = ON_AB
         if t == 0:
             part = ON_A
         elif t == 1:
             part = ON_B
-        return (a + ab * t, t, Float32(0), part)
+        return (mix_delta3(a, b, t), t, Float32(0), part)
     if ac2 >= bc2:
-        var t = min(Float32(1), max(Float32(0), (p - a).dot(ac) / ac2))
+        var t = clamp((p - a).dot(ac) / ac2, 0, 1)
         var part = ON_CA
         if t == 0:
             part = ON_A
         elif t == 1:
             part = ON_C
-        return (a + ac * t, Float32(0), t, part)
-    var t = min(Float32(1), max(Float32(0), (p - b).dot(bc) / bc2))
+        return (mix_delta3(a, c, t), Float32(0), t, part)
+    var t = clamp((p - b).dot(bc) / bc2, 0, 1)
     var part = ON_BC
     if t == 0:
         part = ON_B
     elif t == 1:
         part = ON_C
-    return (b + bc * t, 1 - t, t, part)
+    return (mix_delta3(b, c, t), 1 - t, t, part)
 
 
 def closest_on_triangle(
@@ -129,7 +133,7 @@ def closest_on_triangle(
     var vc = d1 * d4 - d3 * d2
     if vc <= 0 and d1 >= 0 and d3 <= 0:
         var v = d1 / (d1 - d3)
-        return (a + ab * v, v, Float32(0), ON_AB)
+        return (mix_delta3(a, b, v), v, Float32(0), ON_AB)
     var cp = p - c
     var d5 = ab.dot(cp)
     var d6 = ac.dot(cp)
@@ -139,26 +143,22 @@ def closest_on_triangle(
     # Past the tests above, d2 >= 0 here, and on the BC test below both
     # edge terms are too; the weights are clamped against rounding.
     if vb <= 0 and d6 <= 0:
-        var w = min(Float32(1), max(Float32(0), d2 / (d2 - d6)))
-        return (a + ac * w, Float32(0), w, ON_CA)
+        var w = clamp(d2 / (d2 - d6), 0, 1)
+        return (mix_delta3(a, c, w), Float32(0), w, ON_CA)
     var va = d3 * d6 - d5 * d4
     if va <= 0:
-        var w = min(
-            Float32(1), max(Float32(0), (d4 - d3) / ((d4 - d3) + (d5 - d6)))
-        )
-        return (b + (c - b) * w, 1 - w, w, ON_BC)
+        var w = clamp((d4 - d3) / ((d4 - d3) + (d5 - d6)), 0, 1)
+        return (mix_delta3(b, c, w), 1 - w, w, ON_BC)
     var denom = 1 / (va + vb + vc)
     var v = vb * denom
     var w = vc * denom
-    return (a + ab * v + ac * w, v, w, ON_FACE)
+    return (mix_delta3(a, b, v) + ac * w, v, w, ON_FACE)
 
 
 def _box_gap(low: Vector3, high: Vector3, p: Vector3) -> Float32:
     """Return the squared distance from `p` to a box, zero inside."""
-    var dx = max(max(low.x - p.x, p.x - high.x), 0)
-    var dy = max(max(low.y - p.y, p.y - high.y), 0)
-    var dz = max(max(low.z - p.z, p.z - high.z), 0)
-    return dx * dx + dy * dy + dz * dz
+    var outside = box_exterior(low, high, p)
+    return outside.length_sq()
 
 
 @fieldwise_init
@@ -308,8 +308,11 @@ struct MeshTree(Movable):
         if len(triangles) == 0 or len(triangles) % 3 != 0:
             raise Error("A mesh field needs whole triangles")
         for index in range(len(triangles)):  # pragma: no branch
-            if triangles[index] < 0 or triangles[index] >= len(points):
-                raise Error("A mesh field's triangle names no vertex")
+            require_index_in_count(
+                triangles[index],
+                len(points),
+                "A mesh field's triangle names no vertex",
+            )
         var count = len(triangles) // 3
         self.faces = List[Vector3](capacity=count)
         self.normals = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
@@ -326,7 +329,7 @@ struct MeshTree(Movable):
                 var e2 = points[triangles[t * 3 + (c + 2) % 3]] - points[v]
                 e1.normalize()
                 e2.normalize()
-                var angle = acos(max(Float32(-1), min(Float32(1), e1.dot(e2))))
+                var angle = acos(clamp_unit(e1.dot(e2)))
                 self.normals[v] = self.normals[v] + n * angle
         # Each edge's two faces, found through a key of its two ends. An
         # edge with one face is an open edge: its normal is that face's.
@@ -404,8 +407,7 @@ struct MeshTree(Movable):
         var high = Vector3(-3.0e38, -3.0e38, -3.0e38)
         for i in range(first * 3, end * 3):  # pragma: no branch
             var p = self.points[self.triangles[self.order[i // 3] * 3 + i % 3]]
-            low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
-            high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
+            enclose_point(low, high, p)
         self.low.append(low)
         self.high.append(high)
         self.left.append(-1)

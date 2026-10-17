@@ -3,16 +3,16 @@
   "issue": "https://github.com/SethKitchen/ThreeMojo/issues/595",
   "result_label": "template geometry evidence; not clearance or biomechanical validation",
   "build_provenance": {
-    "source_sha256": "8eba00fd928b4da2f340e226c5524203a582b0036ed2acbbb63bacefb6f6536a",
+    "source_sha256": "b4d7edd5e765496d9dcbed5056fb29765968c651a6c7e5d4e0543438495ee77b",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "e11789cc7d8d0b6dbd56250ec93ea1f0575c8e98972ed34c5bd8a1fd2ede6596"
+    "binary_sha256": "720f7773967886c60fbdb13b8ce3849b55ddd57778d0bedb6abfbe9fd1f69c67"
   },
-  "tool_sha256": "85917cd0805b96821b486f93462b6b5a78b397a96129d5f0389c04568f60f3da",
+  "tool_sha256": "ba9b800a26222354c051ac85ea5532e947887a7e12fc5195d6b94cd046d98343",
   "spec": {
     "stature_m": 1.8288,
     "sex": "male",
@@ -42,7 +42,7 @@
       "spine": 0
     }
   },
-  "reproduction": "python3 tools/anatomy_overlaps.py --build --output <file>",
+  "reproduction": "mojo run -I . tools/anatomy_overlaps.mojo --build --output <file>",
   "interface_rules": {
     "foot_articulation_precedence": "A foot bone gives way to each articulating foot bone before it in the segment accounting order.",
     "talus_yields_to_tibia": "The talus gives way to the placed tibia.",

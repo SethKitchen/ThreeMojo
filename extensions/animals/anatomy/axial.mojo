@@ -24,6 +24,7 @@ here. Arthropod muscle develops 0.3 to 0.7 MPa (Medler 2002,
 each, is a `DESIGN` value.
 """
 
+from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
     FROM_TEXT,
@@ -37,18 +38,20 @@ from extensions.animals.anatomy.body import (
     SHARK_PLAN,
     TELEOST,
     BodyPlan,
+    require_body_plan,
 )
-from extensions.animals.anatomy.mass import BodyMass
+from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import ABDOMEN, TAIL, segment_of
 from extensions.animals.rig import Rig
 from extensions.sdf.vector import V3, cross, length, lerp, normalize
-from std.math import isfinite, sqrt
+from math.finite import require_non_negative_finite
+from std.math import sqrt
+from units.measure import length_meters
 from units.si import (
     DEGREE,
     KILOGRAM,
     MEGAPASCAL,
-    METER,
     PASCAL,
     Angle,
     Length,
@@ -99,9 +102,9 @@ def _muscle(
     var unit = length(insertion - origin)
     var arch = MuscleArchitecture(
         Mass(Float32(mass_kg), KILOGRAM),
-        Length(Float32(FIBER_SHARE * unit), METER),
+        length_meters(FIBER_SHARE * unit),
         Angle(0.0, DEGREE),
-        Length(Float32((1.0 - FIBER_SHARE) * unit), METER),
+        length_meters((1.0 - FIBER_SHARE) * unit),
         tension,
         muscle_density(),
     )
@@ -150,8 +153,8 @@ def _trunk(
         # The radius of a cylinder of the segment's mass and length.
         var radius = sqrt(m / (1000.0 * 3.141592653589793 * span))
         for side in ["L", "R"]:  # pragma: no branch
-            var x = V3(radius, 0.0, 0.0) * (1.0 if side == "L" else -1.0)
-            var mirror = 1.0 if side == "L" else -1.0
+            var x = V3(radius, 0.0, 0.0) * (side_sign(side))
+            var mirror = side_sign(side)
             out.append(
                 _muscle(
                     "myomere " + rig.bones[c].name,
@@ -226,10 +229,8 @@ def axial_muscles(
         Error: If the plan is not named, the mass is for another rig, or
             a spider's rig lacks a leg bone.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
-    if len(mass.bones) != len(rig.bones):
-        raise Error("The mass was sampled from another rig")
+    require_body_plan(plan)
+    require_sampled_rig(len(mass.bones), len(rig.bones))
     for i in range(len(rig.bones)):
         var parent = rig.bones[i].parent.value
         if parent < -1 or parent >= i:
@@ -237,8 +238,10 @@ def axial_muscles(
                 "An axial bone parent must be a root or an earlier bone"
             )
     for tally in mass.bones:
-        if not (isfinite(tally.mass) and tally.mass >= 0.0):
-            raise Error("An axial muscle needs finite nonnegative segment mass")
+        require_non_negative_finite(
+            Float64(tally.mass),
+            "An axial muscle needs finite nonnegative segment mass",
+        )
     if plan == TELEOST or plan == SHARK_PLAN or plan == SERPENT:
         return _trunk(rig, plan, mass)
     if plan == ARACHNID:

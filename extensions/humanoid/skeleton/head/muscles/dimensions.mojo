@@ -25,7 +25,8 @@ parameters. They are not a cited cross-section table.
     var d = head_muscle_distance(dims, MASSETER, RIGHT, p)
 """
 
-from extensions.humanoid.side import RIGHT, BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
@@ -57,9 +58,7 @@ struct HeadMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= ORBICULARIS_ORIS.value
+        return ordinal_valid(self.value, ORBICULARIS_ORIS.value)
 
 
 comptime STERNOCLEIDOMASTOID = HeadMuscle(0)
@@ -79,6 +78,20 @@ comptime ORBICULARIS_OCULI = HeadMuscle(12)
 comptime ZYGOMATICUS_MAJOR = HeadMuscle(13)
 # Across the midline.
 comptime ORBICULARIS_ORIS = HeadMuscle(14)
+
+
+def require_head_muscle(part: HeadMuscle) raises:
+    """Refuse a head muscle that is not named.
+
+    Nothing. The call returns when the muscle is named.
+
+    Args:
+        part: The muscle.
+
+    Raises:
+        Error: If the muscle is not named.
+    """
+    require_valid(part.is_valid(), "A head muscle must be a named muscle")
 
 
 def head_muscle_label(part: HeadMuscle) -> String:
@@ -108,9 +121,7 @@ def head_muscle_label(part: HeadMuscle) -> String:
         "zygomaticus major",
         "orbicularis oris",
     ]
-    if not part.is_valid():
-        return "head muscle"
-    return labels[part.value]
+    return ordinal_label(part.is_valid(), part.value, labels, "head muscle")
 
 
 def named_head_muscles() -> List[HeadMuscle]:
@@ -138,8 +149,7 @@ def is_paired_head_muscle(part: HeadMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head muscle must be a named muscle")
+    require_head_muscle(part)
     return not (part == SUPRAHYOID or part == ORBICULARIS_ORIS)
 
 
@@ -162,8 +172,7 @@ def head_muscle_paths(part: HeadMuscle) raises -> List[List[Float32]]:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head muscle must be a named muscle")
+    require_head_muscle(part)
     var paths = List[List[Float32]]()
     # fmt: off
     if part == STERNOCLEIDOMASTOID:
@@ -353,8 +362,7 @@ def head_muscle_field(
     """
     dimensions.validate()
     var paths = head_muscle_paths(part)
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
+    require_side(side, "A head")
     var h = dimensions.head.copy()
     var placed = side
     if not is_paired_head_muscle(part):

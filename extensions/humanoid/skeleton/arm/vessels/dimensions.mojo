@@ -28,7 +28,8 @@ are not a cited caliber table.
     var d = arm_vessel_distance(dims, BRACHIAL_ARTERY, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.torso.sweep import SweepField, floats
@@ -48,9 +49,7 @@ struct ArmVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= MEDIAN_CUBITAL_VEIN.value
+        return ordinal_valid(self.value, MEDIAN_CUBITAL_VEIN.value)
 
 
 comptime AXILLARY_ARTERY = ArmVessel(0)
@@ -77,8 +76,9 @@ def is_arm_artery(part: ArmVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "An arm vessel must be a named artery or vein"
+    )
     return part.value <= ULNAR_ARTERY.value
 
 
@@ -92,8 +92,6 @@ def arm_vessel_label(part: ArmVessel) -> String:
         A short American English label, or `"arm vessel"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "arm vessel"
     var names = List[String]()
     names.append("axillary artery")
     names.append("brachial artery")
@@ -104,7 +102,7 @@ def arm_vessel_label(part: ArmVessel) -> String:
     names.append("cephalic vein")
     names.append("basilic vein")
     names.append("median cubital vein")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm vessel")
 
 
 def named_arm_vessels() -> List[ArmVessel]:
@@ -262,8 +260,7 @@ def arm_vessel_field(
     """
     dimensions.validate()
     var paths = arm_vessel_paths(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     return paths_field(dimensions.arm, paths, 1, side, 0.05)
 
 

@@ -43,10 +43,13 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite_group
 from math.norm import length2
+from math.sine import fraction
 from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
+from math.utils import glsl_sign, mix_delta
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
 from postprocessing.filter_nodes import interleaved_gradient_noise
@@ -55,9 +58,10 @@ from postprocessing.screen_space import DepthView, glsl_rand
 from render.framebuffer import FloatColor
 from render.target import RenderTarget, UNSIGNED_BYTE_TARGET, stored
 from std.bit import pop_count
-from std.math import acos, ceil, cos, floor, isfinite, max, min, pi, pow, sin
+from std.math import acos, ceil, cos, isfinite, max, min, pi, pow, sin
 from std.math import sqrt
 from units.si import Length, METER
+from core.ordinal import require_valid, require_non_negative
 
 
 # `MAX_RAY`: how many sectors a slice's bit field has.
@@ -140,12 +144,12 @@ def check_ssgi(settings: SsgiSettings) raises:
         and isfinite(settings.thickness.value)
         and isfinite(settings.backface_lighting)
     )
-    if not finite:
-        raise Error("An SSGI pass setting must be finite")
+    require_finite_group(finite, "An SSGI pass setting must be finite")
     if not (settings.radius > 0 and settings.exp_factor > 0):
         raise Error("An SSGI pass's radius and step growth must be positive")
-    if settings.frame_id < 0:
-        raise Error("An SSGI pass's frame count must not be negative")
+    require_non_negative(
+        settings.frame_id, "An SSGI pass's frame count must not be negative"
+    )
 
 
 # --- reading the frame, down from the top -------------------------------------
@@ -267,22 +271,6 @@ def gtao_fast_acos(value: Float32) -> Float32:
     if value >= 0:
         return angle
     return Float32(pi) - angle
-
-
-def glsl_sign(x: Float32) -> Float32:
-    """Return GLSL's `sign`.
-
-    Args:
-        x: The number.
-
-    Returns:
-        One, minus one, or zero for zero.
-    """
-    if x > 0:
-        return 1
-    if x < 0:
-        return -1
-    return 0
 
 
 def occluded_sectors(start: Float32, span: Float32) -> UInt32:
@@ -471,7 +459,7 @@ def ssgi_pixel(
     )
     var jitter = temporal[0] * 0.02
     var shifted = noise_offset + temporal[1]
-    var initial_step = (shifted - floor(shifted)) + glsl_rand(
+    var initial_step = fraction(shifted) + glsl_rand(
         (u + jitter) * 2 - 1, (v + jitter) * 2 - 1
     )
     var steps = Float32(settings.step_count)
@@ -626,18 +614,19 @@ def check_sss(settings: SssSettings) raises:
         Error: If the light index is negative, a number is not finite, or
             the frame count is negative.
     """
-    if not settings.light.is_valid():
-        raise Error("An SSS pass's light must not be negative")
+    require_valid(
+        settings.light.is_valid(), "An SSS pass's light must not be negative"
+    )
     var finite = (
         isfinite(settings.max_distance.value)
         and isfinite(settings.thickness.value)
         and isfinite(settings.shadow_intensity)
         and isfinite(settings.quality)
     )
-    if not finite:
-        raise Error("An SSS pass setting must be finite")
-    if settings.frame_id < 0:
-        raise Error("An SSS pass's frame count must not be negative")
+    require_finite_group(finite, "An SSS pass setting must be finite")
+    require_non_negative(
+        settings.frame_id, "An SSS pass's frame count must not be negative"
+    )
 
 
 def sss_light_direction(
@@ -727,7 +716,7 @@ def sss_pixel(
         temporal = SPATIAL_OFFSETS[settings.frame_id % 4]
         frame = Float32(settings.frame_id)
     var noise = interleaved_gradient_noise(d0x, d0y) + temporal
-    var offset = (noise - floor(noise)) + glsl_rand(u + frame, v + frame)
+    var offset = fraction(noise) + glsl_rand(u + frame, v + frame)
     for i in range(steps):
         var px = d0x + x_span * (Float32(i) + offset)
         var py = d0y + y_span * (Float32(i) + offset)
@@ -737,7 +726,7 @@ def sss_pixel(
         var dx = px - d0x
         var dy = py - d0y
         var s = length2(dx, dy) / total
-        var ray_z = start.z + (end.z - start.z) * s
+        var ray_z = mix_delta(start.z, end.z, s)
         var delta = there - ray_z
         if delta > 0 and delta < settings.thickness.value:
             return 1 - settings.shadow_intensity

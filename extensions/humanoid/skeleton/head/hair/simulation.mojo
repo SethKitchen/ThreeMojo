@@ -42,9 +42,12 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     _unit_vector,
     follower_across,
 )
-from math.vector3 import Vector3
+from math.sine import fraction
+from math.utils import clamp, clamp_unit
+from math.vector3 import Vector3, centroid
+from math.finite import require_finite_group
 from render.tasks import TaskGroup
-from std.math import floor, isfinite, max, min
+from std.math import max, min
 from std.sys import num_logical_cores
 
 
@@ -112,7 +115,7 @@ struct HairPhysics(ImplicitlyCopyable):
 
 def _motion_normal(before: Vector3, after: Vector3, normal: Vector3) -> Vector3:
     """Rotate a rest normal with the shortest rotation of its tangent."""
-    var cosine = min(Float32(1), max(Float32(-1), before.dot(after)))
+    var cosine = clamp_unit(before.dot(after))
     var axis = before
     axis.cross(after)
     var turned: Vector3
@@ -288,7 +291,7 @@ struct HairSimulation(Movable):
                 0.73
             ) + wind.phase * Float32(strand)
             var flutter = timer * wind.frequency
-            flutter = flutter - floor(flutter)
+            flutter = fraction(flutter)
             var gust = 1 + wind.jitter * (flutter - Float32(0.5))
             var force = Vector3(0, -p.gravity, 0) + wind.direction * abs(
                 wind.strength * gust
@@ -370,9 +373,7 @@ struct HairSimulation(Movable):
         # Global shape, fading from the root to the tip.
         for k in range(1, count):  # pragma: no branch
             var x = Float32(k) / Float32(count - 1)
-            var keep = 1 - min(
-                Float32(1), max(Float32(0), (x - p.extent) / p.fade)
-            )
+            var keep = 1 - clamp((x - p.extent) / p.fade, 0, 1)
             self.now[first + k] = self.now[first + k] + (
                 self.initial[first + k] - self.now[first + k]
             ) * (p.shape / iterations * keep)
@@ -382,12 +383,12 @@ struct HairSimulation(Movable):
             var a = self.initial[first + k]
             var b = self.initial[first + k + 1]
             var c = self.initial[first + k + 2]
-            var rest = (b - (a + b + c) / 3).length()
-            var middle = (
-                self.now[first + k]
-                + self.now[first + k + 1]
-                + self.now[first + k + 2]
-            ) / 3
+            var rest = (b - centroid(a, b, c)).length()
+            var middle = centroid(
+                self.now[first + k],
+                self.now[first + k + 1],
+                self.now[first + k + 2],
+            )
             var h = self.now[first + k + 1] - middle
             var height = h.length()
             if height < Float32(1e-9):
@@ -457,8 +458,10 @@ struct HairSimulation(Movable):
             raise Error("The groom is not the one the hair moves")
         for index in range(len(self.now)):
             var p = self.now[index]
-            if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):
-                raise Error("Hair motion must have finite positions")
+            require_finite_group(
+                p.is_finite(),
+                "Hair motion must have finite positions",
+            )
         for index in range(len(self.now)):
             groom.points[index] = self.now[index]
         # Each point's frame reads the written points of its own strand.

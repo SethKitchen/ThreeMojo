@@ -15,7 +15,7 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.leg.knee.dimensions import (
     ARTICULAR_CARTILAGE,
     LATERAL_COLLATERAL,
@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.leg.knee.dimensions import (
     KneeDimensions,
     KneePart,
     MeniscusField,
+    require_knee_part,
     knee_dimensions,
     knee_part_label,
 )
@@ -178,20 +179,18 @@ def knee_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A knee part must be cartilage, a meniscus or a collateral")
+    require_knee_part(part)
     var label = knee_part_label(part)
-    check_detail(detail, label)
     if part == ARTICULAR_CARTILAGE:
         var cartilage = CartilageField(dimensions)
-        return mesh_field(
+        return mesh_checked(
             cartilage, cartilage.low, cartilage.high, detail, label
         )
     if part == MEDIAL_MENISCUS:
         var medial = MeniscusField(dimensions, part)
-        return mesh_field(medial, medial.low, medial.high, detail, label)
+        return mesh_checked(medial, medial.low, medial.high, detail, label)
     if part == LATERAL_MENISCUS:
         var lateral = MeniscusField(dimensions, part)
-        return mesh_field(lateral, lateral.low, lateral.high, detail, label)
+        return mesh_checked(lateral, lateral.low, lateral.high, detail, label)
     var ligament = CollateralField(dimensions, part)
-    return mesh_field(ligament, ligament.low, ligament.high, detail, label)
+    return mesh_checked(ligament, ligament.low, ligament.high, detail, label)

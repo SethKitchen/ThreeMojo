@@ -44,10 +44,10 @@ Like `Vector3` and the bounds, a ray holds bare `Float32` meters. The
 """
 
 from math.bounds import Box3, Plane, Sphere
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
 from math.matrix_determinant import _sum_products
-from math.vector3 import Vector3
-from math.norm import normalized3, _ordinary_squared
+from math.vector3 import Vector3, vector3_from_float64
+from math.norm import normalized3, _ordinary_squared, squared_length3
 from std.math import copysign, inf, max, min, nan, sqrt
 from std.memory import bitcast
 from std.sys.intrinsics import unlikely
@@ -135,9 +135,9 @@ def _line_products[
     var dx = ray_products.dx if prepared else Float64(direction.x)
     var dy = ray_products.dy if prepared else Float64(direction.y)
     var dz = ray_products.dz if prepared else Float64(direction.z)
-    var norm_sq = (
-        ray_products.norm_sq if prepared else dx * dx + dy * dy + dz * dz
-    )
+    var norm_sq = ray_products.norm_sq if prepared else squared_length3[
+        DType.float64
+    ](dx, dy, dz)
     # Cross the points separately. Subtracting a small center from a distant
     # origin first can erase its perpendicular offset even in Float64.
     var cross_x = (Float64(point.y) * dz - Float64(point.z) * dy) - (
@@ -183,7 +183,7 @@ def _line_approach[
     var cz = products.cross_z
     return _LineApproach(
         products.projection * inverse,
-        (cx * cx + cy * cy + cz * cz) / products.norm_sq,
+        squared_length3[DType.float64](cx, cy, cz) / products.norm_sq,
         products.norm_sq,
         (dy * cz - dz * cy) * inverse,
         (dz * cx - dx * cz) * inverse,
@@ -213,11 +213,11 @@ def _distance_sq_ratio[
         var x = Float64(point.x) - Float64(origin.x)
         var y = Float64(point.y) - Float64(origin.y)
         var z = Float64(point.z) - Float64(origin.z)
-        return (x * x + y * y + z * z, 1)
+        return (squared_length3[DType.float64](x, y, z), 1)
     return (
-        products.cross_x * products.cross_x
-        + products.cross_y * products.cross_y
-        + products.cross_z * products.cross_z,
+        squared_length3[DType.float64](
+            products.cross_x, products.cross_y, products.cross_z
+        ),
         products.norm_sq,
     )
 
@@ -521,9 +521,7 @@ struct Ray(ImplicitlyCopyable):
                 Float64(target.y) - Float64(self.origin.y),
                 Float64(target.z) - Float64(self.origin.z),
             )
-            toward = Vector3(
-                Float32(unit[0]), Float32(unit[1]), Float32(unit[2])
-            )
+            toward = vector3_from_float64(unit[0], unit[1], unit[2])
         self.direction = toward
 
     def recast(mut self, t: Float32):
@@ -552,10 +550,10 @@ struct Ray(ImplicitlyCopyable):
         var approach = _line_approach(self.origin, self.direction, point)
         if approach.parameter < 0:
             return self.origin
-        return Vector3(
-            Float32(Float64(point.x) - approach.offset_x),
-            Float32(Float64(point.y) - approach.offset_y),
-            Float32(Float64(point.z) - approach.offset_z),
+        return vector3_from_float64(
+            Float64(point.x) - approach.offset_x,
+            Float64(point.y) - approach.offset_y,
+            Float64(point.z) - approach.offset_z,
         )
 
     def distance_sq_to_point(self, point: Vector3) -> Float32:
@@ -670,7 +668,7 @@ struct Ray(ImplicitlyCopyable):
         var dx = Float64(self.direction.x)
         var dy = Float64(self.direction.y)
         var dz = Float64(self.direction.z)
-        var norm = dx * dx + dy * dy + dz * dz
+        var norm = squared_length3[DType.float64](dx, dy, dz)
         var r2 = Float64(sphere.radius) * Float64(sphere.radius)
         if (
             q < inf[DType.float64]()
@@ -838,9 +836,9 @@ struct Ray(ImplicitlyCopyable):
         var dx = Float64(self.direction.x)
         var dy = Float64(self.direction.y)
         var dz = Float64(self.direction.z)
-        var norm = dx * dx + dy * dy + dz * dz
+        var norm = squared_length3[DType.float64](dx, dy, dz)
         var projection = x * dx + y * dy + z * dz
-        var distance = x * x + y * y + z * z
+        var distance = squared_length3[DType.float64](x, y, z)
         var radius = Float64(sphere.radius) * Float64(sphere.radius)
         var outside = distance - radius
         var discriminant = projection * projection - norm * outside
@@ -954,7 +952,7 @@ struct Ray(ImplicitlyCopyable):
             ox * dy - oy * dx,
             ox * dz - oz * dx,
             oy * dz - oz * dy,
-            dx * dx + dy * dy + dz * dz,
+            squared_length3[DType.float64](dx, dy, dz),
             magnitude > 0
             and magnitude + abs(ox + oy + oz) < inf[DType.float64](),
         )
@@ -1101,70 +1099,8 @@ struct Ray(ImplicitlyCopyable):
         var origin = endpoint.origin * endpoint.sign
         var inverse = 1 / direction
         if endpoint.axis == 0:
-            return Vector3(
-                Float32(face),
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.y),
-                        direction,
-                        Float64(self.direction.y),
-                        face,
-                        Float64(box.min.y),
-                        inverse,
-                    )
-                ),
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.z),
-                        direction,
-                        Float64(self.direction.z),
-                        face,
-                        Float64(box.min.z),
-                        inverse,
-                    )
-                ),
-            )
-        if endpoint.axis == 1:
-            return Vector3(
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.x),
-                        direction,
-                        Float64(self.direction.x),
-                        face,
-                        Float64(box.min.x),
-                        inverse,
-                    )
-                ),
-                Float32(face),
-                Float32(
-                    _plane_coordinate(
-                        origin,
-                        Float64(self.origin.z),
-                        direction,
-                        Float64(self.direction.z),
-                        face,
-                        Float64(box.min.z),
-                        inverse,
-                    )
-                ),
-            )
-        return Vector3(
-            Float32(
-                _plane_coordinate(
-                    origin,
-                    Float64(self.origin.x),
-                    direction,
-                    Float64(self.direction.x),
-                    face,
-                    Float64(box.min.x),
-                    inverse,
-                )
-            ),
-            Float32(
+            return vector3_from_float64(
+                face,
                 _plane_coordinate(
                     origin,
                     Float64(self.origin.y),
@@ -1173,9 +1109,59 @@ struct Ray(ImplicitlyCopyable):
                     face,
                     Float64(box.min.y),
                     inverse,
-                )
+                ),
+                _plane_coordinate(
+                    origin,
+                    Float64(self.origin.z),
+                    direction,
+                    Float64(self.direction.z),
+                    face,
+                    Float64(box.min.z),
+                    inverse,
+                ),
+            )
+        if endpoint.axis == 1:
+            return vector3_from_float64(
+                _plane_coordinate(
+                    origin,
+                    Float64(self.origin.x),
+                    direction,
+                    Float64(self.direction.x),
+                    face,
+                    Float64(box.min.x),
+                    inverse,
+                ),
+                face,
+                _plane_coordinate(
+                    origin,
+                    Float64(self.origin.z),
+                    direction,
+                    Float64(self.direction.z),
+                    face,
+                    Float64(box.min.z),
+                    inverse,
+                ),
+            )
+        return vector3_from_float64(
+            _plane_coordinate(
+                origin,
+                Float64(self.origin.x),
+                direction,
+                Float64(self.direction.x),
+                face,
+                Float64(box.min.x),
+                inverse,
             ),
-            Float32(face),
+            _plane_coordinate(
+                origin,
+                Float64(self.origin.y),
+                direction,
+                Float64(self.direction.y),
+                face,
+                Float64(box.min.y),
+                inverse,
+            ),
+            face,
         )
 
     @always_inline
@@ -1268,8 +1254,9 @@ struct Ray(ImplicitlyCopyable):
                 under one, or flattens the direction to nothing, which
                 leaves the ray no way to point.
         """
-        if not matrix.is_affine():
-            raise Error("A ray can only be carried through an affine matrix")
+        require_affine(
+            matrix, "A ray can only be carried through an affine matrix"
+        )
         var direction = matrix.transform_direction(self.direction)
         if direction.length() == 0:
             raise Error(

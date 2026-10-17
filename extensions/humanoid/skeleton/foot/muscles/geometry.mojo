@@ -14,19 +14,17 @@ Tendon meshes use a diagrammatic minimum radius. Mass does not.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.foot.chain import (
-    enlarge_tube_set,
-    tube_set_bounds,
-)
+from extensions.humanoid.skeleton.foot.chain import display_tube_set
 from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscle,
     FootMuscleDimensions,
+    require_foot_muscle,
     FootMuscleField,
     foot_muscle_dimensions,
     foot_muscle_part_label,
     is_tendon,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 
 
 def foot_muscle(
@@ -75,16 +73,17 @@ def muscle_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot muscle must be a named muscle or tendon")
+    require_foot_muscle(part)
     var label = foot_muscle_part_label(part)
-    check_detail(detail, label)
     var field = FootMuscleField(dimensions, part)
     if is_tendon(part):
         var least = 0.0018 * dimensions.foot.stature.value
-        field.tubes = enlarge_tube_set(field.tubes, least)
-        field.k = 0.0012 * dimensions.foot.stature.value
-        var box = tube_set_bounds(field.tubes, 0.004)
-        field.low = box.low
-        field.high = box.high
-    return mesh_field(field, field.low, field.high, detail, label)
+        display_tube_set(
+            field.tubes,
+            field.k,
+            field.low,
+            field.high,
+            least,
+            0.0012 * dimensions.foot.stature.value,
+        )
+    return mesh_checked(field, field.low, field.high, detail, label)

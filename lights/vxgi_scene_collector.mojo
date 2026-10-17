@@ -56,7 +56,9 @@ from materials.material import (
     TOON,
 )
 from math.bounds import Box3
+from math.sine import fraction
 from math.matrix4 import Matrix4
+from math.utils import edge_index, max3
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
@@ -156,14 +158,14 @@ def _wrapped(coordinate: Float32, mode: Wrap) -> Float32:
     if coordinate >= 0 and coordinate <= 1:
         return coordinate
     if mode == REPEAT:
-        return coordinate - floor(coordinate)
+        return fraction(coordinate)
     if mode == CLAMP:
         return 0 if coordinate < 0 else 1
     # A mirrored repeat: an odd tile runs backward.
     var tile = Int(floor(coordinate))
     if abs(tile) % 2 == 1:
         return ceil(coordinate) - coordinate
-    return coordinate - floor(coordinate)
+    return fraction(coordinate)
 
 
 def sample_texture(texture: Texture, u: Float32, v: Float32) -> FloatColor:
@@ -189,13 +191,10 @@ def sample_texture(texture: Texture, u: Float32, v: Float32) -> FloatColor:
     mv = _wrapped(mv, texture.wrap_t)
     var width = texture.width
     var height = texture.height
-    var column = max(0, min(width - 1, Int(floor(mu * Float32(width)))))
-    var row = max(
-        0,
-        min(
-            height - 1,
-            Int(floor(row_coordinate(mv, texture.flip_y) * Float32(height))),
-        ),
+    var column = edge_index(Int(floor(mu * Float32(width))), width)
+    var row = edge_index(
+        Int(floor(row_coordinate(mv, texture.flip_y) * Float32(height))),
+        height,
     )
     # `fetch` counts its row as `v` counts, so the stored row is turned
     # back first.
@@ -244,7 +243,7 @@ struct _Collector(Movable):
             var ab = pa.distance_to_squared(pb)
             var bc = pb.distance_to_squared(pc)
             var ca = pc.distance_to_squared(pa)
-            var longest = max(ab, max(bc, ca))
+            var longest = max3(ab, bc, ca)
             if longest > self.max_edge_sq:
                 if longest == ab:
                     var middle = (pa + pb) * 0.5
@@ -329,9 +328,7 @@ def _add_run(
                 assets.textures.get(info.map), at[0], at[1]
             )
             alpha *= texel.a
-            albedo = Vector3(
-                albedo.x * texel.r, albedo.y * texel.g, albedo.z * texel.b
-            )
+            albedo = albedo * Vector3(texel.r, texel.g, texel.b)
         if info.alpha_test > 0 and alpha < info.alpha_test:
             continue
         if alpha < collector.min_opacity:
@@ -345,9 +342,7 @@ def _add_run(
             var texel = sample_texture(
                 assets.textures.get(info.emissive_map), at[0], at[1]
             )
-            emissive = Vector3(
-                emissive.x * texel.r, emissive.y * texel.g, emissive.z * texel.b
-            )
+            emissive = emissive * Vector3(texel.r, texel.g, texel.b)
         collector.emit(a, b, c, albedo, emissive, info.side)
 
 

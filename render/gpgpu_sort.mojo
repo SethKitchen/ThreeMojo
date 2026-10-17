@@ -25,7 +25,9 @@ host, which runs the invocations in order, and can come in any order on
 the device, as three.js says of its own.
 """
 
+from core.ordinal import require_index_in_count, require_positive
 from materials.compute_ids import WORKGROUP_ID
+from math.utils import is_power_of_two
 from materials.compute_nodes import (
     ComputeKernel,
     ComputeNode,
@@ -42,11 +44,6 @@ comptime _SWAP_LOCAL = Float32(1)
 comptime _DISPERSE_LOCAL = Float32(2)
 comptime _FLIP_GLOBAL = Float32(3)
 comptime _DISPERSE_GLOBAL = Float32(4)
-
-
-def _is_power_of_two(n: Int) -> Bool:
-    """Return True for one, two, four and so on."""
-    return n > 0 and (n & (n - 1)) == 0
 
 
 def _log2(n: Int) -> Int:
@@ -355,9 +352,9 @@ struct BitonicSort(Movable):
         """
         if data.type != NODE_FLOAT:
             raise Error("A bitonic sort sorts a buffer of floats")
-        if data.count < 2 or not _is_power_of_two(data.count):
+        if data.count < 2 or not is_power_of_two(data.count):
             raise Error("A bitonic sort needs a power of two of elements")
-        if not _is_power_of_two(workgroup_size):
+        if not is_power_of_two(workgroup_size):
             raise Error("A bitonic sort's workgroup is a power of two")
         var count = data.count
         var dispatch = count // 2
@@ -578,8 +575,7 @@ struct CountingSort(Movable):
         Raises:
             Error: If no bin node is set, or the runner refuses a kernel.
         """
-        if len(self.nodes) == 0:
-            raise Error("A counting sort needs a bin node")
+        require_positive(len(self.nodes), "A counting sort needs a bin node")
         for at in range(len(self.nodes)):  # pragma: no branch
             runner.compute(store, self.nodes[at])
 
@@ -602,8 +598,11 @@ struct CountingSort(Movable):
         var counts = List[Int](length=self.bin_count, fill=0)
         for place in range(self.count):  # pragma: no branch
             var bin = bins[place]
-            if bin < 0 or bin >= self.bin_count:
-                raise Error("A counting sort's bin is out of range")
+            require_index_in_count(
+                bin,
+                self.bin_count,
+                "A counting sort's bin is out of range",
+            )
             counts[bin] += 1
         var offsets = List[Int](length=self.bin_count, fill=0)
         var sum = 0

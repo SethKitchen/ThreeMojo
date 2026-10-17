@@ -76,8 +76,11 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from core.scene import Scene
+from core.search import first_match
 from exporters.gltf import gltf_pixels
+from loaders.js_text import is_js_word
 from loaders.js_number import (
     js_float32_text,
     js_number_text,
@@ -292,12 +295,7 @@ def usd_name(name: String, fallback: String) -> String:
     """
     var out = String()
     for b in name.as_bytes():
-        var keep = (
-            (b >= 65 and b <= 90)
-            or (b >= 97 and b <= 122)
-            or (b >= 48 and b <= 57)
-            or b == 95
-        )
+        var keep = is_js_word(b)
         if keep:
             out += chr(Int(b))
     if out.byte_length() == 0:
@@ -460,14 +458,6 @@ def _wrap_name(wrap: Wrap) raises -> String:
     raise Error("USDZ: a texture's wrap is none of the three")
 
 
-def _has(values: List[Int], value: Int) -> Bool:
-    """Return True if a list holds a value."""
-    for v in values:
-        if v == value:
-            return True
-    return False
-
-
 struct _Exporter(Movable):
     """What three.js's `parseAsync` keeps as it goes: the names used, the
     geometry files, the materials and the textures."""
@@ -521,12 +511,12 @@ struct _Exporter(Movable):
         if material.kind != STANDARD and material.kind != PHYSICAL:
             return None
         var id = mesh.geometry.value
-        if not _has(self.geometry_ids, id):
+        if first_match(self.geometry_ids, id) < 0:
             self.geometry_ids.append(id)
             self.geometry_files.append(
                 usda_geometry(assets.geometries.get(mesh.geometry))
             )
-        if not _has(self.materials, mesh.material.value):
+        if first_match(self.materials, mesh.material.value) < 0:
             self.materials.append(mesh.material.value)
         var out = self.xform(node, name, matrix)
         out.add_metadata(
@@ -645,11 +635,12 @@ struct _Exporter(Movable):
         transform and a texture, with a scale when `color` is not empty.
         """
         ref texture = assets.textures.get(id)
-        if not texture.channel.is_valid():
-            raise Error("USDZ: a texture's channel is not valid")
+        require_valid(
+            texture.channel.is_valid(), "USDZ: a texture's channel is not valid"
+        )
         var wrap_s = _wrap_name(texture.wrap_s)
         var wrap_t = _wrap_name(texture.wrap_t)
-        if not _has(self.textures, id.value):
+        if first_match(self.textures, id.value) < 0:
             self.textures.append(id.value)
         var uv = "st"
         if texture.channel.value > 0:
@@ -1061,8 +1052,11 @@ def _build(
 def _file(mut meshes: List[List[_Drawn]], node: NodeId, drawn: _Drawn) raises:
     """File a mesh under its node, refusing a node the scene has not
     got."""
-    if node.value < 0 or node.value >= len(meshes):
-        raise Error("USDZ: a mesh names a node that is not in the scene")
+    require_index_in_count(
+        node.value,
+        len(meshes),
+        "USDZ: a mesh names a node that is not in the scene",
+    )
     meshes[node.value].append(drawn)
 
 
@@ -1091,8 +1085,9 @@ def usdz_files(
             has a wrap or a channel that is not valid, or
             `max_texture_size` is below one.
     """
-    if options.max_texture_size < 1:
-        raise Error("USDZ: a max texture size must be one or more")
+    require_positive(
+        options.max_texture_size, "USDZ: a max texture size must be one or more"
+    )
     var count = scene.count()
     var meshes = List[List[_Drawn]](length=count, fill=List[_Drawn]())
     for mesh in scene.meshes:

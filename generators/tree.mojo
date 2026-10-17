@@ -21,8 +21,9 @@ The branching is fixed by the seed. The same seed and parameters give the
 same geometry as three.js, number for number up to `Float32` rounding.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_non_negative, require_positive
+from geometries.surface import position_normal_surface
 from generators.utils import (
     Vec3d,
     check_finite,
@@ -30,7 +31,8 @@ from generators.utils import (
     meters,
     radians,
 )
-from math.utils import SeededRandom
+from math.utils import SeededRandom, clamp, js_round_int, mix_delta
+from math.vector3 import append_float64_xyz
 from std.math import atan2, cos, floor, pi, pow, sin
 from units.si import (
     Angle,
@@ -171,14 +173,18 @@ struct TreeParameters(Copyable, Movable):
                 positive, the taper curve is negative, an active root flare
                 has no positive fraction, or a number is not finite.
         """
-        if self.levels < 1:
-            raise Error("A tree needs one level at least")
-        if len(self.children) == 0:
-            raise Error("A tree needs a child count for one level at least")
-        if len(self.branch_angle) == 0:
-            raise Error("A tree needs a branch angle for one level at least")
-        if len(self.gnarl) == 0:
-            raise Error("A tree needs a gnarl for one level at least")
+        require_positive(self.levels, "A tree needs one level at least")
+        require_positive(
+            len(self.children),
+            "A tree needs a child count for one level at least",
+        )
+        require_positive(
+            len(self.branch_angle),
+            "A tree needs a branch angle for one level at least",
+        )
+        require_positive(
+            len(self.gnarl), "A tree needs a gnarl for one level at least"
+        )
         for level in range(len(self.children)):  # pragma: no branch
             if self.children[level] < 0:
                 raise Error("A child count must be zero or more")
@@ -206,10 +212,12 @@ struct TreeParameters(Copyable, Movable):
         check_finite(self.trunk_clear, "A trunk clearance")
         if meters(self.section_length) <= 0:
             raise Error("A tree's section length must be positive")
-        if self.radius_exponent <= 0:
-            raise Error("A tree's radius exponent must be positive")
-        if self.taper_curve < 0:
-            raise Error("A tree's taper curve must be zero or more")
+        require_positive(
+            self.radius_exponent, "A tree's radius exponent must be positive"
+        )
+        require_non_negative(
+            self.taper_curve, "A tree's taper curve must be zero or more"
+        )
         if self.root_flare > 0 and self.flare_frac <= 0:
             raise Error("An active root flare needs a positive flare fraction")
 
@@ -224,7 +232,7 @@ def _finite_vector(v: Vec3d, what: String) raises:
 def _direction(v: Vec3d) raises -> Vec3d:
     """Normalize a finite, nonzero generated direction."""
     _finite_vector(v, "A generated tree direction")
-    if v.x == 0 and v.y == 0 and v.z == 0:
+    if v == Vec3d(0, 0, 0):
         raise Error("A generated tree direction must be nonzero")
     return v.normalized()
 
@@ -258,7 +266,7 @@ def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
     `_grow` constructs a new perpendicular normal for every child tube.
     """
     check_finite(t, "A generated child fraction")
-    var f = max(0.0, min(0.999, t)) * Float64(len(rings) - 1)
+    var f = clamp(t, 0.0, 0.999) * Float64(len(rings) - 1)
     var i = Int(floor(f))
     var frac = f - Float64(i)
     ref a = rings[i]
@@ -267,13 +275,8 @@ def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
         a.position.lerp(b.position, frac),
         _direction(a.tangent.lerp(b.tangent, frac)),
         _direction(a.normal.lerp(b.normal, frac)),
-        a.radius + (b.radius - a.radius) * frac,
+        mix_delta(a.radius, b.radius, frac),
     )
-
-
-def _js_round(value: Float64) -> Int:
-    """Return JavaScript's `Math.round`: halves go up."""
-    return Int(floor(value + 0.5))
 
 
 def _signed(mut random: SeededRandom) -> Float64:
@@ -310,8 +313,8 @@ def _grow(
     check_finite(length, "A generated branch length")
     # Clamp in floating point before converting to Int. A finite length
     # and step can have a quotient far outside the integer range.
-    var sections = _js_round(
-        max(3.0, min(24.0, length / meters(p.section_length)))
+    var sections = js_round_int(
+        clamp(length / meters(p.section_length), 3.0, 24.0)
     )
     var radial = max(3, p.radial_segments - level)
     var step = length / Float64(sections)
@@ -396,8 +399,7 @@ def _bake(tubes: List[TreeTube]) raises -> BufferGeometry:
             _join(index, offset + r * radial, radial)
         offset += len(rings) * radial
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     geometry.set_index(index^)
     return geometry^
 
@@ -429,9 +431,7 @@ def _write_ring(
         positions.append(_position32(ring.position.x + nx * ring.radius))
         positions.append(_position32(ring.position.y + ny * ring.radius))
         positions.append(_position32(ring.position.z + nz * ring.radius))
-        normals.append(Float32(nx))
-        normals.append(Float32(ny))
-        normals.append(Float32(nz))
+        append_float64_xyz(normals, nx, ny, nz)
 
 
 def _join(mut index: List[Int], a: Int, radial: Int):

@@ -18,18 +18,19 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = vessel_distance(dims, FEMORAL_ARTERY, Vector3(0, 0.2, 0.02))
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
+    display_tube_chain,
     field_gradient,
     mix_point,
-    tube_chain_bounds,
+    tube_root_bounds,
     tube_chain_distance,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -45,9 +46,23 @@ struct VesselPart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= SMALL_SAPHENOUS_VEIN.value
+        return ordinal_valid(self.value, SMALL_SAPHENOUS_VEIN.value)
+
+
+def require_vessel_part(part: VesselPart) raises:
+    """Refuse a vessel that is not named.
+
+    Nothing. The call returns when the vessel is named.
+
+    Args:
+        part: The vessel.
+
+    Raises:
+        Error: If the vessel is not a named artery or vein.
+    """
+    require_valid(
+        part.is_valid(), "A vessel part must be a named artery or vein"
+    )
 
 
 comptime FEMORAL_ARTERY = VesselPart(0)
@@ -87,8 +102,7 @@ struct VesselField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A vessel part must be a named artery or vein")
+        require_vessel_part(part)
         var S = dimensions.stature.value
         var chain: TubeChain
         if part == FEMORAL_ARTERY:
@@ -114,7 +128,7 @@ struct VesselField(DistanceField, ImplicitlyCopyable):
         self.chain = chain
         self.k = Float32(0.00025)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(chain, Float32(0.003) + chain.r0)
+        var box = tube_root_bounds(chain)
         self.low = box.low
         self.high = box.high
 
@@ -136,16 +150,15 @@ def _display_vessel_field(
     """Return a vessel with a diagrammatic minimum mesh radius."""
     var field = VesselField(dimensions, part)
     var least = 0.0018 * dimensions.stature.value
-    field.chain.r0 = max(field.chain.r0, least)
-    field.chain.r1 = max(field.chain.r1, least)
-    field.chain.r2 = max(field.chain.r2, least)
-    field.chain.r3 = max(field.chain.r3, least)
-    field.chain.r4 = max(field.chain.r4, least)
-    field.k = 0.0008 * dimensions.stature.value
-    field.epsilon = Float32(0.25) * least
-    var box = tube_chain_bounds(field.chain, 0.008 + field.chain.r2)
-    field.low = box.low
-    field.high = box.high
+    display_tube_chain(
+        field.chain,
+        field.k,
+        field.epsilon,
+        field.low,
+        field.high,
+        least,
+        dimensions.stature.value,
+    )
     return field
 
 
@@ -215,8 +228,7 @@ def is_artery(part: VesselPart) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A vessel part must be a named artery or vein")
+    require_vessel_part(part)
     return part.value <= FIBULAR_ARTERY.value
 
 

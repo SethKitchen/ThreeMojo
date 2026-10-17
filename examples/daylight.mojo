@@ -12,7 +12,13 @@ inside. The sun position is a uniform. The sphere sits in the light so
 the sky has something to shine on.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
@@ -23,13 +29,9 @@ from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.sky import Sky
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.math import cos, pi, sin
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from std.math import cos, sin
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/sky.png"
 comptime WIDTH = 240
@@ -39,13 +41,9 @@ comptime DELAY_MS = 55
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(8, 12, 20))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(8, 12, 20))
     var assets = Assets()
     var scene = Scene()
 
@@ -67,13 +65,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(180, 200, 230), 0.45))
     scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.4))
 
-    var camera = PerspectiveCamera(
-        Angle(50.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(80.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.25, 1.5),
+        Vector3(0, 0.45, -1.6),
+        field_of_view=Angle(50.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(80.0, METER),
     )
-    camera.place(Vector3(0, 0.25, 1.5), Vector3(0, 0.45, -1.6))
 
     var frame_clock = Clock()
     frame_clock.start()
@@ -90,12 +90,4 @@ def main() raises:
         scene.update()
         frames.append(renderer.render(scene, assets, camera))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

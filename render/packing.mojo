@@ -3,8 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""How a depth or a distance is written into the bytes of a pixel: three.js's
+"""How a depth, a distance, or a normal is written into a pixel: three.js's
 `packing.glsl`, and the four `DepthPacking` modes of `MeshDepthMaterial`.
+
+A unit normal is packed into zero to one per axis by `packed_normal`,
+three.js's `packNormalToRGB`.
 
 A byte holds 256 steps. A depth written as one gray therefore keeps only
 eight bits of itself. The packings spread one number across two, three or
@@ -34,6 +37,7 @@ limits, and explicit zero and nonfinite rules.
 from math.norm import length3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from math.finite import require_finite_group, require_non_negative_finite
 from std.math import floor, isfinite, max, min, sqrt
 
 # three.js's `PackUpscale`, `Inv255`, `ShiftRight8` and `UnpackDownscale`.
@@ -278,6 +282,22 @@ def normalized_distance(
     return min(max(fraction, Float32(0)), Float32(1))
 
 
+def packed_normal(facing: Vector3) -> Vector3:
+    """Return a unit normal mapped into zero to one per axis, three.js's
+    `packNormalToRGB`: each component halved and moved up by a half, so a
+    surface square-on to the camera is (0.5, 0.5, 1).
+
+    Args:
+        facing: The unit normal, in the space it is to be shown in.
+
+    Returns:
+        The three channels, before quantization.
+    """
+    return Vector3(
+        facing.x * 0.5 + 0.5, facing.y * 0.5 + 0.5, facing.z * 0.5 + 0.5
+    )
+
+
 def packed_distance_fragment(
     world: Vector3, reference: Vector3, near: Float32, far: Float32
 ) -> SIMD[DType.float32, 4]:
@@ -317,13 +337,12 @@ def check_distance_range(
             greater than `near`, which would divide by zero or turn the
             fraction around.
     """
-    if (
-        not isfinite(reference.x)
-        or not isfinite(reference.y)
-        or not isfinite(reference.z)
-    ):
-        raise Error("A distance's reference position must be finite")
-    if not isfinite(near) or near < 0:
-        raise Error("A near distance must be finite and not negative")
+    require_finite_group(
+        reference.is_finite(),
+        "A distance's reference position must be finite",
+    )
+    require_non_negative_finite(
+        Float64(near), "A near distance must be finite and not negative"
+    )
     if not isfinite(far) or far <= near:
         raise Error("A far distance must be finite and past the near one")

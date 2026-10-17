@@ -8,8 +8,8 @@ import coverage_loop_proofs as loops
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = 'renderers/renderer'
-CURRENT_RENDERER_SHA256 = '08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45'
-CURRENT_CAP_LINE = 3886
+CURRENT_RENDERER_SHA256 = '5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9'
+CURRENT_CAP_LINE = 4049
 
 
 class RendererCapLoopTests(unittest.TestCase):
@@ -28,19 +28,58 @@ class RendererCapLoopTests(unittest.TestCase):
         row = proof[CURRENT_CAP_LINE]
         self.assertEqual((row['required'], row['impossible']), ('T', 'F'))
         self.assertEqual((row['minimum_cardinality'], row['maximum_cardinality']), (2, 64))
-        self.assertEqual(row['dependency_sha256'], {
-            **loops.STRAND_CAP_SOURCES, 'renderers/renderer.mojo': CURRENT_RENDERER_SHA256})
+        self.assertEqual(row['dependency_sha256'], loops.STRAND_CAP_FORMATTED_SUCCESSOR[0])
         self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'other/renderer'), {})
 
     def test_exact_endpoint_table_preserves_the_historical_theorem(self):
         self.assertEqual(loops.STRAND_CAP_RENDERER_ENDPOINTS, {
             'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5': 3757,
-            CURRENT_RENDERER_SHA256: CURRENT_CAP_LINE,
+            '08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45': 3886,
         })
         self.assertEqual(loops.STRAND_CAP_SOURCES['renderers/renderer.mojo'],
                          'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5')
         self.assertEqual(loops.file_sha256(self.root/'renderers/renderer.mojo'),
                          CURRENT_RENDERER_SHA256)
+
+    def test_endpoint_selection_never_admits_mixed_pairs(self):
+        from unittest.mock import patch
+        current, line = loops.STRAND_CAP_FORMATTED_SUCCESSOR
+        self.assertEqual(line, CURRENT_CAP_LINE)
+        self.assertEqual(current['renderers/renderer.mojo'], CURRENT_RENDERER_SHA256)
+        # Isolate descriptor selection. These mocked hashes are not receipt evidence.
+        for renderer, old_line in loops.STRAND_CAP_RENDERER_ENDPOINTS.items():
+            historical = dict(loops.STRAND_CAP_SOURCES,
+                              **{'renderers/renderer.mojo': renderer})
+            for producer, consumer, expected in (
+                    (historical, historical, {old_line}),
+                    (current, current, {CURRENT_CAP_LINE}),
+                    (historical, current, set()), (current, historical, set())):
+                observed = dict(historical,
+                    **{'objects/line_segments2.mojo': producer['objects/line_segments2.mojo'],
+                       'renderers/renderer.mojo': consumer['renderers/renderer.mojo']})
+                def digest(path, **kwargs):
+                    return observed[path.relative_to(self.root).as_posix()]
+                with self.subTest(renderer=renderer, expected=expected), patch.object(loops, 'file_sha256', digest):
+                    self.assertEqual(set(loops.strand_cap_loops(self.root)), expected)
+
+    def test_first_pr760_pair_remains_unchanged(self):
+        from unittest.mock import patch
+        first, line = loops.STRAND_CAP_PAIRED_SUCCESSOR
+        self.assertEqual(first['renderers/renderer.mojo'],
+                         '2491b99a982cd4bc49b3573d3c6db8313bfdd47372e693e932c03c27d0ff127d')
+        def digest(path, **kwargs):
+            return first[path.relative_to(self.root).as_posix()]
+        with patch.object(loops, 'file_sha256', digest):
+            self.assertEqual(set(loops.strand_cap_loops(self.root)), {line})
+
+    def test_symlinked_producer_is_not_a_physical_endpoint(self):
+        path = self.root/'objects/line_segments2.mojo'
+        raw = path.read_bytes()
+        other = self.root/'retained.mojo'
+        other.write_bytes(raw)
+        path.unlink()
+        path.symlink_to(other)
+        self.assertEqual(loops.reviewed_nonempty_loops(self.root, MODULE), {})
 
     def test_strand_cap_assignment_range_and_unrelated_bytes_revoke(self):
         path = self.root/'renderers/renderer.mojo'
@@ -144,17 +183,17 @@ class RendererCapLoopTests(unittest.TestCase):
                     self.root, MODULE, include_roots=include_roots), {})
 
     def test_manifest_changes_only_the_one_impossible_outcome(self):
-        raw = (b'L renderers/renderer 3885\nB renderers/renderer 3886\n'
-               b'B renderers/renderer 3887\nB renderers/renderer 3757\n'
+        raw = (b'L renderers/renderer 4046\nB renderers/renderer 4049\n'
+               b'B renderers/renderer 4048\nB renderers/renderer 3757\n'
                b'B renderers/renderer 3810\n')
         proof = loops.reviewed_nonempty_loops(self.root, MODULE)[CURRENT_CAP_LINE]
         proof['module'] = MODULE
         envelope = {'sha256': '0' * 64, 'receipt': {
             'manifest_sha256': loops.sha256(raw), 'proofs': [proof]}}
         result = loops.masked_manifest(raw, envelope).decode()
-        self.assertIn('R renderers/renderer 3886 T reviewed-nonempty-range 1\n', result)
-        self.assertIn('L renderers/renderer 3885\n', result)
-        self.assertIn('B renderers/renderer 3887\n', result)
+        self.assertIn('R renderers/renderer 4049 T reviewed-nonempty-range 1\n', result)
+        self.assertIn('L renderers/renderer 4046\n', result)
+        self.assertIn('B renderers/renderer 4048\n', result)
         self.assertIn('B renderers/renderer 3757\n', result)
         self.assertIn('B renderers/renderer 3810\n', result)
         self.assertNotIn('R renderers/renderer 3757 ', result)

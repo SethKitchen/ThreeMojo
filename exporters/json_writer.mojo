@@ -9,7 +9,8 @@
 `JsonWriter` is a cursor over the text it builds. `begin_object` and
 `begin_array` open a container, `end_object` and `end_array` close it,
 `key` names the next value in an object, and `string`, `number`,
-`integer`, `boolean`, `null` and `raw` write a value. The commas and the
+`integer`, `boolean`, `null`, `raw`, `numbers`, `integers` and
+`strings` write a value. `metadata` writes a three.js metadata object. The commas and the
 colons are the writer's: a caller says what goes where, and the writer
 refuses what JSON has no place for -- a value in an object without a key,
 a key outside an object, a close that does not match the open, a second
@@ -176,6 +177,32 @@ struct JsonWriter(Movable):
         """
         self._write(format_float32(value))
 
+    def metadata(
+        mut self, version: Float32, type_name: String, generator: String = ""
+    ) raises:
+        """Write a three.js `metadata` object.
+
+        Nothing. The metadata object is written into this text.
+
+        Args:
+            version: The format version.
+            type_name: The `type` field.
+            generator: The `generator` field. An empty string omits it.
+
+        Raises:
+            Error: If a value has no place here, or `version` is not finite.
+        """
+        self.key("metadata")
+        self.begin_object()
+        self.key("version")
+        self.number(version)
+        self.key("type")
+        self.string(type_name)
+        if generator.byte_length() > 0:
+            self.key("generator")
+            self.string(generator)
+        self.end_object()
+
     def integer(mut self, value: Int) raises:
         """Write a whole number.
 
@@ -219,6 +246,74 @@ struct JsonWriter(Movable):
             Error: If a value has no place here.
         """
         self._write(json)
+
+    def raw_array(mut self, key: String, entries: List[String]) raises:
+        """Write an array of JSON texts under `key`, or nothing when empty.
+
+        Args:
+            key: The key.
+            entries: One JSON text per element.
+
+        Raises:
+            Error: If no object is open, or a key is waiting for its value.
+        """
+        if len(entries) == 0:
+            return
+        self.key(key)
+        self.begin_array()
+        # Empty arrays return above, so this loop has an entry.
+        for entry in entries:  # pragma: no branch
+            self.raw(entry)
+        self.end_array()
+
+    def numbers(mut self, values: List[Float32]) raises:
+        """Write `values` as one JSON array.
+
+        Nothing.
+
+        Args:
+            values: The numbers, in order. An empty list writes `[]`.
+
+        Raises:
+            Error: If one number is not finite, or an array has no place
+                here.
+        """
+        self.begin_array()
+        for value in values:
+            self.number(value)
+        self.end_array()
+
+    def integers(mut self, values: List[Int]) raises:
+        """Write `values` as one JSON array of whole numbers.
+
+        Nothing.
+
+        Args:
+            values: The numbers, in order. An empty list writes `[]`.
+
+        Raises:
+            Error: If an array has no place here.
+        """
+        self.begin_array()
+        for value in values:
+            self.integer(value)
+        self.end_array()
+
+    def strings(mut self, values: List[String]) raises:
+        """Write `values` as one JSON array of strings.
+
+        Nothing.
+
+        Args:
+            values: The strings, in order. An empty list writes `[]`.
+
+        Raises:
+            Error: If an array has no place here.
+        """
+        self.begin_array()
+        for value in values:
+            self.string(value)
+        self.end_array()
 
     def finish(self) raises -> String:
         """Return the text, once its root value is complete.

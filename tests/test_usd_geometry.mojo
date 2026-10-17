@@ -67,7 +67,7 @@ def _slice(values: List[Float64], start: Int, end: Int) -> List[Float64]:
 def _plus(a: List[Float64], b: List[Float64]) -> List[Float64]:
     """Return one list after another."""
     var out = a.copy()
-    out.extend(b.copy())
+    out.extend(Span(b))
     return out^
 
 

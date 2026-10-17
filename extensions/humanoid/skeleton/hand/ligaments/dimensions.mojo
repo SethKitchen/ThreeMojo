@@ -22,7 +22,8 @@ authored in template centimeters. They are not a cited width table.
     var d = hand_ligament_distance(dims, FLEXOR_RETINACULUM, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.arm.ligaments.dimensions import joint_pad
 from extensions.humanoid.skeleton.field import cross
@@ -58,9 +59,7 @@ struct HandLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= TRIANGULAR_FIBROCARTILAGE.value
+        return ordinal_valid(self.value, TRIANGULAR_FIBROCARTILAGE.value)
 
 
 comptime FLEXOR_RETINACULUM = HandLigament(0)
@@ -84,8 +83,6 @@ def hand_ligament_label(part: HandLigament) -> String:
         A short American English label, or `"hand ligament"` when
         `part` is not named.
     """
-    if not part.is_valid():
-        return "hand ligament"
     var names = List[String]()
     names.append("flexor retinaculum")
     names.append("extensor retinaculum")
@@ -94,7 +91,7 @@ def hand_ligament_label(part: HandLigament) -> String:
     names.append("volar plates")
     names.append("joint cartilage")
     names.append("triangular fibrocartilage")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand ligament")
 
 
 def named_hand_ligaments() -> List[HandLigament]:
@@ -125,8 +122,7 @@ def hand_ligament_tissue(part: HandLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A hand ligament must be a named part")
+    require_valid(part.is_valid(), "A hand ligament must be a named part")
     if part == TRIANGULAR_FIBROCARTILAGE:
         return meniscus_tissue()
     if part == JOINT_CARTILAGE:
@@ -169,8 +165,7 @@ def hand_ligament_field(
     """
     dimensions.validate()
     _ = hand_ligament_tissue(part)
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var f = dimensions.frame
     var up = f.hand_direction(0, 1, 0)
     var palm = f.hand_direction(0, 0, 1)

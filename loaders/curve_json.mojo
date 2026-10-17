@@ -59,8 +59,8 @@ from math.curve3 import (
     quadratic_bezier3,
 )
 from math.path import Path, Shape
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector2 import Vector2, vector2_from_float64
+from math.vector3 import Vector3, vector3_from_float64
 from units.si import Angle, Length, METER, RADIAN
 
 # three.js 0.180's JSON format version, in every curve's `metadata`.
@@ -78,24 +78,11 @@ def _head(
     """Write three.js's `Curve.toJSON` fields: the metadata, unless a
     library leaves it out, the arc length divisions and the type."""
     if metadata:
-        _metadata(writer)
+        writer.metadata(CURVE_FORMAT, "Curve", "Curve.toJSON")
     writer.key("arcLengthDivisions")
     writer.integer(ARC_LENGTH_DIVISIONS)
     writer.key("type")
     writer.string(type_name)
-
-
-def _metadata(mut writer: JsonWriter) raises:
-    """Write a curve's `metadata`."""
-    writer.key("metadata")
-    writer.begin_object()
-    writer.key("version")
-    writer.number(CURVE_FORMAT)
-    writer.key("type")
-    writer.string("Curve")
-    writer.key("generator")
-    writer.string("Curve.toJSON")
-    writer.end_object()
 
 
 def _vector2(mut writer: JsonWriter, key: String, v: Vector2) raises:
@@ -435,9 +422,8 @@ def read_curve(doc: JsonDocument, node: Int) raises -> Curve:
             if doc.kind(xy) != ARRAY or doc.length(xy) != 2:
                 raise Error("Curve JSON: a spline point must be [x, y]")
             points.append(
-                Vector2(
-                    Float32(doc.number(doc.at(xy, 0))),
-                    Float32(doc.number(doc.at(xy, 1))),
+                vector2_from_float64(
+                    doc.number(doc.at(xy, 0)), doc.number(doc.at(xy, 1))
                 )
             )
         return spline(points^)
@@ -579,10 +565,10 @@ def read_curve3(doc: JsonDocument, node: Int) raises -> Curve3:
             if doc.kind(xyz) != ARRAY or doc.length(xyz) != 3:
                 raise Error("Curve JSON: a spline point must be [x, y, z]")
             points.append(
-                Vector3(
-                    Float32(doc.number(doc.at(xyz, 0))),
-                    Float32(doc.number(doc.at(xyz, 1))),
-                    Float32(doc.number(doc.at(xyz, 2))),
+                vector3_from_float64(
+                    doc.number(doc.at(xyz, 0)),
+                    doc.number(doc.at(xyz, 1)),
+                    doc.number(doc.at(xyz, 2)),
                 )
             )
         return catmull_rom3(

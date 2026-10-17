@@ -47,12 +47,22 @@ reads them at: the image sizes and offsets that libultrahdr writes.
   three.js gives an image of `NaN`s.
 """
 
+from core.binary import (
+    big_endian_u16,
+    big_endian_u32,
+    copy_bytes,
+    little_endian_u32,
+)
+from core.ordinal import require_non_negative
+from loaders.bytes import bytes_match
 from loaders.js_number import js_log2, js_parse_float, js_pow
 from loaders.xml import XmlDocument, parse_xml
 from render.float_image import FloatImage
 from render.jpeg import decode as decode_jpeg
 from render.png import DecodedImage
-from std.math import floor, isfinite, nan, sqrt
+from math.finite import require_finite
+from math.utils import mix_bilinear
+from std.math import floor, nan, sqrt
 from std.pathlib import Path
 
 # The name that starts the XMP of an APP1 segment.
@@ -112,38 +122,11 @@ struct UltraHdrImage(Movable):
         self.metadata = metadata^
 
 
-def _u16(bytes: List[UInt8], at: Int) -> Int:
-    """Return a big-endian 16-bit number."""
-    return (Int(bytes[at]) << 8) | Int(bytes[at + 1])
-
-
 def _u32(bytes: List[UInt8], at: Int, little: Bool) -> Int:
-    """Return a 32-bit number."""
+    """Return a 32-bit number in the file's byte order."""
     if little:
-        return (
-            Int(bytes[at])
-            | (Int(bytes[at + 1]) << 8)
-            | (Int(bytes[at + 2]) << 16)
-            | (Int(bytes[at + 3]) << 24)
-        )
-    return (
-        (Int(bytes[at]) << 24)
-        | (Int(bytes[at + 1]) << 16)
-        | (Int(bytes[at + 2]) << 8)
-        | Int(bytes[at + 3])
-    )
-
-
-def _starts_with(bytes: List[UInt8], at: Int, end: Int, text: String) -> Bool:
-    """Return True if the bytes from `at` start with `text`."""
-    var t = text.as_bytes()
-    if at + len(t) > end:
-        return False
-    # The texts are not empty. The loop always runs.
-    for i in range(len(t)):  # pragma: no branch
-        if bytes[at + i] != t[i]:
-            return False
-    return True
+        return little_endian_u32(bytes, at)
+    return big_endian_u32(bytes, at)
 
 
 def _js_number(text: String) -> Float64:
@@ -265,24 +248,28 @@ def _read_segments(
         # The scan, or the end: no more segments to read.
         if marker == 0xDA or marker == 0xD9:
             return
-        var length = _u16(bytes, at + 2)
+        var length = big_endian_u16(bytes, at + 2)
         var payload = at + 4
         var stop = at + 2 + length
         if length < 2 or stop > end:
             raise Error("UltraHDR: a JPEG segment runs past the file")
-        if marker == 0xE1 and _starts_with(bytes, payload, stop, XMP_NAMESPACE):
+        if marker == 0xE1 and bytes_match(
+            Span(bytes), payload, stop, XMP_NAMESPACE
+        ):
             var text = String(
                 from_utf8=Span(bytes)[
                     payload + len(XMP_NAMESPACE.as_bytes()) + 1 : stop
                 ]
             )
             _read_xmp(text, metadata)
-        elif marker == 0xE2 and _starts_with(bytes, payload, stop, "MPF\0"):
+        elif marker == 0xE2 and bytes_match(
+            Span(bytes), payload, stop, "MPF\0"
+        ):
             # three.js's offsets are from the segment's length field.
             var base = at + 2
             if base + _MPF_ENTRIES + 24 > stop:
                 raise Error("UltraHDR: the MPF segment is cut short")
-            var little = _starts_with(bytes, base + 6, stop, "II*\0")
+            var little = bytes_match(Span(bytes), base + 6, stop, "II*\0")
             images.primary_size = _u32(bytes, base + _MPF_ENTRIES, little)
             images.primary_offset = _u32(bytes, base + _MPF_ENTRIES + 4, little)
             images.gain_size = _u32(bytes, base + _MPF_ENTRIES + 16, little)
@@ -299,7 +286,7 @@ def _slice(bytes: List[UInt8], offset: Int, size: Int) raises -> List[UInt8]:
     """Return one of the two images, checked against the file."""
     if size < 1 or offset + size > len(bytes):
         raise Error("UltraHDR: an image of the MPF index runs past the file")
-    return List[UInt8](bytes[offset : offset + size])
+    return copy_bytes(bytes, offset, size)
 
 
 def scale_gain_map(gain: DecodedImage, width: Int, height: Int) -> List[UInt8]:
@@ -336,11 +323,8 @@ def scale_gain_map(gain: DecodedImage, width: Int, height: Int) -> List[UInt8]:
                 var b = Float64(gain.pixels[(y0 * gain.width + x1) * 4 + c])
                 var d = Float64(gain.pixels[(y1 * gain.width + x0) * 4 + c])
                 var e = Float64(gain.pixels[(y1 * gain.width + x1) * 4 + c])
-                var top = a + (b - a) * tx
-                var bottom = d + (e - d) * tx
-                out[(y * width + x) * 4 + c] = UInt8(
-                    Int(floor(top + (bottom - top) * ty + 0.5))
-                )
+                var sample = mix_bilinear(a, b, d, e, tx, ty)
+                out[(y * width + x) * 4 + c] = UInt8(Int(floor(sample + 0.5)))
     return out^
 
 
@@ -390,10 +374,10 @@ def apply_gain_map(
         m.hdr_capacity_min,
         m.hdr_capacity_max,
     ]:
-        if not isfinite(value):
-            raise Error(
-                "UltraHDR: a number of the gain map's XMP is not finite"
-            )
+        require_finite(
+            Float64(value),
+            "UltraHDR: a number of the gain map's XMP is not finite",
+        )
     if m.hdr_capacity_max == m.hdr_capacity_min:
         raise Error("UltraHDR: the HDR capacity range must not be zero")
     var width = sdr.width
@@ -450,8 +434,9 @@ def parse_ultrahdr(bytes: List[UInt8]) raises -> UltraHdrImage:
         _read_segments(bytes, images.gain_offset, end, metadata, images)
     if metadata.version.byte_length() == 0:
         raise Error("UltraHDR: not a valid UltraHDR image: no hdrgm:Version")
-    if images.gain_offset < 0:
-        raise Error("UltraHDR: there is no MPF index of the two images")
+    require_non_negative(
+        images.gain_offset, "UltraHDR: there is no MPF index of the two images"
+    )
     var sdr = decode_jpeg(
         _slice(bytes, images.primary_offset, images.primary_size)
     )

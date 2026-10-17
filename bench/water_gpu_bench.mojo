@@ -22,6 +22,7 @@ frame. The CPU rows run fewer frames, because each takes over a second.
 The numbers describe the machine that runs it.
 """
 
+from tools._bench_timing import _percentile, _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -54,22 +55,6 @@ comptime WARMUP = 2
 comptime WIDTH = 1920
 comptime HEIGHT = 1080
 comptime BUDGET_MS = 1000.0 / 60.0
-
-
-def _sorted(var times: List[Int]) -> List[Int]:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
-    return times^
-
-
-def _percentile(times: List[Int], fraction: Float64) -> Float64:
-    # Nearest rank on a sorted list.
-    var rank = Int(fraction * Float64(len(times)) + 0.999999) - 1
-    rank = max(0, min(rank, len(times) - 1))
-    return Float64(times[rank]) / 1e6
 
 
 def _report(label: String, var times: List[Int]) -> String:

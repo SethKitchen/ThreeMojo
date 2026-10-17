@@ -19,15 +19,18 @@ from math.utils import (
     floor_power_of_two,
     inverse_lerp,
     is_power_of_two,
+    glsl_sign,
     lerp,
     map_linear,
+    mix_bilinear,
+    mix_trilinear,
     pingpong,
     smooth_step,
     smootherstep,
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import pi, sqrt
+from std.math import nan, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -250,7 +253,10 @@ def test_box2() raises:
 
 
 def test_scalar_helpers() raises:
-    assert_equal(clamp(5, 0, 1), Float32(1))
+    assert_equal(clamp(Float32(5), Float32(0), Float32(1)), Float32(1))
+    assert_equal(clamp(-3, 0, 4), 0)
+    assert_equal(clamp(2, 0, 4), 2)
+    assert_equal(clamp(9, 0, 4), 4)
     assert_equal(lerp(2, 4, 0.5), Float32(3))
     assert_equal(inverse_lerp(2, 4, 3), Float32(0.5))
     assert_equal(inverse_lerp(2, 2, 3), Float32(0))
@@ -264,6 +270,14 @@ def test_scalar_helpers() raises:
     assert_equal(smootherstep(2, 0, 1), Float32(1))
     assert_equal(smootherstep(0.5, 0, 1), Float32(0.5))
     assert_equal(smooth_step(0.5, 0, 1), Float32(0.5))
+    assert_equal(glsl_sign(Float32(2)), Float32(1))
+    assert_equal(glsl_sign(Float32(-2)), Float32(-1))
+    assert_equal(glsl_sign(Float32(0)), Float32(0))
+    assert_equal(glsl_sign(nan[DType.float32]()), Float32(0))
+    assert_equal(glsl_sign(Float64(2)), Float64(1))
+    assert_equal(glsl_sign(Float64(-2)), Float64(-1))
+    assert_equal(glsl_sign(Float64(0)), Float64(0))
+    assert_equal(glsl_sign(nan[DType.float64]()), Float64(0))
     assert_true(is_power_of_two(8))
     assert_false(is_power_of_two(6))
     assert_false(is_power_of_two(0))
@@ -304,6 +318,84 @@ def test_the_seeded_generator_matches_three_js() raises:
     for _ in range(50):
         var n = other.int_in(1, 3)
         assert_true(n >= 1 and n <= 3)
+
+
+def test_a_bilinear_mix_goes_across_then_down() raises:
+    assert_equal(mix_bilinear(0, 10, 0, 0, 0.5, 0), 5)
+    assert_equal(mix_bilinear(0, 0, 8, 8, 0, 0.25), 2)
+    assert_equal(mix_bilinear(1, 3, 5, 9, 0.5, 0.5), 4.5)
+    assert_equal(
+        mix_bilinear(
+            Float32(0),
+            Float32(10),
+            Float32(0),
+            Float32(0),
+            Float32(0.5),
+            Float32(0),
+        ),
+        Float32(5),
+    )
+    assert_equal(
+        mix_bilinear(
+            Float32(1),
+            Float32(3),
+            Float32(5),
+            Float32(9),
+            Float32(0.5),
+            Float32(0.5),
+        ),
+        Float32(4.5),
+    )
+
+
+def test_a_trilinear_mix_goes_across_then_down_then_deep() raises:
+    assert_equal(
+        mix_trilinear[DType.float64, 1](
+            Float64(0),
+            Float64(8),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0.25),
+            Float64(0),
+            Float64(0),
+        ),
+        Float64(2),
+    )
+    assert_equal(
+        mix_trilinear[DType.float64, 1](
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(0),
+            Float64(8),
+            Float64(1),
+            Float64(1),
+            Float64(1),
+        ),
+        Float64(8),
+    )
+    var lanes = mix_trilinear[DType.float32, 4](
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](4, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        SIMD[DType.float32, 4](0, 0, 0, 1),
+        Float32(0.5),
+        Float32(0),
+        Float32(0),
+    )
+    assert_equal(lanes[0], 2)
+    assert_equal(lanes[3], 1)
 
 
 def main() raises:

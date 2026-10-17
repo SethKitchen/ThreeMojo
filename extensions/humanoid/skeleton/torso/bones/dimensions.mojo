@@ -27,6 +27,7 @@ table. A female template is narrower and shallower through the chest.
     var d = torso_bone_distance(dims, T7, RIGHT, dims.centers[6])
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.genome import (
     CHEST_DEPTH,
     Genome,
@@ -34,13 +35,14 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
     check_spec,
     finite_point,
     mix_point,
 )
-from extensions.humanoid.skeleton.morph import HeadMorph, smoothstep
+from extensions.humanoid.skeleton.morph import HeadMorph
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     TEMPLATE_CM,
     pelvis_dimensions,
@@ -53,8 +55,10 @@ from extensions.humanoid.skeleton.torso.sweep import (
     spline_points,
     tube,
 )
-from math.vector3 import Vector3
-from std.math import cos, isfinite, max, min, sin
+from math.utils import clamp, edge_index, mix_delta
+from math.vector3 import Vector3, mix_delta3
+from math.finite import require_positive_finite
+from std.math import cos, max, min, sin
 from units.si import Length
 
 # The female template against the male one: narrower and shallower
@@ -114,9 +118,7 @@ struct TorsoBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named torso bone."""
-        if self.value < 0:
-            return False
-        return self.value <= SCAPULA.value
+        return ordinal_valid(self.value, SCAPULA.value)
 
 
 comptime T1 = TorsoBone(0)
@@ -229,10 +231,10 @@ struct TorsoFrame(ImplicitlyCopyable):
             self.head,
             self.neck,
         ]:  # pragma: no branch
-            if not isfinite(value) or value <= 0:
-                raise Error(
-                    "An anatomy frame scale must be finite and positive"
-                )
+            require_positive_finite(
+                Float64(value),
+                "An anatomy frame scale must be finite and positive",
+            )
         finite_point(self.anchor, "anchor", "anatomy frame")
         self.morph.validate()
 
@@ -251,12 +253,12 @@ struct TorsoFrame(ImplicitlyCopyable):
         if self.neck != 1:
             var slim = self.slim(y)
             p.x *= slim
-            p.z = NECK_AXIS_Z + (p.z - NECK_AXIS_Z) * slim
+            p.z = mix_delta(NECK_AXIS_Z, p.z, slim)
         if self.shoulders != 1:
-            p.x *= 1 + (self.shoulders - 1) * smoothstep(18.0, 46.0, y)
+            p.x *= 1 + (self.shoulders - 1) * clamped_smoothstep(18.0, 46.0, y)
         if self.chest != 1:
-            var grow = 1 + (self.chest - 1) * smoothstep(14.0, 30.0, y)
-            p.z = SPINE_Z + (p.z - SPINE_Z) * grow
+            var grow = 1 + (self.chest - 1) * clamped_smoothstep(14.0, 30.0, y)
+            p.z = mix_delta(SPINE_Z, p.z, grow)
         var unit = TEMPLATE_CM * self.stature
         var placed = self.anchor + Vector3(
             p.x * unit * self.wide,
@@ -265,7 +267,7 @@ struct TorsoFrame(ImplicitlyCopyable):
         )
         if self.head == 1:
             return placed
-        var grow = 1 + (self.head - 1) * smoothstep(
+        var grow = 1 + (self.head - 1) * clamped_smoothstep(
             HEAD_GROWS_FROM, HEAD_GROWS_TO, y
         )
         var pivot = self.anchor + Vector3(
@@ -273,7 +275,7 @@ struct TorsoFrame(ImplicitlyCopyable):
             (HEAD_PIVOT_Y - PROMONTORY_Y) * unit,
             (HEAD_PIVOT_Z - PROMONTORY_Z) * unit * self.deep,
         )
-        return pivot + (placed - pivot) * grow
+        return mix_delta3(pivot, placed, grow)
 
     def slim(self, y: Float32) -> Float32:
         """Return the factor the neck is slimmed by at a height.
@@ -286,8 +288,8 @@ struct TorsoFrame(ImplicitlyCopyable):
             one at its base, under the jaw, and on a torso's own frame.
         """
         return 1 + (self.neck - 1) * (
-            smoothstep(NECK_SLIM_FROM, NECK_SLIM_FULL, y)
-            - smoothstep(NECK_SLIM_UNTIL, NECK_SLIM_TO, y)
+            clamped_smoothstep(NECK_SLIM_FROM, NECK_SLIM_FULL, y)
+            - clamped_smoothstep(NECK_SLIM_UNTIL, NECK_SLIM_TO, y)
         )
 
     def cm(self, value: Float32) -> Float32:
@@ -575,11 +577,13 @@ def is_paired_bone(part: TorsoBone) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error(
-            "A torso bone must be a named vertebra, rib, sternum, clavicle"
-            " or scapula"
-        )
+    require_valid(
+        part.is_valid(),
+        (
+            "A torso bone must be a named vertebra, rib, sternum, clavicle or"
+            " scapula"
+        ),
+    )
     return part.value >= RIB_1.value
 
 
@@ -639,8 +643,7 @@ def torso_bone_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var placed = RIGHT
     if is_paired_bone(part):
         placed = side
@@ -699,7 +702,7 @@ def rib_path(dimensions: TorsoDimensions, rib: Int) -> List[Vector3]:
         side of the chest and the costochondral junction, in meters.
     """
     var f = dimensions.frame
-    var i = min(max(rib, 0), RIBS - 1)
+    var i = edge_index(rib, RIBS)
     var c = dimensions.centers[i]
     var w = dimensions.widths[i]
     var dd = dimensions.depths[i]
@@ -779,7 +782,7 @@ def cartilage_end(dimensions: TorsoDimensions, rib: Int) -> Vector3:
     ends.append(f.at(6.5, 31.2, 9.8))
     ends.append(f.at(9.5, 28.8, 9.4))
     ends.append(f.at(11.0, 26.8, 8.6))
-    return ends[min(max(rib, 0), 9)]
+    return ends[clamp(rib, 0, 9)]
 
 
 def _rib(dimensions: TorsoDimensions, rib: Int) -> Sweep:
@@ -1073,7 +1076,7 @@ def spinous_root(dimensions: TorsoDimensions, index: Int) -> Vector3:
         The root of the spinous process, in meters.
     """
     var f = dimensions.frame
-    var i = min(max(index, 0), VERTEBRAE - 1)
+    var i = edge_index(index, VERTEBRAE)
     var c = dimensions.centers[i]
     return Vector3(0, c.y - f.cm(0.2), c.z - dimensions.depths[i] - f.cm(2.0))
 
@@ -1092,7 +1095,7 @@ def spinous_tip(dimensions: TorsoDimensions, index: Int) -> Vector3:
         The tip, in meters.
     """
     var f = dimensions.frame
-    var i = min(max(index, 0), VERTEBRAE - 1)
+    var i = edge_index(index, VERTEBRAE)
     var drops = floats(
         1.0,
         1.3,
@@ -1129,7 +1132,7 @@ def canal_center(dimensions: TorsoDimensions, index: Int) -> Vector3:
         The canal's center, in meters.
     """
     var f = dimensions.frame
-    var i = min(max(index, 0), VERTEBRAE - 1)
+    var i = edge_index(index, VERTEBRAE)
     var c = dimensions.centers[i]
     return Vector3(0, c.y, c.z - dimensions.depths[i] - f.cm(0.85))
 

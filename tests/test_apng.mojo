@@ -11,26 +11,12 @@ fdAT share a single sequence counter that must run 0, 1, 2, ... with no gaps.
 A viewer given a file that breaks either one simply shows a still image.
 """
 
+from core.binary import big_endian_u16, big_endian_u32
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 comptime SIGNATURE_LENGTH = 8
-
-
-def be32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the big-endian 32-bit integer starting at `at`."""
-    return (
-        Int(bytes[at]) << 24
-        | Int(bytes[at + 1]) << 16
-        | Int(bytes[at + 2]) << 8
-        | Int(bytes[at + 3])
-    )
-
-
-def be16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the big-endian 16-bit integer starting at `at`."""
-    return Int(bytes[at]) << 8 | Int(bytes[at + 1])
 
 
 def chunk_kind(bytes: List[UInt8], at: Int) raises -> String:
@@ -47,7 +33,7 @@ def chunk_kinds(png: List[UInt8]) raises -> List[String]:
     var position = SIGNATURE_LENGTH
     while position < len(png):
         kinds.append(chunk_kind(png, position + 4))
-        position += 12 + be32(png, position)
+        position += 12 + big_endian_u32(png, position)
     return kinds^
 
 
@@ -57,7 +43,7 @@ def data_offset_of(png: List[UInt8], wanted: String) raises -> Int:
     while position < len(png):
         if chunk_kind(png, position + 4) == wanted:
             return position + 8
-        position += 12 + be32(png, position)
+        position += 12 + big_endian_u32(png, position)
     return -1
 
 
@@ -68,8 +54,8 @@ def sequence_numbers(png: List[UInt8]) raises -> List[Int]:
     while position < len(png):
         var kind = chunk_kind(png, position + 4)
         if kind == "fcTL" or kind == "fdAT":
-            numbers.append(be32(png, position + 8))
-        position += 12 + be32(png, position)
+            numbers.append(big_endian_u32(png, position + 8))
+        position += 12 + big_endian_u32(png, position)
     return numbers^
 
 
@@ -158,24 +144,26 @@ def test_sequence_numbers_run_without_gaps() raises:
 def test_actl_records_the_frame_count_and_loop_count() raises:
     var png = encode(frames_of(3), delay_ms=40, plays=7)
     var at = data_offset_of(png, String("acTL"))
-    assert_equal(be32(png, at), 3)
-    assert_equal(be32(png, at + 4), 7)
+    assert_equal(big_endian_u32(png, at), 3)
+    assert_equal(big_endian_u32(png, at + 4), 7)
 
 
 def test_animations_loop_forever_by_default() raises:
     var png = encode(frames_of(2))
-    assert_equal(be32(png, data_offset_of(png, String("acTL")) + 4), 0)
+    assert_equal(
+        big_endian_u32(png, data_offset_of(png, String("acTL")) + 4), 0
+    )
 
 
 def test_fctl_describes_a_full_size_frame_at_the_origin() raises:
     var png = encode(frames_of(2, width=5, height=3), delay_ms=250)
     var at = data_offset_of(png, String("fcTL"))
-    assert_equal(be32(png, at + 4), 5)  # width
-    assert_equal(be32(png, at + 8), 3)  # height
-    assert_equal(be32(png, at + 12), 0)  # x offset
-    assert_equal(be32(png, at + 16), 0)  # y offset
-    assert_equal(be16(png, at + 20), 250)  # delay numerator
-    assert_equal(be16(png, at + 22), 1000)  # delay denominator
+    assert_equal(big_endian_u32(png, at + 4), 5)  # width
+    assert_equal(big_endian_u32(png, at + 8), 3)  # height
+    assert_equal(big_endian_u32(png, at + 12), 0)  # x offset
+    assert_equal(big_endian_u32(png, at + 16), 0)  # y offset
+    assert_equal(big_endian_u16(png, at + 20), 250)  # delay numerator
+    assert_equal(big_endian_u16(png, at + 22), 1000)  # delay denominator
     assert_equal(Int(png[at + 24]), 0)  # dispose NONE
     assert_equal(Int(png[at + 25]), 0)  # blend SOURCE
 
@@ -183,8 +171,8 @@ def test_fctl_describes_a_full_size_frame_at_the_origin() raises:
 def test_ihdr_matches_the_frame_size() raises:
     var png = encode(frames_of(2, width=7, height=4))
     var at = data_offset_of(png, String("IHDR"))
-    assert_equal(be32(png, at), 7)
-    assert_equal(be32(png, at + 4), 4)
+    assert_equal(big_endian_u32(png, at), 7)
+    assert_equal(big_endian_u32(png, at + 4), 4)
 
 
 def test_empty_animation_is_rejected() raises:

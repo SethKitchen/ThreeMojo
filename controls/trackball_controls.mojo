@@ -42,22 +42,23 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2
+from math.norm import length2, squared_length2
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
 from controls.input import (
     InputEvent,
     KEY_DOWN,
+    button_choice,
+    require_named,
+    require_viewport_size,
+    require_input,
     KEY_UP,
     Key,
-    MIDDLE,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
-    PRIMARY,
     PointerButton,
-    SECONDARY,
     WHEEL,
 )
 from controls.orbit_controls import DOLLY, NO_ACTION, OrbitAction, PAN, ROTATE
@@ -252,15 +253,14 @@ struct TrackballControls(Copyable, Movable):
         Raises:
             Error: If the action set for the button is invalid.
         """
-        var action = NO_ACTION
-        if button == PRIMARY:
-            action = self.primary_action
-        elif button == MIDDLE:
-            action = self.middle_action
-        elif button == SECONDARY:
-            action = self.secondary_action
-        if not action.is_valid():
-            raise Error("Invalid trackball action: ", action.value)
+        var action = button_choice(
+            button,
+            self.primary_action,
+            self.middle_action,
+            self.secondary_action,
+            NO_ACTION,
+        )
+        require_named(action.is_valid(), "trackball action", action.value)
         return action
 
     def handle(
@@ -277,14 +277,8 @@ struct TrackballControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, a key or
                 an action is invalid, or a size is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
-        if viewport_width <= 0 or viewport_height <= 0:
-            raise Error("A viewport's size must be positive")
+        require_input(event)
+        require_viewport_size(viewport_width, viewport_height)
         if not self.enabled:
             return
         self._width = viewport_width
@@ -426,6 +420,31 @@ struct TrackballControls(Copyable, Movable):
             self._pan_end_x = at.x
             self._pan_end_y = at.y
 
+    def _aim(
+        mut self, position: Vector3, up: Vector3, delta: Duration
+    ) raises -> Tuple[Vector3, Vector3]:
+        """Age the held keys, then turn the offset and the up when rotation
+        is on.
+
+        Args:
+            position: Where the camera is.
+            up: The camera's up.
+            delta: The time since the last frame.
+
+        Returns:
+            The offset from the target, and the up after any turn.
+
+        Raises:
+            Error: If the time is negative or the key timeout is not
+                positive.
+        """
+        self._expire(delta)
+        var eye = position - self.target
+        var aimed = up
+        if not self.no_rotate:
+            self._rotate(eye, aimed)
+        return eye, aimed
+
     # --- the frame ---------------------------------------------------------
 
     def update(
@@ -448,11 +467,7 @@ struct TrackballControls(Copyable, Movable):
             Error: If the time is negative or the key timeout is not
                 positive.
         """
-        self._expire(delta)
-        var eye = camera.position - self.target
-        var up = camera.up
-        if not self.no_rotate:
-            self._rotate(eye, up)
+        var eye, up = self._aim(camera.position, camera.up, delta)
         if not self.no_zoom:
             var factor = self._zoom_factor()
             if factor != 1 and factor > 0:
@@ -500,11 +515,7 @@ struct TrackballControls(Copyable, Movable):
             Error: If the time is negative or the key timeout is not
                 positive.
         """
-        self._expire(delta)
-        var eye = camera.position - self.target
-        var up = camera.up
-        if not self.no_rotate:
-            self._rotate(eye, up)
+        var eye, up = self._aim(camera.position, camera.up, delta)
         if not self.no_zoom:
             var factor = self._zoom_factor()
             if factor != 1 and factor > 0:
@@ -614,7 +625,7 @@ struct TrackballControls(Copyable, Movable):
         """
         var change_x = self._pan_end_x - self._pan_start_x
         var change_y = self._pan_end_y - self._pan_start_y
-        if change_x * change_x + change_y * change_y == 0:
+        if squared_length2[DType.float32](change_x, change_y) == 0:
             return
         var reach = eye.length() * self.pan_speed
         var sideways = eye

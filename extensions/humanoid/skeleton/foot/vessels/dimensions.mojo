@@ -23,6 +23,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = vessel_distance(dims, DORSALIS_PEDIS_ARTERY, Vector3(0, 0, 0.05))
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -36,9 +37,9 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.chain import (
     TubeSet,
-    enlarge_tube_set,
+    display_tube_set,
     one_tube,
-    tube_set_bounds,
+    tube_set_soft_bounds,
     tube_set_distance,
 )
 from math.vector3 import Vector3
@@ -57,9 +58,23 @@ struct FootVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named foot vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= SMALL_SAPHENOUS_VEIN.value
+        return ordinal_valid(self.value, SMALL_SAPHENOUS_VEIN.value)
+
+
+def require_foot_vessel(part: FootVessel) raises:
+    """Refuse a foot vessel that is not named.
+
+    Nothing. The call returns when the vessel is named.
+
+    Args:
+        part: The vessel.
+
+    Raises:
+        Error: If the vessel is not a named artery or vein.
+    """
+    require_valid(
+        part.is_valid(), "A foot vessel must be a named artery or vein"
+    )
 
 
 comptime DORSALIS_PEDIS_ARTERY = FootVessel(0)
@@ -94,13 +109,12 @@ struct FootVesselField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot vessel must be a named artery or vein")
+        require_foot_vessel(part)
         self.tubes = _tubes(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.00035 * S
         self.epsilon = 0.00020 * S
-        var box = tube_set_bounds(self.tubes, 0.003)
+        var box = tube_set_soft_bounds(self.tubes)
         self.low = box.low
         self.high = box.high
 
@@ -134,12 +148,15 @@ def display_vessel_field(
     """
     var field = FootVesselField(dimensions, part)
     var least = 0.0016 * dimensions.stature.value
-    field.tubes = enlarge_tube_set(field.tubes, least)
-    field.k = 0.0008 * dimensions.stature.value
+    display_tube_set(
+        field.tubes,
+        field.k,
+        field.low,
+        field.high,
+        least,
+        0.0008 * dimensions.stature.value,
+    )
     field.epsilon = 0.0004 * dimensions.stature.value
-    var box = tube_set_bounds(field.tubes, 0.004)
-    field.low = box.low
-    field.high = box.high
     return field
 
 
@@ -177,8 +194,7 @@ def is_artery(part: FootVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot vessel must be a named artery or vein")
+    require_foot_vessel(part)
     return part.value <= PLANTAR_ARCH.value
 
 

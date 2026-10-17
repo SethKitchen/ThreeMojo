@@ -32,7 +32,7 @@ from objects.line_segments2 import (
     line_segments_geometry,
 )
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, Framebuffer, rgb_is_black
 from renderers.renderer import Renderer
 from std.math import isfinite, nan
 from std.testing import (
@@ -154,7 +154,7 @@ def test_crossing_strands_are_order_independent_and_repeatable() raises:
             var p = first.get_pixel(x, y)
             red += Int(p.r > 128)
             blue += Int(p.b > 128)
-            holes += Int(p.r == 0 and p.g == 0 and p.b == 0)
+            holes += Int(rgb_is_black(p))
     assert_true(red > 40)
     assert_true(blue > 40)
     assert_true(holes > SIZE * SIZE // 2)

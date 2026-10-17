@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 class ScaledFloat32LeafControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.after = {name: (ROOT/name).read_text() for name in scaled.SOURCE_PATHS}
+        baseline = fixtures.common758_leaf_texts(ROOT)
+        cls.after = {name: baseline[name] for name in scaled.SOURCE_PATHS}
         cls.before = {name: scaled.predecessor_source(name, value)
                       for name, value in cls.after.items()}
 
@@ -182,9 +183,12 @@ class ScaledFloat32PhysicalControls(unittest.TestCase):
                 def denied(path, *args, **kwargs):
                     if path == self.root/name: raise failure
                     return read(path, *args, **kwargs)
-                with patch.object(Path, 'read_bytes', denied), self.assertRaises(OSError) as caught:
+                with patch.object(Path, 'read_bytes', denied), self.assertRaises((OSError, ValueError)) as caught:
                     cleanup.scaled_float32_proof_bindings(self.root)
-                self.assertIs(caught.exception, failure)
+                cause = caught.exception
+                while cause.__cause__ is not None:
+                    cause = cause.__cause__
+                self.assertIs(cause, failure)
 
     def test_missing_symlinked_and_shadowed_input_refuses(self):
         target = self.root/scaled.NATIVE_TESTS[0]
@@ -471,7 +475,12 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
             *scaled.SOURCE_PATHS, scaled.LEAF, *scaled.PACKAGE_INPUTS,
             *scaled.PROVIDER_INPUTS, *scaled.TESTS,
         )))
-        self.original = {name: (ROOT / name).read_bytes() for name in self.paths}
+        baseline = fixtures.common758_leaf_texts(ROOT)
+        self.original = {name: (baseline[name].encode('utf-8') if name in baseline
+                         else (ROOT/name).read_bytes()) for name in self.paths}
+        witness = 'tools/carla_lane_oracle/test_scaled_float32_contracts.py'
+        self.original[witness] = cleanup.qualification_predecessor_bytes(
+            witness, self.original[witness])
         self.expected = {
             name: hashlib.sha256(raw).hexdigest()
             for name, raw in self.original.items()

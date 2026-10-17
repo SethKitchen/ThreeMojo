@@ -17,6 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = hair_distance(dims, THIGH_HAIR, Vector3(0.04, 0.2, 0.06))
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -44,9 +45,21 @@ struct HairPart(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hair group."""
-        if self.value < 0:
-            return False
-        return self.value <= CALF_HAIR.value
+        return ordinal_valid(self.value, CALF_HAIR.value)
+
+
+def require_hair_part(part: HairPart) raises:
+    """Refuse a hair group that is not named.
+
+    Nothing. The call returns when the group is named.
+
+    Args:
+        part: The hair group.
+
+    Raises:
+        Error: If the group is not named.
+    """
+    require_valid(part.is_valid(), "A hair part must be a named hair group")
 
 
 comptime THIGH_HAIR = HairPart(0)
@@ -86,8 +99,7 @@ struct HairField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A hair part must be a named hair group")
+        require_hair_part(part)
         var S = dimensions.stature.value
         var lat = Float32(1)
         if dimensions.side == LEFT:

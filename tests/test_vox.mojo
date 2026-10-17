@@ -12,6 +12,7 @@ palette.
 """
 
 from core.assets import Assets
+from core.binary import append_little_endian_u32
 from core.buffer_geometry import COLOR, NORMAL, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
@@ -99,19 +100,16 @@ def test_the_fixture_matches_three_js() raises:
 def u32(value: Int) -> List[UInt8]:
     """Return a little-endian 32-bit value."""
     var out = List[UInt8]()
-    for k in range(4):
-        out.append(UInt8((value >> (8 * k)) & 0xFF))
+    append_little_endian_u32(out, value)
     return out^
 
 
 def chunk(id: String, content: List[UInt8]) -> List[UInt8]:
     """Return a chunk with no children."""
-    var out = List[UInt8]()
-    for byte in id.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](id.as_bytes())
     out.extend(u32(len(content)))
     out.extend(u32(0))
-    out.extend(content.copy())
+    out.extend(Span(content))
     return out^
 
 
@@ -119,7 +117,7 @@ def vox(body: List[UInt8]) -> List[UInt8]:
     """Return a VOX file of chunks."""
     var out: List[UInt8] = [86, 79, 88, 32]
     out.extend(u32(150))
-    out.extend(body.copy())
+    out.extend(Span(body))
     return out^
 
 
@@ -134,7 +132,7 @@ def size(x: Int, y: Int, z: Int) -> List[UInt8]:
 def xyzi(voxels: List[UInt8]) -> List[UInt8]:
     """Return an XYZI chunk."""
     var content = u32(len(voxels) // 4)
-    content.extend(voxels.copy())
+    content.extend(Span(voxels))
     return chunk("XYZI", content)
 
 

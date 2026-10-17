@@ -48,6 +48,8 @@ well, as three.js's `vec4(colorNode)` does: the alpha multiplies the
 opacity node, or the material's `opacity`. Texture gather inputs are
 refused by name when reached. They are not ordinary RGBA samples.
 """
+from core.ordinal import ordinal_valid
+from core.search import first_match
 
 from loaders.json import (
     ARRAY,
@@ -72,7 +74,8 @@ from materials.nodes import (
     ValueType,
 )
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from math.matrix4 import column_major_matrix
+from math.square_matrix import fill_elements
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
@@ -93,7 +96,7 @@ struct NodeJsonType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is zero to `NODE_JSON_TYPE_COUNT` less one.
         """
-        return self.value >= 0 and self.value < NODE_JSON_TYPE_COUNT
+        return ordinal_valid(self.value, NODE_JSON_TYPE_COUNT - 1)
 
 
 comptime JSON_VAR_NODE = NodeJsonType(0)
@@ -183,14 +186,6 @@ def node_material_properties() -> List[String]:
     ]
 
 
-def _position(names: List[String], name: String) -> Int:
-    """Return where a name is in a list, or -1."""
-    for index in range(len(names)):
-        if names[index] == name:
-            return index
-    return -1
-
-
 def node_json_type_of(name: String) -> NodeJsonType:
     """Return the `NodeJsonType` of a three.js class name.
 
@@ -201,7 +196,7 @@ def node_json_type_of(name: String) -> NodeJsonType:
         Its type, or `NodeJsonType(-1)`, which is not valid, for a class the
         loader does not read.
     """
-    return NodeJsonType(_position(node_json_type_names(), name))
+    return NodeJsonType(first_match(node_json_type_names(), name))
 
 
 def node_output_of(property: String) -> NodeOutput:
@@ -214,7 +209,7 @@ def node_output_of(property: String) -> NodeOutput:
         Its output, or `NodeOutput(-1)`, which is not valid, for a property
         this port has no output for.
     """
-    return NodeOutput(_position(node_material_properties(), property))
+    return NodeOutput(first_match(node_material_properties(), property))
 
 
 def plain_material_type(name: String) -> String:
@@ -347,10 +342,23 @@ def _flag(
     document: JsonDocument, item: Int, key: String, default: Bool
 ) raises -> Bool:
     """Return a node's boolean field, or `default` where it is absent."""
-    var at = document.get(item, key)
-    if at == NO_NODE:
-        return default
-    return document.boolean(at)
+    return document.optional_boolean(item, key, default)
+
+
+def require_node_object(document: JsonDocument, item: Int) raises:
+    """Refuse a node JSON value that is not an object.
+
+    Nothing. The call returns when the node is an object.
+
+    Args:
+        document: The JSON document.
+        item: The node.
+
+    Raises:
+        Error: If the node is not an object.
+    """
+    if document.kind(item) != OBJECT:
+        raise Error("Node JSON: a node must be an object")
 
 
 struct NodeLoader(Movable):
@@ -404,7 +412,7 @@ struct NodeLoader(Movable):
                 "Node JSON: an attribute is a float or a vector, not a "
                 + type.name()
             )
-        var at = _position(self._attribute_names, name)
+        var at = first_match(self._attribute_names, name)
         if at >= 0:
             self._attribute_types[at] = type
             return
@@ -431,8 +439,7 @@ struct NodeLoader(Movable):
 
     def _index(mut self, document: JsonDocument, item: Int) raises -> String:
         """Index one node, and return its uuid."""
-        if document.kind(item) != OBJECT:
-            raise Error("Node JSON: a node must be an object")
+        require_node_object(document, item)
         var uuid = _text(document, item, "uuid")
         _ = _text(document, item, "type")
         if uuid in self._items:
@@ -455,8 +462,7 @@ struct NodeLoader(Movable):
         Raises:
             Error: If a node is refused; see `node`.
         """
-        if document.kind(item) != OBJECT:
-            raise Error("Node JSON: a node must be an object")
+        require_node_object(document, item)
         var list = document.get(item, "nodes")
         if list != NO_NODE:
             self.parse_nodes(document, list)
@@ -482,7 +488,7 @@ struct NodeLoader(Movable):
             return NodeRef(self._built[uuid])
         if uuid not in self._items:
             raise Error("Node JSON: no node has the uuid " + uuid)
-        if _position(self._open, uuid) >= 0:
+        if first_match(self._open, uuid) >= 0:
             raise Error("Node JSON: a node reads itself: " + uuid)
         self._open.append(uuid)
         var built = self._build(document, self._items[uuid], uuid)
@@ -544,7 +550,7 @@ struct NodeLoader(Movable):
             return self._input(document, item, "node")
         if type == JSON_VARYING_NODE:
             var value = self._input(document, item, "node")
-            if _position_of_int(self._leaves, value.value) >= 0:
+            if first_match(self._leaves, value.value) >= 0:
                 return value
             return self.graph.varying(value)
         if type == JSON_CONST_NODE:
@@ -673,13 +679,9 @@ struct NodeLoader(Movable):
             )
         if width == 9:
             var matrix = Matrix3()
-            for index in range(9):  # pragma: no branch
-                matrix.elements[index] = numbers[index]
+            fill_elements(matrix.elements, numbers)
             return self.graph.uniform(name, matrix)
-        var matrix = Matrix4()
-        for index in range(16):  # pragma: no branch
-            matrix.elements[index] = numbers[index]
-        return self.graph.uniform(name, matrix)
+        return self.graph.uniform(name, column_major_matrix(numbers))
 
     def _attribute(
         mut self, document: JsonDocument, item: Int
@@ -694,7 +696,7 @@ struct NodeLoader(Movable):
             return self._leaf(self.graph.normal_local())
         if name == "color":
             return self._leaf(self.graph.vertex_color())
-        var at = _position(self._attribute_names, name)
+        var at = first_match(self._attribute_names, name)
         if at < 0:
             raise Error(
                 "Node JSON: the attribute "
@@ -758,12 +760,12 @@ struct NodeLoader(Movable):
         """Build a `MathNode`, by its `method`."""
         var method = _text(document, item, "method")
         var a = self._input(document, item, "aNode")
-        if _position(_unary_methods(), method) >= 0:
+        if first_match(_unary_methods(), method) >= 0:
             return self._unary(method, a)
         if method == "atan" and not self._has_input(document, item, "bNode"):
             return self.graph.atan(a)
-        var binary = _position(_binary_methods(), method) >= 0
-        if not binary and _position(_ternary_methods(), method) < 0:
+        var binary = first_match(_binary_methods(), method) >= 0
+        if not binary and first_match(_ternary_methods(), method) < 0:
             raise Error("Node JSON: the math method " + method + " is not read")
         var b = self._input(document, item, "bNode")
         if binary:
@@ -919,7 +921,7 @@ struct NodeLoader(Movable):
     def _join(mut self, document: JsonDocument, item: Int) raises -> NodeRef:
         """Build a `JoinNode`: a vector, or a matrix of its columns."""
         var list = self._input_at(document, item, "nodes")
-        if list == NO_NODE or document.kind(list) != ARRAY:
+        if not document.has_kind(list, ARRAY):
             raise Error("Node JSON: a JoinNode needs a list of nodes")
         var parts = List[NodeRef]()
         var width = 0
@@ -1094,9 +1096,12 @@ struct NodeLoader(Movable):
         var own = document.get(item, "nodes")
         if own != NO_NODE and document.kind(own) == ARRAY:
             self.parse_nodes(document, own)
-        var inputs = document.get(item, "inputNodes")
-        if inputs == NO_NODE or document.kind(inputs) != OBJECT:
-            raise Error("Node JSON: a node material needs inputNodes")
+        var inputs = document.required_kind(
+            item,
+            "inputNodes",
+            OBJECT,
+            "Node JSON: a node material needs inputNodes",
+        )
         var refs = List[Int](length=NODE_OUTPUT_COUNT, fill=-1)
         for index in range(document.length(inputs)):
             var property = document.key(inputs, index)
@@ -1152,14 +1157,6 @@ struct NodeLoader(Movable):
         return NodeMaterialGraph(self.graph.copy(), self.textures.copy())
 
 
-def _position_of_int(values: List[Int], value: Int) -> Int:
-    """Return where a number is in a list, or -1."""
-    for index in range(len(values)):
-        if values[index] == value:
-            return index
-    return -1
-
-
 def _unary_methods() -> List[String]:
     """Return the math methods of one value this loader reads."""
     return [
@@ -1207,7 +1204,7 @@ def _value_width(name: String) -> Int:
     """Return how many numbers a `valueType` holds, or -1 for one that is
     not read: `float`, `bool`, `vec2` to `vec4`, `color`, `mat3` and
     `mat4`."""
-    var at = _position(
+    var at = first_match(
         ["float", "bool", "vec2", "vec3", "vec4", "color", "mat3", "mat4"],
         name,
     )

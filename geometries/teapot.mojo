@@ -28,8 +28,9 @@ is exact for every choice of parts, so the index here is simply the
 triangles kept.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
+from math.norm import squared_length3
 from std.math import sqrt
 from units.si import Length, METER
 
@@ -1637,7 +1638,7 @@ def teapot(
                 var nx = tdir[1] * sdir[2] - tdir[2] * sdir[1]
                 var ny = tdir[2] * sdir[0] - tdir[0] * sdir[2]
                 var nz = tdir[0] * sdir[1] - tdir[1] * sdir[0]
-                var length = sqrt(nx * nx + ny * ny + nz * nz)
+                var length = sqrt(squared_length3[DType.float64](nx, ny, nz))
                 var scale = 1.0 / (length if length != 0 else 1.0)
                 nx *= scale
                 ny *= scale
@@ -1677,12 +1678,9 @@ def teapot(
                         vertices, triangle[0], triangle[1], triangle[2]
                     ):
                         continue
-                    index.extend(triangle.copy())
+                    index.extend(Span(triangle))
         surface_count += 1
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(vertices^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(index^)
+    indexed_surface(geometry, vertices^, normals^, uvs^, index^)
     return geometry^

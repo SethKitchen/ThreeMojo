@@ -37,9 +37,11 @@ writes past its volume.
 """
 
 from core.assets import Assets
+from core.binary import copy_bytes, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import NO_PARENT, NodeId, Object3D
+from core.ordinal import require_positive
 from core.scene import Scene
 from materials.material import STANDARD, Material
 from objects.mesh import Mesh
@@ -349,10 +351,7 @@ def _u32(bytes: List[UInt8], at: Int) raises -> Int:
     """
     if at + 4 > len(bytes):
         raise Error("VOX: the file ends inside a chunk, at byte " + String(at))
-    var value = 0
-    for k in range(4):  # pragma: no branch
-        value |= Int(bytes[at + k]) << (8 * k)
-    return value
+    return little_endian_u32(bytes, at)
 
 
 def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
@@ -392,14 +391,13 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
             )
             i += content
         elif id == "XYZI":
-            if len(models) == 0:
-                raise Error("VOX: voxels before any SIZE")
+            require_positive(len(models), "VOX: voxels before any SIZE")
             var count = _u32(bytes, i)
             i += 4
             if i + count * 4 > len(bytes):
                 raise Error("VOX: the file ends inside its voxels")
             ref model = models[len(models) - 1]
-            model.data = List[UInt8](bytes[i : i + count * 4])
+            model.data = copy_bytes(bytes, i, count * 4)
             for v in range(count):
                 var outside = (
                     Int(model.data[v * 4]) >= model.size_x
@@ -410,8 +408,7 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
                     raise Error("VOX: a voxel outside its model")
             i += count * 4
         elif id == "RGBA":
-            if len(models) == 0:
-                raise Error("VOX: a palette before any SIZE")
+            require_positive(len(models), "VOX: a palette before any SIZE")
             var palette: List[UInt32] = [0]
             for j in range(256):  # pragma: no branch
                 palette.append(UInt32(_u32(bytes, i + j * 4)))

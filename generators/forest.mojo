@@ -26,6 +26,8 @@ ported; `ForestInstances.keeps` answers the cull's question on the CPU.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from geometries.surface import position_normal_surface
+from core.ordinal import require_index_in_count, require_non_negative
 from generators.terrain import TerrainGenerator
 from generators.utils import (
     Instances,
@@ -38,7 +40,9 @@ from generators.utils import (
 from geometries.polyhedron import icosahedron
 from geometries.utils import merge_vertices
 from math.noise import ImprovedNoise
-from math.vector3 import Vector3
+from math.smoothstep import clamped_smoothstep
+from math.utils import clamp
+from math.vector3 import Vector3, append_float64_xyz
 from std.math import pi, sin, sqrt
 from units.si import InverseLength, Length, METER, PER_METER
 
@@ -107,10 +111,12 @@ struct ForestParameters(Copyable, Movable):
             Error: If the count or the detail is negative, the cull does
                 not end past where it starts, or a number is not finite.
         """
-        if self.count < 0:
-            raise Error("A forest's tree count must be zero or more")
-        if self.detail < 0:
-            raise Error("A forest's blob detail must be zero or more")
+        require_non_negative(
+            self.count, "A forest's tree count must be zero or more"
+        )
+        require_non_negative(
+            self.detail, "A forest's blob detail must be zero or more"
+        )
         if not meters(self.to_distance) > meters(self.from_distance):
             raise Error("A forest's cull must end past where it starts")
         check_finite(
@@ -140,8 +146,7 @@ def smooth_blend(edge0: Float64, edge1: Float64, x: Float64) -> Float64:
     Returns:
         A number from zero to one.
     """
-    var t = max(0.0, min(1.0, (x - edge0) / (edge1 - edge0)))
-    return t * t * (3 - 2 * t)
+    return clamped_smoothstep(edge0, edge1, x)
 
 
 def blob_noise(x: Float64, y: Float64, z: Float64) -> Float64:
@@ -190,17 +195,14 @@ def blob_geometry(p: ForestParameters) raises -> BufferGeometry:
         var h = (uy + 1) / 2
         var taper = 1 - 0.62 * h
         var r = taper * (1 + p.distortion * blob_noise(ux, uy, uz))
-        positions.append(Float32(ux * r * radius))
-        positions.append(Float32(h * height))
-        positions.append(Float32(uz * r * radius))
+        append_float64_xyz(
+            positions, ux * r * radius, h * height, uz * r * radius
+        )
         var inverse = 1 / sqrt(ux * ux + 0.55 * 0.55 + uz * uz)
-        normals.append(Float32(ux * inverse))
-        normals.append(Float32(0.55 * inverse))
-        normals.append(Float32(uz * inverse))
+        append_float64_xyz(normals, ux * inverse, 0.55 * inverse, uz * inverse)
         ao.append(Float32(h))
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     geometry.set_attribute(String(AO), BufferAttribute(ao^, 1))
     geometry.set_index(welded.index.copy())
     return geometry^
@@ -261,8 +263,11 @@ struct ForestInstances(Movable):
         Raises:
             Error: If there is no such tree.
         """
-        if index < 0 or index >= self.instances.count():
-            raise Error("A forest has no tree at that index")
+        require_index_in_count(
+            index,
+            self.instances.count(),
+            "A forest has no tree at that index",
+        )
         var c = index * 4
         ref v = self.instances.values
         var d = Vec3d(
@@ -372,12 +377,10 @@ struct ForestGenerator(Movable):
             forest.instances.matrices.append(
                 euler_matrix(position, rx, ry, rz, Vec3d(sx, s, sz))
             )
-            forest.instances.values.append(Float32(x))
-            forest.instances.values.append(Float32(position.y))
-            forest.instances.values.append(Float32(z))
+            append_float64_xyz(forest.instances.values, x, position.y, z)
             forest.instances.values.append(Float32(cull_random.next()))
             var drift = perlin.noise(
                 x * 0.02 + region_x, z * 0.02 + region_z, region_slice
             )
-            forest.region.append(Float32(min(1.0, max(0.0, drift * 0.6 + 0.5))))
+            forest.region.append(Float32(clamp(drift * 0.6 + 0.5, 0.0, 1.0)))
         return forest^

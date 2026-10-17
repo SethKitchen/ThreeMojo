@@ -12,9 +12,17 @@ tissues and skeletal muscles. The program also prints tissue mass and
 Earth weight.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    print_tissue_mass,
+    spin_gallery,
+    warm_lamp,
+)
+
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.spec import HumanoidSpec
@@ -39,13 +47,8 @@ from extensions.humanoid.skeleton.look import (
     muscle_phong,
     tendon_phong,
 )
-from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv
+from render.framebuffer import Color
 from units.si import (
     Angle,
     DEGREE,
@@ -65,113 +68,75 @@ comptime DELAY_MS = 55
 comptime DETAIL = 12
 
 
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the leg by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometry, materials and textures.
-        scene: The persistent scene, edited in place.
-        node: The parent of the leg.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
-
-
-def _print_mass(label: String, grams: Float32, newtons: Float32, lbf: Float32):
-    """Print one tissue mass line."""
-    print(label, "-", grams, "g,", newtons, "N,", lbf, "lbf on Earth")
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var femur_report = femur_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "femur",
         femur_report.mass.to(GRAM),
         femur_report.weight().to(NEWTON),
         femur_report.weight().to(POUND_FORCE),
     )
     var tibia_report = tibia_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "tibia",
         tibia_report.mass.to(GRAM),
         tibia_report.weight().to(NEWTON),
         tibia_report.weight().to(POUND_FORCE),
     )
     var fibula_report = fibula_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "fibula",
         fibula_report.mass.to(GRAM),
         fibula_report.weight().to(NEWTON),
         fibula_report.weight().to(POUND_FORCE),
     )
     var patella_report = patella_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "patella",
         patella_report.mass.to(GRAM),
         patella_report.weight().to(NEWTON),
         patella_report.weight().to(POUND_FORCE),
     )
     var cartilage_report = articular_cartilage_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "articular cartilage",
         cartilage_report.mass.to(GRAM),
         cartilage_report.weight().to(NEWTON),
         cartilage_report.weight().to(POUND_FORCE),
     )
     var med_report = medial_meniscus_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "medial meniscus",
         med_report.mass.to(GRAM),
         med_report.weight().to(NEWTON),
         med_report.weight().to(POUND_FORCE),
     )
     var lat_report = lateral_meniscus_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "lateral meniscus",
         lat_report.mass.to(GRAM),
         lat_report.weight().to(NEWTON),
         lat_report.weight().to(POUND_FORCE),
     )
     var mcl_report = medial_collateral_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "MCL",
         mcl_report.mass.to(GRAM),
         mcl_report.weight().to(NEWTON),
         mcl_report.weight().to(POUND_FORCE),
     )
     var lcl_report = lateral_collateral_mass(person)
-    _print_mass(
+    print_tissue_mass(
         "LCL",
         lcl_report.mass.to(GRAM),
         lcl_report.weight().to(NEWTON),
         lcl_report.weight().to(POUND_FORCE),
     )
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 16, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 16, 14))
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))
@@ -199,24 +164,16 @@ def main() raises:
         detail=DETAIL,
     )
 
-    var lamp = Object3D()
-    lamp.set_position(0.55, 0.65, 1.1)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
-
-    var camera = PerspectiveCamera(
-        Angle(36.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(20.0, METER),
+    warm_lamp(scene, 0.55, 0.65, 1.1)
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.35, 0.06, 2.45),
+        Vector3(0.0, 0.02, 0.0),
+        field_of_view=Angle(36.0, DEGREE),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.35, 0.06, 2.45), Vector3(0.0, 0.02, 0.0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
-
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    spin_gallery(
+        renderer, camera, assets, scene, pivot, FRAMES, DELAY_MS, destination
+    )

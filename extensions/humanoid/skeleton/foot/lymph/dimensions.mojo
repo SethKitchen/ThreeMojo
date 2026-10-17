@@ -20,6 +20,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = lymph_distance(dims, DORSAL_LYMPHATICS, dims.mt2_head)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -33,9 +34,9 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.chain import (
     TubeSet,
-    enlarge_tube_set,
+    display_tube_set,
     one_tube,
-    tube_set_bounds,
+    tube_set_soft_bounds,
     tube_set_distance,
 )
 from math.vector3 import Vector3
@@ -54,9 +55,21 @@ struct FootLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic trunk."""
-        if self.value < 0:
-            return False
-        return self.value <= LATERAL_COLLECTORS.value
+        return ordinal_valid(self.value, LATERAL_COLLECTORS.value)
+
+
+def require_foot_lymph(part: FootLymph) raises:
+    """Refuse a foot lymph trunk that is not named.
+
+    Nothing. The call returns when the trunk is named.
+
+    Args:
+        part: The trunk.
+
+    Raises:
+        Error: If the trunk is not named.
+    """
+    require_valid(part.is_valid(), "A foot lymph part must be a named trunk")
 
 
 comptime DORSAL_LYMPHATICS = FootLymph(0)
@@ -86,13 +99,12 @@ struct FootLymphField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot lymph part must be a named trunk")
+        require_foot_lymph(part)
         self.tubes = _tubes(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.00025 * S
         self.epsilon = 0.00015 * S
-        var box = tube_set_bounds(self.tubes, 0.003)
+        var box = tube_set_soft_bounds(self.tubes)
         self.low = box.low
         self.high = box.high
 
@@ -126,11 +138,14 @@ def display_lymph_field(
     """
     var field = FootLymphField(dimensions, part)
     var least = 0.0014 * dimensions.stature.value
-    field.tubes = enlarge_tube_set(field.tubes, least)
-    field.k = 0.0007 * dimensions.stature.value
-    var box = tube_set_bounds(field.tubes, 0.004)
-    field.low = box.low
-    field.high = box.high
+    display_tube_set(
+        field.tubes,
+        field.k,
+        field.low,
+        field.high,
+        least,
+        0.0007 * dimensions.stature.value,
+    )
     return field
 
 

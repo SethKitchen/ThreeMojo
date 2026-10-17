@@ -11,6 +11,9 @@ spots, rosettes and patches on the skin in reference space, so each
 mark rides the skin as the animal moves.
 """
 
+from math.norm import squared_length3
+from math.smoothstep import hermite_fade
+from math.utils import mix_trilinear
 from extensions.sdf.vector import V3
 from std.math import floor, sqrt
 
@@ -55,9 +58,9 @@ def vnoise3(p: V3) -> Float64:
     var xf = p.x - fx
     var yf = p.y - fy
     var zf = p.z - fz
-    var u = xf * xf * (3.0 - 2.0 * xf)
-    var v = yf * yf * (3.0 - 2.0 * yf)
-    var w = zf * zf * (3.0 - 2.0 * zf)
+    var u = hermite_fade(xf)
+    var v = hermite_fade(yf)
+    var w = hermite_fade(zf)
     var c000 = ihash(xi, yi, zi)
     var c100 = ihash(xi + 1, yi, zi)
     var c010 = ihash(xi, yi + 1, zi)
@@ -66,13 +69,9 @@ def vnoise3(p: V3) -> Float64:
     var c101 = ihash(xi + 1, yi, zi + 1)
     var c011 = ihash(xi, yi + 1, zi + 1)
     var c111 = ihash(xi + 1, yi + 1, zi + 1)
-    var x00 = c000 + (c100 - c000) * u
-    var x10 = c010 + (c110 - c010) * u
-    var x01 = c001 + (c101 - c001) * u
-    var x11 = c011 + (c111 - c011) * u
-    var y0 = x00 + (x10 - x00) * v
-    var y1 = x01 + (x11 - x01) * v
-    return y0 + (y1 - y0) * w
+    return mix_trilinear[DType.float64, 1](
+        c000, c100, c010, c110, c001, c101, c011, c111, u, v, w
+    )
 
 
 def fbm3(p: V3, octaves: Int = 4) -> Float64:
@@ -98,6 +97,55 @@ def fbm3(p: V3, octaves: Int = 4) -> Float64:
         a *= 0.5
         f *= 2.03
     return s / n if n > 0.0 else 0.5
+
+
+def offset_fbm(point: V3, octaves: Int) -> Float64:
+    """Return fractal noise at `point`, centered on zero.
+
+    Args:
+        point: The sample, already scaled and shifted.
+        octaves: How many octaves `fbm3` adds.
+
+    Returns:
+        The noise, about minus one half through one half.
+    """
+    return fbm3(point, octaves) - 0.5
+
+
+def centered_fbm(
+    point: V3, scale: Float64, octaves: Int, shift: Float64 = 0.0
+) -> Float64:
+    """Return fractal noise at one scale on each axis, centered on zero.
+
+    Args:
+        point: The sample.
+        scale: Cells per unit on each axis.
+        octaves: How many octaves `fbm3` adds.
+        shift: An extra offset on x. Zero by default.
+
+    Returns:
+        The noise, about minus one half through one half.
+    """
+    return offset_fbm(
+        V3(point.x * scale + shift, point.y * scale, point.z * scale), octaves
+    )
+
+
+def centered_value(point: V3, scale: Float64, shift: Float64 = 0.0) -> Float64:
+    """Return value noise at one scale on each axis, centered on zero.
+
+    Args:
+        point: The sample.
+        scale: Cells per unit on each axis.
+        shift: An extra offset on x. Zero by default.
+
+    Returns:
+        The noise, about minus one half through one half.
+    """
+    return (
+        vnoise3(V3(point.x * scale + shift, point.y * scale, point.z * scale))
+        - 0.5
+    )
 
 
 @fieldwise_init
@@ -137,7 +185,7 @@ def cells3(p: V3, seed: Int) -> Cell:
         var dx = Float64(cx) + jx - p.x
         var dy = Float64(cy) + jy - p.y
         var dz = Float64(cz) + jz - p.z
-        var d = sqrt(dx * dx + dy * dy + dz * dz)
+        var d = sqrt(squared_length3[DType.float64](dx, dy, dz))
         var closer = d < best
         next = best if closer else min(next, d)
         id = ihash(cx + 7, cy + 11, cz + seed * 101 + 13) if closer else id

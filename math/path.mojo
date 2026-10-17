@@ -42,6 +42,7 @@ track of the order, and three.js's silent answer to all of them is a
 shape with no area.
 """
 
+from core.ordinal import require_index_in_count, require_positive
 from math.curve import (
     ELLIPSE,
     LINE,
@@ -56,9 +57,24 @@ from math.curve_checks import (
     curve_count_product,
     curve_count_sum,
     curve_sample_count,
+    require_at_least_one,
 )
 from math.vector2 import Vector2
 from units.si import Angle, Length, METER, RADIAN
+
+
+def require_path_divisions(divisions: Int) raises:
+    """Refuse a path asked for fewer than one division.
+
+    Nothing. The call returns when there is at least one division.
+
+    Args:
+        divisions: How many runs to cut a curve into.
+
+    Raises:
+        Error: If divisions is less than one.
+    """
+    require_at_least_one(divisions, "A path needs at least one division")
 
 
 def resolution_of(curve: Curve, divisions: Int) raises -> Int:
@@ -80,8 +96,7 @@ def resolution_of(curve: Curve, divisions: Int) raises -> Int:
             the per-curve resolution cannot fit in Int.
     """
     curve._validate()
-    if divisions < 1:
-        raise Error("A path needs at least one division")
+    require_path_divisions(divisions)
     if curve.kind == LINE:
         return 1
     if curve.kind == SPLINE:
@@ -216,8 +231,9 @@ struct Path(Copyable, Movable):
                 point is where the pen already is.
         """
         self._pen()
-        if len(points) == 0:
-            raise Error("A spline needs at least one point to go through")
+        require_positive(
+            len(points), "A spline needs at least one point to go through"
+        )
         var through = List[Vector2]()
         through.append(self.last)
         for index in range(len(points)):  # pragma: no branch
@@ -376,8 +392,7 @@ struct Path(Copyable, Movable):
             Error: If the path has nothing on it, or the pen is already at
                 the start, which means the path is closed already.
         """
-        if len(self.curves) == 0:
-            raise Error("An empty path cannot be closed")
+        require_positive(len(self.curves), "An empty path cannot be closed")
         var start = self.first
         self.line_to(start)
 
@@ -417,10 +432,10 @@ struct Path(Copyable, Movable):
             Error: If the path has no curves, a curve is not valid, divisions
                 is less than one, or a sample count cannot fit in Int.
         """
-        if len(self.curves) == 0:
-            raise Error("A path with no curves has no points")
-        if divisions < 1:
-            raise Error("A path needs at least one division")
+        require_positive(
+            len(self.curves), "A path with no curves has no points"
+        )
+        require_path_divisions(divisions)
         # Preflight the whole output before sampling any large first piece.
         var count = 1
         for index in range(len(self.curves)):  # pragma: no branch
@@ -448,8 +463,9 @@ struct Path(Copyable, Movable):
         Raises:
             Error: If the path has no curves.
         """
-        if len(self.curves) == 0:
-            raise Error("A path with no curves has no length")
+        require_positive(
+            len(self.curves), "A path with no curves has no length"
+        )
         var total = Float32(0)
         for index in range(len(self.curves)):  # pragma: no branch
             total += self.curves[index].length().to(METER)
@@ -535,6 +551,7 @@ struct Shape(Copyable, Movable):
             Error: If there is no such hole, or `divisions` is less than
                 one.
         """
-        if index < 0 or index >= len(self.holes):
-            raise Error("A shape has no hole at that index")
+        require_index_in_count(
+            index, len(self.holes), "A shape has no hole at that index"
+        )
         return self.holes[index].sample(divisions)

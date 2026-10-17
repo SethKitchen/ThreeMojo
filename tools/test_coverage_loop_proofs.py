@@ -243,7 +243,7 @@ class ProofBindingTests(unittest.TestCase):
         self.build = stage
         self.hits = stage/'hits'
         self.receipt = stage/'loop-proofs.json'
-        repo = Path(__file__).resolve().parents[1]
+        repo = historical_boundary_root(self)
         name = loops.DENSITY_SOURCE
         module = name.removesuffix('.mojo')
         original = self.root/name
@@ -264,8 +264,9 @@ class ProofBindingTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'unreviewed package or alternate source')
             self.assertNotIn(Path(relative), set(cache_key.input_paths(self.build)))
-            # The generated receipt's owner can refuse first, at its exit census.
-            with self.assertRaisesRegex(ValueError, 'pending generated resolver surface changed'):
+            # Historical density now forwards its real owner, so this physical
+            # shadow is refused before the separate terminal resolver census.
+            with self.assertRaisesRegex(ValueError, 'Shadowed coverage std resolver'):
                 self.verify()
             path.unlink()
             self.assertEqual(self.verify()['sha256'], envelope['sha256'])
@@ -320,7 +321,7 @@ class ProofBindingTests(unittest.TestCase):
         self.assertEqual(self.verify()['sha256'], self.envelope['sha256'])
 
     def test_missing_authority_cannot_withhold_a_reviewed_module(self):
-        repo = Path(__file__).resolve().parents[1]
+        repo = historical_boundary_root(self)
         self._replace_measured_module(loops.DENSITY_SOURCE,
             loops.reviewed_density_source(repo, successor=True), 149)
         prior = self.receipt.read_bytes()
@@ -382,7 +383,7 @@ class ProofBindingTests(unittest.TestCase):
         self.assertEqual(self.receipt.read_bytes(), prior)
 
     def test_present_but_missing_pending_prerequisite_is_not_inapplicable(self):
-        repo = Path(__file__).resolve().parents[1]
+        repo = historical_boundary_root(self)
         name = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
         path = self.root/name
         path.parent.mkdir(parents=True, exist_ok=True)

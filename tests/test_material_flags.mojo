@@ -481,7 +481,7 @@ def test_an_untoned_primitive_is_refused_beside_a_blend_under_a_curve() raises:
     var dots = List[RasterVertex]()
     dots.append(_point(white, untoned))
     var both = flat.copy()
-    both.extend(glass.copy())
+    both.extend(Span(glass))
     # Alone, each is drawn.
     check_output_kinds(flat, True)
     check_output_kinds(glass, True)
@@ -496,7 +496,7 @@ def test_an_untoned_primitive_is_refused_beside_a_blend_under_a_curve() raises:
     shown.append(_corner(0, 0, white, RasterState(), kind=False))
     shown.append(_corner(4, 0, white, RasterState(), kind=False))
     shown.append(_corner(0, 4, white, RasterState(), kind=False))
-    shown.extend(glass.copy())
+    shown.extend(Span(glass))
     with assert_raises(contains="data material"):
         check_output_kinds(shown, True)
     var strokes = List[RasterVertex]()

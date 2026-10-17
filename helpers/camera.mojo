@@ -29,8 +29,8 @@ from cameras.camera import Camera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
-from render.framebuffer import Color, FloatColor
+from math.vector3 import Vector3, append_vector3
+from render.framebuffer import Color, FloatColor, append_float_rgb
 
 # three.js's five colors, as authored.
 comptime DEFAULT_FRUSTUM_COLOR = Color(0xFF, 0xAA, 0x00)
@@ -62,12 +62,8 @@ def _push(
     var point = Vector3(0, 0, 0)
     if z != APEX_Z:
         point = unproject.transform_point(Vector3(x, y, z))
-    positions.append(point.x)
-    positions.append(point.y)
-    positions.append(point.z)
-    colors.append(color.r)
-    colors.append(color.g)
-    colors.append(color.b)
+    append_vector3(positions, point)
+    append_float_rgb(colors, color)
 
 
 def camera_helper[

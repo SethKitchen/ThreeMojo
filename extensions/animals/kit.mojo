@@ -7,21 +7,57 @@
 soft masks and the re-seeded random streams.
 
 The eye functions are procedural-animals' `core/sdf/eyeSocket.js`.
+A point behind an eye reads as one.
 """
 
+from extensions.animals.rig import Rig
 from extensions.sdf.ids import BoneId
 from extensions.animals.options import AnimalRandom
 from extensions.sdf.distance import almond_distance
 from extensions.sdf.field import SdfModel
 from extensions.sdf.sculpt import ell_y
+from math.norm import squared_length3
 from extensions.sdf.vector import (
     V3,
     dot,
     frame_zy,
+    mix,
+    normalize,
 )
 from std.math import atan2, cos, exp, pi, sin, sqrt
 
 comptime MASK32 = 0xFFFFFFFF
+
+
+def side_sign(side: String) -> Float64:
+    """Return one for a left side and minus one for a right side.
+
+    Args:
+        side: `"L"` or `"R"`. Any other text is treated as the right.
+
+    Returns:
+        `1` for `"L"`, and `-1` otherwise.
+    """
+    return 1.0 if side == "L" else -1.0
+
+
+def ear_ends(rig: Rig, side: String) raises -> Tuple[Float64, V3, V3, V3]:
+    """Return one ear's side sign, base, tip and unit axis.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+
+    Returns:
+        One for the left and minus one for the right, then the ear base,
+        the ear tip, and the unit axis from the base to the tip.
+
+    Raises:
+        Error: If the rig lacks an ear joint.
+    """
+    var base = rig.j("earBase" + side)
+    var tip = rig.j("earTip" + side)
+    return side_sign(side), base, tip, normalize(tip - base)
 
 
 @fieldwise_init
@@ -239,11 +275,43 @@ def head_local(
     Returns:
         The point in reference space.
     """
-    var z = muzzle_z0 + (v.z - muzzle_z0) * muzzle if v.z > muzzle_z0 else v.z
+    var z = mix(muzzle_z0, v.z, muzzle) if v.z > muzzle_z0 else v.z
     return V3(
         head_origin.x + v.x * width * scale,
         head_origin.y + v.y * scale,
         head_origin.z + scale * z,
+    )
+
+
+def reference_to_head_local(
+    head_origin: V3,
+    scale: Float64,
+    muzzle_z0: Float64,
+    muzzle: Float64,
+    width: Float64,
+    p: V3,
+) -> V3:
+    """Return a reference point in head-local space.
+
+    This undoes `head_local`: the head scale, the width, and the muzzle
+    stretch in front of `muzzle_z0`.
+
+    Args:
+        head_origin: The head's origin in reference space.
+        scale: The head's scale.
+        muzzle_z0: Where the muzzle starts, head-local.
+        muzzle: The muzzle's length factor.
+        width: The head's width factor.
+        p: The point in reference space.
+
+    Returns:
+        The point in head-local space.
+    """
+    var x = (p.x - head_origin.x) / width / scale
+    var y = (p.y - head_origin.y) / scale
+    var z = (p.z - head_origin.z) / scale
+    return V3(
+        x, y, muzzle_z0 + (z - muzzle_z0) / muzzle if z > muzzle_z0 else z
     )
 
 
@@ -310,6 +378,33 @@ def lid_distance(e: EyeSpec, ef: EyeFrame, p: V3) -> Float64:
     return abs(almond_distance(q.x, q.y, e.big_r, e.d))
 
 
+def lid_unless_behind(
+    e: EyeSpec, head_origin: V3, p: V3, behind: Float64
+) -> Float64:
+    """Return the lid distance, or one when the point is behind the eye.
+
+    Error: Never.
+
+    Args:
+        e: The eye.
+        head_origin: The head origin. The nearer eye is the one on the
+            point's side of it.
+        p: The point.
+        behind: How far behind the aperture, in eye radii, still counts.
+            A point at this depth or farther back returns one.
+
+    Returns:
+        The distance to the almond rim, or one.
+
+    """
+    var s = 1.0 if p.x > head_origin.x else -1.0
+    var frame = eye_frame_of(e, head_origin, s)
+    var q = aperture_local(e, frame, p)
+    if q.z > behind * e.r:
+        return abs(almond_distance(q.x, q.y, e.big_r, e.d))
+    return 1.0
+
+
 def is_front_limb(bone: String) -> Bool:
     """Return whether a bone is part of a foreleg.
 
@@ -361,6 +456,47 @@ def is_limb(bone: String) -> Bool:
     return is_front_limb(bone) or is_hind_limb(bone)
 
 
+def coat_place(bone: String) -> Tuple[Int, Bool]:
+    """Return a coat region and whether a trunk bone is a leg.
+
+    The region is 2 for the head, 6 for the jaw, 5 for an ear, 4 for the
+    tail, 1 for the neck, and 0 for the trunk. A leg stays on the trunk.
+
+    Args:
+        bone: The bone's name.
+
+    Returns:
+        The region, and True when the bone is a leg that stayed on the trunk.
+    """
+    if bone == "head":
+        return (2, False)
+    if bone == "jaw":
+        return (6, False)
+    if bone.startswith("ear"):
+        return (5, False)
+    if bone.startswith("tail"):
+        return (4, False)
+    if bone == "neck1" or bone == "neck2":
+        return (1, False)
+    return (0, is_limb(bone))
+
+
+def is_upper_limb(bone: String) -> Bool:
+    """Return whether a bone is a scapula, a humerus, or a femur.
+
+    Args:
+        bone: The bone's name.
+
+    Returns:
+        True when the name starts with `scapula`, `humerus`, or `femur`.
+    """
+    return (
+        bone.startswith("scapula")
+        or bone.startswith("humerus")
+        or bone.startswith("femur")
+    )
+
+
 def mirrored_blob(h: V3, c: V3, r: V3) -> Float64:
     """Return a soft Gaussian blob, mirrored across the midline.
 
@@ -378,7 +514,7 @@ def mirrored_blob(h: V3, c: V3, r: V3) -> Float64:
     var dx = (abs(h.x) - c.x) / r.x
     var dy = (h.y - c.y) / r.y
     var dz = (h.z - c.z) / r.z
-    return exp(-(dx * dx + dy * dy + dz * dz))
+    return exp(-squared_length3[DType.float64](dx, dy, dz))
 
 
 def mirrored_ell_bottom(h: V3, c: V3, r: V3) -> Float64:
@@ -500,3 +636,95 @@ def hashed_stream(seed: Int, add: Int, mul: Int, xor: Int) -> AnimalRandom:
         The stream.
     """
     return stream_of(imul32(seed + add, mul) ^ xor)
+
+
+def fore_reach(
+    rig: Rig, side: String, sign: Float64
+) raises -> Tuple[V3, V3, V3, V3, V3, V3]:
+    """Return one foreleg's lateral axis and its shoulder-to-cannon joints.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+        sign: One for the left, minus one for the right.
+
+    Returns:
+        The lateral axis, then the scapular top, shoulder, elbow, wrist
+        and metacarpophalangeal joint.
+
+    Raises:
+        Error: If the rig lacks one of those joints.
+    """
+    return (
+        V3(sign, 0, 0),
+        rig.j("scapTop" + side),
+        rig.j("shoulder" + side),
+        rig.j("elbow" + side),
+        rig.j("wrist" + side),
+        rig.j("mcp" + side),
+    )
+
+
+def digitigrade_fore(
+    rig: Rig, side: String, sign: Float64
+) raises -> Tuple[
+    V3, V3, V3, V3, V3, V3, V3, BoneId, BoneId, BoneId, BoneId, BoneId
+]:
+    """Return the stations of one digitigrade foreleg.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+        sign: One for the left, minus one for the right.
+
+    Returns:
+        The reach from `fore_reach`, then the toe joint and the scapula,
+        humerus, radius, metacarpus and front paw bones.
+
+    Raises:
+        Error: If the rig lacks one of those joints or bones.
+    """
+    var lat, sc, sh, e, w, mc = fore_reach(rig, side, sign)
+    return (
+        lat,
+        sc,
+        sh,
+        e,
+        w,
+        mc,
+        rig.j("ftoe" + side),
+        rig.bone("scapula" + side),
+        rig.bone("humerus" + side),
+        rig.bone("radius" + side),
+        rig.bone("metacarpus" + side),
+        rig.bone("fpaw" + side),
+    )
+
+
+def digitigrade_hind(
+    rig: Rig, side: String
+) raises -> Tuple[V3, V3, V3, V3, V3, BoneId, BoneId, BoneId, BoneId]:
+    """Return the stations of one digitigrade hind leg.
+
+    Args:
+        rig: The animal's rig.
+        side: `"L"` or `"R"`.
+
+    Returns:
+        The hip, knee, hock, metatarsophalangeal joint and hind toe, then
+        the femur, tibia, metatarsus and hind paw bones.
+
+    Raises:
+        Error: If the rig lacks one of those joints or bones.
+    """
+    return (
+        rig.j("hip" + side),
+        rig.j("knee" + side),
+        rig.j("hock" + side),
+        rig.j("mtp" + side),
+        rig.j("htoe" + side),
+        rig.bone("femur" + side),
+        rig.bone("tibia" + side),
+        rig.bone("metatarsus" + side),
+        rig.bone("hpaw" + side),
+    )

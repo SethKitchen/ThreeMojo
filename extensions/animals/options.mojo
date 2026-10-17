@@ -10,6 +10,7 @@ This is procedural-animals' `normaliseOptions`. A seed picks one
 repeatable individual. The sex, the age and the morph, when they are not
 given, are drawn from the seed as the original draws them.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from math.utils import SeededRandom
 
@@ -71,7 +72,7 @@ struct Quality(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to four.
         """
-        return self.value >= 0 and self.value < 5
+        return ordinal_valid(self.value, 5 - 1)
 
     def resolution(self) -> Float64:
         """Return the tier's cell-size multiplier.
@@ -153,14 +154,19 @@ def check_options(options: AnimalOptions) raises:
     Raises:
         Error: If the quality, sex, age or variant is not valid.
     """
-    if not options.quality.is_valid():
-        raise Error("Animal quality must be from 0 to 4")
-    if not options.sex.is_valid():
-        raise Error("Animal sex must be ANY_SEX, MALE or FEMALE")
-    if not options.age.is_valid():
-        raise Error("Animal age must be ANY_AGE, ADULT or JUVENILE")
-    if not options.variant.is_valid():
-        raise Error("Animal variant must be ANY_VARIANT or an index")
+    require_valid(
+        options.quality.is_valid(), "Animal quality must be from 0 to 4"
+    )
+    require_valid(
+        options.sex.is_valid(), "Animal sex must be ANY_SEX, MALE or FEMALE"
+    )
+    require_valid(
+        options.age.is_valid(), "Animal age must be ANY_AGE, ADULT or JUVENILE"
+    )
+    require_valid(
+        options.variant.is_valid(),
+        "Animal variant must be ANY_VARIANT or an index",
+    )
 
 
 struct AnimalRandom(Movable):

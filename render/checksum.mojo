@@ -31,6 +31,8 @@ step is a write to stderr, that keeps the checksum of a ten-byte chunk as
 cheap as it always was.
 """
 
+from core.binary import little_endian_u32
+
 comptime CRC_POLYNOMIAL = UInt32(0xEDB88320)
 comptime ADLER_MODULUS = UInt32(65521)
 # The most bytes Adler-32's running sums can take before either can pass
@@ -96,12 +98,7 @@ def _crc_sliced(
     var index = 0
     var count = len(bytes)
     while index + CRC_SLICES <= count:
-        var word = running ^ (
-            UInt32(bytes[index])
-            | (UInt32(bytes[index + 1]) << 8)
-            | (UInt32(bytes[index + 2]) << 16)
-            | (UInt32(bytes[index + 3]) << 24)
-        )
+        var word = running ^ UInt32(little_endian_u32(bytes, index))
         running = (
             tables[7 * 256 + Int(word & 0xFF)]
             ^ tables[6 * 256 + Int((word >> 8) & 0xFF)]
@@ -204,18 +201,21 @@ def crc32(bytes: List[UInt8]) -> UInt32:
     return crc.finish()
 
 
-def adler32(bytes: List[UInt8]) -> UInt32:
+def adler32(bytes: Span[UInt8, _]) -> UInt32:
     """Return the Adler-32 checksum zlib requires over the raw data.
 
     The two sums grow for a run of `ADLER_RUN` bytes and are reduced once
     at its end, which is the same answer as reducing them after every byte
     and a small fraction of the divisions.
 
+    Error: Never.
+
     Args:
         bytes: The bytes to checksum.
 
     Returns:
         The checksum.
+
     """
     var low = UInt32(1)
     var high = UInt32(0)
@@ -232,3 +232,19 @@ def adler32(bytes: List[UInt8]) -> UInt32:
         low %= ADLER_MODULUS
         high %= ADLER_MODULUS
     return (high << 16) | low
+
+
+def adler32(bytes: List[UInt8]) -> UInt32:
+    """Return the Adler-32 checksum zlib requires over the raw data.
+
+    The two sums grow for a run of `ADLER_RUN` bytes and are reduced once
+    at its end, which is the same answer as reducing them after every byte
+    and a small fraction of the divisions.
+
+    Args:
+        bytes: The bytes to checksum.
+
+    Returns:
+        The checksum.
+    """
+    return adler32(Span(bytes))

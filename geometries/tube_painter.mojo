@@ -24,9 +24,10 @@ three.js 0.180, this rule keeps nonzero subnormal displacements.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, COLOR
+from geometries.surface import position_normal_surface
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from render.framebuffer import FloatColor
 from std.math import cos, pi, sin
 
@@ -34,13 +35,6 @@ from std.math import cos, pi, sin
 comptime TUBE_SIDES = 10
 # A stroke's radius at a size of one, in meters.
 comptime TUBE_RADIUS = Float32(0.01)
-
-
-def _push(mut out: List[Float32], v: Vector3):
-    """Append a vector's three numbers."""
-    out.append(v.x)
-    out.append(v.y)
-    out.append(v.z)
 
 
 struct TubePainter(Movable):
@@ -151,11 +145,11 @@ struct TubePainter(Movable):
                 c + end,
                 d + end,
             ]:
-                _push(self.positions, p)
+                append_vector3(self.positions, p)
             for n in [a, b, d, b, c, d]:  # pragma: no branch
                 var unit = n
                 unit.normalize()
-                _push(self.normals, unit)
+                append_vector3(self.normals, unit)
             for _ in range(6):  # pragma: no branch
                 self.colors.append(self.color.r)
                 self.colors.append(self.color.g)
@@ -192,11 +186,8 @@ struct TubePainter(Movable):
             Error: Never; the lists hold whole points.
         """
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
-        )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
+        position_normal_surface(
+            geometry, self.positions.copy(), self.normals.copy()
         )
         geometry.set_attribute(
             String(COLOR), BufferAttribute(self.colors.copy(), 3)

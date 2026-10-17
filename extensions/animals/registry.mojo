@@ -9,6 +9,7 @@ Each species module supplies the same nine things: its morphs, a
 variation, a rig, a sculpt, an eye, an eye look, a palette, a painter
 and a base cell size. This module picks the module a `SpeciesId` names.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.animals.coat import CoatSample, EyeLook, Paint, Palette
 from extensions.animals.kit import EyeSpec
@@ -322,7 +323,7 @@ struct SpeciesId(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to `SPECIES_COUNT - 1`.
         """
-        return self.value >= 0 and self.value < SPECIES_COUNT
+        return ordinal_valid(self.value, SPECIES_COUNT - 1)
 
 
 comptime BEAR = SpeciesId(0)
@@ -360,8 +361,7 @@ def require_species(id: SpeciesId) raises:
     Raises:
         Error: If `id` is not valid.
     """
-    if not id.is_valid():
-        raise Error("Species id names no species")
+    require_valid(id.is_valid(), "Species id names no species")
 
 
 def species_names() -> List[String]:

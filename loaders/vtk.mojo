@@ -56,14 +56,20 @@ replacement characters. And an index past the points, which three.js
 keeps and draws from undefined positions.
 """
 
+from math.finite import stored_float32
+from core.binary import big_endian_u32, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
+from core.ordinal import require_non_negative, require_positive
+from loaders.bytes import ascii_digit, ascii_letter, base64_digit, is_sign_mark
+from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
     is_js_space,
     js_part,
     js_string,
     js_trim,
     js_units,
+    latin1_units,
 )
 from loaders.js_number import (
     js_parse_float,
@@ -85,18 +91,6 @@ comptime MAX_VTK_ARRAY = 1 << 28
 # What `_only` returns when an element has more than one child of a name,
 # which three.js's `xmlToJson` makes an array.
 comptime _MANY = -2
-
-
-def _is_digit(unit: Int) -> Bool:
-    """Return True for `0` to `9`.
-
-    Args:
-        unit: The code unit.
-
-    Returns:
-        Whether it is a digit.
-    """
-    return unit >= 48 and unit <= 57
 
 
 def _starts(units: List[Int], prefix: String) -> Bool:
@@ -153,6 +147,21 @@ def _second_word(units: List[Int]) -> String:
     return _word(units, 1).or_else("undefined")
 
 
+def require_vtk_polydata(dataset: String) raises:
+    """Refuse a VTK dataset that is not PolyData.
+
+    Nothing. The call returns when the dataset is PolyData.
+
+    Args:
+        dataset: The DATASET word.
+
+    Raises:
+        Error: If the dataset is not PolyData.
+    """
+    if dataset != "POLYDATA":
+        raise Error("Unsupported DATASET type: " + dataset)
+
+
 def _decoded(bytes: Span[UInt8, _]) raises -> String:
     """Return a file as text, as `TextDecoder` decodes it: a leading byte
     order mark dropped.
@@ -166,15 +175,7 @@ def _decoded(bytes: Span[UInt8, _]) raises -> String:
     Raises:
         Error: If the bytes are not UTF-8.
     """
-    var start = 0
-    var marked = (
-        len(bytes) >= 3
-        and bytes[0] == 0xEF
-        and bytes[1] == 0xBB
-        and bytes[2] == 0xBF
-    )
-    if marked:
-        start = 3
+    var start = leading_utf8_bom(bytes)
     try:
         return String(from_utf8=bytes[start:])
     except:
@@ -390,14 +391,14 @@ def _number_end(line: List[Int], at: Int) -> Int:
     if line[i] == 45:
         i += 1
     var first = i
-    while i < n and _is_digit(line[i]):
+    while i < n and ascii_digit(line[i]):
         i += 1
     if i == first:
         return -1
     if i < n and line[i] == 46:
         i += 1
     while i < n and (
-        _is_digit(line[i]) or line[i] == 45 or line[i] == 43 or line[i] == 101
+        ascii_digit(line[i]) or is_sign_mark(line[i]) or line[i] == 101
     ):
         i += 1
     return i
@@ -459,7 +460,7 @@ def _starts_with_word(line: List[Int]) -> Bool:
     # Called when the line gave three numbers, so it is not empty; it is
     # trimmed, so it never starts with white space.
     var u = line[0]
-    return not (_is_digit(u) or u == 46 or u == 45)
+    return not (ascii_digit(u) or u == 46 or u == 45)
 
 
 def _head(line: List[Int], prefix: String, runs: List[Int]) -> Bool:
@@ -484,15 +485,10 @@ def _head(line: List[Int], prefix: String, runs: List[Int]) -> Bool:
         var end = at
         while end < len(line):
             var u = line[end]
-            var word = (
-                _is_digit(u)
-                or (u >= 65 and u <= 90)
-                or (u >= 97 and u <= 122)
-                or u == 95
-            )
+            var word = ascii_digit(u) or ascii_letter(u) or u == 95
             var fits = (
                 (kind == 0 and u == 32)
-                or (kind == 1 and _is_digit(u))
+                or (kind == 1 and ascii_digit(u))
                 or (kind == 2 and word)
             )
             if not fits:
@@ -517,7 +513,7 @@ def _connectivity(line: List[Int]) -> List[Float64]:
     """
     var n = len(line)
     var at = 0
-    while at < n and _is_digit(line[at]):
+    while at < n and ascii_digit(line[at]):
         at += 1
     if at == 0 or at >= n or not is_js_space(line[at]):
         return []
@@ -527,7 +523,7 @@ def _connectivity(line: List[Int]) -> List[Float64]:
         at += 1
     var start = at
     var end = at
-    while end < n and (_is_digit(line[end]) or is_js_space(line[end])):
+    while end < n and (ascii_digit(line[end]) or is_js_space(line[end])):
         end += 1
     # JavaScript's `split( /\s+/ )`: an empty text is one empty word.
     var word = start
@@ -621,8 +617,7 @@ def parse_vtk_ascii(text: String) raises -> BufferGeometry:
         number += 1
         if _starts(line, "DATASET"):
             var dataset = _second_word(line)
-            if dataset != "POLYDATA":
-                raise Error("Unsupported DATASET type: " + dataset)
+            require_vtk_polydata(dataset)
         elif in_points:
             while True:
                 var three = _three_floats(line, last_index)
@@ -732,18 +727,21 @@ def parse_vtk_ascii(text: String) raises -> BufferGeometry:
 # --- legacy binary -----------------------------------------------------------
 
 
-struct _Binary:
-    """A legacy binary file, read as three.js's `DataView` reads it."""
+struct _Binary[origin: Origin[mut=False]]:
+    """A legacy binary file, read as three.js's `DataView` reads it.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
         """Hold the file.
 
         Args:
-            bytes: The file.
+            bytes: The file. The caller keeps it.
         """
-        self.bytes = bytes^
+        self.bytes = bytes
 
     def word(self, at: Int) raises -> UInt32:
         """Return the big-endian 32 bits at a byte.
@@ -759,10 +757,7 @@ struct _Binary:
         """
         if at + 4 > len(self.bytes):
             raise Error("VTK: a value runs past the end, at byte " + String(at))
-        var value: UInt32 = 0
-        for k in range(4):  # pragma: no branch
-            value = (value << 8) | UInt32(self.bytes[at + k])
-        return value
+        return UInt32(big_endian_u32(self.bytes, at))
 
     def float(self, at: Int) raises -> Float64:
         """Return a big-endian 32-bit float.
@@ -814,21 +809,6 @@ struct _Binary:
         return at
 
 
-def _latin1(bytes: Span[UInt8, _]) -> List[Int]:
-    """Return bytes as `String.fromCharCode` reads each one.
-
-    Args:
-        bytes: The bytes.
-
-    Returns:
-        One code unit each.
-    """
-    var out = List[Int](capacity=len(bytes))
-    for b in bytes:
-        out.append(Int(b))
-    return out^
-
-
 def _count(line: List[Int], word: Int, what: String) raises -> Int:
     """Return `parseInt( line.split( ' ' )[ word ], 10 )` as a count.
 
@@ -867,7 +847,7 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
             array would have a negative length, or an index is past the
             points.
     """
-    var file = _Binary(bytes.copy())
+    var file = _Binary(Span(bytes))
     var points = List[Float64]()
     var normals = List[Float64]()
     var indices = List[Float64]()
@@ -877,12 +857,11 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
     var index = 0
     while True:
         var end = file.line_end(index)
-        var line = _latin1(Span(file.bytes)[index:end])
+        var line = latin1_units(file.bytes[index:end])
         var next = end + 1
         if _starts(line, "DATASET"):
             var dataset = _second_word(line)
-            if dataset != "POLYDATA":
-                raise Error("Unsupported DATASET type: " + dataset)
+            require_vtk_polydata(dataset)
         elif _starts(line, "POINTS"):
             var n = _count(line, 1, "POINTS")
             _ = _to_index(Float64(n) * 3, "the points")
@@ -1069,13 +1048,10 @@ def _look(units: List[Int], k: Int) -> Int:
         Its six bits.
     """
     var u = units[k]
-    if u >= 65 and u <= 90:
-        return u - 65
-    if u >= 97 and u <= 122:
-        return u - 71
-    if u >= 48 and u <= 57:
-        return u + 4
-    if u == 43 or u == 45:
+    var digit = base64_digit(u)
+    if digit >= 0:
+        return digit
+    if is_sign_mark(u):
         return 62
     if u == 47 or u == 95:
         return 63
@@ -1157,12 +1133,7 @@ def _typed(
         raise Error("VTK: " + what + " is not a whole number of values")
     var out = List[Float64](capacity=len(bytes) // 4)
     for k in range(0, len(bytes), 4):
-        var bits = (
-            UInt32(bytes[k])
-            | (UInt32(bytes[k + 1]) << 8)
-            | (UInt32(bytes[k + 2]) << 16)
-            | (UInt32(bytes[k + 3]) << 24)
-        )
+        var bits = UInt32(little_endian_u32(bytes, k))
         if type == "Float32":
             out.append(Float64(bitcast[DType.float32](bits)))
         else:
@@ -1243,10 +1214,7 @@ def _inflated(block: Span[UInt8, _]) raises -> List[UInt8]:
         raise Error("invalid zlib data")
     if (block[1] & 32) != 0:
         raise Error("invalid zlib data: preset dictionaries not supported")
-    var copy = List[UInt8](capacity=len(block))
-    for b in block:  # pragma: no branch
-        copy.append(b)
-    return inflate(copy, 2)
+    return inflate(block, 2)
 
 
 def _data_array(
@@ -1325,7 +1293,7 @@ def _data_array(
             k += 1
         var number = js_string_to_number(js_string(text, start, k))
         if type == "Float32":
-            values.append(Float64(Float32(number)))
+            values.append(stored_float32(number))
         else:
             values.append(_to_int32(number))
     return values^
@@ -1393,7 +1361,7 @@ def _filled(
         raise Error("VTK: " + what + " hold more values than their count")
     var out = List[Float64](capacity=length)
     for value in values:
-        out.append(Float64(Float32(value)))
+        out.append(stored_float32(value))
     while len(out) < length:
         out.append(0)
     return out^
@@ -1517,6 +1485,21 @@ def _slot_of(
     return slots[element]
 
 
+def require_vtk_piece(piece: Int) raises:
+    """Refuse a PolyData element that has no Piece.
+
+    Nothing. The call returns when a Piece is present.
+
+    Args:
+        piece: The Piece element, or `NO_ELEMENT`.
+
+    Raises:
+        Error: If the Piece is absent.
+    """
+    if piece == NO_ELEMENT:
+        raise Error("VTK: the PolyData has no Piece")
+
+
 def parse_vtk_xml(text: String) raises -> BufferGeometry:
     """Read a VTK XML poly data file, three.js's `parseXML`.
 
@@ -1542,14 +1525,11 @@ def parse_vtk_xml(text: String) raises -> BufferGeometry:
         if appended == _MANY:
             raise Error("VTK: the appended data has no text")
         var all = js_trim(js_units(document.text(appended)))
-        if len(all) == 0:
-            raise Error("VTK: the appended data has no text")
+        require_positive(len(all), "VTK: the appended data has no text")
         var data = js_part(all, 1, len(all))
-        if poly_data < 0:
-            raise Error("VTK: the file has no one PolyData")
+        require_non_negative(poly_data, "VTK: the file has no one PolyData")
         var piece = _only(document, poly_data, "Piece")
-        if piece == NO_ELEMENT:
-            raise Error("VTK: the PolyData has no Piece")
+        require_vtk_piece(piece)
         if piece != _MANY:
             var order: List[String] = [
                 "PointData",
@@ -1584,8 +1564,7 @@ def parse_vtk_xml(text: String) raises -> BufferGeometry:
     if poly_data == _MANY:
         raise Error("VTK: the file has more than one PolyData")
     var piece = _only(document, poly_data, "Piece")
-    if piece == NO_ELEMENT:
-        raise Error("VTK: the PolyData has no Piece")
+    require_vtk_piece(piece)
     _needs_attributes(document, root, "VTKFile")
     var compressed = document.has_attribute(root, "compressor")
     var header_type = _attribute_of(document, root, "header_type").or_else("")

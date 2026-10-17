@@ -36,6 +36,17 @@ expands to the wrong length; an ASCII node without `:`, an unbalanced
 other than the one its `*count` declares.
 """
 
+from core.ordinal import index_in_count
+
+from core.binary import copy_bytes, little_endian_uint
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+)
+
+from loaders.js_text import is_js_word
+from loaders.text_number import file_line
 from render.inflate import zlib_inflate
 from std.memory import bitcast
 
@@ -57,6 +68,21 @@ comptime MIN_BINARY_VERSION = 6400
 comptime WIDE_RECORD_VERSION = 7500
 
 
+def require_fbx_whole(value: Float64) raises:
+    """Refuse an FBX number that has a fraction.
+
+    Nothing. The call returns when the number is a whole number.
+
+    Args:
+        value: The number.
+
+    Raises:
+        Error: If the number has a fraction.
+    """
+    if value != Float64(Int(value)):
+        raise Error("FBX: a whole number was expected, not " + String(value))
+
+
 @fieldwise_init
 struct FbxFormat(Equatable, ImplicitlyCopyable, Writable):
     """Which of its two forms an FBX file is written in, as a type rather
@@ -66,13 +92,29 @@ struct FbxFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two forms there are."""
-        return self == FBX_ASCII or self == FBX_BINARY
+        return ordinal_valid(self.value, FBX_BINARY.value)
 
 
 # Text: `Name: value, value { ... }`.
 comptime FBX_ASCII = FbxFormat(0)
 # Bytes: the `Kaydara FBX Binary` header and records.
 comptime FBX_BINARY = FbxFormat(1)
+
+
+def require_fbx_format(format: FbxFormat) raises:
+    """Refuse an FBX format that is neither ASCII nor binary.
+
+    Nothing. The call returns when the format is one of the two.
+
+    Args:
+        format: Which form the file is written in.
+
+    Raises:
+        Error: If the format is neither ASCII nor binary.
+    """
+    require_valid(
+        format.is_valid(), "FBX: a format that is neither ASCII nor binary"
+    )
 
 
 @fieldwise_init
@@ -84,14 +126,7 @@ struct FbxPropertyKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six kinds there are."""
-        return (
-            self == FBX_INTEGER
-            or self == FBX_NUMBER
-            or self == FBX_STRING
-            or self == FBX_INTEGERS
-            or self == FBX_NUMBERS
-            or self == FBX_BYTES
-        )
+        return ordinal_valid(self.value, FBX_BYTES.value)
 
 
 # A whole number: binary `Y`, `C`, `I` and `L`, or ASCII digits.
@@ -224,7 +259,7 @@ struct FbxDocument(Movable):
 
     def _check(self, node: Int) raises:
         """Refuse an index that names no node."""
-        if node < 0 or node >= len(self.nodes):
+        if not index_in_count(node, len(self.nodes)):
             raise Error("FBX: no node at index " + String(node))
 
     def name(self, node: Int) raises -> String:
@@ -327,7 +362,7 @@ struct FbxDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node].properties
-        if index < 0 or index >= len(found):
+        if not index_in_count(index, len(found)):
             raise Error(
                 "FBX: "
                 + self.nodes[node].name
@@ -355,10 +390,7 @@ struct FbxDocument(Movable):
         if found.kind == FBX_INTEGER:
             return found.integer
         var value = self.number(node, index)
-        if value != Float64(Int(value)):
-            raise Error(
-                "FBX: a whole number was expected, not " + String(value)
-            )
+        require_fbx_whole(value)
         return Int(value)
 
     def number(self, node: Int, index: Int) raises -> Float64:
@@ -454,10 +486,7 @@ struct FbxDocument(Movable):
                 return only.integers.copy()
         var out = List[Int]()
         for value in self.numbers(node):
-            if value != Float64(Int(value)):
-                raise Error(
-                    "FBX: a whole number was expected, not " + String(value)
-                )
+            require_fbx_whole(value)
             out.append(Int(value))
         return out^
 
@@ -477,8 +506,7 @@ def object_name(name: String, format: FbxFormat) raises -> String:
     Raises:
         Error: If `format` is none of `FBX_ASCII` and `FBX_BINARY`.
     """
-    if not format.is_valid():
-        raise Error("FBX: a format that is neither ASCII nor binary")
+    require_fbx_format(format)
     if format == FBX_BINARY:
         return name
     # three.js strips `^(\w+)::`: a word of letters, digits or `_`.
@@ -487,19 +515,9 @@ def object_name(name: String, format: FbxFormat) raises -> String:
         return name
     # `cut` is positive here: the loop always runs.
     for byte in name.as_bytes()[:cut]:  # pragma: no branch
-        if not _is_word(Int(byte)):
+        if not is_js_word(byte):
             return name
     return String(name[byte = cut + 2 :])
-
-
-def _is_word(byte: Int) -> Bool:
-    """Return True for a byte of `\\w`: a letter, a digit or `_`."""
-    return (
-        (byte >= 48 and byte <= 57)
-        or (byte >= 65 and byte <= 90)
-        or (byte >= 97 and byte <= 122)
-        or byte == 95
-    )
 
 
 def parse_fbx(bytes: List[UInt8]) raises -> FbxDocument:
@@ -524,7 +542,7 @@ def parse_fbx(bytes: List[UInt8]) raises -> FbxDocument:
             if bytes[index] != magic[index]:
                 binary = False
     if binary:
-        var reader = _BinaryReader(bytes)
+        var reader = _BinaryReader(Span(bytes))
         return reader.read()
     return parse_fbx_text(String(from_utf8=Span(bytes)))
 
@@ -545,8 +563,7 @@ def parse_fbx_text(text: String) raises -> FbxDocument:
     # three.js finds the version with `/FBXVersion: (\d+)/` over the whole
     # text, before it reads anything else.
     var at = text.find("FBXVersion: ")
-    if at < 0:
-        raise Error("FBX: the file names no FBXVersion")
+    require_non_negative(at, "FBX: the file names no FBXVersion")
     var digits = String()
     for byte in text.as_bytes()[at + 12 :]:
         if byte < 48 or byte > 57:
@@ -557,10 +574,7 @@ def parse_fbx_text(text: String) raises -> FbxDocument:
     var version = Int(digits)
     if version < MIN_ASCII_VERSION:
         raise Error("FBX: an ASCII file older than 7000: " + digits)
-    var bytes = List[UInt8]()
-    # The text holds `FBXVersion: `: the loop always runs.
-    for byte in text.as_bytes():  # pragma: no branch
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     var reader = _TextReader(bytes^)
     var document = FbxDocument(FBX_ASCII)
     document.version = version
@@ -584,7 +598,7 @@ struct _TextReader(Movable):
         for index in range(min(self.at, len(self.bytes))):
             if self.bytes[index] == 10:
                 line += 1
-        return "FBX line " + String(line) + ": "
+        return file_line("FBX", line)
 
     def peek(self) -> Int:
         """Return the byte under the cursor, or -1 past the end."""
@@ -786,14 +800,6 @@ def _scalar(var token: String) -> FbxProperty:
         return string_property(token^)
 
 
-def _le(bytes: List[UInt8], at: Int, count: Int) -> UInt64:
-    """Return `count` bytes at `at` as a little-endian unsigned number."""
-    var value = UInt64(0)
-    for index in range(count):  # pragma: no branch
-        value |= UInt64(bytes[at + index]) << UInt64(8 * index)
-    return value
-
-
 def _signed(value: UInt64, bits: Int) -> Int:
     """Return an unsigned number of `bits` bits as the signed number it
     stores in two's complement."""
@@ -803,15 +809,18 @@ def _signed(value: UInt64, bits: Int) -> Int:
     return raw
 
 
-struct _BinaryReader(Movable):
-    """The binary reader's cursor over the bytes."""
+struct _BinaryReader[origin: Origin[mut=False]](Movable):
+    """The binary reader's cursor over the bytes.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var at: Int
     var version: Int
 
-    def __init__(out self, bytes: List[UInt8]):
-        self.bytes = bytes.copy()
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        self.bytes = bytes
         self.at = 0
         self.version = 0
 
@@ -827,16 +836,14 @@ struct _BinaryReader(Movable):
     def unsigned(mut self, count: Int) raises -> UInt64:
         """Read a little-endian unsigned number of `count` bytes."""
         self.need(count)
-        var value = _le(self.bytes, self.at, count)
+        var value = UInt64(little_endian_uint(self.bytes, self.at, count))
         self.at += count
         return value
 
     def take(mut self, count: Int) raises -> List[UInt8]:
         """Read `count` raw bytes."""
         self.need(count)
-        var out = List[UInt8](capacity=count)
-        for index in range(self.at, self.at + count):
-            out.append(self.bytes[index])
+        var out = copy_bytes(self.bytes, self.at, count)
         self.at += count
         return out^
 
@@ -951,7 +958,9 @@ struct _BinaryReader(Movable):
         if code == 102 or code == 100:
             var out = FbxProperty(FBX_NUMBERS)
             for index in range(count):
-                var bits = _le(data, index * width, width)
+                var bits = UInt64(
+                    little_endian_uint(data, index * width, width)
+                )
                 if width == 4:
                     out.numbers.append(
                         Float64(bitcast[DType.float32](UInt32(bits)))
@@ -962,6 +971,9 @@ struct _BinaryReader(Movable):
         var out = FbxProperty(FBX_INTEGERS)
         for index in range(count):
             out.integers.append(
-                _signed(_le(data, index * width, width), width * 8)
+                _signed(
+                    UInt64(little_endian_uint(data, index * width, width)),
+                    width * 8,
+                )
             )
         return out^

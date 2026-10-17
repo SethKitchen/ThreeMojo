@@ -121,9 +121,7 @@ def test_the_fixtures_match_three_js() raises:
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a text as the bytes of a file."""
-    var out = List[UInt8]()
-    for byte in text.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](text.as_bytes())
     return out^
 
 

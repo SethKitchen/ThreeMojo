@@ -13,6 +13,8 @@ floats, and floats from an HDR file mean one thing only, linear light with
 no upper bound, so there is no color space to carry.
 """
 
+from render.framebuffer import pixel_slot
+
 
 struct FloatImage(Movable):
     """Linear RGBA floats, row-major from the top."""
@@ -51,9 +53,7 @@ struct FloatImage(Movable):
         Raises:
             Error: If the coordinate is outside the image.
         """
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        var at = (y * self.width + x) * Self.CHANNELS
+        var at = pixel_slot(x, y, self.width, self.height) * Self.CHANNELS
         return SIMD[DType.float32, 4](
             self.pixels[at],
             self.pixels[at + 1],

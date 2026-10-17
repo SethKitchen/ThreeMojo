@@ -40,6 +40,7 @@ from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
 from extensions.humanoid.skeleton.leg.contents import LegContents
 from extensions.humanoid.skeleton.limb.skin import LimbSkinField
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     lymph_phong,
     nerve_phong,
@@ -51,19 +52,19 @@ from extensions.humanoid.skeleton.pelvis.contents import (
     BOTH,
     SKIN,
     PelvisContents,
+    require_pelvis_contents,
 )
 from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     pelvis_muscle_dimensions,
 )
 from extensions.humanoid.skeleton.pelvis.skin.dimensions import PelvisSkinField
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 from materials.material import MaterialId
+from math.bounds import enclose_point
+from math.smoothstep import hermite_fade
 from math.vector3 import Vector3
-from objects.mesh import Mesh
-from std.math import max, min
+from std.math import max
 
-# Optional `add_lower_body` paint. A negative id asks the assembler to
-# create the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 # The crotch, as shares of the stature: how far below the pubic
 # symphysis the thighs part, how wide the crease between them is, and
 # how round the fork is where they part.
@@ -130,10 +131,10 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
         self.epsilon = self.pelvis.epsilon
         var low = self.pelvis.low
         var high = self.pelvis.high
-        _grow(low, high, self.right.low + self.right_origin)
-        _grow(low, high, self.right.high + self.right_origin)
-        _grow(low, high, self.left.low + self.left_origin)
-        _grow(low, high, self.left.high + self.left_origin)
+        enclose_point(low, high, self.right.low + self.right_origin)
+        enclose_point(low, high, self.right.high + self.right_origin)
+        enclose_point(low, high, self.left.low + self.left_origin)
+        enclose_point(low, high, self.left.high + self.left_origin)
         self.low = low
         self.high = high
 
@@ -159,7 +160,7 @@ struct LowerBodySkinField(Copyable, DistanceField, Movable):
         # Across the band the surface morphs from the two thighs to the
         # one pelvis, so the crotch forms without a seam.
         var t = (point.y - bottom) / (top - bottom)
-        var w = t * t * (3 - 2 * t)
+        var w = hermite_fade(t)
         return self._parted(
             limbs + (self.pelvis.distance(point) - limbs) * w, point
         )
@@ -257,15 +258,12 @@ def add_lower_body(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Pelvis contents must be a named layer set")
+    require_pelvis_contents(contents)
     var artery = _resolved_paint(assets, artery_paint, artery_phong())
     var vein = _resolved_paint(assets, vein_paint, vein_phong())
     var lymph = _resolved_paint(assets, lymph_paint, lymph_phong())
     var nerve = _resolved_paint(assets, nerve_paint, nerve_phong())
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     var inner = contents.value & (SKIN.value ^ 127)
     if inner != 0:
         _ = add_pelvis(
@@ -340,11 +338,13 @@ def add_lower_body(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        var shape = assets.geometries.add(
-            lower_body_skin_mesh(spec, skin_detail)
+        _ = place_mesh_node(
+            scene,
+            assets,
+            root_id,
+            lower_body_skin_mesh(spec, skin_detail),
+            skin,
         )
-        var nid = scene.attach(Object3D(), root_id)
-        scene.add_mesh(Mesh(shape, skin, nid))
     return root_id
 
 
@@ -365,11 +365,3 @@ def _foot_bits(contents: PelvisContents) -> Int:
     the same bits as the pelvis's.
     """
     return contents.value & 63
-
-
-def _grow(mut low: Vector3, mut high: Vector3, point: Vector3):
-    """Grow a box to hold `point`."""
-    low = Vector3(min(low.x, point.x), min(low.y, point.y), min(low.z, point.z))
-    high = Vector3(
-        max(high.x, point.x), max(high.y, point.y), max(high.z, point.z)
-    )

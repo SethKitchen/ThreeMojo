@@ -28,7 +28,7 @@ This is not a three.js port. See Extensions.
     skin_weights(skin, rig)
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
@@ -45,7 +45,9 @@ from extensions.humanoid.rig.joints import (
     JOINT_COUNT,
     HumanoidRig,
     Joint,
+    require_joint,
 )
+from math.utils import clamp
 from math.vector3 import Vector3
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 
@@ -100,7 +102,7 @@ def _segment_distance(p: Vector3, a: Vector3, b: Vector3) -> Float32:
     var t = Float32(0)
     var len2 = ab.dot(ab)
     if len2 > 0:
-        t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / len2))
+        t = clamp((p - a).dot(ab) / len2, 0, 1)
     return (p - (a + ab * t)).length()
 
 
@@ -200,8 +202,7 @@ struct _Heap(Movable):
 
 def _quantized_coordinate(value: Float32) raises -> Int:
     """Truncate the original Float32 grid product within the Int domain."""
-    if not isfinite(value):
-        raise Error("Skin positions must be finite for welding")
+    require_finite(Float64(value), "Skin positions must be finite for welding")
     var scaled = value * Float32(1e5)
     # Int.MAX rounds up to 2**63 in Float32. Use an exclusive upper
     # bound and an inclusive lower bound, both exact powers of two.
@@ -328,8 +329,7 @@ def skin_weights(
     """
     var allowed = List[Bool](length=JOINT_COUNT, fill=len(joints) == 0)
     for j in joints:  # pragma: no branch
-        if not j.is_valid():
-            raise Error("A joint must be a named joint")
+        require_joint(j)
         allowed[j.value] = True
     ref placed = skin.attribute_view(String(POSITION))
     var count = placed.count()
@@ -367,7 +367,7 @@ def skin_weights(
             var t = Float32(0)
             var len2 = ab.dot(ab)
             if len2 > 0:
-                t = min(Float32(1), max(Float32(0), (p - a).dot(ab) / len2))
+                t = clamp((p - a).dot(ab) / len2, 0, 1)
             # Only a bone the vertex lies beside the middle of competes:
             # by a joint, the bones on either side share it later. A bone
             # that ends a chain, as the head, a hand or the toes, keeps
@@ -471,8 +471,7 @@ def rigid_weights(mut part: BufferGeometry, joint: Joint) raises:
     Raises:
         Error: If the part has no positions or `joint` is not named.
     """
-    if not joint.is_valid():
-        raise Error("A joint must be a named joint")
+    require_joint(joint)
     var count = part.attribute_view(String(POSITION)).count()
     var indices = List[Float32](capacity=4 * count)
     var weights = List[Float32](capacity=4 * count)

@@ -12,17 +12,18 @@ render view draws the storeys up to the first shaft storey, so the plan,
 the doors and the furniture show.
 """
 
+from tools._example_output import (
+    example_destination,
+    build_and_spin,
+    gallery_camera,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv
+from render.framebuffer import Color
 from units.si import DEGREE, METER, Angle, Length
 from extensions.building.generate.plan import RESIDENTIAL_FLOOR
 from extensions.building.generate.tower import TowerOptions, generate_tower
@@ -67,62 +68,26 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.5, METER),
-        Length(300, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(17, 21, 19),
+        Vector3(0, 3, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.5, METER),
+        far=Length(300, METER),
     )
-    camera.place(Vector3(17, 21, 19), Vector3(0, 3, 0))
     return camera^
 
 
-def _light(mut scene: Scene) raises:
-    """Add a sky fill and a sun.
-
-    Args:
-        scene: The scene to light.
-
-    Raises:
-        Error: If the scene refuses a node.
-    """
-    scene.add_light(ambient_light(Color(214, 222, 232), 0.5))
-    var sun = Object3D()
-    sun.set_position(30, 60, 40)
-    scene.add_light(
-        directional_light(Color(255, 246, 230), scene.add(sun^), 1.6)
-    )
-
-
-def _write(frames: List[Framebuffer]) raises:
-    """Write the frames as an animated PNG.
-
-    Args:
-        frames: The frames.
-
-    Raises:
-        Error: If the file cannot be written.
-    """
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", len(frames), "frames")
-
-
 def main() raises:
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(150, 182, 214))
-    var assets = Assets()
-    var scene = Scene()
-    var root = _build(scene, assets)
-    _light(scene)
-    var camera = _camera()
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        scene.node(root).rotate_y(step)
-        scene.update()
-        frames.append(renderer.render(scene, assets, camera))
-    _write(frames)
+    build_and_spin[_build, _camera](
+        WIDTH,
+        HEIGHT,
+        Color(150, 182, 214),
+        0.5,
+        1.6,
+        FRAMES,
+        DELAY_MS,
+        example_destination(String(DEFAULT_OUTPUT)),
+    )

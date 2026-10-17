@@ -31,10 +31,19 @@ the wrong sign, and repeats until nothing changes.
 The simulation is deterministic: it has no random input and no thread.
 """
 
-from std.math import isfinite
-
-from extensions.energy.conduction import FaceCondition, LayeredWall
-from extensions.energy.ids import EXTERIOR, GROUND, INTERZONE, ZoneId
+from core.ordinal import require_index_in_count, require_positive
+from extensions.energy.conduction import (
+    FaceCondition,
+    LayeredWall,
+    require_fourier,
+)
+from extensions.energy.ids import (
+    EXTERIOR,
+    GROUND,
+    INTERZONE,
+    ZoneId,
+    require_zone,
+)
 from extensions.energy.solar import (
     SurfaceOrientation,
     orientation,
@@ -101,8 +110,7 @@ struct SimulationOptions(ImplicitlyCopyable):
         """
         if self.substeps < 1 or self.substeps > 60:
             raise Error("Substeps must be 1 to 60")
-        if not (self.fourier > 0 and isfinite(self.fourier)):
-            raise Error("A Fourier number must be positive and finite")
+        require_fourier(self.fourier)
         if not (
             self.ground_temperature.is_valid()
             and self.initial_temperature.is_valid()
@@ -180,13 +188,13 @@ struct SimulationResult(Movable):
 
     def _index(self, step: Int, zone: ZoneId) raises -> Int:
         self._check_zone(zone)
-        if step < 0 or step >= self.step_count():
-            raise Error("A step is out of range")
+        require_index_in_count(
+            step, self.step_count(), "A step is out of range"
+        )
         return step * self.zone_count + zone.value
 
     def _check_zone(self, zone: ZoneId) raises:
-        if not zone.is_valid() or zone.value >= self.zone_count:
-            raise Error("A zone id is out of range")
+        require_zone(zone, self.zone_count)
 
     def air_temperature(self, step: Int, zone: ZoneId) raises -> Temperature64:
         """Return a zone's air temperature at the end of a step.
@@ -411,8 +419,9 @@ def simulate(
     model.check()
     options.check()
     weather.location.check()
-    if len(weather.records) == 0:
-        raise Error("A simulation needs a weather record")
+    require_positive(
+        len(weather.records), "A simulation needs a weather record"
+    )
     var record_seconds = weather.step.to(SECOND)
     if not (record_seconds > 0 and record_seconds <= 3600):
         raise Error("A weather step must be over zero and up to one hour")

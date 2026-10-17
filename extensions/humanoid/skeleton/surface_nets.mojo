@@ -29,10 +29,12 @@ does not smear across it.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, POSITION, UV
+from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from extensions.humanoid.skeleton.isosurface import check_detail
-from math.vector3 import Vector3
+from math.utils import clamp
+from math.vector3 import Vector3, mix_delta3
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.sys import num_logical_cores
@@ -119,7 +121,7 @@ def surface_gradient[
 def _crossing(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
     """Return where the field crosses zero between two samples."""
     var t = da / (da - db)
-    return a + (b - a) * t
+    return mix_delta3(a, b, t)
 
 
 def _u_of(point: Vector3) -> Float32:
@@ -476,7 +478,7 @@ def mesh_surface[
                     active[i + bx * (j + by * k)] = True
                     near.append(i + bx * (j + by * k))
     var pending = _sample_indices(values, grid, near, bx, by)
-    var tasks = max(1, min(threads, len(pending)))
+    var tasks = clamp(threads, 1, len(pending))
     var samplers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         samplers.create_task(
@@ -507,7 +509,7 @@ def mesh_surface[
     var count = len(crossed)
     var positions = List[Float32](length=count * 3, fill=0)
     var normals = List[Float32](length=count * 3, fill=0)
-    tasks = max(1, min(threads, count))
+    tasks = clamp(threads, 1, count)
     var placers = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         placers.create_task(
@@ -533,7 +535,7 @@ def mesh_surface[
                     var q = _edge_quad(values, cells, grid, i, j, k, axis)
                     if q[0] >= 0:
                         _emit_quad(indices, positions, normals, q)
-    if len(indices) == 0:
+    if len(indices) <= 0:
         raise Error("The " + name + " field produced no surface")
     _smooth_normals(normals, indices, smoothing)
     return finish_surface(positions^, normals^, indices^, low.y, span_y)
@@ -650,7 +652,7 @@ def finish_surface(
     for index in range(count):  # pragma: no branch
         var p = _vertex(positions, index)
         uvs.append(_u_of(p))
-        uvs.append(max(Float32(0), min(Float32(1), (p.y - base) / span)))
+        uvs.append(clamp((p.y - base) / span, 0, 1))
     # A triangle across the seam gets copies of its corners on the low
     # side, moved past one.
     var copies = Dict[Int, Int]()
@@ -679,10 +681,7 @@ def finish_surface(
                 indices[corner + n] = copy
         corner += 3
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^
 
 
@@ -708,5 +707,5 @@ def share_height(
     for index in range(positions.count()):  # pragma: no branch
         shared.append(uvs.component(index, 0))
         var v = (positions.vector3(index).y - low) / span
-        shared.append(max(Float32(0), min(Float32(1), v)))
+        shared.append(clamp(v, 0, 1))
     geometry.set_attribute(String(UV), BufferAttribute(shared^, 2))

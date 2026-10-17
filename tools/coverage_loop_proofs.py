@@ -495,6 +495,16 @@ REVIEWED_LOOP_RULES = {
 }
 
 
+# PR760 local literal successor. The retained-groom theorem below is unchanged.
+HAIR_LITERAL_SUCCESSOR = ({
+    'extensions/humanoid/skeleton/head/hair/strands.mojo':
+        '058c0e6fbfce95ee97c79247622185de968c8de5e0ad23240d667da13776404f',
+}, (
+    (229, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
+    (235, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),
+))
+
+
 # Each additional row is a separately source-reviewed local/caller theorem.
 # Complete source bindings are fixed review inputs, never refreshed at runtime.
 # A mismatch withholds that row; all original reachable probes remain mandatory.
@@ -792,14 +802,21 @@ def _density_stdlib_unshadowed(root, *, _operation=None):
     return True
 
 
-def repaired_density_loops(root, *, include_roots=()):
+def repaired_density_loops(root, *, include_roots=(), _operation=None):
     """Admit local repaired loops, never their unsafe historical counterparts."""
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    stream_args = {} if _operation is None else {'_operation': _operation, '_root': root}
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_include_context(_operation, root, include_roots)
     try:
-        if file_sha256(relative_source(root, DENSITY_SOURCE)) != DENSITY_AFTER_SHA256:
+        if file_sha256(relative_source(root, DENSITY_SOURCE, **operation_args),
+                       **stream_args) != DENSITY_AFTER_SHA256:
             return {}
     except (OSError, ValueError):
         return {}
-    if not all(_density_stdlib_unshadowed(path) for path in (root, *include_roots)):
+    if not all(_density_stdlib_unshadowed(path, **operation_args)
+               for path in (root, *include_roots)):
         return {}
     return {line: {
         'line': line, 'kind': kind, 'cardinality': 1,
@@ -808,6 +825,453 @@ def repaired_density_loops(root, *, include_roots=()):
         'expression': expression, 'proof_id': proof_id,
         'dependency_sha256': {DENSITY_SOURCE: DENSITY_AFTER_SHA256},
     } for line, kind, minimum, maximum, expression, proof_id in DENSITY_REPAIRED_RULES}
+
+
+# Fixed physical density/groom import closure on the reviewed PR760 image.
+# These bytes bind local domination proofs only, never whole CARLA admission.
+DENSITY760_INPUTS = {'core/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'core/assets.mojo': '5d5394df10b330767970b8585f9707673fb1ee6ef0f269ec430b8e2ffa54f89b',
+ 'core/background.mojo': '0d43517034157e341071cd96448901e0483480053e26df93dca3521680446039',
+ 'core/binary.mojo': '2d3a5a121ebcd919fc987b5972eb1071100bdd9dc397695c789561cc275e59d7',
+ 'core/buffer_attribute.mojo': '8b0dfe3d758bf4e323805f5a3c513a3102f7fde86f7ebad418db3264295ceaed',
+ 'core/buffer_geometry.mojo': '9e09d806746e717207b5d20bff79369b5cc6357bcde1d9a609792c0095668176',
+ 'core/extent.mojo': '50f3c4fcc55b672ab1d42505cf70baeb3aae85ebf915927369246ab7e214a023',
+ 'core/fog.mojo': '8026f0db83e2eef31d0e63793f65a449cb9eebae917e081e950a851ab98ca66c',
+ 'core/gaussian_splat_utils.mojo': '63e4123f61a1e8ae6845b0eae449b5c173368bdf0ca691d7327255d33c8533b3',
+ 'core/geometry_store.mojo': 'c42cde4b1e8c5668b138d462a997ac23d36cfe9789cddd22eaee142a2cec6f06',
+ 'core/interleaved_buffer.mojo': '2d9b3760a4e0d9d227d38a91ef4917501ffecdedfdf60bf0e8ccacd0e60de597',
+ 'core/layers.mojo': 'ebc7a81fcc9f8b7d36ab3cecc46208f078797b7ac108317baaac9a9d44cacb7b',
+ 'core/morph.mojo': '8c84adfbad9405ae1f582ba6e3f6a9b39db14bbf8ac20e96bee1d03e9d6be47d',
+ 'core/object3d.mojo': '749062c89390981215d7f4d9fb60a4557291b734b19f93571d4e46e1996cb203',
+ 'core/order.mojo': '4c7a1e85fbb2ceffa9c6d59a4294517057b1580dfd7b0e2f07b1ec99b59096b7',
+ 'core/ordinal.mojo': '020ae821e6e4d6f596174a672f70876d43a13d5a397bd42ef1b2152ac736bb90',
+ 'core/scene.mojo': '4eb55a160cd53e4db34a51bc6fc48e7427cb10ffa4ffa72e191519dee76e8b20',
+ 'core/search.mojo': '1bc8bedd8b4d91ff3a455fa8232dc36fdfdeae0b7f61adf8d41ee16467b8df72',
+ 'core/user_data.mojo': 'bec1a6fb8cf0cc43536c0e347a5e302fa225988a47dcd5001b30fb9dd443d5a5',
+ 'extensions/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/anatomy/__init__.mojo': 'e07a6d503cb1d532b4dac54ceca76d6ff2b7bbddea0af02d17f55b64143ee1cf',
+ 'extensions/anatomy/soft_tissue.mojo': '7a72a46ef52f2d4a506b30eb405381a2e24760bfdb7e80a3b49bde1a29d1b91b',
+ 'extensions/humanoid/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/assets.mojo': '5bb7d4e755b00fb7f9170449fac3fb294b8a32be7397772cfec73fd1af0a0fd4',
+ 'extensions/humanoid/athleticism.mojo': '0cddb9a18fbd1de06a3af23fdba6bd6d76a0227c537277bf87ebc6b6aedc9541',
+ 'extensions/humanoid/genome.mojo': '6e76453b4bd8f3b1fc7a1575ceff46684aa3d4c333b4fed506dfc21ed68a5eca',
+ 'extensions/humanoid/sex.mojo': 'd31e08b1eb5e8301ae86d895b1f0e35e9242ea0e2e265227243c4231b406c342',
+ 'extensions/humanoid/side.mojo': '8e0d56aaa0b8a06cde796f440809daab81ff2ba5042c56f5474beaf5115cd2a9',
+ 'extensions/humanoid/skeleton/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/assembly.mojo': 'f62f2445d176dcb7135826a79fe03cf1ef1958717e9241fe6d083eadd034911f',
+ 'extensions/humanoid/skeleton/arm/bones/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/bones/dimensions.mojo': 'fec01e7fcf2e22f572025a9aa25ee73787afe40a81af3d15895ed870eb220388',
+ 'extensions/humanoid/skeleton/arm/bones/geometry.mojo': 'b97e08430c780a0ee916aaa1137af5c64f2282de7330d34bd23e68f591c5903e',
+ 'extensions/humanoid/skeleton/arm/contents.mojo': '4abe4929a889fbb130217874c52a470fad109c0d29d85a3e6004a77eeb28f508',
+ 'extensions/humanoid/skeleton/arm/frame.mojo': 'a6a2fd6455f20e4e261fb43d4b6754d382da71dd060a79a19612cafc4f927546',
+ 'extensions/humanoid/skeleton/arm/hair/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/hair/dimensions.mojo': '2117dae1a6b922403571c72f661ed270acef62589299c02daab143edd3d9188d',
+ 'extensions/humanoid/skeleton/arm/hair/geometry.mojo': '20d3ff217a0c2fca7da2e62c94d5a5369261f1eb613e210c4a9e4d9bb9ea54db',
+ 'extensions/humanoid/skeleton/arm/ligaments/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/ligaments/dimensions.mojo': 'd6439c7dc5bff3066ca69d8e610162f9038cb65dcc3056da3d430ab11a401162',
+ 'extensions/humanoid/skeleton/arm/ligaments/geometry.mojo': 'efdc55cb634b732654bc268971c0fafde6baa2d502ba0d4f827ec63acb1018e3',
+ 'extensions/humanoid/skeleton/arm/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/lymph/dimensions.mojo': '9c69c757e141106011074cc20ba0e0e90543ee7e2c767bf741f046ebf7b11a63',
+ 'extensions/humanoid/skeleton/arm/lymph/geometry.mojo': '77d88fb31f2fdb2b3e7f0492c5f8b3f833afa3ac82d9f2094294081460b538ab',
+ 'extensions/humanoid/skeleton/arm/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/muscles/dimensions.mojo': 'daea51edd98ea1882e5f5b840ef43e93f3f4421b6e142ad2fd6d5c1ca5174a0b',
+ 'extensions/humanoid/skeleton/arm/muscles/geometry.mojo': '87c62ef12263a84408013142de1306ad3d682401d223121ee49a16a878bb1e26',
+ 'extensions/humanoid/skeleton/arm/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/nerves/dimensions.mojo': '5f99788bd09e4eba09c04c10547b443af4640e58161dd2414340f2fa63b8fee5',
+ 'extensions/humanoid/skeleton/arm/nerves/geometry.mojo': 'f4c02994854f0cdabe88453f3a7c691bb44dab599157da776380ba0289340cb4',
+ 'extensions/humanoid/skeleton/arm/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/skin/dimensions.mojo': '65341dc934994f1401535fc732255739dae36ff4790389ca7808729064e92aa0',
+ 'extensions/humanoid/skeleton/arm/skin/geometry.mojo': '8b687cd8a8982e32f2fac500c2db809a3ada568c4fbc3903dfd081f9089a05a3',
+ 'extensions/humanoid/skeleton/arm/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/arm/vessels/dimensions.mojo': '720932e514410d8ed79f7bab028cda672a68b0380b11376b34356038faa4b6c9',
+ 'extensions/humanoid/skeleton/arm/vessels/geometry.mojo': 'a5f4cb9a6493d4ea73a5a50b4a146aa054452ca11a762922c2851771af35bc31',
+ 'extensions/humanoid/skeleton/complexion.mojo': '4000aa47c43c805097a54b96d226ae89d6341a6ca6c79436e80b7e8dbd56ad06',
+ 'extensions/humanoid/skeleton/dermis.mojo': 'bdfbe857828add673109c382a8478ad6ea7a47c495b8bbfd3b38a6844d0ff5f9',
+ 'extensions/humanoid/skeleton/field.mojo': 'c5c57466cc6bd576d56bddd948f5dcbc3330523b2375742c8a8f1ab687d40fa9',
+ 'extensions/humanoid/skeleton/foot/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/assembly.mojo': '3cf5b178fa42b49feebf9336703caa990b43ed83dc2f0075d02292be77939df3',
+ 'extensions/humanoid/skeleton/foot/bones/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/bones/dimensions.mojo': 'b6f21c7d225c013eab349961aee5c416322e6abb053b5e9cad69d006435a569a',
+ 'extensions/humanoid/skeleton/foot/bones/geometry.mojo': '3e04cf81d212e620db76470513e20180c45c97264b56a06343eb8d821137da6b',
+ 'extensions/humanoid/skeleton/foot/chain.mojo': 'd82355f0a6f6c4f3340f24689b9b1aa18f916fd57c8f030647c200dc52eb00bc',
+ 'extensions/humanoid/skeleton/foot/contents.mojo': '4ac91cacee468c5b8bad79ad8cdd8012995b51b31bbff3244dc1f09820e5af35',
+ 'extensions/humanoid/skeleton/foot/hair/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/hair/dimensions.mojo': '15781d9f1f7961037b22d418823cf2d007002563a78edc4b84f4400311d3a018',
+ 'extensions/humanoid/skeleton/foot/hair/geometry.mojo': '2822843b766edb7f260a6a410635bcb39b57db0e5cea728177b0a1d431af6a38',
+ 'extensions/humanoid/skeleton/foot/ligaments/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/ligaments/dimensions.mojo': 'e534d46121d26c543a7b506164c64ef54d2cc29caac636cef929d1eeff54f6d6',
+ 'extensions/humanoid/skeleton/foot/ligaments/geometry.mojo': '3082eb038e5acef71d037476c7ccf9aef9e23fe0a8be88640e4ac3468965d317',
+ 'extensions/humanoid/skeleton/foot/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/lymph/dimensions.mojo': '822889f9bd9ca1e68714945c255d272747986037f8bf6d551d6e4c6c4e2f5b3a',
+ 'extensions/humanoid/skeleton/foot/lymph/geometry.mojo': '822b1a94865951aa34427c927e5d3185e8c777a2a53616999de6354830a32ef3',
+ 'extensions/humanoid/skeleton/foot/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/muscles/dimensions.mojo': '06b1c0b7e304eed94682ffa8ba1b799bdce944f06f0804be9f25785d6c898d7b',
+ 'extensions/humanoid/skeleton/foot/muscles/geometry.mojo': '1e40ff03dd6516b9e391c428a9884ca8cff56d3df9cc08cdd3443d5d2aa28a0f',
+ 'extensions/humanoid/skeleton/foot/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/nerves/dimensions.mojo': '6ae2a4a74534bf8d3ad32a1b4a2e4bbda71821af57793b17293169121e021908',
+ 'extensions/humanoid/skeleton/foot/nerves/geometry.mojo': '20cc857c207e46a1e423533839219e418eb0334a8db8f09fa036649456cce4aa',
+ 'extensions/humanoid/skeleton/foot/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/skin/dimensions.mojo': 'cac9654d6385da4c8fa44ec185fa7829de620f823ebe178a7485b69926f49cec',
+ 'extensions/humanoid/skeleton/foot/skin/geometry.mojo': 'ac8fc0d736a79aa68108f52dff5b68d06a5a71cf1c74902cf30ec8fa5ae46154',
+ 'extensions/humanoid/skeleton/foot/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/foot/vessels/dimensions.mojo': '22b582af30c0003ca1535d6573d44c54132cac6b47a8884df24adfde2f5058b8',
+ 'extensions/humanoid/skeleton/foot/vessels/geometry.mojo': '52acebbddd8e2ced61c9c141a8e23668162ebca4d581ec96f3cf5b70f63bcdb0',
+ 'extensions/humanoid/skeleton/hair_shafts.mojo': '1c8c1a21f439d4694bde79aff5d576a98d9d002ff2ac02b94010eaac6ac3311c',
+ 'extensions/humanoid/skeleton/hand/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/assembly.mojo': '77f807c1ee34a766f7f79b6b4d04c5caf4310cc569b26e6441621db35146c408',
+ 'extensions/humanoid/skeleton/hand/bones/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/bones/dimensions.mojo': 'ee3533bb1657418b005a7bd13451a510789beb726fa38e0add676d4d1d618461',
+ 'extensions/humanoid/skeleton/hand/bones/geometry.mojo': '93a3fa4a707f8fe950db466c0af19185fc9c13149021cd77a5512433c02ca2c4',
+ 'extensions/humanoid/skeleton/hand/contents.mojo': 'ce55447d577356c91dfa648ec4b2c28a6de4c00332859b9c8044df350e42aa56',
+ 'extensions/humanoid/skeleton/hand/hair/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/hair/dimensions.mojo': '85a3ad55508026b86b8ace135c0209b415595a8955df9445cb0370cd51f66832',
+ 'extensions/humanoid/skeleton/hand/hair/geometry.mojo': 'ace0c7dd09bf1e0cb64c4d16b0a4421f53e6dc4139ba0b482b7cad483277aa83',
+ 'extensions/humanoid/skeleton/hand/ligaments/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/ligaments/dimensions.mojo': 'dedee73703e5a13bd8de7c37989a1480e129a3c79e596cd405e400c3113daafa',
+ 'extensions/humanoid/skeleton/hand/ligaments/geometry.mojo': 'e12c1e40562e5a6a533668b0827ecdd34ed5dfd78b56e27b79cb12845b949fe3',
+ 'extensions/humanoid/skeleton/hand/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/lymph/dimensions.mojo': '7f1b2197ba968af085e6cd42088447100eb33ec24fcd672efdf9ed33bb8dc7ab',
+ 'extensions/humanoid/skeleton/hand/lymph/geometry.mojo': 'f568f74defca05261750eabf717ad715689273911e07693f00819e48791f51aa',
+ 'extensions/humanoid/skeleton/hand/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/muscles/dimensions.mojo': '774775c26d5852f240f1140415103765d60a2165fd459189833d578f6d5657bf',
+ 'extensions/humanoid/skeleton/hand/muscles/geometry.mojo': 'c69e380e22d6a6470a828569174692d778c943c44dc55fa076fde77405f2e0e7',
+ 'extensions/humanoid/skeleton/hand/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/nerves/dimensions.mojo': 'f0082636513ae8306f9bde3cce54d8f3090d3170d5f81c420d66ea2819a7a978',
+ 'extensions/humanoid/skeleton/hand/nerves/geometry.mojo': 'a59e5b920dffc808c9f8b469c1a00db77829e77ac533599049e5c514948c9088',
+ 'extensions/humanoid/skeleton/hand/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/skin/dimensions.mojo': '329328b7896e02928f9d8afd319a2cbe380d65e6bc4ed06ea1b9d398d1276aa2',
+ 'extensions/humanoid/skeleton/hand/skin/geometry.mojo': '82531a82da3600f8887a8e1e3af7e3758d3d975bb036c8c976ef4d7a8d44af6a',
+ 'extensions/humanoid/skeleton/hand/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/hand/vessels/dimensions.mojo': 'f6182b369605e4dc0a3fb389c90cdff1a907f1eb5cc7d4d62fbd42ca978b7052',
+ 'extensions/humanoid/skeleton/hand/vessels/geometry.mojo': 'ae7b3fe2dd1f1b6eae62317876b135ec07f8d0588c6835b46fbe4885fc4c51bb',
+ 'extensions/humanoid/skeleton/head/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/assembly.mojo': '89c62abc454debdb2777e3698c2992185507a4c2b1c7674ecd22bf70a883f406',
+ 'extensions/humanoid/skeleton/head/bones/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/bones/dimensions.mojo': '8de999263d7cb6b807b6e1105e5bf9e774efdbcd0501546bac58af77415e0eba',
+ 'extensions/humanoid/skeleton/head/bones/geometry.mojo': '131afc719a4262c90defbd9c1c9c70dffe4382ee2f365fc57fe0bef96bbd12c5',
+ 'extensions/humanoid/skeleton/head/contents.mojo': '8963187c2c449394e9deeb5efeca8e9f781d6fe39525b74c878a2af2c7eb4e69',
+ 'extensions/humanoid/skeleton/head/eyes.mojo': 'ed845af70644d0408e6a295c1af5abcf4ef6ab16073a8ab29a2c9d5b258e542b',
+ 'extensions/humanoid/skeleton/head/face_model.mojo': '89f346b425a3f096e8ad46352f97cbf44299f3a0bd4713815af3b7e6a3322e6e',
+ 'extensions/humanoid/skeleton/head/frame.mojo': 'cc2ebb1a9d590ddd6072f509d8f9d59f41473f02128193bbf9f8b3de6f54795d',
+ 'extensions/humanoid/skeleton/head/hair/collider.mojo': 'da7bf07ec7f71bbb742e8af16de38d3b93bd3497446cf5f73ed1a1b8fe438a88',
+ 'extensions/humanoid/skeleton/head/hair/density.mojo': '88283971d77ae8f245e606887373bc57222c403f4e64af982bf2acdf4a97ef63',
+ 'extensions/humanoid/skeleton/head/hair/dimensions.mojo': '4dbcc1e61c5b8a748633d255b99f9167f55c7b822c7a7718e5b6b11ed860152b',
+ 'extensions/humanoid/skeleton/head/hair/geometry.mojo': '786d218c79da1097b930bc83d42ac9d3ae2cb4b4705d2c1318f824db251396ee',
+ 'extensions/humanoid/skeleton/head/hair/groom.mojo': '67f8ea34485c0f1a8b561dece38a933cdc5d0e6aea47d038196d68ee0b617fbd',
+ 'extensions/humanoid/skeleton/head/hair/styles.mojo': '2693b22bbca30f659de4c954479249680871c001959c03644d897f17ba5c5ea4',
+ 'extensions/humanoid/skeleton/head/ligaments/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/ligaments/dimensions.mojo': '4ff301c65e3c38639504f67f2ab32267a34c0e9f89768d5f30cafe97cf5a5779',
+ 'extensions/humanoid/skeleton/head/ligaments/geometry.mojo': 'a4da0a0a88d271c2198dca163b553b420987b76e0d61251f8b0482fc4d002586',
+ 'extensions/humanoid/skeleton/head/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/lymph/dimensions.mojo': '1606f3ac37769995f888646920da7ff2973c4f0fdf29f8d118348a8173101831',
+ 'extensions/humanoid/skeleton/head/lymph/geometry.mojo': 'e6735eeddeff098772e131af3f3c05c2e19e67f7d4d5802c9eb493bd7435df3c',
+ 'extensions/humanoid/skeleton/head/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/muscles/dimensions.mojo': '0fd568d8d36e0c7390f18b1d212853a6a643d9d86e2a358990f00fa369793c67',
+ 'extensions/humanoid/skeleton/head/muscles/geometry.mojo': '9805573beadd5dc11b5689902f29bcd403eb18dd62d6317a4292948f8724f74c',
+ 'extensions/humanoid/skeleton/head/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/nerves/dimensions.mojo': 'b8648d896b8d5d0700f81ee12232c5933b3f30909f65b25da42240946d5a44f7',
+ 'extensions/humanoid/skeleton/head/nerves/geometry.mojo': '0c794156f22d40b3224fb0e6b0f80943b1e777628e6a4a42fb07682898288fdf',
+ 'extensions/humanoid/skeleton/head/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/skin/dimensions.mojo': 'fb1f420a98b05ce2a64224699b4dd5b1032654a096ffe9ce6e060d0fcee713be',
+ 'extensions/humanoid/skeleton/head/skin/geometry.mojo': '22d55d868986379a82bab45d351325d223c0f228cd60b2ea9eacdc58286cc385',
+ 'extensions/humanoid/skeleton/head/skin/mouth.mojo': '9c3bdb9b664e92a3a3e7fb93689be2ff7ca2b996de740bd750d7d31819eb406c',
+ 'extensions/humanoid/skeleton/head/skin/scan.mojo': '616033de36df47bc74ec0c0f91d38dff73ae1b8606ca42731dc97af9b8891eb7',
+ 'extensions/humanoid/skeleton/head/skin/tint.mojo': 'aefb817f97ca01316b9a9a22e30f855bd9bd20fdfc9573d6fcdd7eed5c30d170',
+ 'extensions/humanoid/skeleton/head/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/head/vessels/dimensions.mojo': '0f3bc9c28524be575a022bb1700eba4811c27410d270c7c80b5077425f1bf515',
+ 'extensions/humanoid/skeleton/head/vessels/geometry.mojo': '775662396994f5ccffac5b4b5f2102488118a5d7cf1373f1f36c01fae1bf7709',
+ 'extensions/humanoid/skeleton/isosurface.mojo': 'cf40c00847dbdb157273acc2163ba3c2f90875ac0b41ec67ea9d4828fb17ac75',
+ 'extensions/humanoid/skeleton/layer_set.mojo': '833ceb236d967cc0594cad8e7ccc97b13a874f73605ef103b32bf6c8776ced09',
+ 'extensions/humanoid/skeleton/leg/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/assembly.mojo': '50593a0fbe48d64ccd33386d1ab1d5b2ad54482d758f78ccfc4b362b49a1cafd',
+ 'extensions/humanoid/skeleton/leg/contents.mojo': 'c2aef8fe7969cab99926bce30af9de3777294c96d8c526582739fa63e73be28b',
+ 'extensions/humanoid/skeleton/leg/femur/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/femur/dimensions.mojo': '1bfcc887ee1f531108b2719c31d90d8b88f8650db75b32e3a628f991488dc4ba',
+ 'extensions/humanoid/skeleton/leg/femur/geometry.mojo': 'e6e99b707dff7ab24886a5ecbf4bf1ce15f7cd3ab617bf2117b392a671675691',
+ 'extensions/humanoid/skeleton/leg/fibula/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/fibula/dimensions.mojo': 'b4c7848f100e1ebd5ba1010de6fc34bc77aa59b227010fd33c0d40b664e0fbaa',
+ 'extensions/humanoid/skeleton/leg/fibula/geometry.mojo': '50205b8c7e927732edac3e227f23d1e8d520f0eb4ceb04d0b91e8a2ca7fe93cc',
+ 'extensions/humanoid/skeleton/leg/hair/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/hair/dimensions.mojo': 'e904d80577cd1727684064b1ed4b487ff29b795f50eab770ded4665831c9cacb',
+ 'extensions/humanoid/skeleton/leg/hair/geometry.mojo': '4653aab9209929c433617c94029f68d438cce5d0745fbd5dbfdb7a877bb9cef6',
+ 'extensions/humanoid/skeleton/leg/knee/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/knee/dimensions.mojo': '6661d7cb0622e8f3e66044f0fe598ad9ae0a493654ccf0293313579fa2ec8297',
+ 'extensions/humanoid/skeleton/leg/knee/geometry.mojo': 'c7477b3213098d1c42ea4fb9fbb550f0c003f75512eb07ccd39721aca00ea38d',
+ 'extensions/humanoid/skeleton/leg/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/lymph/dimensions.mojo': '34bb02ffa56e23a7f2651979fc4e52c0cf1c9bc329cf6f5c926f66a74076aa66',
+ 'extensions/humanoid/skeleton/leg/lymph/geometry.mojo': '98572a4ddfb99d136838dcbfa1e97b58dc2fee8ef6e2e66c4a0f4403aa8989b4',
+ 'extensions/humanoid/skeleton/leg/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/muscles/dimensions.mojo': 'f947872e5d0f24ba923b445ff13970a56adc1299534a6cf5b48885173981117f',
+ 'extensions/humanoid/skeleton/leg/muscles/geometry.mojo': '7ba642cfe580bd55e882020e0e7449b1b02b105a4c968d4eb86c51f76fd81957',
+ 'extensions/humanoid/skeleton/leg/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/nerves/dimensions.mojo': 'da35dd1c640e32ab76fe8af3ae59ea0d0f0fe1543a86f28b21f94d79e36cc833',
+ 'extensions/humanoid/skeleton/leg/nerves/geometry.mojo': 'b3ca7e7d49746d2fc1ea8fafa6aa8f971c0ce9f331bf2f2862cbb9a63f09b6a0',
+ 'extensions/humanoid/skeleton/leg/patella/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/patella/dimensions.mojo': '0ff13ee04349990b58ee3b37f9b928ad36a9ffcf6237d6032f8d7de2aedd17ff',
+ 'extensions/humanoid/skeleton/leg/patella/geometry.mojo': '6aa9d6af356e5a506e45035b3a160548bfed17455560b8a4190af74cef8350e9',
+ 'extensions/humanoid/skeleton/leg/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/skin/dimensions.mojo': 'e85e7864d7a6e8d5c041ba8386c790938345502688f519717a1523f4076b9393',
+ 'extensions/humanoid/skeleton/leg/skin/geometry.mojo': '612bead9071cff56cb692fed1a2014211acfbd1264911f8e0ff34eb41c48f8f4',
+ 'extensions/humanoid/skeleton/leg/tibia/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/tibia/dimensions.mojo': '0b35d66eff93164c478da515d5966a736a37f0aac8853837a5c5f31cd61e05dc',
+ 'extensions/humanoid/skeleton/leg/tibia/geometry.mojo': 'e366515e962e34e2c3ded867861693eb7b5152bc3bd93d4f4e70027b9a1b7eaf',
+ 'extensions/humanoid/skeleton/leg/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/leg/vessels/dimensions.mojo': '3a9b54cfa4eeeacbb1a04c8ce8952a46f5ca2d8405f69215832aecf37ea476a7',
+ 'extensions/humanoid/skeleton/leg/vessels/geometry.mojo': '53b51984fd16179981a4f964f7fd6435009d946c8b1103c1b66504cf75b3bb85',
+ 'extensions/humanoid/skeleton/limb/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/limb/skin.mojo': '3b93c4902fa4dfbb2bb984aa21dfd555036631b40e8d964e8b776a07414ac430',
+ 'extensions/humanoid/skeleton/loft.mojo': 'e752c764322629e463d4bda2ec1016fcf798dc783b8964e1d3c67380724083ab',
+ 'extensions/humanoid/skeleton/look.mojo': '3650c0efb4bbfd6ab72793cbb2485b633bb70e6e8413006ea8022a3c1a93dc89',
+ 'extensions/humanoid/skeleton/mesh_field.mojo': '2fae9883759be00f2d95eed70595bd4f3020773a96e821d88af86c45b5cd136d',
+ 'extensions/humanoid/skeleton/morph.mojo': 'ad45a84aecebd2ede894aaf3706ae14a79635e1df93156adb540662620c5d8ec',
+ 'extensions/humanoid/skeleton/pelvis/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/assembly.mojo': 'a1db00e7da91785d4700751d2e23ab1a1359ff0176201c0a58390373dfd7785d',
+ 'extensions/humanoid/skeleton/pelvis/bones/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/bones/dimensions.mojo': '13fd1ec5e495f42650355847245f508d41b37da75766e0bae9b398c31403b5f1',
+ 'extensions/humanoid/skeleton/pelvis/bones/geometry.mojo': 'da74a97a5bc3c9bca9d3cbdad9addeef1ec8f349c3b0858b89f88dde35e1ec12',
+ 'extensions/humanoid/skeleton/pelvis/contents.mojo': '43d95b7d5cfa1d784eeb36fdbf4916893b4283d6436417291deb6ffc1b89f10a',
+ 'extensions/humanoid/skeleton/pelvis/ligaments/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/ligaments/dimensions.mojo': '07f981c8d999391e065f3bae371a6f89b4d29c6e1d061e75a7978e1b05908440',
+ 'extensions/humanoid/skeleton/pelvis/ligaments/geometry.mojo': 'a3de67d9e17fdf08f1dac600a86e10e2784679066b2b663bb402111cb2efe945',
+ 'extensions/humanoid/skeleton/pelvis/lower_body.mojo': '2fdd9e479823e2c35988e7321b6e723cbb367e854e410ba0423f80ce46d605eb',
+ 'extensions/humanoid/skeleton/pelvis/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/lymph/dimensions.mojo': '70f1362e55c33f8ee148d7243c3678a18d798b8a2de9b4933aa4a90eb71678d0',
+ 'extensions/humanoid/skeleton/pelvis/lymph/geometry.mojo': '0adcc126f28e9ed4dc3043adeed75dc96e07fa1229d5a75010327c558a304c05',
+ 'extensions/humanoid/skeleton/pelvis/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/muscles/dimensions.mojo': 'e0b25da2866e2ff54a9644e18b5c87c7cbe81d670bff0b2618d04e5ada054d50',
+ 'extensions/humanoid/skeleton/pelvis/muscles/geometry.mojo': '76422f29dea2b0ee59fa3de095a9a8bc488cf00b18107227d4ab5be064cb1535',
+ 'extensions/humanoid/skeleton/pelvis/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/nerves/dimensions.mojo': '48e4f823a890ec63e6582774e803554389105476c58e03969abd64d8cd8b4211',
+ 'extensions/humanoid/skeleton/pelvis/nerves/geometry.mojo': 'c06bb0bd8c5f7042b584b96c230d9653dc0a1eec288e3ca1a09ae6de020b8f64',
+ 'extensions/humanoid/skeleton/pelvis/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/skin/dimensions.mojo': '0a41deec5cec4c2d5c8e938534df901a63aacf1cae2d0119523a019f3244751b',
+ 'extensions/humanoid/skeleton/pelvis/skin/geometry.mojo': '032066a91f40ecf521162aa1f98ca198baadcfc6fc59eb854f7a776cba63cdc0',
+ 'extensions/humanoid/skeleton/pelvis/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/pelvis/vessels/dimensions.mojo': 'e7fa736eccca74db021cbcd2a4dd816c4d72cd7b09661c38da6115eb0e1d347e',
+ 'extensions/humanoid/skeleton/pelvis/vessels/geometry.mojo': 'c6bc09e684ea9b75bf428e4df7e8159f096b422044f188f9e5a159f12662bdd7',
+ 'extensions/humanoid/skeleton/place.mojo': '5821df5eefffc821ee3a219620ebe44ba41f1cbd48ed6003ae4040a5fd180b6b',
+ 'extensions/humanoid/skeleton/sculpt.mojo': 'a345363e76110c3a7e962156ca2ef3395724667f0f41644586cb360e264dd365',
+ 'extensions/humanoid/skeleton/surface_nets.mojo': 'c41e146dca44bb7c2e9f05113a0e0d254b4257547e8c7930dc25d5ba8567c86e',
+ 'extensions/humanoid/skeleton/torso/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/assembly.mojo': '1c82e6907e7c82478b0af19a45882340f34c5a1522814e2bfc5c4f8c38b5c4bd',
+ 'extensions/humanoid/skeleton/torso/body.mojo': '0658ea8977066bff64e7cfcb96711f1b88bb2debb7339abaaf22bed477a2d44d',
+ 'extensions/humanoid/skeleton/torso/bones/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/bones/dimensions.mojo': '091efbf3f856a0d95ce1821316c448a240d8fd35fe811cf5f147d5e3a8333896',
+ 'extensions/humanoid/skeleton/torso/bones/geometry.mojo': 'd56c60e8875c95881311a1701f4b23e3e4036c1f0c60a566f7cc9175850f53db',
+ 'extensions/humanoid/skeleton/torso/contents.mojo': '6b7e25da899e5ef3c092216d4f7e40d57623fb38d2a51443ca4b7560ab9707d1',
+ 'extensions/humanoid/skeleton/torso/ligaments/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/ligaments/dimensions.mojo': '1d3de688dd915e85bfdbd353799d950b4d4cb585e316ba118fed9fa209feb0e3',
+ 'extensions/humanoid/skeleton/torso/ligaments/geometry.mojo': '802c3a65993a5e85d2f374b0ea988d0f3dc406ffe8427b09a28fa0d35c034b45',
+ 'extensions/humanoid/skeleton/torso/lymph/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/lymph/dimensions.mojo': '25495230d859a0df914d109ba132f9e8f2a919038525bc0a41808920e7c33b07',
+ 'extensions/humanoid/skeleton/torso/lymph/geometry.mojo': '1a4003f46bdc343725b982d49d4f3232593a2d9b3551be73c7ea7cd7316338a7',
+ 'extensions/humanoid/skeleton/torso/muscles/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/muscles/dimensions.mojo': 'b37174a431e5afb705e0d820c8721d608e167ee2914cef8bdd5d4b1a8e725ec9',
+ 'extensions/humanoid/skeleton/torso/muscles/geometry.mojo': '5429ce4a2f1649d32781ad809371088f256f76dfc96c0b56f6c646ef6e9e9c9f',
+ 'extensions/humanoid/skeleton/torso/nerves/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/nerves/dimensions.mojo': '5d54ea4d00a723cf51cf1e5e29cb259567c39715f503711c1e1e725df273dc33',
+ 'extensions/humanoid/skeleton/torso/nerves/geometry.mojo': 'bda5de30375bf8f3c74a18c7f48d611aefdebf627ae7f1d5477dc179a3b8f442',
+ 'extensions/humanoid/skeleton/torso/skin/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/skin/dimensions.mojo': '33e3f30cdecfdc9ea615a984886ae01f8cd1aa0f4f86a4f0f5685581a088fd86',
+ 'extensions/humanoid/skeleton/torso/skin/geometry.mojo': '09148d5decdd93e67de2785afcb696f5333f817327f7d40765a3024205530654',
+ 'extensions/humanoid/skeleton/torso/sweep.mojo': '8ee430e8785effa1078ce22509580f60eb64c5c23e79c55145ba7cec2189891a',
+ 'extensions/humanoid/skeleton/torso/vessels/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/humanoid/skeleton/torso/vessels/dimensions.mojo': '444ffc36a5040f1edc66bc31bc8c79d94f6329f22bc0c7c21bae5b51b2991d70',
+ 'extensions/humanoid/skeleton/torso/vessels/geometry.mojo': 'ab01ddda0002f59e5bc7faa2a8800331720cd908fdf418b27be569765b7616cf',
+ 'extensions/humanoid/spec.mojo': '994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224',
+ 'geometries/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'geometries/attribute_utils.mojo': '0a87276b9264a028a3220a667e39f8e96ff6fde7e41ed2c180e0aed7484ccda6',
+ 'geometries/surface.mojo': '8ff3246d240c90168470bde485496accca02d7096a53270c0d6ce442a4429e04',
+ 'geometries/utils.mojo': '459f32ecdd779c03d347b6c99f743a48a56028ab02b3f813181781eea3dcf548',
+ 'lights/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'lights/fresnel.mojo': '4c1a852d788c636603f75a3c459b6f43b0ec3a032d62b525c9fe9fc7cdfcada7',
+ 'lights/light.mojo': 'bc5654ee21e462cf9c86bc5eeffdd2ae7eaed91c3607a03312322e342d9108da',
+ 'lights/light_slot.mojo': '05dd9713ca0a410e23b8ffdae48a9f530cec9239efaa127f4fb43861ab129652',
+ 'lights/physical_layers.mojo': 'b97a85136309d66b1042de440bf4bc4571c64851b87fb2c4c4aa4fff1b17f649',
+ 'lights/shadow.mojo': 'e57aabcefe61cebaa8e57ae129f0cae3873215b7b1c0d2171c972d78d4015b81',
+ 'loaders/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'loaders/bytes.mojo': '5600d6d9ca117fc7c7c97a2e5d6a687adc8090627c34cf3181935245dae87c07',
+ 'loaders/js_text.mojo': '847797a811cd7ee54bdf833e1f6d3f8c2965e90e2491c71d04bf2488c6d2b971',
+ 'loaders/json.mojo': 'b6d44e6930f415f9b47eb7c48b26673a961746cff3a3125b8ac3f7ef9a1de417',
+ 'loaders/utf8.mojo': 'e0d5891d9d2954bd5c4329cda8a3492f4f6464b402b84489eae000cf8e0ce10a',
+ 'materials/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'materials/compute_ids.mojo': '215ccb1704fb7b30d8a0ad7ec14e839dc399f29f7c7ca29f0403f5c32e25a39e',
+ 'materials/material.mojo': '0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9',
+ 'materials/nodes.mojo': '5e4a3a33b1e2b8dd84705412c61e4d75938f0aae45d7e318b164bfd48bb0bb97',
+ 'math/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'math/arc_tangent.mojo': 'fde08cd180cb0e2bd94fca6196f86c4b318ef6f1a4ed8e588aaad848076ea8e5',
+ 'math/bezier.mojo': '4a4087e15d2472bcbeedd492c5a866039988cc1988029a5c28c828eedfb77034',
+ 'math/bounds.mojo': '712403832a9fc9bdcd835e68e1934dd4de37e8b218e418f797a717da3684ee25',
+ 'math/box_extent.mojo': 'd978c71d45c074acb0a6e36938b1f52f7b2bb6e822c95cf6b3ec4802223782c1',
+ 'math/catmull.mojo': 'd2584909e792fd6f503ea35b6e33fc0fcd801571b1260135ee6fb38df8c74ed2',
+ 'math/cross.mojo': '352f81c1fc781becc0cf88056ac39978b24926303e3784ff783bcabdf5bf67e5',
+ 'math/curve.mojo': '579839a0981c00cc9e188a0a57ff9f0c5822b09f3cd8ae6fa5b667d97d8ff5d9',
+ 'math/curve_checks.mojo': '9ad53ff5ed5a540a85ed4ed00860e8d9c1b537c67edda2a8d6f58b458ae5a8ef',
+ 'math/euler.mojo': '9645a80e2b0a7dcfeeb2fbf51a0030aab6b44f8603192b86aee533068dab7356',
+ 'math/finite.mojo': 'fc0bcbef9d5439f4ce6da4e10ac2c0a3a2a8022fb31f3426992408e25ac73f7b',
+ 'math/matrix3.mojo': 'b134fabd9dbf12f41c46724ccaa89582be5efbb929677a47c64af45c4d0a1e97',
+ 'math/matrix4.mojo': '206877d7335ed69e9055ec69b2ac09bd83b493456bfc43c1083ea235a1a44549',
+ 'math/matrix_determinant.mojo': 'c5b25179893fd2903dbda5de68914a50e662e3428107ef2c3424ef42cafcde19',
+ 'math/matrix_inverse.mojo': 'd833edd9d3705ba77e5000b75e6cd4852955e4d978bf0afdbc8efbafa61d42de',
+ 'math/norm.mojo': '941dbe97b3b6bc6d48af64a682f88970e12d387e8e896054cfc860d59eea9c3d',
+ 'math/path.mojo': 'e182834e6ecb1019ca882beeb2272053dfbbee263f4bfd45bcd35c5c53197f11',
+ 'math/polyline.mojo': 'c4ff928fc5278100da0df381e6ee79423ddd6ef7c3fc38dcfb11521ac73774c1',
+ 'math/quaternion.mojo': '2cf5b20029448204c1b984349e2e9e5f804ff7831d0506ab156ea7f88173c65d',
+ 'math/random.mojo': 'f8a00ee7d03897a7c35f2f23d157fb65ce2c2b3fde5e4c91f21e7a764fab1655',
+ 'math/ray.mojo': '5298756c8056364661902adb9a253b3c0e7d771641cc01e4781b85d3dc9a84a4',
+ 'math/ray_query.mojo': '48136d70da9f19e28fc30e1660416ba1c25bf8a545bafbbe16a904f8e26ff3eb',
+ 'math/remainder.mojo': 'b7575b2fde7a212433498422a121c66b12a85e7109614093bb783ad1cc043e58',
+ 'math/scaled_products.mojo': '8d16ee11a738e90a951943b786c1abcc7473286788392c447827240900ed16c5',
+ 'math/sine.mojo': '81580a510da8722ef96df0074937d139019234afc3f089584f534d6b556edcf9',
+ 'math/smoothstep.mojo': '1753a3342932f3c89eb5ebfb7f9ef5ee0a28530f447432b1bb179e3213ff8edb',
+ 'math/spherical_harmonics3.mojo': '2ca87fb3e0c23a5755e6c7d147a866d041d3bcef40ad3d35329a4dd559c5b8f4',
+ 'math/square_matrix.mojo': '04a9f011e814455c9d24a94c66df30b8137f7e9802a2a9b552b0d9bb05538c27',
+ 'math/triangle.mojo': 'f1facc4a319f3ee6614bc3c57896b82300826e0536640e73adc7d55573347f01',
+ 'math/triangle_normal.mojo': 'cdcf00131967b714f2518acd96fb28e874fa3006bfb52a242f3596c281e147bf',
+ 'math/utils.mojo': 'd32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690',
+ 'math/vector2.mojo': '2aa5cee2c09cfad3c3b2fa883db31efe47f82f30bac6565415ce6a9f18c8d125',
+ 'math/vector3.mojo': '39bd8f3d5102eb8d32f95fb0982b5886050c43031de416903d692e1c2c664b4a',
+ 'math/vector4.mojo': '44797637aae80c1e92c08592bc2a510e90e14e93d1c74bb4a01ca71034b10ee6',
+ 'objects/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'objects/clipping_group.mojo': 'abb69d042f7add2154e9efeb83df36a10788844803b57fc405c7092bdc8dc19e',
+ 'objects/gaussian_splat.mojo': '01fe94cc3159b21a70c104ea92a3631e57c217f19ad26f17bd2bd3ad3ff0f80f',
+ 'objects/instanced_mesh.mojo': '9992a151f9340c0211f5202594b6bec3d63e10940ae236e9ec0e4feafd888261',
+ 'objects/line.mojo': '3846559aebd946c4a5e73937fa488a14d2bdbfedf30102cb746456c86397ae27',
+ 'objects/line_segments2.mojo': 'fdff9f90123e0d3d8d3ca9b0aaf22e3b2c110c255d01a14927ce1fca8fa7d021',
+ 'objects/lod.mojo': '4829fbffecab2c13215a9918f30df7ea7c1471fb94d75b0a0815ccbbb1156899',
+ 'objects/mesh.mojo': '5e365168f48476146dc90c8bc9f3fec240be9c260b719925e7965e42d2de53b8',
+ 'objects/points.mojo': '42cdd945dc927e8bcf490824e9163188f50d8dcdd407970b7ccb234e9b91f737',
+ 'objects/skeleton.mojo': 'baff1a5346ae64d843d58802437e797c83686a5f11447684dd028febd0a98a5d',
+ 'objects/skinned_mesh.mojo': 'bf9a1d2aebf7c510a322d85e209f13e472f11bd4898c1c4ea5d507e5fde5a3fb',
+ 'objects/sprite.mojo': 'c257fd417a1394f9c4600e58e5994d3251b8f221efab993ab54b4458e869b225',
+ 'render/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'render/blend.mojo': '899f45b625a5c50af3960bf65042686ab4b6fb910e03cb142c9556847aedb271',
+ 'render/checksum.mojo': '796c60b76d945f7672c1595a06d86443224747cbddc07cdaf3fae90bdd3b4eff',
+ 'render/color_math.mojo': '37e57703f18f3ccd6c7f85ec4700ee2b2967e96b5451db2f7b3edf4be4d4d02b',
+ 'render/css_color.mojo': 'bcfa54778b83bf4056cbf15b7602f6a66e0a01c6778e87b75440fa667275e567',
+ 'render/cube_texture.mojo': '28c83baf52788ffb412328360ceef2397de1ec33489ee1516d447e3fc8d1f79c',
+ 'render/cube_texture_store.mojo': 'f052c06f7608058225486575e8584da3dda50ced69cf4834501360a73aebefde',
+ 'render/cube_uv.mojo': '8bd7e1dd5fb4eb131747759c7dfdb86f71ec2f77d4d99dd6735d924ae7756bbe',
+ 'render/float_image.mojo': '5554273bf9382d919b8cc8450ba406de99b220c4951f86e61721bc92c7aba357',
+ 'render/framebuffer.mojo': 'cc907b6c905ad936f68fca609a7ddcffcd2090977088170670c4b43bfa6ad6ef',
+ 'render/inflate.mojo': '7db92edc5ed721f4fb66a02195703fa4c7260607be732cb72070d33ac4d0c0a5',
+ 'render/linerule.mojo': '0d809e132f3019d04cef9734e9841dfbd0244aac738ed4d09bb40b9c45faf07e',
+ 'render/packing.mojo': 'e7b3b4158fb6992edad74bd0870b4509b79d6547785ec9285448b2467b98f083',
+ 'render/png.mojo': '75d9105e434ed286b207d55d27e90328a24a2ad9f4b8e6580f8de156256558c4',
+ 'render/raster_state.mojo': 'a8fc16d55ca53f4e36c333d99f3ce9eb110ea523aac33b90194c17a8f4fb1211',
+ 'render/srgb.mojo': '630ac4819cf3eb7bd546e8400ab8984452570110ee15db2898ae65cebae20b61',
+ 'render/tasks.mojo': 'efa65ccd751c3430f1fa875382748f6040733f802be4719b92ff239b510804d4',
+ 'render/texture.mojo': '3552ba623c9c6c8dd2ea0d7b6f4eb0aac924854086a0ddd9b90865e3f1978c15',
+ 'render/texture_buffer.mojo': 'a1977c2d14e15917b149280e4ae75a1c20e37a0b5939514d8daac50c3da7c7db',
+ 'render/texture_store.mojo': '78dfcc5c37879dd286272674096b13bad72efdefac769f85525790800f1fbd4b',
+ 'render/volume_texture.mojo': 'e599b4924490cdd8d828749ae4e25cea751f59bfa59198cd3350b5823bda52bf',
+ 'render/volume_texture_store.mojo': '105a32971b5e88c613ec3a350d9b2c99c27d19080c6c66fb9d42bd4be546c8b0',
+ 'tests/test_hair_density_bounds_controls.mojo': '2cfb0de9ac61d170beaa7e47fbcaf5c51c7db139ed373f4ab4f07af2fae9e11c',
+ 'tests/test_reconciled_hair_density.mojo': '2e0c703b365bc98d3d6fc4c8796d4133edf004eafb753262ca89cd6d639be3c4',
+ 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': '77d838415054e1fea54ede845bf70e8d98ed7243c3e74dbcef0283e4798b21cb',
+ 'units/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'units/measure.mojo': 'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',
+ 'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
+ 'units/si.mojo': 'd149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}
+DENSITY760_RULES = (
+    (131, 64, 262144, 'range(count)', 'density-validated-positive-cube-count'),
+    (167, 1, None, 'range(len(groom))', 'density-partitioned-nonempty-groom'),
+    (178, 1, None, 'range(samples)', 'density-checked-representable-positive-samples'),
+    (245, 16, 256, 'range(self.resolution * 4)', 'density-query-validated-positive-step-count'),
+)
+
+
+def _density760_stage_identity(raw):
+    """Reuse existing executing-code checks for the one pure inverse leaf."""
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    from carla_lane_oracle import pr760_arithmetic_stage as stage
+    filename = Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'
+    cleanup.require(Path(stage.__file__).resolve() == filename,
+                    'density inverse executing origin changed')
+    compiled = compile(raw, str(filename), 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+    cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)
+                    == cleanup._code_identity(compiled), 'density inverse module code changed')
+    defaults = cleanup._compiled_defaults(raw)
+    for name, expected in cleanup._compiled_functions(raw, str(filename)).items():
+        if name.startswith('<'):
+            continue
+        live = getattr(stage, name, None)
+        actual = cleanup._live_function_code(live)
+        cleanup.require(actual is not None and cleanup._code_identity(actual)
+                        == cleanup._code_identity(expected), 'density inverse function changed: ' + name)
+        cleanup._check_defaults(live, defaults.get(name), name)
+    stage.verify_stage_data()
+
+
+def density760_loops(root, *, include_roots=(), _operation=None):
+    """Admit only four local validated density rows on one physical image."""
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    from carla_lane_oracle import pr760_arithmetic_stage as stage
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is not None:
+        cleanup._operation_include_context(_operation, root, include_roots)
+    try:
+        # Historical and unknown endpoints keep their existing independent paths.
+        raw = _coverage_observe_bytes(root, DENSITY_SOURCE,
+            relative_source(root, DENSITY_SOURCE, **operation_args).read_bytes(),
+            _operation=_operation)
+        if sha256(raw) != DENSITY760_INPUTS[DENSITY_SOURCE]:
+            return {}
+        executing = cleanup.executing_checker_bindings()
+        snapshots = {}
+        for name, expected in DENSITY760_INPUTS.items():
+            value = _coverage_observe_bytes(root, name,
+                relative_source(root, name, **operation_args).read_bytes(), _operation=_operation)
+            if sha256(value) != expected:
+                return {}
+            snapshots[name] = value
+        leaf = 'tools/carla_lane_oracle/pr760_arithmetic_stage.py'
+        _density760_stage_identity(snapshots[leaf])
+        groom = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
+        if sha256(stage.predecessor_source(DENSITY_SOURCE, snapshots[DENSITY_SOURCE].decode()).encode()) != DENSITY_AFTER_SHA256:
+            return {}
+        if sha256(stage.predecessor_source(groom, snapshots[groom].decode()).encode()) != GUARDED_LOOP_SOURCE_SHA256[groom]:
+            return {}
+        paths = {name for name in snapshots if name.endswith('.mojo')}
+        entries, source_image = cleanup._helper_entry_census(root, **operation_args)
+        contexts = [(root, entries, source_image)]
+        for location in include_roots:
+            extra_entries, extra_image = cleanup._include_entry_context(
+                location, source_image, **operation_args)
+            contexts.append((location, extra_entries, extra_image))
+        native_tests = {'tests/test_reconciled_hair_density.mojo',
+                        'tests/test_hair_density_bounds_controls.mojo'}
+        closure = cleanup.dependency_inventory(root, roots=(DENSITY_SOURCE, groom),
+            entries=entries, _known=set(source_image), _snapshots=dict(source_image))
+        if closure != paths - native_tests:
+            return {}
+        def resolver_ok():
+            return all(cleanup.resolver_unshadowed(location, paths,
+                **cleanup._render_lookup_args(paths, local_entries),
+                math_entries=frozenset(('.', *local_entries)))
+                for location, local_entries, _ in contexts)
+        if not resolver_ok():
+            return {}
+        for name, value in snapshots.items():
+            if _coverage_observe_bytes(root, name,
+                    relative_source(root, name, **operation_args).read_bytes(), _operation=_operation) != value:
+                return {}
+        _density760_stage_identity(snapshots[leaf])
+        for location, _, image in contexts:
+            cleanup._helper_entry_census_finish(location, image, **operation_args)
+        if cleanup.executing_checker_bindings() != executing or not resolver_ok():
+            return {}
+        return {line: {
+            'line': line, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
+            'minimum_cardinality': minimum, 'maximum_cardinality': maximum,
+            'required': 'T', 'impossible': 'F', 'expression': expression,
+            'proof_id': proof_id, 'dependency_sha256': dict(DENSITY760_INPUTS),
+        } for line, minimum, maximum, expression, proof_id in DENSITY760_RULES}
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError) as error:
+        if _operation is not None:
+            cleanup._operation_fail(_operation, error)
+        return {}
 
 
 # Separate producer theorem: every Float32 radius passes through the pinned
@@ -841,6 +1305,33 @@ STRAND_CAP_RENDERER_ENDPOINTS = {
     'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5': 3757,
     '08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45': 3886,
 }
+
+
+# Review the producer and consumer as one pair; old/new mixtures are unknown.
+STRAND_CAP_PAIRED_SUCCESSOR = ({
+    **STRAND_CAP_SOURCES,
+    'renderers/renderer.mojo':
+        '2491b99a982cd4bc49b3573d3c6db8313bfdd47372e693e932c03c27d0ff127d',
+    'objects/line_segments2.mojo':
+        'fdff9f90123e0d3d8d3ca9b0aaf22e3b2c110c255d01a14927ce1fca8fa7d021',
+}, 4047)
+
+
+# The Camera-order repair leaves the complete cap function and producer intact.
+# Preserve the first PR760 pair as a separately accepted historical endpoint.
+STRAND_CAP_CAMERA_ORDER_SUCCESSOR = ({
+    **STRAND_CAP_PAIRED_SUCCESSOR[0],
+    'renderers/renderer.mojo':
+        'df552b5bc14d6cc5a0ef4cf919afaf66da620f431b0d4f5bb9c3a61538cb2b84',
+}, 4047)
+
+
+# Formatting only: generic Camera signature gains two physical lines.
+STRAND_CAP_FORMATTED_SUCCESSOR = ({
+    **STRAND_CAP_CAMERA_ORDER_SUCCESSOR[0],
+    'renderers/renderer.mojo':
+        '5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9',
+}, 4049)
 
 
 def _strand_cap_resolver_unshadowed(root):
@@ -877,15 +1368,27 @@ def _strand_cap_resolver_unshadowed(root):
     return True
 
 
-def strand_cap_loops(root, *, include_roots=()):
+def strand_cap_loops(root, *, include_roots=(), _operation=None):
     """Bind the nonempty strand-cap loop without suppressing its True edge."""
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    stream_args = {} if _operation is None else {'_operation': _operation, '_root': root}
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_include_context(_operation, root, include_roots)
     try:
-        actual = {name: file_sha256(relative_source(root, name))
+        actual = {name: file_sha256(relative_source(root, name, **operation_args),
+                                   **stream_args)
                   for name in STRAND_CAP_SOURCES}
         renderer = 'renderers/renderer.mojo'
         line = STRAND_CAP_RENDERER_ENDPOINTS.get(actual[renderer])
         expected = {**STRAND_CAP_SOURCES, renderer: actual[renderer]}
-        if line is None or actual != expected:
+        if actual == STRAND_CAP_FORMATTED_SUCCESSOR[0]:
+            line = STRAND_CAP_FORMATTED_SUCCESSOR[1]
+        elif actual == STRAND_CAP_CAMERA_ORDER_SUCCESSOR[0]:
+            line = STRAND_CAP_CAMERA_ORDER_SUCCESSOR[1]
+        elif actual == STRAND_CAP_PAIRED_SUCCESSOR[0]:
+            line = STRAND_CAP_PAIRED_SUCCESSOR[1]
+        elif line is None or actual != expected:
             return {}
         if not all(
                 _density_stdlib_unshadowed(path)
@@ -1150,6 +1653,16 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _oper
         return {}
     bindings, sites = rule
     try:
+        if module == 'extensions/humanoid/skeleton/head/hair/strands':
+            name = module + '.mojo'
+            raw = _coverage_observe_bytes(root, name,
+                relative_source(root, name, **operation_args).read_bytes(),
+                _operation=_operation)
+            if sha256(raw) == HAIR_LITERAL_SUCCESSOR[0][name]:
+                bindings, sites = HAIR_LITERAL_SUCCESSOR
+                if not all(_density_stdlib_unshadowed(path, **operation_args)
+                           for path in (root, *include_roots)):
+                    return {}
         if module == 'extensions/carla/rtree':
             # Fail closed on any newly introduced private frontier caller.
             # This is a fixed census, not inference about arbitrary callers.
@@ -1645,11 +2158,12 @@ def reviewed_nonempty_loops(root, module, *, include_roots=(), _operation=None):
         operation_args = {} if _operation is None else {'_operation': _operation}
         result = _historical_reviewed_nonempty_loops(root, module, include_roots=include_roots, **operation_args)
         if module == 'renderers/renderer':
-            result.update(strand_cap_loops(root, include_roots=include_roots))
+            result.update(strand_cap_loops(root, include_roots=include_roots, **operation_args))
         if module == 'extensions/carla/map':
             result.update(construction_boundary_loops(root, include_roots=include_roots, **operation_args))
         if module + '.mojo' == DENSITY_SOURCE:
-            result.update(repaired_density_loops(root, include_roots=include_roots))
+            result.update(repaired_density_loops(root, include_roots=include_roots, **operation_args))
+            result.update(density760_loops(root, include_roots=include_roots, **operation_args))
         for rule in GUARDED_LOOP_RULES:
             if rule[0] != module:
                 continue

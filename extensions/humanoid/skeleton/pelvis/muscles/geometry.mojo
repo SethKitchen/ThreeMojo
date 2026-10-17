@@ -15,7 +15,7 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscle,
     PelvisMuscleDimensions,
@@ -73,5 +73,4 @@ def pelvis_muscle_from_dimensions(
     """
     var field = PelvisMuscleField(dimensions, part, side)
     var label = pelvis_muscle_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

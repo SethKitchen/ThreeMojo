@@ -11,6 +11,8 @@ humanoid path re-exports those same types, kinds and factories for callers
 that used it before the extraction.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 from extensions.anatomy.soft_tissue import (
     SoftTissueKind,
     CARTILAGE,
@@ -48,6 +50,7 @@ from extensions.humanoid.skeleton.occupancy import (
 )
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
+from std.math import pi
 from units.si import (
     CUBIC_METER,
     Density,
@@ -71,7 +74,7 @@ struct SoftOccupancy(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is empty or filled soft tissue."""
-        return self == SOFT_EMPTY or self == SOFT_FILL
+        return ordinal_valid(self.value, SOFT_FILL.value)
 
 
 # Outside the solid.
@@ -94,8 +97,7 @@ def filled_density(fill: SoftOccupancy, tissue: SoftTissue) raises -> Density:
         Error: If `fill` is none of the named occupancies, or `tissue`
             fails `validate`.
     """
-    if not fill.is_valid():
-        raise Error("A soft fill must be empty or filled")
+    require_valid(fill.is_valid(), "A soft fill must be empty or filled")
     tissue.validate()
     if fill == SOFT_FILL:
         return tissue.wet_density
@@ -173,3 +175,64 @@ def sample_soft_mass[
 
 # Re-export the bone mass step floor so knee mass can default to 2 mm.
 comptime SOFT_STEP = MIN_STEP
+
+
+def six_segment_length(
+    a0: Vector3,
+    b0: Vector3,
+    a1: Vector3,
+    b1: Vector3,
+    a2: Vector3,
+    b2: Vector3,
+    a3: Vector3,
+    b3: Vector3,
+    a4: Vector3,
+    b4: Vector3,
+    a5: Vector3,
+    b5: Vector3,
+) -> Float32:
+    """Return the added length of six hair shafts, in meters.
+
+    Args:
+        a0: Start of the first shaft.
+        b0: End of the first shaft.
+        a1: Start of the second shaft.
+        b1: End of the second shaft.
+        a2: Start of the third shaft.
+        b2: End of the third shaft.
+        a3: Start of the fourth shaft.
+        b3: End of the fourth shaft.
+        a4: Start of the fifth shaft.
+        b4: End of the fifth shaft.
+        a5: Start of the sixth shaft.
+        b5: End of the sixth shaft.
+
+    Returns:
+        The six center-line lengths added together.
+    """
+    var length = (b0 - a0).length()
+    length += (b1 - a1).length()
+    length += (b2 - a2).length()
+    length += (b3 - a3).length()
+    length += (b4 - a4).length()
+    length += (b5 - a5).length()
+    return length
+
+
+def six_capsule_volume(radius: Float32, length: Float32) -> Float32:
+    """Return the volume of six equal-radius hair capsules, in cubic meters.
+
+    Each shaft is a cylinder along its center line plus a sphere for its
+    two ends. Six shafts therefore add six spheres.
+
+    Args:
+        radius: Shaft radius, in meters.
+        length: The six center-line lengths added together, in meters.
+
+    Returns:
+        Cylinder volume plus the six end spheres.
+    """
+    return (
+        pi * radius * radius * length
+        + Float32(6) * Float32(4.0 / 3.0) * pi * radius * radius * radius
+    )

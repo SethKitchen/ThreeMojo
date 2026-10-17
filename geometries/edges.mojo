@@ -53,6 +53,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
@@ -172,15 +173,6 @@ def welded_points(geometry: BufferGeometry) raises -> List[Int]:
     return welded^
 
 
-def _face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
-    """Return the unit normal of one triangle, or zero if it has no area.
-
-    Its own rather than `renderers.renderer.face_normal`, because a
-    geometry does not depend on a renderer.
-    """
-    return normal_or_zero(a, b, c)
-
-
 def _degenerate(a: Int, b: Int, c: Int) -> Bool:
     """Return True if two of a face's three welded points are one point.
 
@@ -247,7 +239,7 @@ def _paired(
             welded[corners[0]], welded[corners[1]], welded[corners[2]]
         ):
             continue
-        var normal = _face_normal(
+        var normal = normal_or_zero(
             geometry.corner(triangle, 0),
             geometry.corner(triangle, 1),
             geometry.corner(triangle, 2),
@@ -430,8 +422,9 @@ def edges_geometry(
         Error: If the geometry has no positions, if an index entry points
             past the last vertex, or if the threshold is negative.
     """
-    if threshold.value < 0:
-        raise Error("An edge threshold cannot be a negative angle")
+    require_non_negative(
+        threshold.value, "An edge threshold cannot be a negative angle"
+    )
     var paired = _paired(geometry)
     # Widened by the slack, so an edge turning exactly as far as the
     # threshold is kept rather than lost to the rounding of a float32

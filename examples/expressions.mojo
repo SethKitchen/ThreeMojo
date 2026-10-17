@@ -16,7 +16,12 @@ The optional second argument is the mesh quality: `low`, `medium`,
 `high` or `xhigh`. The default is `high`.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
+
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -57,10 +62,10 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, Length, METER
+from units.si import FOOT, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/expressions.png"
 comptime DEFAULT_QUALITY = "high"
@@ -127,15 +132,12 @@ def _model() raises -> HumanoidSpec:
 
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var level = quality_named(String(DEFAULT_QUALITY))
     if len(args) > 2:
         level = quality_named(String(args[2]))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.local_clipping_enabled = True
@@ -215,13 +217,7 @@ def main() raises:
     var rim_node = scene.add(rim^)
     scene.add_light(directional_light(Color(200, 214, 255), rim_node, 0.9))
     var eye = Vector3(0.0, 0.03, 1.25)
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
-    )
-    camera.place(eye, Vector3(0.0, 0.0, 0.0))
+    var camera = gallery_camera(WIDTH, HEIGHT, eye, Vector3(0.0, 0.0, 0.0))
     var key_toward = Vector3(1.0, 1.4, 2.4)
     key_toward.normalize()
     var rim_toward = Vector3(-1.4, 1.0, -1.2)

@@ -13,6 +13,13 @@ map. The phase advances by one twelfth, so the rings return to their
 start after the last frame.
 """
 
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -22,13 +29,10 @@ from geometries.sphere import sphere
 from materials.material import BASIC, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.computation import GPUComputationRenderer
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from renderers.renderer import Renderer
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/computation.png"
 comptime WIDTH = 240
@@ -91,13 +95,9 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var computation = GPUComputationRenderer(SIZE, SIZE)
     var field = computation.add_variable(
@@ -121,13 +121,15 @@ def main() raises:
     var ball = scene.add(Object3D())
     scene.add_mesh(Mesh(ball_shape, paint, ball))
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.15, 0.35, 2.55),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.15, 0.35, 2.55), Vector3(0, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
@@ -148,12 +150,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)
