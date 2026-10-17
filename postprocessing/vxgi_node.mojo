@@ -258,6 +258,23 @@ def _debug_view(
     return Vector3(0, 0, 0)
 
 
+def require_vxgi_normals(got: Int, pixels: Int) raises:
+    """Refuse a VXGI normal buffer that is not one normal a pixel.
+
+    Args:
+        got: How many normals the buffer holds.
+        pixels: How many pixels the view holds.
+
+    Returns:
+        Nothing. The call returns when there is one normal a pixel.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if got != pixels:
+        raise Error("A VXGI pass needs one normal a pixel")
+
+
 def vxgi_pixel(
     grid: VxgiGrid,
     opacity: Pointer[Float32, Untracked],
@@ -529,8 +546,7 @@ struct VXGINode(Movable):
                 not one normal a pixel.
         """
         self.validate()
-        if len(normals) != view.width * view.height:
-            raise Error("A VXGI pass needs one normal a pixel")
+        require_vxgi_normals(len(normals), view.width * view.height)
         var numbers = self.params(view, camera_world, frame_id)
         var frame = VxgiFrame(view.width, view.height)
         var seen = floats_of(self.volume.opacity)

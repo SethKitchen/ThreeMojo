@@ -47,7 +47,12 @@ from math.vector3 import Vector3
 from max.gpu import global_idx
 from max.gpu.host import DeviceBuffer, DeviceContext
 from postprocessing.screen_space import DepthView
-from postprocessing.vxgi_node import VXGINode, VxgiFrame, vxgi_pixel
+from postprocessing.vxgi_node import (
+    VXGINode,
+    VxgiFrame,
+    require_vxgi_normals,
+    vxgi_pixel,
+)
 from render.gpu import available
 from std.math import ceildiv
 from std.memory import unsafe_memcpy
@@ -559,8 +564,7 @@ struct GpuVxgi(Movable):
         """
         node.validate()
         var count = view.width * view.height
-        if len(normals) != count:
-            raise Error("A VXGI pass needs one normal a pixel")
+        require_vxgi_normals(len(normals), count)
         var flat = List[Float32](capacity=count * 3)
         for normal in normals:
             flat.extend([normal.x, normal.y, normal.z])

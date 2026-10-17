@@ -56,6 +56,22 @@ def require_gravity(acceleration: Float64) raises:
         raise Error("A gravity must be zero or more and finite")
 
 
+def require_finite_load(value: Float64) raises:
+    """Refuse a load that is not finite.
+
+    Args:
+        value: The load, in its stored unit.
+
+    Returns:
+        Nothing. The call returns when the load is finite.
+
+    Raises:
+        Error: If the load is not finite.
+    """
+    if not isfinite(value):
+        raise Error("A load must be finite")
+
+
 struct Member(Copyable, Movable):
     """A frame member between two nodes."""
 
@@ -479,8 +495,7 @@ struct StructuralModel(Copyable, Movable):
         if not dof.is_translation():
             raise Error("A force must act along a translation")
         var f = force.to(NEWTON)
-        if not isfinite(f):
-            raise Error("A load must be finite")
+        require_finite_load(f)
         self.nodal_loads.append(NodalLoad(load_case, node, dof, f))
 
     def add_moment(
@@ -507,8 +522,7 @@ struct StructuralModel(Copyable, Movable):
         if not dof.is_rotation():
             raise Error("A moment must act about a rotation")
         var m = moment.to(NEWTON_METER)
-        if not isfinite(m):
-            raise Error("A load must be finite")
+        require_finite_load(m)
         self.nodal_loads.append(NodalLoad(load_case, node, dof, m))
 
     def add_line_load(
@@ -538,8 +552,7 @@ struct StructuralModel(Copyable, Movable):
         if not dof.is_translation():
             raise Error("A line load must act along a translation")
         var w = load.to(NEWTON_PER_METER)
-        if not isfinite(w):
-            raise Error("A load must be finite")
+        require_finite_load(w)
         self.line_loads.append(LineLoad(load_case, member, dof, w))
 
     def add_pressure(
@@ -561,8 +574,7 @@ struct StructuralModel(Copyable, Movable):
         self.check_case(load_case)
         self.check_shell(shell)
         var p = pressure.to(PASCAL)
-        if not isfinite(p):
-            raise Error("A load must be finite")
+        require_finite_load(p)
         self.pressures.append(PressureLoad(load_case, shell, p))
 
     def add_self_weight(

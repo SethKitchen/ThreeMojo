@@ -477,6 +477,7 @@ from postprocessing.sampling import LightView, Untracked, u_of, v_of
 from postprocessing.shader_pass import (
     ScreenNodes,
     reads_assets,
+    require_saved_frame,
     screen_code,
     screen_pixel,
 )
@@ -12590,11 +12591,10 @@ struct GpuComposer(Movable):
         var saved = List[FloatColor]()
         if step.shader.saved.byte_length() > 0:
             saved = composer.saved_image(step.shader.saved_pass)
+        require_saved_frame(len(saved), self.width * self.height)
         if len(saved) == self.width * self.height:
             saved_width = self.width
             saved_height = self.height
-        elif len(saved) != 0:
-            raise Error("A saved image must be the frame's size")
         else:
             saved = [TRANSPARENT_BLACK]
         for slot in range(len(saved)):

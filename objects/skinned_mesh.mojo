@@ -126,6 +126,24 @@ from objects.skeleton import Skeleton
 # and glTF's. See the module docstring.
 comptime BONES_PER_VERTEX = 4
 
+
+def require_skin_width(item_size: Int) raises:
+    """Refuse a skin attribute that is not four numbers a vertex.
+
+    Args:
+        item_size: How many numbers one vertex holds.
+
+    Returns:
+        Nothing. The call returns when the attribute holds four numbers
+            a vertex.
+
+    Raises:
+        Error: If the attribute holds another count.
+    """
+    if item_size != BONES_PER_VERTEX:
+        raise Error("A skin attribute holds four numbers a vertex")
+
+
 # The geometry attribute naming which bones carry each vertex, four per
 # vertex, each a whole number identifying a bone of the skeleton.
 comptime SKIN_INDEX = "skinIndex"
@@ -364,8 +382,7 @@ def normalize_skin_weights(mut geometry: BufferGeometry) raises:
     if not geometry.has_attribute(String(SKIN_WEIGHT)):
         raise Error("Only a geometry with skinWeight has weights to normalize")
     var weights = geometry.attribute_view(String(SKIN_WEIGHT)).copy()
-    if weights.item_size != BONES_PER_VERTEX:
-        raise Error("A skin attribute holds four numbers a vertex")
+    require_skin_width(weights.item_size)
     for vertex in range(weights.count()):
         var four = SIMD[DType.float32, BONES_PER_VERTEX](0)
         for lane in range(BONES_PER_VERTEX):  # pragma: no branch

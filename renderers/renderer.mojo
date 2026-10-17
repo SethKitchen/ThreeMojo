@@ -221,6 +221,7 @@ from materials.material import (
     GOURAUD,
     VOLUME,
     check_steps,
+    require_strand_opacity,
     DEFAULT_IOR,
     MULTIPLY_OPERATION,
     NO_ATTENUATION,
@@ -4179,12 +4180,8 @@ def _emit_wide_line(
     var material = assets.materials.get(draw.material)
     require_line_coverage(coverage)
     var strand = coverage == STRAND_LINE_COVERAGE
-    if strand and (
-        not isfinite(material.opacity)
-        or material.opacity < 0
-        or material.opacity > 1
-    ):
-        raise Error("Strand opacity must be finite and between zero and one")
+    if strand:
+        require_strand_opacity(material.opacity)
     if strand and (
         material.blending != OPAQUE
         or not material.depth_write

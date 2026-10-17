@@ -44,6 +44,7 @@ from extensions.humanoid.skeleton.head.hair.density import (
 from extensions.humanoid.skeleton.head.hair.shading import (
     HairLight,
     HairLook,
+    require_groom_fields,
     shade_groom_into,
 )
 from extensions.humanoid.spec import HumanoidSpec
@@ -53,6 +54,7 @@ from materials.material import (
     MaterialId,
     OPAQUE,
     line_material,
+    require_strand_opacity,
 )
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
@@ -316,15 +318,9 @@ def add_strands(
     Raises:
         Error: If the parent, groom, width or opacity is invalid.
     """
-    if not isfinite(opacity) or opacity < 0 or opacity > 1:
-        raise Error("Strand opacity must be finite and between zero and one")
+    require_strand_opacity(opacity)
     var parent_object = scene.get(parent)
-    if (
-        len(groom.normals) != len(groom.points)
-        or len(groom.depths) != len(groom.points)
-        or len(groom.shades) != len(groom)
-    ):
-        raise Error("Hair shading fields must match the groom")
+    require_groom_fields(groom)
     var shape = groom_lines(groom)
     if shape.attribute_view(String(POSITION)).count() == 0:
         raise Error("Hair strands need at least one segment")
