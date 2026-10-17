@@ -88,7 +88,7 @@ from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from lights.shadow import LightShadow, ShadowCascade, ShadowMap
-from math.finite import require_non_negative_finite
+from math.finite import require_non_negative_finite, require_unit_finite
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
@@ -571,14 +571,10 @@ struct Light(ImplicitlyCopyable):
                     "A spot light's angle is too narrow to resolve: its"
                     " cosine rounds to one"
                 )
-            if (
-                not isfinite(self.penumbra)
-                or self.penumbra < 0
-                or self.penumbra > 1
-            ):
-                raise Error(
-                    "A spot light's penumbra must be between zero and one"
-                )
+            require_unit_finite(
+                Float64(self.penumbra),
+                "A spot light's penumbra must be between zero and one",
+            )
 
     def shadow_far(self) -> Length:
         """Return where this light's shadow camera puts its far plane:

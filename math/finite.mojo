@@ -10,8 +10,10 @@ both widths. `require_finite` refuses a value that is not finite.
 `finite_float32` narrows a `Float64` and refuses a result that is not
 finite. `require_positive_finite` refuses a value that is not positive
 and finite. `require_non_negative_finite` refuses a value that is not
-finite or is negative. `require_finite_group` refuses a caller-tested
-group that is not finite. Callers keep their own error text.
+finite or is negative. `require_unit_finite` refuses a value outside
+zero through one, or one that is not finite. `require_finite_group`
+refuses a caller-tested group that is not finite. Callers keep their
+own error text.
 """
 
 from std.math import isfinite
@@ -91,6 +93,39 @@ def require_non_negative_finite(value: Float64, message: String) raises:
         Error: If `value` is not finite or is negative.
     """
     if not non_negative_finite(value):
+        raise Error(message)
+
+
+def unit_finite(value: Float64) -> Bool:
+    """Return True when `value` is finite and from zero through one.
+
+    Args:
+        value: The number. A `Float32` converts exactly.
+
+    Returns:
+        Whether it is finite and from zero through one.
+
+    Raises:
+        Error: Never.
+    """
+    return isfinite(value) and value >= 0 and value <= 1
+
+
+def require_unit_finite(value: Float64, message: String) raises:
+    """Refuse a number outside zero through one, or one that is not finite.
+
+    Args:
+        value: The number. A `Float32` converts exactly.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is finite and from zero
+        through one.
+
+    Raises:
+        Error: If `value` is not finite or is outside zero through one.
+    """
+    if not unit_finite(value):
         raise Error(message)
 
 

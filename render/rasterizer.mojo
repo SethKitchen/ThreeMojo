@@ -105,7 +105,6 @@ from render.raster_state import (
     REVERSED_DEPTH,
     RasterState,
     fragment_depth,
-    is_unit_fraction,
     shades,
 )
 from render.packing import (
@@ -229,6 +228,7 @@ from math.finite import (
     require_positive_finite,
     require_finite_group,
     require_non_negative_finite,
+    require_unit_finite,
 )
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
@@ -751,12 +751,14 @@ struct LayerFactors(ImplicitlyCopyable):
         var darkest = min(min(color.x, color.y), color.z)
         if not isfinite(color.dot(color)) or darkest < 0:
             raise Error("A triangle's sheen color cannot be negative")
-        if not is_unit_fraction(self.sheen_roughness):
-            raise Error(
-                "A triangle's sheen roughness must be between zero and one"
-            )
-        if not is_unit_fraction(self.iridescence):
-            raise Error("A triangle's iridescence must be between zero and one")
+        require_unit_finite(
+            Float64(self.sheen_roughness),
+            "A triangle's sheen roughness must be between zero and one",
+        )
+        require_unit_finite(
+            Float64(self.iridescence),
+            "A triangle's iridescence must be between zero and one",
+        )
         var ior = self.iridescence_ior
         if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
             raise Error(
@@ -2737,8 +2739,10 @@ def check_triangle_state(
     # Before the agreement check below, because not-a-number is not equal
     # to itself: a NaN threshold would be reported as three corners
     # disagreeing when what is wrong is the number.
-    if not isfinite(a.alpha_test) or a.alpha_test < 0 or a.alpha_test > 1:
-        raise Error("A triangle's alpha test must be between zero and one")
+    require_unit_finite(
+        Float64(a.alpha_test),
+        "A triangle's alpha test must be between zero and one",
+    )
     # Before its agreement check for the reason above: not a number is not
     # equal to itself.
     require_non_negative_finite(
@@ -2850,24 +2854,30 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their frames")
     # The physical terms and the normal maps, asked as the rest are: the
     # numbers before their agreement checks, then the maps, then the kind.
-    if not is_unit_fraction(a.roughness):
-        raise Error("A triangle's roughness must be between zero and one")
-    if not is_unit_fraction(a.metalness):
-        raise Error("A triangle's metalness must be between zero and one")
+    require_unit_finite(
+        Float64(a.roughness),
+        "A triangle's roughness must be between zero and one",
+    )
+    require_unit_finite(
+        Float64(a.metalness),
+        "A triangle's metalness must be between zero and one",
+    )
     require_non_negative_finite(
         Float64(a.env_map_intensity),
         "A triangle's env map intensity cannot be negative",
     )
-    if not is_unit_fraction(a.specular_intensity):
-        raise Error(
-            "A triangle's specular intensity must be between zero and one"
-        )
-    if not is_unit_fraction(a.clearcoat):
-        raise Error("A triangle's clearcoat must be between zero and one")
-    if not is_unit_fraction(a.clearcoat_roughness):
-        raise Error(
-            "A triangle's clearcoat roughness must be between zero and one"
-        )
+    require_unit_finite(
+        Float64(a.specular_intensity),
+        "A triangle's specular intensity must be between zero and one",
+    )
+    require_unit_finite(
+        Float64(a.clearcoat),
+        "A triangle's clearcoat must be between zero and one",
+    )
+    require_unit_finite(
+        Float64(a.clearcoat_roughness),
+        "A triangle's clearcoat roughness must be between zero and one",
+    )
     require_finite_group(
         a.normal_scale.is_finite(),
         "A triangle's normal scale must be finite",
@@ -2995,8 +3005,10 @@ def check_triangle_state(
         )
     # The volume, asked as the material asks it: the numbers first, since a
     # NaN never agrees, then the agreement, the ids and the kind.
-    if not is_unit_fraction(a.transmission):
-        raise Error("A triangle's transmission must be between zero and one")
+    require_unit_finite(
+        Float64(a.transmission),
+        "A triangle's transmission must be between zero and one",
+    )
     if not _is_depth(a.thickness):
         raise Error("A triangle's thickness cannot be negative")
     var tint = a.attenuation_color
@@ -6684,12 +6696,10 @@ def check_point_state(point: RasterVertex) raises:
     require_positive_finite(
         Float64(point.point_size), "A point needs a size above zero"
     )
-    if (
-        not isfinite(point.alpha_test)
-        or point.alpha_test < 0
-        or point.alpha_test > 1
-    ):
-        raise Error("A point's alpha test must be between zero and one")
+    require_unit_finite(
+        Float64(point.alpha_test),
+        "A point's alpha test must be between zero and one",
+    )
     if point.texture != NO_TEXTURE and point.texture.value < 0:
         raise Error("A point names a texture id that nothing can hold")
     if point.alpha_map != NO_TEXTURE and point.alpha_map.value < 0:

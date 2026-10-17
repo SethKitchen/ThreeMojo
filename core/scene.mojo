@@ -83,7 +83,7 @@ from core.object3d import (
 from core.ordinal import require_index_in_count, require_valid
 from lights.light import Light
 from materials.material import MaterialId
-from math.finite import require_non_negative_finite
+from math.finite import require_non_negative_finite, require_unit_finite
 from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
 from math.euler import XYZ, Euler
@@ -374,8 +374,10 @@ struct Scene(Movable):
                 either rotation is refused by `check_rotation`.
         """
         var blur = self.background_blurriness
-        if not isfinite(blur) or blur < 0 or blur > 1:
-            raise Error("A background blurriness must be between zero and one")
+        require_unit_finite(
+            Float64(blur),
+            "A background blurriness must be between zero and one",
+        )
         var shown = self.background_intensity
         require_non_negative_finite(
             Float64(shown), "A background intensity cannot be negative"
