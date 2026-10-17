@@ -47,7 +47,7 @@ a time with the first bit the code's highest, as DEFLATE reads them. A
 reader past the end of its bytes reads zeros, as Binomial's does.
 """
 
-from core.binary import little_endian_u16, little_endian_u32
+from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 
 # The largest Huffman code and the size of the code-length alphabet.
 comptime MAX_CODE_BITS = 16
@@ -92,7 +92,7 @@ struct _Bits(Movable):
     var position: Int
 
     def __init__(out self, bytes: List[UInt8], start: Int, length: Int):
-        self.data = List[UInt8](bytes[start : start + length])
+        self.data = copy_bytes(bytes, start, length)
         self.position = 0
 
     def read(mut self, count: Int) -> Int:

@@ -51,6 +51,7 @@ texture `flipY = false`, which samples the same way.
 from loaders.bytes import ascii_letter
 from core.binary import (
     big_endian_u16,
+    copy_bytes,
     little_endian_i32,
     little_endian_u16,
     little_endian_u32,
@@ -1133,7 +1134,7 @@ def _inflate_exact(
         if expected != 0:
             raise Error("EXR: a compressed stream is missing")
         return List[UInt8]()
-    var out = zlib_inflate(List[UInt8](bytes[at : at + size]), expected)
+    var out = zlib_inflate(copy_bytes(bytes, at, size), expected)
     if len(out) != expected:
         raise Error("EXR: a compressed stream has the wrong length")
     return out^
@@ -1965,9 +1966,7 @@ def _uncompress(
         return _dwa_decode(
             bytes, start, size, header.width(), lines, header.channels
         )
-    return _reorder(
-        zlib_inflate(List[UInt8](bytes[start : start + size]), expected)
-    )
+    return _reorder(zlib_inflate(copy_bytes(bytes, start, size), expected))
 
 
 def decode(bytes: List[UInt8]) raises -> FloatImage:
@@ -2053,7 +2052,7 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
         _need(len(bytes), at, size)
         var raw: List[UInt8]
         if size >= expected:
-            raw = List[UInt8](bytes[at : at + expected])
+            raw = copy_bytes(bytes, at, expected)
         else:
             raw = _uncompress(bytes, at, size, expected, lines, header)
         if len(raw) != expected:

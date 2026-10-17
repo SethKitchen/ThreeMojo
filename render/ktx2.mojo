@@ -62,7 +62,7 @@ refuses them too.
 """
 from core.ordinal import ordinal_valid
 
-from core.binary import little_endian_u32
+from core.binary import copy_bytes, little_endian_u32
 from render.compressed_texture import (
     R11_EAC_FORMAT,
     RED_GREEN_RGTC2_FORMAT,
@@ -836,7 +836,7 @@ def _read_descriptor(bytes: List[UInt8], mut container: KTX2Container) raises:
 
 def _key_is(bytes: List[UInt8], at: Int, length: Int, key: String) -> Bool:
     """Return True if the `length` bytes at `at` spell `key`."""
-    return List[UInt8](bytes[at : at + length]) == List[UInt8](key.as_bytes())
+    return copy_bytes(bytes, at, length) == List[UInt8](key.as_bytes())
 
 
 def _has_animation_key(bytes: List[UInt8]) raises -> Bool:
@@ -1020,7 +1020,7 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         var full = _u64(bytes, entry + 16)
         if _outside(offset, length, len(bytes)):
             raise Error("KTX2: a level lies outside the file")
-        var data = List[UInt8](bytes[offset : offset + length])
+        var data = copy_bytes(bytes, offset, length)
         if not etc1s:
             # Divided rather than multiplied, so a huge layer count cannot
             # overflow the check.
@@ -1041,7 +1041,7 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         if _outside(offset, length, len(bytes)):
             raise Error("KTX2: the supercompression global data lies outside")
         container.etc1s = Etc1sGlobal(
-            List[UInt8](bytes[offset : offset + length]),
+            copy_bytes(bytes, offset, length),
             images * container.levels,
             container.has_alpha,
         )

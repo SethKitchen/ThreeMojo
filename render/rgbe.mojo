@@ -37,6 +37,7 @@ three.js reads only it, and the old Radiance run-length scheme, which
 three.js does not read either, is not read.
 """
 
+from core.binary import copy_bytes
 from loaders.bytes import space_tab_return
 from render.float_image import FloatImage
 from render.png import MAX_PIXELS
@@ -278,7 +279,7 @@ def read_pixels(
     if _is_flat(bytes, start, width):
         if len(bytes) - start < count:
             raise Error("RGBE: the pixels are cut short")
-        return List[UInt8](bytes[start : start + count])
+        return copy_bytes(bytes, start, count)
     var out = List[UInt8](capacity=count)
     var line = width * 4
     var scan = List[UInt8](length=line, fill=0)
