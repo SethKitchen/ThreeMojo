@@ -88,7 +88,7 @@ from geometries.sculptor_utils import (
     sqr_dist,
 )
 from math.ray import Ray
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.finite import (
     require_finite,
     require_positive_finite,
@@ -338,11 +338,6 @@ def _point(v: Vector3) -> Point3:
     return Point3(Float64(v.x), Float64(v.y), Float64(v.z))
 
 
-def _vector(p: Point3) -> Vector3:
-    """Return a point rounded to a `Vector3`."""
-    return Vector3(Float32(p.x), Float32(p.y), Float32(p.z))
-
-
 struct Sculptor(Movable):
     """Sculpts one mesh of a scene with adaptive topology, three.js's
     `Sculptor`.
@@ -525,7 +520,11 @@ struct Sculptor(Movable):
     ](self, camera: C, scene: Scene, point: Point3) raises -> Point3:
         """Return where a world point lands, in pixels and depth, three.js's
         `_project`."""
-        var ndc = _point(project_point(_vector(point), camera, scene))
+        var ndc = _point(
+            project_point(
+                vector3_from_float64(point.x, point.y, point.z), camera, scene
+            )
+        )
         var rect = self._get_rect()
         return Point3(
             (ndc.x * 0.5 + 0.5) * rect[2] + rect[0],
@@ -1491,7 +1490,9 @@ struct Sculptor(Movable):
         Returns:
             The hit, or zero when there is none.
         """
-        return _vector(self._hit_point)
+        return vector3_from_float64(
+            self._hit_point.x, self._hit_point.y, self._hit_point.z
+        )
 
     def get_hit_normal(self) -> Vector3:
         """Return the surface's unit normal at the last hit, in the mesh's
@@ -1500,7 +1501,9 @@ struct Sculptor(Movable):
         Returns:
             The normal, or zero when there is none.
         """
-        return _vector(self._hit_normal)
+        return vector3_from_float64(
+            self._hit_normal.x, self._hit_normal.y, self._hit_normal.z
+        )
 
     def get_world_radius(self) -> Length:
         """Return the brush's radius in world units, three.js's
