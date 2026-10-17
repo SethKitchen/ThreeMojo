@@ -51,6 +51,7 @@ from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match, last_match
 from loaders.three_mf import js_key_order
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import unzip
@@ -365,10 +366,7 @@ def parse_amf(
                     color = _color(doc, part)
                 elif kind == "mesh":
                     meshes.append(_read_mesh(doc, part, color))
-            var slot = -1
-            for index in range(len(object_order)):
-                if object_order[index] == id:
-                    slot = index
+            var slot = first_match(object_order, id)
             if slot < 0:
                 object_order.append(id)
                 object_names.append(object_name^)
@@ -537,9 +535,7 @@ def _place_mesh(
         geometry.set_index(volume.triangles.copy())
         var found = -1
         if volume.has_material:
-            for index in range(len(material_ids)):
-                if material_ids[index] == volume.material_id:
-                    found = index
+            found = last_match(material_ids, volume.material_id)
         var material: Material
         var name: String
         if found >= 0:

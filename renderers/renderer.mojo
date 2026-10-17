@@ -172,6 +172,7 @@ from core.layers import Layers
 from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from core.search import first_match
 from math.bounds import Plane, Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
@@ -2145,10 +2146,10 @@ def light_masks(assets: Assets) raises -> List[LightMask]:
 def _mask_place(masks: List[LightMask], mask: LightMask) -> Int:
     """Return which of the frame's lightings a material's mask names: zero
     for every light, and one past its place in `masks` otherwise."""
-    for index in range(len(masks)):
-        if masks[index] == mask:
-            return index + 1
-    return 0
+    var at = first_match(masks, mask)
+    if at < 0:
+        return 0
+    return at + 1
 
 
 def _to_raster(

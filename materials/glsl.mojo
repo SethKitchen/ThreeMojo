@@ -54,6 +54,7 @@ runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
 from core.ordinal import ordinal_valid
+from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
     is_exponent_mark,
@@ -556,10 +557,7 @@ struct _Lexer(Movable):
 
     def defined(self, name: String) -> Bool:
         """Return True if a macro is defined."""
-        for index in range(len(self.names)):
-            if self.names[index] == name:
-                return True
-        return False
+        return first_match(self.names, name) >= 0
 
     def condition(self, text: String, line: Int) raises -> Bool:
         """Return whether an `#if`'s condition holds: whole numbers, macros
@@ -2103,11 +2101,10 @@ struct _Compiler(Movable):
                     raise self.error(
                         "an array in a struct is outside the subset"
                     )
-                for index in range(len(names)):
-                    if names[index] == field:
-                        raise self.error(
-                            "the field " + field + " is declared twice"
-                        )
+                if first_match(names, field) >= 0:
+                    raise self.error(
+                        "the field " + field + " is declared twice"
+                    )
                 names.append(field)
                 types.append(type)
                 if not self.is_mark(","):
@@ -3041,13 +3038,12 @@ struct _Compiler(Movable):
                 var label = self.bit_or()
                 if label.type != selector.type or not label.known:
                     raise self.error("a case label is a constant int")
-                for index in range(len(labels)):
-                    if labels[index] == label.number:
-                        raise self.error(
-                            "the case "
-                            + String(Int(label.number))
-                            + " is listed twice"
-                        )
+                if first_match(labels, label.number) >= 0:
+                    raise self.error(
+                        "the case "
+                        + String(Int(label.number))
+                        + " is listed twice"
+                    )
                 labels.append(label.number)
                 continue
             elif nesting == 0 and self.is_word("default"):

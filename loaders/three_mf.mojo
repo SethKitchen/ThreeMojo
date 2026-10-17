@@ -72,6 +72,7 @@ from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
 from loaders.bytes import hex_digit_value
 from loaders.gltf import decode_image
 from loaders.js_number import js_parse_float
@@ -334,7 +335,7 @@ def _index(text: String, count: Int, what: String) raises -> Int:
 
 def _kept_metadata(name: String) -> Bool:
     """Return True for the eight metadata names three.js keeps."""
-    for kept in [
+    var kept: List[String] = [
         "Title",
         "Designer",
         "Description",
@@ -343,10 +344,8 @@ def _kept_metadata(name: String) -> Bool:
         "Rating",
         "CreationDate",
         "ModificationDate",
-    ]:  # pragma: no branch
-        if name == kept:
-            return True
-    return False
+    ]
+    return first_match(kept, name) >= 0
 
 
 def _local(name: String) -> String:

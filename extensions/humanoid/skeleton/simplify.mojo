@@ -40,6 +40,7 @@ from core.buffer_geometry import (
 )
 from core.geometry_store import GeometryId
 from core.scene import Scene
+from core.search import first_match
 from math.bounds import enclose_point
 from math.curve_checks import require_at_least_one
 from math.vector3 import Vector3
@@ -777,12 +778,7 @@ struct _Collapser(Movable):
                 var other = self.faces[face * 3 + corner]
                 if other == vertex:
                     continue
-                var seen = False
-                for index in range(len(found)):
-                    if found[index] == other:
-                        seen = True
-                        break
-                if not seen:
+                if first_match(found, other) < 0:
                     found.append(other)
         return found^
 
