@@ -422,6 +422,19 @@ struct _Header(Copyable, Movable):
         self.auto = True
         self.up = [0, 1, 0]
 
+    def set_draw(
+        mut self,
+        type_name: String,
+        cast_shadow: Bool,
+        receive_shadow: Bool,
+        frustum_culled: Bool,
+    ):
+        """Set the type and the three draw flags a drawn object writes."""
+        self.type = type_name
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
+        self.frustum_culled = frustum_culled
+
     def write(self, mut writer: JsonWriter) raises:
         """Write the fields, as `Object3D.toJSON` writes them."""
         writer.key("uuid")
@@ -458,6 +471,16 @@ struct _Header(Copyable, Movable):
         if not self.auto:
             writer.key("matrixAutoUpdate")
             writer.boolean(False)
+
+
+def _begin_drawn(
+    mut writer: JsonWriter, header: _Header, geometry: String
+) raises:
+    """Write the header, then the geometry uuid and the material key."""
+    header.write(writer)
+    writer.key("geometry")
+    writer.string(geometry)
+    writer.key("material")
 
 
 def _named(mut writer: JsonWriter, geometry: BufferGeometry) raises:
@@ -1755,14 +1778,15 @@ struct _Writer(Movable):
     ) raises:
         """Write a mesh's header and fields."""
         ref mesh = scene.meshes[which]
-        header.type = "Mesh"
-        header.cast_shadow = mesh.cast_shadow
-        header.receive_shadow = mesh.receive_shadow
-        header.frustum_culled = mesh.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(mesh.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "Mesh",
+            mesh.cast_shadow,
+            mesh.receive_shadow,
+            mesh.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(mesh.geometry, assets)
+        )
         if mesh.is_multi_material():
             # three.js's `toJSON` writes a list of uuids for a list.
             writer.begin_array()
@@ -1791,14 +1815,15 @@ struct _Writer(Movable):
     ) raises:
         """Write an instanced mesh's header and fields."""
         ref mesh = scene.instanced_meshes[which]
-        header.type = "InstancedMesh"
-        header.cast_shadow = mesh.cast_shadow
-        header.receive_shadow = mesh.receive_shadow
-        header.frustum_culled = mesh.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(mesh.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "InstancedMesh",
+            mesh.cast_shadow,
+            mesh.receive_shadow,
+            mesh.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(mesh.geometry, assets)
+        )
         writer.string(
             self.library.material(mesh.material, assets, _SURFACE_USE)
         )
@@ -1835,14 +1860,13 @@ struct _Writer(Movable):
                 tinted = True
         var joined = _Joined(geometries, assets)
         var geometry = self.library.add_geometry(joined.geometry, -1)
-        header.type = "BatchedMesh"
-        header.frustum_culled = batch.frustum_culled
-        header.cast_shadow = batch.cast_shadow
-        header.receive_shadow = batch.receive_shadow
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(object_uuid(_GEOMETRY_UUID, geometry))
-        writer.key("material")
+        header.set_draw(
+            "BatchedMesh",
+            batch.cast_shadow,
+            batch.receive_shadow,
+            batch.frustum_culled,
+        )
+        _begin_drawn(writer, header, object_uuid(_GEOMETRY_UUID, geometry))
         writer.string(
             self.library.material(batch.material, assets, _SURFACE_USE)
         )
@@ -1968,14 +1992,15 @@ struct _Writer(Movable):
         does."""
         ref mesh = scene.skinned_meshes[which]
         var mode = bind_mode_name(mesh.bind_mode)
-        header.type = "SkinnedMesh"
-        header.cast_shadow = mesh.cast_shadow
-        header.receive_shadow = mesh.receive_shadow
-        header.frustum_culled = mesh.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(mesh.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "SkinnedMesh",
+            mesh.cast_shadow,
+            mesh.receive_shadow,
+            mesh.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(mesh.geometry, assets)
+        )
         writer.string(
             self.library.material(mesh.material, assets, _SURFACE_USE)
         )
@@ -2005,14 +2030,15 @@ struct _Writer(Movable):
             line.mode.is_valid(),
             "Object JSON: a line mode that is none of the three",
         )
-        header.type = line_type_names()[line.mode.value]
-        header.cast_shadow = line.cast_shadow
-        header.receive_shadow = line.receive_shadow
-        header.frustum_culled = line.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(line.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            line_type_names()[line.mode.value],
+            line.cast_shadow,
+            line.receive_shadow,
+            line.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(line.geometry, assets)
+        )
         writer.string(self.library.material(line.material, assets, _LINE_USE))
 
     def points(
@@ -2025,14 +2051,15 @@ struct _Writer(Movable):
     ) raises:
         """Write points and their `PointsMaterial`."""
         ref points = scene.points[which]
-        header.type = "Points"
-        header.cast_shadow = points.cast_shadow
-        header.receive_shadow = points.receive_shadow
-        header.frustum_culled = points.frustum_culled
-        header.write(writer)
-        writer.key("geometry")
-        writer.string(self.library.geometry(points.geometry, assets))
-        writer.key("material")
+        header.set_draw(
+            "Points",
+            points.cast_shadow,
+            points.receive_shadow,
+            points.frustum_culled,
+        )
+        _begin_drawn(
+            writer, header, self.library.geometry(points.geometry, assets)
+        )
         writer.string(
             self.library.material(points.material, assets, "PointsMaterial")
         )
