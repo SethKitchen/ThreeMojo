@@ -241,7 +241,7 @@ def blur_axis(latitudinal: Bool, pole: Vector3, direction: Vector3) -> Vector3:
     var axis = pole
     if not latitudinal:
         axis.cross(direction)
-    if axis.x == 0 and axis.y == 0 and axis.z == 0:
+    if axis == Vector3(0, 0, 0):
         axis = Vector3(direction.z, 0, -direction.x)
     axis.normalize()
     return axis

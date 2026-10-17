@@ -808,7 +808,7 @@ def equirect_uv(direction: Vector3) -> Vector2:
             direction.y / magnitude,
             direction.z / magnitude,
         )
-    if unit.x == 0 and unit.y == 0 and unit.z == 0:
+    if unit == Vector3(0, 0, 0):
         return Vector2(0.5, 0.5)
     # Clamped as three.js clamps: a unit vector's y is within one bar a
     # rounding, and `asin` of a hair past one is NaN.

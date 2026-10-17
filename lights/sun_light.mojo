@@ -209,9 +209,7 @@ def fit_sun[
             origin, or the camera's view or projection is refused.
     """
     shadow.validate()
-    if not position.is_finite() or (
-        position.x == 0 and position.y == 0 and position.z == 0
-    ):
+    if not position.is_finite() or (position == Vector3(0, 0, 0)):
         raise Error("A sun at the origin has no direction")
     var direction = -position
     direction.normalize()
