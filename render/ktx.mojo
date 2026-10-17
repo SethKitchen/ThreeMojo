@@ -171,6 +171,24 @@ def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
     )
 
 
+def require_ktx_tail(at: Int, length: Int, count: Int) raises:
+    """Refuse a KTX read that needs more bytes than the file still holds.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the file has.
+        count: How many bytes the read needs.
+
+    Returns:
+        Nothing. The call returns when at least `count` bytes remain.
+
+    Raises:
+        Error: If fewer than `count` bytes remain.
+    """
+    if length - at < count:
+        raise Error("KTX: the file ends before its last level")
+
+
 def read(bytes: List[UInt8]) raises -> CompressedImage:
     """Return every level of every face of a KTX 1 file, as block bytes.
 
@@ -231,8 +249,7 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
         image.mipmaps.append(List[UInt8]())
     var at = HEADER_BYTES + _word(bytes, 60, big_endian)
     for level in range(levels):  # pragma: no branch
-        if at > len(bytes) - 4:
-            raise Error("KTX: the file ends before its last level")
+        require_ktx_tail(at, len(bytes), 4)
         var size = _word(bytes, at, big_endian)
         at += 4
         var expected = level_bytes(
@@ -243,8 +260,7 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
                 "KTX: a level's stated size does not match its block grid"
             )
         for face in range(faces):  # pragma: no branch
-            if size > len(bytes) - at:
-                raise Error("KTX: the file ends before its last level")
+            require_ktx_tail(at, len(bytes), size)
             image.mipmaps[face * levels + level] = List[UInt8](
                 bytes[at : at + size]
             )

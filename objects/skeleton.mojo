@@ -77,6 +77,23 @@ def require_bone_index(bone: Int, count: Int) raises:
         raise Error("A vertex names a bone the skeleton does not have")
 
 
+def require_bone_matrices(held: Int, expected: Int) raises:
+    """Refuse a bone binding whose lists have different lengths.
+
+    Args:
+        held: How many items one list holds.
+        expected: How many items the other list holds.
+
+    Returns:
+        Nothing. The call returns when the two lengths are equal.
+
+    Raises:
+        Error: If the lengths differ.
+    """
+    if held != expected:
+        raise Error("Binding needs one world matrix for every bone")
+
+
 @fieldwise_init
 struct Bone(ImplicitlyCopyable):
     """One scene node, and where it stood when the mesh was bound to it."""
@@ -154,8 +171,7 @@ struct Skeleton(Copyable, Movable):
                 inverse of such a matrix as all zeros, which no later pose
                 can measure against. Nothing changes when this raises.
         """
-        if len(placed) != len(self.bones):
-            raise Error("Binding needs one world matrix for every bone")
+        require_bone_matrices(len(placed), len(self.bones))
         var inverses = List[Matrix4]()
         for index in range(len(placed)):  # pragma: no branch
             var stood = Matrix4(copy=placed[index])
@@ -277,8 +293,7 @@ def bind_skeleton(
             bound at a scale of zero, which no later pose can measure
             against.
     """
-    if len(nodes) != len(placed):
-        raise Error("Binding needs one world matrix for every bone")
+    require_bone_matrices(len(nodes), len(placed))
     var bones = List[Bone]()
     for index in range(len(nodes)):  # pragma: no branch
         bones.append(Bone(nodes[index], Matrix4()))

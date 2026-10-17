@@ -536,6 +536,22 @@ struct SsaoSettings(ImplicitlyCopyable):
         self.output = DEFAULT_OUTPUT
 
 
+def require_ssao_samples(size: Int) raises:
+    """Refuse an SSAO kernel that holds no sample.
+
+    Args:
+        size: How many samples the kernel holds.
+
+    Returns:
+        Nothing. The call returns when the kernel holds at least one sample.
+
+    Raises:
+        Error: If `size` is below one.
+    """
+    if size < 1:
+        raise Error("An SSAO kernel holds at least one sample")
+
+
 def check_ssao(settings: SsaoSettings) raises:
     """Refuse SSAO settings no pass could run.
 
@@ -559,8 +575,7 @@ def check_ssao(settings: SsaoSettings) raises:
         or settings.max_distance < 0
     ):
         raise Error("An SSAO setting must not be negative")
-    if settings.kernel_size < 1:
-        raise Error("An SSAO kernel holds at least one sample")
+    require_ssao_samples(settings.kernel_size)
 
 
 def ssao_kernel(size: Int, seed: Int) raises -> List[Vector3]:
@@ -581,8 +596,7 @@ def ssao_kernel(size: Int, seed: Int) raises -> List[Vector3]:
     Raises:
         Error: If the size is not positive.
     """
-    if size < 1:
-        raise Error("An SSAO kernel holds at least one sample")
+    require_ssao_samples(size)
     var random = SeededRandom(seed)
     var kernel = List[Vector3](capacity=size)
     var index = 0

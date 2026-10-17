@@ -552,6 +552,23 @@ def require_morph_index(target: Int, count: Int) raises:
         raise Error("No morph target has that index")
 
 
+def require_morph_cover(held: Int, expected: Int) raises:
+    """Refuse a morph target that does not cover every vertex.
+
+    Args:
+        held: How many vertices the target describes.
+        expected: How many vertices the geometry has.
+
+    Returns:
+        Nothing. The call returns when the two counts are equal.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("A morph target must cover every vertex")
+
+
 struct BufferGeometry(Movable):
     """Named vertex attributes, with optional indexed triangles."""
 
@@ -860,8 +877,9 @@ struct BufferGeometry(Movable):
             raise Error("A morph target needs a geometry with positions")
         if attribute.item_size != 3:
             raise Error("A morph target holds three numbers a vertex")
-        if attribute.count() != self.attribute_view(String(POSITION)).count():
-            raise Error("A morph target must cover every vertex")
+        require_morph_cover(
+            attribute.count(), self.attribute_view(String(POSITION)).count()
+        )
 
     def add_morph_target(
         mut self, var positions: BufferAttribute, *, name: String = ""
@@ -966,8 +984,7 @@ struct BufferGeometry(Movable):
             var size = colors[index].item_size
             if size != 3 and size != 4:
                 raise Error("A color target holds three or four numbers")
-            if colors[index].count() != count:
-                raise Error("A morph target must cover every vertex")
+            require_morph_cover(colors[index].count(), count)
         self.morph_colors = colors^
 
     def has_morph_colors(self) -> Bool:

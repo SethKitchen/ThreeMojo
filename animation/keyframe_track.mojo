@@ -721,6 +721,23 @@ def require_track_target(target: TrackTarget) raises:
         raise Error("A track needs a kind that exists and fits its slot")
 
 
+def require_key_values(held: Int, expected: Int) raises:
+    """Refuse a track that does not hold one value for every key.
+
+    Args:
+        held: How many values the track holds.
+        expected: How many values the keys require.
+
+    Returns:
+        Nothing. The call returns when the two counts are equal.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("A track needs one value for every key")
+
+
 def light_target(light: LightIndex, kind: TrackKind) raises -> TrackTarget:
     """Return the target for one property of one light.
 
@@ -1017,8 +1034,7 @@ struct KeyframeTrack(Copyable, Movable):
         var kind = target.kind
         if len(times) == 0:
             raise Error("A track needs at least one key")
-        if len(values) != len(times) * kind.component_count():
-            raise Error("A track needs one value for every key")
+        require_key_values(len(values), len(times) * kind.component_count())
         for index in range(len(values)):  # pragma: no branch
             if not isfinite(values[index]):
                 raise Error("A track's values must be numbers")
@@ -1160,8 +1176,7 @@ struct KeyframeTrack(Copyable, Movable):
         require_track_target(target)
         if not target.kind.is_string():
             raise Error("Only a string track takes strings")
-        if len(strings) != len(times):
-            raise Error("A track needs one value for every key")
+        require_key_values(len(strings), len(times))
         var kept = List[String]()
         var places = List[Float32]()
         for index in range(len(strings)):
