@@ -12,6 +12,22 @@ both widths.
 from std.math import isfinite
 
 
+def require_positive_tolerance(value: Float64) raises:
+    """Refuse a tolerance that is not positive and finite.
+
+    Args:
+        value: The tolerance. A `Float32` converts exactly.
+
+    Returns:
+        Nothing. The call returns when the tolerance is positive and finite.
+
+    Raises:
+        Error: If the tolerance is not positive and finite.
+    """
+    if not (value > 0 and isfinite(value)):
+        raise Error("A tolerance must be positive and finite")
+
+
 def positive_finite(value: Float64) -> Bool:
     """Return True when `value` is finite and greater than zero.
 

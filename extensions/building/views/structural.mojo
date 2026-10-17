@@ -28,6 +28,7 @@ Loads and Associated Criteria for Buildings and Other Structures", table
 code and occupancy.
 """
 
+from math.finite import require_positive_tolerance
 from math.norm import squared_length2
 from math.polygon_hit import ray_crosses
 from math.utils import clamp
@@ -133,9 +134,7 @@ struct StructuralViewOptions(ImplicitlyCopyable):
                 divisions are outside 0 to 16, or the gravity is negative
                 or not finite.
         """
-        var t = self.tolerance.to(METER)
-        if not (t > 0 and isfinite(t)):
-            raise Error("A tolerance must be positive and finite")
+        require_positive_tolerance(self.tolerance.to(METER))
         if self.shell_divisions < 0 or self.shell_divisions > _MAX_DIVISIONS:
             raise Error("The shell divisions must be from 0 to 16")
         var g = self.gravity.to(METER_PER_SECOND_SQUARED)

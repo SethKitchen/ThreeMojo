@@ -23,7 +23,7 @@ sections 3.4, 4.2 and 8.5.
 """
 
 from std.math import isfinite, sqrt
-from extensions.numerics.vector import zeros
+from extensions.numerics.vector import require_row_count, zeros
 
 # The cyclic Jacobi method stops after this many sweeps. Each sweep at
 # least squares the off-diagonal norm near convergence, so a few dozen
@@ -202,8 +202,7 @@ def solve(a: DenseMatrix, b: List[Float64]) raises -> List[Float64]:
     """
     if a.rows != a.cols:
         raise Error("Gaussian elimination needs a square matrix")
-    if len(b) != a.rows:
-        raise Error("The right-hand side must have one entry per row")
+    require_row_count(len(b), a.rows)
     var n = a.rows
     var m = a.copy()
     var x = b.copy()

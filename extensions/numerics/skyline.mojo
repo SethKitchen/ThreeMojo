@@ -31,7 +31,7 @@ Procedures" (2nd edition, 2014), section 8.2.
 
 from std.math import isfinite
 from extensions.numerics.sparse import CsrMatrix
-from extensions.numerics.vector import zeros
+from extensions.numerics.vector import require_row_count, zeros
 
 
 def _degree(a: CsrMatrix, node: Int) -> Int:
@@ -349,8 +349,7 @@ struct SkylineFactor(Movable):
         Raises:
             Error: If the length differs from the size.
         """
-        if len(b) != self.size:
-            raise Error("The right-hand side must have one entry per row")
+        require_row_count(len(b), self.size)
         var n = self.size
         var y = zeros(n)
         for i in range(n):

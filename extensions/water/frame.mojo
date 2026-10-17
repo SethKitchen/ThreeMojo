@@ -113,6 +113,23 @@ struct CameraLook(ImplicitlyCopyable):
     var pz: Float32
 
 
+def require_water_size(width: Int, height: Int) raises:
+    """Refuse a water image whose size is not positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Returns:
+        Nothing. The call returns when both sizes are positive.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    if not positive_extent(width, height):
+        raise Error("Water image dimensions must be positive")
+
+
 def camera_look(clock: Duration, sway: Bool, pitch: Angle) -> CameraLook:
     """Return the page's camera at one clock time.
 
@@ -1614,8 +1631,7 @@ struct WaterScene(Movable):
         Raises:
             Error: If a size or the view is not valid.
         """
-        if not positive_extent(width, height):
-            raise Error("Water image dimensions must be positive")
+        require_water_size(width, height)
         require_view(view)
         var clock = self.clock
         var surface = self._surface()
@@ -1768,8 +1784,7 @@ def render_water(
     Raises:
         Error: If a size or the view is not valid, or `clock` is not finite.
     """
-    if not positive_extent(width, height):
-        raise Error("Water image dimensions must be positive")
+    require_water_size(width, height)
     require_view(view)
     var scene = WaterScene(
         ocean, caustic_grid, caustic_resolution, glare_resolution, clock

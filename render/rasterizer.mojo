@@ -7188,6 +7188,22 @@ def _rows_of_corners(corners: List[Corner]) -> List[Int]:
     return rows^
 
 
+def require_whole_triangles(corner_count: Int) raises:
+    """Refuse a corner list that is not whole triangles.
+
+    Args:
+        corner_count: How many corners the list holds.
+
+    Returns:
+        Nothing. The call returns when the count is a multiple of three.
+
+    Raises:
+        Error: If the count is not a multiple of three.
+    """
+    if corner_count % 3 != 0:
+        raise Error("Rasterizing needs whole triangles")
+
+
 def _check_frame(
     corners: List[RasterVertex],
     segments: List[RasterVertex],
@@ -7207,8 +7223,7 @@ def _check_frame(
 ) raises:
     """Refuse a frame before any of it is drawn: the checks of
     `rasterize_frame`, on whole corners, with `splats` projected splats."""
-    if len(corners) % 3 != 0:
-        raise Error("Rasterizing needs whole triangles")
+    require_whole_triangles(len(corners))
     if len(segments) % 2 != 0:
         raise Error("Rasterizing needs whole segments")
     if workers < 1:
@@ -7455,8 +7470,7 @@ def rasterize_frame(
         Error: As the other overload, and also if a triangle's corners name
             different surfaces or a corner names one the list does not have.
     """
-    if len(corners) % 3 != 0:
-        raise Error("Rasterizing needs whole triangles")
+    require_whole_triangles(len(corners))
     var triangles = len(corners) // 3
     check_draws(draws, triangles, len(segments) // 2, len(points), len(splats))
     for triangle in range(triangles):
