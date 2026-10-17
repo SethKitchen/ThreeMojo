@@ -420,6 +420,31 @@ struct TrackballControls(Copyable, Movable):
             self._pan_end_x = at.x
             self._pan_end_y = at.y
 
+    def _aim(
+        mut self, position: Vector3, up: Vector3, delta: Duration
+    ) raises -> Tuple[Vector3, Vector3]:
+        """Age the held keys, then turn the offset and the up when rotation
+        is on.
+
+        Args:
+            position: Where the camera is.
+            up: The camera's up.
+            delta: The time since the last frame.
+
+        Returns:
+            The offset from the target, and the up after any turn.
+
+        Raises:
+            Error: If the time is negative or the key timeout is not
+                positive.
+        """
+        self._expire(delta)
+        var eye = position - self.target
+        var aimed = up
+        if not self.no_rotate:
+            self._rotate(eye, aimed)
+        return eye, aimed
+
     # --- the frame ---------------------------------------------------------
 
     def update(
@@ -442,11 +467,7 @@ struct TrackballControls(Copyable, Movable):
             Error: If the time is negative or the key timeout is not
                 positive.
         """
-        self._expire(delta)
-        var eye = camera.position - self.target
-        var up = camera.up
-        if not self.no_rotate:
-            self._rotate(eye, up)
+        var eye, up = self._aim(camera.position, camera.up, delta)
         if not self.no_zoom:
             var factor = self._zoom_factor()
             if factor != 1 and factor > 0:
@@ -494,11 +515,7 @@ struct TrackballControls(Copyable, Movable):
             Error: If the time is negative or the key timeout is not
                 positive.
         """
-        self._expire(delta)
-        var eye = camera.position - self.target
-        var up = camera.up
-        if not self.no_rotate:
-            self._rotate(eye, up)
+        var eye, up = self._aim(camera.position, camera.up, delta)
         if not self.no_zoom:
             var factor = self._zoom_factor()
             if factor != 1 and factor > 0:
