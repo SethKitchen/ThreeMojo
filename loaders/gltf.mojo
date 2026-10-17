@@ -513,6 +513,22 @@ comptime GLTF_PERSPECTIVE = GltfCameraKind(0)
 comptime GLTF_ORTHOGRAPHIC = GltfCameraKind(1)
 
 
+def require_gltf_camera(kind: GltfCameraKind) raises:
+    """Refuse a glTF camera kind that is not known.
+
+    Args:
+        kind: The camera kind.
+
+    Returns:
+        Nothing. The call returns when the kind is named.
+
+    Raises:
+        Error: If the kind is not known.
+    """
+    if not kind.is_valid():
+        raise Error("glTF: a camera kind that is not known")
+
+
 struct GltfCamera(Copyable, Movable):
     """One camera a node of the file carries, already riding that node."""
 
@@ -579,8 +595,7 @@ struct GltfCamera(Copyable, Movable):
             Error: If the kind is not one there is, or it is not
                 `GLTF_PERSPECTIVE`, or no perspective camera is held.
         """
-        if not self.kind.is_valid():
-            raise Error("glTF: a camera kind that is not known")
+        require_gltf_camera(self.kind)
         if self.kind != GLTF_PERSPECTIVE:
             raise Error("glTF: the camera is not a perspective camera")
         if not Bool(self._perspective):
@@ -597,8 +612,7 @@ struct GltfCamera(Copyable, Movable):
             Error: If the kind is not one there is, or it is not
                 `GLTF_ORTHOGRAPHIC`, or no orthographic camera is held.
         """
-        if not self.kind.is_valid():
-            raise Error("glTF: a camera kind that is not known")
+        require_gltf_camera(self.kind)
         if self.kind != GLTF_ORTHOGRAPHIC:
             raise Error("glTF: the camera is not an orthographic camera")
         if not Bool(self._orthographic):
