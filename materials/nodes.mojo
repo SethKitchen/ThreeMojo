@@ -675,6 +675,23 @@ def _int_kind(kind: NodeKind) -> NodeKind:
     ) if mapped.is_valid() else mapped
 
 
+def _refuse_integer_operation(operation: NodeKind, verb: String) raises:
+    """Refuse an integer operation this graph does not have.
+
+    Args:
+        operation: The kind chosen for the integer form.
+        verb: The operation's name in the error.
+
+    Returns:
+        Nothing. The call returns when the kind is named.
+
+    Raises:
+        Error: If the kind is not named.
+    """
+    if not operation.is_valid():
+        raise Error("A node graph cannot " + verb + " an exact integer")
+
+
 @fieldwise_init
 struct NodeOutput(Equatable, ImplicitlyCopyable, Writable):
     """Which part of the shading a graph replaces, as a type rather than a
@@ -2593,8 +2610,7 @@ struct NodeGraph(Copyable, Movable):
             operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
                 kind
             )
-            if not operation.is_valid():
-                raise Error("A node graph cannot " + verb + " an exact integer")
+            _refuse_integer_operation(operation, verb)
             if (
                 kind.value >= NODE_LESS_THAN.value
                 and kind.value <= NODE_NOT_EQUAL.value
@@ -3240,8 +3256,7 @@ struct NodeGraph(Copyable, Movable):
             operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
                 kind
             )
-            if not operation.is_valid():
-                raise Error("A node graph cannot " + verb + " an exact integer")
+            _refuse_integer_operation(operation, verb)
         return self._add(
             operation, type, first.value, second.value, third.value
         )

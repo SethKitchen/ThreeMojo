@@ -337,11 +337,27 @@ def _truthy(tree: LwoTree, object: Int, key: String) -> Bool:
     return tree.get(object, key).truthy()
 
 
+def _require_lwo_value(value: LwoValue, name: String) raises:
+    """Refuse an LWO attribute that has no value.
+
+    Args:
+        value: The attribute's value.
+        name: The attribute's name in the error.
+
+    Returns:
+        Nothing. The call returns when the value is present.
+
+    Raises:
+        Error: If the value is missing.
+    """
+    if value.is_undefined():
+        raise Error("LWO: the attribute " + name + " has no value")
+
+
 def _scalar(tree: LwoTree, attribute: Int, name: String) raises -> Float64:
     """Return an attribute's value, a number."""
     var value = tree.get(attribute, "value")
-    if value.is_undefined():
-        raise Error("LWO: the attribute " + name + " has no value")
+    _require_lwo_value(value, name)
     if not value.is_number():
         raise Error("LWO: the attribute " + name + " is not a number")
     return value.number
@@ -351,8 +367,7 @@ def _triple(tree: LwoTree, attribute: Int, name: String) raises -> Rgb:
     """Return an attribute's value, three numbers: three.js's
     `fromArray`."""
     var value = tree.get(attribute, "value")
-    if value.is_undefined():
-        raise Error("LWO: the attribute " + name + " has no value")
+    _require_lwo_value(value, name)
     # A `vparam3` is always three numbers.
     if not value.is_numbers():
         raise Error("LWO: the attribute " + name + " is not three numbers")
