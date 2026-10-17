@@ -89,12 +89,6 @@ def _positive(size: Length, name: String) raises -> Float32:
     return meters
 
 
-def _target(light: Light, scene: Scene) raises -> Vector3:
-    """Return where a light's target is in world space: its node's world
-    position, or the origin for `NO_PARENT`."""
-    return light_target_position(scene, light)
-
-
 def _aimed(position: Vector3, target: Vector3) raises -> Matrix4:
     """Return the transform that puts a part at `position` with its +z
     toward `target` and +y up, as three.js's `Object3D.lookAt` turns it."""
@@ -136,7 +130,7 @@ def directional_light_helper(
     var half = _positive(size, "directional light")
     var paint = _paint(light, color)
     var start = scene.world_position(light.node)
-    var end = _target(light, scene)
+    var end = light_target_position(scene, light)
     var place = _aimed(start, end)
     var square: List[Vector3] = [
         Vector3(-half, half, 0),
@@ -336,7 +330,7 @@ def spot_light_helper(
         reach = light.distance
     var width = reach * tan(light.angle.to(RADIAN))
     var start = scene.world_position(light.node)
-    var place = _aimed(start, _target(light, scene))
+    var place = _aimed(start, light_target_position(scene, light))
     place.multiply(scaling(width, width, reach))
     var apex = place.transform_point(Vector3(0, 0, 0))
     var spokes: List[Vector3] = [

@@ -1174,16 +1174,6 @@ def physical_light(
     return Reflected(diffuse, specular, coat, sheen)
 
 
-def _aimed_at(scene: Scene, light: Light) raises -> Vector3:
-    """Return where `light` points, in world space: its target node's
-    position, or the origin when it names none.
-
-    Raises:
-        Error: If the target is a node the scene does not have.
-    """
-    return light_target_position(scene, light)
-
-
 struct Lighting(Movable):
     """Every light in a scene, resolved to world space and ready to evaluate.
 
@@ -1483,9 +1473,9 @@ struct Lighting(Movable):
             elif light.kind == DIRECTIONAL:
                 # Where the node ended up after every transform above it,
                 # seen from what it shines at.
-                var pointing = scene.world_position(light.node) - _aimed_at(
-                    scene, light
-                )
+                var pointing = scene.world_position(
+                    light.node
+                ) - light_target_position(scene, light)
                 # A node on its target leaves a zero direction, as three.js's
                 # `normalize` leaves it. Every surface then meets the light
                 # edge-on: a dot product of zero, as three.js's shader gets.
@@ -1518,7 +1508,7 @@ struct Lighting(Movable):
                 # From the target toward the bulb, as three.js holds it.
                 # A node on its target leaves a zero axis, as in three.js:
                 # every surface is then at a right angle to it.
-                var axis = at - _aimed_at(scene, light)
+                var axis = at - light_target_position(scene, light)
                 axis.normalize()
                 self.spot_positions.append(at)
                 self.spot_directions.append(axis)

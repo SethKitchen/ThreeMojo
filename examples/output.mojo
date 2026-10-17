@@ -11,7 +11,7 @@ one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
 scene and spin it, hang a part on a turning node, stand a body on the
 floor, make a gallery renderer, frame or place a gallery camera, add a
-fill and a key lamp, or write a third of a turn.
+fill and a key lamp, write a third of a turn, or print one tissue mass line.
 """
 
 from cameras.camera import Camera
@@ -226,6 +226,26 @@ def warm_lamp(mut scene: Scene, x: Float32, y: Float32, z: Float32) raises:
         Color(255, 244, 220),
         2.55,
     )
+
+
+def print_tissue_mass(
+    label: String, grams: Float32, newtons: Float32, lbf: Float32
+):
+    """Print one tissue mass line.
+
+    Args:
+        label: The tissue name.
+        grams: The mass in grams.
+        newtons: The weight in newtons.
+        lbf: The weight in pounds-force.
+
+    Returns:
+        Nothing. The line is printed.
+
+    Raises:
+        Error: Never.
+    """
+    print(label, "-", grams, "g,", newtons, "N,", lbf, "lbf on Earth")
 
 
 def example_destination(default_name: String) -> String:
