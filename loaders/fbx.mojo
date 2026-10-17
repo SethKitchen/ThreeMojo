@@ -96,6 +96,7 @@ from lights.light import (
     point_light,
     spot_light,
 )
+from loaders.bytes import space_tab_line
 from loaders.fbx_tree import (
     FBX_BYTES,
     FBX_STRING,
@@ -360,7 +361,7 @@ def sanitize_node_name(name: String) -> String:
     """
     var out = List[UInt8]()
     for byte in name.as_bytes():
-        if byte == 32 or byte == 9 or byte == 10 or byte == 13:
+        if space_tab_line(byte):
             out.append(95)
         elif (
             byte != 91

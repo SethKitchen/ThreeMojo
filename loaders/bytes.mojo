@@ -84,6 +84,36 @@ def space_tab_return(byte: UInt8) -> Bool:
     return byte == 0x20 or byte == 0x09 or byte == 0x0D
 
 
+def space_tab_line(byte: Int) -> Bool:
+    """Return True for a space, a tab, a line feed, or a carriage return.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is one of those four bytes.
+
+    Raises:
+        Error: Never.
+    """
+    return byte == 32 or byte == 9 or byte == 10 or byte == 13
+
+
+def space_tab_line(byte: UInt8) -> Bool:
+    """Return True for a space, a tab, a line feed, or a carriage return.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is one of those four bytes.
+
+    Raises:
+        Error: Never.
+    """
+    return space_tab_line(Int(byte))
+
+
 def ascii_digit(byte: Int) -> Bool:
     """Return True for an ASCII decimal digit.
 
