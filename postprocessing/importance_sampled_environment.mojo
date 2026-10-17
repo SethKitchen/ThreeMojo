@@ -41,6 +41,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
 from postprocessing.sampling import clamped_texel
+from render.color_math import rgb_channels
 from render.framebuffer import FloatColor
 from std.math import asin, atan2, cos, floor, isfinite, max, min, pi, pow, sin
 
@@ -389,11 +390,6 @@ def _to_world(direction: Vector3, camera_world: Matrix4) -> Vector3:
     return world
 
 
-def _rgb(color: FloatColor) -> Vector3:
-    """Return a color's red, green and blue."""
-    return Vector3(color.r, color.g, color.b)
-
-
 def sample_reflect(
     env: EquirectEnvironment,
     camera_world: Matrix4,
@@ -412,7 +408,7 @@ def sample_reflect(
         The light.
     """
     var uv = equirect_uv(_to_world(view_reflect_dir, camera_world))
-    return _rgb(env.sample(uv.x, uv.y)) * (env.intensity * weight)
+    return rgb_channels(env.sample(uv.x, uv.y)) * (env.intensity * weight)
 
 
 def sample_environment_brdf(
@@ -444,7 +440,7 @@ def sample_environment_brdf(
     var n_dot_v = max(Float32(0), n.dot(v))
     var l = _to_world(view_reflect_dir, camera_world)
     var uv = equirect_uv(l)
-    var color = _rgb(env.sample(uv.x, uv.y))
+    var color = rgb_channels(env.sample(uv.x, uv.y))
     var h = v + l
     h.normalize()
     var n_dot_l = max(Float32(0), n.dot(l))
@@ -496,7 +492,7 @@ def sample_environment_mis(
     var n_dot_v = max(Float32(0), n.dot(v))
     var l1 = _to_world(view_reflect_dir, camera_world)
     var uv1 = equirect_uv(l1)
-    var color1 = _rgb(env.sample(uv1.x, uv1.y))
+    var color1 = rgb_channels(env.sample(uv1.x, uv1.y))
     var h1 = v + l1
     h1.normalize()
     var n_dot_l1 = max(Float32(0), n.dot(l1))
@@ -532,7 +528,7 @@ def sample_environment_mis(
         var v_dot_h = max(Float32(0), v.dot(half_vector))
         if n_dot_l > 0.001:
             var d = d_gtr(alpha, n_dot_h, 2)
-            var color = _rgb(env.sample(u_cdf, v_cdf))
+            var color = rgb_channels(env.sample(u_cdf, v_cdf))
             var pdf_env2 = max(
                 w
                 * h

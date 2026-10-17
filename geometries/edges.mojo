@@ -172,15 +172,6 @@ def welded_points(geometry: BufferGeometry) raises -> List[Int]:
     return welded^
 
 
-def _face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
-    """Return the unit normal of one triangle, or zero if it has no area.
-
-    Its own rather than `renderers.renderer.face_normal`, because a
-    geometry does not depend on a renderer.
-    """
-    return normal_or_zero(a, b, c)
-
-
 def _degenerate(a: Int, b: Int, c: Int) -> Bool:
     """Return True if two of a face's three welded points are one point.
 
@@ -247,7 +238,7 @@ def _paired(
             welded[corners[0]], welded[corners[1]], welded[corners[2]]
         ):
             continue
-        var normal = _face_normal(
+        var normal = normal_or_zero(
             geometry.corner(triangle, 0),
             geometry.corner(triangle, 1),
             geometry.corner(triangle, 2),

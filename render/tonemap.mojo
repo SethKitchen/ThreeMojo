@@ -59,6 +59,7 @@ from materials.nodes import (
 )
 from math.utils import max3, min3, mix_delta, saturate
 from math.vector3 import Vector3
+from render.color_math import rgb_channels
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, isfinite, log2, max, min
 
@@ -524,9 +525,7 @@ def custom_tone_map[S: NodeSource](color: FloatColor, curve: S) -> FloatColor:
     """
     if not has_output(curve, OUTPUT_NODE):
         return color
-    var mapped = run_nodes(
-        curve, OUTPUT_NODE, _no_inputs(Vector3(color.r, color.g, color.b))
-    )
+    var mapped = run_nodes(curve, OUTPUT_NODE, _no_inputs(rgb_channels(color)))
     return FloatColor(mapped[0], mapped[1], mapped[2], color.a)
 
 
