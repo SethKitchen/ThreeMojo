@@ -56,7 +56,7 @@ the next code.
 
 from core.binary import little_endian_u32
 from math.utils import clamp
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from render.inflate import inflate
 from render.srgb import LINEAR
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture
@@ -500,8 +500,7 @@ def _decode_image[
     """
     var width = ifd.first(256, -1)
     var height = ifd.first(257, -1)
-    if not positive_extent(width, height):
-        raise Error("TIFF: the image has no size")
+    require_positive_extent(width, height, "TIFF: the image has no size")
     if width * height > MAX_TIFF_PIXELS:
         raise Error("TIFF: the image is larger than this port decodes")
     var compression = ifd.first(259, 1)

@@ -23,7 +23,7 @@ small pixel's area, weighted by their alpha, so the result does not depend
 on a browser.
 """
 
-from core.extent import positive_extent
+from core.extent import positive_extent, require_positive_extent
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
@@ -345,8 +345,9 @@ struct AsciiEffect(Movable):
         """
         var width = ascii_size(image.width, self.resolution)
         var height = ascii_size(image.height, self.resolution)
-        if not positive_extent(width, height):
-            raise Error("The image is too small for that ASCII resolution")
+        require_positive_extent(
+            width, height, "The image is too small for that ASCII resolution"
+        )
         var small = shrink(image, width, height)
         var rows = (height + 1) // 2
         var characters = List[String](capacity=width * rows)

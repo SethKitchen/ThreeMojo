@@ -36,7 +36,7 @@ area with the formula SMAA's `AreaTex.py` fills the texture with. See
 """
 
 from cameras.camera import Camera
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.layers import Layers
 from core.ordinal import require_index_in_count
 from core.scene import Scene
@@ -942,8 +942,9 @@ struct JitteredCamera(Camera, ImplicitlyCopyable):
         """
         if not (isfinite(offset_x) and isfinite(offset_y)):
             raise Error("A view offset must be finite")
-        if not positive_extent(width, height):
-            raise Error("A view offset's image must have a positive size")
+        require_positive_extent(
+            width, height, "A view offset's image must have a positive size"
+        )
         self.view = camera.view_matrix_in(scene)
         self.projection = translation(
             -2 * offset_x / Float32(width), 2 * offset_y / Float32(height), 0

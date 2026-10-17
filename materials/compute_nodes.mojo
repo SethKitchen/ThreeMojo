@@ -71,7 +71,7 @@ one launch a step. Both backends call `run_statements` on a
 `ComputeSource`, so the two agree to the float.
 """
 
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.ordinal import require_index_in_count
 from materials.compute_ids import (
     ATOMIC_ADD,
@@ -333,8 +333,7 @@ struct StorageBufferStore(Movable):
         Raises:
             Error: If a size is not positive.
         """
-        if not positive_extent(width, height):
-            raise Error("A storage texture needs a size")
+        require_positive_extent(width, height, "A storage texture needs a size")
         var texels = self.instanced_array(width * height, NODE_VEC4)
         return StorageTexture(texels, width, height)
 

@@ -26,7 +26,7 @@ than zero, a depth, or an array is refused. The image's color space is
 """
 
 from core.binary import big_endian_u32, little_endian_u32
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from render.compressed_texture import (
     R11_EAC_FORMAT,
     RED_GREEN_RGTC2_FORMAT,
@@ -224,10 +224,11 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     var named = format_of_gl(_word(bytes, 28, big_endian))
     var width = _word(bytes, 36, big_endian)
     var height = _word(bytes, 40, big_endian)
-    if not positive_extent(width, height):
-        raise Error(
-            "KTX: only 2D textures are ported; the size must be positive"
-        )
+    require_positive_extent(
+        width,
+        height,
+        "KTX: only 2D textures are ported; the size must be positive",
+    )
     if _word(bytes, 44, big_endian) != 0:
         raise Error("KTX: only 2D textures are ported; this one has a depth")
     if _word(bytes, 48, big_endian) != 0:

@@ -50,7 +50,7 @@ code is a block format even when the flags say RGB, as in three.js.
 """
 
 from core.binary import copy_bytes, little_endian_u32
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from render.compressed_texture import (
     RED_GREEN_RGTC2_FORMAT,
     RED_RGTC1_FORMAT,
@@ -262,8 +262,9 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
         raise Error("DDS: the header or pixel format states the wrong size")
     var height = little_endian_u32(bytes, 12)
     var width = little_endian_u32(bytes, 16)
-    if not positive_extent(width, height):
-        raise Error("DDS: the dimensions must be positive")
+    require_positive_extent(
+        width, height, "DDS: the dimensions must be positive"
+    )
     var levels = 1
     if (little_endian_u32(bytes, 8) & DDSD_MIPMAPCOUNT) != 0:
         levels = max(1, little_endian_u32(bytes, 28))

@@ -22,7 +22,7 @@ arrives. A sequence this decoder does not know is consumed and dropped.
 A position is a terminal cell: its column and its row, from zero. The
 window that reads the bytes converts a cell to the pixels it shows.
 """
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from loaders.bytes import ascii_digit
 from core.ordinal import ordinal_valid
 
@@ -260,8 +260,7 @@ def require_viewport_size(width: Int, height: Int) raises:
     Raises:
         Error: If the width or the height is not positive.
     """
-    if not positive_extent(width, height):
-        raise Error("A viewport's size must be positive")
+    require_positive_extent(width, height, "A viewport's size must be positive")
 
 
 def require_view_size(width: Int, height: Int) raises:
@@ -277,8 +276,9 @@ def require_view_size(width: Int, height: Int) raises:
     Raises:
         Error: If the width or the height is not positive.
     """
-    if not positive_extent(width, height):
-        raise Error("A view must have a positive width and height")
+    require_positive_extent(
+        width, height, "A view must have a positive width and height"
+    )
 
 
 def refuse_invalid(what: String, value: Int) raises:

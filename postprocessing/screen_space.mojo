@@ -41,7 +41,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.extent import positive_extent
+from core.extent import require_positive_extent
 from core.ordinal import ordinal_valid
 
 from postprocessing.sample_math import gaussian_pdf
@@ -194,8 +194,9 @@ struct DepthView(Movable):
                 of the far one, the projection cannot be inverted, or the
                 depth mode is none of the three.
         """
-        if not positive_extent(width, height):
-            raise Error("A depth view's size must be positive")
+        require_positive_extent(
+            width, height, "A depth view's size must be positive"
+        )
         if len(ndc_depth) != width * height:
             raise Error("A depth view needs one depth per pixel")
         if len(normals) != 0 and len(normals) != width * height:
