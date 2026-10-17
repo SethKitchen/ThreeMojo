@@ -27,6 +27,7 @@ SOURCE, so each frame simply replaces the last. Sub-rectangle frames are the
 format's compression trick, and nothing here compresses.
 """
 
+from core.binary import append_big_endian
 from render.framebuffer import Framebuffer
 from render.png import frame_data, push_be32, push_chunk, push_ihdr
 from render.png import push_signature
@@ -47,8 +48,7 @@ comptime MAX_PLAYS = 0xFFFFFFFF
 
 def push_be16(mut out: List[UInt8], value: UInt16):
     """Append `value` as two big-endian bytes."""
-    out.append(UInt8((value >> 8) & 0xFF))
-    out.append(UInt8(value & 0xFF))
+    append_big_endian(out, Int(value), 2)
 
 
 def push_actl(mut out: List[UInt8], frames: Int, plays: Int) raises:

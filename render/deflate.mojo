@@ -27,6 +27,7 @@ natural log of the data's length: `ceil(max(8, min(13, ln(n))) * 1.5)`.
 
 from std.math import ceil, log
 
+from core.binary import store_big_endian
 from render.checksum import adler32
 
 # The largest number of symbols in a block, and the size of the list
@@ -870,8 +871,5 @@ def zlib_deflate(data: Span[UInt8, _], level: Int = 6) raises -> List[UInt8]:
     for b in data:
         bytes.append(b)
     var sum = Int(adler32(bytes))
-    var at = len(out) - 4
-    # Four bytes. The loop always runs.
-    for k in range(4):  # pragma: no branch
-        out[at + k] = UInt8((sum >> (24 - 8 * k)) & 255)
+    store_big_endian(out, len(out) - 4, sum, 4)
     return out^

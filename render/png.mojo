@@ -18,7 +18,11 @@ Byte order is big-endian throughout, as PNG requires, except inside DEFLATE's
 own stored-block lengths, which are little-endian.
 """
 
-from core.binary import big_endian_u32
+from core.binary import (
+    append_big_endian,
+    append_little_endian_u16,
+    big_endian_u32,
+)
 from core.extent import positive_extent
 from render.checksum import Crc32, adler32
 from render.framebuffer import Color, Framebuffer, pixel_slot
@@ -34,10 +38,7 @@ comptime BIT_DEPTH = UInt8(8)
 
 def push_be32(mut out: List[UInt8], value: UInt32):
     """Append `value` as four big-endian bytes."""
-    out.append(UInt8((value >> 24) & 0xFF))
-    out.append(UInt8((value >> 16) & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-    out.append(UInt8(value & 0xFF))
+    append_big_endian(out, Int(value), 4)
 
 
 def _push_ascii(mut out: List[UInt8], text: String):
@@ -128,10 +129,8 @@ def zlib_stream(
         # Block header: BFINAL in bit 0, BTYPE 00 (stored) in bits 1-2.
         out.append(1) if final else out.append(0)
         # LEN then its one's complement, both little-endian.
-        out.append(UInt8(size & 0xFF))
-        out.append(UInt8((size >> 8) & 0xFF))
-        out.append(UInt8((~size) & 0xFF))
-        out.append(UInt8(((~size) >> 8) & 0xFF))
+        append_little_endian_u16(out, size)
+        append_little_endian_u16(out, ~size)
         out.extend(Span(raw)[position : position + size])
 
         position += size
