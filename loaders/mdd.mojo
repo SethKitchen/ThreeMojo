@@ -32,6 +32,7 @@ Bytes after the last frame are stepped over, as three.js steps over them.
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import KeyframeTrack, MeshIndex, morph_target
+from core.binary import big_endian_u32
 from core.buffer_attribute import BufferAttribute
 from std.memory import bitcast
 from std.pathlib import Path
@@ -82,10 +83,7 @@ def _word(bytes: List[UInt8], at: Int) raises -> UInt32:
     """
     if at + 4 > len(bytes):
         raise Error("MDD: the file ends inside a value, at byte " + String(at))
-    var value: UInt32 = 0
-    for k in range(4):  # pragma: no branch
-        value = (value << 8) | UInt32(bytes[at + k])
-    return value
+    return UInt32(big_endian_u32(bytes, at))
 
 
 def parse_mdd(bytes: List[UInt8]) raises -> MddModel:

@@ -61,6 +61,7 @@ JPEG carries no color space of its own. What every viewer assumes is
 sRGB, and so does this: a decoded JPEG is `SRGB`.
 """
 
+from core.binary import big_endian_u16
 from render.framebuffer import Color
 from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
@@ -729,7 +730,7 @@ def _be16(bytes: List[UInt8], at: Int) raises -> Int:
     """
     if at + 1 >= len(bytes):
         raise Error("A JPEG file ended inside a marker segment")
-    return (Int(bytes[at]) << 8) | Int(bytes[at + 1])
+    return big_endian_u16(bytes, at)
 
 
 def _read_quant_tables(

@@ -47,6 +47,7 @@ reads them at: the image sizes and offsets that libultrahdr writes.
   three.js gives an image of `NaN`s.
 """
 
+from core.binary import big_endian_u16, big_endian_u32, little_endian_u32
 from loaders.bytes import bytes_match
 from loaders.js_number import js_log2, js_parse_float, js_pow
 from loaders.xml import XmlDocument, parse_xml
@@ -115,26 +116,11 @@ struct UltraHdrImage(Movable):
         self.metadata = metadata^
 
 
-def _u16(bytes: List[UInt8], at: Int) -> Int:
-    """Return a big-endian 16-bit number."""
-    return (Int(bytes[at]) << 8) | Int(bytes[at + 1])
-
-
 def _u32(bytes: List[UInt8], at: Int, little: Bool) -> Int:
-    """Return a 32-bit number."""
+    """Return a 32-bit number in the file's byte order."""
     if little:
-        return (
-            Int(bytes[at])
-            | (Int(bytes[at + 1]) << 8)
-            | (Int(bytes[at + 2]) << 16)
-            | (Int(bytes[at + 3]) << 24)
-        )
-    return (
-        (Int(bytes[at]) << 24)
-        | (Int(bytes[at + 1]) << 16)
-        | (Int(bytes[at + 2]) << 8)
-        | Int(bytes[at + 3])
-    )
+        return little_endian_u32(bytes, at)
+    return big_endian_u32(bytes, at)
 
 
 def _js_number(text: String) -> Float64:
@@ -256,7 +242,7 @@ def _read_segments(
         # The scan, or the end: no more segments to read.
         if marker == 0xDA or marker == 0xD9:
             return
-        var length = _u16(bytes, at + 2)
+        var length = big_endian_u16(bytes, at + 2)
         var payload = at + 4
         var stop = at + 2 + length
         if length < 2 or stop > end:

@@ -10,21 +10,12 @@ it, including recomputing every chunk CRC and walking the stored DEFLATE
 blocks back to the original scanlines.
 """
 
+from core.binary import big_endian_u32
 from render.framebuffer import Color, Framebuffer
 from render.png import encode, zlib_stream
 from std.testing import TestSuite, assert_equal, assert_true
 
 comptime SIGNATURE_LENGTH = 8
-
-
-def be32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the big-endian 32-bit integer starting at `at`."""
-    return (
-        Int(bytes[at]) << 24
-        | Int(bytes[at + 1]) << 16
-        | Int(bytes[at + 2]) << 8
-        | Int(bytes[at + 3])
-    )
 
 
 def chunk_kind(bytes: List[UInt8], at: Int) raises -> String:
@@ -96,7 +87,7 @@ def test_chunks_appear_in_order() raises:
     var kinds = List[String]()
     var position = SIGNATURE_LENGTH
     while position < len(png):
-        var length = be32(png, position)
+        var length = big_endian_u32(png, position)
         kinds.append(chunk_kind(png, position + 4))
         position += 12 + length
     assert_equal(len(kinds), 3)
@@ -110,10 +101,10 @@ def test_every_chunk_crc_is_correct() raises:
     var position = SIGNATURE_LENGTH
     var checked = 0
     while position < len(png):
-        var length = be32(png, position)
+        var length = big_endian_u32(png, position)
         # The CRC covers the type and data, but not the length field.
         var expected = crc32_of(png, position + 4, length + 4)
-        var stored = be32(png, position + 8 + length)
+        var stored = big_endian_u32(png, position + 8 + length)
         assert_equal(Int(expected), stored)
         checked += 1
         position += 12 + length
@@ -123,8 +114,8 @@ def test_every_chunk_crc_is_correct() raises:
 def test_header_describes_an_rgba_image() raises:
     var png = encode(Framebuffer(3, 2, Color(0, 0, 0)))
     var data = SIGNATURE_LENGTH + 8
-    assert_equal(be32(png, data), 3)  # width
-    assert_equal(be32(png, data + 4), 2)  # height
+    assert_equal(big_endian_u32(png, data), 3)  # width
+    assert_equal(big_endian_u32(png, data + 4), 2)  # height
     assert_equal(Int(png[data + 8]), 8)  # bit depth
     assert_equal(Int(png[data + 9]), 6)  # color type 6 = truecolor + alpha
     assert_equal(Int(png[data + 10]), 0)  # compression
@@ -134,7 +125,7 @@ def test_header_describes_an_rgba_image() raises:
 
 def test_iend_is_empty() raises:
     var png = encode(Framebuffer(1, 1, Color(0, 0, 0)))
-    assert_equal(be32(png, len(png) - 12), 0)
+    assert_equal(big_endian_u32(png, len(png) - 12), 0)
     assert_equal(chunk_kind(png, len(png) - 8), String("IEND"))
 
 
@@ -153,7 +144,7 @@ def idat_scanlines(buffer: Framebuffer) raises -> List[UInt8]:
     var png = encode(buffer)
     var position = SIGNATURE_LENGTH
     while position < len(png):
-        var length = be32(png, position)
+        var length = big_endian_u32(png, position)
         if chunk_kind(png, position + 4) == "IDAT":
             return inflate_stored(png, position + 8, length)
         position += 12 + length

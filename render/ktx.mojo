@@ -25,6 +25,7 @@ than zero, a depth, or an array is refused. The image's color space is
 `SRGB` when the internal format is an sRGB one, and `LINEAR` otherwise.
 """
 
+from core.binary import big_endian_u32, little_endian_u32
 from core.extent import positive_extent
 from render.compressed_texture import (
     R11_EAC_FORMAT,
@@ -78,13 +79,9 @@ def identifier() -> List[UInt8]:
 def _word(bytes: List[UInt8], at: Int, big_endian: Bool) -> Int:
     """Return the word at `at` in the file's byte order; the caller has
     checked the length."""
-    var b0 = Int(bytes[at])
-    var b1 = Int(bytes[at + 1])
-    var b2 = Int(bytes[at + 2])
-    var b3 = Int(bytes[at + 3])
     if big_endian:
-        return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
-    return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+        return big_endian_u32(bytes, at)
+    return little_endian_u32(bytes, at)
 
 
 def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:

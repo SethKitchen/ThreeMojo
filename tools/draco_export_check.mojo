@@ -12,6 +12,7 @@ refused where three.js throws, and each file must decode. It is not in
 `make test` or `make coverage`. Run it with `make draco-export-check`.
 """
 
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
 from exporters.draco import (
@@ -29,17 +30,6 @@ from std.pathlib import Path
 comptime _DIR = "assets/draco/export/"
 
 
-def _word(words: List[UInt8], i: Int) -> Int:
-    """The little-endian 32-bit word `i` of `three.bin`."""
-    var at = 4 * i
-    return (
-        Int(words[at])
-        | (Int(words[at + 1]) << 8)
-        | (Int(words[at + 2]) << 16)
-        | (Int(words[at + 3]) << 24)
-    )
-
-
 def _geometry(
     doc: JsonDocument, words: List[UInt8], name: String
 ) raises -> BufferGeometry:
@@ -54,7 +44,9 @@ def _geometry(
         var start = doc.integer(doc.at(w, 0))
         var values = List[Float32]()
         for i in range(start, start + doc.integer(doc.at(w, 1))):
-            values.append(bitcast[DType.float32](UInt32(_word(words, i))))
+            values.append(
+                bitcast[DType.float32](UInt32(little_endian_u32(words, 4 * i)))
+            )
         geometry.set_attribute(
             key,
             BufferAttribute(values^, doc.integer(doc.get(entry, "itemSize"))),
@@ -64,7 +56,7 @@ def _geometry(
         var start = doc.integer(doc.at(w, 0))
         var index = List[Int]()
         for i in range(start, start + doc.integer(doc.at(w, 1))):
-            index.append(_word(words, i))
+            index.append(little_endian_u32(words, 4 * i))
         geometry.set_index(index^)
     return geometry^
 

@@ -293,19 +293,6 @@ def _twiddle(x_size: Int, y_size: Int, x: Int, y: Int) -> Int:
     return twiddled | ((maximum >> shift) << (2 * shift))
 
 
-def _word(data: List[UInt8], index: Int) -> Int:
-    """Return a little-endian 32-bit word.
-
-    Args:
-        data: The payload.
-        index: Which word.
-
-    Returns:
-        The word.
-    """
-    return little_endian_u32(data, index * 4)
-
-
 def decode_pvrtc(
     width: Int, height: Int, data: List[UInt8], two_bit: Bool
 ) raises -> List[UInt8]:
@@ -351,8 +338,8 @@ def decode_pvrtc(
             var color = List[Int]()
             for k in range(4):  # pragma: no branch
                 var at = _twiddle(words_x, words_y, xs[k], ys[k]) * 2
-                modulation.append(_word(data, at))
-                color.append(_word(data, at + 1))
+                modulation.append(little_endian_u32(data, 4 * at))
+                color.append(little_endian_u32(data, 4 * (at + 1)))
             var offsets_x: List[Int] = [0, word_width, 0, word_width]
             var offsets_y: List[Int] = [0, 0, word_height, word_height]
             for k in range(4):  # pragma: no branch
