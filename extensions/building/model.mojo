@@ -19,6 +19,7 @@ Coordinates are meters, z up. The x axis points east and the y axis points
 north unless `Site.north` says otherwise.
 """
 
+from math.finite import positive_finite
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.construction import Construction, Glazing
@@ -680,6 +681,23 @@ struct ConstructionSet(ImplicitlyCopyable):
     var roof: ConstructionId
 
 
+def require_furnishing_place(center: Point2, rotation: Float64) raises:
+    """Refuse a furnishing whose place is not finite.
+
+    Args:
+        center: The furnishing's center in plan, in meters.
+        rotation: Its turn about that center, in radians.
+
+    Returns:
+        Nothing. The call returns when the center and the turn are finite.
+
+    Raises:
+        Error: If the center or the turn is not finite.
+    """
+    if not (center.is_finite() and isfinite(rotation)):
+        raise Error("A furnishing's place must be finite")
+
+
 def require_furniture_kind(kind: FurnitureKind) raises:
     """Refuse a furniture kind that is not named.
 
@@ -1130,10 +1148,9 @@ struct Building(Movable):
         self.check_space(space)
         var sizes = [width.to(METER), depth.to(METER), height.to(METER)]
         for i in range(3):  # pragma: no branch
-            if not (sizes[i] > 0 and isfinite(sizes[i])):
+            if not positive_finite(sizes[i]):
                 raise Error("A furnishing's size must be positive and finite")
-        if not (center.is_finite() and isfinite(rotation.to(RADIAN))):
-            raise Error("A furnishing's place must be finite")
+        require_furnishing_place(center, rotation.to(RADIAN))
         var item = Furnishing(
             String(kind.name(), " ", len(self.furnishings)),
             kind,
@@ -1558,12 +1575,11 @@ struct Building(Movable):
             require_furniture_kind(item.kind)
             var sizes = [item.width.value, item.depth.value, item.height.value]
             for k in range(3):  # pragma: no branch (three dimensions)
-                if not (sizes[k] > 0 and isfinite(sizes[k])):
+                if not positive_finite(sizes[k]):
                     raise Error(
                         "A furnishing's size must be positive and finite"
                     )
-            if not (item.center.is_finite() and isfinite(item.rotation.value)):
-                raise Error("A furnishing's place must be finite")
+            require_furnishing_place(item.center, item.rotation.value)
             var corners = item.corners()
             var space = item.space.value
             for k in range(4):  # pragma: no branch (four generated corners)
