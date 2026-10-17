@@ -11,7 +11,9 @@ both widths. `require_finite` refuses a value that is not finite.
 finite. `require_positive_finite` refuses a value that is not positive
 and finite. `require_non_negative_finite` refuses a value that is not
 finite or is negative. `require_unit_finite` refuses a value outside
-zero through one, or one that is not finite. `require_finite_group`
+zero through one, or one that is not finite. `require_unit_range` refuses
+a Float32 outside that range and does not read finiteness.
+`require_finite_group`
 refuses a caller-tested group that is not finite. Callers keep their
 own error text.
 """
@@ -126,6 +128,26 @@ def require_unit_finite(value: Float64, message: String) raises:
         Error: If `value` is not finite or is outside zero through one.
     """
     if not unit_finite(value):
+        raise Error(message)
+
+
+def require_unit_range(value: Float32, message: String) raises:
+    """Refuse a Float32 outside zero through one.
+
+    Zero and one are accepted. A value that is not finite is left as it is.
+
+    Args:
+        value: The number.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is from zero through one,
+        or is not finite.
+
+    Raises:
+        Error: If `value` is below zero or above one.
+    """
+    if value < 0 or value > 1:
         raise Error(message)
 
 

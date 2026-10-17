@@ -82,6 +82,7 @@ from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.obj import ObjModel, read_obj
 from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side
+from math.finite import require_unit_range
 from math.vector2 import Vector2
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
@@ -478,8 +479,9 @@ def _fraction(field: String, line: Int) raises -> Float32:
             one.
     """
     var value = _number(field, line)
-    if value < 0 or value > 1:
-        raise Error(_where(line) + "must be from zero to one: " + field)
+    require_unit_range(
+        value, _where(line) + "must be from zero to one: " + field
+    )
     return value
 
 
@@ -509,8 +511,9 @@ def _channels(
         var channel = _number(field, line)
         if normalize:
             channel /= 255
-        if channel < 0 or channel > 1:
-            raise Error(_where(line) + "must be from zero to one: " + field)
+        require_unit_range(
+            channel, _where(line) + "must be from zero to one: " + field
+        )
         out.append(channel)
     return out^
 

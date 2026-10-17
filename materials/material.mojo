@@ -240,6 +240,7 @@ from math.finite import (
     require_finite_group,
     require_non_negative_finite,
     require_unit_finite,
+    require_unit_range,
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -1827,8 +1828,7 @@ struct Material(ImplicitlyCopyable):
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
-        if opacity < 0 or opacity > 1:
-            raise Error("Opacity must be between zero and one")
+        require_unit_range(opacity, "Opacity must be between zero and one")
         require_valid(
             side.is_valid(),
             "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE",

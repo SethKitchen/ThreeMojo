@@ -42,6 +42,7 @@ from core.scene import Scene
 from materials.glsl import compile_shader_material
 from materials.material import BACK_SIDE, MaterialId, shader_material
 from materials.nodes import NodeProgram
+from math.finite import require_unit_range
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer
 from std.collections import Dict
@@ -127,8 +128,9 @@ def check_outline_parameters(parameters: OutlineParameters) raises:
     require_non_negative(
         parameters.thickness, "An outline's thickness must not be negative"
     )
-    if parameters.alpha < 0 or parameters.alpha > 1:
-        raise Error("An outline's alpha runs from zero to one")
+    require_unit_range(
+        parameters.alpha, "An outline's alpha runs from zero to one"
+    )
 
 
 struct OutlineEffect(Movable):

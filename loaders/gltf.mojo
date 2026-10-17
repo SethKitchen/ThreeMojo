@@ -166,6 +166,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.extent import require_closed_count
 from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
@@ -1942,11 +1943,15 @@ struct _Loader(Movable):
         if found == NO_NODE:
             return -1
         var set = self.texture_set(found)
-        if set < 0 or set > 1:
-            raise Error(
+        require_closed_count(
+            set,
+            0,
+            1,
+            (
                 "glTF: a texture reads only the first two sets of texture"
                 " coordinates"
-            )
+            ),
+        )
         var index = self.required_integer(found, "index")
         require_non_negative(
             index, "glTF: a texture index must not be negative"
