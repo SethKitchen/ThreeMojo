@@ -54,7 +54,7 @@ runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
 from core.ordinal import ordinal_valid
-from loaders.bytes import ascii_digit, ascii_letter, hex_digit_value
+from loaders.bytes import ascii_digit, ascii_letter, is_hex_digit
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.volume_texture_store import (
@@ -217,11 +217,6 @@ struct _Token(Copyable, Movable):
 def _is_letter(c: UInt8) -> Bool:
     """Return True for a letter or an underscore."""
     return ascii_letter(Int(c)) or c == UInt8(ord("_"))
-
-
-def _is_hex(c: UInt8) -> Bool:
-    """Return True for a hexadecimal digit."""
-    return hex_digit_value(Int(c)) >= 0
 
 
 def _is_word_byte(c: UInt8) -> Bool:
@@ -420,7 +415,7 @@ struct _Lexer(Movable):
             base = 16
             digits_at += 2
             end = digits_at
-            while end < len(bytes) and _is_hex(bytes[end]):
+            while end < len(bytes) and is_hex_digit(Int(bytes[end])):
                 end += 1
             if end == digits_at:
                 raise self.error(line, "a hexadecimal number needs digits")

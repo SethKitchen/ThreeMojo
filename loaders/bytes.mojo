@@ -217,3 +217,18 @@ def hex_digit_value(byte: Int) -> Int:
     if byte >= 97 and byte <= 102:
         return byte - 87
     return -1
+
+
+def is_hex_digit(byte: Int) -> Bool:
+    """Return True for one ASCII hexadecimal digit.
+
+    Args:
+        byte: A byte value. A value outside 0 through 255 is not a digit.
+
+    Returns:
+        Whether it is `0-9`, `A-F`, or `a-f`.
+
+    Raises:
+        Error: Never.
+    """
+    return hex_digit_value(byte) >= 0
