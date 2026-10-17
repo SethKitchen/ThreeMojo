@@ -1026,8 +1026,8 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         var center = view.transform_point(
             Vector3(world.elements[12], world.elements[13], world.elements[14])
         )
-        var scale_x = _column_length(world, 0)
-        var scale_y = _column_length(world, 1)
+        var scale_x = world.column_length(0)
+        var scale_y = world.column_length(1)
         if not material.size_attenuation and self.camera_perspective:
             scale_x *= -center.z
             scale_y *= -center.z
@@ -1662,19 +1662,3 @@ def _sort_by_distance(mut hits: List[Hit]) raises:
             hits[slot] = hits[slot - 1]
             slot -= 1
         hits[slot] = hit
-
-
-def _column_length(matrix: Matrix4, axis: Int) -> Float32:
-    """Return the length of one of a matrix's three axis columns: how much
-    it scales along that axis, as the renderer measures a sprite.
-
-    Args:
-        matrix: The transform.
-        axis: Which column, zero for x through two for z.
-
-    Returns:
-        The length.
-    """
-    ref e = matrix.elements
-    var start = axis * 4
-    return Vector3(e[start], e[start + 1], e[start + 2]).length()

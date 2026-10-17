@@ -157,8 +157,6 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length3, normalized3, _ordinary_squared
-
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute, component_of_array
 from core.buffer_geometry import (
@@ -844,9 +842,9 @@ def decompose(mut node: Object3D, elements: List[Float32]) raises:
     var matrix = Matrix4()
     for index in range(16):  # pragma: no branch
         matrix.elements[index] = elements[index]
-    var sx = _column_length(elements, 0)
-    var sy = _column_length(elements, 4)
-    var sz = _column_length(elements, 8)
+    var sx = matrix.column_length(0)
+    var sy = matrix.column_length(1)
+    var sz = matrix.column_length(2)
     require_axis_extent(
         sx, sy, sz, "Object JSON" + ": a matrix that flattens an axis"
     )
@@ -857,11 +855,6 @@ def decompose(mut node: Object3D, elements: List[Float32]) raises:
     node.set_position(position.x, position.y, position.z)
     node.set_quaternion(rotation)
     node.set_scale(scale.x, scale.y, scale.z)
-
-
-def _column_length(elements: List[Float32], start: Int) -> Float32:
-    """Return the length of a column's first three entries."""
-    return length3(elements[start], elements[start + 1], elements[start + 2])
 
 
 def _flip_rows(mut pixels: List[UInt8], width: Int, height: Int):

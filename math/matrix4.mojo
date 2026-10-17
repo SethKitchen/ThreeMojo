@@ -612,7 +612,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             True for a rotation, within `tolerance`. Translation is not
             looked at.
         """
-        var unit = abs(self._axis_length(0) - 1) <= tolerance
+        var unit = abs(self.column_length(0) - 1) <= tolerance
         return unit and self.is_scaled_rotation(tolerance)
 
     def is_scaled_rotation(self, tolerance: Float32 = FRAME_TOLERANCE) -> Bool:
@@ -687,9 +687,9 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             The largest axis length. Zero for a transform that flattens
             everything.
         """
-        var longest = self._axis_length(0)
+        var longest = self.column_length(0)
         for axis in range(1, 3):  # pragma: no branch
-            var length = self._axis_length(axis)
+            var length = self.column_length(axis)
             if length > longest:
                 longest = length
         return longest
@@ -939,9 +939,9 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         """
         if not self.is_finite():
             raise Error("A transform must be finite to decompose")
-        var sx = self._axis_length(0)
-        var sy = self._axis_length(1)
-        var sz = self._axis_length(2)
+        var sx = self.column_length(0)
+        var sy = self.column_length(1)
+        var sz = self.column_length(2)
         require_axis_extent(
             sx,
             sy,
@@ -991,8 +991,21 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         quaternion = result
         scale = Vector3(sx, sy, sz)
 
-    def _axis_length(self, axis: Int) -> Float32:
-        """Return the length of one axis column: the scale along that axis."""
+    def column_length(self, axis: Int) -> Float32:
+        """Return the length of one axis column.
+
+        That length is the scale along the axis. three.js reads it as
+        the length of `matrix[axis].xyz`.
+
+        Args:
+            axis: Which column, zero for x through two for z.
+
+        Returns:
+            The length.
+
+        Raises:
+            Error: Never.
+        """
         ref e = self.elements
         var start = axis * 4
         return length3(e[start], e[start + 1], e[start + 2])

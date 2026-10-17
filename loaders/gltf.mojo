@@ -169,8 +169,6 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import ordinal_valid
 
 from core.binary import little_endian_u16, little_endian_u32
-from math.norm import length3, normalized3, _ordinary_squared
-
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -3863,9 +3861,9 @@ def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
     var m = Matrix4()
     for index in range(16):  # pragma: no branch
         m.elements[index] = matrix[index]
-    var sx = _column_length(matrix, 0)
-    var sy = _column_length(matrix, 4)
-    var sz = _column_length(matrix, 8)
+    var sx = m.column_length(0)
+    var sy = m.column_length(1)
+    var sz = m.column_length(2)
     require_axis_extent(
         sx, sy, sz, "glTF" + ": a node matrix that flattens an axis"
     )
@@ -3876,8 +3874,3 @@ def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
     node.set_position(position.x, position.y, position.z)
     node.set_quaternion(rotation)
     node.set_scale(scale.x, scale.y, scale.z)
-
-
-def _column_length(matrix: List[Float32], start: Int) -> Float32:
-    """Return the length of a column's first three entries."""
-    return length3(matrix[start], matrix[start + 1], matrix[start + 2])
