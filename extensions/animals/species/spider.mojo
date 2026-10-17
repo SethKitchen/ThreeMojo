@@ -41,7 +41,7 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import fbm3, centered_fbm
 from extensions.animals.options import (
     FEMALE,
     MALE,
@@ -1249,8 +1249,8 @@ def spider_paint(
         )
     if tag == "fang":
         return Paint(pal.get("fang"), KERATIN)
-    var noise = fbm3(p * (1.0 / (1.6 * mmu)), 3) - 0.5
-    var noise_f = fbm3(p * (1.0 / (0.45 * mmu)) + V3(7, 0, 0), 2) - 0.5
+    var noise = centered_fbm(p, (1.0 / (1.6 * mmu)), 3)
+    var noise_f = centered_fbm(p, (1.0 / (0.45 * mmu)), 2, 7)
     var col: V3
     var surface = CHITIN
     var pat = 1.0
@@ -1436,7 +1436,7 @@ def spider_paint(
             pcol = pal.get("chevron")
             pint = dors * contrast * 0.8 * smoothstep(-0.35, 0.1, up)
             col = channel_gain(col, noise_f, 0.3, 0.28, 0.24)
-            hair = fbm3(p * (1.0 / (0.12 * mmu)), 2) - 0.5
+            hair = centered_fbm(p, (1.0 / (0.12 * mmu)), 2)
         else:
             # Long reddish setae over black, strongest on the dorsum, and
             # sometimes a bald patch where the urticating hairs were
@@ -1532,7 +1532,7 @@ def spider_paint(
             col = mix3(
                 col, pal.get("ocular"), smoothstep(0.5 * mmu, 0.05 * mmu, eye_d)
             )
-        hair = (fbm3(p * (1.0 / (0.12 * mmu)), 2) - 0.5) * smoothstep(
+        hair = (centered_fbm(p, (1.0 / (0.12 * mmu)), 2)) * smoothstep(
             0.05 * mmu, 0.6 * mmu, eye_d
         )
     # Low-frequency color noise.

@@ -44,7 +44,7 @@ from extensions.animals.kit import (
     mirrored_blob,
     aperture_local,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import cells3, fbm3, centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, add_sided, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1712,8 +1712,8 @@ def lion_paint(
     var white = t.variant == WHITE
     var seed = Int(t.get("coatSeed", 0.0))
     var off = Float64(seed % 997)
-    var nz = fbm3(V3(p.x * 5.0 + off, p.y * 5.0, p.z * 5.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 30.0 + off, p.y * 30.0, p.z * 30.0)) - 0.5
+    var nz = centered_fbm(p, 5.0, 3, off)
+    var nz2 = centered_value(p, 30.0, off)
     if tag == "canine":
         return Paint(c[TOOTH], KERATIN)
     if tag == "tongue":
@@ -1763,16 +1763,8 @@ def lion_paint(
         var hair = (
             0.56
             + 0.1 * axc * axc
-            + 0.26
-            * (
-                fbm3(V3(p.x * 12.0 + 3.3 + off, p.y * 12.0, p.z * 12.0), 2)
-                - 0.5
-            )
-            + 0.22
-            * (
-                vnoise3(V3(p.x * 30.0 + 1.9 + off, p.y * 30.0, p.z * 30.0))
-                - 0.5
-            )
+            + 0.26 * (centered_fbm(p, 12.0, 2, 3.3 + off))
+            + 0.22 * (centered_value(p, 30.0, 1.9 + off))
         )
         var tc = f.y - hair + 0.8 * max(0.0, -0.3 - f.z)
         var cw = (
@@ -1813,7 +1805,7 @@ def lion_paint(
         ) if juv > 0.0 else 0.22 * spots_k / 0.2
         sp = 0.0 if on_head else sp
         col = mix3(col, c[CUB_SPOT], clamp(sp * k, 0.0, 1.0))
-    var cvh = fbm3(V3(p.x * 3.0 + 5.0 + off, p.y * 3.0, p.z * 3.0), 2) - 0.5
+    var cvh = centered_fbm(p, 3.0, 2, 5.0 + off)
     col = V3(
         col.x * (1.0 + 0.12 * nz + 0.08 * cvh + 0.06 * nz2),
         col.y * (1.0 + 0.1 * nz + 0.06 * nz2),

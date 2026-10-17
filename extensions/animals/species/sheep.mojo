@@ -54,7 +54,7 @@ from extensions.animals.kit import (
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm
 from extensions.animals.options import (
     ADULT,
     FEMALE,
@@ -2105,7 +2105,7 @@ def sheep_paint(
     var legness = 0.0
     if is_limb(bone):
         legness = smoothstep(0.5, 0.36, p.y) if is_upper_limb(bone) else 1.0
-    var cv = fbm3(p * 6.0, 3) - 0.5
+    var cv = centered_fbm(p, 6.0, 3)
     var c: V3
     var surface = FUR
     # How woolly, and where on a lock: crest 1, crevice 0.
@@ -2126,10 +2126,10 @@ def sheep_paint(
             # No region is 3, so the body, the neck and the tail are left.
             var knee_y = 0.3 if is_front_limb(bone) else 0.26
             wool = 1.0 - legness * smoothstep(knee_y + 0.03, knee_y - 0.03, p.y)
-            crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
+            crest = 0.5 + (centered_fbm(p, 40.0, 2))
     if region == 2 and woolly:
         wool = 1.0
-        crest = 0.4 + 0.4 * (fbm3(p * 40.0, 2) - 0.5)
+        crest = 0.4 + 0.4 * (centered_fbm(p, 40.0, 2))
     # The face's edge: the wool starts behind the ears and the jaw.
     var edge = not black and (region == 1 or region == 2)
     if edge:
@@ -2142,7 +2142,7 @@ def sheep_paint(
         # On the neck and the head `wool` is none or full, and `wl` is one at
         # most, so only bare skin takes the edge's wool.
         if wl > wool:
-            crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
+            crest = 0.5 + (centered_fbm(p, 40.0, 2))
             wool = wl
     if region <= 1 or region == 4:
         c = mix3(
@@ -2213,7 +2213,7 @@ def sheep_paint(
         var eye_d = length(p - ef.c)
         c = mix3(c, pal.get("muzzle"), smoothstep(0.024, 0.012, eye_d) * 0.2)
         var tn = vnoise3(p * 160.0) - 0.5
-        c = c * (1.0 + 0.16 * tn + 0.08 * (fbm3(p * 30.0, 2) - 0.5))
+        c = c * (1.0 + 0.16 * tn + 0.08 * (centered_fbm(p, 30.0, 2)))
         # Streaks drawn out along the hair flow: short hair, not rubber.
         var flow = _face_flow(h)
         var al = dot(p, flow)

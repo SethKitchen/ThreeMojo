@@ -39,7 +39,7 @@ from extensions.animals.kit import (
     mirrored_blob,
     hashed_stream,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm
 from extensions.animals.options import (
     FEMALE,
     Sex,
@@ -1717,8 +1717,8 @@ def cat_paint(
             bone,
         )
     # Low-frequency color variation, and a black coat's rusty cast.
-    var cv = fbm3(V3(p.x * 30.0, p.y * 30.0, p.z * 30.0), 3) - 0.5
-    var cvh = fbm3(V3(p.x * 12.0 + 5.0, p.y * 12.0, p.z * 12.0), 2) - 0.5
+    var cv = centered_fbm(p, 30.0, 3)
+    var cvh = centered_fbm(p, 12.0, 2, 5.0)
     c = V3(
         c.x * (1.0 + 0.14 * cv + 0.08 * cvh),
         c.y * (1.0 + 0.12 * cv),

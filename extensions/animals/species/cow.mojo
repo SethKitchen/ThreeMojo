@@ -50,7 +50,7 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm
 from extensions.animals.options import (
     FEMALE,
     MALE,
@@ -1690,9 +1690,7 @@ def _white(
         return f
     if breed == HEREFORD:
         var off = pal.get("piedOff")
-        var jag = (
-            fbm3(V3(p.x * 40.0 + off.x, p.y * 40.0, p.z * 40.0), 2) - 0.5
-        ) * 0.03
+        var jag = (centered_fbm(p, 40.0, 2, off.x)) * 0.03
         if region == R_HEAD:
             # A white face; the white runs over the poll. Some have red
             # rings round the eyes, the spectacles.
@@ -1995,7 +1993,7 @@ def _nostril_dist(hm: V3) -> Float64:
 
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
-    var cv = fbm3(p * 5.0, 3) - 0.5
+    var cv = centered_fbm(p, 5.0, 3)
     var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 150.0, 0.06)
 

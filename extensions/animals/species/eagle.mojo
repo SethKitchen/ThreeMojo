@@ -39,7 +39,7 @@ from extensions.animals.kit import (
     EyeSpec,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import fbm3, centered_fbm
 from extensions.animals.options import (
     ANY_AGE,
     ADULT,
@@ -972,7 +972,7 @@ def eagle_paint(
     var h = p - HEAD_O
     var golden = t.variant == GOLDEN
     var juv = t.juvenile() > 0.0
-    var cv = fbm3(p * 18.0, 3) - 0.5
+    var cv = centered_fbm(p, 18.0, 3)
     var cond4 = tag == "mandible" or tag == "gonys"
     if cond4:
         if h.z < 0.012:
@@ -1051,7 +1051,7 @@ def eagle_paint(
             var tb = V3(0.0, _ax(-0.06, 0.05).y, _ax(-0.06, 0.05).z)
             var u = (
                 dot(p - tb, V3(0.0, -0.616, -0.788))
-                + (fbm3(p * 70.0, 2) - 0.5) * 0.012
+                + (centered_fbm(p, 70.0, 2)) * 0.012
             )
             c = mix3(c, pal.get("tail"), smoothstep(0.02, 0.036, u))
         else:
@@ -1068,7 +1068,7 @@ def eagle_paint(
         var occ = _hl(V3(0.0, -0.026, -0.058))
         var nd = occ - nb
         var ht = dot(p - nb, nd) / dot(nd, nd)
-        var jag = (fbm3(p * 60.0, 3) - 0.5) * 0.35
+        var jag = (centered_fbm(p, 60.0, 3)) * 0.35
         var cond9 = not golden and not juv
         if cond9:
             var hood_c = occ + V3(0.0, -0.008, 0.01)

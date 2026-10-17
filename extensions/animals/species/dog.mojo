@@ -49,7 +49,7 @@ from extensions.animals.kit import (
     pick_cumulative,
     mirrored_ell_bottom,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1679,7 +1679,7 @@ def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:
     # a black patch keeps a thin tan rim.
     var d = 1.0
     var db = 1.0
-    var nz = fbm3(V3(p.x * 18.0 + n_off, p.y * 18.0, p.z * 18.0), 2) - 0.5
+    var nz = centered_fbm(p, 18.0, 2, n_off)
     for q in _terrier_patches(t):
         var c = q.c
         var r = q.r
@@ -1825,8 +1825,8 @@ def dog_paint(
             return Paint(srgb(0x5A3A30) if liver else srgb(0x231D1A), SKIN)
     var ag = pal.get("agouti")
     var n_off = Float64(Int(t.get("coatSeed", 0.0)) % 997)
-    var nz = fbm3(V3(p.x * 7.0 + n_off, p.y * 7.0, p.z * 7.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 38.0 + n_off, p.y * 38.0, p.z * 38.0)) - 0.5
+    var nz = centered_fbm(p, 7.0, 3, n_off)
+    var nz2 = centered_value(p, 38.0, n_off)
     var c: V3
     var agouti: Float64
     var region, limb = coat_place(bone)
@@ -2013,7 +2013,7 @@ def dog_paint(
         c = _terrier(pal, t, c, p, region, n_off)
     if juv > 0.0:
         agouti *= 1.0 - 0.6 * juv
-    var cvh = fbm3(V3(p.x * 4.0 + 5.0 + n_off, p.y * 4.0, p.z * 4.0), 2) - 0.5
+    var cvh = centered_fbm(p, 4.0, 2, 5.0 + n_off)
     var a = 0.25 if key == KEY_TERRIER else 1.0
     c = V3(
         c.x * (1.0 + a * (0.12 * nz + 0.08 * cvh + 0.06 * nz2)),
@@ -2041,9 +2041,7 @@ def _terrier(
         var h = _head_local(t, p)
         var side = 1.0 if h.x >= 0.0 else -1.0
         var ext = 1.0 + 0.35 * t.get("maskSide", 0.0) * side
-        var wob = 0.005 * (
-            fbm3(V3(p.x * 30.0 + n_off, p.y * 30.0, p.z * 30.0), 2) - 0.5
-        )
+        var wob = 0.005 * (centered_fbm(p, 30.0, 2, n_off))
         var white = Int(t.get("color", 0.0)) == WHITE
         var z_front = (0.03 if white else 0.068) * ext
         var y_low = 0.0 if white else -0.022 - 0.006 * ext

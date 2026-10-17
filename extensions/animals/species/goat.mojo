@@ -52,7 +52,7 @@ from extensions.animals.kit import (
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import vnoise3, centered_fbm
 from extensions.animals.options import (
     ADULT,
     FEMALE,
@@ -1844,7 +1844,7 @@ def _mark_sd(
     # The breed's second color as a signed distance, inside below zero.
     var face = region == 2 or region == 6
     var head_like = face or region == 5
-    var jag = (fbm3(p * 45.0, 2) - 0.5) * (0.005 if head_like else 0.02)
+    var jag = (centered_fbm(p, 45.0, 2)) * (0.005 if head_like else 0.02)
     var d = 1.0
     var ax = abs(h.x)
     if head_like:
@@ -1902,7 +1902,7 @@ def _mark_sd(
         var nl = length(NECK_MID_J - NECK_BASE_J)
         d = min(
             d,
-            (0.5 - u) * nl + (fbm3(p * 20.0, 2) - 0.5) * 0.05,
+            (0.5 - u) * nl + (centered_fbm(p, 20.0, 2)) * 0.05,
         )
     var trunk = region == 0 or region == 1
     if trunk:
@@ -1925,7 +1925,7 @@ def _mark_sd(
             d = min(
                 d,
                 (p.z + 0.02 + 0.22 * (p.y - 0.6)) * 0.9
-                + (fbm3(p * 6.0, 3) - 0.5) * 0.12
+                + (centered_fbm(p, 6.0, 3)) * 0.12
                 + (vnoise3(p * 90.0) - 0.5) * 0.012,
             )
         if (masks & M_TAILPATCH) != 0:
@@ -1959,9 +1959,9 @@ def _mark_sd(
     var count = Int(pal.get("patches").x)
     var patched = count > 0 and region != 5
     if patched:
-        var wob = (fbm3(p * 9.0, 3) - 0.5) * 0.08
-        var lobe = (fbm3(p * 4.5 + V3(3.1, 0, 0), 3) - 0.5) * 0.12 + (
-            fbm3(p * 28.0, 2) - 0.5
+        var wob = (centered_fbm(p, 9.0, 3)) * 0.08
+        var lobe = (centered_fbm(p, 4.5, 3, 3.1)) * 0.12 + (
+            centered_fbm(p, 28.0, 2)
         ) * 0.02
         # Inside `patched`, `count` is positive.
         for i in range(count):  # pragma: no branch
@@ -2116,7 +2116,7 @@ def goat_paint(
                 V3(0.8, 0.78, 0.75),
                 0.2 if pink > 0.0 else 0.0,
             )
-            var border = 0.56 + (fbm3(p * 26.0 + V3(7.7, 0, 0), 2) - 0.5) * 0.24
+            var border = 0.56 + (centered_fbm(p, 26.0, 2, 7.7)) * 0.24
             var bare = smoothstep(border - 0.04, border + 0.14, ut)
             var in_pat = smoothstep(0.004, -0.004, msd)
             var hair = mix3(c, mark, in_pat)
@@ -2234,7 +2234,7 @@ def goat_paint(
         var in_mark = smoothstep(0.004, -0.004, msd)
         c = mix3(c, mark, in_mark)
     # Low-frequency variation, and lock-to-lock streaks in long hair.
-    var cv = fbm3(p * 7.0, 3) - 0.5
+    var cv = centered_fbm(p, 7.0, 3)
     if surface == FUR:
         c = channel_gain(c, cv, 0.12, 0.1, 0.08)
         var shag = t.get("shaggy", 0.0) > 0.3 and region <= 1

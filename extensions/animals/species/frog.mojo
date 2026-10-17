@@ -41,7 +41,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import cells3, fbm3
+from extensions.animals.noise import cells3, fbm3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones
 from extensions.sdf.field import SdfModel
@@ -1095,11 +1095,11 @@ def frog_paint(
                 var period = 0.0105 if temporaria else 0.0125
                 var phase = Float64(ends[0].byte_length() * 7 % 10) * 0.1
                 var ph = (
-                    along / period + phase + 0.25 * (fbm3(p * 300.0, 2) - 0.5)
+                    along / period + phase + 0.25 * (centered_fbm(p, 300.0, 2))
                 )
                 var f = abs(ph - floor(ph) - 0.5)
                 var wb = (0.2 if temporaria else 0.17) + 0.05 * (
-                    fbm3(p * 120.0, 2) - 0.5
+                    centered_fbm(p, 120.0, 2)
                 )
                 pat = min(pat, (f - wb) * period + (1.0 - outer) * 0.002)
                 pat_col = pal.get("band")
@@ -1209,11 +1209,11 @@ def frog_paint(
             rad *= 0.6
         rad *= t.get("mottleSize")
         var cs = rad * 2.0 * (1.35 if temporaria else 1.5)
-        var q = p + V3(0.7, 0.3, 1.1) * (0.002 * (fbm3(p * 260.0, 2) - 0.5))
+        var q = p + V3(0.7, 0.3, 1.1) * (0.002 * (centered_fbm(p, 260.0, 2)))
         var cl = cells3(q * (1.0 / cs), Int(t.get("coatSeed", 0.0)) % 7919)
         if cl.id < t.get("mottle", 0.7):
             var sd = cl.nearest * cs - rad * (0.75 + 0.5 * cl.id)
-            sd += 0.0022 * (fbm3(p * 420.0, 3) - 0.5)
+            sd += 0.0022 * (centered_fbm(p, 420.0, 3))
             if sd < pat:
                 pat = sd
                 pat_col = pal.get("mottle") if region == 0 else mix3(
@@ -1238,6 +1238,6 @@ def frog_paint(
         )
     if t.juvenile() > 0.0:
         col = mix3(col, mix3(col, pal.get("head"), 0.6), 0.3)
-    var cv = fbm3(p * 60.0, 3) - 0.5
+    var cv = centered_fbm(p, 60.0, 3)
     col = channel_gain(col, cv, 0.16, 0.13, 0.1)
     return Paint(col, SKIN if mouth else WET)

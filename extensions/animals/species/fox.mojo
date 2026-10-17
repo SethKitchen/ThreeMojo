@@ -43,7 +43,7 @@ from extensions.animals.kit import (
     hashed_stream,
     mirrored_ell_bottom,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -1311,8 +1311,8 @@ def fox_paint(
     var ag = pal.get("agouti")
     var ag2 = pal.get("agouti2")
     var n_off = Float64(Int(t.get("coatSeed", 0.0)) % 997)
-    var nz = fbm3(V3(p.x * 12.0 + n_off, p.y * 12.0, p.z * 12.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 70.0 + n_off, p.y * 70.0, p.z * 70.0)) - 0.5
+    var nz = centered_fbm(p, 12.0, 3, n_off)
+    var nz2 = centered_value(p, 70.0, n_off)
     var c: V3
     var agouti: Float64
     var region, limb = coat_place(bone)
@@ -1388,7 +1388,7 @@ def fox_paint(
         agouti = ag.z * (1.0 - _white_face(t, p, n, nz, region))
     if juv > 0.0:
         agouti *= 1.0 - 0.8 * juv
-    var cvh = fbm3(V3(p.x * 6.0 + 5.0 + n_off, p.y * 6.0, p.z * 6.0), 2) - 0.5
+    var cvh = centered_fbm(p, 6.0, 2, 5.0 + n_off)
     c = V3(
         c.x * (1.0 + 0.14 * nz + 0.1 * cvh + 0.06 * nz2),
         c.y * (1.0 + 0.12 * nz + 0.06 * nz2),
@@ -1415,9 +1415,7 @@ def _body(
         vent = smoothstep(-0.45, -0.85, n.y)
         var y_bib = Y_ELBOW + 0.13 * t.get("bib")
         if p.z > Z_SHOULDER - 0.05:
-            var wob = 0.012 * (
-                fbm3(V3(p.x * 40.0, p.y * 40.0, p.z * 40.0), 2) - 0.5
-            )
+            var wob = 0.012 * (centered_fbm(p, 40.0, 2))
             vent = max(
                 vent,
                 smoothstep(y_bib, y_bib - 0.035, p.y + wob)

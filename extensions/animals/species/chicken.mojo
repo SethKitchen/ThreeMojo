@@ -50,7 +50,7 @@ from extensions.animals.kit import (
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import fbm3, centered_fbm
 from extensions.animals.options import (
     ANY_AGE,
     ANY_SEX,
@@ -2433,7 +2433,7 @@ def chicken_paint(
         flow = V3(hh.x * 10.0, -0.5, -1.0)
         tract = 1
         # Bare facial skin around the eye and the lores.
-        var cvh = fbm3(p * 700.0, 2) - 0.5
+        var cvh = centered_fbm(p, 700.0, 2)
         var bound = (
             0.0048
             - 60.0 * pow(max(0.0, hh.z - 0.006), 2.0)

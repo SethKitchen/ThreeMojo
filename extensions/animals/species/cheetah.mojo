@@ -39,7 +39,7 @@ from extensions.animals.kit import (
     mirrored_blob,
     aperture_local,
 )
-from extensions.animals.noise import cells3, fbm3, vnoise3
+from extensions.animals.noise import cells3, vnoise3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -980,8 +980,8 @@ def cheetah_paint(
         col = body[0]
         ventral = body[1]
         radius = body[2]
-    var cv = fbm3(p * 9.0, 3) - 0.5
-    var cvh = fbm3(V3(p.x * 4.0 + 5.0, p.y * 4.0, p.z * 4.0), 2) - 0.5
+    var cv = centered_fbm(p, 9.0, 3)
+    var cvh = centered_fbm(p, 4.0, 2, 5.0)
     col = V3(
         col.x * (1.0 + 0.16 * cv + 0.1 * cvh),
         col.y * (1.0 + 0.14 * cv),
