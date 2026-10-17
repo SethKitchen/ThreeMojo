@@ -223,6 +223,7 @@ from materials.material import (
     MaterialId,
 )
 from math.matrix4 import Matrix4
+from math.square_matrix import copy_elements
 from math.utils import (
     ComponentType,
     max3,
@@ -2801,10 +2802,8 @@ def _node_json(
             writer.key("scale")
             writer.numbers([node.scale.x, node.scale.y, node.scale.z])
     elif node.matrix != Matrix4():
-        var elements = List[Float32]()
-        for index in range(16):  # pragma: no branch
-            elements.append(node.matrix.elements[index])
         writer.key("matrix")
+        var elements = copy_elements(node.matrix.elements)
         writer.numbers(elements)
     if extras != "":
         writer.key("extras")

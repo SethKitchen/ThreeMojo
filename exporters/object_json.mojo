@@ -188,6 +188,7 @@ from materials.material import (
 )
 from math.euler import Euler, EulerOrder
 from math.matrix4 import Matrix4
+from math.square_matrix import append_elements, copy_elements
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
 from render.cube_texture import cube_image_index
@@ -260,9 +261,7 @@ def object_uuid(kind: Int, index: Int) -> String:
 
 def _matrix(mut writer: JsonWriter, matrix: Matrix4) raises:
     """Write a matrix's sixteen numbers, column by column."""
-    var values = List[Float32]()
-    for index in range(16):  # pragma: no branch
-        values.append(matrix.elements[index])
+    var values = copy_elements(matrix.elements)
     writer.numbers(values)
 
 
@@ -1744,8 +1743,7 @@ struct _Writer(Movable):
         writer.integer(mesh.count())
         var data = List[Float32]()
         for matrix in mesh.matrices:
-            for index in range(16):  # pragma: no branch
-                data.append(matrix.elements[index])
+            append_elements(data, matrix.elements)
         writer.key("instanceMatrix")
         _attribute(writer, BufferAttribute(data^, 16))
 

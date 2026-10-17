@@ -140,6 +140,7 @@ from materials.compute_ids import (
 from math.arc_tangent import atan2_float32, atan_float32
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
+from math.square_matrix import copy_elements, store_elements
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.norm import squared_length3
@@ -1689,10 +1690,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the name is empty or already taken.
         """
-        var elements = List[Float32]()
-        for index in range(9):  # pragma: no branch
-            elements.append(value.elements[index])
-        return self._matrix_uniform(name, NODE_MAT3, elements)
+        return self._matrix_uniform(
+            name, NODE_MAT3, copy_elements(value.elements)
+        )
 
     def uniform(mut self, name: String, value: Matrix4) raises -> NodeRef:
         """Return a named `mat4` the caller can change between frames. Only
@@ -1708,10 +1708,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the name is empty or already taken.
         """
-        var elements = List[Float32]()
-        for index in range(16):  # pragma: no branch
-            elements.append(value.elements[index])
-        return self._matrix_uniform(name, NODE_MAT4, elements)
+        return self._matrix_uniform(
+            name, NODE_MAT4, copy_elements(value.elements)
+        )
 
     def texture_uniform(
         mut self, name: String, map: TextureId = NO_TEXTURE
@@ -6594,9 +6593,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name, or it is not a `mat3`.
         """
-        var at = self._find(name, NODE_MAT3)
-        for index in range(9):  # pragma: no branch
-            self.code[at + index] = value.elements[index]
+        store_elements(self.code, self._find(name, NODE_MAT3), value.elements)
 
     def set_uniform(mut self, name: String, value: Matrix4) raises:
         """Change a `mat4` uniform.
@@ -6608,9 +6605,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name, or it is not a `mat4`.
         """
-        var at = self._find(name, NODE_MAT4)
-        for index in range(16):  # pragma: no branch
-            self.code[at + index] = value.elements[index]
+        store_elements(self.code, self._find(name, NODE_MAT4), value.elements)
 
     def _list_cubes(mut self):
         """List every cube, 3D texture and array texture the reads read
@@ -6760,8 +6755,7 @@ struct NodeProgram(Copyable, Movable):
             view: The world-to-camera matrix.
         """
         self.code[PROGRAM_TIME] = time.to(SECOND)
-        for index in range(16):  # pragma: no branch
-            self.code[PROGRAM_VIEW + index] = view.elements[index]
+        store_elements(self.code, PROGRAM_VIEW, view.elements)
 
 
 struct NodeProgramStore(Copyable, Movable):
