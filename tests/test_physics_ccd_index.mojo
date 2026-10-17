@@ -16,6 +16,7 @@ from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD, _sweep_domain
 from extensions.physics.ccd_index import _CCDIndex, _bounds, _down
 from math.next_float import next_binary64_up
 from extensions.physics.shape import Shape, PhysicsMaterial
+from core.search import first_match
 from math.cross import widen_vector
 from extensions.physics.world import PhysicsWorld
 from math.quaternion import Quaternion
@@ -699,13 +700,6 @@ def test_indexed_reach_refusal_restores_pending_force() raises:
     assert_true(indexed.bodies[1].torque == Vector3(0, 0, 0))
 
 
-def _contains(found: List[Int], entry: Int) -> Bool:
-    for candidate in found:
-        if candidate == entry:
-            return True
-    return False
-
-
 def _assert_candidates(
     index: _CCDIndex,
     triangles: List[Triangle],
@@ -723,7 +717,7 @@ def _assert_candidates(
             assert_true(found[i] != found[j])
     for i in range(len(triangles)):
         if _sweep_domain(start, travel, 1, reach, triangles[i]):
-            assert_true(_contains(found, i))
+            assert_true(first_match(found, i) >= 0)
 
 
 def test_index_axis_splits_pruning_and_unique_candidates() raises:
@@ -756,7 +750,7 @@ def test_index_axis_splits_pruning_and_unique_candidates() raises:
             assert_true(index.nodes[i].escape > i)
             assert_true(index.nodes[i].escape <= len(index.nodes))
             if index.nodes[i].entry >= 0:
-                assert_false(_contains(leaves, index.nodes[i].entry))
+                assert_false(first_match(leaves, index.nodes[i].entry) >= 0)
                 leaves.append(index.nodes[i].entry)
         assert_equal(len(leaves), 33)
         for direction in [Float32(-1), Float32(0), Float32(1)]:

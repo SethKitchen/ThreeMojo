@@ -77,6 +77,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
 from exporters.gltf import gltf_pixels
 from loaders.js_text import is_js_word
 from loaders.js_number import (
@@ -456,14 +457,6 @@ def _wrap_name(wrap: Wrap) raises -> String:
     raise Error("USDZ: a texture's wrap is none of the three")
 
 
-def _has(values: List[Int], value: Int) -> Bool:
-    """Return True if a list holds a value."""
-    for v in values:
-        if v == value:
-            return True
-    return False
-
-
 struct _Exporter(Movable):
     """What three.js's `parseAsync` keeps as it goes: the names used, the
     geometry files, the materials and the textures."""
@@ -517,12 +510,12 @@ struct _Exporter(Movable):
         if material.kind != STANDARD and material.kind != PHYSICAL:
             return None
         var id = mesh.geometry.value
-        if not _has(self.geometry_ids, id):
+        if first_match(self.geometry_ids, id) < 0:
             self.geometry_ids.append(id)
             self.geometry_files.append(
                 usda_geometry(assets.geometries.get(mesh.geometry))
             )
-        if not _has(self.materials, mesh.material.value):
+        if first_match(self.materials, mesh.material.value) < 0:
             self.materials.append(mesh.material.value)
         var out = self.xform(node, name, matrix)
         out.add_metadata(
@@ -645,7 +638,7 @@ struct _Exporter(Movable):
             raise Error("USDZ: a texture's channel is not valid")
         var wrap_s = _wrap_name(texture.wrap_s)
         var wrap_t = _wrap_name(texture.wrap_t)
-        if not _has(self.textures, id.value):
+        if first_match(self.textures, id.value) < 0:
             self.textures.append(id.value)
         var uv = "st"
         if texture.channel.value > 0:

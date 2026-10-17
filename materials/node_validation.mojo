@@ -5,6 +5,7 @@
 
 """Validate serialized surface programs before either interpreter reads them."""
 
+from core.search import first_match
 from materials import nodes
 from math.finite import require_finite
 from std.math import floor, isfinite, max
@@ -43,14 +44,6 @@ def _span(first: Int, count: Int, low: Int, size: Int) raises:
     """Check a span without overflowing its endpoint."""
     if first < low or first > size or count < 0 or count > size - first:
         raise Error("Object JSON: a node program span is outside its storage")
-
-
-def _contains(values: List[Int], value: Int) -> Bool:
-    """Return whether a list contains one address."""
-    for item in values:
-        if item == value:
-            return True
-    return False
 
 
 def _addresses(values: List[Int], low: Int, size: Int) raises:
@@ -341,8 +334,9 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             written[dest] = True
             if kind == nodes.NODE_CONSTANT or kind == nodes.NODE_UNIFORM:
                 _span(immediate, 4, pool, size)
-                if kind == nodes.NODE_UNIFORM and not _contains(
-                    program.uniform_offsets, immediate
+                if (
+                    kind == nodes.NODE_UNIFORM
+                    and first_match(program.uniform_offsets, immediate) < 0
                 ):
                     raise Error(
                         "Object JSON: a uniform instruction lacks its offset"
@@ -394,12 +388,12 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 or kind == nodes.NODE_TEXEL_FETCH
                 or kind == nodes.NODE_TEXTURE_SIZE
             ):
-                if not _contains(program.texture_offsets, immediate):
+                if first_match(program.texture_offsets, immediate) < 0:
                     raise Error(
                         "Object JSON: a texture instruction lacks its offset"
                     )
             elif kind == nodes.NODE_TEXTURE_CUBE:
-                if not _contains(program.cube_offsets, immediate):
+                if first_match(program.cube_offsets, immediate) < 0:
                     raise Error(
                         "Object JSON: a cube instruction lacks its offset"
                     )

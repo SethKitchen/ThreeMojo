@@ -11,6 +11,7 @@ line number embedded in the probe id, so the instrumented copy is disposable
 and only ever lives under `coverage/build/`.
 """
 
+from core.search import first_match
 from coverage.scanner import (
     Scanner,
     indent_of,
@@ -1032,10 +1033,6 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
     # Only compound decisions need a buffer. Unused declarations disappear.
     for frame in range(len(declarations)):
-        var used = False
-        for candidate in used_frames:
-            if frame == candidate:
-                used = True
-        if not used and declarations[frame] != "":
+        if first_match(used_frames, frame) < 0 and declarations[frame] != "":
             out = out.replace(declarations[frame], "")
     return Instrumented(out^, lines^, branches^, conditions^)
