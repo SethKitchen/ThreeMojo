@@ -133,6 +133,7 @@ from core.ordinal import (
     require_index_in_count,
     require_valid,
     require_non_negative,
+    require_positive,
 )
 from core.search import first_match
 
@@ -4403,8 +4404,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If `parts` is empty, a part is not a `float` or a vector
                 of this graph, or the widths add up to more than four.
         """
-        if len(parts) == 0:
-            raise Error("A join needs at least one part")
+        require_positive(len(parts), "A join needs at least one part")
         var total = 0
         for index in range(len(parts)):  # pragma: no branch
             self._vector(parts[index], "join")
@@ -4972,8 +4972,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If no call is open, or `answer` is not a node of the
                 call's type when a `Return` ran.
         """
-        if len(self._returns) == 0:
-            raise Error("A close_call needs an open_call")
+        require_positive(len(self._returns), "A close_call needs an open_call")
         var frame = self._returns.pop()
         self._retired[frame.returned] = True
         self._retired[frame.result] = True
@@ -5047,8 +5046,7 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If no `Fn` is being built, or the value's type is another.
         """
-        if len(self._returns) == 0:
-            raise Error("A Return needs a Fn to be in")
+        require_positive(len(self._returns), "A Return needs a Fn to be in")
         self._check(value)
         var frame = self._returns[len(self._returns) - 1].copy()
         var type = self._var_types[frame.result]
@@ -5349,8 +5347,9 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If no block is open.
         """
-        if len(self._blocks) == 0:
-            raise Error("An End needs an If or a Loop to close")
+        require_positive(
+            len(self._blocks), "An End needs an If or a Loop to close"
+        )
         if self._blocks[len(self._blocks) - 1].kind == _BLOCK_LOOP:
             self._end_loop()
         else:

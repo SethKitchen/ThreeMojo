@@ -46,6 +46,7 @@ from core.buffer_geometry import (
     SHAPE_GEOMETRY,
     UV,
 )
+from core.ordinal import require_positive
 from core.user_data import UserData
 from geometries.earcut import triangulate_shape
 from geometries.surface import indexed_surface
@@ -621,8 +622,7 @@ def shape_geometry(
         Error: If there is no shape, or a shape cannot be filled in; see
             `triangulate`.
     """
-    if len(shapes) == 0:
-        raise Error("A shape geometry needs at least one shape")
+    require_positive(len(shapes), "A shape geometry needs at least one shape")
     var data = List[Float32]()
     var normals = List[Float32]()
     var uvs = List[Float32]()

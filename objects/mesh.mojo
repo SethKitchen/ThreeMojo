@@ -83,7 +83,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from materials.material import MaterialId
 
 
@@ -211,8 +211,9 @@ struct Mesh(ImplicitlyCopyable):
         Raises:
             Error: If the list is empty, or any id is negative.
         """
-        if len(materials) == 0:
-            raise Error("A mesh with a material list needs one material")
+        require_positive(
+            len(materials), "A mesh with a material list needs one material"
+        )
         for index in range(len(materials)):  # pragma: no branch
             require_mesh_material(materials[index])
         self = Mesh(

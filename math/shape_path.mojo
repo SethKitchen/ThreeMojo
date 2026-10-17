@@ -41,6 +41,7 @@ closing run first when an outline does not end where it began. The
 surface is the same.
 """
 
+from core.ordinal import require_positive
 from math.path import Path, Shape
 from math.polygon_area import signed_area64
 from math.vector2 import Vector2
@@ -177,8 +178,9 @@ struct ShapePath(Copyable, Movable):
         Raises:
             Error: If no outline has been started.
         """
-        if len(self.sub_paths) == 0:
-            raise Error("A shape path must move before it draws")
+        require_positive(
+            len(self.sub_paths), "A shape path must move before it draws"
+        )
         return len(self.sub_paths) - 1
 
     def move_to(mut self, start: Vector2):

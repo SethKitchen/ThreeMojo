@@ -43,6 +43,7 @@ and three.js's Basis Universal transcoder refuses such a frame too.
 """
 
 from core.binary import copy_byte_range, copy_bytes, little_endian_uint
+from core.ordinal import require_positive
 
 # A decoder that knows the size it expects passes it as the limit.
 comptime NO_LIMIT = 0x7FFFFFFFFFFFFFF
@@ -981,8 +982,7 @@ def zstd_decompress(
             with a magic number, needs a dictionary or is malformed, or the
             stream expands past `limit`.
     """
-    if len(bytes) == 0:
-        raise Error("zstd: the stream is empty")
+    require_positive(len(bytes), "zstd: the stream is empty")
     var out = List[UInt8]()
     var at = 0
     while at < len(bytes):

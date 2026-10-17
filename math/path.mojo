@@ -42,7 +42,7 @@ track of the order, and three.js's silent answer to all of them is a
 shape with no area.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from math.curve import (
     ELLIPSE,
     LINE,
@@ -232,8 +232,9 @@ struct Path(Copyable, Movable):
                 point is where the pen already is.
         """
         self._pen()
-        if len(points) == 0:
-            raise Error("A spline needs at least one point to go through")
+        require_positive(
+            len(points), "A spline needs at least one point to go through"
+        )
         var through = List[Vector2]()
         through.append(self.last)
         for index in range(len(points)):  # pragma: no branch
@@ -392,8 +393,7 @@ struct Path(Copyable, Movable):
             Error: If the path has nothing on it, or the pen is already at
                 the start, which means the path is closed already.
         """
-        if len(self.curves) == 0:
-            raise Error("An empty path cannot be closed")
+        require_positive(len(self.curves), "An empty path cannot be closed")
         var start = self.first
         self.line_to(start)
 
@@ -433,8 +433,9 @@ struct Path(Copyable, Movable):
             Error: If the path has no curves, a curve is not valid, divisions
                 is less than one, or a sample count cannot fit in Int.
         """
-        if len(self.curves) == 0:
-            raise Error("A path with no curves has no points")
+        require_positive(
+            len(self.curves), "A path with no curves has no points"
+        )
         require_path_divisions(divisions)
         # Preflight the whole output before sampling any large first piece.
         var count = 1
@@ -463,8 +464,9 @@ struct Path(Copyable, Movable):
         Raises:
             Error: If the path has no curves.
         """
-        if len(self.curves) == 0:
-            raise Error("A path with no curves has no length")
+        require_positive(
+            len(self.curves), "A path with no curves has no length"
+        )
         var total = Float32(0)
         for index in range(len(self.curves)):  # pragma: no branch
             total += self.curves[index].length().to(METER)

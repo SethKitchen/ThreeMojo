@@ -34,7 +34,11 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
-from core.ordinal import require_index_in_count, require_non_negative
+from core.ordinal import (
+    require_index_in_count,
+    require_non_negative,
+    require_positive,
+)
 from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
@@ -526,8 +530,7 @@ struct _Parser(Movable):
             self.at = field_start
             var encoding = self.declaration_value("encoding")
             var bytes = encoding.as_bytes()
-            if len(bytes) == 0:
-                raise Error(self.where() + "empty encoding name")
+            require_positive(len(bytes), self.where() + "empty encoding name")
             if not ascii_letter(Int(bytes[0])):
                 raise Error(self.where() + "invalid encoding name")
             var index = 0

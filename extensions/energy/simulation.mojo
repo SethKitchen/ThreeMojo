@@ -31,7 +31,7 @@ the wrong sign, and repeats until nothing changes.
 The simulation is deterministic: it has no random input and no thread.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from extensions.energy.conduction import (
     FaceCondition,
     LayeredWall,
@@ -419,8 +419,9 @@ def simulate(
     model.check()
     options.check()
     weather.location.check()
-    if len(weather.records) == 0:
-        raise Error("A simulation needs a weather record")
+    require_positive(
+        len(weather.records), "A simulation needs a weather record"
+    )
     var record_seconds = weather.step.to(SECOND)
     if not (record_seconds > 0 and record_seconds <= 3600):
         raise Error("A weather step must be over zero and up to one hour")

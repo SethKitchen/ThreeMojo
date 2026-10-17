@@ -171,6 +171,7 @@ from core.ordinal import (
     require_index_in_count,
     require_valid,
     require_non_negative,
+    require_positive,
 )
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
@@ -3454,8 +3455,9 @@ struct _Loader(Movable):
         )
         if input[1] != 1:
             raise Error("glTF: a sampler's input must be a SCALAR")
-        if len(input[0]) == 0:
-            raise Error("glTF: a sampler needs at least one key")
+        require_positive(
+            len(input[0]), "glTF: a sampler needs at least one key"
+        )
         var times = List[Duration]()
         for key in range(len(input[0])):  # pragma: no branch
             times.append(Duration(input[0][key], SECOND))

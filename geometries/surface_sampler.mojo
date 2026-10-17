@@ -41,7 +41,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
@@ -311,8 +311,10 @@ struct MeshSurfaceSampler(Movable):
             Error: If the sampler is not built, or the surface has no
                 weight to choose by.
         """
-        if len(self.distribution) == 0:
-            raise Error("Build the sampler, over some triangles, first")
+        require_positive(
+            len(self.distribution),
+            "Build the sampler, over some triangles, first",
+        )
         var total = Float64(self.distribution[len(self.distribution) - 1])
         if total == 0:
             raise Error("No triangle has any weight to be chosen by")

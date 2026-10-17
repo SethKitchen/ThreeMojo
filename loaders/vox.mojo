@@ -41,6 +41,7 @@ from core.binary import copy_bytes, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import NO_PARENT, NodeId, Object3D
+from core.ordinal import require_positive
 from core.scene import Scene
 from materials.material import STANDARD, Material
 from objects.mesh import Mesh
@@ -390,8 +391,7 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
             )
             i += content
         elif id == "XYZI":
-            if len(models) == 0:
-                raise Error("VOX: voxels before any SIZE")
+            require_positive(len(models), "VOX: voxels before any SIZE")
             var count = _u32(bytes, i)
             i += 4
             if i + count * 4 > len(bytes):
@@ -408,8 +408,7 @@ def parse_vox(bytes: List[UInt8]) raises -> List[VoxModel]:
                     raise Error("VOX: a voxel outside its model")
             i += count * 4
         elif id == "RGBA":
-            if len(models) == 0:
-                raise Error("VOX: a palette before any SIZE")
+            require_positive(len(models), "VOX: a palette before any SIZE")
             var palette: List[UInt32] = [0]
             for j in range(256):  # pragma: no branch
                 palette.append(UInt32(_u32(bytes, i + j * 4)))

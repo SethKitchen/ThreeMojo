@@ -39,7 +39,12 @@ it. three.js does this for a `Mesh`; here it takes the geometry, the
 weights and, for a skinned mesh, one matrix per vertex. `core.scene_utils`
 has the forms that take a mesh.
 """
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -111,8 +116,7 @@ def merge_attributes(
         Error: If no attribute is given, or the item sizes, component types,
             normalization flags, or instance divisors differ.
     """
-    if len(attributes) == 0:
-        raise Error("Merging needs at least one attribute")
+    require_positive(len(attributes), "Merging needs at least one attribute")
     ref first = attributes[0]
     var size = first.item_size
     var data = List[Float32]()
@@ -172,8 +176,9 @@ def interleave_attributes(
             is more than four. three.js writes only the first four numbers
             with `setX` through `setW`, and stops at a fifth.
     """
-    if len(attributes) == 0:
-        raise Error("Interleaving needs at least one attribute")
+    require_positive(
+        len(attributes), "Interleaving needs at least one attribute"
+    )
     var count = attributes[0].count()
     var stride = 0
     for index in range(len(attributes)):  # pragma: no branch

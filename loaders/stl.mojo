@@ -48,6 +48,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from core.ordinal import require_positive
 from geometries.surface import position_normal_surface
 from loaders.bytes import bytes_match
 from loaders.js_text import split_fields
@@ -470,8 +471,7 @@ def parse_stl_text(text: String) raises -> StlModel:
             raise Error(_where(line) + "a word STL does not have: " + word)
     if in_solid:
         raise Error("STL: the file ends inside a solid, before `endsolid`")
-    if len(solids) == 0:
-        raise Error("STL: the text has no solid")
+    require_positive(len(solids), "STL: the text has no solid")
     var geometry = BufferGeometry()
     position_normal_surface(geometry, positions^, normals^)
     for index in range(len(solids)):  # pragma: no branch

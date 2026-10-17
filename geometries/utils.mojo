@@ -32,6 +32,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_positive
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
@@ -112,8 +113,7 @@ def merge_geometries(
             parts do not match as above, if a part has no positions, or if
             an index entry points past its part's last vertex.
     """
-    if len(geometries) == 0:
-        raise Error("Merging needs at least one geometry")
+    require_positive(len(geometries), "Merging needs at least one geometry")
     # The empty list was refused above, so this runs once at least.
     for part in range(len(geometries)):  # pragma: no branch
         if geometries[part].instanced:

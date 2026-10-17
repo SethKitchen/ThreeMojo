@@ -38,6 +38,7 @@ This is not a three.js port. See Extensions.
 
 from core.binary import little_endian_u32
 from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_positive
 from geometries.surface import indexed_surface
 from math.cross import cross_vectors
 from math.vector3 import Vector3, append_vector3
@@ -815,8 +816,7 @@ struct FaceModel(Movable):
                     uvs.append(floats[unsafe_offset=uvs_at + d * 2])
                     uvs.append(floats[unsafe_offset=uvs_at + d * 2 + 1])
                 indices.append(remap[d])
-        if len(indices) == 0:
-            raise Error("That face part has no triangles")
+        require_positive(len(indices), "That face part has no triangles")
         # Smooth normals, summed per position so a seam does not show.
         var sums = List[Vector3](
             length=self.vertex_count(), fill=Vector3(0, 0, 0)

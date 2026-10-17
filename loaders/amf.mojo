@@ -44,6 +44,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_positive
 from math.norm import normalized3, _ordinary_squared, squared_length3
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -284,8 +285,7 @@ def _amf_text(bytes: List[UInt8]) raises -> String:
     if not zipped:
         return String(from_utf8_lossy=Span(bytes))
     var entries = unzip(bytes)
-    if len(entries) == 0:
-        raise Error("AMF: an archive with no files")
+    require_positive(len(entries), "AMF: an archive with no files")
     var chosen = len(entries) - 1
     for index in range(len(entries)):  # pragma: no branch
         if entries[index].name.lower().endswith(".amf"):

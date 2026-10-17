@@ -35,6 +35,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from core.ordinal import require_positive
 from extensions.animals.anatomy.body import MAMMAL, BodyPlan, species_body
 from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import (
@@ -319,8 +320,9 @@ def anatomy_layers(
         Error: If the pose is for another rig, or the animal has no
             muscles to draw.
     """
-    if len(muscles) == 0:
-        raise Error("Engineering mode needs the animal's muscles")
+    require_positive(
+        len(muscles), "Engineering mode needs the animal's muscles"
+    )
     var threads = workers if workers > 0 else num_logical_cores()
     var world = pose.world(animal.rig)
     var cell = animal.cell * FINE

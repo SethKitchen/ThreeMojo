@@ -164,8 +164,7 @@ struct AnimationClip(Copyable, Movable):
                 which is a clip of no length.
         """
         require_blend_mode(blend_mode)
-        if len(tracks) == 0:
-            raise Error("A clip needs at least one track")
+        require_positive(len(tracks), "A clip needs at least one track")
         var runs = _longest(tracks)
         if Bool(duration):
             runs = duration.value().to(SECOND)

@@ -28,6 +28,7 @@ format's compression trick, and nothing here compresses.
 """
 
 from core.binary import append_big_endian
+from core.ordinal import require_positive
 from render.framebuffer import Framebuffer
 from render.png import frame_data, push_be32, push_chunk, push_ihdr
 from render.png import push_signature
@@ -144,8 +145,7 @@ def encode(
             is outside 0 to 65535 milliseconds, or the loop count is
             outside what four bytes hold.
     """
-    if len(frames) == 0:
-        raise Error("An animation needs at least one frame")
+    require_positive(len(frames), "An animation needs at least one frame")
 
     var width = frames[0].width
     var height = frames[0].height

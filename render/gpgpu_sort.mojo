@@ -25,7 +25,7 @@ host, which runs the invocations in order, and can come in any order on
 the device, as three.js says of its own.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from materials.compute_ids import WORKGROUP_ID
 from math.utils import is_power_of_two
 from materials.compute_nodes import (
@@ -575,8 +575,7 @@ struct CountingSort(Movable):
         Raises:
             Error: If no bin node is set, or the runner refuses a kernel.
         """
-        if len(self.nodes) == 0:
-            raise Error("A counting sort needs a bin node")
+        require_positive(len(self.nodes), "A counting sort needs a bin node")
         for at in range(len(self.nodes)):  # pragma: no branch
             runner.compute(store, self.nodes[at])
 

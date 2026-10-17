@@ -71,6 +71,7 @@ from core.ordinal import (
     require_index_in_count,
     require_valid,
     require_non_negative,
+    require_positive,
 )
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
@@ -489,8 +490,9 @@ def _parse_header(
                     )
             elements.append(_Element(fields[1], rows, List[_Property]()))
         elif keyword == "property":
-            if len(elements) == 0:
-                raise Error(_where(line) + "a property before any element")
+            require_positive(
+                len(elements), _where(line) + "a property before any element"
+            )
             if len(fields) == 5 and fields[1] == "list":
                 var count = ply_scalar(fields[2])
                 if not count.is_integer():

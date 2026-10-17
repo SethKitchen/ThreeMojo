@@ -38,6 +38,7 @@ from core.buffer_geometry import (
     POSITION,
     require_vertex_index,
 )
+from core.ordinal import require_positive
 from geometries.utils import merge_vertices
 from math.finite import require_finite
 from std.math import cos, sqrt
@@ -220,8 +221,10 @@ def edge_split(
     var splits = List[_Split]()
     var cut_off = cos(Float64(cut_off_angle.value)) - 0.001
     for vertex in range(count):
-        if len(point_to_index[vertex]) == 0:
-            raise Error("An edge split needs every vertex in a triangle")
+        require_positive(
+            len(point_to_index[vertex]),
+            "An edge split needs every vertex in a triangle",
+        )
         _edge_split(normals, point_to_index[vertex], cut_off, None, splits)
 
     var result = BufferGeometry()

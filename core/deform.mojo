@@ -48,6 +48,7 @@ from core.buffer_geometry import (
     UV,
 )
 from core.morph import MorphInfluences
+from core.ordinal import require_positive
 from core.scene import Scene, require_skinned_mesh
 from materials.material import Material
 from math.bounds import Box3, Sphere
@@ -246,8 +247,7 @@ def sphere_of(points: List[Vector3]) raises -> Sphere:
     Raises:
         Error: If there are no points to bound.
     """
-    if len(points) == 0:
-        raise Error("A bound needs a point to be around")
+    require_positive(len(points), "A bound needs a point to be around")
     var box = box_of(points)
     var center = box.center()
     var reach = Float32(0)

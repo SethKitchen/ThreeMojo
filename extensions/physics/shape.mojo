@@ -27,7 +27,12 @@ inside. That is the method of Blow and Binstock, "How to find the inertia
 tensor (or other mass properties) of a 3D solid body represented by a
 triangle mesh" (2004).
 """
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
 
 from math.convex_hull import ConvexHull
 from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
@@ -636,8 +641,7 @@ struct Shape(Copyable, Movable):
         Raises:
             Error: If there are no triangles.
         """
-        if len(triangles) == 0:
-            raise Error("A mesh needs at least one triangle")
+        require_positive(len(triangles), "A mesh needs at least one triangle")
         var out = Shape(MESH)
         out.triangles = triangles^
         return out^

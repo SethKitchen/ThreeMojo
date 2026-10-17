@@ -71,6 +71,7 @@ from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
     require_non_negative,
+    require_positive,
 )
 
 from math.triangle_normal import polygon_normal
@@ -1908,8 +1909,7 @@ struct _Loader(Movable):
                 if self.kind(bone.id) == "Model":
                     self.rig.bones[bone.id] = True
         var owners = self.links(self.parents, id)
-        if len(owners) == 0:
-            raise Error("FBX: a skin deforms no geometry")
+        require_positive(len(owners), "FBX: a skin deforms no geometry")
         self.rig.clusters[id] = clusters^
         # A geometry keeps the last skin connected to it, as three.js's
         # `parseMeshGeometry` keeps it. The skin is a child of its owner:

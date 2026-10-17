@@ -56,7 +56,11 @@ taken as it is, as three.js's shader takes it; see
 """
 
 from core.object3d import NodeId
-from core.ordinal import require_index_in_count, require_non_negative
+from core.ordinal import (
+    require_index_in_count,
+    require_non_negative,
+    require_positive,
+)
 from math.matrix4 import Matrix4, require_affine
 from math.finite import require_finite, require_finite_group
 
@@ -122,8 +126,7 @@ struct Skeleton(Copyable, Movable):
             Error: If there are no bones, or one carries an inverse bind
                 that is not a finite affine transform.
         """
-        if len(bones) == 0:
-            raise Error("A skeleton needs at least one bone")
+        require_positive(len(bones), "A skeleton needs at least one bone")
         for index in range(len(bones)):  # pragma: no branch
             require_finite_group(
                 bones[index].inverse_bind.is_finite(),

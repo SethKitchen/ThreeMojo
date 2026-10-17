@@ -170,6 +170,7 @@ from core.ordinal import (
     require_index_in_count,
     require_valid,
     require_non_negative,
+    require_positive,
 )
 from core.object3d import NodeId
 from materials.material import MaterialId
@@ -1041,8 +1042,7 @@ struct KeyframeTrack(Copyable, Movable):
         """
         var target = checked_target
         var kind = target.kind
-        if len(times) == 0:
-            raise Error("A track needs at least one key")
+        require_positive(len(times), "A track needs at least one key")
         require_key_values(len(values), len(times) * kind.component_count())
         for index in range(len(values)):  # pragma: no branch
             require_finite(
@@ -1685,8 +1685,9 @@ struct KeyframeTrack(Copyable, Movable):
         Raises:
             Error: If the track holds no keys.
         """
-        if len(self.times) == 0:
-            raise Error("A track's keys were removed after it was built")
+        require_positive(
+            len(self.times), "A track's keys were removed after it was built"
+        )
 
     def _check_lists(self) raises:
         """Refuse a track whose lists no longer agree with each other.

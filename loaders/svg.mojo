@@ -728,8 +728,7 @@ def parse_path_data(d: String) raises -> SvgShapePath:
     for i in range(len(bytes)):  # pragma: no branch
         if _command_start(bytes[i]):
             starts.append(i)
-    if len(starts) == 0:
-        raise Error("SVG: path data with no command")
+    require_positive(len(starts), "SVG: path data with no command")
     starts.append(len(bytes))
 
     # There is a command: the loop always runs.
@@ -1214,8 +1213,9 @@ struct _Parser(Movable):
             Error: If it has no points, or a number is not one.
         """
         var pairs = svg_point_pairs(self.doc.attribute(node, "points"))
-        if len(pairs) == 0:
-            raise Error("SVG: a `" + self.doc.name(node) + "` with no points")
+        require_positive(
+            len(pairs), "SVG: a `" + self.doc.name(node) + "` with no points"
+        )
         var path = SvgShapePath()
         for i in range(0, len(pairs), 2):  # pragma: no branch
             var x = self.length(pairs[i])

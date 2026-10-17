@@ -58,6 +58,7 @@ from animation.keyframe_track import (
     node_target,
 )
 from core.object3d import NodeId
+from core.ordinal import require_positive
 from loaders.fbx_tree import NO_FBX_NODE, FbxDocument, object_name
 from math.euler import ZYX, Euler, EulerOrder
 from math.quaternion import Quaternion, append_quaternion
@@ -223,8 +224,9 @@ def _first_parent(parents: Dict[Int, List[_Link]], id: Int) raises -> Int:
         Error: If it has none, where three.js reads past the end.
     """
     var found = _links(parents, id)
-    if len(found) == 0:
-        raise Error("FBX: a blend shape channel is not connected to a model")
+    require_positive(
+        len(found), "FBX: a blend shape channel is not connected to a model"
+    )
     return found[0].id
 
 

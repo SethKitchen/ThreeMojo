@@ -37,7 +37,7 @@ is allocated per symbol, and a malformed stream runs out of lengths rather
 than reading off the end of anything.
 """
 
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from render.checksum import adler32
 
 # Let a stream produce whatever it likes. Only safe for one you wrote.
@@ -408,8 +408,9 @@ def _read_dynamic_lengths[
             lengths.append(symbol)
         elif symbol == 16:
             # Repeat the previous length three to six times.
-            if len(lengths) == 0:
-                raise Error("A length repeat has nothing to repeat")
+            require_positive(
+                len(lengths), "A length repeat has nothing to repeat"
+            )
             var previous = lengths[len(lengths) - 1]
             for _ in range(reader.read_bits(2) + 3):  # pragma: no branch
                 lengths.append(previous)
