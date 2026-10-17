@@ -358,6 +358,26 @@ def _transformed(
     )
 
 
+def _quad_form(
+    mut c0: Vector3, mut c1: Vector3, mut c2: Vector3, mut c3: Vector3
+) -> Vector3:
+    """Project four corners onto the unit sphere and sum the four edges.
+
+    `normalize` leaves a zero vector alone, so a corner on the surface
+    stays there. The edges run `c0` to `c1`, `c1` to `c2`, `c2` to `c3`,
+    and `c3` to `c0`.
+    """
+    c0.normalize()
+    c1.normalize()
+    c2.normalize()
+    c3.normalize()
+    var total = ltc_edge_vector_form_factor(c0, c1)
+    total = total + ltc_edge_vector_form_factor(c1, c2)
+    total = total + ltc_edge_vector_form_factor(c2, c3)
+    total = total + ltc_edge_vector_form_factor(c3, c0)
+    return total
+
+
 def ltc_evaluate(
     normal: Vector3,
     toward_eye: Vector3,
@@ -419,17 +439,7 @@ def ltc_evaluate(
     var c1 = _transformed(minv, t1, t2, normal, corner1 - position)
     var c2 = _transformed(minv, t1, t2, normal, corner2 - position)
     var c3 = _transformed(minv, t1, t2, normal, corner3 - position)
-    # `normalize` leaves a zero vector alone: a corner the transform
-    # squashes onto the surface stays where it is.
-    c0.normalize()
-    c1.normalize()
-    c2.normalize()
-    c3.normalize()
-    var total = ltc_edge_vector_form_factor(c0, c1)
-    total = total + ltc_edge_vector_form_factor(c1, c2)
-    total = total + ltc_edge_vector_form_factor(c2, c3)
-    total = total + ltc_edge_vector_form_factor(c3, c0)
-    return ltc_clipped_sphere_form_factor(total)
+    return ltc_clipped_sphere_form_factor(_quad_form(c0, c1, c2, c3))
 
 
 def ltc_evaluate_volume(
@@ -473,14 +483,7 @@ def ltc_evaluate_volume(
     var c1 = corner1 - position
     var c2 = corner2 - position
     var c3 = corner3 - position
-    c0.normalize()
-    c1.normalize()
-    c2.normalize()
-    c3.normalize()
-    var total = ltc_edge_vector_form_factor(c0, c1)
-    total = total + ltc_edge_vector_form_factor(c1, c2)
-    total = total + ltc_edge_vector_form_factor(c2, c3)
-    total = total + ltc_edge_vector_form_factor(c3, c0)
+    var total = _quad_form(c0, c1, c2, c3)
     return ltc_clipped_sphere_form_factor(
         Vector3(abs(total.x), abs(total.y), abs(total.z))
     )
