@@ -17,13 +17,13 @@ The concrete and granite materials are not ported.
 
 from core.buffer_geometry import BufferGeometry
 from generators.street_furniture import placed
-from generators.utils import Instances, meters
+from generators.utils import Instances, angle_radians, length_meters, meters
 from geometries.extrude import extrude
 from math.matrix4 import Matrix4
 from math.path import Path, Shape
 from math.vector2 import Vector2
 from std.math import pi
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Length, METER
 
 
 def rounded_rect(
@@ -81,8 +81,8 @@ def extrude_up(shape: Shape, height: Float64) raises -> BufferGeometry:
     Raises:
         Error: If the footprint cannot be filled in.
     """
-    var geometry = extrude(shape, Length(Float32(height), METER), 1, 6)
-    geometry.rotate_x(Angle(Float32(-pi / 2), RADIAN))
+    var geometry = extrude(shape, length_meters(height), 1, 6)
+    geometry.rotate_x(angle_radians(-pi / 2))
     return geometry^
 
 

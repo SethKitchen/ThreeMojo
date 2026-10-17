@@ -37,8 +37,10 @@ from generators.utils import (
     PartId,
     Vec3d,
     basis_matrix,
+    angle_radians,
     check_finite,
     generator_random,
+    length_meters,
     meters,
 )
 from geometries.box import box
@@ -56,7 +58,7 @@ from math.sine import fraction
 from math.utils import SeededRandom, js_round, min3
 from math.vector2 import Vector2, vector2_from_float64
 from std.math import floor, pi, sin, sqrt
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Length, METER
 from core.ordinal import require_valid
 
 # The zones of a skyscraper, three.js's `PartId`.
@@ -1020,7 +1022,7 @@ def _add_arcade(
     var wall = merge_geometries([front^, reveals^])
     parts.extras.append(_affine_geometry(wall^, frame.matrix(0, 0, 0)))
     var back = plane(
-        Length(length, METER), Length(Float32(height), METER)
+        Length(length, METER), length_meters(height)
     ).to_non_indexed()
     parts.extras.append(
         _affine_geometry(
@@ -1062,10 +1064,10 @@ def _slab(
             outline.line_to(point)
     var start = outline.first
     outline.line_to(start)
-    var geometry = extrude(Shape(outline^), Length(Float32(thickness), METER))
-    geometry.rotate_x(Angle(Float32(pi / 2), RADIAN))
+    var geometry = extrude(Shape(outline^), length_meters(thickness))
+    geometry.rotate_x(angle_radians(pi / 2))
     geometry.translate(
-        Length(0, METER), Length(Float32(y - 0.2), METER), Length(0, METER)
+        Length(0, METER), length_meters(y - 0.2), Length(0, METER)
     )
     return geometry^
 
@@ -1080,15 +1082,9 @@ def _box_part(
 ) raises -> BufferGeometry:
     """Return a box of a size moved to a point, without an index."""
     var geometry = box(
-        Length(Float32(width), METER),
-        Length(Float32(height), METER),
-        Length(Float32(depth), METER),
+        length_meters(width), length_meters(height), length_meters(depth)
     )
-    geometry.translate(
-        Length(Float32(x), METER),
-        Length(Float32(y), METER),
-        Length(Float32(z), METER),
-    )
+    geometry.translate(length_meters(x), length_meters(y), length_meters(z))
     return geometry.to_non_indexed()
 
 
@@ -1137,15 +1133,11 @@ def _reveal_wall(
 ) raises -> BufferGeometry:
     """Return one reveal wall of a window opening, set back to the
     glazing."""
-    var wall = plane(
-        Length(Float32(width), METER), Length(Float32(height), METER)
-    )
-    wall.rotate_x(Angle(Float32(rx), RADIAN))
-    wall.rotate_y(Angle(Float32(ry), RADIAN))
+    var wall = plane(length_meters(width), length_meters(height))
+    wall.rotate_x(angle_radians(rx))
+    wall.rotate_y(angle_radians(ry))
     wall.translate(
-        Length(Float32(x), METER),
-        Length(Float32(y), METER),
-        Length(Float32(-depth / 2), METER),
+        length_meters(x), length_meters(y), length_meters(-depth / 2)
     )
     return wall.to_non_indexed()
 
@@ -1185,13 +1177,9 @@ def window_geometry(style: SkyscraperStyle) raises -> BufferGeometry:
     hole.line_to(Vector2(x, -y))
     hole.line_to(Vector2(-x, -y))
     shape.add_hole(hole^)
-    var transom = plane(
-        Length(Float32(iw * 2), METER), Length(Float32(0.05), METER)
-    )
+    var transom = plane(length_meters(iw * 2), length_meters(0.05))
     transom.translate(
-        Length(0, METER),
-        Length(Float32(h * 0.04), METER),
-        Length(Float32(-depth + 0.02), METER),
+        Length(0, METER), length_meters(h * 0.04), length_meters(-depth + 0.02)
     )
     return merge_geometries(
         [
@@ -1219,11 +1207,8 @@ def glass_geometry(style: SkyscraperStyle) raises -> BufferGeometry:
         Error: If the opening is too small for its frame.
     """
     return plane(
-        Length(
-            Float32(style.bay_width - style.pier_width - WINDOW_BORDER * 2),
-            METER,
-        ),
-        Length(Float32(style.window_height - WINDOW_BORDER * 2), METER),
+        length_meters(style.bay_width - style.pier_width - WINDOW_BORDER * 2),
+        length_meters(style.window_height - WINDOW_BORDER * 2),
     ).to_non_indexed()
 
 
