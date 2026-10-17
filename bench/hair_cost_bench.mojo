@@ -52,7 +52,7 @@ from extensions.humanoid.skeleton.head.hair.strands import (
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import LineWidth
 from math.bounds import Box3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.ffi import OwnedDLHandle
 from std.sys import argv, num_logical_cores
 from std.time import perf_counter_ns
@@ -190,7 +190,7 @@ def _measure(guides: Int, followers: Int, hook: String) raises:
     var box = Box3.from_points(hair.groom.points)
     var low = box.min
     var high = box.max
-    var middle = (low + high) * 0.5
+    var middle = midpoint(low, high)
     var collider = HairCollider(
         _Head(middle, 0.09),
         low - Vector3(0.1, 0.1, 0.1),

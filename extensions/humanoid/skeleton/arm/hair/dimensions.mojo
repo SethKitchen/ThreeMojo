@@ -24,7 +24,7 @@ from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.skin.dimensions import ArmSkinField
 from extensions.humanoid.skeleton.field import DistanceField, mix_point
 from extensions.humanoid.skeleton.torso.sweep import Dome, Sweep, SweepField
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 
 # Representative shafts per group.
 comptime SHAFTS = 8
@@ -98,7 +98,7 @@ def surface_root[
     var low = inside
     var high = inside + direction * reach
     for _ in range(18):  # pragma: no branch
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if skin.distance(middle) < 0:
             low = middle
         else:

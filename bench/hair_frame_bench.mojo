@@ -56,7 +56,7 @@ from geometries.sphere import sphere
 from lights.light import ambient_light, directional_light
 from materials.material import Material
 from math.bounds import Box3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from objects.mesh import Mesh
 from lights.lighting import Lighting
 from render.framebuffer import Color
@@ -116,7 +116,7 @@ def main() raises:
     var box = Box3.from_points(hair.groom.points)
     var low = box.min
     var high = box.max
-    var middle = (low + high) * 0.5
+    var middle = midpoint(low, high)
     # A head sphere under the hair, so strands behind it are hidden.
     var head = scene.add(Object3D())
     scene.node(head).set_position(middle.x, middle.y, middle.z)
