@@ -25,17 +25,14 @@ measured along the arc of the rounded edge and the flat band between, so a
 texture is not squeezed where the surface bends.
 """
 
-from core.buffer_attribute import BufferAttribute
 from geometries.surface import (
     require_finite_extents,
     require_positive_extents,
+    textured_surface,
 )
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
-    NORMAL,
-    POSITION,
-    UV,
 )
 from math.curve_checks import require_at_least_one
 from math.utils import glsl_sign
@@ -258,9 +255,7 @@ def rounded_box(
         uvs.append(Float32(1.0 - v if v_flips[side] else v))
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, data^, normals^, uvs^)
     for side in range(6):  # pragma: no branch
         geometry.add_group(side * per_side, per_side, MaterialIndex(side))
     return geometry^

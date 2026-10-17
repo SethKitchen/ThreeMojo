@@ -35,19 +35,15 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_index_in_count
-from geometries.surface import require_positive_radius
+from geometries.surface import require_positive_radius, textured_surface
 from math.norm import length2
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     DODECAHEDRON_GEOMETRY,
     ICOSAHEDRON_GEOMETRY,
-    NORMAL,
     OCTAHEDRON_GEOMETRY,
     POLYHEDRON_GEOMETRY,
-    POSITION,
     TETRAHEDRON_GEOMETRY,
-    UV,
 )
 from core.user_data import UserData, json_number_text
 from math.vector3 import Vector3, centroid, mix_delta3
@@ -254,9 +250,7 @@ def polyhedron(
         _correct_seam(uvs, triangle)
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, data^, normals^, uvs^)
     if detail == 0:
         geometry.compute_vertex_normals()
     geometry.kind = POLYHEDRON_GEOMETRY

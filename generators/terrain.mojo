@@ -25,8 +25,8 @@ writes that array, so the port rounds each height to `Float32` where
 three.js stores one.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import position_normal_surface
 from generators.utils import check_finite, generator_random, meters
 from math.noise import ImprovedNoise
 from math.utils import clamp
@@ -356,8 +356,7 @@ struct TerrainGenerator(Movable):
             for ix in range(segments):  # pragma: no branch
                 _append_quad(index, n, ix, iz)
         var geometry = BufferGeometry()
-        geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-        geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+        position_normal_surface(geometry, positions^, normals^)
         geometry.set_index(index^)
         self.heights = heights^
         self.grid_size = n

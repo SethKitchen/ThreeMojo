@@ -6,15 +6,62 @@
 """The attributes a generated surface writes onto a geometry.
 
 A plane, a sphere, a tube and the other generated solids all finish the
-same way: positions, normals, texture coordinates and a triangle index.
-They also share the checks for a positive radius, three segments, and
-positive or finite box extents. A count below one is
-`require_at_least_one` in `math.curve_checks`.
+same way. `position_normal_surface` writes positions and normals.
+`textured_surface` also writes texture coordinates. `indexed_surface`
+also writes the triangle index. They share the checks for a positive
+radius, three segments, and positive or finite box extents. A count
+below one is `require_at_least_one` in `math.curve_checks`.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
 from std.math import isfinite
+
+
+def position_normal_surface(
+    mut geometry: BufferGeometry,
+    var positions: List[Float32],
+    var normals: List[Float32],
+) raises:
+    """Attach positions and normals.
+
+    Args:
+        geometry: The geometry to fill.
+        positions: Vertex positions, three numbers each.
+        normals: Vertex normals, three numbers each.
+
+    Returns:
+        Nothing. The two attributes are set on `geometry`.
+
+    Raises:
+        Error: If either list does not divide evenly into vertices.
+    """
+    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
+    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+
+
+def textured_surface(
+    mut geometry: BufferGeometry,
+    var positions: List[Float32],
+    var normals: List[Float32],
+    var uvs: List[Float32],
+) raises:
+    """Attach positions, normals and texture coordinates.
+
+    Args:
+        geometry: The geometry to fill.
+        positions: Vertex positions, three numbers each.
+        normals: Vertex normals, three numbers each.
+        uvs: Texture coordinates, two numbers each.
+
+    Returns:
+        Nothing. The three attributes are set on `geometry`.
+
+    Raises:
+        Error: If a list does not divide evenly into vertices.
+    """
+    position_normal_surface(geometry, positions^, normals^)
+    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
 
 
 def indexed_surface(
@@ -39,9 +86,7 @@ def indexed_surface(
     Raises:
         Error: If the index is not whole triangles, or an entry is negative.
     """
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    textured_surface(geometry, positions^, normals^, uvs^)
     geometry.set_index(index^)
 
 

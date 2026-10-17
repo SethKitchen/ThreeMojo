@@ -14,8 +14,8 @@ before triangulation: rounding afterward can collapse an exact tiny face.
 Use ConvexHull directly to retain original Float64 coordinates.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import position_normal_surface
 from math.convex_hull import (
     ConvexHull,
     require_hull_count,
@@ -97,8 +97,7 @@ def convex(points: List[SIMD[DType.float64, 4]]) raises -> BufferGeometry:
                 normals.append(normal.y)
                 normals.append(normal.z)
         var geometry = BufferGeometry()
-        geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-        geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+        position_normal_surface(geometry, data^, normals^)
         return geometry^
     except error:
         raise Error("Convex geometry Float32 storage: " + String(error))

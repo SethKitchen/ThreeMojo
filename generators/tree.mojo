@@ -21,8 +21,8 @@ The branching is fixed by the seed. The same seed and parameters give the
 same geometry as three.js, number for number up to `Float32` rounding.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import position_normal_surface
 from generators.utils import (
     Vec3d,
     check_finite,
@@ -391,8 +391,7 @@ def _bake(tubes: List[TreeTube]) raises -> BufferGeometry:
             _join(index, offset + r * radial, radial)
         offset += len(rings) * radial
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    position_normal_surface(geometry, positions^, normals^)
     geometry.set_index(index^)
     return geometry^
 
