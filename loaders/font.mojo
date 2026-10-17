@@ -66,7 +66,11 @@ from math.path import Shape
 from math.shape_path import ShapePath
 from math.vector2 import Vector2
 from std.collections import Dict
-from math.finite import require_finite, require_positive_finite
+from math.finite import (
+    finite_float32,
+    require_finite,
+    require_positive_finite,
+)
 from std.math import isfinite, isnan
 from std.pathlib import Path
 from units.si import Length, METER
@@ -223,9 +227,7 @@ def _token_number(tokens: List[String], at: Int) raises -> Float32:
     var wide = js_string_to_number(tokens[at])
     if isnan(wide):
         raise Error("'" + tokens[at] + "' is not a number")
-    var narrow = Float32(wide)
-    require_finite(Float64(narrow), "'" + tokens[at] + "' is not finite")
-    return narrow
+    return finite_float32(wide, "'" + tokens[at] + "' is not finite")
 
 
 def parse_outline(outline: String) raises -> List[OutlineStep]:

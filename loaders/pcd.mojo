@@ -56,7 +56,7 @@ from loaders.bytes import ascii_space
 from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
-from math.finite import require_finite
+from math.finite import finite_float32
 from std.math import floor
 from std.memory import bitcast
 from std.pathlib import Path
@@ -571,15 +571,13 @@ def _coordinate(value: Float64, what: String) raises -> Float32:
     Raises:
         Error: If it is not finite as a `Float32`.
     """
-    var narrow = Float32(value)
-    require_finite(
-        Float64(narrow),
+    return finite_float32(
+        value,
         "PCD: `"
         + what
         + "` must be a finite number, and it is "
         + String(value),
     )
-    return narrow
 
 
 def _triple(header: PcdHeader, a: String, b: String, c: String) raises -> Bool:
