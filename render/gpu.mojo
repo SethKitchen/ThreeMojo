@@ -235,6 +235,7 @@ from render.rasterizer import (
     check_transmission,
     check_triangle_state,
     require_triangle_lighting,
+    require_data_descriptors,
     bumped_normal,
     interpolate_alpha,
     mapped_normal,
@@ -1184,6 +1185,44 @@ def require_gpu() raises:
     """
     if not available():
         raise Error("No GPU available")
+
+
+def require_volume_address(used: Int, size: Int) raises:
+    """Refuse a volume block that cannot be addressed as an Int32.
+
+    Args:
+        used: How many floats are already stored.
+        size: How many floats the next block adds.
+
+    Returns:
+        Nothing. The call returns when the block fits.
+
+    Raises:
+        Error: If the block exceeds Int32 addressing.
+    """
+    if used > 2147483647 - size:
+        raise Error("GPU volume blocks must fit Int32 addressing")
+
+
+def require_composer_frame(
+    width: Int, height: Int, frame_width: Int, frame_height: Int
+) raises:
+    """Refuse a composer frame that is not the composer's size.
+
+    Args:
+        width: The composer's width in pixels.
+        height: The composer's height in pixels.
+        frame_width: The frame's width in pixels.
+        frame_height: The frame's height in pixels.
+
+    Returns:
+        Nothing. The call returns when the sizes match.
+
+    Raises:
+        Error: If the frame is another size.
+    """
+    if frame_width != width or frame_height != height:
+        raise Error("A GPU composer's frame must be its own size")
 
 
 def flatten(corners: List[RasterVertex]) -> List[Float32]:
@@ -2517,8 +2556,7 @@ def volume_blocks(
         var size = _volume_block_size(
             volume.image.width, volume.image.height, volume.image.depth
         )
-        if len(floats) > 2147483647 - size:
-            raise Error("GPU volume blocks must fit Int32 addressing")
+        require_volume_address(len(floats), size)
         volume.validate()
         volume_starts.append(len(floats))
         _append_block(
@@ -2537,8 +2575,7 @@ def volume_blocks(
         var size = _volume_block_size(
             array.image.width, array.image.height, array.image.depth
         )
-        if len(floats) > 2147483647 - size:
-            raise Error("GPU volume blocks must fit Int32 addressing")
+        require_volume_address(len(floats), size)
         array.validate()
         array_starts.append(len(floats))
         _append_block(
@@ -10314,16 +10351,11 @@ struct GpuRenderer(Movable):
                     )
             var mask = points[index].alpha_map
             if mask != NO_TEXTURE and mode == SHADE_TEXTURE:
-                if not self.is_linear[mask.value]:
-                    raise Error(
-                        "An alpha map holds data, not color; build the"
-                        " texture with color_space=LINEAR"
-                    )
-                if not self.ignores_alpha[mask.value]:
-                    raise Error(
-                        "An alpha map must ignore its own alpha; build"
-                        " the texture with alpha=IGNORED"
-                    )
+                require_data_descriptors(
+                    self.is_linear[mask.value],
+                    self.ignores_alpha[mask.value],
+                    "An alpha map",
+                )
         # An emissive map's alpha means nothing, and only a texture built to
         # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
         # here, before the launch, exactly where `rasterize_shaded` asks it
@@ -10341,16 +10373,11 @@ struct GpuRenderer(Movable):
                 # descriptors this renderer uploaded.
                 var mask = corners[triangle * 3].alpha_map
                 if mask != NO_TEXTURE:
-                    if not self.is_linear[mask.value]:
-                        raise Error(
-                            "An alpha map holds data, not color; build the"
-                            " texture with color_space=LINEAR"
-                        )
-                    if not self.ignores_alpha[mask.value]:
-                        raise Error(
-                            "An alpha map must ignore its own alpha; build"
-                            " the texture with alpha=IGNORED"
-                        )
+                    require_data_descriptors(
+                        self.is_linear[mask.value],
+                        self.ignores_alpha[mask.value],
+                        "An alpha map",
+                    )
                 # The maps that hold numbers, asked the same two
                 # questions with the same words `check_data_map` uses.
                 self._check_data_map(
@@ -12290,8 +12317,9 @@ struct GpuComposer(Movable):
             Error: If the frame is another size, or a buffer cannot be
                 written.
         """
-        if frame.width != self.width or frame.height != self.height:
-            raise Error("A GPU composer's frame must be its own size")
+        require_composer_frame(
+            self.width, self.height, frame.width, frame.height
+        )
         var count = self.width * self.height
         var flags = List[UInt8](length=count, fill=0)
         for slot in range(count):
@@ -12332,8 +12360,9 @@ struct GpuComposer(Movable):
             Error: If the frame is another size, or a buffer cannot be
                 read.
         """
-        if frame.width != self.width or frame.height != self.height:
-            raise Error("A GPU composer's frame must be its own size")
+        require_composer_frame(
+            self.width, self.height, frame.width, frame.height
+        )
         var count = self.width * self.height
         var flags = List[UInt8](length=count, fill=0)
         with self.light.map_to_host() as host:
