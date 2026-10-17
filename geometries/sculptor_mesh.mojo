@@ -60,6 +60,7 @@ from core.buffer_geometry import BufferGeometry, POSITION
 from geometries.sculptor_utils import (
     MAX_FLAG,
     Point3,
+    point3_of,
     js_max,
     js_min,
     point_of,
@@ -530,9 +531,7 @@ struct SculptorMesh(Movable):
         if _ordinary_triangle_cross(
             b - a, c - a, cached
         ) or not _finite_triangle(a, b, c):
-            return Point3(
-                Float64(cached.x), Float64(cached.y), Float64(cached.z)
-            )
+            return point3_of(cached)
         var wide = _triangle_cross_wide(a, b, c)
         if (
             Float32(wide[0]) == cached.x
@@ -540,7 +539,7 @@ struct SculptorMesh(Movable):
             and Float32(wide[2]) == cached.z
         ):
             return Point3(wide[0], wide[1], wide[2])
-        return Point3(Float64(cached.x), Float64(cached.y), Float64(cached.z))
+        return point3_of(cached)
 
     def _vertex_area(self, vertex: Int) -> Point3:
         """Return the area-weighted vertex mean before Float32 storage."""

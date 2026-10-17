@@ -29,6 +29,7 @@ limits, and explicit zero and nonfinite rules.
 
 from math.cross import cross_components
 from math.norm import dot3, length3, squared_length3
+from math.vector3 import Vector3
 from std.math import isfinite, isnan, sqrt
 
 # The tag three.js writes in the fourth slot of a face. Kept for the
@@ -149,9 +150,22 @@ def point_of(values: List[Float32], vertex: Int) -> Point3:
         Its three numbers.
     """
     var at = vertex * 3
-    return Point3(
-        Float64(values[at]), Float64(values[at + 1]), Float64(values[at + 2])
-    )
+    return point3_of(Vector3(values[at], values[at + 1], values[at + 2]))
+
+
+def point3_of(v: Vector3) -> Point3:
+    """Return a vector widened to doubles.
+
+    Args:
+        v: The vector.
+
+    Returns:
+        The same components as `Float64`.
+
+    Raises:
+        Error: Never.
+    """
+    return Point3(Float64(v.x), Float64(v.y), Float64(v.z))
 
 
 def replace_element(mut array: List[Int], old_value: Int, new_value: Int):

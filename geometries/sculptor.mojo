@@ -83,6 +83,7 @@ from geometries.sculptor_tools import (
 from geometries.sculptor_utils import (
     Point3,
     intersection_ray_triangle,
+    point3_of,
     point_of,
     ray_point,
     sqr_dist,
@@ -333,11 +334,6 @@ def _prefix[T: Copyable](values: List[T], count: Int) -> List[T]:
     return out^
 
 
-def _point(v: Vector3) -> Point3:
-    """Return a vector widened to doubles."""
-    return Point3(Float64(v.x), Float64(v.y), Float64(v.z))
-
-
 struct Sculptor(Movable):
     """Sculpts one mesh of a scene with adaptive topology, three.js's
     `Sculptor`.
@@ -509,7 +505,7 @@ struct Sculptor(Movable):
         var rect = self._get_rect()
         var x = ((client_x - rect[0]) / rect[2]) * 2 - 1
         var y = -((client_y - rect[1]) / rect[3]) * 2 + 1
-        return _point(
+        return point3_of(
             unproject_point(
                 Vector3(Float32(x), Float32(y), Float32(z)), camera, scene
             )
@@ -520,7 +516,7 @@ struct Sculptor(Movable):
     ](self, camera: C, scene: Scene, point: Point3) raises -> Point3:
         """Return where a world point lands, in pixels and depth, three.js's
         `_project`."""
-        var ndc = _point(
+        var ndc = point3_of(
             project_point(
                 vector3_from_float64(point.x, point.y, point.z), camera, scene
             )
@@ -970,8 +966,8 @@ struct Sculptor(Movable):
             radius,
             "Sculptor: worldRadius must be a finite number greater than 0.",
         )
-        var origin = _point(ray.origin)
-        var direction = _point(ray.direction)
+        var origin = point3_of(ray.origin)
+        var direction = point3_of(ray.direction)
         var length_sq = direction.dot(direction)
         if not origin.is_finite() or not isfinite(length_sq) or length_sq == 0:
             raise Error(
