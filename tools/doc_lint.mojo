@@ -404,10 +404,6 @@ def _is_punctuation(byte: UInt8) -> Bool:
     )
 
 
-def _is_alpha(byte: UInt8) -> Bool:
-    return ascii_letter(Int(byte))
-
-
 def _has(bytes: Span[UInt8, _], at: Int, text: String) -> Bool:
     """Return True if `text` occurs in `bytes` at or after `at`."""
     var want = text.as_bytes()
@@ -632,7 +628,7 @@ def _html_start(bytes: Span[UInt8, _], at: Int) raises -> Int:
         name += 1
     var end = name
     while end < len(bytes) and (
-        _is_alpha(bytes[end]) or ascii_digit(Int(bytes[end]))
+        ascii_letter(Int(bytes[end])) or ascii_digit(Int(bytes[end]))
     ):
         end += 1
     if end == name:
@@ -2881,7 +2877,7 @@ def _named_entity(name: String, mut out: List[UInt8]) -> Bool:
             _utf8(code, out)
             code = 0
         else:
-            code = code * 16 + _hex(bytes[i])
+            code = code * 16 + hex_digit_value(Int(bytes[i]))
         i += 1
     _utf8(code, out)
     return True
@@ -2905,7 +2901,7 @@ def _entity(
         var start = i
         var code = 0
         while i < end and i - start < (6 if hex else 7):
-            var digit = _hex(bytes[i])
+            var digit = hex_digit_value(Int(bytes[i]))
             if not hex and (bytes[i] < 48 or bytes[i] > 57):
                 digit = -1
             if digit < 0:
@@ -2920,7 +2916,7 @@ def _entity(
     while (
         i < end
         and i - start < 32
-        and (_is_alpha(bytes[i]) or ascii_digit(Int(bytes[i])))
+        and (ascii_letter(Int(bytes[i])) or ascii_digit(Int(bytes[i])))
     ):
         i += 1
     if i == start or i >= end or bytes[i] != 59:
@@ -3095,7 +3091,7 @@ def _html_end(bytes: Span[UInt8, _], at: Int, end: Int) -> Int:
     var i = at + 1
     if i < end and bytes[i] == 47:
         i += 1
-    if i >= end or not _is_alpha(bytes[i]):
+    if i >= end or not ascii_letter(Int(bytes[i])):
         return -1
     while i < end and bytes[i] != 62:
         if bytes[i] == 60:
@@ -4038,12 +4034,12 @@ def _drops(ch: String) -> Bool:
             var span = line.as_bytes()
             var low = 0
             for k in range(cut):
-                low = low * 16 + _hex(span[k])
+                low = low * 16 + hex_digit_value(Int(span[k]))
             if low > code:
                 return False
             var high = 0
             for k in range(cut + 1, len(span)):
-                high = high * 16 + _hex(span[k])
+                high = high * 16 + hex_digit_value(Int(span[k]))
             if code <= high:
                 return True
         return False
@@ -4090,8 +4086,8 @@ def percent_decode(text: String) -> String:
     var i = 0
     while i < len(bytes):
         if bytes[i] == 37 and i + 2 < len(bytes):
-            var high = _hex(bytes[i + 1])
-            var low = _hex(bytes[i + 2])
+            var high = hex_digit_value(Int(bytes[i + 1]))
+            var low = hex_digit_value(Int(bytes[i + 2]))
             if high >= 0 and low >= 0:
                 out.append(UInt8(high * 16 + low))
                 i += 3
@@ -4102,10 +4098,6 @@ def percent_decode(text: String) -> String:
         return String(from_utf8=Span(out))
     except:
         return text
-
-
-def _hex(byte: UInt8) -> Int:
-    return hex_digit_value(Int(byte))
 
 
 struct Document(Movable):
@@ -4347,7 +4339,7 @@ def _is_page(name: String) -> Bool:
         return False
     for i in range(len(bytes)):
         var byte = bytes[i]
-        var alnum = _is_alpha(byte) or ascii_digit(Int(byte))
+        var alnum = ascii_letter(Int(byte)) or ascii_digit(Int(byte))
         if not (alnum or (i > 0 and (byte == 45 or byte == 95))):
             return False
     return True

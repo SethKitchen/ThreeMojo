@@ -31,11 +31,9 @@ from extensions.physics.shape import (
     _finite_vector,
     _inertia_inverse,
     _inertia_determinant,
-    _wide,
-    _wide_cross,
-    _wide_dot,
     _narrow_finite,
 )
+from math.cross import wide_cross, wide_dot, widen_vector
 from math.finite import require_finite, require_positive_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
@@ -138,22 +136,22 @@ def _rotation_wide(q: Quaternion) -> SIMD[DType.float64, 4]:
     var out = SIMD[DType.float64, 4](
         Float64(q.x), Float64(q.y), Float64(q.z), Float64(q.w)
     )
-    return out / sqrt(_wide_dot(out, out) + out[3] * out[3])
+    return out / sqrt(wide_dot(out, out) + out[3] * out[3])
 
 
 def _rotation_product(
     a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
-    var out = _wide_cross(a, b) + a * b[3] + b * a[3]
-    out[3] = a[3] * b[3] - _wide_dot(a, b)
+    var out = wide_cross(a, b) + a * b[3] + b * a[3]
+    out[3] = a[3] * b[3] - wide_dot(a, b)
     return out
 
 
 def _rotation_apply(
     q: SIMD[DType.float64, 4], v: SIMD[DType.float64, 4]
 ) -> SIMD[DType.float64, 4]:
-    var twice = 2 * _wide_cross(q, v)
-    return v + q[3] * twice + _wide_cross(q, twice)
+    var twice = 2 * wide_cross(q, v)
+    return v + q[3] * twice + wide_cross(q, twice)
 
 
 def _rotation_back(q: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
@@ -182,7 +180,7 @@ def _split_rotation(
 ):
     # Exact flow of H = coefficient * (axis . momentum)^2 / 2.
     # This scalar projection is constant during this one subflow.
-    var half = h * coefficient * _wide_dot(axis, momentum) / 2
+    var half = h * coefficient * wide_dot(axis, momentum) / 2
     var turn = axis * sin(half)
     turn[3] = cos(half)
     q = _rotation_product(q, turn)
@@ -638,7 +636,7 @@ struct RigidBody(Copyable, Movable):
         var minor = a * d - b * b
         var q = _rotation_wide(self.rotation)
         var omega = _rotation_apply(
-            _rotation_back(q), _wide(self.angular_velocity)
+            _rotation_back(q), widen_vector(self.angular_velocity)
         )
         # Invert only in wide arithmetic; a finite custom inverse can have
         # a reciprocal tensor outside Float32's range.
@@ -667,10 +665,10 @@ struct RigidBody(Copyable, Movable):
         # LDL^T gives three rank-one terms without an eigensolver. Scaling
         # the first two columns avoids dividing by a small pivot early.
         var axis0 = SIMD[DType.float64, 4](a, b, c, 0)
-        var square0 = _wide_dot(axis0, axis0)
+        var square0 = wide_dot(axis0, axis0)
         axis0 /= sqrt(square0)
         var axis1 = SIMD[DType.float64, 4](0, minor, a * e - b * c, 0)
-        var square1 = _wide_dot(axis1, axis1)
+        var square1 = wide_dot(axis1, axis1)
         axis1 /= sqrt(square1)
         var axis2 = SIMD[DType.float64, 4](0, 0, 1, 0)
         var coefficient0 = square0 / a

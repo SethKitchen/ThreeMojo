@@ -164,20 +164,6 @@ def any_perpendicular(n: Vector3) -> Vector3:
 
 # Widen before subtracting coordinates or multiplying lengths. All products
 # through degree five of finite Float32 coordinates fit in Float64.
-def _wide(v: Vector3) -> SIMD[DType.float64, 4]:
-    return widen_vector(v)
-
-
-def _wide_cross(
-    a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
-) -> SIMD[DType.float64, 4]:
-    return wide_cross(a, b)
-
-
-def _wide_dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
-    return wide_dot(a, b)
-
-
 def _finite_vector(v: Vector3) raises:
     for i in range(3):  # pragma: no branch
         if not isfinite(component(v, i)):
@@ -284,15 +270,15 @@ struct Polyhedron(Copyable, Movable):
             corners: The corner indices, counter-clockwise from outside.
                 There must be three at least, not all on one line.
         """
-        var a = _wide(self.vertices[corners[0]])
-        var b = _wide(self.vertices[corners[1]])
+        var a = widen_vector(self.vertices[corners[0]])
+        var b = widen_vector(self.vertices[corners[1]])
         var wide_normal = SIMD[DType.float64, 4](0)
         # `corners[1]` above: there are two at least, and a face has three.
         for i in range(2, len(corners)):  # pragma: no branch
-            wide_normal += _wide_cross(
-                b - a, _wide(self.vertices[corners[i]]) - a
+            wide_normal += wide_cross(
+                b - a, widen_vector(self.vertices[corners[i]]) - a
             )
-        var length = sqrt(_wide_dot(wide_normal, wide_normal))
+        var length = sqrt(wide_dot(wide_normal, wide_normal))
         var normal = Vector3(0, 0, 1)
         if length > 0:
             wide_normal /= length
@@ -302,7 +288,7 @@ struct Polyhedron(Copyable, Movable):
                 Float32(wide_normal[2]),
             )
         self.normals.append(normal)
-        self.offsets.append(Float32(_wide_dot(_wide(normal), a)))
+        self.offsets.append(Float32(wide_dot(widen_vector(normal), a)))
         # `corners[0]` above: the list is not empty.
         for i in range(len(corners)):  # pragma: no branch
             self.face_corners.append(corners[i])
@@ -344,7 +330,7 @@ struct Polyhedron(Copyable, Movable):
         """
         var sum = SIMD[DType.float64, 4](0)
         for v in self.vertices:
-            sum += _wide(v)
+            sum += widen_vector(v)
         sum /= Float64(len(self.vertices))
         return Vector3(Float32(sum[0]), Float32(sum[1]), Float32(sum[2]))
 
@@ -467,15 +453,19 @@ def _ordered(
     var middle = SIMD[DType.float64, 4](0)
     # A face has three corners at least.
     for m in members:  # pragma: no branch
-        middle += _wide(vertices[m])
+        middle += widen_vector(vertices[m])
     middle /= Float64(len(members))
     var u = any_perpendicular(normal)
     var w = cross(normal, u)
     var angles = List[Float32]()
     for m in members:  # pragma: no branch
-        var r = _wide(vertices[m]) - middle
+        var r = widen_vector(vertices[m]) - middle
         angles.append(
-            Float32(atan2(_wide_dot(r, _wide(w)), _wide_dot(r, _wide(u))))
+            Float32(
+                atan2(
+                    wide_dot(r, widen_vector(w)), wide_dot(r, widen_vector(u))
+                )
+            )
         )
     var out = members.copy()
     # Insertion sort by angle: a face has few corners.
@@ -719,7 +709,7 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
     var origin = SIMD[DType.float64, 4](0)
     for v in poly.vertices:  # pragma: no branch
         _finite_vector(v)
-        origin += _wide(v)
+        origin += widen_vector(v)
     origin /= Float64(len(poly.vertices))
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
@@ -734,13 +724,15 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
     var moment = SIMD[DType.float64, 4](0)
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
-        var a = _wide(poly.vertices[poly.face_corners[first]]) - origin
+        var a = widen_vector(poly.vertices[poly.face_corners[first]]) - origin
         for k in range(
             first + 1, poly.face_start[f + 1] - 1
         ):  # pragma: no branch
-            var b = _wide(poly.vertices[poly.face_corners[k]]) - origin
-            var d = _wide(poly.vertices[poly.face_corners[k + 1]]) - origin
-            var det = _wide_dot(a, _wide_cross(b, d))
+            var b = widen_vector(poly.vertices[poly.face_corners[k]]) - origin
+            var d = (
+                widen_vector(poly.vertices[poly.face_corners[k + 1]]) - origin
+            )
+            var det = wide_dot(a, wide_cross(b, d))
             volume += det / 6
             moment += (a + b + d) * (det / 24)
     if not volume > 0:
@@ -749,13 +741,15 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
     var covariance = List[Float64](length=9, fill=0)
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
-        var a = _wide(poly.vertices[poly.face_corners[first]]) - center
+        var a = widen_vector(poly.vertices[poly.face_corners[first]]) - center
         for k in range(
             first + 1, poly.face_start[f + 1] - 1
         ):  # pragma: no branch
-            var b = _wide(poly.vertices[poly.face_corners[k]]) - center
-            var d = _wide(poly.vertices[poly.face_corners[k + 1]]) - center
-            var det = _wide_dot(a, _wide_cross(b, d))
+            var b = widen_vector(poly.vertices[poly.face_corners[k]]) - center
+            var d = (
+                widen_vector(poly.vertices[poly.face_corners[k + 1]]) - center
+            )
+            var det = wide_dot(a, wide_cross(b, d))
             var total = a + b + d
             for i in range(3):  # pragma: no branch
                 for j in range(i, 3):  # pragma: no branch

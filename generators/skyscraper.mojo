@@ -376,11 +376,6 @@ struct SkyscraperParameters(Copyable, Movable):
         self.base_style = None
 
 
-def _js_round(value: Float64) -> Float64:
-    """Return JavaScript's `Math.round`: halves go up."""
-    return js_round(value)
-
-
 def _length_or(value: Optional[Length], seeded: Float64) -> Float64:
     """Return a length the caller set, in meters, or the seeded value."""
     return meters(value.value()) if value else seeded
@@ -438,7 +433,7 @@ struct SkyscraperStyle(Copyable, Movable):
         var pier_depth = 0.3 + random.next() * 0.3
         var reveal = 0.12 + random.next() * 0.1
         var course = 0.5 + random.next() * 0.5
-        var arch_ratio = _js_round(1.5 + random.next() * 1.5)
+        var arch_ratio = js_round(1.5 + random.next() * 1.5)
         var arch_rise = 0.4 + random.next() * 0.5
         var style = ARCADE if random.next() < 0.22 else STOREFRONT
         self.base_style = p.base_style.value() if p.base_style else style
@@ -491,19 +486,19 @@ struct SkyscraperStyle(Copyable, Movable):
         var v_module = BRICK_HEIGHT * 2
         self.floor_height = max(
             v_module * 3,
-            _js_round(meters(p.floor_height) / v_module) * v_module,
+            js_round(meters(p.floor_height) / v_module) * v_module,
         )
         self.window_height = (
-            _js_round(self.floor_height * WINDOW_HEIGHT_RATIO / v_module)
+            js_round(self.floor_height * WINDOW_HEIGHT_RATIO / v_module)
             * v_module
         )
         self.bay_width = max(
             BRICK_LENGTH * 3,
-            _js_round(meters(p.bay_width) / BRICK_LENGTH) * BRICK_LENGTH,
+            js_round(meters(p.bay_width) / BRICK_LENGTH) * BRICK_LENGTH,
         )
         self.pier_width = max(
             BRICK_LENGTH,
-            _js_round(_length_or(p.pier_width, pier_width) / BRICK_LENGTH)
+            js_round(_length_or(p.pier_width, pier_width) / BRICK_LENGTH)
             * BRICK_LENGTH,
         )
         self.total_height = meters(p.total_height)
@@ -683,7 +678,7 @@ struct SkyscraperParts(Movable):
             bottom: Its base.
             height: Its height.
         """
-        var key = Int(_js_round(height * 1000))
+        var key = Int(js_round(height * 1000))
         var slot = -1
         for i in range(len(self.pier_keys)):
             slot = i if self.pier_keys[i] == key else slot
@@ -724,7 +719,7 @@ def _add_spandrel_bands(
     """Place the bands at every floor line of a tier, three.js's
     `addSpandrelBands`. The end bands are clipped to the tier."""
     ref s = parts.style
-    var floors = max(1, Int(_js_round(height / s.floor_height)))
+    var floors = max(1, Int(js_round(height / s.floor_height)))
     var fh = height / Float64(floors)
     var band_height = s.floor_height - s.window_height
     var band_length = max(0.2, frame.length - 0.6)
@@ -786,7 +781,7 @@ def _add_windows(
     conditioners on some shaft windows, three.js's `addWindows`."""
     ref s = parts.style
     var bays = frame.bays(s.bay_width)
-    var floors = max(1, Int(_js_round(height / s.floor_height)))
+    var floors = max(1, Int(js_round(height / s.floor_height)))
     var fh = height / Float64(floors)
     var ac_w = min((s.bay_width - s.pier_width) * 0.55, 0.66)
     var ac_h = ac_w * 0.6
@@ -1380,12 +1375,12 @@ struct SkyscraperGenerator(Movable):
         """
         var parts = SkyscraperParts(SkyscraperStyle(self.parameters))
         ref s = parts.style
-        var floors = max(3, Int(_js_round(s.total_height / s.floor_height)))
+        var floors = max(3, Int(js_round(s.total_height / s.floor_height)))
         var base_floors = max(
-            1, Int(_js_round(Float64(floors) * s.base_fraction))
+            1, Int(js_round(Float64(floors) * s.base_fraction))
         )
         var crown_floors = max(
-            1, Int(_js_round(Float64(floors) * s.crown_fraction))
+            1, Int(js_round(Float64(floors) * s.crown_fraction))
         )
         var shaft_floors = max(1, floors - base_floors - crown_floors)
         var base_height = Float64(base_floors) * s.floor_height

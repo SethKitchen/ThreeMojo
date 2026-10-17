@@ -135,12 +135,6 @@ def _unit4(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
     return SIMD[DType.float64, 4](unit[0], unit[1], unit[2], unit[3])
 
 
-def _find(list: List[Int], value: Int) -> Int:
-    """Return where `value` first is in `list`, or -1: JavaScript's
-    `indexOf`."""
-    return first_match(list, value)
-
-
 def _remove(mut list: List[Int], value: Int):
     """Remove the first `value` from `list`: three.js's `removeFromArray`.
 
@@ -149,7 +143,7 @@ def _remove(mut list: List[Int], value: Int):
     lists, once for each corner, even a corner that repeats. A vertex is
     in the list of vertices until it is removed, once.
     """
-    var at = _find(list, value)
+    var at = first_match(list, value)
     # The value is there; see above.
     if at >= 0:  # pragma: no branch
         _ = list.pop(at)
@@ -157,7 +151,7 @@ def _remove(mut list: List[Int], value: Int):
 
 def _contains(list: List[Int], value: Int) -> Bool:
     """Return True if `value` is in `list`."""
-    return _find(list, value) >= 0
+    return first_match(list, value) >= 0
 
 
 struct _Reduction(Movable):

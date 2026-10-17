@@ -256,12 +256,12 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         raise Error("SPZ: invalid SPZ byte length")
     var at = SPZ_HEADER_BYTES
     var fields = _Fields(
-        _cut(bytes, at, positions),
-        _cut(bytes, at + positions, count),
-        _cut(bytes, at + positions + count, count * 3),
-        _cut(bytes, at + positions + count * 4, count * 3),
-        _cut(bytes, at + positions + count * 7, rotations),
-        _cut(bytes, at + positions + count * 7 + rotations, harmonics),
+        copy_bytes(bytes, at, positions),
+        copy_bytes(bytes, at + positions, count),
+        copy_bytes(bytes, at + positions + count, count * 3),
+        copy_bytes(bytes, at + positions + count * 4, count * 3),
+        copy_bytes(bytes, at + positions + count * 7, rotations),
+        copy_bytes(bytes, at + positions + count * 7 + rotations, harmonics),
         count,
         version,
         Int(bytes[13]),
@@ -269,20 +269,6 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         stored,
     )
     return _attributes(fields)
-
-
-def _cut(bytes: List[UInt8], start: Int, length: Int) -> List[UInt8]:
-    """Return a run of bytes.
-
-    Args:
-        bytes: The data.
-        start: Where the run starts.
-        length: How long it is. The caller checks it is inside.
-
-    Returns:
-        A copy of the run.
-    """
-    return copy_bytes(bytes, start, length)
 
 
 def require_spz_header(length: Int, least: Int) raises:
@@ -385,7 +371,7 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         if length > UInt64(len(bytes) - start):
             raise Error("SPZ: an SPZ stream is past the end")
         var stream = zstd_decompress(
-            _cut(bytes, start, Int(length)), sizes[field]
+            copy_bytes(bytes, start, Int(length)), sizes[field]
         )
         if len(stream) != sizes[field]:
             raise Error("SPZ: an SPZ stream does not hold its field")

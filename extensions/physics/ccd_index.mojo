@@ -16,7 +16,7 @@ from extensions.physics.center_order import (
     build_median,
     collect_median,
 )
-from extensions.physics.shape import _wide
+from math.cross import widen_vector
 from math.bounds import Box3
 from math.next_float import next_binary64_up
 from math.triangle import Triangle
@@ -98,8 +98,8 @@ struct _SweepBounds(ImplicitlyCopyable):
 
 def _sweep_misses(bounds: _SweepBounds, box: Box3) -> Bool:
     """Return True when `box` misses the swept bounds."""
-    var low = _wide(box.min)
-    var high = _wide(box.max)
+    var low = widen_vector(box.min)
+    var high = widen_vector(box.max)
     for axis in range(3):  # pragma: no branch
         if high[axis] < bounds.low[axis] or low[axis] > bounds.high[axis]:
             return True

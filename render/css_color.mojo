@@ -371,11 +371,6 @@ def _is_word(byte: UInt8) -> Bool:
     return letter or ascii_digit(byte) or byte == 95
 
 
-def _hex_digit(byte: UInt8) -> Int:
-    """Return the value of a hexadecimal digit, or minus one."""
-    return hex_digit_value(Int(byte))
-
-
 struct _Scanner(Movable):
     """A cursor over the bytes of a string, for the few patterns a CSS
     color has."""
@@ -638,7 +633,7 @@ def _parse_hex(style: String, space: ColorSpace) raises -> FloatColor:
     var bytes = style.as_bytes()
     var digits = List[Int]()
     for index in range(1, len(bytes)):  # pragma: no branch
-        var digit = _hex_digit(bytes[index])
+        var digit = hex_digit_value(Int(bytes[index]))
         if digit < 0:
             raise Error("A hex color holds hexadecimal digits: " + style)
         digits.append(digit)

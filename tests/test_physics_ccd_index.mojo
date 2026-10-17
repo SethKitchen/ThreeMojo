@@ -15,7 +15,8 @@ from extensions.physics.body import (
 from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD, _sweep_domain
 from extensions.physics.ccd_index import _CCDIndex, _bounds, _down
 from math.next_float import next_binary64_up
-from extensions.physics.shape import Shape, PhysicsMaterial, _wide
+from extensions.physics.shape import Shape, PhysicsMaterial
+from math.cross import widen_vector
 from extensions.physics.world import PhysicsWorld
 from math.quaternion import Quaternion
 from math.triangle import Triangle
@@ -251,8 +252,8 @@ def test_equal_triangle_and_sphere_times_retain_insertion_order() raises:
     indexed._validate_ccd()
     var candidates = List[Int]()
     _ = indexed._ccd_index.query(
-        _wide(Vector3(0, 0, 0.15)),
-        _wide(Vector3(0, 0, -0.3)),
+        widen_vector(Vector3(0, 0, 0.15)),
+        widen_vector(Vector3(0, 0, -0.3)),
         Float64(indexed.bodies[1].shape.radius),
         candidates,
     )
@@ -762,24 +763,32 @@ def test_index_axis_splits_pruning_and_unique_candidates() raises:
             _assert_candidates(
                 index,
                 triangles,
-                _wide(Vector3(0, 0, 0)),
-                _wide(Vector3(2 * direction, 3 * direction, 4 * direction)),
+                widen_vector(Vector3(0, 0, 0)),
+                widen_vector(
+                    Vector3(2 * direction, 3 * direction, 4 * direction)
+                ),
                 1,
             )
         var found = List[Int]()
         var visited = index.query(
-            _wide(Vector3(0, 0, 0)), _wide(Vector3(0, 0, 0)), 1, found
+            widen_vector(Vector3(0, 0, 0)),
+            widen_vector(Vector3(0, 0, 0)),
+            1,
+            found,
         )
         assert_equal(len(found), 1)
         assert_true(visited < len(index.nodes))
         visited = index.query(
-            _wide(Vector3(0, 0, 0)), _wide(Vector3(0, 0, 0)), 1000, found
+            widen_vector(Vector3(0, 0, 0)),
+            widen_vector(Vector3(0, 0, 0)),
+            1000,
+            found,
         )
         assert_equal(len(found), 33)
         assert_equal(visited, len(index.nodes))
         visited = index.query(
-            _wide(Vector3(1000000, 1000000, 1000000)),
-            _wide(Vector3(0, 0, 0)),
+            widen_vector(Vector3(1000000, 1000000, 1000000)),
+            widen_vector(Vector3(0, 0, 0)),
             0,
             found,
         )
@@ -796,7 +805,10 @@ def test_index_axis_splits_pruning_and_unique_candidates() raises:
         assert_equal(index.count, 0)
         found.append(999)
         visited = index.query(
-            _wide(Vector3(0, 0, 0)), _wide(Vector3(0, 0, 0)), 1, found
+            widen_vector(Vector3(0, 0, 0)),
+            widen_vector(Vector3(0, 0, 0)),
+            1,
+            found,
         )
         assert_equal(visited, 0)
         assert_equal(len(found), 0)
@@ -820,16 +832,22 @@ def test_equal_centroids_and_query_boundary_containment() raises:
     ]:
         var found = List[Int]()
         var visited = index.query(
-            _wide(start), _wide(Vector3(0, 0, 0)), 1, found
+            widen_vector(start), widen_vector(Vector3(0, 0, 0)), 1, found
         )
         assert_equal(visited, len(index.nodes))
         assert_equal(len(found), 9)
         _assert_candidates(
-            index, triangles, _wide(start), _wide(Vector3(0, 0, 0)), 1
+            index,
+            triangles,
+            widen_vector(start),
+            widen_vector(Vector3(0, 0, 0)),
+            1,
         )
     # No Float32 narrowing of sub-ULP endpoint travel or query inflation.
     var tiny = SIMD[DType.float64, 4](1e-16, -1e-16, 0, 0)
-    _assert_candidates(index, triangles, _wide(Vector3(-1, 2, 0)), tiny, 1)
+    _assert_candidates(
+        index, triangles, widen_vector(Vector3(-1, 2, 0)), tiny, 1
+    )
 
 
 def test_bounds_round_each_operation_outward() raises:

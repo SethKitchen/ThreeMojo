@@ -527,7 +527,7 @@ struct _Library(Movable):
 
     def geometry(mut self, id: GeometryId, assets: Assets) raises -> String:
         """Write a geometry once, and return its uuid."""
-        var at = _find(self.geometry_keys, id.value)
+        var at = last_match(self.geometry_keys, id.value)
         if at < 0:
             at = self.add_geometry(assets.geometries.get(id), id.value)
         return object_uuid(_GEOMETRY_UUID, at)
@@ -538,7 +538,7 @@ struct _Library(Movable):
         var uuid = shape.uuid
         if uuid == "":
             uuid = object_uuid(_SHAPE_UUID, len(self.shapes))
-        if _find_text(self.shape_keys, uuid) < 0:
+        if last_match(self.shape_keys, uuid) < 0:
             var writer = JsonWriter()
             write_shape(writer, shape, uuid, metadata=False)
             self.shapes.append(writer.finish())
@@ -658,7 +658,7 @@ struct _Library(Movable):
 
     def texture(mut self, id: TextureId, assets: Assets) raises -> String:
         """Write a texture and its image once, and return its uuid."""
-        var at = _find(self.texture_keys, id.value)
+        var at = last_match(self.texture_keys, id.value)
         if at < 0:
             at = len(self.texture_keys)
             ref texture = assets.textures.get(id)
@@ -753,7 +753,7 @@ struct _Library(Movable):
         # Refuses an id that names no cube before it becomes a key.
         ref cube = assets.cube_textures.get(id)
         var key = _CUBE_KEY - id.value
-        var at = _find(self.texture_keys, key)
+        var at = last_match(self.texture_keys, key)
         if at >= 0:
             return object_uuid(_TEXTURE_UUID, at)
         at = len(self.texture_keys)
@@ -1037,7 +1037,7 @@ struct _Library(Movable):
         elif use != _SURFACE_USE:
             type = use
         var key = String(id.value) + " " + type
-        var at = _find_text(self.material_keys, key)
+        var at = last_match(self.material_keys, key)
         if at >= 0:
             return object_uuid(_MATERIAL_UUID, at)
         at = len(self.material_keys)
@@ -1486,16 +1486,6 @@ def _influences(
     writer.end_array()
 
 
-def _find(keys: List[Int], key: Int) -> Int:
-    """Return where a key is in a list, or -1."""
-    return last_match(keys, key)
-
-
-def _find_text(keys: List[String], key: String) -> Int:
-    """Return where a text is in a list, or -1."""
-    return last_match(keys, key)
-
-
 struct _Joined(Movable):
     """A batch's geometries joined into one, as three.js's `BatchedMesh`
     holds them, and where each one starts."""
@@ -1791,7 +1781,7 @@ struct _Writer(Movable):
         var chosen = List[Int]()
         var tinted = False
         for instance in batch.instances:
-            var at = _find(geometries, instance.geometry.value)
+            var at = last_match(geometries, instance.geometry.value)
             if at < 0:
                 at = len(geometries)
                 geometries.append(instance.geometry.value)
