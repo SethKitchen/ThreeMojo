@@ -62,6 +62,7 @@ parity tests.
 
 from core.ordinal import ordinal_valid, require_valid
 
+from math.finite import require_non_negative_finite
 from math.smoothstep import smoothstep
 from render.framebuffer import Color, FloatColor
 from std.math import exp, isfinite
@@ -127,10 +128,10 @@ def _check_fog_numbers(
     """
     require_valid(kind.is_valid(), "A fog of an unknown kind cannot be drawn")
     if kind == LINEAR_FOG:
-        if not isfinite(near) or near < 0:
-            raise Error(
-                "A fog must start at a finite depth, not behind the camera"
-            )
+        require_non_negative_finite(
+            Float64(near),
+            "A fog must start at a finite depth, not behind the camera",
+        )
         if not isfinite(far) or far <= near:
             raise Error(
                 "A fog's far edge must be finite and beyond its near edge"

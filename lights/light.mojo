@@ -88,6 +88,7 @@ from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from lights.shadow import LightShadow, ShadowCascade, ShadowMap
+from math.finite import require_non_negative_finite
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
@@ -109,8 +110,10 @@ def require_light_intensity(intensity: Float32) raises:
     Raises:
         Error: If the intensity is negative or not finite.
     """
-    if not isfinite(intensity) or intensity < 0:
-        raise Error("A light's intensity must be finite and not negative")
+    require_non_negative_finite(
+        Float64(intensity),
+        "A light's intensity must be finite and not negative",
+    )
 
 
 def require_shadow_light(index: Int, count: Int) raises:
@@ -544,12 +547,14 @@ struct Light(ImplicitlyCopyable):
                     " plane: it is where the shadow camera's far plane goes"
                 )
         if self.kind == POINT or self.kind == SPOT:
-            if not isfinite(self.decay) or self.decay < 0:
-                raise Error("A light's decay must be finite and not negative")
-            if not isfinite(self.distance) or self.distance < 0:
-                raise Error(
-                    "A light's distance must be finite and not negative"
-                )
+            require_non_negative_finite(
+                Float64(self.decay),
+                "A light's decay must be finite and not negative",
+            )
+            require_non_negative_finite(
+                Float64(self.distance),
+                "A light's distance must be finite and not negative",
+            )
         if self.kind == SPOT:
             var half = self.angle.value
             if (

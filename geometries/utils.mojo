@@ -33,6 +33,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.ordinal import require_positive
+from math.finite import require_non_negative_finite
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
@@ -46,7 +47,7 @@ from core.buffer_geometry import (
 from geometries.attribute_utils import merge_attributes
 from math.vector3 import Vector3
 from std.collections import Dict
-from std.math import cos, isfinite, isnan, log10
+from std.math import cos, isnan, log10
 from units.si import Angle, DEGREE
 
 # The tolerance three.js's `mergeVertices` defaults to. A plain number and
@@ -227,8 +228,10 @@ def merge_vertices(
             is instanced or has no positions, or if an index entry points past an
             attribute's last item.
     """
-    if not isfinite(tolerance) or tolerance < 0:
-        raise Error("A weld tolerance must be a finite number, zero or more")
+    require_non_negative_finite(
+        Float64(tolerance),
+        "A weld tolerance must be a finite number, zero or more",
+    )
     if geometry.instanced:
         raise Error("An instanced geometry is not welded")
     var step = max(tolerance, EPSILON)
@@ -326,8 +329,10 @@ def to_creased_normals(
             no positions or they hold fewer than three numbers a vertex, or
             if an index entry points past an attribute's last item.
     """
-    if not isfinite(crease_angle.value) or crease_angle.value < 0:
-        raise Error("A crease angle must be a finite angle, zero or more")
+    require_non_negative_finite(
+        Float64(crease_angle.value),
+        "A crease angle must be a finite angle, zero or more",
+    )
     var crease = cos(crease_angle.value)
     var result = geometry.to_non_indexed()
     var count = result.vertex_count()

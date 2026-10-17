@@ -29,6 +29,7 @@ from core.scene import Scene
 from materials.glsl import compile_shader_material
 from materials.material import shader_material
 from materials.nodes import NodeProgramId
+from math.finite import require_non_negative_finite
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -320,8 +321,9 @@ struct Water2(Movable):
             Error: If the time is negative or not finite.
         """
         var seconds = Float64(delta.to(SECOND))
-        if not (isfinite(seconds) and seconds >= 0):
-            raise Error("A frame's time must be finite and not negative")
+        require_non_negative_finite(
+            Float64(seconds), "A frame's time must be finite and not negative"
+        )
         var half = FLOW_CYCLE * 0.5
         self.offset0 += Float64(self.flow_speed.to(PER_SECOND)) * seconds
         self.offset1 = self.offset0 + half

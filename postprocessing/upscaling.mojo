@@ -32,6 +32,7 @@ size, as a scene pass with `setResolutionScale` hands it over, and writes
 it at the frame's size.
 """
 
+from math.finite import require_non_negative_finite
 from math.norm import squared_length2
 from math.utils import clamp, max3, min3
 from postprocessing.display_nodes import replace_light, scaled_size
@@ -75,8 +76,10 @@ def check_upscale(settings: UpscaleSettings) raises:
             RCAS's divisor at zero, or the resolution scale is not a
             positive finite number of at most one.
     """
-    if not (isfinite(settings.sharpness) and settings.sharpness >= 0):
-        raise Error("A sharpen pass's sharpness must not be negative")
+    require_non_negative_finite(
+        Float64(settings.sharpness),
+        "A sharpen pass's sharpness must not be negative",
+    )
     if not (
         isfinite(settings.resolution_scale)
         and settings.resolution_scale > 0

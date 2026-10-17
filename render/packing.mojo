@@ -37,7 +37,7 @@ limits, and explicit zero and nonfinite rules.
 from math.norm import length3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from math.finite import require_finite_group
+from math.finite import require_finite_group, require_non_negative_finite
 from math.utils import saturate
 from std.math import floor, isfinite, sqrt
 
@@ -342,7 +342,8 @@ def check_distance_range(
         reference.is_finite(),
         "A distance's reference position must be finite",
     )
-    if not isfinite(near) or near < 0:
-        raise Error("A near distance must be finite and not negative")
+    require_non_negative_finite(
+        Float64(near), "A near distance must be finite and not negative"
+    )
     if not isfinite(far) or far <= near:
         raise Error("A far distance must be finite and past the near one")
