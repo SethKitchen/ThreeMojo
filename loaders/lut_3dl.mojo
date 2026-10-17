@@ -35,7 +35,7 @@ a number that is not one, where three.js reads `NaN`, and a table whose
 largest number is not above zero, which three.js divides by zero.
 """
 
-from loaders.bytes import ascii_digit
+from loaders.bytes import ascii_digit, js_float_byte_at
 from loaders.js_number import js_string_to_number
 from render.srgb import LINEAR
 from render.texture import (
@@ -124,7 +124,7 @@ def _entry(line: String) -> List[String]:
     var i = 0
     while i < len(bytes):
         var start = i
-        while _number_at(bytes, i):
+        while js_float_byte_at(bytes, i):
             i += 1
         if i == start:
             return List[String]()
@@ -140,24 +140,9 @@ def _entry(line: String) -> List[String]:
     return List[String]()
 
 
-def _number_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a byte of `[\\d.e+-]` at `i`."""
-    return i < len(bytes) and _in_number(bytes[i])
-
-
 def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
     """Return True if there is a space at `i`."""
     return i < len(bytes) and bytes[i] == 32
-
-
-def _in_number(byte: UInt8) -> Bool:
-    """Return True for a byte of `[\\d.e+-]`."""
-    return (
-        ascii_digit(Int(byte))
-        or byte == 46
-        or byte == 101
-        or (byte == 43 or byte == 45)
-    )
 
 
 def lut_3dl_byte(value: Float64) -> UInt8:
