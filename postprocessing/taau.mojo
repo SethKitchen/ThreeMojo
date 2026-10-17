@@ -44,7 +44,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.utils import clamp
+from math.utils import edge_index
 from math.norm import squared_length2
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
@@ -320,8 +320,8 @@ def taau_pixel(
             var w = exp_f(squared_length2[DType.float32](ddx, ddy) * -2.29)
             var c = floor_channels(
                 beauty.at(
-                    clamp(tx, 0, beauty.width - 1),
-                    clamp(ty, 0, beauty.height - 1),
+                    edge_index(tx, beauty.width),
+                    edge_index(ty, beauty.height),
                 )
             )
             sum_r += c.r * w

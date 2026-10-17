@@ -55,7 +55,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     spline_points,
     tube,
 )
-from math.utils import clamp, mix_delta
+from math.utils import clamp, edge_index, mix_delta
 from math.vector3 import Vector3, mix_delta3
 from math.finite import require_positive_finite
 from std.math import cos, max, min, sin
@@ -700,7 +700,7 @@ def rib_path(dimensions: TorsoDimensions, rib: Int) -> List[Vector3]:
         side of the chest and the costochondral junction, in meters.
     """
     var f = dimensions.frame
-    var i = clamp(rib, 0, RIBS - 1)
+    var i = edge_index(rib, RIBS)
     var c = dimensions.centers[i]
     var w = dimensions.widths[i]
     var dd = dimensions.depths[i]
@@ -1074,7 +1074,7 @@ def spinous_root(dimensions: TorsoDimensions, index: Int) -> Vector3:
         The root of the spinous process, in meters.
     """
     var f = dimensions.frame
-    var i = clamp(index, 0, VERTEBRAE - 1)
+    var i = edge_index(index, VERTEBRAE)
     var c = dimensions.centers[i]
     return Vector3(0, c.y - f.cm(0.2), c.z - dimensions.depths[i] - f.cm(2.0))
 
@@ -1093,7 +1093,7 @@ def spinous_tip(dimensions: TorsoDimensions, index: Int) -> Vector3:
         The tip, in meters.
     """
     var f = dimensions.frame
-    var i = clamp(index, 0, VERTEBRAE - 1)
+    var i = edge_index(index, VERTEBRAE)
     var drops = floats(
         1.0,
         1.3,
@@ -1130,7 +1130,7 @@ def canal_center(dimensions: TorsoDimensions, index: Int) -> Vector3:
         The canal's center, in meters.
     """
     var f = dimensions.frame
-    var i = clamp(index, 0, VERTEBRAE - 1)
+    var i = edge_index(index, VERTEBRAE)
     var c = dimensions.centers[i]
     return Vector3(0, c.y, c.z - dimensions.depths[i] - f.cm(0.85))
 
