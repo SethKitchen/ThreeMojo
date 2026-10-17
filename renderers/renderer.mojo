@@ -6132,6 +6132,45 @@ struct Renderer(Movable):
         check_samples(samples)
         return self.scaled(sample_grid(samples))
 
+    def _copy_draw_settings(self, mut other: Self):
+        """Copy the draw settings that do not follow the frame size.
+
+        The viewport, the scissor, the scissor test, antialias, and
+        `render_scale` stay with the caller. A supersampled frame scales
+        the rectangles and the scale. A resized frame keeps the whole
+        target and copies antialias.
+        """
+        other.background = self.background
+        other.shading = self.shading
+        other.tone_mapping = self.tone_mapping
+        other.tone_mapping_exposure = self.tone_mapping_exposure
+        other.output_color_space = self.output_color_space
+        other.override_material = self.override_material
+        # The planes cut in camera space, and the shadow filter reads the
+        # light's own map, so neither changes with the frame's size.
+        other.clipping_planes = self.clipping_planes.copy()
+        other.local_clipping_enabled = self.local_clipping_enabled
+        other.shadow_map_type = self.shadow_map_type
+        other.shadow_map_transmitted = self.shadow_map_transmitted
+        other.depth_mode = self.depth_mode
+        other.time = self.time
+        other.auto_clear = self.auto_clear
+        other.auto_clear_color = self.auto_clear_color
+        other.auto_clear_depth = self.auto_clear_depth
+        other.auto_clear_stencil = self.auto_clear_stencil
+        other.custom_tone_mapping = self.custom_tone_mapping
+        other.info_auto_reset = self.info_auto_reset
+        other._opaque_sort = self._opaque_sort
+        other._transparent_sort = self._transparent_sort
+        other.draw_filter = self.draw_filter
+        other.oit_draw = self.oit_draw
+        other.snap_vertices = self.snap_vertices
+        other.uv_space_meshes = self.uv_space_meshes.copy()
+        # Counted into this renderer's info, not a copy of it.
+        other._state = self._state
+        other.ltc = self.ltc.copy()
+        other.probe_grid = self.probe_grid.copy()
+
     def scaled(self, factor: Int) raises -> Renderer:
         """Return a renderer `factor` times this one's size each way, with
         the same settings, its viewport and scissor scaled to match, and
@@ -6159,44 +6198,13 @@ struct Renderer(Movable):
         var big = Renderer(
             self.width * factor, self.height * factor, self.workers
         )
-        big.background = self.background
-        big.shading = self.shading
-        big.tone_mapping = self.tone_mapping
-        big.tone_mapping_exposure = self.tone_mapping_exposure
-        big.output_color_space = self.output_color_space
-        big.override_material = self.override_material
+        self._copy_draw_settings(big)
         big.viewport = _scaled(self.viewport, factor)
         big.scissor = _scaled(self.scissor, factor)
         big.scissor_test = self.scissor_test
-        # The planes cut in camera space, and the shadow filter reads the
-        # light's own map, so neither changes with the frame's size.
-        big.clipping_planes = self.clipping_planes.copy()
-        big.local_clipping_enabled = self.local_clipping_enabled
-        big.shadow_map_type = self.shadow_map_type
-        big.shadow_map_transmitted = self.shadow_map_transmitted
-        big.depth_mode = self.depth_mode
-        big.time = self.time
-        big.auto_clear = self.auto_clear
-        big.auto_clear_color = self.auto_clear_color
-        big.auto_clear_depth = self.auto_clear_depth
-        big.auto_clear_stencil = self.auto_clear_stencil
-        big.custom_tone_mapping = self.custom_tone_mapping
-        big.info_auto_reset = self.info_auto_reset
-        big._opaque_sort = self._opaque_sort
-        big._transparent_sort = self._transparent_sort
-        big.draw_filter = self.draw_filter
-        big.oit_draw = self.oit_draw
-        big.snap_vertices = self.snap_vertices
-        big.uv_space_meshes = self.uv_space_meshes.copy()
-        # Counted into this renderer's info, not a copy of it.
-        big._state = self._state
-        big.ltc = self.ltc.copy()
-        big.probe_grid = self.probe_grid.copy()
-        # What makes the larger renderer draw a frame that *averages down*
-        # to this one rather than merely one that is bigger: a point's
-        # size and a line's thickness are given in the output pixels this
-        # renderer has, and the larger one converts them once. See
-        # `render_scale`.
+        # A point's size and a line's thickness are given in this
+        # renderer's output pixels. The larger renderer converts them
+        # once, so the averaged frame keeps the size the caller asked for.
         big.render_scale = self.render_scale * factor
         return big^
 
@@ -6218,34 +6226,8 @@ struct Renderer(Movable):
             Error: If a size is not positive.
         """
         var sized = Renderer(width, height, self.workers)
-        sized.background = self.background
-        sized.shading = self.shading
-        sized.tone_mapping = self.tone_mapping
-        sized.tone_mapping_exposure = self.tone_mapping_exposure
-        sized.output_color_space = self.output_color_space
-        sized.override_material = self.override_material
-        sized.clipping_planes = self.clipping_planes.copy()
-        sized.local_clipping_enabled = self.local_clipping_enabled
-        sized.shadow_map_type = self.shadow_map_type
-        sized.shadow_map_transmitted = self.shadow_map_transmitted
-        sized.depth_mode = self.depth_mode
-        sized.time = self.time
-        sized.custom_tone_mapping = self.custom_tone_mapping
-        sized._opaque_sort = self._opaque_sort
-        sized._transparent_sort = self._transparent_sort
-        sized.draw_filter = self.draw_filter
-        sized.oit_draw = self.oit_draw
-        sized.snap_vertices = self.snap_vertices
-        sized.uv_space_meshes = self.uv_space_meshes.copy()
-        sized.auto_clear = self.auto_clear
-        sized.auto_clear_color = self.auto_clear_color
-        sized.auto_clear_depth = self.auto_clear_depth
-        sized.auto_clear_stencil = self.auto_clear_stencil
-        sized.info_auto_reset = self.info_auto_reset
+        self._copy_draw_settings(sized)
         sized.antialias = self.antialias
-        sized._state = self._state
-        sized.ltc = self.ltc.copy()
-        sized.probe_grid = self.probe_grid.copy()
         sized.render_scale = self.render_scale
         return sized^
 
