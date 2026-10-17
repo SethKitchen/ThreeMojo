@@ -88,6 +88,7 @@ from renderers.projector import (
     project_scene,
 )
 from std.math import floor, pow, sqrt
+from core.ordinal import require_valid
 
 
 struct SvgQuality(Equatable, ImplicitlyCopyable, Writable):
@@ -392,8 +393,10 @@ struct SVGRenderer(Movable):
         Raises:
             Error: If the quality is neither.
         """
-        if not quality.is_valid():
-            raise Error("An SVG quality must be LOW_QUALITY or HIGH_QUALITY")
+        require_valid(
+            quality.is_valid(),
+            "An SVG quality must be LOW_QUALITY or HIGH_QUALITY",
+        )
         self.quality = quality
 
     def set_clear_color(mut self, color: Color):

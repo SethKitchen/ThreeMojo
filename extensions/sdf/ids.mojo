@@ -8,7 +8,7 @@
 Each is a type, so a bare integer cannot stand in for one. A value the
 type can hold but the code does not accept is refused where it is read.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 # How many surface parts there are.
 comptime SURFACE_PART_COUNT = 12
@@ -123,8 +123,7 @@ def require_part(part: SurfacePart) raises:
     Raises:
         Error: If `part` is not valid.
     """
-    if not part.is_valid():
-        raise Error("Surface part must be from 0 to 11")
+    require_valid(part.is_valid(), "Surface part must be from 0 to 11")
 
 
 def require_kind(kind: PrimitiveKind) raises:
@@ -136,5 +135,4 @@ def require_kind(kind: PrimitiveKind) raises:
     Raises:
         Error: If `kind` is not valid.
     """
-    if not kind.is_valid():
-        raise Error("Primitive kind must be from 0 to 3")
+    require_valid(kind.is_valid(), "Primitive kind must be from 0 to 3")

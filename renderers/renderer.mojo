@@ -371,6 +371,7 @@ from math.finite import require_positive_finite
 from std.math import cos, floor, isfinite, max, min, pi, sin
 from std.memory import ArcPointer, unsafe_memcpy
 from std.sys import num_logical_cores
+from core.ordinal import require_valid
 
 
 def _carriers(
@@ -6280,8 +6281,9 @@ struct Renderer(Movable):
         Raises:
             Error: If the rectangle holds no pixel.
         """
-        if not rect.is_valid():
-            raise Error("A viewport needs a positive width and height")
+        require_valid(
+            rect.is_valid(), "A viewport needs a positive width and height"
+        )
         self.viewport = rect
 
     def set_scissor(mut self, rect: Rect) raises:

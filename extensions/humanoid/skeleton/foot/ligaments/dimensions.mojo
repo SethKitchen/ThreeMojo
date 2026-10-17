@@ -18,7 +18,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = ligament_distance(dims, ANTERIOR_TALOFIBULAR, dims.talar_head)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -64,8 +64,7 @@ def require_foot_ligament(part: FootLigament) raises:
     Raises:
         Error: If the ligament is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot ligament must be a named ligament")
+    require_valid(part.is_valid(), "A foot ligament must be a named ligament")
 
 
 comptime ANTERIOR_TALOFIBULAR = FootLigament(0)

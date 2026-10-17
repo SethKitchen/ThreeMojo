@@ -17,7 +17,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = foot_hair_distance(dims, DORSAL_HAIR, Vector3(0, 0.04, 0.02))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -62,8 +62,9 @@ def require_foot_hair(part: FootHair) raises:
     Raises:
         Error: If the group is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot hair part must be a named hair group")
+    require_valid(
+        part.is_valid(), "A foot hair part must be a named hair group"
+    )
 
 
 comptime DORSAL_HAIR = FootHair(0)

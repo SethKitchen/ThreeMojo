@@ -43,7 +43,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from core.ordinal import require_draw_ids
+from core.ordinal import require_draw_ids, require_valid
 from materials.material import MaterialId
 from math.vector3 import Vector3, append_vector3
 from objects.line import SEGMENTS, segment_count
@@ -93,8 +93,9 @@ def require_line_coverage(coverage: LineCoverage) raises:
     Raises:
         Error: If the coverage is not named.
     """
-    if not coverage.is_valid():
-        raise Error("A wide line needs a named coverage rule")
+    require_valid(
+        coverage.is_valid(), "A wide line needs a named coverage rule"
+    )
 
 
 struct LineSegments2(ImplicitlyCopyable):

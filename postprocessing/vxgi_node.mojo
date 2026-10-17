@@ -38,7 +38,7 @@ occlusion, plus the diffuse color times the irradiance over pi. The
 normals are the frame's, or the ones `DepthView` reconstructs.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.assets import Assets
 from core.scene import Scene
@@ -476,8 +476,9 @@ struct VXGINode(Movable):
             isfinite(self.ao_distance.value) and self.ao_distance.value >= 0
         ):
             raise Error("A VXGI pass's occlusion distance must be zero or more")
-        if not self.debug.is_valid():
-            raise Error("A VXGI debug view that is none of the three")
+        require_valid(
+            self.debug.is_valid(), "A VXGI debug view that is none of the three"
+        )
 
     def params(
         self,

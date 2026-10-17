@@ -278,7 +278,7 @@ two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from animation.loop_time import _split_loop_time, _stored_loop_phase
 from animation.animation_clip import (
@@ -389,8 +389,7 @@ def require_loop(loop: Loop) raises:
     Raises:
         Error: If the mode is none of the three.
     """
-    if not loop.is_valid():
-        raise Error("An action needs a loop mode that exists")
+    require_valid(loop.is_valid(), "An action needs a loop mode that exists")
 
 
 def require_action_weight(weight: Float32) raises:

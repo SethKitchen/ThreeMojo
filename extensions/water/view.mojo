@@ -9,7 +9,7 @@ The page selects these with `?view=`. `FRAME` is the photograph. `CAUSTICS`
 is the raw caustic texture. `LINEAR` skips glare and bloom. `GLARE` shows
 the diffraction spikes on their own.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -37,8 +37,9 @@ def require_view(view: WaterView) raises:
     Raises:
         Error: If `view` is not valid.
     """
-    if not view.is_valid():
-        raise Error("Water view must be frame, caustics, linear or glare")
+    require_valid(
+        view.is_valid(), "Water view must be frame, caustics, linear or glare"
+    )
 
 
 # The graded photograph: water, glare, bloom and the tone curve.

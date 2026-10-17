@@ -25,7 +25,7 @@ plans in Neufert, "Architects' Data" (5th edition, 2019), and the program
 splits of Merrell, Schkufza and Koltun, "Computer-generated residential
 building layouts" (2010), at a much simpler level.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.finite import require_positive_finite
 from std.math import sqrt
@@ -249,8 +249,10 @@ def plan_floor(
             not convex or has no area, or it is too narrow for a corridor
             and two rooms deep, or too short for the core.
     """
-    if not program.is_valid():
-        raise Error("A floor program must be office, residential or lobby")
+    require_valid(
+        program.is_valid(),
+        "A floor program must be office, residential or lobby",
+    )
     options.check()
     if len(footprint) < 3 or abs(polygon_area(footprint)) <= 1e-9:
         raise Error("A footprint needs three corners and an area")

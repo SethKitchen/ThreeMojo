@@ -19,7 +19,7 @@ table. Geometry applies a separate diagrammatic minimum radius.
     var d = arm_lymph_distance(dims, CUBITAL_NODES, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -96,8 +96,7 @@ def arm_lymph_paths(part: ArmLymph) raises -> List[List[Float32]]:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm lymphatic must be a named part")
+    require_valid(part.is_valid(), "An arm lymphatic must be a named part")
     var paths = List[List[Float32]]()
     # fmt: off
     if part == CUBITAL_NODES:

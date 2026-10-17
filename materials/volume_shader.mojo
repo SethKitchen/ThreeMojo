@@ -38,7 +38,7 @@ The source is three.js's but for four things the subset asks:
   and the colors are three.js's.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from materials.glsl import compile_shader_material
 from materials.nodes import NodeProgram
@@ -236,8 +236,9 @@ def volume_render_shader(style: VolumeStyle = VOLUME_MIP) raises -> NodeProgram:
     Raises:
         Error: If the style is neither.
     """
-    if not style.is_valid():
-        raise Error("A volume render style is VOLUME_MIP or VOLUME_ISO")
+    require_valid(
+        style.is_valid(), "A volume render style is VOLUME_MIP or VOLUME_ISO"
+    )
     var steps = VOLUME_MIP_STEPS if style == VOLUME_MIP else VOLUME_ISO_STEPS
     var program = compile_shader_material(
         VOLUME_RENDER_VERTEX,

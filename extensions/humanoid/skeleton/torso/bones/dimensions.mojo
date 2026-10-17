@@ -27,7 +27,7 @@ table. A female template is narrower and shallower through the chest.
     var d = torso_bone_distance(dims, T7, RIGHT, dims.centers[6])
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.genome import (
     CHEST_DEPTH,
     Genome,
@@ -577,11 +577,13 @@ def is_paired_bone(part: TorsoBone) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error(
-            "A torso bone must be a named vertebra, rib, sternum, clavicle"
-            " or scapula"
-        )
+    require_valid(
+        part.is_valid(),
+        (
+            "A torso bone must be a named vertebra, rib, sternum, clavicle or"
+            " scapula"
+        ),
+    )
     return part.value >= RIB_1.value
 
 

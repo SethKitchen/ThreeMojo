@@ -125,7 +125,7 @@ from core.geometry_store import GeometryId
 from core.layers import Layers
 from core.morph import MorphInfluences
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from exporters.json_writer import JsonWriter
@@ -386,11 +386,10 @@ struct _Header(Copyable, Movable):
     def __init__(out self, uuid: String, node: Object3D) raises:
         """Start from a node: its type, name, visibility, user data,
         layers and matrix. Refuse a node of neither type."""
-        if not node.object_type.is_valid():
-            raise Error(
-                "Object JSON: a node must be an Object3D, a Group or a"
-                " Gyroscope"
-            )
+        require_valid(
+            node.object_type.is_valid(),
+            "Object JSON: a node must be an Object3D, a Group or a Gyroscope",
+        )
         self.uuid = uuid
         self.type = "Group" if node.object_type == GROUP_TYPE else "Object3D"
         self.name = node.name
@@ -1013,8 +1012,10 @@ struct _Library(Movable):
         """
         var material = assets.materials.get(id)
         var kind = material.kind
-        if not kind.is_valid():
-            raise Error("Object JSON: a material kind that is none of eleven")
+        require_valid(
+            kind.is_valid(),
+            "Object JSON: a material kind that is none of eleven",
+        )
         var type = material_type_names()[kind.value]
         if use == _LINE_USE:
             type = (
@@ -1942,8 +1943,10 @@ struct _Writer(Movable):
     ) raises:
         """Write a line as the three.js class of its mode."""
         ref line = scene.lines[which]
-        if not line.mode.is_valid():
-            raise Error("Object JSON: a line mode that is none of the three")
+        require_valid(
+            line.mode.is_valid(),
+            "Object JSON: a line mode that is none of the three",
+        )
         header.type = line_type_names()[line.mode.value]
         header.cast_shadow = line.cast_shadow
         header.receive_shadow = line.receive_shadow

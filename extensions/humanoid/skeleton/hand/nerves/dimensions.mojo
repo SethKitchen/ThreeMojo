@@ -23,7 +23,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_nerve_distance(dims, MEDIAN_BRANCHES, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -118,8 +118,7 @@ def hand_nerve_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand nerve must be a named nerve")
+    require_valid(part.is_valid(), "A hand nerve must be a named nerve")
     require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame

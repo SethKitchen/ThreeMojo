@@ -37,7 +37,7 @@ template. Call `validate` at every public consumer of an edited copy.
     var d = bone_distance(dims, CALCANEUS, dims.heel)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
@@ -124,8 +124,9 @@ def require_foot_bone(part: FootBone) raises:
     Raises:
         Error: If the bone is not one of the twenty-six.
     """
-    if not part.is_valid():
-        raise Error("A foot bone must be one of the twenty-six bones")
+    require_valid(
+        part.is_valid(), "A foot bone must be one of the twenty-six bones"
+    )
 
 
 comptime TALUS = FootBone(0)

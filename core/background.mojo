@@ -48,7 +48,7 @@ three.js's plane does.
 and multiplied by `Scene.environment_intensity`. See `core.scene`.
 """
 
-from core.ordinal import ordinal_valid, require_non_negative
+from core.ordinal import ordinal_valid, require_non_negative, require_valid
 
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.framebuffer import Color
@@ -138,8 +138,9 @@ struct Background(ImplicitlyCopyable):
                 names `NO_TEXTURE` or a negative id, or a cube background
                 names `NO_CUBE_TEXTURE` or a negative id.
         """
-        if not self.kind.is_valid():
-            raise Error("A background's kind is none of the four")
+        require_valid(
+            self.kind.is_valid(), "A background's kind is none of the four"
+        )
         if self.kind == TEXTURE_BACKGROUND:
             require_texture_background(self.texture)
         if self.kind == CUBE_BACKGROUND:

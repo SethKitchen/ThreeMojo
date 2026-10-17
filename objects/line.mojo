@@ -82,6 +82,7 @@ from core.ordinal import (
     require_index_in_count,
     require_draw_ids,
     require_non_negative,
+    require_valid,
 )
 
 from math.norm import normalized2
@@ -148,8 +149,7 @@ def require_line_mode(mode: LineMode) raises:
     Raises:
         Error: If the mode is not named.
     """
-    if not mode.is_valid():
-        raise Error("A line needs a mode that exists")
+    require_valid(mode.is_valid(), "A line needs a mode that exists")
 
 
 def segment_count(mode: LineMode, vertices: Int) raises -> Int:

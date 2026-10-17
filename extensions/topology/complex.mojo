@@ -34,6 +34,7 @@ from extensions.topology.ids import (
 )
 from extensions.topology.weld import Welder, require_weld_tolerance
 from generators.utils import Vec3d
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -104,8 +105,7 @@ def require_face_kind(kind: FaceKind) raises:
     Raises:
         Error: If the kind is not valid.
     """
-    if not kind.is_valid():
-        raise Error("A face kind must be vertical or horizontal")
+    require_valid(kind.is_valid(), "A face kind must be vertical or horizontal")
 
 
 def require_face_corners(count: Int) raises:

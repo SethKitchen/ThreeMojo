@@ -58,6 +58,7 @@ from materials.material import standard_material
 from objects.mesh import Mesh
 from render.framebuffer import Color, unit_byte
 from std.math import cos, pi, sin
+from core.ordinal import require_valid
 
 # The name of the per-vertex element attribute.
 comptime ELEMENT_ID = "elementId"
@@ -911,8 +912,9 @@ def add_building(
         Error: If the detail is not valid, the top storey is out of range,
             or the model's ids do not agree.
     """
-    if not options.detail.is_valid():
-        raise Error("A render detail must be massing or full")
+    require_valid(
+        options.detail.is_valid(), "A render detail must be massing or full"
+    )
     var top = options.top_storey
     if top < -1 or top >= len(building.storeys):
         raise Error("The top storey must be -1 or a storey of the model")

@@ -134,7 +134,7 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -2915,8 +2915,9 @@ def export_gltf(
     """
     if len(scene.gaussian_splats) > 0:
         raise Error("glTF export cannot serialize Gaussian splats yet")
-    if not container.is_valid():
-        raise Error("glTF: a container that is none of the three")
+    require_valid(
+        container.is_valid(), "glTF: a container that is none of the three"
+    )
     if Bool(options.max_texture_size) and options.max_texture_size.value() < 1:
         raise Error("glTF: maxTextureSize must be one pixel or more")
     if container == GLTF_SEPARATE and not _is_relative_name(binary_name):
@@ -3068,8 +3069,10 @@ def _carry(
             carried[slot].points.append(which)
     for which in range(len(scene.lights)):
         ref light = scene.lights[which]
-        if not light.kind.is_valid():
-            raise Error("glTF: a light of a kind that is none of the named")
+        require_valid(
+            light.kind.is_valid(),
+            "glTF: a light of a kind that is none of the named",
+        )
         light.validate()
         if not _is_punctual(light.kind):
             continue

@@ -21,7 +21,7 @@ attribute: one number per vertex that says which zone of the model the
 vertex belongs to. three.js's materials branch on it. `PartId` is that
 number as a type, and `part` tags a geometry with one.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry
@@ -435,8 +435,7 @@ def part(geometry: BufferGeometry, id: PartId) raises -> BufferGeometry:
         Error: If the code is not one there is, or the geometry cannot be
             welded; see `merge_vertices`.
     """
-    if not id.is_valid():
-        raise Error("A part code must be from zero to eight")
+    require_valid(id.is_valid(), "A part code must be from zero to eight")
     var tagged = geometry.clone() if geometry.is_indexed() else merge_vertices(
         geometry
     )

@@ -44,6 +44,7 @@ from loaders.bytes import (
 )
 from loaders.js_number import js_parse_float
 from math.finite import require_finite
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -811,8 +812,9 @@ def parse_vrml_tree(var tokens: List[VrmlToken]) raises -> VrmlTree:
             three.js's grammar, with where the error is.
     """
     for token in tokens:
-        if not token.kind.is_valid():
-            raise Error("VRML: a token kind that is not valid")
+        require_valid(
+            token.kind.is_valid(), "VRML: a token kind that is not valid"
+        )
     var parser = _Parser(tokens^)
     var tree = VrmlTree()
     tree.version = parser.expect(VRML_VERSION, "a `#VRML` version line")

@@ -166,7 +166,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -546,8 +546,7 @@ def require_gltf_camera(kind: GltfCameraKind) raises:
     Raises:
         Error: If the kind is not known.
     """
-    if not kind.is_valid():
-        raise Error("glTF: a camera kind that is not known")
+    require_valid(kind.is_valid(), "glTF: a camera kind that is not known")
 
 
 struct GltfCamera(Copyable, Movable):
@@ -1044,8 +1043,9 @@ def select_variant(
             if model.variants[slot] == name.value():
                 which = slot
     for ref object in model.variant_objects:
-        if not object.kind.is_valid():
-            raise Error("glTF: an object kind that is not known")
+        require_valid(
+            object.kind.is_valid(), "glTF: an object kind that is not known"
+        )
         var material = object.original
         if which >= 0:
             material = object.materials[which]

@@ -12,7 +12,7 @@ baked occlusion. SI units and source metadata do not validate anatomy,
 physical accuracy or engineering capability.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -45,5 +45,6 @@ def require_mode(mode: AnatomyMode) raises:
     Raises:
         Error: If the mode is not game or engineering.
     """
-    if not mode.is_valid():
-        raise Error("An anatomy mode must be game or engineering")
+    require_valid(
+        mode.is_valid(), "An anatomy mode must be game or engineering"
+    )

@@ -58,7 +58,7 @@ from core.binary import (
     little_endian_u32,
     store_little_endian,
 )
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from render.float_image import FloatImage
 from render.inflate import zlib_inflate
@@ -188,8 +188,9 @@ def lines_per_block(compression: ExrCompression) raises -> Int:
     Raises:
         Error: If the compression is not one this reader reads.
     """
-    if not compression.is_valid():
-        raise Error("EXR: invalid scanline compression code")
+    require_valid(
+        compression.is_valid(), "EXR: invalid scanline compression code"
+    )
     if compression == ZIP_COMPRESSION or compression == PXR24_COMPRESSION:
         return 16
     if compression == DWAB_COMPRESSION:
@@ -244,8 +245,10 @@ def sample_bytes(kind: ExrPixelType) raises -> Int:
     Raises:
         Error: If the pixel type is none of the three.
     """
-    if not kind.is_valid():
-        raise Error("EXR: a channel's pixel type must be UINT, HALF or FLOAT")
+    require_valid(
+        kind.is_valid(),
+        "EXR: a channel's pixel type must be UINT, HALF or FLOAT",
+    )
     if kind == HALF_SAMPLES:
         return 2
     return 4

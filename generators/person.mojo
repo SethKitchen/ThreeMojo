@@ -43,6 +43,7 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
 from units.si import Length, METER
+from core.ordinal import require_valid
 
 # A figure's parts.
 comptime PERSON_SKIN = PartId(0)
@@ -362,8 +363,7 @@ def person_geometry(pose: Pose, height: Length) raises -> BufferGeometry:
         Error: If the pose is not one there is, or the height is not
             positive.
     """
-    if not pose.is_valid():
-        raise Error("A pose must be walking or standing")
+    require_valid(pose.is_valid(), "A pose must be walking or standing")
     if not meters(height) > 0:
         raise Error("A person's height must be positive")
     var walking = pose == WALK

@@ -72,6 +72,7 @@ from units.si import (
     WATT_PER_SQUARE_METER_KELVIN,
 )
 from units.temperature import Temperature64
+from core.ordinal import require_valid
 
 # One air change per hour.
 comptime AIR_CHANGE_PER_HOUR = FrequencyUnit(1.0 / 3600.0, "1/h")
@@ -265,8 +266,7 @@ def exterior_film(
     """
     var v = wind_speed.to(METER_PER_SECOND)
     _nonnegative(v, "A wind speed must be zero or more and finite")
-    if not air.is_valid():
-        raise Error("An air temperature must be valid")
+    require_valid(air.is_valid(), "An air temperature must be valid")
     if not (emissivity >= 0 and emissivity <= 1):
         raise Error("An emissivity must be zero to one")
     var t = air.kelvin
@@ -547,8 +547,9 @@ struct ZoneModel(Movable):
     def _check_surface(self, surface: Surface) raises:
         var c = surface.construction
         require_construction(c, len(self.constructions))
-        if not surface.boundary.is_valid():
-            raise Error("A boundary kind is not valid")
+        require_valid(
+            surface.boundary.is_valid(), "A boundary kind is not valid"
+        )
         self.check_zone(surface.inside)
         if surface.boundary == INTERZONE:
             if not surface.outside:

@@ -26,7 +26,7 @@ triangles `fit_triangle_budget` then keeps for the whole body.
     fit_triangle_budget(scene, assets, first, triangle_budget(level))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -64,8 +64,9 @@ def _checked(quality: Quality) raises:
     Raises:
         Error: If `quality` is not a named level.
     """
-    if not quality.is_valid():
-        raise Error("Quality must be low, medium, high or xhigh")
+    require_valid(
+        quality.is_valid(), "Quality must be low, medium, high or xhigh"
+    )
 
 
 def _cells(

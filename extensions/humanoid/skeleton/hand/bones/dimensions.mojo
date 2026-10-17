@@ -22,7 +22,7 @@ not a cited osteometric table.
     var d = hand_bone_distance(dims, CAPITATE, RIGHT, dims.frame.wrist)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
@@ -123,8 +123,9 @@ def require_finger(finger: Finger) raises:
     Raises:
         Error: If the digit is not named.
     """
-    if not finger.is_valid():
-        raise Error("A finger must be the thumb or a named finger")
+    require_valid(
+        finger.is_valid(), "A finger must be the thumb or a named finger"
+    )
 
 
 def finger_label(finger: Finger) -> String:
@@ -322,8 +323,10 @@ def hand_bone_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand bone must be a named carpal, metacarpal or phalanx")
+    require_valid(
+        part.is_valid(),
+        "A hand bone must be a named carpal, metacarpal or phalanx",
+    )
     require_side(side, "A hand")
     var f = dimensions.frame
     var sweeps = List[Sweep]()

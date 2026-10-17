@@ -21,7 +21,7 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, MEDIAL_PLANTAR_NERVE, dims.navicular)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -72,8 +72,7 @@ def require_foot_nerve(part: FootNerve) raises:
     Raises:
         Error: If the nerve is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot nerve must be a named nerve")
+    require_valid(part.is_valid(), "A foot nerve must be a named nerve")
 
 
 comptime TIBIAL_NERVE = FootNerve(0)

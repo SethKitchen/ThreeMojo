@@ -40,6 +40,7 @@ from math.projection import require_far_beyond_near
 from math.vector3 import Vector3
 from math.finite import require_finite_group
 from std.math import isfinite
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -142,8 +143,10 @@ struct Frustum(Copyable, Movable):
                 describes no volume.
         """
         require_frustum_matrix(matrix)
-        if not coordinate_system.is_valid():
-            raise Error("A frustum reads WEBGL or WEBGPU coordinates")
+        require_valid(
+            coordinate_system.is_valid(),
+            "A frustum reads WEBGL or WEBGPU coordinates",
+        )
         ref e = matrix.elements
         var far: Plane
         var near: Plane

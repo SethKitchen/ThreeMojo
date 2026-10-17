@@ -99,7 +99,7 @@ from core.extent import (
     require_positive_extent,
     require_texel_count,
 )
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.finite import require_finite, require_finite_group
 from math.utils import clamp, edge_index
@@ -425,10 +425,10 @@ def require_texel_type(texel_type: TexelType) raises:
     Raises:
         Error: If the type is neither of those.
     """
-    if not texel_type.is_valid():
-        raise Error(
-            "A texture's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE"
-        )
+    require_valid(
+        texel_type.is_valid(),
+        "A texture's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE",
+    )
 
 
 def require_float_linear(texel_type: TexelType, space: ColorSpace) raises:
@@ -486,8 +486,10 @@ def require_uv_channel(channel: UvChannel) raises:
     Raises:
         Error: If the channel is neither of those.
     """
-    if not channel.is_valid():
-        raise Error("A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1")
+    require_valid(
+        channel.is_valid(),
+        "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1",
+    )
 
 
 @fieldwise_init
@@ -1177,18 +1179,22 @@ struct Texture(Movable):
             raise Error(
                 "A texture's magnification filter must be NEAREST or BILINEAR"
             )
-        if not self.min_filter.is_valid():
-            raise Error(
-                "A texture's minification filter must be one of the six"
-            )
-        if not self.mapping.is_valid():
-            raise Error("A texture's mapping must be one of the six")
+        require_valid(
+            self.min_filter.is_valid(),
+            "A texture's minification filter must be one of the six",
+        )
+        require_valid(
+            self.mapping.is_valid(),
+            "A texture's mapping must be one of the six",
+        )
         if not self.color_space.is_decodable():
             raise Error(
                 "A texture needs a color space it can decode: SRGB or LINEAR"
             )
-        if not self.alpha.is_valid():
-            raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
+        require_valid(
+            self.alpha.is_valid(),
+            "A texture's alpha mode must be COVERAGE or IGNORED",
+        )
         require_texel_type(self.texel_type)
         # A float holds linear light as it is. The sRGB curve is a way to
         # spend 256 steps where the eye sees them, and a float has no steps

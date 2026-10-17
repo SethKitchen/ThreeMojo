@@ -66,7 +66,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.binary import copy_byte_range
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields
@@ -516,8 +516,7 @@ def _parse_header(
                 )
         else:
             raise Error(_where(line) + "not a header line: " + keyword)
-    if not format.is_valid():
-        raise Error("PLY: the header has no `format` line")
+    require_valid(format.is_valid(), "PLY: the header has no `format` line")
     return format
 
 

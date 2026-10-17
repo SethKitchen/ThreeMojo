@@ -54,6 +54,7 @@ from loaders.svg_path import (
 )
 from math.path import Shape
 from std.math import fma, acos, cos, floor, isfinite, log10, pi, sin, sqrt
+from core.ordinal import require_valid
 
 
 # three.js's `BIGNUMBER`.
@@ -642,8 +643,7 @@ def create_shapes_with_rule(
         Error: If the rule is not valid, or the scan line through an
             outline does not cross it.
     """
-    if not rule.is_valid():
-        raise Error("SVG: a fill rule that is not valid")
+    require_valid(rule.is_valid(), "SVG: a fill rule that is not valid")
     var min_x = BIG_NUMBER
     var max_x = -BIG_NUMBER
     var simple = List[_Simple]()

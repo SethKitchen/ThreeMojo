@@ -64,6 +64,7 @@ from render.texture import (
 )
 from math.finite import require_finite
 from std.math import floor
+from core.ordinal import require_valid
 
 
 # How many numbers a stored texel holds: red, green, blue and alpha.
@@ -297,11 +298,13 @@ struct VolumeImage(Movable):
                 four numbers a texel.
         """
         _check_extent(self.width, self.height, self.depth, VOLUME_CHANNELS)
-        if not self.texel_type.is_valid():
-            raise Error(
+        require_valid(
+            self.texel_type.is_valid(),
+            (
                 "A volume texture's texel type must be UNSIGNED_BYTE_TYPE or"
                 " FLOAT_TYPE"
-            )
+            ),
+        )
         var length = self.width * self.height * self.depth * VOLUME_CHANNELS
         var held = len(self.pixels)
         if self.texel_type == FLOAT_TYPE:

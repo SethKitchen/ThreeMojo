@@ -24,7 +24,7 @@ a cited cross-section table.
     var d = arm_muscle_distance(dims, BICEPS_BRACHII, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -172,8 +172,7 @@ def arm_muscle_paths(part: ArmMuscle) raises -> List[List[Float32]]:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm muscle must be a named muscle")
+    require_valid(part.is_valid(), "An arm muscle must be a named muscle")
     var paths = List[List[Float32]]()
     # fmt: off
     if part == DELTOID:

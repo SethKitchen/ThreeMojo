@@ -99,6 +99,7 @@ from loaders.js_text import split_fields
 from loaders.text_number import file_line, read_finite_float32
 from std.pathlib import Path
 from units.si import METER, Length
+from core.ordinal import require_valid
 
 # What three.js's `MeshPhongMaterial` starts from.
 comptime _WHITE = Color(255, 255, 255)
@@ -160,10 +161,12 @@ struct MtlOptions(ImplicitlyCopyable):
         Raises:
             Error: If `side` or `wrap` is not valid.
         """
-        if not self.side.is_valid():
-            raise Error("MTL: a side that is none of the three")
-        if not self.wrap.is_valid():
-            raise Error("MTL: a wrap that is none of the three")
+        require_valid(
+            self.side.is_valid(), "MTL: a side that is none of the three"
+        )
+        require_valid(
+            self.wrap.is_valid(), "MTL: a wrap that is none of the three"
+        )
 
 
 struct MtlLibrary(Movable):

@@ -30,7 +30,7 @@ pelvic vessels, nerves and lymphatics run on to those points.
     var d = pelvis_muscle_distance(dims, PIRIFORMIS, RIGHT, dims.gt)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -171,8 +171,10 @@ def require_pelvis_athleticism(athleticism: Athleticism) raises:
     Raises:
         Error: If the athleticism is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("A pelvic muscle needs a toned or untoned athleticism")
+    require_valid(
+        athleticism.is_valid(),
+        "A pelvic muscle needs a toned or untoned athleticism",
+    )
 
 
 @fieldwise_init
@@ -281,8 +283,7 @@ struct PelvisMuscleField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic muscle must be a named muscle")
+        require_valid(part.is_valid(), "A pelvic muscle must be a named muscle")
         require_side(side, "A pelvis")
         self.chains = _chains(dimensions, part)
         self.mirror = side == LEFT

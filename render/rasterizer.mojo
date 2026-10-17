@@ -30,7 +30,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from math.scaled_products import (
     _Scaled,
@@ -839,11 +839,13 @@ struct TextureFrames(Equatable, ImplicitlyCopyable):
             Error: If the normal map type is none of the two, or the
                 refraction ratio is negative or not finite.
         """
-        if not self.normal_map_type.is_valid():
-            raise Error(
+        require_valid(
+            self.normal_map_type.is_valid(),
+            (
                 "A triangle's normal map type must be TANGENT_SPACE_NORMAL_MAP"
                 " or OBJECT_SPACE_NORMAL_MAP"
-            )
+            ),
+        )
         var ratio = self.refraction_ratio
         if not isfinite(ratio) or ratio < 0:
             raise Error("A triangle's refraction ratio cannot be negative")
@@ -1920,8 +1922,7 @@ def require_shade_mode(mode: ShadeMode) raises:
     Raises:
         Error: If `mode` is none of the four.
     """
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_valid(mode.is_valid(), "A shading mode that is none of the four")
 
 
 def _coordinates_at(
@@ -2601,8 +2602,10 @@ def check_data_state(a: RasterVertex, b: RasterVertex, c: RasterVertex) raises:
         c.depth_packing != a.depth_packing
     ):
         raise Error("A triangle's corners disagree about their depth packing")
-    if not a.depth_packing.is_valid():
-        raise Error("A triangle's depth packing is none of the four")
+    require_valid(
+        a.depth_packing.is_valid(),
+        "A triangle's depth packing is none of the four",
+    )
     if a.depth_packing != BASIC_DEPTH_PACKING and a.kind != DEPTH:
         raise Error("Only a depth triangle packs its depth")
     if a.kind == DISTANCE:
@@ -2737,10 +2740,13 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their shininess")
     if b.alpha_test != a.alpha_test or c.alpha_test != a.alpha_test:
         raise Error("A triangle's corners disagree about their alpha test")
-    if not a.blend.is_valid():
-        raise Error("A triangle's blend policy is not a blending mode there is")
-    if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the thirteen")
+    require_valid(
+        a.blend.is_valid(),
+        "A triangle's blend policy is not a blending mode there is",
+    )
+    require_valid(
+        a.kind.is_valid(), "A triangle's material kind is none of the thirteen"
+    )
     if a.volume_scene_depth and a.kind != VOLUME:
         raise Error("Only a VOLUME triangle reads volume scene depth")
     if b.volume_scene_depth != a.volume_scene_depth or (
@@ -2815,8 +2821,10 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their reflectivity")
     if b.combine != a.combine or c.combine != a.combine:
         raise Error("A triangle's corners disagree about their combine")
-    if not a.combine.is_valid():
-        raise Error("A triangle's combine is none of the three operations")
+    require_valid(
+        a.combine.is_valid(),
+        "A triangle's combine is none of the three operations",
+    )
     if not a.kind.reflects() and a.env_map != NO_CUBE_TEXTURE:
         raise Error(
             "Only a basic, lambert or phong triangle reflects an"
@@ -3003,8 +3011,10 @@ def check_triangle_state(
     # The node program, asked as the material asks it.
     if b.nodes != a.nodes or c.nodes != a.nodes:
         raise Error("A triangle's corners disagree about their node program")
-    if not a.nodes.is_valid():
-        raise Error("A triangle names a node program id that nothing can hold")
+    require_valid(
+        a.nodes.is_valid(),
+        "A triangle names a node program id that nothing can hold",
+    )
     if a.nodes != NO_NODES and not a.kind.takes_nodes():
         raise Error(
             "A data or shadow triangle runs no node graph: it shows"
@@ -6323,12 +6333,10 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
             `RasterState.check`, or if they disagree about the fog or the
             node program.
     """
-    if not a.blend.is_valid():
-        raise Error("A line needs a blend policy that exists")
+    require_valid(a.blend.is_valid(), "A line needs a blend policy that exists")
     if a.blend != b.blend:
         raise Error("A line's ends must agree about blending")
-    if not a.kind.is_valid():
-        raise Error("A line needs a material kind that exists")
+    require_valid(a.kind.is_valid(), "A line needs a material kind that exists")
     if a.kind != b.kind:
         raise Error("A line's ends must agree about the material")
     if not a.kind.is_unlit():
@@ -6650,10 +6658,12 @@ def check_point_state(point: RasterVertex) raises:
             depth, color and stencil state is refused by
             `RasterState.check`.
     """
-    if not point.blend.is_valid():
-        raise Error("A point needs a blend policy that exists")
-    if not point.kind.is_valid():
-        raise Error("A point needs a material kind that exists")
+    require_valid(
+        point.blend.is_valid(), "A point needs a blend policy that exists"
+    )
+    require_valid(
+        point.kind.is_valid(), "A point needs a material kind that exists"
+    )
     if not point.kind.is_unlit():
         raise Error("A point's material must be unlit")
     require_positive_finite(
@@ -7055,11 +7065,13 @@ def check_draws(
     """
     for index in range(len(draws)):
         ref draw = draws[index]
-        if not draw.kind.is_valid():
-            raise Error(
-                "A draw needs a kind that exists: DRAW_TRIANGLES,"
-                " DRAW_SEGMENTS or DRAW_POINTS"
-            )
+        require_valid(
+            draw.kind.is_valid(),
+            (
+                "A draw needs a kind that exists: DRAW_TRIANGLES, DRAW_SEGMENTS"
+                " or DRAW_POINTS"
+            ),
+        )
         var held = triangles
         if draw.kind == DRAW_SEGMENTS:
             held = segments

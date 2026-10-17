@@ -76,7 +76,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from core.scene import Scene
 from core.search import first_match
 from exporters.gltf import gltf_pixels
@@ -635,8 +635,9 @@ struct _Exporter(Movable):
         transform and a texture, with a scale when `color` is not empty.
         """
         ref texture = assets.textures.get(id)
-        if not texture.channel.is_valid():
-            raise Error("USDZ: a texture's channel is not valid")
+        require_valid(
+            texture.channel.is_valid(), "USDZ: a texture's channel is not valid"
+        )
         var wrap_s = _wrap_name(texture.wrap_s)
         var wrap_t = _wrap_name(texture.wrap_t)
         if first_match(self.textures, id.value) < 0:

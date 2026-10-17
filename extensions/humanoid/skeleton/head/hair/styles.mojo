@@ -48,7 +48,12 @@ This is not a three.js port. See Extensions.
     var style = HairStyleFile(hair_style_path(LAYERED))
     var strand = style.strand(dims.head, 0)
 """
-from core.ordinal import ordinal_valid, require_index_in_count, ordinal_label
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    ordinal_label,
+    require_valid,
+)
 
 from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
@@ -140,8 +145,7 @@ def require_hair_style(style: HairStyle) raises:
     Raises:
         Error: If the style is not named.
     """
-    if not style.is_valid():
-        raise Error("A hair style must be a named style")
+    require_valid(style.is_valid(), "A hair style must be a named style")
 
 
 def hair_style_label(style: HairStyle) -> String:

@@ -20,7 +20,7 @@ the velocity by one plus h times the damping, so the damping never
 reverses a velocity, however large the step. Both dampings are 0 by
 default, as in Box2D: a body keeps its speed unless something acts on it.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.physics.shape import (
     MESH,
@@ -109,8 +109,7 @@ def require_body_kind(kind: BodyKind) raises:
     Raises:
         Error: If the kind is not named.
     """
-    if not kind.is_valid():
-        raise Error("Body kind is not valid")
+    require_valid(kind.is_valid(), "Body kind is not valid")
 
 
 def rotation_matrix(q: Quaternion) -> Matrix3:

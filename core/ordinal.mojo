@@ -13,7 +13,7 @@ own type. `index_in_count` is true from zero through one below a count.
 own error text. `require_draw_ids` refuses a negative node, geometry,
 and material, and builds the three messages from one label.
 `ordinal_label` returns a name from a list, or a fallback when the
-value is not valid.
+value is not valid. `require_valid` refuses a false validity flag.
 """
 
 
@@ -125,3 +125,20 @@ def ordinal_label(
     if not valid:
         return fallback
     return names[value]
+
+
+def require_valid(valid: Bool, message: String) raises:
+    """Refuse a false validity flag.
+
+    Args:
+        valid: Whether the value is one of the named ones.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `valid` is true.
+
+    Raises:
+        Error: If `valid` is false.
+    """
+    if not valid:
+        raise Error(message)

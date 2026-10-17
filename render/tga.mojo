@@ -28,7 +28,7 @@ sRGB, and so does this reader assume: a decoded TGA is `SRGB`.
 """
 
 from core.binary import copy_bytes, little_endian_u16
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from render.framebuffer import Color
 from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
@@ -156,8 +156,7 @@ def unpack_pixels(
         Error: If `kind` is not a type this reader reads, the file ends
             before the last pixel, or a packet runs past the image.
     """
-    if not kind.is_valid():
-        raise Error("A TGA image type this reader does not read")
+    require_valid(kind.is_valid(), "A TGA image type this reader does not read")
     var size = count * pixel_bytes
     if not kind.is_run_length():
         require_tga_span(start, size, len(bytes))
@@ -223,11 +222,13 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var height = little_endian_u16(bytes, 14)
     var pixel_bits = Int(bytes[16])
     var descriptor = Int(bytes[17])
-    if not kind.is_valid():
-        raise Error(
-            "A TGA image type must be color-mapped, true color or gray,"
-            " plain or run-length encoded"
-        )
+    require_valid(
+        kind.is_valid(),
+        (
+            "A TGA image type must be color-mapped, true color or gray, plain"
+            " or run-length encoded"
+        ),
+    )
     if kind.is_color_mapped():
         if map_type != 1:
             raise Error("A color-mapped TGA must carry a color map")

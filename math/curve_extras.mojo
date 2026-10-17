@@ -23,6 +23,7 @@ ten-thousandth either side; see `math.space_curve.chord_tangent`.
 from math.space_curve import Point3, SpaceCurve, chord_tangent, point3
 from math.finite import require_finite
 from std.math import cos, pi, sin
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -111,8 +112,9 @@ def require_extra_curve(kind: ExtraCurveKind) raises:
     Raises:
         Error: If the kind is not valid.
     """
-    if not kind.is_valid():
-        raise Error("A named curve's kind must be one of the fourteen")
+    require_valid(
+        kind.is_valid(), "A named curve's kind must be one of the fourteen"
+    )
 
 
 struct ExtraCurve(SpaceCurve):

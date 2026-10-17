@@ -19,7 +19,7 @@ so a caller can refuse inputs it does not trust:
   read shows.
 - `DESIGN`: a modeling choice or a unit conversion, not a measurement.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -64,8 +64,7 @@ def evidence_label(grade: Evidence) raises -> String:
     Raises:
         Error: If the grade is not named.
     """
-    if not grade.is_valid():
-        raise Error("Evidence must be a named grade")
+    require_valid(grade.is_valid(), "Evidence must be a named grade")
     var names: List[String] = [
         "from abstract",
         "from text",

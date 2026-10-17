@@ -27,7 +27,7 @@ This is not a three.js port. See Extensions.
     face.add_viseme(OH, 1.0)
     face.apply(scene.meshes[skin])
 """
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from math.utils import clamp
 
 from objects.mesh import Mesh
@@ -215,8 +215,9 @@ def expression_recipe(
     Raises:
         Error: If `expression` is not named.
     """
-    if not expression.is_valid():
-        raise Error("A facial expression must be a named expression")
+    require_valid(
+        expression.is_valid(), "A facial expression must be a named expression"
+    )
     var r = List[ShapeWeight]()
     if expression == SMILE:
         # Action units 6 and 12: the cheeks raised and the corners of
@@ -290,8 +291,7 @@ def viseme_recipe(viseme: Viseme) raises -> List[ShapeWeight]:
     Raises:
         Error: If `viseme` is not named.
     """
-    if not viseme.is_valid():
-        raise Error("A viseme must be a named viseme")
+    require_valid(viseme.is_valid(), "A viseme must be a named viseme")
     var r = List[ShapeWeight]()
     if viseme == PP:
         _both(r, "mouthPress", 0.7)

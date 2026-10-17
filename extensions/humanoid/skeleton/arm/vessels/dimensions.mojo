@@ -28,7 +28,7 @@ are not a cited caliber table.
     var d = arm_vessel_distance(dims, BRACHIAL_ARTERY, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -76,8 +76,9 @@ def is_arm_artery(part: ArmVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "An arm vessel must be a named artery or vein"
+    )
     return part.value <= ULNAR_ARTERY.value
 
 

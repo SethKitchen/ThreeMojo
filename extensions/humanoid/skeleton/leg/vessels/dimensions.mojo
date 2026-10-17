@@ -18,7 +18,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = vessel_distance(dims, FEMORAL_ARTERY, Vector3(0, 0.2, 0.02))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -61,8 +61,9 @@ def require_vessel_part(part: VesselPart) raises:
     Raises:
         Error: If the vessel is not a named artery or vein.
     """
-    if not part.is_valid():
-        raise Error("A vessel part must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A vessel part must be a named artery or vein"
+    )
 
 
 comptime FEMORAL_ARTERY = VesselPart(0)

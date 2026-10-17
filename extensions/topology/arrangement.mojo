@@ -30,7 +30,7 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from math.polygon_hit import ray_crosses
 from math.utils import clamp
 from math.finite import require_finite_group
@@ -334,8 +334,7 @@ def _check_region(region: Region, layers: Int, tolerance: Float64) raises:
         layers,
         "A region's layer must be from zero to the count less one",
     )
-    if not region.id.is_valid():
-        raise Error("A region id must be zero or more")
+    require_valid(region.id.is_valid(), "A region id must be zero or more")
     var n = len(region.points)
     if n < 3:
         raise Error("A region needs three corners or more")

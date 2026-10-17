@@ -16,7 +16,7 @@ is a grid-sampled estimate under the chosen tissues. It is not a proven
 upper bound.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.anatomy.tissue import BoneTissue
 from extensions.humanoid.skeleton.field import DistanceField
@@ -123,8 +123,10 @@ def apparent_density_of(
     Raises:
         Error: If `fill` is none of the named occupancies.
     """
-    if not fill.is_valid():
-        raise Error("A bone fill must be empty, cortical, trabecular or marrow")
+    require_valid(
+        fill.is_valid(),
+        "A bone fill must be empty, cortical, trabecular or marrow",
+    )
     if fill == CORTICAL_FILL:
         return cortical.apparent_density()
     if fill == TRABECULAR_FILL:

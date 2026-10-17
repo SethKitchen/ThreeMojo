@@ -38,7 +38,7 @@ the camera takes the denoise's second tangent, as three.js means it to.
 The specular mode, which reprojects the hit point along the ray length an
 SSR pass leaves in alpha, is not ported.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from render.color_math import floor_channels
 from math.finite import require_finite_group
@@ -191,8 +191,10 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
             finite, the velocity length or the frame limit is not
             positive, or the frame count is negative.
     """
-    if not settings.alpha_source.is_valid():
-        raise Error("A denoiser's alpha source must be one of the three")
+    require_valid(
+        settings.alpha_source.is_valid(),
+        "A denoiser's alpha source must be one of the three",
+    )
     var finite = (
         isfinite(settings.clamp_intensity)
         and isfinite(settings.flicker_suppression)

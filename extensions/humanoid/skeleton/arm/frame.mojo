@@ -41,6 +41,7 @@ from math.finite import require_positive_finite
 from math.vector3 import Vector3
 from std.math import cos, sin
 from units.si import Length
+from core.ordinal import require_valid
 
 # How far the forearm turns out from the upper arm at the elbow, in
 # radians: about seven degrees for a man and ten for a woman.
@@ -283,8 +284,10 @@ def require_arm_athleticism(athleticism: Athleticism) raises:
     Raises:
         Error: If the athleticism is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("An arm muscle needs a toned or untoned athleticism")
+    require_valid(
+        athleticism.is_valid(),
+        "An arm muscle needs a toned or untoned athleticism",
+    )
 
 
 struct ArmMuscleDimensions(Copyable, Movable):

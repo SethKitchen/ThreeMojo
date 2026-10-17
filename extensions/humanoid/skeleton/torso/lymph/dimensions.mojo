@@ -21,7 +21,7 @@ paired, authored on the right and mirrored on x for the left.
     var d = torso_lymph_distance(dims, THORACIC_DUCT, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     template_points,
@@ -75,8 +75,7 @@ def is_paired_lymph(part: TorsoLymph) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso lymphatic must be a named part")
+    require_valid(part.is_valid(), "A torso lymphatic must be a named part")
     return part.value >= PARA_AORTIC_NODES.value
 
 

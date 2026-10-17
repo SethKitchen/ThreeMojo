@@ -21,7 +21,7 @@ not a cited node count or size table.
     var d = head_lymph_distance(dims, DEEP_CERVICAL_NODES, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -113,8 +113,7 @@ def head_lymph_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A head lymph group must be a named group")
+    require_valid(part.is_valid(), "A head lymph group must be a named group")
     require_side(side, "A head")
     var f = dimensions.head.frame
     # Each node: x, y, z and its radius, in template cm.

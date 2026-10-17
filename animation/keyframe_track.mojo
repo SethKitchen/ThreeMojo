@@ -166,7 +166,7 @@ it was built can be edited afterward.
 """
 
 from core.morph import require_morph_target
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.finite import require_finite, require_positive_finite
@@ -719,8 +719,9 @@ def require_track_target(target: TrackTarget) raises:
     Raises:
         Error: If the kind does not exist or the slot does not fit it.
     """
-    if not target.is_valid():
-        raise Error("A track needs a kind that exists and fits its slot")
+    require_valid(
+        target.is_valid(), "A track needs a kind that exists and fits its slot"
+    )
 
 
 def require_key_values(held: Int, expected: Int) raises:
@@ -830,11 +831,13 @@ def check_interpolation(kind: TrackKind, how: Interpolation) raises:
             or a string track is anything but `STEP`, or if a
             `QUATERNION` track is `SMOOTH`.
     """
-    if not how.is_valid():
-        raise Error(
-            "A track's interpolation must be STEP, LINEAR, SMOOTH,"
-            " CUBIC_SPLINE or BEZIER"
-        )
+    require_valid(
+        how.is_valid(),
+        (
+            "A track's interpolation must be STEP, LINEAR, SMOOTH, CUBIC_SPLINE"
+            " or BEZIER"
+        ),
+    )
     if kind.is_discrete() and how != STEP:
         # three.js's `BooleanKeyframeTrack` and `StringKeyframeTrack` have
         # no other mode: a flag half way between shown and hidden is

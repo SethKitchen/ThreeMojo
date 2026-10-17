@@ -21,7 +21,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_vessel_distance(dims, DEEP_PALMAR_ARCH, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid, ordinal_label
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -82,8 +82,9 @@ def is_hand_artery(part: HandVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A hand vessel must be a named artery or vein")
+    require_valid(
+        part.is_valid(), "A hand vessel must be a named artery or vein"
+    )
     return part.value <= DIGITAL_ARTERIES.value
 
 

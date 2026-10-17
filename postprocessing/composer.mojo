@@ -47,7 +47,7 @@ composer can run with its frame on the GPU; see
 `docs/wiki/GPU-backend.md`.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from postprocessing.sample_math import gaussian_pdf
 from cameras.camera import Camera
 from core.assets import Assets
@@ -726,8 +726,9 @@ def check_pass(step: Pass) raises:
             `check_transition`, `check_effect` and `check_god_rays`
             raise, and `check_shader` for a shader pass.
     """
-    if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the named kinds")
+    require_valid(
+        step.kind.is_valid(), "A pass kind must be one of the named kinds"
+    )
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)

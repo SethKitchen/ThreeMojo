@@ -10,7 +10,7 @@ Bone pores are included in the apparent-density regions. Their fluid and
 marrow mass is not added separately. Unresolved soft tissue uses fat as
 an explicit density proxy.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -57,8 +57,7 @@ def require_limb_region(region: LimbRegion) raises:
     Raises:
         Error: If the region is not named.
     """
-    if not region.is_valid():
-        raise Error("A limb region must be named")
+    require_valid(region.is_valid(), "A limb region must be named")
 
 
 def region_label(region: LimbRegion) raises -> String:
@@ -73,8 +72,10 @@ def region_label(region: LimbRegion) raises -> String:
     Raises:
         Error: If `region` is not named.
     """
-    if not region.is_valid():
-        raise Error("A limb region must name an exclusive density assignment")
+    require_valid(
+        region.is_valid(),
+        "A limb region must name an exclusive density assignment",
+    )
     var names: List[String] = [
         "dermis",
         "cortical_apparent",

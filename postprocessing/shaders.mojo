@@ -44,7 +44,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from std.math import isfinite
 
@@ -278,10 +278,13 @@ def check_effect(settings: EffectSettings) raises:
             the shader divides by zero; the saturation is above one, where
             its weight changes sign; or the sides are not positive.
     """
-    if not settings.effect.is_valid():
-        raise Error("A shader effect must be one of the eighteen named")
-    if not settings.side.is_valid():
-        raise Error("A mirror side must be one of the four named")
+    require_valid(
+        settings.effect.is_valid(),
+        "A shader effect must be one of the eighteen named",
+    )
+    require_valid(
+        settings.side.is_valid(), "A mirror side must be one of the four named"
+    )
     var scalars = (
         isfinite(settings.amount)
         and isfinite(settings.angle.value)

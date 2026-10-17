@@ -12,7 +12,7 @@ template. The scales are authored. They are not a cited CSA regression.
     var person = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 
 @fieldwise_init
@@ -53,8 +53,9 @@ def radius_scale(athleticism: Athleticism) raises -> Float32:
     Raises:
         Error: If `athleticism` is not named.
     """
-    if not athleticism.is_valid():
-        raise Error("Athleticism must be toned or untoned")
+    require_valid(
+        athleticism.is_valid(), "Athleticism must be toned or untoned"
+    )
     if athleticism == TONED:
         return TONED_RADIUS
     return UNTONED_RADIUS

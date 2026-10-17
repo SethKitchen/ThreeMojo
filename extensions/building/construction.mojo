@@ -18,7 +18,7 @@ gain coefficient and its visible transmittance. These are the three
 numbers of the simple glazing model that thermal programs use for a
 window without a layer-by-layer description.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.finite import require_positive_finite
 from extensions.building.ids import MaterialId
@@ -68,8 +68,10 @@ def inside_film(direction: FlowDirection) raises -> ThermalResistance64:
     Raises:
         Error: If the direction is not valid.
     """
-    if not direction.is_valid():
-        raise Error("A flow direction must be horizontal, upward or downward")
+    require_valid(
+        direction.is_valid(),
+        "A flow direction must be horizontal, upward or downward",
+    )
     var values: List[Float64] = [0.13, 0.10, 0.17]
     return ThermalResistance64(
         values[direction.value], SQUARE_METER_KELVIN_PER_WATT

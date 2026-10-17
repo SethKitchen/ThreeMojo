@@ -30,7 +30,7 @@ The wall is per square meter of area. The first node is on the outside
 face, the side of the first layer.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from math.finite import require_finite, require_positive_finite
 from std.math import ceil, isfinite, sqrt
 from extensions.building.construction import Construction
@@ -125,8 +125,9 @@ struct LayeredWall(Copyable, Movable):
             dt, "A conduction step must be positive and finite"
         )
         require_fourier(fourier)
-        if not initial.is_valid():
-            raise Error("A wall's initial temperature must be valid")
+        require_valid(
+            initial.is_valid(), "A wall's initial temperature must be valid"
+        )
         self.step = dt
         self.capacity = [0.0]
         self.conductance = List[Float64]()

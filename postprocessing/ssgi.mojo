@@ -61,6 +61,7 @@ from std.bit import pop_count
 from std.math import acos, ceil, cos, isfinite, max, min, pi, pow, sin
 from std.math import sqrt
 from units.si import Length, METER
+from core.ordinal import require_valid
 
 
 # `MAX_RAY`: how many sectors a slice's bit field has.
@@ -608,8 +609,9 @@ def check_sss(settings: SssSettings) raises:
         Error: If the light index is negative, a number is not finite, or
             the frame count is negative.
     """
-    if not settings.light.is_valid():
-        raise Error("An SSS pass's light must not be negative")
+    require_valid(
+        settings.light.is_valid(), "An SSS pass's light must not be negative"
+    )
     var finite = (
         isfinite(settings.max_distance.value)
         and isfinite(settings.thickness.value)

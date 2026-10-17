@@ -27,7 +27,7 @@ applied once. The Phong look lives in `bone.mojo`, not here.
     var weight = mass * STANDARD_GRAVITY
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.finite import require_finite
 from units.si import (
@@ -100,8 +100,9 @@ struct BoneTissue(ImplicitlyCopyable):
                 outside 0 through 1, or if Poisson's ratio is outside
                 0 through 1.
         """
-        if not self.kind.is_valid():
-            raise Error("Bone tissue must be cortical or trabecular")
+        require_valid(
+            self.kind.is_valid(), "Bone tissue must be cortical or trabecular"
+        )
         require_finite(
             Float64(self.tissue_density.value),
             "A bone tissue density must be finite",

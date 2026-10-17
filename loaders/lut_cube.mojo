@@ -57,6 +57,7 @@ from render.srgb import LINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
 from loaders.text_number import file_line, read_finite_float32
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 # The largest table Adobe's `.cube` specification allows.
 comptime LUT_MAX_SIZE = 256
@@ -213,10 +214,10 @@ def parse_lut_cube(
             not `size` cubed; or, for bytes, a number is outside zero to
             one.
     """
-    if not texel_type.is_valid():
-        raise Error(
-            "A LUT's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE"
-        )
+    require_valid(
+        texel_type.is_valid(),
+        "A LUT's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE",
+    )
     var title = Optional[String]()
     var size = 0
     var domain_min = Vector3(0, 0, 0)

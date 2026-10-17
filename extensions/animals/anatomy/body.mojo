@@ -28,7 +28,7 @@ The coat depth is how far the sculpt's surface stands off the skin: fur,
 wool under the explicit fleece, and contour plumage. It is a `DESIGN`
 estimate. No source we read gives it.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.anatomy.evidence import (
     DESIGN,
@@ -84,8 +84,7 @@ def require_body_plan(plan: BodyPlan) raises:
     Raises:
         Error: If the plan is not named.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
+    require_valid(plan.is_valid(), "A body plan must be named")
 
 
 @fieldwise_init
@@ -213,8 +212,7 @@ def require_species(id: SpeciesId) raises:
     Raises:
         Error: If the species is not named.
     """
-    if not id.is_valid():
-        raise Error("No such species")
+    require_valid(id.is_valid(), "No such species")
 
 
 def species_body(id: SpeciesId) raises -> SpeciesBody:

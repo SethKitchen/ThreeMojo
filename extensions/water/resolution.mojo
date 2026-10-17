@@ -1,3 +1,5 @@
+from core.ordinal import require_valid
+
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Noncommercial use is free; commercial use requires a paid license.
@@ -34,8 +36,10 @@ def require_resolution(resolution: SpectrumResolution) raises:
     Raises:
         Error: If `resolution` is not valid.
     """
-    if not resolution.is_valid():
-        raise Error("Spectrum resolution must be a power of two from 4 to 256")
+    require_valid(
+        resolution.is_valid(),
+        "Spectrum resolution must be a power of two from 4 to 256",
+    )
 
 
 def log2_resolution(resolution: SpectrumResolution) raises -> Int:

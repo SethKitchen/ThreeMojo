@@ -19,7 +19,7 @@ left.
     var d = pelvis_lymph_distance(dims, SACRAL_NODES, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -111,8 +111,10 @@ struct PelvisLymphField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic lymph part must be a named group or trunk")
+        require_valid(
+            part.is_valid(),
+            "A pelvic lymph part must be a named group or trunk",
+        )
         require_side(side, "A pelvis")
         var p = dimensions.pelvis
         var f = pelvis_frame(p)

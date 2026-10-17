@@ -19,7 +19,7 @@ centimeters. They are not a cited hair density table; see
     var d = head_hair_distance(dims, SCALP_HAIR, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.genome import BROW_THICKNESS, HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import require_side, RIGHT, BodySide
@@ -114,8 +114,9 @@ def is_paired_head_hair(part: HeadHair) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head hair group must be the scalp's or the eyebrows")
+    require_valid(
+        part.is_valid(), "A head hair group must be the scalp's or the eyebrows"
+    )
     return part == EYEBROWS
 
 

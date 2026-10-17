@@ -20,7 +20,7 @@ minimum radius.
     var d = hand_lymph_distance(dims, PALMAR_PLEXUS, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -109,8 +109,7 @@ def hand_lymph_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand lymphatic must be a named part")
+    require_valid(part.is_valid(), "A hand lymphatic must be a named part")
     require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame

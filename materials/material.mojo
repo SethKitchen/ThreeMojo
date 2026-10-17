@@ -189,7 +189,7 @@ rasterizers read them from `raster_state`. See
 `docs/wiki/Renderer-hooks-and-material-flags.md`.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
 
 from render.cube_texture import check_rotation, is_turned
 from render.cube_texture_store import (
@@ -463,10 +463,10 @@ def custom_blending(
     var mode = Blending(
         pack_custom(src, dst, equation, alpha_src, alpha_dst, alpha_equation)
     )
-    if not mode.is_valid():
-        raise Error(
-            "A custom blending names a factor or an equation that is not one"
-        )
+    require_valid(
+        mode.is_valid(),
+        "A custom blending names a factor or an equation that is not one",
+    )
     return mode
 
 
@@ -1819,10 +1819,10 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's texture id cannot be negative")
         if opacity < 0 or opacity > 1:
             raise Error("Opacity must be between zero and one")
-        if not side.is_valid():
-            raise Error(
-                "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
-            )
+        require_valid(
+            side.is_valid(),
+            "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE",
+        )
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
@@ -1957,8 +1957,10 @@ struct Material(ImplicitlyCopyable):
         # wide line reads a width or an offset, and a wide line is unlit.
         # A wireframe is drawn by the one-pixel line pass, which cannot
         # draw any wider.
-        if not line_width.is_valid():
-            raise Error("A line width must be a positive, finite number")
+        require_valid(
+            line_width.is_valid(),
+            "A line width must be a positive, finite number",
+        )
         if not isfinite(dash_offset.to(METER)):
             raise Error("A dash offset must be finite")
         var widened = line_width != DEFAULT_LINE_WIDTH or dash_offset != NO_DASH
@@ -1979,8 +1981,10 @@ struct Material(ImplicitlyCopyable):
         # drawn unlit. The default size and attenuation are what every
         # other material carries without reading, so only a change is a
         # mistake.
-        if not point_size.is_valid():
-            raise Error("A point size must be a positive number of pixels")
+        require_valid(
+            point_size.is_valid(),
+            "A point size must be a positive number of pixels",
+        )
         if not isfinite(rotation.to(RADIAN)):
             raise Error("A sprite rotation must be finite")
         if kind != BASIC and (
@@ -2011,11 +2015,13 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's env map id cannot be negative")
         if not isfinite(reflectivity) or reflectivity < 0 or reflectivity > 1:
             raise Error("A reflectivity must be between zero and one")
-        if not combine.is_valid():
-            raise Error(
-                "A material's combine must be MULTIPLY_OPERATION,"
-                " MIX_OPERATION or ADD_OPERATION"
-            )
+        require_valid(
+            combine.is_valid(),
+            (
+                "A material's combine must be MULTIPLY_OPERATION, MIX_OPERATION"
+                " or ADD_OPERATION"
+            ),
+        )
         if not kind.reflects() and (
             env_map != NO_CUBE_TEXTURE
             or reflectivity != 1
@@ -2259,8 +2265,9 @@ struct Material(ImplicitlyCopyable):
         # A node graph replaces parts of a surface's shading, so a kind that
         # shows data or a shadow has nothing for it to replace. A wireframe
         # is drawn as lines, which run no graph.
-        if not nodes.is_valid():
-            raise Error("A material's node program id cannot be negative")
+        require_valid(
+            nodes.is_valid(), "A material's node program id cannot be negative"
+        )
         if nodes != NO_NODES and not kind.takes_nodes():
             raise Error(
                 "A data or shadow material runs no node graph: it"
@@ -2288,11 +2295,13 @@ struct Material(ImplicitlyCopyable):
                 "Only a basic, lambert or phong material refracts its"
                 " environment: a physical surface reflects it by roughness"
             )
-        if not normal_map_type.is_valid():
-            raise Error(
+        require_valid(
+            normal_map_type.is_valid(),
+            (
                 "A normal map type must be TANGENT_SPACE_NORMAL_MAP or"
                 " OBJECT_SPACE_NORMAL_MAP"
-            )
+            ),
+        )
         if (
             normal_map_type == OBJECT_SPACE_NORMAL_MAP
             and normal_map == NO_TEXTURE
@@ -2425,11 +2434,13 @@ struct Material(ImplicitlyCopyable):
         var stated = Bool(blending)
         if stated:
             var chosen = blending.value()
-            if not chosen.is_valid():
-                raise Error(
+            require_valid(
+                chosen.is_valid(),
+                (
                     "A material's blending must be OPAQUE, one of the four"
                     " named modes, or a custom one"
-                )
+                ),
+            )
             self.blending = chosen
         elif transparent or kind == SHADOW:
             # A shadow material is transparent wherever no shadow falls,
@@ -2499,11 +2510,13 @@ struct Material(ImplicitlyCopyable):
                 `check_distance_range` refuses. If `fog` is on on a data
                 kind, whose shaders read no fog.
         """
-        if not self.depth_packing.is_valid():
-            raise Error(
+        require_valid(
+            self.depth_packing.is_valid(),
+            (
                 "A material's depth packing must be BASIC_DEPTH_PACKING,"
                 " RGBA_DEPTH_PACKING, RGB_DEPTH_PACKING or RG_DEPTH_PACKING"
-            )
+            ),
+        )
         var packed = self.depth_packing != BASIC_DEPTH_PACKING
         if packed and self.kind != DEPTH:
             raise Error(
@@ -2913,10 +2926,10 @@ struct Material(ImplicitlyCopyable):
         if not stated:
             return self.side
         var face = self.shadow_side.value()
-        if not face.is_valid():
-            raise Error(
-                "A shadow side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
-            )
+        require_valid(
+            face.is_valid(),
+            "A shadow side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE",
+        )
         return face
 
     def depth_offset(self) raises -> PolygonOffset:
@@ -2936,8 +2949,10 @@ struct Material(ImplicitlyCopyable):
         var offset = PolygonOffset(
             self.polygon_offset_factor, self.polygon_offset_units
         )
-        if not offset.is_valid():
-            raise Error("A polygon offset factor and units must be finite")
+        require_valid(
+            offset.is_valid(),
+            "A polygon offset factor and units must be finite",
+        )
         return offset
 
     def clipping_planes(self) raises -> List[Plane]:

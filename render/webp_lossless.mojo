@@ -28,7 +28,7 @@ which tile.
 pixel or past the last, a transform named twice, and data that ends too
 soon are refused, as libwebp refuses them.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from math.utils import clamp
 
 # The first byte of a VP8L stream.
@@ -769,8 +769,7 @@ def apply_inverse(
     Raises:
         If the kind is not one of the four.
     """
-    if not kind.is_valid():
-        raise Error("WebP: a transform that is not known")
+    require_valid(kind.is_valid(), "WebP: a transform that is not known")
     var t = _Transform(kind, bits, width, data.copy())
     if kind == PREDICTOR_TRANSFORM:
         _undo_predictor(t, pixels, height)

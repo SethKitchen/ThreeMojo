@@ -18,7 +18,7 @@ and moves the tensor to the center of mass, so each bone's mass, center
 and inertia come from one pass. The whole body is the sum of its bones.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_valid
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
@@ -141,8 +141,7 @@ struct BodyMass(Movable):
             Error: If the kind is not named, or the sculpt has no
                 withers to measure, or an extent is absent or under-resolved.
         """
-        if not kind.is_valid():
-            raise Error("A reference length must be named")
+        require_valid(kind.is_valid(), "A reference length must be named")
         if kind == SHOULDER_HEIGHT:
             if self.withers.value < self.ground.value:
                 raise Error("The sculpt has no withers")

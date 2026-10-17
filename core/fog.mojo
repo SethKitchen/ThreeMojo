@@ -60,7 +60,7 @@ kernel as `lights.lighting.falloff` is, and held to the same numbers by the
 parity tests.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 
 from math.smoothstep import smoothstep
 from render.framebuffer import Color, FloatColor
@@ -125,8 +125,7 @@ def _check_fog_numbers(
             not beyond its start; or an exponential fog's density is
             negative or not finite.
     """
-    if not kind.is_valid():
-        raise Error("A fog of an unknown kind cannot be drawn")
+    require_valid(kind.is_valid(), "A fog of an unknown kind cannot be drawn")
     if kind == LINEAR_FOG:
         if not isfinite(near) or near < 0:
             raise Error(

@@ -17,7 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
     var d = nerve_distance(dims, SCIATIC_NERVE, Vector3(0, 0.2, -0.04))
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -60,8 +60,9 @@ def require_nerve_part(part: NervePart) raises:
     Raises:
         Error: If the nerve is not a named peripheral nerve.
     """
-    if not part.is_valid():
-        raise Error("A nerve part must be a named peripheral nerve")
+    require_valid(
+        part.is_valid(), "A nerve part must be a named peripheral nerve"
+    )
 
 
 comptime FEMORAL_NERVE = NervePart(0)

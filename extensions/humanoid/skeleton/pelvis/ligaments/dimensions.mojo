@@ -24,7 +24,7 @@ is anterior.
     var d = pelvis_ligament_distance(dims, INGUINAL, RIGHT, dims.gt)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
@@ -116,8 +116,7 @@ def require_pelvis_ligament(part: PelvisLigament) raises:
     Raises:
         Error: If the ligament is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic ligament must be a named ligament")
+    require_valid(part.is_valid(), "A pelvic ligament must be a named ligament")
 
 
 struct PelvisLigamentField(DistanceField, ImplicitlyCopyable):

@@ -18,7 +18,7 @@ cited width table.
     var d = torso_ligament_distance(dims, INTERVERTEBRAL_DISCS, RIGHT, p)
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import mix_point
 from extensions.anatomy.soft_tissue import (
@@ -86,8 +86,7 @@ def require_torso_ligament(part: TorsoLigament) raises:
     Raises:
         Error: If the part is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso ligament must be a named part")
+    require_valid(part.is_valid(), "A torso ligament must be a named part")
 
 
 def torso_ligament_field(
