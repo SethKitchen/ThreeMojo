@@ -334,10 +334,10 @@ def _check_round_trip(
     geometry: BufferGeometry,
     kind: DracoObjectKind,
     options: DracoExportOptions,
-    bytes: List[UInt8],
+    var bytes: List[UInt8],
 ) raises:
     """Read an export back, and find the geometry's corners in it."""
-    var decoded = decode_draco(bytes)
+    var decoded = decode_draco(bytes^)
     var expected = _Expected(geometry, kind, options)
     assert_equal(len(decoded.attributes), len(expected.names))
     var arrays = List[List[Float32]]()
@@ -587,7 +587,7 @@ def test_without_an_index() raises:
     # refuses more points than three for each triangle.
     var bytes = export_draco(two, DRACO_EXPORT_MESH, sequential)
     with assert_raises(contains="there are too many points"):
-        _ = decode_draco(bytes)
+        _ = decode_draco(bytes^)
 
 
 def test_write_draco() raises:
@@ -618,7 +618,7 @@ def test_one_value() raises:
             DRACO_EXPORT_POINTS,
             DracoExportOptions(encoder_method=method),
         )
-        var decoded = decode_draco(bytes)
+        var decoded = decode_draco(bytes^)
         assert_equal(decoded.points, 1)
         assert_equal(decoded.float32_values(0), [Float32(1), 2, 3])
 
@@ -639,7 +639,7 @@ def test_one_texture_prediction() raises:
         DRACO_EXPORT_MESH,
         DracoExportOptions(encode_speed=0, decode_speed=0),
     )
-    var decoded = decode_draco(bytes)
+    var decoded = decode_draco(bytes^)
     assert_true(decoded.geometry_type == DRACO_TRIANGULAR_MESH)
     assert_equal(len(decoded.faces), 3)
     var positions = decoded.float32_values(0)

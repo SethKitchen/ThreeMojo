@@ -122,7 +122,7 @@ def main() raises:
             print("FAIL", label, "has other bytes than three.js")
             failed += 1
             continue
-        _ = decode_draco(got)
+        _ = decode_draco(got^)
     var total = doc.length(cases)
     if failed > 0:
         raise Error(String(failed) + " of " + String(total) + " cases fail")
