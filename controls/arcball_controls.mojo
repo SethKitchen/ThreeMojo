@@ -1791,11 +1791,11 @@ struct ArcballControls(Copyable, Movable):
         Returns:
             The scale.
         """
-        ref e = self._gizmo.elements
-        var sx = Vector3(e[0], e[1], e[2]).length()
-        var sy = Vector3(e[4], e[5], e[6]).length()
-        var sz = Vector3(e[8], e[9], e[10]).length()
-        return (sx + sy + sz) / 3
+        return (
+            self._gizmo.column_length(0)
+            + self._gizmo.column_length(1)
+            + self._gizmo.column_length(2)
+        ) / 3
 
     def _make_gizmos(mut self, lens: _Lens, center: Vector3, radius: Float32):
         """Build the gizmo about a center, dim, at a scale that undoes an

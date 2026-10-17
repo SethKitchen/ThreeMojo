@@ -52,7 +52,7 @@ from core.user_data import UserData
 from math.euler import XYZ, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, require_nonzero_scale
 from units.si import METER, Angle, Length
 
 
@@ -119,13 +119,10 @@ def scale_of(matrix: Matrix4) -> Vector3:
         The lengths of the first three columns. The x length is negative
         when the matrix mirrors, as in three.js.
     """
-    ref e = matrix.elements
-    var sx = Vector3(e[0], e[1], e[2]).length()
-    var sy = Vector3(e[4], e[5], e[6]).length()
-    var sz = Vector3(e[8], e[9], e[10]).length()
+    var scale = Vector3.from_matrix_scale(matrix)
     if matrix.determinant() < 0:
-        sx = -sx
-    return Vector3(sx, sy, sz)
+        scale.x = -scale.x
+    return scale
 
 
 def facing(
@@ -499,8 +496,9 @@ struct Object3D(ImplicitlyCopyable):
                 refuses and leaves the node as it was.
         """
         var scale = scale_of(matrix)
-        if scale.x * scale.y * scale.z == 0:
-            raise Error("A transform that flattens an axis has no rotation")
+        require_nonzero_scale(
+            scale, "A transform that flattens an axis has no rotation"
+        )
         ref e = matrix.elements
         var rotation = Matrix4()
         for row in range(3):  # pragma: no branch

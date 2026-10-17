@@ -46,7 +46,7 @@ from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene, require_skinned_mesh
 from math.matrix4 import Matrix4, compose
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.vector3 import Vector3, require_nonzero_scale
 from objects.skeleton import Skeleton
 
 
@@ -316,8 +316,9 @@ def retarget(
                 undo.invert()
                 relative.premultiply(undo)
             var size = Vector3.from_matrix_scale(relative)
-            if size.x * size.y * size.z == 0:
-                raise Error("A source bone that flattens an axis has no turn")
+            require_nonzero_scale(
+                size, "A source bone that flattens an axis has no turn"
+            )
             relative.scale(Vector3(1 / size.x, 1 / size.y, 1 / size.z))
             placed = compose(
                 Vector3(0, 0, 0),
