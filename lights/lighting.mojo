@@ -2003,10 +2003,9 @@ struct Lighting(Movable):
             total = _add_rgb(total, rgb_channels(light) * (through * lambert))
         for index in range(len(self.positions)):
             # From the surface to the bulb: how far, and which way.
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             # A surface exactly on the bulb has no direction to be lit from.
             if distance == 0:
                 continue
@@ -2106,10 +2105,9 @@ struct Lighting(Movable):
             ref light = self.radiances[index]
             total = _add_rgb(total, rgb_channels(light) * (through * tone))
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             # A surface exactly on the bulb has no direction to be lit from.
             if distance == 0:
                 continue
@@ -2217,10 +2215,9 @@ struct Lighting(Movable):
             ref light = self.radiances[index]
             sum = sum + (rgb_channels(light) * (through * lambert)) * sent
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             if distance == 0:
                 continue
             var lambert = normal.dot(toward) / direction_length
@@ -2350,9 +2347,9 @@ struct Lighting(Movable):
             ref light = self.radiances[index]
             sum = sum + rgb_channels(light) * (shadowed * sent)
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
+            var toward, distance, _ = light_vector(
+                self.positions[index], position
+            )
             if distance == 0:
                 continue
             var bare = falloff(
@@ -2426,7 +2423,7 @@ struct Lighting(Movable):
         for index in range(len(self.positions)):
             # A step on the bulb is lit by `falloff`'s floor, as three.js's
             # `getDistanceAttenuation` lights it: no direction is read.
-            var distance = light_vector(self.positions[index], position)[1]
+            var _, distance, _ = light_vector(self.positions[index], position)
             ref bulb = self.point_radiances[index]
             total = total + shadowed_twice(
                 rgb_channels(bulb),
@@ -2483,10 +2480,9 @@ struct Lighting(Movable):
         """
         var total = FloatColor(0.0, 0.0, 0.0, 1.0)
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             if distance == 0:
                 continue
             var lambert = normal.dot(toward) / direction_length
@@ -2629,10 +2625,9 @@ struct Lighting(Movable):
                 layers,
             )
         for index in range(len(self.positions)):
-            var ray = light_vector(self.positions[index], position)
-            var toward = ray[0]
-            var distance = ray[1]
-            var direction_length = ray[2]
+            var toward, distance, direction_length = light_vector(
+                self.positions[index], position
+            )
             if distance == 0:
                 continue
             var lambert, coat_lambert = light_cosines(
