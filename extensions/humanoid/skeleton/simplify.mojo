@@ -31,7 +31,13 @@ from core.ordinal import ordinal_valid
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    NORMAL,
+    POSITION,
+    UV,
+    require_stored_index,
+)
 from core.geometry_store import GeometryId
 from core.scene import Scene
 from math.bounds import enclose_point
@@ -464,8 +470,7 @@ def _read_mesh(geometry: BufferGeometry) raises -> WeldedMesh:
     if len(faces) % 3 != 0:
         raise Error("A mesh to simplify must hold whole triangles")
     for slot in range(len(faces)):
-        if faces[slot] < 0 or faces[slot] >= count:
-            raise Error("An index entry points past the last vertex")
+        require_stored_index(faces[slot], count)
     return WeldedMesh(positions^, uvs^, faces^)
 
 

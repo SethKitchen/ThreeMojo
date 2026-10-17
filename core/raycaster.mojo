@@ -140,7 +140,7 @@ from core.buffer_geometry import (
     UV1,
 )
 from core.buffer_attribute import BufferAttribute
-from core.scene import Scene
+from core.scene import Scene, require_lod_index
 from math.ray_query import RayQuery
 from math.bounds import Sphere
 from math.matrix4 import Matrix4
@@ -759,8 +759,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no LOD has that index, or for anything
                 `intersect_mesh` raises for.
         """
-        if index < 0 or index >= len(scene.lods):
-            raise Error("No LOD has that index")
+        require_lod_index(index, len(scene.lods))
         ref lod = scene.lods[index]
         var world = scene.world_matrix(lod.node)
         var origin = world.transform_point(Vector3(0, 0, 0))

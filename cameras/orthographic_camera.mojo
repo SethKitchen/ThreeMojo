@@ -46,7 +46,11 @@ from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
-from math.projection import orthographic, view_to_screen
+from math.projection import (
+    orthographic,
+    require_far_beyond_near,
+    view_to_screen,
+)
 from math.vector3 import Vector3
 from units.si import Length, METER
 
@@ -135,8 +139,7 @@ struct OrthographicCamera(Camera):
             raise Error("The view volume needs right beyond left")
         if self.top.value <= self.bottom.value:
             raise Error("The view volume needs top above bottom")
-        if self.far.value <= self.near.value:
-            raise Error("The far plane must be beyond the near plane")
+        require_far_beyond_near(self.near.value, self.far.value)
         if not (self.zoom > 0 and isfinite(self.zoom)):
             raise Error(
                 "An orthographic zoom must be positive, got ", self.zoom
