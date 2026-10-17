@@ -60,7 +60,7 @@ from animation.keyframe_track import (
 from core.object3d import NodeId
 from loaders.fbx_tree import NO_FBX_NODE, FbxDocument, object_name
 from math.euler import ZYX, Euler, EulerOrder
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, append_quaternion
 from math.vector3 import Vector3
 from std.math import isnan, pi
 from units.si import RADIAN, SECOND, Angle, Duration
@@ -632,10 +632,7 @@ def _rotation_track(
         # Unroll: the same rotation on the side of the key before.
         if _flips(key, previous, turned):
             turned = -turned
-        values.append(turned.x)
-        values.append(turned.y)
-        values.append(turned.z)
-        values.append(turned.w)
+        append_quaternion(values, turned)
         previous = turned
     return KeyframeTrack(
         node_target(model.node, QUATERNION), _durations(times), values^

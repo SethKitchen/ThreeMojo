@@ -65,7 +65,7 @@ from extensions.humanoid.rig.joints import (
     HumanoidRig,
     Joint,
 )
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, append_quaternion
 from math.smoothstep import hermite_fade
 from math.utils import clamp
 from math.vector3 import Vector3, mix_delta3, append_vector3
@@ -183,10 +183,7 @@ def clip_from_poses(
         var values = List[Float32](capacity=4 * len(poses))
         for k in range(len(poses)):  # pragma: no branch
             var q = joint_rotation(poses[k].angles[j])
-            values.append(q.x)
-            values.append(q.y)
-            values.append(q.z)
-            values.append(q.w)
+            append_quaternion(values, q)
         tracks.append(KeyframeTrack(bones[j], QUATERNION, times, values^))
     var rest = rig.local(HIPS)
     var places = List[Float32](capacity=3 * len(poses))

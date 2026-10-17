@@ -132,7 +132,7 @@ from materials.material import (
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
-from math.vector2 import Vector2
+from math.vector2 import Vector2, append_vector2
 from math.vector3 import Vector3, append_vector3
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
@@ -2262,8 +2262,7 @@ struct _Face(Movable):
                 var n = self.normals[corner]
                 append_vector3(part.normals, n)
             if len(self.uvs) > 0:
-                part.uvs.append(self.uvs[corner].x)
-                part.uvs.append(self.uvs[corner].y)
+                append_vector2(part.uvs, self.uvs[corner])
             if len(self.colors) > 0:
                 var c = self.colors[corner]
                 append_vector3(part.colors, c)

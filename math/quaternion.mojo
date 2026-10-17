@@ -589,3 +589,22 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         if angle == 0:
             return
         self = self.slerp(other, min(Float32(1), step.value / angle))
+
+
+def append_quaternion(mut values: List[Float32], rotation: Quaternion):
+    """Append `rotation`'s four components, x, y, z, then w.
+
+    Args:
+        values: The list that receives the components.
+        rotation: The quaternion.
+
+    Returns:
+        Nothing. Four numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(rotation.x)
+    values.append(rotation.y)
+    values.append(rotation.z)
+    values.append(rotation.w)

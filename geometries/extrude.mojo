@@ -113,7 +113,7 @@ from geometries.shape import Contours, extract_points, is_clockwise
 from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.norm import squared_length2
 from math.path import Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, append_vector2
 from math.vector3 import Vector3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
@@ -511,8 +511,7 @@ def _faces(
                 if len(wall) != 4:
                     raise Error("A side wall UV generator must give four")
                 for pick in [0, 1, 3, 1, 2, 3]:  # pragma: no branch
-                    uvs.append(wall[pick].x)
-                    uvs.append(wall[pick].y)
+                    append_vector2(uvs, wall[pick])
 
     var walls = len(data) // 3 - lids
     # Rounded once, as three.js's `Float32BufferAttribute` rounds them.
@@ -854,8 +853,7 @@ def _cap_uvs(
     if len(cap) != 3:
         raise Error("A top UV generator must give three")
     for point in cap:  # pragma: no branch
-        uvs.append(point.x)
-        uvs.append(point.y)
+        append_vector2(uvs, point)
 
 
 def _joined(parts: List[BufferGeometry]) raises -> BufferGeometry:
