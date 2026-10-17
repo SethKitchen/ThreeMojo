@@ -23,6 +23,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
 from extensions.humanoid.skeleton.leg.vessels.dimensions import (
     VesselPart,
     _display_vessel_field,
+    require_vessel_part,
     vessel_part_label,
 )
 
@@ -71,8 +72,7 @@ def vessel_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A vessel part must be a named artery or vein")
+    require_vessel_part(part)
     var label = vessel_part_label(part)
     var field = _display_vessel_field(dimensions, part)
     return mesh_checked(field, field.low, field.high, detail, label)

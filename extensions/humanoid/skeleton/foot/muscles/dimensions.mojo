@@ -63,6 +63,22 @@ struct FootMuscle(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, EXTENSOR_HALLUCIS_BREVIS.value)
 
 
+def require_foot_muscle(part: FootMuscle) raises:
+    """Refuse a foot muscle that is not named.
+
+    Args:
+        part: The muscle or tendon.
+
+    Returns:
+        Nothing. The call returns when the part is named.
+
+    Raises:
+        Error: If the part is not a named muscle or tendon.
+    """
+    if not part.is_valid():
+        raise Error("A foot muscle must be a named muscle or tendon")
+
+
 comptime CALCANEAL_TENDON = FootMuscle(0)
 comptime TIBIALIS_ANTERIOR_TENDON = FootMuscle(1)
 comptime EXTENSOR_HALLUCIS_LONGUS_TENDON = FootMuscle(2)
@@ -141,8 +157,7 @@ struct FootMuscleField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot muscle must be a named muscle or tendon")
+        require_foot_muscle(part)
         self.tubes = _tubes(dimensions, part)
         self.k = dimensions.k
         self.epsilon = dimensions.epsilon
@@ -222,8 +237,7 @@ def is_tendon(part: FootMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A foot muscle must be a named muscle or tendon")
+    require_foot_muscle(part)
     return part.value <= FLEXOR_DIGITORUM_LONGUS_TENDON.value
 
 

@@ -45,6 +45,7 @@ from extensions.humanoid.rig.joints import (
     JOINT_COUNT,
     HumanoidRig,
     Joint,
+    require_joint,
 )
 from math.utils import clamp
 from math.vector3 import Vector3
@@ -329,8 +330,7 @@ def skin_weights(
     """
     var allowed = List[Bool](length=JOINT_COUNT, fill=len(joints) == 0)
     for j in joints:  # pragma: no branch
-        if not j.is_valid():
-            raise Error("A joint must be a named joint")
+        require_joint(j)
         allowed[j.value] = True
     ref placed = skin.attribute_view(String(POSITION))
     var count = placed.count()
@@ -472,8 +472,7 @@ def rigid_weights(mut part: BufferGeometry, joint: Joint) raises:
     Raises:
         Error: If the part has no positions or `joint` is not named.
     """
-    if not joint.is_valid():
-        raise Error("A joint must be a named joint")
+    require_joint(joint)
     var count = part.attribute_view(String(POSITION)).count()
     var indices = List[Float32](capacity=4 * count)
     var weights = List[Float32](capacity=4 * count)

@@ -18,6 +18,7 @@ from extensions.humanoid.skeleton.foot.chain import display_tube_set
 from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscle,
     FootMuscleDimensions,
+    require_foot_muscle,
     FootMuscleField,
     foot_muscle_dimensions,
     foot_muscle_part_label,
@@ -72,8 +73,7 @@ def muscle_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot muscle must be a named muscle or tendon")
+    require_foot_muscle(part)
     var label = foot_muscle_part_label(part)
     var field = FootMuscleField(dimensions, part)
     if is_tendon(part):
