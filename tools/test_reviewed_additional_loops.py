@@ -33,7 +33,7 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
     def test_exact_sites_and_truthful_cardinalities(self):
         expected = {AXES: {50: ('reviewed-nonempty-range', 1, 3)},
                     BLEND: {592: ('literal-list', 4, 4)},
-                    HAIR: {225: ('literal-range', 2, 2), 231: ('literal-range', 3, 3)}}
+                    HAIR: {229: ('literal-range', 2, 2), 235: ('literal-range', 3, 3)}}
         for module, sites in expected.items():
             actual = loops.reviewed_nonempty_loops(self.root, module)
             self.assertEqual(set(actual), set(sites))
@@ -42,6 +42,36 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
                 self.assertEqual((actual[line]['required'], actual[line]['impossible']), ('T', 'F'))
                 self.assertNotIn(line, loops.constant_loops((self.root/(module+'.mojo')).read_text()))
         self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'unlisted/module'), {})
+
+    def test_hair_successor_keeps_historical_descriptor_and_other_rows_withheld(self):
+        bindings, rows = loops.REVIEWED_LOOP_RULES[HAIR]
+        self.assertEqual(bindings, {HAIR + '.mojo':
+            '42e4799761c82ebc1f51ed87c5e77d67c018bd5d310670cecb74d220c236e880'})
+        self.assertEqual(rows, (
+            (225, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
+            (231, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels')))
+        actual = loops.reviewed_nonempty_loops(self.root, HAIR)
+        self.assertEqual(set(actual), {229, 235})
+        self.assertEqual(actual[229]['dependency_sha256'], loops.HAIR_LITERAL_SUCCESSOR[0])
+        path = self.root/(HAIR + '.mojo')
+        raw = path.read_bytes()
+        path.write_bytes(raw + b'\n# unrelated change\n')
+        self.assertEqual(loops.reviewed_nonempty_loops(self.root, HAIR), {})
+        path.write_bytes(raw)
+
+    def test_hair_source_and_include_std_shadows_reject(self):
+        stage = self.root/'coverage/build'
+        stage.mkdir(parents=True)
+        for root in (self.root, stage):
+            for name in ('std.mojo', 'std.mojopkg', 'std.unknown'):
+                path = root/name
+                with self.subTest(root=root, name=name):
+                    path.write_text('unreviewed range provider')
+                    self.assertEqual(loops.reviewed_nonempty_loops(
+                        self.root, HAIR, include_roots=(stage,)), {})
+                    path.unlink()
+        self.assertEqual(set(loops.reviewed_nonempty_loops(
+            self.root, HAIR, include_roots=(stage,))), {229, 235})
 
     def test_axis_assertion_alias_call_and_iterable_mutations_reject(self):
         cases = [(PRODUCER, 'comptime assert axes >= 1 and axes <= 3', 'comptime assert axes >= 0 and axes <= 3'),
