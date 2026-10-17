@@ -41,6 +41,7 @@ three.js's internal `_getMatrix` multiplies the two the other way round.
 from core.ordinal import ordinal_valid, require_valid
 
 from math.rounded_product import rounded_product
+from math.vector3 import vector3_from_float64
 from render.framebuffer import Color, FloatColor, SrgbBytes
 from std.math import pow
 
@@ -557,7 +558,8 @@ def convert(
         r = linear_to_srgb_three(r)
         g = linear_to_srgb_three(g)
         b = linear_to_srgb_three(b)
-    return FloatColor(Float32(r), Float32(g), Float32(b), color.a)
+    var linear = vector3_from_float64(r, g, b)
+    return FloatColor(linear.x, linear.y, linear.z, color.a)
 
 
 # How many floats an `OutputEncoding` crosses to the device as: the nine

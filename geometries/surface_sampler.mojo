@@ -50,7 +50,7 @@ from math.finite import require_finite, require_non_negative_finite
 from math.norm import squared_length3
 from math.utils import SeededRandom
 from math.vector2 import Vector2, vector2_from_float64
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from render.framebuffer import FloatColor
 from std.math import ceil, isfinite, sqrt
 
@@ -85,10 +85,10 @@ def _mix(a: Vector3, b: Vector3, c: Vector3, u: Float64, v: Float64) -> Vector3:
         The mixed value.
     """
     var w = 1 - (u + v)
-    return Vector3(
-        Float32(Float64(a.x) * u + Float64(b.x) * v + Float64(c.x) * w),
-        Float32(Float64(a.y) * u + Float64(b.y) * v + Float64(c.y) * w),
-        Float32(Float64(a.z) * u + Float64(b.z) * v + Float64(c.z) * w),
+    return vector3_from_float64(
+        Float64(a.x) * u + Float64(b.x) * v + Float64(c.x) * w,
+        Float64(a.y) * u + Float64(b.y) * v + Float64(c.y) * w,
+        Float64(a.z) * u + Float64(b.z) * v + Float64(c.z) * w,
     )
 
 

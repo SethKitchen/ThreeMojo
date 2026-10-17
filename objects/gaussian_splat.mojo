@@ -49,7 +49,7 @@ from math.box_extent import _max_radius_encloses_box
 from math.matrix4 import Matrix4
 from math.norm import squared_length3
 from math.utils import max3
-from math.vector3 import Vector3, append_vector3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from std.math import floor, inf, max, min, sqrt
 from std.memory import bitcast
 from units.si import Length, METER
@@ -488,10 +488,10 @@ struct GaussianSplat(Copyable, Movable):
             return None
         # Preserve the surface offset even when the distance from the ray
         # origin is too large for that offset to survive in its parameter.
-        return Vector3(
-            Float32(Float64(center.x) + fx + offset * dx),
-            Float32(Float64(center.y) + fy + offset * dy),
-            Float32(Float64(center.z) + fz + offset * dz),
+        return vector3_from_float64(
+            Float64(center.x) + fx + offset * dx,
+            Float64(center.y) + fy + offset * dy,
+            Float64(center.z) + fz + offset * dz,
         )
 
     def sort_direction(self, model_view: Matrix4) -> Vector3:

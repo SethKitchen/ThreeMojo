@@ -27,6 +27,7 @@ from core.object3d import Object3D, _place_decomposed
 from materials.material import Material, MaterialId
 from loaders.gltf import decode_image
 from math.matrix4 import Matrix4
+from math.vector3 import vector3_from_float64
 from math.finite import require_finite_group, require_unit_finite
 from render.framebuffer import Color, FloatColor
 from render.srgb import ColorSpace
@@ -112,7 +113,8 @@ def authored_color(
             + ": a color channel must be from zero to one, not "
             + String(channel),
         )
-    return FloatColor(Float32(r), Float32(g), Float32(b), 1).quantize()
+    var linear = vector3_from_float64(r, g, b)
+    return FloatColor(linear.x, linear.y, linear.z, 1).quantize()
 
 
 def texture_from_bytes(
