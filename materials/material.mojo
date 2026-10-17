@@ -747,6 +747,30 @@ def require_gap_size(size: Float32) raises:
         raise Error("A gap size cannot be negative")
 
 
+def require_unmixed_data(is_data: Bool, mixes: Bool) raises:
+    """Refuse a data material that blends into the light behind it.
+
+    A normal or a depth material holds bytes. A blend would mix those
+    bytes with the scene's light.
+
+    Args:
+        is_data: Whether the material shows data rather than light.
+        mixes: Whether its blending mixes with the pixel behind it.
+
+    Returns:
+        Nothing. The call returns when the material shows light, or it
+            does not blend.
+
+    Raises:
+        Error: If a data material blends.
+    """
+    if is_data and mixes:
+        raise Error(
+            "A normal or depth material cannot blend: a pixel holds its"
+            " bytes or the scene's light, not a mixture of the two"
+        )
+
+
 def require_strand_opacity(opacity: Float32) raises:
     """Refuse a strand opacity outside zero through one.
 
@@ -2430,11 +2454,7 @@ struct Material(ImplicitlyCopyable):
         # refused along with a policy stated outright -- see
         # `render.target`. A map's own alpha is another matter: an opaque
         # write keeps it, and the bytes come back exact.
-        if kind.is_data() and self.blending.mixes():
-            raise Error(
-                "A normal or depth material cannot blend: a pixel holds its"
-                " bytes or the scene's light, not a mixture of the two"
-            )
+        require_unmixed_data(kind.is_data(), self.blending.mixes())
         self.depth_packing = depth_packing
         self.reference_position = reference_position
         self.near_distance = near_distance
