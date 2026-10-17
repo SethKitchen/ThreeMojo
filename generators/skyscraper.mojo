@@ -1320,13 +1320,12 @@ struct _Baked:
     def geometry(self) raises -> BufferGeometry:
         """Return the baked attributes as one geometry."""
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
+        textured_surface(
+            geometry,
+            self.positions.copy(),
+            self.normals.copy(),
+            self.uvs.copy(),
         )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
-        )
-        geometry.set_attribute(String(UV), BufferAttribute(self.uvs.copy(), 2))
         geometry.set_attribute(
             String(PART_ID), BufferAttribute(self.part_ids.copy(), 1)
         )

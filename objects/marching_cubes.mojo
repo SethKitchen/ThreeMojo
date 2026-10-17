@@ -40,7 +40,8 @@ Where the port differs:
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, COLOR, UV
+from geometries.surface import position_normal_surface
 from core.geometry_store import GeometryId
 from core.ordinal import index_in_count
 from math.norm import squared_length3
@@ -668,11 +669,8 @@ struct MarchingCubes(Movable):
         if self.count == 0:
             raise Error("A marching cubes surface with no triangle")
         var geometry = BufferGeometry()
-        geometry.set_attribute(
-            String(POSITION), BufferAttribute(self.positions.copy(), 3)
-        )
-        geometry.set_attribute(
-            String(NORMAL), BufferAttribute(self.normals.copy(), 3)
+        position_normal_surface(
+            geometry, self.positions.copy(), self.normals.copy()
         )
         if self.enable_uvs:
             geometry.set_attribute(
