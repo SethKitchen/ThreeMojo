@@ -30,6 +30,7 @@ The wall is per square meter of area. The first node is on the outside
 face, the side of the first layer.
 """
 
+from math.finite import positive_finite
 from std.math import ceil, isfinite, sqrt
 from extensions.building.construction import Construction
 from extensions.building.material import BuildingMaterial
@@ -61,7 +62,7 @@ def require_fourier(fourier: Float64) raises:
     Raises:
         Error: If the number is not positive and finite.
     """
-    if not (fourier > 0 and isfinite(fourier)):
+    if not positive_finite(fourier):
         raise Error("A Fourier number must be positive and finite")
 
 
@@ -118,7 +119,7 @@ struct LayeredWall(Copyable, Movable):
         """
         construction.check(materials)
         var dt = step.to(SECOND)
-        if not (dt > 0 and isfinite(dt)):
+        if not positive_finite(dt):
             raise Error("A conduction step must be positive and finite")
         require_fourier(fourier)
         if not initial.is_valid():

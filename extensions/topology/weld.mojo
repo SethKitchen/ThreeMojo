@@ -12,7 +12,8 @@ the tolerance are one point; two points farther apart than twice the
 tolerance are never merged.
 """
 
-from std.math import floor, isfinite
+from math.finite import positive_finite
+from std.math import floor
 
 
 def require_weld_tolerance(tolerance: Float64) raises:
@@ -27,7 +28,7 @@ def require_weld_tolerance(tolerance: Float64) raises:
     Raises:
         Error: If the tolerance is not positive and finite.
     """
-    if not (tolerance > 0 and isfinite(tolerance)):
+    if not positive_finite(tolerance):
         raise Error("A weld tolerance must be positive and finite")
 
 

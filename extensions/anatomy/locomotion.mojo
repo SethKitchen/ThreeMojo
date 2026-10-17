@@ -38,7 +38,7 @@ comptime TROT_FROUDE = 0.5
 
 def _height(hip: Length) raises -> Float64:
     var h = Float64(hip.to(METER))
-    if not (h > 0.0 and isfinite(h)):
+    if not positive_finite(h):
         raise Error("A hip height must be positive and finite")
     return h
 
@@ -102,7 +102,7 @@ def stride_length(fr: Float64, hip: Length) raises -> Length:
             hip height is not positive and finite.
     """
     var h = _height(hip)
-    if not (fr > 0.0 and isfinite(fr)):
+    if not positive_finite(fr):
         raise Error("A stride needs a positive Froude number")
     var stride = Float32(2.3 * pow(fr, 0.3) * h)
     if not (positive_finite(Float64(stride))):

@@ -27,6 +27,7 @@ and ISO 17772-1 Annex. They are typical values, not design values. A
 project must use its own.
 """
 
+from math.finite import positive_finite
 from std.math import isfinite
 from extensions.building.construction import (
     Construction,
@@ -88,7 +89,7 @@ def _nonnegative(value: Float64, message: String) raises:
 
 
 def _positive(value: Float64, message: String) raises:
-    if not (value > 0 and isfinite(value)):
+    if not positive_finite(value):
         raise Error(message)
 
 
