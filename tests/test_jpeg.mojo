@@ -328,11 +328,11 @@ def test_a_huffman_table_is_checked_as_it_is_built() raises:
     assert_true(table.defined)
     assert_false(HuffmanTable().defined)
     # One code of one bit: `0` is the symbol and `1` is nothing at all.
-    var reader = BitReader([UInt8(0x00)], 0)
+    var one: List[UInt8] = [0x00]
+    var reader = BitReader(Span(one), 0)
     assert_equal(reader.decode(table), UInt8(7))
-    var wrong = BitReader(
-        [UInt8(0xFF), UInt8(0x00), UInt8(0xFF), UInt8(0x00)], 0
-    )
+    var stuffed: List[UInt8] = [0xFF, 0x00, 0xFF, 0x00]
+    var wrong = BitReader(Span(stuffed), 0)
     with assert_raises():
         _ = wrong.decode(table)
 
@@ -1124,10 +1124,12 @@ def test_a_scan_names_one_to_all_of_the_components() raises:
 
 
 def test_complete_nonmarker_bytes_cannot_end_a_scan() raises:
-    var restart_reader = BitReader([UInt8(0), UInt8(0xD0)], 0)
+    var restart_bytes: List[UInt8] = [0, 0xD0]
+    var restart_reader = BitReader(Span(restart_bytes), 0)
     with assert_raises(contains="without its marker"):
         restart_reader.restart(UInt8(0xD0))
-    var end_reader = BitReader([UInt8(0), UInt8(0xD9)], 0)
+    var end_bytes: List[UInt8] = [0, 0xD9]
+    var end_reader = BitReader(Span(end_bytes), 0)
     with assert_raises(contains="without a marker"):
         _ = end_reader.end()
 
