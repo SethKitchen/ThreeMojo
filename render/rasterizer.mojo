@@ -5841,6 +5841,82 @@ def _code_of(
     )
 
 
+def _host_level[
+    origin: Origin[mut=False]
+](
+    textures: Pointer[TextureStore, origin],
+    slot: Int,
+    u: Float32,
+    v: Float32,
+    level: Float32,
+) -> FloatColor:
+    """Return one stored texture at a mip level."""
+    return textures[].textures[slot].sample_level(u, v, level)
+
+
+def _host_grad[
+    origin: Origin[mut=False]
+](
+    textures: Pointer[TextureStore, origin],
+    slot: Int,
+    u: Float32,
+    v: Float32,
+    dx: Vector2,
+    dy: Vector2,
+) -> FloatColor:
+    """Return one stored texture read with explicit gradients."""
+    return textures[].textures[slot]._sample_grad(u, v, dx, dy)
+
+
+def _host_cube[
+    origin: Origin[mut=False]
+](
+    cubes: Pointer[CubeTextureStore, origin], slot: Int, direction: Vector3
+) -> FloatColor:
+    """Return one stored cube read in a direction."""
+    return cubes[].textures[slot].sample(direction)
+
+
+def _host_volume[
+    origin: Origin[mut=False]
+](
+    volumes: Pointer[Data3DTextureStore, origin], slot: Int, at: Vector3
+) -> FloatColor:
+    """Return one stored volume read."""
+    return volumes[].textures[slot].sample(at.x, at.y, at.z)
+
+
+def _host_array[
+    origin: Origin[mut=False]
+](
+    arrays: Pointer[DataArrayTextureStore, origin], slot: Int, at: Vector3
+) -> FloatColor:
+    """Return one stored array texture read."""
+    return arrays[].textures[slot].sample(at.x, at.y, at.z)
+
+
+def _host_fetch[
+    origin: Origin[mut=False]
+](
+    textures: Pointer[TextureStore, origin],
+    slot: Int,
+    x: Int,
+    y: Int,
+    level: Int,
+) -> FloatColor:
+    """Return one stored texel by its column and row."""
+    return textures[].textures[slot].fetch(x, y, level)
+
+
+def _host_size[
+    origin: Origin[mut=False]
+](textures: Pointer[TextureStore, origin], slot: Int, level: Int) -> SIMD[
+    DType.float32, 4
+]:
+    """Return one stored texture level's size."""
+    return textures[].textures[slot].fetch_size(level)
+
+
 struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource`: a program in its store, and one triangle's
     own footprint for the textures it reads, as `_sample_map` reads the
@@ -5930,33 +6006,33 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     ) -> FloatColor:
         """Return a texture read at (u, v) and a mip level, through the
         texture's two filters, as `Texture.sample_level` reads it."""
-        return self.textures[].textures[slot].sample_level(u, v, level)
+        return _host_level(self.textures, slot, u, v, level)
 
     def sample_grad(
         self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
     ) -> FloatColor:
         """Read explicit gradients through the texture's checked sampler."""
-        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+        return _host_grad(self.textures, slot, u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].textures[slot].sample(direction)
+        return _host_cube(self.cubes, slot, direction)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, `Data3DTexture.sample`."""
-        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_volume(self.volumes, slot, at)
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, `DataArrayTexture.sample`."""
-        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_array(self.arrays, slot, at)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
-        return self.textures[].textures[slot].fetch(x, y, level)
+        return _host_fetch(self.textures, slot, x, y, level)
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return a texture level's size, `Texture.fetch_size`."""
-        return self.textures[].textures[slot].fetch_size(level)
+        return _host_size(self.textures, slot, level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each corner's perspective-correct weight at this pixel,
@@ -6094,33 +6170,33 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
     ) -> FloatColor:
         """Return a texture read at (u, v) and a mip level,
         `Texture.sample_level`."""
-        return self.textures[].textures[slot].sample_level(u, v, level)
+        return _host_level(self.textures, slot, u, v, level)
 
     def sample_grad(
         self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
     ) -> FloatColor:
         """Read explicit gradients through the texture's checked sampler."""
-        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+        return _host_grad(self.textures, slot, u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].textures[slot].sample(direction)
+        return _host_cube(self.cubes, slot, direction)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, `Data3DTexture.sample`."""
-        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_volume(self.volumes, slot, at)
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, `DataArrayTexture.sample`."""
-        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_array(self.arrays, slot, at)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
-        return self.textures[].textures[slot].fetch(x, y, level)
+        return _host_fetch(self.textures, slot, x, y, level)
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return a texture level's size, `Texture.fetch_size`."""
-        return self.textures[].textures[slot].fetch_size(level)
+        return _host_size(self.textures, slot, level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return the whole weight on the first corner: every corner is
@@ -6251,33 +6327,33 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
     ) -> FloatColor:
         """Return a texture read at (u, v) and a mip level,
         `Texture.sample_level`."""
-        return self.textures[].textures[slot].sample_level(u, v, level)
+        return _host_level(self.textures, slot, u, v, level)
 
     def sample_grad(
         self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
     ) -> FloatColor:
         """Read explicit gradients through the texture's checked sampler."""
-        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+        return _host_grad(self.textures, slot, u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].textures[slot].sample(direction)
+        return _host_cube(self.cubes, slot, direction)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, `Data3DTexture.sample`."""
-        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_volume(self.volumes, slot, at)
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, `DataArrayTexture.sample`."""
-        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_array(self.arrays, slot, at)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
-        return self.textures[].textures[slot].fetch(x, y, level)
+        return _host_fetch(self.textures, slot, x, y, level)
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return a texture level's size, `Texture.fetch_size`."""
-        return self.textures[].textures[slot].fetch_size(level)
+        return _host_size(self.textures, slot, level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each end's perspective-correct weight at this pixel, or
