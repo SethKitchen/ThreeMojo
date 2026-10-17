@@ -76,7 +76,7 @@ from lights.vxgi_scene_collector import (
     compute_scene_bounds,
 )
 from math.bounds import Box3
-from math.finite import positive_finite, require_finite
+from math.finite import require_finite, require_positive_finite
 from math.smoothstep import smoothstep
 from math.utils import glsl_sign, max3
 from math.vector3 import Vector3
@@ -1067,8 +1067,10 @@ struct VXGIVolume(Movable):
             Float64(self.min_opacity),
             "A VXGI volume's minimum opacity must be finite",
         )
-        if not (positive_finite(Float64(self.step_scale))):
-            raise Error("A VXGI volume's step scale must be positive")
+        require_positive_finite(
+            Float64(self.step_scale),
+            "A VXGI volume's step scale must be positive",
+        )
         if not (
             isfinite(self.max_distance.value) and self.max_distance.value >= 0
         ):

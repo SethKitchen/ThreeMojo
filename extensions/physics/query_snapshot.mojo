@@ -42,7 +42,7 @@ from extensions.physics.world import (
     _triangle_ray_hit,
 )
 from math.bounds import Box3
-from math.finite import positive_finite
+from math.finite import require_positive_finite
 from math.octree import Octree
 from math.quaternion import Quaternion
 from math.ray import Ray
@@ -320,10 +320,10 @@ struct PhysicsQuerySnapshot(Movable):
             _rotation(body.rotation)
             _rotation(body.shape_rotation)
             if body.shape.kind == SPHERE or body.shape.kind == CAPSULE:
-                if not (positive_finite(Float64(body.shape.radius))):
-                    raise Error(
-                        "A query snapshot requires a finite positive radius"
-                    )
+                require_positive_finite(
+                    Float64(body.shape.radius),
+                    "A query snapshot requires a finite positive radius",
+                )
                 if body.shape.kind == CAPSULE:
                     if not (
                         isfinite(body.shape.half_height)

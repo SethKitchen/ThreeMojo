@@ -25,7 +25,7 @@ east positive.
 """
 
 from math.utils import clamp
-from math.finite import positive_finite
+from math.finite import require_positive_finite
 from std.math import acos, atan2, cos, isfinite, pi, sin
 from generators.utils import Vec3d
 from units.si import (
@@ -380,8 +380,9 @@ def orientation(normal: Vec3d, north: Angle64) raises -> SurfaceOrientation:
         Error: If the normal is zero or not finite.
     """
     var length = normal.length()
-    if not positive_finite(length):
-        raise Error("A surface normal must be nonzero and finite")
+    require_positive_finite(
+        length, "A surface normal must be nonzero and finite"
+    )
     var n = normal * (1.0 / length)
     var a = north.value
     var east = n.x * cos(a) + n.y * sin(a)

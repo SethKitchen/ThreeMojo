@@ -30,7 +30,7 @@ The wall is per square meter of area. The first node is on the outside
 face, the side of the first layer.
 """
 
-from math.finite import positive_finite, require_finite
+from math.finite import require_finite, require_positive_finite
 from std.math import ceil, isfinite, sqrt
 from extensions.building.construction import Construction
 from extensions.building.material import BuildingMaterial
@@ -62,8 +62,9 @@ def require_fourier(fourier: Float64) raises:
     Raises:
         Error: If the number is not positive and finite.
     """
-    if not positive_finite(fourier):
-        raise Error("A Fourier number must be positive and finite")
+    require_positive_finite(
+        fourier, "A Fourier number must be positive and finite"
+    )
 
 
 # The most elements one layer gets, however fine the criterion asks.
@@ -119,8 +120,9 @@ struct LayeredWall(Copyable, Movable):
         """
         construction.check(materials)
         var dt = step.to(SECOND)
-        if not positive_finite(dt):
-            raise Error("A conduction step must be positive and finite")
+        require_positive_finite(
+            dt, "A conduction step must be positive and finite"
+        )
         require_fourier(fourier)
         if not initial.is_valid():
             raise Error("A wall's initial temperature must be valid")

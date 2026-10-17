@@ -44,7 +44,11 @@ from extensions.sdf.ids import (
     SurfacePart,
 )
 from extensions.sdf.vector import V3, dot
-from math.finite import positive_finite, require_finite, require_finite_group
+from math.finite import (
+    require_finite,
+    require_finite_group,
+    require_positive_finite,
+)
 from math.utils import clamp, min3
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
@@ -142,14 +146,18 @@ struct BodyMass(Movable):
             if self.withers.value < self.ground.value:
                 raise Error("The sculpt has no withers")
             var height = self.withers - self.ground
-            if not (positive_finite(Float64(height.value))):
-                raise Error("The sampled withers are absent or under-resolved")
+            require_positive_finite(
+                Float64(height.value),
+                "The sampled withers are absent or under-resolved",
+            )
             return height
         var value = (
             self.body_length if kind == BODY_LENGTH else self.total_length
         )
-        if not (positive_finite(Float64(value.value))):
-            raise Error("The sampled reference is absent or under-resolved")
+        require_positive_finite(
+            Float64(value.value),
+            "The sampled reference is absent or under-resolved",
+        )
         return value
 
     def total(self) raises -> SegmentInertia:

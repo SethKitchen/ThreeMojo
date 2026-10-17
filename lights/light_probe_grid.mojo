@@ -41,7 +41,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from math.box_extent import box_exterior
-from math.finite import positive_finite, require_finite_group
+from math.finite import require_finite_group, require_positive_finite
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
 from math.vector3 import Vector3
@@ -178,8 +178,9 @@ def grid_falloff(
 def _default_probes(size: Length) raises -> Int:
     """Return three.js's default count, after checking the conversion."""
     var meters = size.to(METER)
-    if not (positive_finite(Float64(meters))):
-        raise Error("A light probe grid's size must be positive lengths")
+    require_positive_finite(
+        Float64(meters), "A light probe grid's size must be positive lengths"
+    )
     var rounded = floor(Float64(meters) + 0.5)
     if rounded >= Float64(MAX_GRID_AXIS):
         raise Error("A light probe grid axis exceeds the exact device count")

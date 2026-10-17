@@ -12,7 +12,7 @@ the tolerance are one point; two points farther apart than twice the
 tolerance are never merged.
 """
 
-from math.finite import positive_finite, require_finite_group
+from math.finite import require_finite_group, require_positive_finite
 from std.math import floor
 
 
@@ -28,8 +28,9 @@ def require_weld_tolerance(tolerance: Float64) raises:
     Raises:
         Error: If the tolerance is not positive and finite.
     """
-    if not positive_finite(tolerance):
-        raise Error("A weld tolerance must be positive and finite")
+    require_positive_finite(
+        tolerance, "A weld tolerance must be positive and finite"
+    )
 
 
 from generators.utils import Vec3d

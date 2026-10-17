@@ -90,7 +90,7 @@ The fish, shark, snake and spider muscles are in
 `extensions/animals/anatomy/axial.mojo`.
 """
 
-from math.finite import positive_finite, require_finite_group
+from math.finite import require_finite_group, require_positive_finite
 from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
@@ -209,25 +209,30 @@ struct MuscleSpec(Copyable, Movable):
                 source mass is invalid, the active fiber parameter is
                 invalid, or the result is not finite and positive.
         """
-        if not (positive_finite(Float64(reach))):
-            raise Error("Fiber reach must be finite and positive")
-        if not (positive_finite(Float64(body_kg))):
-            raise Error("Fiber body mass must be finite and positive")
+        require_positive_finite(
+            Float64(reach), "Fiber reach must be finite and positive"
+        )
+        require_positive_finite(
+            Float64(body_kg), "Fiber body mass must be finite and positive"
+        )
         if not (isfinite(self.source_kg) and self.source_kg >= 0.0):
             raise Error("Fiber source mass must be finite and nonnegative")
         var fiber: Float64
         if self.source_kg > 0.0:
-            if not (positive_finite(Float64(self.fiber_m))):
-                raise Error(
-                    "Reference fiber length must be finite and positive"
-                )
+            require_positive_finite(
+                Float64(self.fiber_m),
+                "Reference fiber length must be finite and positive",
+            )
             fiber = self.fiber_m * pow(body_kg / self.source_kg, 1.0 / 3.0)
         else:
-            if not (positive_finite(Float64(self.fiber_ratio))):
-                raise Error("Fiber ratio must be finite and positive")
+            require_positive_finite(
+                Float64(self.fiber_ratio),
+                "Fiber ratio must be finite and positive",
+            )
             fiber = self.fiber_ratio * reach
-        if not (positive_finite(Float64(fiber))):
-            raise Error("Fiber result must be finite and positive")
+        require_positive_finite(
+            Float64(fiber), "Fiber result must be finite and positive"
+        )
         return fiber
 
 
@@ -653,10 +658,10 @@ struct AnimalMuscle(Copyable, Movable):
             )
             if k > 0:
                 var span = length(p - out[k - 1])
-                if not (positive_finite(Float64(span))):
-                    raise Error(
-                        "A muscle path segment must have positive length"
-                    )
+                require_positive_finite(
+                    Float64(span),
+                    "A muscle path segment must have positive length",
+                )
             out.append(p)
         return out^
 
@@ -684,8 +689,9 @@ struct AnimalMuscle(Copyable, Movable):
         ):
             raise Error("Muscle joints need paired bones and spans")
         var axis_length = length(self.axis)
-        if not (positive_finite(Float64(axis_length))):
-            raise Error("A muscle axis must be finite and nonzero")
+        require_positive_finite(
+            Float64(axis_length), "A muscle axis must be finite and nonzero"
+        )
         var expected_spans = spans_of(rig, self.bones, self.joint_bones)
         for n in range(len(self.spans)):
             if self.spans[n] != expected_spans[n]:
@@ -740,10 +746,10 @@ struct AnimalMuscle(Copyable, Movable):
         var unit = 0.0
         for k in range(1, len(p)):  # pragma: no branch
             unit += length(p[k] - p[k - 1])
-        if not (positive_finite(Float64(Float32(unit)))):
-            raise Error(
-                "A muscle path length must fit a positive finite SI length"
-            )
+        require_positive_finite(
+            Float64(Float32(unit)),
+            "A muscle path length must fit a positive finite SI length",
+        )
         return Length(Float32(unit), METER)
 
 
@@ -835,8 +841,7 @@ def _build(
     rig: Rig, specs: List[MuscleSpec], body_mass: Mass
 ) raises -> List[AnimalMuscle]:
     var m = Float64(body_mass.to(KILOGRAM))
-    if not (positive_finite(Float64(m))):
-        raise Error("A body mass must be positive")
+    require_positive_finite(Float64(m), "A body mass must be positive")
     var out = List[AnimalMuscle]()
     for side in ["L", "R"]:  # pragma: no branch
         for spec in specs:

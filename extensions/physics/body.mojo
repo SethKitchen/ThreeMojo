@@ -36,7 +36,7 @@ from extensions.physics.shape import (
     _wide_dot,
     _narrow_finite,
 )
-from math.finite import positive_finite, require_finite
+from math.finite import require_finite, require_positive_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -453,8 +453,9 @@ struct RigidBody(Copyable, Movable):
     def _mass_state(
         self, mass: Float32, position: Vector3, rotation: Quaternion
     ) raises -> Tuple[Float32, Vector3, Matrix3]:
-        if not (positive_finite(Float64(mass))):
-            raise Error("A dynamic body needs a mass more than zero")
+        require_positive_finite(
+            Float64(mass), "A dynamic body needs a mass more than zero"
+        )
         var inverse_mass = _narrow_finite(1 / Float64(mass))
         _finite_vector(position)
         var props = self.shape.mass_properties(mass)

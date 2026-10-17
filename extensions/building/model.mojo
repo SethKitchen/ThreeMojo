@@ -19,7 +19,11 @@ Coordinates are meters, z up. The x axis points east and the y axis points
 north unless `Site.north` says otherwise.
 """
 
-from math.finite import positive_finite, require_finite, require_finite_group
+from math.finite import (
+    require_finite,
+    require_finite_group,
+    require_positive_finite,
+)
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.construction import Construction, Glazing
@@ -103,8 +107,7 @@ def _check_outline_area(
 
 def _check_face_area(area: Float64) raises:
     """Check a derived face area before view conversion."""
-    if not positive_finite(area):
-        raise Error("A face must have positive finite area")
+    require_positive_finite(area, "A face must have positive finite area")
 
 
 @fieldwise_init
@@ -219,8 +222,9 @@ struct Section(ImplicitlyCopyable):
             raise Error("A section shape must be a rectangle, an I or a circle")
         var b = self.width.to(METER)
         var d = self.depth.to(METER)
-        if not positive_finite(b):
-            raise Error("A section width must be positive and finite")
+        require_positive_finite(
+            b, "A section width must be positive and finite"
+        )
         require_finite(Float64(d), "A section depth must be finite")
         if not (
             isfinite(self.flange_thickness.value)
@@ -709,8 +713,9 @@ def require_furnishing_size(size: Float64) raises:
     Raises:
         Error: If the size is not positive and finite.
     """
-    if not positive_finite(size):
-        raise Error("A furnishing's size must be positive and finite")
+    require_positive_finite(
+        size, "A furnishing's size must be positive and finite"
+    )
 
 
 def require_furniture_kind(kind: FurnitureKind) raises:
@@ -1525,10 +1530,9 @@ struct Building(Movable):
                 if not (a.is_finite() and b.is_finite()):
                     raise Error("A member axis must be finite")
                 var length = a.distance_to(b)
-                if not positive_finite(length):
-                    raise Error(
-                        "A member axis must have positive finite length"
-                    )
+                require_positive_finite(
+                    length, "A member axis must have positive finite length"
+                )
                 ref storey = self.storeys[element.storey.value]
                 var bottom = storey.elevation.value
                 var top = bottom + storey.height.value
@@ -1670,8 +1674,9 @@ def assemble(
     var regions = List[List[Region]]()
     for s in range(len(plans)):
         var h = plans[s].height.to(METER)
-        if not positive_finite(h):
-            raise Error("A storey height must be positive and finite")
+        require_positive_finite(
+            h, "A storey height must be positive and finite"
+        )
         z = z + plans[s].height
         levels.append(z)
         var plan = List[Region]()
