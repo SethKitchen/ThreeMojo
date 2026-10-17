@@ -194,7 +194,7 @@ def _check_file(ref_: _Reference, name: String) raises:
             ref_.array(doc.get(want, "bits")), geometry.float32_values(a)
         )
     var three = doc.get(expected, "three")
-    var built = parse_draco(bytes)
+    var built = parse_draco(bytes^)
     var names: List[String] = [
         String(POSITION),
         String(NORMAL),

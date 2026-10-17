@@ -1049,11 +1049,11 @@ def draco_buffer_geometry(
     return out^
 
 
-def parse_draco(bytes: List[UInt8]) raises -> BufferGeometry:
+def parse_draco(var bytes: List[UInt8]) raises -> BufferGeometry:
     """Decode a `.drc` file into a geometry, as `DRACOLoader.parse` does.
 
     Args:
-        bytes: The file.
+        bytes: The file. The call takes these bytes.
 
     Returns:
         The geometry: `position`, `normal`, `color` and `uv` from the
@@ -1063,7 +1063,7 @@ def parse_draco(bytes: List[UInt8]) raises -> BufferGeometry:
     Raises:
         Error: If the file cannot be decoded.
     """
-    var geometry = decode_draco(bytes.copy())
+    var geometry = decode_draco(bytes^)
     var names: List[String] = [
         String(POSITION),
         String(NORMAL),
