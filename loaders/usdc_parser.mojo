@@ -326,7 +326,7 @@ def decompress_lz4(input: List[UInt8], size: Int) raises -> List[UInt8]:
     return output^
 
 
-def _int32(data: List[UInt8], at: Int, width: Int) -> Int:
+def _int32(data: Span[UInt8, _], at: Int, width: Int) -> Int:
     """Return a signed little-endian integer of one, two or four bytes.
 
     Args:
@@ -372,7 +372,7 @@ def decode_integers32(data: List[UInt8], count: Int) -> List[Int]:
     Returns:
         The integers, as an `Int32Array` holds them.
     """
-    var common = _int32(data, 0, 4)
+    var common = _int32(Span(data), 0, 4)
     var codes = 4
     var vints = 4 + ((count * 2 + 7) >> 3)
     var out = List[Int](capacity=count)
@@ -386,13 +386,13 @@ def decode_integers32(data: List[UInt8], count: Int) -> List[Int]:
             var code = (code_byte >> (j * 2)) & 3
             var delta = common
             if code == 1:
-                delta = _int32(data, vints, 1)
+                delta = _int32(Span(data), vints, 1)
                 vints += 1
             elif code == 2:
-                delta = _int32(data, vints, 2)
+                delta = _int32(Span(data), vints, 2)
                 vints += 2
             elif code == 3:
-                delta = _int32(data, vints, 4)
+                delta = _int32(Span(data), vints, 4)
                 vints += 4
             sum += delta
             out.append(_wrap32(sum))
@@ -527,10 +527,13 @@ struct _CrateSpec(ImplicitlyCopyable):
     var spec_type: Int
 
 
-struct _Crate(Movable):
-    """The counterpart of three.js's `USDCParser` as it reads one file."""
+struct _Crate[origin: Origin[mut=False]](Movable):
+    """The counterpart of three.js's `USDCParser` as it reads one file.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var at: Int
     var major: Int
     var minor: Int
@@ -549,13 +552,13 @@ struct _Crate(Movable):
     var specs: List[_CrateSpec]
     var layer: UsdLayer
 
-    def __init__(out self, var bytes: List[UInt8]):
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
         """Start reading a file.
 
         Args:
-            bytes: The file.
+            bytes: The file. The caller keeps it.
         """
-        self.bytes = bytes^
+        self.bytes = bytes
         self.at = 0
         self.major = 0
         self.minor = 0
@@ -1624,11 +1627,11 @@ def _child_path(parent: String, element: String, property: Bool) -> String:
     return parent + "/" + element
 
 
-def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
+def parse_usdc(bytes: Span[UInt8, _]) raises -> UsdLayer:
     """Read a USDC crate into a layer, three.js's `USDCParser.parseData`.
 
     Args:
-        bytes: The file.
+        bytes: The file. The caller keeps it.
 
     Returns:
         Each path's spec, in the order of the `SPECS` section. A spec
@@ -1637,7 +1640,7 @@ def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var crate = _Crate(bytes^)
+    var crate = _Crate(bytes)
     crate.bootstrap()
     crate.table()
     crate.read_tokens()
@@ -1656,3 +1659,19 @@ def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
     var layer = UsdLayer()
     swap(layer, crate.layer)
     return layer^
+
+
+def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
+    """Read a USDC crate into a layer, three.js's `USDCParser.parseData`.
+
+    Args:
+        bytes: The file.
+
+    Returns:
+        Each path's spec, in the order of the `SPECS` section. A spec
+        whose path is not set is left out, as in three.js.
+
+    Raises:
+        Error: For anything the module docstring lists.
+    """
+    return parse_usdc(Span(bytes))
