@@ -9,7 +9,7 @@ OBJ, MTL, STL and a cube LUT read a field with Mojo's `Float64`, then keep
 it only when it is finite as the `Float32` a geometry stores. A text that
 is not a number names the parser's reason. A number that overflows a
 `Float32` is refused before it can become an infinity in a bound or a
-normal. `file_line` builds the `KIND line N: ` prefix those errors use.
+normal. `file_line` builds the `KIND line N: ` prefix a loader error uses.
 """
 
 from math.finite import require_finite

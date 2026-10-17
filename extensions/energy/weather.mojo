@@ -34,6 +34,7 @@ and C of that model for the 21st day of each month.
 
 from std.math import cos, exp, isfinite, pi
 from std.pathlib import Path
+from loaders.text_number import file_line
 from extensions.energy.solar import (
     SunPosition,
     day_of_year,
@@ -178,7 +179,7 @@ struct Weather(Movable):
 
 
 def _at(line: Int, message: String) -> Error:
-    return Error(String("EPW line ", line, ": ", message))
+    return Error(file_line("EPW", line) + message)
 
 
 def _number(field: StringSlice, what: String, line: Int) raises -> Float64:

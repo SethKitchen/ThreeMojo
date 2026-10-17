@@ -29,6 +29,7 @@ geometry. A line that is not an atom or a bond is stepped over.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from loaders.js_number import js_parse_float, js_parse_int
+from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
 from std.math import isnan
 from std.pathlib import Path
@@ -623,9 +624,8 @@ def parse_pdb(text: String) raises -> PdbModel:
             var color = cpk_color(element)
             if color[0] < 0:
                 raise Error(
-                    "PDB line "
-                    + String(number)
-                    + ": no color for the element `"
+                    file_line("PDB", number)
+                    + "no color for the element `"
                     + element
                     + "`"
                 )
@@ -651,7 +651,7 @@ def parse_pdb(text: String) raises -> PdbModel:
                     continue
                 if isnan(start):
                     raise Error(
-                        "PDB line " + String(number) + ": a bond from no atom"
+                        file_line("PDB", number) + "a bond from no atom"
                     )
                 var low = Int(min(start, end)) - 1
                 var high = Int(max(start, end)) - 1

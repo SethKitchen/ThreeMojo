@@ -40,6 +40,7 @@ from core.binary import copy_bytes, little_endian_uint
 from core.ordinal import ordinal_valid
 
 from loaders.js_text import is_js_word
+from loaders.text_number import file_line
 from render.inflate import zlib_inflate
 from std.memory import bitcast
 
@@ -596,7 +597,7 @@ struct _TextReader(Movable):
         for index in range(min(self.at, len(self.bytes))):
             if self.bytes[index] == 10:
                 line += 1
-        return "FBX line " + String(line) + ": "
+        return file_line("FBX", line)
 
     def peek(self) -> Int:
         """Return the byte under the cursor, or -1 past the end."""
