@@ -118,11 +118,6 @@ struct _Face(Copyable, Movable):
         return v == self.v1 or v == self.v2 or v == self.v3
 
 
-def _dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
-    """Return the dot product of the first three numbers."""
-    return wide_dot(a, b)
-
-
 def _unit3(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
     """Return a three-number vector scaled to unit length, or itself if it
     is zero long, as three.js's `Vector3.normalize` does."""
@@ -244,7 +239,9 @@ struct _Reduction(Movable):
             var min_curvature = 1.0
             ref normal = self.face_data[faces[index]].normal
             for side in range(len(side_faces)):  # pragma: no branch
-                var dot = _dot(normal, self.face_data[side_faces[side]].normal)
+                var dot = wide_dot(
+                    normal, self.face_data[side_faces[side]].normal
+                )
                 min_curvature = min(min_curvature, (1.001 - dot) / 2)
             curvature = max(curvature, min_curvature)
         if len(side_faces) < 2:

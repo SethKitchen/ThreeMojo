@@ -29,6 +29,7 @@ from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
+    abs_f,
     empty_bounds,
     field_gradient,
     flip_x,
@@ -283,9 +284,7 @@ def abs_gap(value: Float32) -> Float32:
     Returns:
         Its magnitude.
     """
-    if value < 0:
-        return -value
-    return value
+    return abs_f(value)
 
 
 def pelvis_ligament_distance(

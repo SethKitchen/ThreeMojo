@@ -729,14 +729,9 @@ struct SVGRenderer(Movable):
         self._add(look, outline, path, style)
 
 
-def _dot(a: Vec, b: Vec) -> Float64:
-    """Return the dot product of two directions, as three.js adds it."""
-    return wide_dot(a, b)
-
-
 def _unit(v: Vec) -> Vec:
     """Return a direction scaled to length one, three.js's `normalize`."""
-    var squared = _dot(v, v)
+    var squared = wide_dot(v, v)
     if _ordinary_squared(squared):
         return v * (1 / sqrt(squared))
     var unit = normalized3(v[0], v[1], v[2])
@@ -756,14 +751,14 @@ def _light(scene: Scene, light: Light, center: Vec, normal: Vec) raises -> Vec:
     )
     var amount: Float64
     if light.kind == DIRECTIONAL:
-        amount = _dot(normal, _unit(place))
+        amount = wide_dot(normal, _unit(place))
         if amount <= 0:
             return Vec(0)
     else:
         # three.js's `lightPosition` is `_vector3`, which the direction
         # overwrites, so the distance is measured to the direction.
         var toward = _unit(place - center)
-        amount = _dot(normal, toward)
+        amount = wide_dot(normal, toward)
         if amount <= 0:
             return Vec(0)
         if light.distance != 0:
