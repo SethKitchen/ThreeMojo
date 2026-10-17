@@ -45,7 +45,7 @@ texture does not have, so a curve past the last clamps to the last row.
 """
 
 from core.buffer_attribute import BufferAttribute
-from geometries.surface import require_at_least_one
+from math.curve_checks import require_at_least_one
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.matrix4 import Matrix4
 from math.sine import fraction

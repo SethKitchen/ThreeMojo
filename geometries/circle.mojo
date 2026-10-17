@@ -41,11 +41,11 @@ from core.buffer_geometry import (
 from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
-    require_at_least_one,
     require_positive_radius,
     require_three_segments,
 )
 from core.user_data import UserData
+from math.curve_checks import require_at_least_one
 from std.math import cos, isfinite, sin
 from units.si import Angle, Length, METER, RADIAN, TURN
 

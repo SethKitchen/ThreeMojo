@@ -29,6 +29,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION as POSITION_ATTRIBUTE
 from core.object3d import NodeId, Object3D
+from math.curve_checks import require_at_least_one
 from core.scene import Scene
 from materials.material import BASIC, Material, PointSize, points_material
 from objects.line import Line
@@ -82,8 +83,9 @@ def animation_path(
         Error: If `divisions` is below one, the clip has no position track
             for the node, or the track cannot be read.
     """
-    if divisions < 1:
-        raise Error("An animation path needs one division at least")
+    require_at_least_one(
+        divisions, "An animation path needs one division at least"
+    )
     var track = position_track(clip, object)
     require_position_track(track)
     var numbers = List[Float32]()

@@ -39,7 +39,6 @@ transport made. three.js checks neither; here both raise.
 from core.buffer_geometry import BufferGeometry, TUBE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
-    require_at_least_one,
     require_positive_radius,
     require_three_segments,
 )
@@ -48,6 +47,7 @@ from exporters.json_writer import JsonWriter
 from geometries.grid import grid_index
 from loaders.curve_json import write_curve3
 from math.curve3 import Curve3, FrenetFrames, transport_frames
+from math.curve_checks import require_at_least_one
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
 from units.si import Length, METER

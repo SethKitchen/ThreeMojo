@@ -45,11 +45,11 @@ from core.buffer_geometry import (
 )
 from geometries.surface import (
     indexed_surface,
-    require_at_least_one,
     require_three_segments,
 )
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
+from math.curve_checks import require_at_least_one
 from math.norm import normalized2
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN

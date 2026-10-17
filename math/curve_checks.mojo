@@ -3,7 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Shared kind, count, length-table, and parameter boundaries for curves."""
+"""Shared kind, count, length-table, and parameter boundaries for curves.
+
+`require_at_least_one` refuses a count below one. Geometry builders call
+it for a segment, a step, or a division.
+"""
 
 from math.polyline import PolylineVertex
 
@@ -95,6 +99,23 @@ def check_curve_parameter(value: Float64) raises:
         )
 
 
+def require_at_least_one(count: Int, message: String) raises:
+    """Refuse a count below one.
+
+    Args:
+        count: How many pieces the caller was given.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `count` is at least one.
+
+    Raises:
+        Error: If `count` is below one.
+    """
+    if count < 1:
+        raise Error(message)
+
+
 def curve_sample_count(divisions: Int) raises -> Int:
     """Return the checked number of samples for a positive division count.
 
@@ -107,8 +128,7 @@ def curve_sample_count(divisions: Int) raises -> Int:
     Raises:
         Error: If divisions is not positive or the sample count overflows.
     """
-    if divisions < 1:
-        raise Error("A curve needs at least one division")
+    require_at_least_one(divisions, "A curve needs at least one division")
     return curve_count_sum(divisions, 1)
 
 

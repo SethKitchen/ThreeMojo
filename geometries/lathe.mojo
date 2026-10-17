@@ -36,7 +36,8 @@ made of plain points.
 """
 
 from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
-from geometries.surface import indexed_surface, require_at_least_one
+from geometries.surface import indexed_surface
+from math.curve_checks import require_at_least_one
 from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
 from math.norm import normalized2
