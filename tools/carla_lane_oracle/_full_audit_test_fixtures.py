@@ -154,6 +154,39 @@ def copy_current_root(case, source, *, destination=None):
     return destination
 
 
+def _historical_hair_predecessors(root):
+    """Separate exact hair provenance for a still-current copied test root.
+
+    Only density and groom have the four local density row admission. Shading
+    and strands are transported by exact source provenance, not new theorems.
+    No original source is written until every endpoint and reread succeeds.
+    """
+    import coverage_loop_proofs as loops
+    stage = cleanup.pr760_stage
+    physical = {name: (root/name).read_bytes() for name in stage.HAIR_SOURCE_PATHS}
+    for name, raw in physical.items():
+        if cleanup.sha(raw) != stage.EDGES[name]['after_sha256']:
+            raise AssertionError('historical hair fixture current endpoint changed: ' + name)
+    rows = loops.density760_loops(root)
+    if (set(rows) != {131, 167, 178, 245}
+            or any(row['dependency_sha256'] != loops.DENSITY760_INPUTS
+                   for row in rows.values())):
+        raise AssertionError('historical hair fixture lacks independent density admission')
+    predecessors = {}
+    for name, raw in physical.items():
+        previous = stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
+        expected = (loops.DENSITY_AFTER_SHA256 if name == loops.DENSITY_SOURCE
+                    else loops.GUARDED_LOOP_SOURCE_SHA256[name])
+        if (cleanup.sha(previous) != stage.EDGES[name]['before_sha256']
+                or cleanup.sha(previous) != expected):
+            raise AssertionError('historical hair fixture predecessor changed: ' + name)
+        predecessors[name] = previous
+    for name, raw in physical.items():
+        if (root/name).read_bytes() != raw:
+            raise AssertionError('historical hair fixture source changed after transport: ' + name)
+    return predecessors
+
+
 def copy_common758_boundary_root(case, source, *, destination=None):
     """Admit current bytes, then create the complete common758 predecessor graph.
 
@@ -169,6 +202,9 @@ def copy_common758_boundary_root(case, source, *, destination=None):
     examples = {name: (root/name).read_bytes() for name in stage.EXAMPLE_PATHS}
     selected = cleanup._pr760_image_selected(examples)
     if selected:
+        hair_predecessors = _historical_hair_predecessors(root)
+        for name, previous in hair_predecessors.items():
+            (root/name).write_bytes(previous)
         for name in stage.CARLA_REGISTRY_PATHS:
             raw = (root/name).read_bytes()
             previous = stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
