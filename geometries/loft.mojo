@@ -54,6 +54,7 @@ from geometries.earcut import triangulate_shape
 from math.shape_path import is_clockwise
 from math.vector2 import Vector2, component_max, component_min
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 
 # JavaScript's `Number.EPSILON`, which keeps a cap's texture from dividing
 # by a width of zero.
@@ -79,8 +80,10 @@ def _check_sections(sections: List[List[Vector3]]) raises -> Int:
                 "Every loft section must hold the same number of points"
             )
         for point in sections[row]:  # pragma: no branch
-            if not point.is_finite():
-                raise Error("A loft point must be finite")
+            require_finite_group(
+                point.is_finite(),
+                "A loft point must be finite",
+            )
     return columns
 
 

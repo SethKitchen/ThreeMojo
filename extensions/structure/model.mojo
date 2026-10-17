@@ -14,7 +14,7 @@ them all.
 Coordinates are meters, z up. Gravity acts along -z.
 """
 
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 from std.math import isfinite
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Section
@@ -297,8 +297,10 @@ struct StructuralModel(Copyable, Movable):
         Raises:
             Error: If the position is not finite.
         """
-        if not at.is_finite():
-            raise Error("A node position must be finite")
+        require_finite_group(
+            at.is_finite(),
+            "A node position must be finite",
+        )
         self.nodes.append(at)
         for _ in range(6):  # pragma: no branch
             self.fixed.append(False)

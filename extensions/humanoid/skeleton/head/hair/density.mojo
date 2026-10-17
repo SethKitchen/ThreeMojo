@@ -18,6 +18,11 @@ or third-party implementation is added by this module.
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.bounds import enclose_point
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_finite_group,
+)
 from math.utils import max3
 from math.vector3 import Vector3
 
@@ -34,11 +39,12 @@ def require_hair_direction(direction: Vector3) raises:
     Raises:
         Error: If the direction is not finite.
     """
-    if not direction.is_finite():
-        raise Error("Hair optical depth needs a finite light direction")
+    require_finite_group(
+        direction.is_finite(),
+        "Hair optical depth needs a finite light direction",
+    )
 
 
-from math.finite import require_finite, require_positive_finite
 from std.math import ceil, floor, isfinite, max
 from std.sys import size_of
 from units.si import Length, METER
@@ -49,8 +55,10 @@ comptime MAX_HAIR_DENSITY_RESOLUTION = 64
 
 def _checked_density_point(point: Vector3) raises -> Vector3:
     """Return the unchanged point after checking all three coordinates."""
-    if not point.is_finite():
-        raise Error("Hair density needs finite positions")
+    require_finite_group(
+        point.is_finite(),
+        "Hair density needs finite positions",
+    )
     return point
 
 
@@ -221,8 +229,10 @@ struct HairDensity(Movable):
             Error: If the point or direction is not finite, or the current
                 resolution or diameter is outside its domain.
         """
-        if not point.is_finite():
-            raise Error("Hair optical depth needs a finite point")
+        require_finite_group(
+            point.is_finite(),
+            "Hair optical depth needs a finite point",
+        )
         require_hair_direction(direction)
         self.validate()
         if not self.populated or self._slot(point) < 0:

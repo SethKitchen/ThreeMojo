@@ -90,7 +90,7 @@ The fish, shark, snake and spider muscles are in
 `extensions/animals/anatomy/axial.mojo`.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite_group
 from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
     DESIGN,
@@ -647,8 +647,10 @@ struct AnimalMuscle(Copyable, Movable):
             if bone < 0 or bone >= len(world):
                 raise Error("A muscle path names a missing bone transform")
             var p = world[bone].apply(self.points[k])
-            if not p.is_finite():
-                raise Error("A muscle path must have finite points")
+            require_finite_group(
+                p.is_finite(),
+                "A muscle path must have finite points",
+            )
             if k > 0:
                 var span = length(p - out[k - 1])
                 if not (positive_finite(Float64(span))):

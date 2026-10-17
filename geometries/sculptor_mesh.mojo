@@ -54,6 +54,7 @@ from math.norm import (
     reciprocal_normalized3,
     squared_length3,
 )
+from math.finite import require_finite_group
 from core.buffer_geometry import BufferGeometry, POSITION
 from geometries.sculptor_utils import (
     MAX_FLAG,
@@ -342,8 +343,10 @@ struct SculptorMesh(Movable):
             if referenced[i] == 0:
                 continue
             var p = position.vector3(i)
-            if not p.is_finite():
-                raise Error("SculptorMesh: Position values must be finite.")
+            require_finite_group(
+                p.is_finite(),
+                "SculptorMesh: Position values must be finite.",
+            )
             source[i * 3] = p.x
             source[i * 3 + 1] = p.y
             source[i * 3 + 2] = p.z

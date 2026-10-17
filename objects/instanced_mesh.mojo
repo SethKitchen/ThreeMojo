@@ -88,7 +88,7 @@ from core.ordinal import require_non_negative
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, require_affine
 from render.framebuffer import Color
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 
 comptime WHITE = Color(255, 255, 255)
 
@@ -103,8 +103,10 @@ def check_placing(matrix: Matrix4) raises:
         Error: If an element is infinite or not a number, or the matrix
             projects rather than keeping `w` at one.
     """
-    if not matrix.is_finite():
-        raise Error("An instance matrix must hold finite numbers")
+    require_finite_group(
+        matrix.is_finite(),
+        "An instance matrix must hold finite numbers",
+    )
     require_affine(
         matrix,
         (

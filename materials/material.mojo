@@ -228,7 +228,7 @@ from lights.light import ALL_LIGHTS, LightMask
 from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.euler import XYZ, Euler
-from math.finite import positive_finite, require_finite
+from math.finite import positive_finite, require_finite, require_finite_group
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
@@ -2223,8 +2223,10 @@ struct Material(ImplicitlyCopyable):
                 "A material's specular or clearcoat map id cannot be negative"
             )
         var coat_scale = clearcoat_normal_scale
-        if not coat_scale.is_finite():
-            raise Error("A clearcoat normal scale must be finite")
+        require_finite_group(
+            coat_scale.is_finite(),
+            "A clearcoat normal scale must be finite",
+        )
         var coat_scaled = coat_scale.x != 1 or coat_scale.y != 1
         if clearcoat_normal_map == NO_TEXTURE and coat_scaled:
             raise Error(
@@ -2328,8 +2330,10 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's normal map id cannot be negative")
         if bump_map.value < 0 and bump_map != NO_TEXTURE:
             raise Error("A material's bump map id cannot be negative")
-        if not normal_scale.is_finite():
-            raise Error("A normal scale must be finite")
+        require_finite_group(
+            normal_scale.is_finite(),
+            "A normal scale must be finite",
+        )
         require_finite(Float64(bump_scale), "A bump scale must be finite")
         if normal_map != NO_TEXTURE and bump_map != NO_TEXTURE:
             raise Error(

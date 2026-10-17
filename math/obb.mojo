@@ -39,7 +39,7 @@ from math.matrix4 import Matrix4, require_affine
 from math.ray import Ray
 from math.utils import clamp
 from math.vector3 import Vector3
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 from std.math import max, sqrt
 from std.memory import bitcast
 
@@ -524,8 +524,10 @@ struct OBB(ImplicitlyCopyable):
         require_affine(
             matrix, "An OBB can only be carried through an affine matrix"
         )
-        if not matrix.is_finite():
-            raise Error("An OBB transform must be finite")
+        require_finite_group(
+            matrix.is_finite(),
+            "An OBB transform must be finite",
+        )
         _check_half_size(self.half_size)
         var center: Array[Float32, 3] = [
             self.center.x,

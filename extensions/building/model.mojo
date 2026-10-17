@@ -19,7 +19,7 @@ Coordinates are meters, z up. The x axis points east and the y axis points
 north unless `Site.north` says otherwise.
 """
 
-from math.finite import positive_finite, require_finite
+from math.finite import positive_finite, require_finite, require_finite_group
 from math.utils import clamp
 from std.math import isfinite
 from extensions.building.construction import Construction, Glazing
@@ -918,8 +918,10 @@ struct Building(Movable):
         self.check_storey(storey)
         self.check_material(material)
         section.check()
-        if not at.is_finite():
-            raise Error("A column position must be finite")
+        require_finite_group(
+            at.is_finite(),
+            "A column position must be finite",
+        )
         ref s = self.storeys[storey.value]
         var z0 = s.elevation.to(METER)
         var z1 = z0 + s.height.to(METER)
@@ -1436,8 +1438,10 @@ struct Building(Movable):
             # The outline's minimum of three corners was checked above.
             for k in range(len(space.outline)):  # pragma: no branch
                 var point = space.outline[k]
-                if not point.is_finite():
-                    raise Error("A space outline must have finite coordinates")
+                require_finite_group(
+                    point.is_finite(),
+                    "A space outline must have finite coordinates",
+                )
             _check_region(Region(0, RegionId(0), space.outline.copy()), 1, tol)
             var boundaries = complex.faces_of(space.cell)
             for f in range(len(boundaries)):

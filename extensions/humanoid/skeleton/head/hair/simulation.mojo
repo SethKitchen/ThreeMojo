@@ -45,6 +45,7 @@ from extensions.humanoid.skeleton.head.hair.groom import (
 from math.sine import fraction
 from math.utils import clamp
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from render.tasks import TaskGroup
 from std.math import max, min
 from std.sys import num_logical_cores
@@ -457,8 +458,10 @@ struct HairSimulation(Movable):
             raise Error("The groom is not the one the hair moves")
         for index in range(len(self.now)):
             var p = self.now[index]
-            if not p.is_finite():
-                raise Error("Hair motion must have finite positions")
+            require_finite_group(
+                p.is_finite(),
+                "Hair motion must have finite positions",
+            )
         for index in range(len(self.now)):
             groom.points[index] = self.now[index]
         # Each point's frame reads the written points of its own strand.

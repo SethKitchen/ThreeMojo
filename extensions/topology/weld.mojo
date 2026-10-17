@@ -12,7 +12,7 @@ the tolerance are one point; two points farther apart than twice the
 tolerance are never merged.
 """
 
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite_group
 from std.math import floor
 
 
@@ -111,8 +111,10 @@ struct Welder(Movable):
         Raises:
             Error: If a coordinate is not finite.
         """
-        if not p.is_finite():
-            raise Error("A point must have finite coordinates")
+        require_finite_group(
+            p.is_finite(),
+            "A point must have finite coordinates",
+        )
         var found = self.find(p)
         if found >= 0:
             return found

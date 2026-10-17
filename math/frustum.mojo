@@ -38,6 +38,7 @@ from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4, require_affine
 from math.projection import require_far_beyond_near
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from std.math import isfinite
 
 
@@ -88,8 +89,10 @@ def require_frustum_matrix(matrix: Matrix4) raises:
     Raises:
         Error: If the matrix is not finite.
     """
-    if not matrix.is_finite():
-        raise Error("A frustum projection must be finite")
+    require_finite_group(
+        matrix.is_finite(),
+        "A frustum projection must be finite",
+    )
 
 
 @fieldwise_init

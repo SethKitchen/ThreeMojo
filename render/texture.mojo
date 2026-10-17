@@ -97,7 +97,7 @@ limits, and explicit zero and nonfinite rules.
 from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
-from math.finite import require_finite
+from math.finite import require_finite, require_finite_group
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
@@ -2064,8 +2064,10 @@ struct Footprint(ImplicitlyCopyable):
         require_finite(
             Float64(self.level), "A footprint's level must be finite"
         )
-        if not self.step.is_finite():
-            raise Error("A footprint's step must be finite")
+        require_finite_group(
+            self.step.is_finite(),
+            "A footprint's step must be finite",
+        )
 
 
 def _binade(value: Float32) -> Float32:

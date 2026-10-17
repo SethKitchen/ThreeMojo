@@ -119,6 +119,7 @@ from core.morph import MorphInfluences
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, require_affine
+from math.finite import require_finite_group
 from objects.mesh import fill_morph_targets, morph_target_index
 from objects.skeleton import Skeleton
 
@@ -265,8 +266,10 @@ struct SkinnedMesh(Copyable, Movable):
         )
         if not bind_mode.is_valid():
             raise Error("A skinned mesh needs a bind mode that exists")
-        if not bind_matrix.is_finite():
-            raise Error("A bind matrix must be a real transform")
+        require_finite_group(
+            bind_matrix.is_finite(),
+            "A bind matrix must be a real transform",
+        )
         require_affine(bind_matrix, "A bind matrix must be affine")
         if bind_matrix.determinant() == 0:
             raise Error("A bind matrix must be invertible")
