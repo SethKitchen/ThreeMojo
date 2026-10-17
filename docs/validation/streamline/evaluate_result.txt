@@ -1,0 +1,23 @@
+DLSS supported: 0
+bilinear upsample of one render, MSE vs truth (static): 0.043772
+
+A. Static scene, jitter signs (jitterOffset = sx*applied x, sy*applied y)
+  sx=+1 sy=+1  MSE 0.081655
+  sx=+1 sy=-1  MSE 0.066163
+  sx=-1 sy=+1  MSE 0.052024
+  sx=-1 sy=-1  MSE 0.023038
+  jitter applied, jitterOffset=0   MSE 0.046404
+  no jitter at all                 MSE 0.043745
+  best: sx=-1 sy=-1
+
+B. Content moving by (0.8, 0.35) output pixels a frame, motion vector sign
+  bilinear upsample of one render, MSE 0.043774
+  sx=+1 sy=+1 mvSign=+1  MSE 0.067735
+  sx=+1 sy=+1 mvSign=-1  MSE 0.063094
+  sx=+1 sy=-1 mvSign=+1  MSE 0.059713
+  sx=+1 sy=-1 mvSign=-1  MSE 0.061935
+  sx=-1 sy=+1 mvSign=+1  MSE 0.049481
+  sx=-1 sy=+1 mvSign=-1  MSE 0.060836
+  sx=-1 sy=-1 mvSign=+1  MSE 0.039713
+  sx=-1 sy=-1 mvSign=-1  MSE 0.060002
+  best jitter, zero motion vectors  MSE 0.060677

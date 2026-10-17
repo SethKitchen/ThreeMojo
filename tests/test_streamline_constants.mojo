@@ -16,6 +16,7 @@ from extensions.streamline.constants import (
     check_camera_snapshot,
     check_frame_constants,
     frame_constants,
+    streamline_motion_vector,
 )
 from extensions.streamline.kinds import (
     MOTION_NORMALIZED,
@@ -102,8 +103,10 @@ def test_the_constants_describe_the_camera() raises:
     assert_almost_equal(constants.camera_far.to(METER), 100.0, atol=1e-4)
     assert_almost_equal(constants.camera_fov.to(DEGREE), 50.0, atol=1e-3)
     assert_almost_equal(constants.camera_aspect, 16.0 / 9.0, atol=1e-5)
-    assert_equal(constants.jitter_offset.x, 0.25)
-    assert_equal(constants.jitter_offset.y, -0.25)
+    # Streamline's `jitterOffset` is the negative of the `JitteredCamera`
+    # offset: the evaluate probe measured it on a running `sl.dlss`.
+    assert_equal(constants.jitter_offset.x, -0.25)
+    assert_equal(constants.jitter_offset.y, 0.25)
     assert_false(constants.reset)
     assert_false(constants.orthographic)
     assert_false(constants.depth_inverted)
@@ -511,6 +514,26 @@ def test_the_previous_clip_matrix_is_the_row_vector_chain_of_streamline() raises
         for column in range(4):
             var wanted = Float32(1) if row == column else Float32(0)
             assert_almost_equal(back[row * 4 + column], wanted, atol=1e-3)
+
+
+def test_a_velocity_becomes_the_way_back_in_render_pixels() raises:
+    # ThreeMojo: this frame less the last, in NDC with y up. Streamline: the
+    # way back to the last frame, in render pixels with y down.
+    var render = FrameSize(200, 100)
+    var back = streamline_motion_vector(Vector2(0.1, 0.2), render)
+    assert_almost_equal(back.x, -10, atol=1e-4)
+    assert_almost_equal(back.y, 10, atol=1e-4)
+    var still = streamline_motion_vector(Vector2(0, 0), render)
+    assert_equal(still.x, 0)
+    assert_equal(still.y, 0)
+    with assert_raises(contains="finite"):
+        _ = streamline_motion_vector(Vector2(nan[DType.float32](), 0), render)
+    with assert_raises(contains="finite"):
+        _ = streamline_motion_vector(Vector2(0, inf[DType.float32]()), render)
+    with assert_raises(contains="render"):
+        _ = streamline_motion_vector(Vector2(0, 0), FrameSize(0, 100))
+    with assert_raises(contains="render"):
+        _ = streamline_motion_vector(Vector2(0, 0), FrameSize(200, 0))
 
 
 def main() raises:

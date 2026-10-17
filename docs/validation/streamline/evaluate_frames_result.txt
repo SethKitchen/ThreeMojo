@@ -1,0 +1,5 @@
+render 278x157 -> output 480x270, 24 jitter phases
+fallback (EASU + RCAS of one unjittered render): MSE vs native 0.003748
+DLSS, jitter as frame_constants gives it:        MSE vs native 0.002132
+DLSS, the opposite sign:                         MSE vs native 0.006122
+DLSS, jitter not given:                          MSE vs native 0.003938

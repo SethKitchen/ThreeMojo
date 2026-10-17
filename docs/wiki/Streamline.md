@@ -1,6 +1,6 @@
 # Streamline
 
-`extensions/streamline/` holds the half of NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction integration that needs no graphics device. It does not run DLSS yet. A Windows probe has run both plugins, and the package agrees with what they answered. See [Checked against DLSS](#checked-against-dlss).
+`extensions/streamline/` holds the half of NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction integration that needs no graphics device. It does not run DLSS yet. A Windows probe has run both plugins, and evaluated Super Resolution on ThreeMojo's own frames. The package agrees with what they answered. See [Checked against DLSS](#checked-against-dlss).
 
 The package types and checks everything that Streamline reads, builds the per-frame constants from a ThreeMojo camera, and checks the buffers of a frame. It also has an upscaler trait with a CPU fallback. A native binding will implement that trait. See [Extensions](Extensions).
 
@@ -110,7 +110,7 @@ DLSS needs a camera moved by a fraction of a pixel each frame. `jitter_offset` g
 
 `jitter_phase_count` gives eight samples for every output pixel that one render pixel covers. That is this port's rule. Streamline requires no count.
 
-Streamline does not say which way its `jitterOffset` points. A binding must check the sign against a running DLSS.
+Streamline does not say which way its `jitterOffset` points. A running `sl.dlss` answered. The `jitterOffset` is the negative of the offset that `JitteredCamera` takes, in render pixels, with x across and y down. `frame_constants` negates the offset that it gets.
 
 ## Constants
 
@@ -122,7 +122,7 @@ Streamline does not say which way its `jitterOffset` points. A binding must chec
 - `mvec_scale` is one and one for `MOTION_NORMALIZED`, and one over the render size for `MOTION_PIXELS`.
 - The matrices have Streamline's layout. `sl::float4x4` is row-major and multiplies a row vector. A `Matrix4` is column-major and multiplies a column vector. Both hold the same sixteen floats in memory. A binding copies `Matrix4.elements` with no transpose. A test checks this against the order of `matrixMul` in `sl_matrix_helpers.h`.
 
-ThreeMojo's own velocity buffer holds a displacement in normalized device coordinates. A binding must convert it to the unit that it declares.
+ThreeMojo's velocity buffer holds the clip position of this frame less the last, in normalized device coordinates, with y up. DLSS reads the way back to the last position, in render pixels, with y down. `streamline_motion_vector` converts one to the other. Tag such vectors with `mvec_scale` of one over the render size.
 
 ## Tagged buffers
 
@@ -153,7 +153,7 @@ The binding is not written. Three things block it today.
 
 1. **The platform.** Streamline's documentation covers Windows with Direct3D 11, Direct3D 12 and Vulkan 1.2. It does not mention Linux or macOS. ThreeMojo runs on macOS, Linux and WSL 2. Its GPU backend is MAX, which opens no Direct3D or Vulkan device. `slEvaluateFeature` needs the command list of such a device, and `slSetTag` needs its resources.
 2. **The runtime.** `sl.interposer`, `sl.dlss` and `nvngx_dlss` come from NVIDIA. NVIDIA ships the DLSS runtime as a separate product with its own terms. This repository does not hold it.
-3. **Unstated conventions.** The headers leave three conventions open. They are the sign of the jitter, the range of the clip depth, and the sign and direction of the motion vectors. A binding must settle each against a running DLSS. The layout of a `float4x4` and the unit of the motion vectors are settled.
+3. **One unstated convention.** The headers leave the range of the clip depth open. A flat depth cannot test it. The sign of the jitter, the direction of the motion vectors, the layout of a `float4x4` and the unit of the motion vectors are settled.
 
 The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771). It closes when a program on an RTX machine evaluates both features through `sl.interposer`, and a test compares the result with `SpatialUpscaler`.
 
@@ -168,9 +168,14 @@ The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771
 | The render size of each mode | The estimates match at five output sizes |
 | The range of the render size | Matches `estimated_optimal_settings` |
 | Off and Ultra Quality | `eErrorInvalidParameter` |
+| The sign of the jitter | `jitterOffset` is the negative of the `JitteredCamera` offset |
+| The direction of a motion vector | It points to where the content was in the last frame |
+| ThreeMojo's frames through DLSS | Error 0.0021, against 0.0037 for the fallback |
 | The layout of an options struct | Members lie in the order of the headers |
 
-The probe does not evaluate a feature. It does not settle the open conventions. The tests keep the answers it gave: `test_the_estimate_matches_the_running_plugin` holds twenty-five of them.
+Two more programs call `slEvaluateFeature`. One uses a synthetic scene to settle the signs. The other feeds the frames of `examples/streamline.mojo --frames` to DLSS. The README in that folder has the numbers. None of them tests the range of the clip depth.
+
+The tests keep the answers of the plugin. `test_the_estimate_matches_the_running_plugin` holds twenty-five of them.
 
 ## Differences from Streamline
 

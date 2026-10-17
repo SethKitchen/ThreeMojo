@@ -16,7 +16,8 @@ that DLSS can follow the pixels. `frame_constants` builds them from two
   inverse.
 - None of the four matrices may carry the jitter. Take the snapshot of the
   camera before it is moved, and never of a `JitteredCamera`. The jitter goes
-  in `jitter_offset`, in render pixels.
+  in `jitter_offset`, in render pixels, and it is the negative of the offset
+  that `JitteredCamera` takes.
 - The camera's position and axes are in world space, the field of view is
   vertical, and `reset` says the last frame has nothing to do with this one.
 
@@ -30,13 +31,28 @@ row vectors. A binding copies `Matrix4.elements` as it is, with no transpose.
 `tests/test_streamline_constants.mojo` checks this against the order of
 `matrixMul`.
 
-**Conventions kept open.** Streamline's headers do not say which range its
-clip-space depth has, or which way `jitterOffset` points. The unit of the
-motion vectors is not open: `mvec_scale` is one and one for vectors that are
-`MOTION_NORMALIZED`, and one over the render size for `MOTION_PIXELS`, as the
-programming guides write them. The sign of the motion vectors is open, and so
-is whether they point from the previous frame to this one or the other way. A
-native binding must settle those against a running DLSS.
+**Measured on a running DLSS.** Streamline's headers do not say which way
+`jitterOffset` points, or which way a motion vector does. `sl.dlss` 2.14.16
+answered on an NVIDIA TITAN RTX (`docs/validation/streamline/evaluate.cpp`).
+A scene whose detail the render grid cannot hold was rendered with a known
+offset each frame, and the error against the true image was measured for each
+sign:
+
+- `jitterOffset` is the negative of the offset that `JitteredCamera` takes,
+  in render pixels, with x across and y down. The other three sign choices
+  gave an error above the plain bilinear upscale. `frame_constants` negates
+  the jitter it is given.
+- A motion vector points from a pixel to where its content was in the last
+  frame, in render pixels, with y down. `mvec_scale` is one over the render
+  size for such vectors. The opposite sign gave the error of having no motion
+  vectors at all. `streamline_motion_vector` converts ThreeMojo's velocity.
+
+The range of the clip-space depth is still open. The probe tagged a flat
+depth, which cannot tell the ranges apart. Its matrices used the Direct3D
+range, zero at the near plane and one at the far plane, and DLSS accepted them.
+`mvec_scale` is one and one for vectors that are `MOTION_NORMALIZED`, and one
+over the render size for `MOTION_PIXELS`, as the programming guides write
+them.
 """
 
 from cameras.camera import Camera
@@ -152,7 +168,8 @@ struct FrameConstants(Copyable, Movable):
     var clip_to_camera_view: Matrix4
     var clip_to_prev_clip: Matrix4
     var prev_clip_to_clip: Matrix4
-    # `jitterOffset`, in render pixels.
+    # `jitterOffset`, in render pixels: the negative of the offset that
+    # `JitteredCamera` takes.
     var jitter_offset: Vector2
     # `mvecScale`.
     var mvec_scale: Vector2
@@ -290,7 +307,8 @@ def frame_constants(
         previous: The camera of the last frame, before its jitter. It is
             ignored when `reset` is true.
         render: The size the scene is rendered at.
-        jitter: The offset of this frame, in render pixels.
+        jitter: The offset of this frame, in render pixels, as
+            `JitteredCamera` takes it. The constants carry its negative.
         motion: The unit of the motion vectors.
         reset: Whether the last frame has nothing to do with this one.
 
@@ -326,7 +344,7 @@ def frame_constants(
     to_clip.multiply(_inverse(last.view, "view"))
     to_clip.multiply(_inverse(last.projection, "projection"))
     constants.prev_clip_to_clip = to_clip
-    constants.jitter_offset = jitter
+    constants.jitter_offset = Vector2(-jitter.x, -jitter.y)
     if motion == MOTION_PIXELS:
         constants.mvec_scale = Vector2(
             1 / Float32(render.width), 1 / Float32(render.height)
@@ -359,3 +377,34 @@ def frame_constants(
     constants.reset = reset
     check_frame_constants(constants)
     return constants^
+
+
+def streamline_motion_vector(
+    velocity: Vector2, render: FrameSize
+) raises -> Vector2:
+    """Convert ThreeMojo's velocity to the motion vector Streamline reads.
+
+    ThreeMojo's velocity is the clip position of this frame less the last,
+    in normalized device coordinates, with y up. DLSS reads the way back to
+    where the content was, in render pixels, with y down. Tag vectors of this
+    kind with `mvec_scale` of one over the render size.
+
+    Args:
+        velocity: The fragment's velocity, as `fragment_velocity` gives it.
+        render: The size the scene is rendered at.
+
+    Returns:
+        The motion vector, in render pixels.
+
+    Raises:
+        Error: If the velocity is not finite, or the render has a side below
+            one pixel.
+    """
+    if not (isfinite(velocity.x) and isfinite(velocity.y)):
+        raise Error("A velocity must be finite")
+    if render.width < 1 or render.height < 1:
+        raise Error("A render must be at least one pixel each way")
+    return Vector2(
+        -velocity.x * Float32(render.width) / 2,
+        velocity.y * Float32(render.height) / 2,
+    )

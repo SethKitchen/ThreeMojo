@@ -16,9 +16,10 @@ the offset and the picture moves the other way.
 
 **What this port decides.** `jitter_phase_count` is eight samples for every
 output pixel that one render pixel covers. Streamline does not require a
-count. And Streamline's headers do not say which way its `jitterOffset`
-points. A native binding must check the sign against a running DLSS before
-it passes `jitter_offset` on.
+count. And Streamline's `jitterOffset` is the negative of these offsets.
+`sl.dlss` 2.14.16 needed that sign on an NVIDIA TITAN RTX, see
+`docs/validation/streamline/`. `frame_constants` negates the offset it is
+given.
 """
 
 from extensions.streamline.sizing import FrameSize

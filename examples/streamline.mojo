@@ -15,6 +15,13 @@ the scene rendered at the full output size, the image that any upscaler aims
 for. The row below magnifies the boxed part of each image five times.
 
 This is the CPU fallback and not DLSS. It is not in the gallery.
+
+    mojo run -I . examples/streamline.mojo --frames DIR
+
+writes what a Streamline harness needs to run DLSS on the same scene: the
+jittered renders, their depth, the jitter that `frame_constants` hands to
+Streamline, and the full-size render and the fallback's result to compare
+with. `docs/validation/streamline/evaluate_frames.cpp` reads them.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -23,7 +30,13 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, UV
 from core.object3d import Object3D
 from core.scene import Scene
-from extensions.streamline.kinds import MODE_BALANCED, SUPER_RESOLUTION
+from extensions.streamline.constants import CameraSnapshot, frame_constants
+from extensions.streamline.jitter import jitter_offset, jitter_phase_count
+from extensions.streamline.kinds import (
+    MODE_BALANCED,
+    MOTION_PIXELS,
+    SUPER_RESOLUTION,
+)
 from extensions.streamline.sizing import FrameSize, estimated_render_size
 from extensions.streamline.upscaler import SpatialUpscaler, Upscaler
 from extensions.visual.overlay import CENTER, LEFT, Overlay, fill_rect
@@ -31,12 +44,15 @@ from geometries.plane import plane
 from geometries.torus import torus_knot
 from lights.light import ambient_light, directional_light
 from materials.material import DOUBLE_SIDE, Material
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from postprocessing.antialiasing import JitteredCamera
 from render.apng import encode
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.texture import BILINEAR, REPEAT, checkerboard
 from renderers.renderer import Renderer, available_workers
+from std.math import isfinite
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METER
@@ -69,12 +85,28 @@ def floor_geometry() raises -> BufferGeometry:
     return sheet^
 
 
-def render(width: Int, height: Int) raises -> Framebuffer:
+def make_camera() raises -> PerspectiveCamera:
+    """Return the camera of the scene. Its framing does not depend on the
+    size of the render."""
+    var camera = PerspectiveCamera(
+        Angle(40.0, DEGREE),
+        Float32(OUTPUT_WIDTH) / Float32(OUTPUT_HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.95, 2.75), Vector3(0, 0.5, 0))
+    return camera^
+
+
+def render(
+    width: Int, height: Int, jitter: Vector2 = Vector2(0, 0)
+) raises -> Framebuffer:
     """Render the scene at a size. The framing does not depend on the size.
 
     Args:
         width: The width in pixels.
         height: The height in pixels.
+        jitter: How far the view moves, in pixels, across and down.
 
     Returns:
         The frame.
@@ -128,13 +160,9 @@ def render(width: Int, height: Int) raises -> Framebuffer:
     )
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(OUTPUT_WIDTH) / Float32(OUTPUT_HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = JitteredCamera(
+        make_camera(), scene, jitter.x, jitter.y, width, height
     )
-    camera.place(Vector3(0, 0.95, 2.75), Vector3(0, 0.5, 0))
     return renderer.render(scene, assets, camera)
 
 
@@ -203,8 +231,80 @@ def draw_box(mut sheet: Framebuffer, left: Int, top: Int) raises:
     fill_rect(sheet, x1, y0, x1 + 1, y1, BOX)
 
 
+def depth_bytes(frame: Framebuffer) -> List[UInt8]:
+    """Return a frame's depth as 16-bit fractions, low byte first. A pixel
+    that nothing drew is one."""
+    var bytes = List[UInt8](capacity=2 * frame.width * frame.height)
+    for at in range(frame.width * frame.height):
+        var depth = frame.depth[at]
+        var scaled = 65535
+        if isfinite(depth):
+            scaled = Int(max(Float32(0), min(Float32(1), depth)) * 65535)
+        bytes.append(UInt8(scaled & 255))
+        bytes.append(UInt8(scaled >> 8))
+    return bytes^
+
+
+def write_frames(directory: String) raises:
+    """Write the frames a Streamline harness feeds to DLSS.
+
+    Args:
+        directory: An existing directory.
+
+    Raises:
+        Error: If a frame cannot be rendered or a file cannot be written.
+    """
+    var output = FrameSize(OUTPUT_WIDTH, OUTPUT_HEIGHT)
+    var size = estimated_render_size(MODE_BALANCED, output)
+    var count = jitter_phase_count(size, output)
+    var snapshot = CameraSnapshot(make_camera(), Scene())
+    var meta = String(size.width) + " " + String(size.height) + " "
+    meta += String(output.width) + " " + String(output.height) + " "
+    meta += String(count) + "\n"
+    for index in range(count):
+        var offset = jitter_offset(index, count)
+        # What Streamline is told: `frame_constants` negates the offset.
+        var constants = frame_constants(
+            snapshot, snapshot, size, offset, MOTION_PIXELS, index == 0
+        )
+        meta += String(constants.jitter_offset.x) + " "
+        meta += String(constants.jitter_offset.y) + "\n"
+        var frame = render(size.width, size.height, offset)
+        Path(directory + "/color_" + String(index) + ".rgba").write_bytes(
+            frame.pixels
+        )
+        Path(directory + "/depth_" + String(index) + ".u16").write_bytes(
+            depth_bytes(frame)
+        )
+    Path(directory + "/meta.txt").write_text(meta)
+
+    var plain = render(size.width, size.height)
+    var native = render(output.width, output.height)
+    Path(directory + "/native.rgba").write_bytes(native.pixels)
+    var upscaled = from_colors(
+        SpatialUpscaler().evaluate(
+            SUPER_RESOLUTION, to_colors(plain), size, output
+        ),
+        output,
+    )
+    Path(directory + "/fallback.rgba").write_bytes(upscaled.pixels)
+    print(
+        "Wrote",
+        count,
+        "frames of",
+        size.width,
+        "by",
+        size.height,
+        "to",
+        directory,
+    )
+
+
 def main() raises:
     var args = argv()
+    if len(args) > 2 and String(args[1]) == "--frames":
+        write_frames(String(args[2]))
+        return
     var destination = String(DEFAULT_OUTPUT)
     if len(args) > 1:
         destination = String(args[1])
