@@ -102,7 +102,12 @@ from render.cube_uv import (
     cube_uv_lod_max,
     sample_cube_uv,
 )
-from render.framebuffer import FloatColor, Framebuffer
+from render.framebuffer import (
+    FloatColor,
+    Framebuffer,
+    append_color,
+    append_float_color,
+)
 from render.png import DecodedImage
 from render.srgb import SRGB, ColorSpace, require_known_color_space
 from render.texture import (
@@ -913,18 +918,12 @@ def cube_from_equirectangular(
                 var place = equirect_uv(face_direction(face, x, y, edge))
                 var color = image.sample(place.x, place.y)
                 if image.texel_type == FLOAT_TYPE:
-                    floats.append(color.r)
-                    floats.append(color.g)
-                    floats.append(color.b)
-                    floats.append(color.a)
+                    append_float_color(floats, color)
                     continue
                 var stored = color.quantize()
                 if image.color_space == SRGB:
                     stored = color.encode()
-                bytes.append(stored.r)
-                bytes.append(stored.g)
-                bytes.append(stored.b)
-                bytes.append(stored.a)
+                append_color(bytes, stored)
         if image.texel_type == FLOAT_TYPE:
             faces.append(
                 float_texture(

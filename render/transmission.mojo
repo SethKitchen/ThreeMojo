@@ -38,7 +38,11 @@ from math.matrix4 import Matrix4
 from math.sine import fraction
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.framebuffer import TRANSPARENT_BLACK, FloatColor
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    FloatColor,
+    append_float_color,
+)
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture, float_texture
 from math.finite import require_finite
@@ -211,10 +215,7 @@ struct TransmissionTarget(Movable):
         var data = List[Float32](capacity=target.width * target.height * 4)
         for slot in range(len(target.colors)):  # pragma: no branch
             var straight = target.straight_at(slot)
-            data.append(straight.r)
-            data.append(straight.g)
-            data.append(straight.b)
-            data.append(straight.a)
+            append_float_color(data, straight)
         self.image = float_texture(
             target.width,
             target.height,

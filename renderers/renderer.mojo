@@ -281,7 +281,13 @@ from materials.nodes import (
 from render.pointrule import attenuated_size
 from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId
-from render.framebuffer import Color, FloatColor, Framebuffer, SrgbBytes
+from render.framebuffer import (
+    Color,
+    FloatColor,
+    Framebuffer,
+    SrgbBytes,
+    append_float_color,
+)
 from render.layered_target import TARGET_CUBE, LayeredRenderTarget
 from render.srgb import srgb_to_linear
 from render.target import (
@@ -9703,10 +9709,7 @@ struct Renderer(Movable):
             return colors^
         for texel in range(len(target.colors)):  # pragma: no branch
             ref seen = target.colors[texel]
-            colors.append(seen.r)
-            colors.append(seen.g)
-            colors.append(seen.b)
-            colors.append(seen.a)
+            append_float_color(colors, seen)
         return colors^
 
     def _projected(

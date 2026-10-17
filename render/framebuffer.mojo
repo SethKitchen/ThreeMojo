@@ -160,6 +160,25 @@ def rgb_is_black(color: Color) -> Bool:
     return color.r == 0 and color.g == 0 and color.b == 0
 
 
+def append_color(mut values: List[UInt8], color: Color):
+    """Append `color`'s four channels.
+
+    Args:
+        values: The list that receives red, green, blue, and alpha.
+        color: The eight-bit color.
+
+    Returns:
+        Nothing. Four bytes are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(color.r)
+    values.append(color.g)
+    values.append(color.b)
+    values.append(color.a)
+
+
 @fieldwise_init
 struct HSL(ImplicitlyCopyable):
     """A color as hue, saturation and lightness, each nominally zero to
@@ -782,6 +801,43 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
 comptime OPAQUE_WHITE = FloatColor(1.0, 1.0, 1.0, 1.0)
 # What an invalid sample, an uncovered pixel, and an empty sum read.
 comptime TRANSPARENT_BLACK = FloatColor(0.0, 0.0, 0.0, 0.0)
+
+
+def append_float_rgb(mut values: List[Float32], color: FloatColor):
+    """Append the red, green, and blue of a linear color.
+
+    Args:
+        values: The list that receives the three channels.
+        color: The linear color. Alpha is not written.
+
+    Returns:
+        Nothing. Three numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(color.r)
+    values.append(color.g)
+    values.append(color.b)
+
+
+def append_float_color(mut values: List[Float32], color: FloatColor):
+    """Append `color`'s four channels.
+
+    Args:
+        values: The list that receives red, green, blue, and alpha.
+        color: The linear color.
+
+    Returns:
+        Nothing. Four numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(color.r)
+    values.append(color.g)
+    values.append(color.b)
+    values.append(color.a)
 
 
 def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:

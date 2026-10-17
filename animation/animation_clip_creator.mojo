@@ -48,7 +48,7 @@ from materials.material import MaterialId
 from math.finite import require_finite
 from math.utils import SeededRandom
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, append_float_rgb
 from std.math import ceil, isfinite
 from units.si import Duration, SECOND
 
@@ -271,9 +271,7 @@ def create_material_color_animation(
     var values = List[Float32]()
     for index in range(len(colors)):  # pragma: no branch
         times.append(Duration(Float32(index) * step, SECOND))
-        values.append(colors[index].r)
-        values.append(colors[index].g)
-        values.append(colors[index].b)
+        append_float_rgb(values, colors[index])
     return _clip(
         KeyframeTrack(
             material_target(material, MATERIAL_COLOR), times, values^

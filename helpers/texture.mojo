@@ -67,7 +67,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.cube_texture_store import CubeTextureId
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, append_float_color
 from render.texture import (
     CLAMP,
     IGNORED,
@@ -235,14 +235,6 @@ def _baked(
     return map^
 
 
-def _push(mut data: List[Float32], color: FloatColor):
-    """Append one texel's four floats."""
-    data.append(color.r)
-    data.append(color.g)
-    data.append(color.b)
-    data.append(color.a)
-
-
 def texture_helper(
     texture: TextureId,
     mut assets: Assets,
@@ -334,7 +326,7 @@ def _slice_maps[
                 var u = (Float32(x) + 0.5) / Float32(wide)
                 var v = (Float32(y) + 0.5) / Float32(tall)
                 if layered:
-                    _push(
+                    append_float_color(
                         data,
                         filter_array(
                             texels,
@@ -350,7 +342,7 @@ def _slice_maps[
                         ),
                     )
                 else:
-                    _push(
+                    append_float_color(
                         data,
                         filter_volume(
                             texels,
@@ -564,7 +556,9 @@ def texture_helper(
                 # The first stored row is the top, at v near one.
                 var u = (Float32(column) + 0.5) / Float32(size)
                 var v = 1 - (Float32(row) + 0.5) / Float32(size)
-                _push(data, cube.sample(origin + across * u + up * v))
+                append_float_color(
+                    data, cube.sample(origin + across * u + up * v)
+                )
         ref first = cube.faces[0]
         var map = _baked(
             data^,
