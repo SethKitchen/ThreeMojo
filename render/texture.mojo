@@ -94,7 +94,11 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.extent import require_positive_extent, require_texel_count
+from core.extent import (
+    require_closed_count,
+    require_positive_extent,
+    require_texel_count,
+)
 from core.ordinal import ordinal_valid
 
 from math.finite import require_finite, require_finite_group
@@ -2568,8 +2572,12 @@ def data_texture(
             or its length is not `width * height * channels`.
     """
     require_texture_size(width, height)
-    if channels < 1 or channels > 4:
-        raise Error("A data texture holds one through four numbers a texel")
+    require_closed_count(
+        channels,
+        1,
+        4,
+        "A data texture holds one through four numbers a texel",
+    )
     require_texel_count(
         len(data),
         width,

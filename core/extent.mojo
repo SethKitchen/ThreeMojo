@@ -8,6 +8,7 @@
 A size of zero is not an image, a view, or a window. Callers keep their
 own error text. `require_positive_extent` raises that text.
 `require_texel_count` refuses a buffer whose length is not one entry a texel.
+`require_closed_count` refuses a count outside a closed range.
 """
 
 
@@ -72,4 +73,25 @@ def require_texel_count(
             channels.
     """
     if length != width * height * channels:
+        raise Error(message)
+
+
+def require_closed_count(
+    value: Int, low: Int, high: Int, message: String
+) raises:
+    """Refuse a count outside a closed range.
+
+    Args:
+        value: The count.
+        low: The least allowed count.
+        high: The greatest allowed count.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is from `low` through `high`.
+
+    Raises:
+        Error: If `value` is below `low` or above `high`.
+    """
+    if value < low or value > high:
         raise Error(message)

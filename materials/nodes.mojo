@@ -127,6 +127,7 @@ storage buffers and the statements' results through `NodeSource`.
 level the surface's own coordinates pick. WebGPU instead measures the
 derivatives of the coordinate the node computes.
 """
+from core.extent import require_closed_count
 from core.ordinal import ordinal_valid, require_index_in_count
 from core.search import first_match
 
@@ -4355,8 +4356,9 @@ struct NodeGraph(Copyable, Movable):
         """
         self._vector(a, "swizzle")
         var letters = components.as_bytes()
-        if len(letters) < 1 or len(letters) > 4:
-            raise Error("A swizzle picks one to four components")
+        require_closed_count(
+            len(letters), 1, 4, "A swizzle picks one to four components"
+        )
         var width = self._types[a.value].width()
         var packed = 0
         var scale = 1
