@@ -100,7 +100,7 @@ from render.framebuffer import Color
 from render.tasks import TaskGroup
 from std.math import sqrt
 from std.sys import num_logical_cores
-from units.si import METER, Length
+from units.measure import length_meters
 
 # How many fine cells an eyeball's radius spans, at least.
 comptime EYE_CELLS = 6.0
@@ -353,7 +353,7 @@ def mesh_animal(
             ids,
             box[0],
             box[1],
-            Length(Float32(cell), METER),
+            length_meters(cell),
             workers=threads,
         )
         for _ in range(piece.vertex_count()):

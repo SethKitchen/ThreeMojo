@@ -33,6 +33,7 @@ from math.sine import fraction
 from math.utils import clamp_unit, max3
 from math.finite import require_finite, require_finite_group
 from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
+from units.measure import length_meters
 from units.si import METER, SECOND, Duration, Length
 
 # Each foot's phase offset in the lateral-sequence walk: left fore, right
@@ -227,7 +228,7 @@ def _walk_parameters(
     # stance. The simple two-link rig cannot realize every target stride.
     var hip = rig.j("hipL").y
     var desired = DUTY * Float64(
-        stride_length(froude, Length(Float32(hip), METER)).to(METER)
+        stride_length(froude, length_meters(hip)).to(METER)
     )
     var bob = 0.012 * hip
     var lengths = List[Float64]()
@@ -295,7 +296,7 @@ def walk_stride(rig: Rig, froude: Float64 = WALK_FROUDE) raises -> Length:
     """
     if not is_quadruped(rig):
         return Length(0.0, METER)
-    return Length(Float32(_walk_parameters(rig, froude)[0] / DUTY), METER)
+    return length_meters(_walk_parameters(rig, froude)[0] / DUTY)
 
 
 def walk_pose_at(
@@ -322,7 +323,7 @@ def walk_pose_at(
     require_finite(Float64(seconds), "Walk time must be finite")
     if not is_quadruped(rig):
         return Pose(len(rig.bones))
-    var hip = Length(Float32(rig.j("hipL").y), METER)
+    var hip = length_meters(rig.j("hipL").y)
     var frequency = Float64(stride_frequency(froude, hip).value)
     return walk_pose(rig, seconds * frequency, froude)
 

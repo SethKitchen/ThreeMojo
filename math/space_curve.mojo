@@ -61,7 +61,8 @@ from math.norm import (
     _ordinary_squared,
 )
 from std.math import acos, cos, isfinite, sin, sqrt
-from units.si import Length, METER
+from units.measure import length_meters
+from units.si import Length
 
 # Four doubles: a point or a direction in space, and a fourth number that
 # is not used.
@@ -283,7 +284,7 @@ def length_of[
             fit in Int, or the curve refuses a point.
     """
     var table = lengths_of(curve, divisions)
-    return Length(Float32(table[len(table) - 1]), METER)
+    return length_meters(table[len(table) - 1])
 
 
 def u_to_t(lengths: List[Float64], u: Float64) raises -> Float64:

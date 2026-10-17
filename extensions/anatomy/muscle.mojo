@@ -47,13 +47,12 @@ from math.finite import (
 from math.norm import squared_length2
 from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
+from units.measure import angle_radians, length_meters
 from units.si import (
     KILOGRAM_PER_CUBIC_METER,
     DEGREE,
-    METER,
     MEGAPASCAL,
     PER_SECOND,
-    RADIAN,
     SQUARE_METER,
     Angle,
     Area,
@@ -505,9 +504,9 @@ def isometric_equilibrium(
         )
     return MuscleEquilibrium(
         force,
-        Length(Float32(fiber), METER),
-        Length(Float32(unit - reach), METER),
-        Angle(Float32(asin(arch.thickness() / fiber)), RADIAN),
+        length_meters(fiber),
+        length_meters(unit - reach),
+        angle_radians(asin(arch.thickness() / fiber)),
     )
 
 
@@ -573,7 +572,7 @@ def stored_moment_arm(
     require_finite(
         stored_float32(arm), "A muscle moment arm must fit a finite SI length"
     )
-    return Length(Float32(arm), METER)
+    return length_meters(arm)
 
 
 def default_tension() -> Pressure:

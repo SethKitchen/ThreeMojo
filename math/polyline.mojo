@@ -13,7 +13,8 @@ can hold its length between two bounds.
 from math.norm import _ordinary_squared
 from math.utils import clamp, clamp_unit
 from std.math import acos, pi, sqrt
-from units.si import Angle, RADIAN
+from units.measure import angle_radians
+from units.si import Angle
 
 
 trait PolylineVertex(Deinitable, ImplicitlyCopyable, Movable):
@@ -227,7 +228,7 @@ def angle_between[T: PolylineVertex](start: T, end: T) -> Angle:
         second.normalize()
         # A zero vector stays zero, so this is every component being zero.
         if first.length_sq() == 0 or second.length_sq() == 0:
-            return Angle(Float32(pi / 2), RADIAN)
+            return angle_radians(pi / 2)
         theta = first.dot(second)
     return Angle(acos(clamp_unit(theta)), RADIAN)
 

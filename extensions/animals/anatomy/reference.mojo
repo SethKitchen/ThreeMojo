@@ -33,7 +33,8 @@ from extensions.sdf.field import Primitive
 from extensions.sdf.ids import CONE, ELLIPSOID, FIN
 from extensions.sdf.vector import V3, dot
 from std.math import isfinite, sqrt
-from units.si import Length, METER
+from units.measure import length_meters
+from units.si import Length
 
 
 def _extent(
@@ -135,4 +136,4 @@ def reference_length(animal: Animal) raises -> Length:
         stored_float32(value),
         "A reference landmark must fit a positive finite SI length",
     )
-    return Length(Float32(value), METER)
+    return length_meters(value)

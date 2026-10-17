@@ -47,11 +47,11 @@ from extensions.animals.rig import Rig
 from extensions.sdf.vector import V3, cross, length, lerp, normalize
 from math.finite import require_non_negative_finite
 from std.math import sqrt
+from units.measure import length_meters
 from units.si import (
     DEGREE,
     KILOGRAM,
     MEGAPASCAL,
-    METER,
     PASCAL,
     Angle,
     Length,
@@ -102,9 +102,9 @@ def _muscle(
     var unit = length(insertion - origin)
     var arch = MuscleArchitecture(
         Mass(Float32(mass_kg), KILOGRAM),
-        Length(Float32(FIBER_SHARE * unit), METER),
+        length_meters(FIBER_SHARE * unit),
         Angle(0.0, DEGREE),
-        Length(Float32((1.0 - FIBER_SHARE) * unit), METER),
+        length_meters((1.0 - FIBER_SHARE) * unit),
         tension,
         muscle_density(),
     )

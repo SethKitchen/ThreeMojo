@@ -29,7 +29,7 @@ from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3, vector3_from_float64
 from std.math import pi, sqrt
-from units.si import KILOGRAM, METER, Length, Mass
+from units.measure import length_meters
 
 
 def to_physics(p: Vector3) -> Vector3:
@@ -124,8 +124,8 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         var m = Float64(s.mass.value)
         var radius = sqrt(m / (1000.0 * pi * max(span, 1e-6)))
         var shape = Shape.capsule(
-            Length(Float32(radius), METER),
-            Length(Float32(0.5 * span), METER),
+            length_meters(radius),
+            length_meters(0.5 * span),
         )
         var origin = to_physics(vector3_from_float64(head.x, head.y, head.z))
         var body = RigidBody(DYNAMIC, shape^, s.mass, origin, turn)

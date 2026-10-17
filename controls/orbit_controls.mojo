@@ -60,6 +60,7 @@ from math.quaternion import Quaternion
 from math.spherical import Spherical
 from math.vector3 import Vector3
 from std.math import inf, isfinite, pi, tan
+from units.measure import angle_radians
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
@@ -215,7 +216,7 @@ struct OrbitControls(Copyable, Movable):
         self.min_distance = Length(0.0, METER)
         self.max_distance = Length(inf[DType.float32](), METER)
         self.min_polar_angle = Angle(0.0, RADIAN)
-        self.max_polar_angle = Angle(Float32(pi), RADIAN)
+        self.max_polar_angle = angle_radians(pi)
         self.min_azimuth_angle = Angle(-inf[DType.float32](), RADIAN)
         self.max_azimuth_angle = Angle(inf[DType.float32](), RADIAN)
         self.enable_damping = False
