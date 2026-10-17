@@ -572,23 +572,13 @@ def write_track(
         writer.key("settings")
         writer.begin_object()
         writer.key("inTangents")
-        _numbers(writer, track.in_tangents)
+        writer.numbers(track.in_tangents)
         writer.key("outTangents")
-        _numbers(writer, track.out_tangents)
+        writer.numbers(track.out_tangents)
         writer.end_object()
     writer.key("type")
     writer.string(kind.value_type_name())
     writer.end_object()
-
-
-def _numbers(mut writer: JsonWriter, values: List[Float32]) raises:
-    """Write a list of numbers as an array."""
-    writer.begin_array()
-    # A Bezier track's control points, which `validate` has found to be
-    # two for each of its values, and a track has at least one value.
-    for index in range(len(values)):  # pragma: no branch
-        writer.number(values[index])
-    writer.end_array()
 
 
 def write_clip(

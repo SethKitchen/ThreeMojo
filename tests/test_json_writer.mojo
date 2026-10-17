@@ -127,6 +127,24 @@ def test_a_document_is_written_with_its_commas_and_colons() raises:
     assert_equal(single.finish(), "7")
 
 
+def test_a_number_array_writes_each_value() raises:
+    var writer = JsonWriter()
+    var values = List[Float32]()
+    values.append(1)
+    values.append(2.5)
+    writer.numbers(values)
+    assert_equal(writer.finish(), "[1.0,2.5]")
+    var empty = JsonWriter()
+    var none = List[Float32]()
+    empty.numbers(none)
+    assert_equal(empty.finish(), "[]")
+    var bad = JsonWriter()
+    var nans = List[Float32]()
+    nans.append(nan[DType.float32]())
+    with assert_raises(contains="finite"):
+        bad.numbers(nans)
+
+
 def test_an_empty_raw_array_is_left_out() raises:
     var writer = JsonWriter()
     writer.begin_object()
