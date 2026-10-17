@@ -2028,6 +2028,55 @@ def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
 
 
 @fieldwise_init
+struct GradientPlace(ImplicitlyCopyable):
+    """Where an explicit-gradient tap reads, after the finite check.
+
+    `ready` is false when a coordinate or a gradient is not finite.
+    """
+
+    var ready: Bool
+    var u: Float32
+    var v: Float32
+
+
+def gradient_place(
+    u: Float32,
+    v: Float32,
+    dx: Vector2,
+    dy: Vector2,
+    wrap_u: Wrap,
+    wrap_v: Wrap,
+) -> GradientPlace:
+    """Return the coordinates an explicit-gradient tap reads.
+
+    A nonfinite coordinate or gradient is refused before the wrap. A
+    finite coordinate is reduced by `gradient_sample_coordinate`.
+
+    Args:
+        u: Horizontal coordinate.
+        v: Vertical coordinate.
+        dx: Coordinate change per screen pixel across.
+        dy: Coordinate change per screen pixel up.
+        wrap_u: How `u` repeats.
+        wrap_v: How `v` repeats.
+
+    Returns:
+        `ready` is false when an input is not finite. Otherwise `u` and
+        `v` are the reduced coordinates.
+
+    Raises:
+        Error: Never.
+    """
+    if not texture_grad_finite(u, v, dx, dy):
+        return GradientPlace(False, 0, 0)
+    return GradientPlace(
+        True,
+        gradient_sample_coordinate(u, wrap_u),
+        gradient_sample_coordinate(v, wrap_v),
+    )
+
+
+@fieldwise_init
 struct Footprint(ImplicitlyCopyable):
     """How a pixel's footprint is read: which level, how many taps along
     its long axis, and how far apart in texture coordinates they are.

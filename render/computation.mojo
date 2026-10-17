@@ -68,8 +68,7 @@ from render.texture import (
     Texture,
     Wrap,
     float_texture,
-    texture_grad_finite,
-    gradient_sample_coordinate,
+    gradient_place,
 )
 from std.math import floor
 
@@ -224,17 +223,17 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
         Returns:
             The texel's four floats; transparent black for nonfinite inputs.
         """
-        if not texture_grad_finite(u, v, dx, dy):
-            return TRANSPARENT_BLACK
-        return self.sample(
-            slot,
-            gradient_sample_coordinate(
-                u, Wrap(Int(self.wraps[unsafe_offset=slot * 2]))
-            ),
-            gradient_sample_coordinate(
-                v, Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1]))
-            ),
+        var placed = gradient_place(
+            u,
+            v,
+            dx,
+            dy,
+            Wrap(Int(self.wraps[unsafe_offset=slot * 2])),
+            Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1])),
         )
+        if not placed.ready:
+            return TRANSPARENT_BLACK
+        return self.sample(slot, placed.u, placed.v)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a variable's texel by its column and row, wrapped by the
