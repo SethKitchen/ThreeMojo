@@ -44,6 +44,7 @@ from core.buffer_geometry import (
     OCTAHEDRON_GEOMETRY,
     POLYHEDRON_GEOMETRY,
     TETRAHEDRON_GEOMETRY,
+    GeometryType,
 )
 from core.user_data import UserData, json_number_text
 from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
@@ -261,6 +262,26 @@ def _vertex(vertices: List[Float32], index: Int) -> Vector3:
     )
 
 
+def _regular_solid(
+    vertices: List[Float32],
+    indices: List[Int],
+    radius: Length,
+    detail: Int,
+    kind: GeometryType,
+) raises -> BufferGeometry:
+    """Return a regular solid with its radius and detail recorded.
+
+    The four named solids share this finish. The kind is the three.js
+    class, and the parameters are the radius and the detail.
+    """
+    var geometry = polyhedron(vertices, indices, radius, detail)
+    geometry.kind = kind
+    geometry.parameters = UserData()
+    geometry.parameters.set_meters("radius", radius)
+    geometry.parameters.set_number("detail", Float64(detail))
+    return geometry^
+
+
 def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     """Return a tetrahedron, three.js's `TetrahedronGeometry`.
 
@@ -276,12 +297,9 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     """
     var vertices: List[Float32] = [1, 1, 1, -1, -1, 1, -1, 1, -1, 1, -1, -1]
     var indices: List[Int] = [2, 1, 0, 0, 3, 2, 1, 3, 0, 2, 3, 1]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = TETRAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, TETRAHEDRON_GEOMETRY
+    )
 
 
 def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -343,12 +361,9 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         4,
         2,
     ]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = OCTAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, OCTAHEDRON_GEOMETRY
+    )
 
 
 def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -467,12 +482,9 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         8,
         1,
     ]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = ICOSAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, ICOSAHEDRON_GEOMETRY
+    )
 
 
 def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
@@ -663,9 +675,6 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
         5,
         9,
     ]
-    var geometry = polyhedron(vertices, indices, radius, detail)
-    geometry.kind = DODECAHEDRON_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_number("detail", Float64(detail))
-    return geometry^
+    return _regular_solid(
+        vertices, indices, radius, detail, DODECAHEDRON_GEOMETRY
+    )
