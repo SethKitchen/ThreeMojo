@@ -37,7 +37,7 @@ from math.norm import (
 )
 from math.quaternion import quaternion_rotate, quaternion_terms
 from math.utils import SeededRandom
-from math.vector3 import Vector3, vector3_from_float64
+from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
 from math.finite import require_finite
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
@@ -303,6 +303,32 @@ struct Vec3d(Equatable, ImplicitlyCopyable):
             The vector.
         """
         return vector3_from_float64(self.x, self.y, self.z)
+
+
+def append_z_up_as_y_up(
+    mut positions: List[Float32],
+    mut normals: List[Float32],
+    point: Vec3d,
+    normal: Vec3d,
+):
+    """Append a z-up point and normal as y-up.
+
+    `x` stays. `z` becomes `y`. `-y` becomes `z`.
+
+    Args:
+        positions: The position list.
+        normals: The normal list.
+        point: The point, with `z` up.
+        normal: The normal, with `z` up.
+
+    Returns:
+        Nothing. Six numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    append_float64_xyz(positions, point.x, point.z, -point.y)
+    append_float64_xyz(normals, normal.x, normal.z, -normal.y)
 
 
 @fieldwise_init

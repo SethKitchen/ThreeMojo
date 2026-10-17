@@ -52,7 +52,7 @@ from extensions.building.kinds import (
 )
 from extensions.building.material import Look, aluminum, glass, timber
 from extensions.building.model import Building, WallFrame
-from generators.utils import Vec3d
+from generators.utils import Vec3d, append_z_up_as_y_up
 from geometries.earcut import earcut
 from materials.material import standard_material
 from objects.mesh import Mesh
@@ -155,12 +155,7 @@ struct _Bucket(Movable):
 
     def vertex(mut self, p: Vec3d, n: Vec3d, u: Float64, v: Float64, id: Int):
         """Add one vertex, converting z up to y up."""
-        self.positions.append(Float32(p.x))
-        self.positions.append(Float32(p.z))
-        self.positions.append(Float32(-p.y))
-        self.normals.append(Float32(n.x))
-        self.normals.append(Float32(n.z))
-        self.normals.append(Float32(-n.y))
+        append_z_up_as_y_up(self.positions, self.normals, p, n)
         self.uvs.append(Float32(u))
         self.uvs.append(Float32(v))
         self.ids.append(Float32(id))
