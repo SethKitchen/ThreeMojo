@@ -130,7 +130,7 @@ from materials.material import (
     Side,
     points_material,
 )
-from math.quaternion import Quaternion
+from math.quaternion import quaternion_from_float64
 from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
@@ -870,18 +870,19 @@ struct _Builder(Movable):
                         product(v[2], inverse),
                     )
                 var s = sin(v[3] / 2)
-                object.quaternion = Quaternion(
-                    Float32(product(unit[0], s)),
-                    Float32(product(unit[1], s)),
-                    Float32(product(unit[2], s)),
-                    Float32(cos(v[3] / 2)),
+                object.quaternion = quaternion_from_float64(
+                    product(unit[0], s),
+                    product(unit[1], s),
+                    product(unit[2], s),
+                    cos(v[3] / 2),
                 )
             elif field.name == "scale":
                 var v = _first_numbers(field, 3)
                 object.scale = vector3_from_float64(v[0], v[1], v[2])
             elif field.name == "translation":
                 var v = _first_numbers(field, 3)
-                object.set_position(Float32(v[0]), Float32(v[1]), Float32(v[2]))
+                var place = vector3_from_float64(v[0], v[1], v[2])
+                object.set_position(place.x, place.y, place.z)
         var index = self.add_object(object^, VRML_GROUP, -1, -1, scene)
         var id = self.model.objects[index].node
         for f in kids:

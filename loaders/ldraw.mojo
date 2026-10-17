@@ -69,7 +69,8 @@ from materials.material import (
     STANDARD,
 )
 from math.matrix4 import _determinant4
-from math.quaternion import Quaternion
+from math.quaternion import quaternion_from_float64
+from math.vector3 import vector3_from_float64
 from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS
 from objects.mesh import Mesh
 from render.framebuffer import opaque_from_linear
@@ -1236,24 +1237,22 @@ def load_ldraw(
         ref node = model.nodes[n]
         var holder = Object3D()
         holder.name = node.name
-        holder.set_position(
-            Float32(node.position[0]),
-            Float32(node.position[1]),
-            Float32(node.position[2]),
+        var place = vector3_from_float64(
+            node.position[0], node.position[1], node.position[2]
         )
+        holder.set_position(place.x, place.y, place.z)
         holder.set_quaternion(
-            Quaternion(
-                Float32(node.quaternion[0]),
-                Float32(node.quaternion[1]),
-                Float32(node.quaternion[2]),
-                Float32(node.quaternion[3]),
+            quaternion_from_float64(
+                node.quaternion[0],
+                node.quaternion[1],
+                node.quaternion[2],
+                node.quaternion[3],
             )
         )
-        holder.set_scale(
-            Float32(node.scale[0]),
-            Float32(node.scale[1]),
-            Float32(node.scale[2]),
+        var wide = vector3_from_float64(
+            node.scale[0], node.scale[1], node.scale[2]
         )
+        holder.set_scale(wide.x, wide.y, wide.z)
         var id: NodeId
         if up == NO_PARENT:
             id = scene.add(holder^)

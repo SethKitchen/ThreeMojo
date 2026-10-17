@@ -94,6 +94,7 @@ from materials.material import (
     points_material,
 )
 from math.vector2 import Vector2, vector2_from_float64
+from math.vector3 import vector3_from_float64
 from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from objects.points import Points
@@ -1518,11 +1519,10 @@ def load_lwo(
         ref mesh = model.meshes[k]
         var node = Object3D()
         node.name = mesh.name
-        node.set_position(
-            Float32(mesh.position[0]),
-            Float32(mesh.position[1]),
-            Float32(mesh.position[2]),
+        var place = vector3_from_float64(
+            mesh.position[0], mesh.position[1], mesh.position[2]
         )
+        node.set_position(place.x, place.y, place.z)
         var above = parent if mesh.parent < 0 else model.nodes[mesh.parent]
         var id: NodeId
         if above == NO_PARENT:
