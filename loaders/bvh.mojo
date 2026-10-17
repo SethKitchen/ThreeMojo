@@ -37,6 +37,7 @@ from animation.keyframe_track import POSITION, QUATERNION, KeyframeTrack
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.js_number import js_parse_float, js_parse_int
+from loaders.js_text import text_lines
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.skeleton import Bone, Skeleton
@@ -181,9 +182,7 @@ struct _Lines:
 
     def __init__(out self, text: String):
         """Split a text on line breaks."""
-        self.lines = List[String]()
-        for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch
-            self.lines.append(String(line))
+        self.lines = text_lines(text)
         self.at = 0
 
     def next(mut self) raises -> String:

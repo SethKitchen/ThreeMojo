@@ -37,6 +37,7 @@ largest number is not above zero, which three.js divides by zero.
 
 from loaders.bytes import ascii_digit, js_float_byte_at
 from loaders.js_number import js_string_to_number
+from loaders.js_text import text_lines
 from render.srgb import LINEAR
 from render.texture import (
     BILINEAR,
@@ -92,15 +93,6 @@ def _number(text: String) raises -> Float64:
     var value = js_string_to_number(text)
     require_finite(Float64(value), "3DL: `" + text + "` is not a number")
     return value
-
-
-def _lines(text: String) -> List[String]:
-    """Return the lines of a text, split at each line break, as a
-    multiline regular expression's `^` and `$` see them."""
-    var out = List[String]()
-    for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch
-        out.append(String(line))
-    return out^
 
 
 def _is_grid(line: String) -> Bool:
@@ -189,7 +181,7 @@ def parse_lut_3dl(
     """
     if not texel_type.is_valid():
         raise Error("3DL: a texel type that is not valid")
-    var lines = _lines(text)
+    var lines = text_lines(text)
     var grid = List[Float64]()
     # A split gives at least one line: these loops always run.
     for line in lines:  # pragma: no branch
