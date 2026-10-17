@@ -58,7 +58,7 @@ from materials.material import (
 from math.bounds import Box3
 from math.sine import fraction
 from math.matrix4 import Matrix4
-from math.utils import max3
+from math.utils import edge_index, max3
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
@@ -191,13 +191,10 @@ def sample_texture(texture: Texture, u: Float32, v: Float32) -> FloatColor:
     mv = _wrapped(mv, texture.wrap_t)
     var width = texture.width
     var height = texture.height
-    var column = max(0, min(width - 1, Int(floor(mu * Float32(width)))))
-    var row = max(
-        0,
-        min(
-            height - 1,
-            Int(floor(row_coordinate(mv, texture.flip_y) * Float32(height))),
-        ),
+    var column = edge_index(Int(floor(mu * Float32(width))), width)
+    var row = edge_index(
+        Int(floor(row_coordinate(mv, texture.flip_y) * Float32(height))),
+        height,
     )
     # `fetch` counts its row as `v` counts, so the stored row is turned
     # back first.

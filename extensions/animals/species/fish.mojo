@@ -68,7 +68,7 @@ from extensions.sdf.vector import (
 )
 from extensions.animals.warp import girth_warp, scale_about_warp
 from math.norm import squared_length2
-from math.utils import min3, nearest_distance
+from math.utils import edge_index, min3, nearest_distance
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The fish's head origin moves with the variant, so the eye is placed
@@ -468,7 +468,7 @@ struct _Geo(Movable):
         var n = self.v.spine_segs
         var occ = self.v.occ
         var i = Int(floor((u - occ) / (1.0 - occ) * Float64(n)))
-        return spine_name(max(0, min(n - 1, i)))
+        return spine_name(edge_index(i, n))
 
     def bone_at(self, u: Float64) -> String:
         return String("head") if u < self.v.occ else self.pick_parent(u)

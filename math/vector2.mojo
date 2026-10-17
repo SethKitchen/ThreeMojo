@@ -17,7 +17,7 @@ from math.polyline import (
     lerp_in_place,
     scale_to_length,
 )
-from math.utils import SeededRandom, js_round
+from math.utils import SeededRandom, clamp, js_round
 from math.norm import dot2, length2, normalized2
 from std.math import (
     atan2,
@@ -348,7 +348,7 @@ struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
             high: The largest. Where it is below `low`, `low` wins.
         """
         self = Vector2(
-            max(low.x, min(high.x, self.x)), max(low.y, min(high.y, self.y))
+            clamp(self.x, low.x, high.x), clamp(self.y, low.y, high.y)
         )
 
     def clamp_scalar(mut self, low: Float32, high: Float32):

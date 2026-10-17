@@ -34,6 +34,7 @@ functions on the device, so the two agree.
 from math.sine import fraction
 from math.utils import (
     clamp,
+    edge_index,
     interleaved_gradient_noise as _gradient_noise,
     mix_trilinear,
 )
@@ -345,13 +346,13 @@ def _axis(coordinate: Float32, extent: Int) -> Tuple[Int, Int, Float32]:
     clamped to the edge, and how far it is past the first."""
     # Past the volume the edge texel is read, so a far coordinate is held
     # first: an integer cannot hold every float.
-    var texel = max(Float32(-1), min(Float32(extent), coordinate))
+    var texel = clamp(coordinate, Float32(-1), Float32(extent))
     var low = floor(texel)
     var fraction = texel - low
     var first = Int(low)
     var second = first + 1
-    first = max(0, min(extent - 1, first))
-    second = max(0, min(extent - 1, second))
+    first = edge_index(first, extent)
+    second = edge_index(second, extent)
     return (first, second, fraction)
 
 

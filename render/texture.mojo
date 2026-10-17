@@ -864,7 +864,7 @@ def fetch_level(level: Int, levels: Int) -> Int:
     Returns:
         The level read.
     """
-    return max(0, min(level, levels - 1))
+    return edge_index(level, levels)
 
 
 def level_filter(level: Int, mag_filter: Filter, min_filter: Filter) -> Filter:

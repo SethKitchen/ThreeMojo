@@ -31,7 +31,7 @@ from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
-from math.utils import SeededRandom, js_round, mix_delta
+from math.utils import SeededRandom, clamp, js_round, mix_delta
 from math.norm import (
     _ordinary_product,
     dot3,
@@ -509,9 +509,9 @@ struct Vector3(Equatable, ImplicitlyCopyable, PolylineVertex):
                 three.js.
         """
         self = Vector3(
-            max(low.x, min(high.x, self.x)),
-            max(low.y, min(high.y, self.y)),
-            max(low.z, min(high.z, self.z)),
+            clamp(self.x, low.x, high.x),
+            clamp(self.y, low.y, high.y),
+            clamp(self.z, low.z, high.z),
         )
 
     def clamp_scalar(mut self, low: Float32, high: Float32):

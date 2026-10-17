@@ -35,6 +35,7 @@ from extensions.sdf.vector import (
     normalize,
 )
 from math.norm import squared_length2
+from math.utils import edge_index
 from std.math import cos, floor, pi, sin, sqrt
 
 
@@ -160,7 +161,7 @@ struct Profile(Copyable, Movable):
             The cell.
         """
         var n = self.count()
-        var r = max(0, min(n - 1, i))
+        var r = edge_index(i, n)
         return self.rows[r * 4 + k]
 
     def at(self, u: Float64, k: Int) -> Float64:

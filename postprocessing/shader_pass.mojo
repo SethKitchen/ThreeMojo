@@ -51,6 +51,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.utils import edge_index
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
@@ -336,8 +337,8 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         if slot != INPUT_SLOT and slot != SAVED_SLOT:
             return OPAQUE_WHITE
         var view = self._view(slot)
-        var column = max(0, min(x, view.width - 1))
-        var row = max(0, min(y, view.height - 1))
+        var column = edge_index(x, view.width)
+        var row = edge_index(y, view.height)
         return view.at(column, view.height - 1 - row).unpremultiplied()
 
     def size(self, slot: Int, level: Int) -> Lanes:

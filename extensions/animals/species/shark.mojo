@@ -72,6 +72,7 @@ from extensions.animals.warp import scale_about_warp
 from math.norm import squared_length2
 from math.smoothstep import hermite_fade
 from math.sine import fraction
+from math.utils import edge_index
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The shark's head origin moves with the variant, so the eye is placed
@@ -460,7 +461,7 @@ struct _Geo(Movable):
 
     def pick_parent(self, u: Float64) -> String:
         var i = Int(floor((u - self.occ) / (self.pc - self.occ) * 12.0))
-        return spine_name(max(0, min(11, i)))
+        return spine_name(edge_index(i, 12))
 
     def bone_at(self, u: Float64) -> String:
         return String("head") if u < self.occ else self.pick_parent(u)
