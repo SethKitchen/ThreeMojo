@@ -17,7 +17,7 @@ on the sacrum.
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -85,7 +85,7 @@ from extensions.humanoid.skeleton.torso.vessels.geometry import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from extensions.humanoid.skeleton.place import place_mesh
+from extensions.humanoid.skeleton.place import place_mesh, place_root
 
 
 def add_torso(
@@ -135,9 +135,7 @@ def add_torso(
     """
     require_torso_contents(contents)
     var dims = torso_muscle_dimensions(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     var sides = List[BodySide]()
     sides.append(RIGHT)
     sides.append(LEFT)

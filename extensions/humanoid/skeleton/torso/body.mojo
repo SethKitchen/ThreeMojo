@@ -28,7 +28,7 @@ is anterior.
 
 from core.assets import Assets
 from core.buffer_geometry import POSITION, BufferGeometry
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -72,7 +72,7 @@ from extensions.humanoid.skeleton.surface_nets import (
 )
 from geometries.utils import merge_geometries
 from extensions.humanoid.skeleton.look import UNSET_PAINT, skin_phong
-from extensions.humanoid.skeleton.place import place_mesh
+from extensions.humanoid.skeleton.place import place_mesh, place_root
 from extensions.humanoid.skeleton.pelvis.contents import PelvisContents
 from extensions.humanoid.skeleton.pelvis.lower_body import (
     LowerBodySkinField,
@@ -508,9 +508,7 @@ def add_body(
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
     require_torso_contents(contents)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     # Every layer but the skin, drawn part by part; the layers use the
     # same bits in the torso and the pelvis.
     var inner = contents.value & (SKIN.value ^ 127)
