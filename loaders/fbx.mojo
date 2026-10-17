@@ -134,7 +134,7 @@ from materials.material import (
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
-from math.vector2 import Vector2, append_vector2
+from math.vector2 import Vector2, append_vector2, vector2_from_float64
 from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
@@ -1499,9 +1499,7 @@ struct _Loader(Movable):
             if has_uv:
                 var at = uvs.start(corner, polygon, vertex)
                 face.uvs.append(
-                    Vector2(
-                        Float32(uvs.values[at]), Float32(uvs.values[at + 1])
-                    )
+                    vector2_from_float64(uvs.values[at], uvs.values[at + 1])
                 )
             if has_color:
                 var at = colors.start(corner, polygon, vertex)

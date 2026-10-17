@@ -42,7 +42,7 @@ from math.norm import length2
 from math.sine import fraction
 
 from math.smoothstep import smoothstep
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
 from units.si import Length, METER
@@ -602,7 +602,7 @@ def dof_kernel(small: Bool) -> List[Vector2]:
             continue
         var theta = Float64(i) * DOF_GOLDEN_ANGLE
         var r = sqrt(Float64(i)) / sqrt(Float64(DOF_SAMPLES))
-        points.append(Vector2(Float32(r * cos(theta)), Float32(r * sin(theta))))
+        points.append(vector2_from_float64(r * cos(theta), r * sin(theta)))
     return points^
 
 

@@ -124,7 +124,7 @@ from materials.material import (
 )
 from math.matrix4 import Matrix4, rotation_axis, scaling, translation
 from math.quaternion import Quaternion
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
@@ -1035,13 +1035,12 @@ struct _Loader(Movable):
             wrap = CLAMP
             if settings.get("wrapU", 0) != 0:
                 wrap = REPEAT
-            repeat = Vector2(
-                Float32(self.or_default(settings, "repeatU", 1)),
-                Float32(self.or_default(settings, "repeatV", 1)),
+            repeat = vector2_from_float64(
+                self.or_default(settings, "repeatU", 1),
+                self.or_default(settings, "repeatV", 1),
             )
-            offset = Vector2(
-                Float32(settings.get("offsetU", 0)),
-                Float32(settings.get("offsetV", 0)),
+            offset = vector2_from_float64(
+                settings.get("offsetU", 0), settings.get("offsetV", 0)
             )
         var built = texture_from_bytes(
             self.image_bytes(path), space, wrap, alpha

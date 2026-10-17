@@ -43,7 +43,7 @@ from geometries.lathe import lathe
 from geometries.loft import loft
 from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.utils import mix_delta
 from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
 from render.color_spaces import srgb_to_linear_three
@@ -427,17 +427,17 @@ def _wheel(
     var width = r * 0.68
     var x = side * spec.wheel_x
     var profile: List[Vector2] = [
-        Vector2(Float32(r * 0.93), Float32(-width * 0.44)),
-        Vector2(Float32(r), Float32(-width * 0.12)),
-        Vector2(Float32(r * 0.98), Float32(width * 0.27)),
-        Vector2(Float32(rim + 0.014), Float32(width * 0.44)),
+        vector2_from_float64(r * 0.93, -width * 0.44),
+        vector2_from_float64(r, -width * 0.12),
+        vector2_from_float64(r * 0.98, width * 0.27),
+        vector2_from_float64(rim + 0.014, width * 0.44),
     ]
     var tyre = lathe(profile, 24)
     tyre.rotate_z(_a(-side * pi / 2))
     tyre.translate(_l(x), _l(r), _l(z))
     var lip_profile: List[Vector2] = [
-        Vector2(Float32(rim + 0.014), Float32(width * 0.44)),
-        Vector2(Float32(rim), Float32(width * 0.29)),
+        vector2_from_float64(rim + 0.014, width * 0.44),
+        vector2_from_float64(rim, width * 0.29),
     ]
     var lip = lathe(lip_profile, 24)
     lip.rotate_z(_a(-side * pi / 2))

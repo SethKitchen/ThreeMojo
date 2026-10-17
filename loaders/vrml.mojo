@@ -131,7 +131,7 @@ from materials.material import (
     points_material,
 )
 from math.quaternion import Quaternion
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
@@ -1797,7 +1797,7 @@ def _first(field: VrmlField) raises -> VrmlValue:
 def _pair(field: VrmlField) raises -> Vector2:
     """Return the first two numbers of a field."""
     var v = _first_numbers(field, 2)
-    return Vector2(Float32(v[0]), Float32(v[1]))
+    return vector2_from_float64(v[0], v[1])
 
 
 def _spread(

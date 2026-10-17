@@ -42,7 +42,7 @@ from core.user_data import UserData, json_number_text
 from geometries.circle import FULL_TURN, check_sweep
 from math.finite import require_finite, require_finite_group
 from math.norm import normalized2
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from std.math import cos, isfinite, sin
 from units.si import Angle, RADIAN
 
@@ -61,7 +61,7 @@ def _wide_unit(before: Vector2, after: Vector2) raises -> Vector2:
     if x == 0 and y == 0:
         raise Error("A lathe's profile cannot turn straight back")
     var direction = normalized2(x, y)
-    return Vector2(Float32(direction[0]), Float32(direction[1]))
+    return vector2_from_float64(direction[0], direction[1])
 
 
 def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:

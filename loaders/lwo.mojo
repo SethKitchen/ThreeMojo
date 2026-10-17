@@ -93,7 +93,7 @@ from materials.material import (
     Side,
     points_material,
 )
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from objects.line import Line, SEGMENTS
 from objects.mesh import Mesh
 from objects.points import Points
@@ -670,8 +670,8 @@ struct _MaterialParser:
             elif _place_image(name, map^, params) and name == "Normal":
                 var amplitude = tree.get(node, "amplitude")
                 if amplitude.is_number():
-                    params.material.normal_scale = Vector2(
-                        Float32(amplitude.number), Float32(amplitude.number)
+                    params.material.normal_scale = vector2_from_float64(
+                        amplitude.number, amplitude.number
                     )
         if params.has("roughnessMap") and params.has("specularMap"):
             params.material.specular_map = None
