@@ -8618,6 +8618,21 @@ struct Renderer(Movable):
             self.output_encoding(),
         )
 
+    def _require_target_size(self, target: RenderTarget) raises:
+        """Refuse a target that is not this renderer's size.
+
+        Args:
+            target: The target to draw or clear.
+
+        Returns:
+            Nothing. The call returns when the target matches.
+
+        Raises:
+            Error: If the width or the height differs.
+        """
+        if target.width != self.width or target.height != self.height:
+            raise Error("A target must be the renderer's size")
+
     def render_array_into(
         mut self,
         mut target: RenderTarget,
@@ -8650,8 +8665,7 @@ struct Renderer(Movable):
         """
         # Asked here as well as by `render_into`, which an array of no
         # cameras never calls.
-        if target.width != self.width or target.height != self.height:
-            raise Error("A target must be the renderer's size")
+        self._require_target_size(target)
         var viewport = self.viewport
         var scissor = self.scissor
         var scissor_test = self.scissor_test
@@ -8746,8 +8760,7 @@ struct Renderer(Movable):
             Error: If the target is not the renderer's size, or the
                 renderer's depth mode is none of the three.
         """
-        if target.width != self.width or target.height != self.height:
-            raise Error("A target must be the renderer's size")
+        self._require_target_size(target)
         var kept = Rect.whole(self.width, self.height)
         if self.scissor_test:
             kept = self.scissor
@@ -8958,8 +8971,7 @@ struct Renderer(Movable):
                 which no pixel could resolve; see
                 `render.rasterizer.check_output_kinds`.
         """
-        if target.width != self.width or target.height != self.height:
-            raise Error("A target must be the renderer's size")
+        self._require_target_size(target)
         if target.samples > 1:
             # three.js's multisampled render target: the samples are drawn
             # by a renderer `sample_grid` times the size, which refuses a

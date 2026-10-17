@@ -343,6 +343,23 @@ def require_sparse_indices(index_type: Int) raises:
         raise Error("glTF: sparse indices must be unsigned integers")
 
 
+def require_gltf_mesh(mesh: Int, count: Int) raises:
+    """Refuse a glTF node mesh that the file does not have.
+
+    Args:
+        mesh: The mesh index the node names.
+        count: How many meshes the file has.
+
+    Returns:
+        Nothing. The call returns when the index names a mesh.
+
+    Raises:
+        Error: If the index is past the last mesh.
+    """
+    if mesh >= count:
+        raise Error("glTF: a node names a mesh that is not there")
+
+
 # The primitive modes that are read: points, the three kinds of line, and
 # triangles. glTF names them by their GL constants.
 comptime MODE_POINTS = 0
@@ -2937,8 +2954,7 @@ struct _Loader(Movable):
         node, a `Line` per primitive of lines and a `Points` per primitive
         of points, as three.js's `GLTFLoader.loadMesh` builds them."""
         # `place` asks only for a mesh the node named, zero or more.
-        if mesh >= len(self.model.first_primitives):
-            raise Error("glTF: a node names a mesh that is not there")
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
         var weights = self.morph_weights(self.entry("nodes", index), mesh)
         var entry = self.entry("meshes", mesh)
         var primitives = self.document.get(entry, "primitives")
@@ -3100,8 +3116,7 @@ struct _Loader(Movable):
                 )
             placings.append(placed.local_matrix())
         # `place` asks only for a mesh the node named, zero or more.
-        if mesh >= len(self.model.first_primitives):
-            raise Error("glTF: a node names a mesh that is not there")
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
         var primitives = self.document.get(
             self.entry("meshes", mesh), "primitives"
         )
@@ -3253,8 +3268,7 @@ struct _Loader(Movable):
         at the identity as three.js's `GLTFLoader` binds it."""
         var entry = self.entry("nodes", index)
         var mesh = self.required_integer(entry, "mesh")
-        if mesh >= len(self.model.first_primitives):
-            raise Error("glTF: a node names a mesh that is not there")
+        require_gltf_mesh(mesh, len(self.model.first_primitives))
         var skeleton = self.skeleton_of(self.required_integer(entry, "skin"))
         var weights = self.morph_weights(entry, mesh)
         var primitives = self.document.get(

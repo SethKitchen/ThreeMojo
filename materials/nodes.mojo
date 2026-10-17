@@ -754,6 +754,22 @@ comptime SCATTERING_NODE = NodeOutput(23)
 comptime OFFSET_NODE = NodeOutput(24)
 
 
+def require_node_output(output: NodeOutput) raises:
+    """Refuse a node output that is none of the twenty-five.
+
+    Args:
+        output: The output.
+
+    Returns:
+        Nothing. The call returns when the output is named.
+
+    Raises:
+        Error: If the output is none of the twenty-five.
+    """
+    if not output.is_valid():
+        raise Error("A node output that is none of the twenty-five")
+
+
 @fieldwise_init
 struct NodeContext(Equatable, ImplicitlyCopyable, Writable):
     """Where a node reads the surface's attributes, as a type rather than a
@@ -1182,8 +1198,7 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If the output is none of the twenty-five.
         """
-        if not output.is_valid():
-            raise Error("A node output that is none of the twenty-five")
+        require_node_output(output)
         return NodeRef(self._outputs[output.value])
 
     def _check(self, node: NodeRef) raises:
@@ -5384,8 +5399,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If the output is none of the twenty-five, the node is not in
                 this graph, or its type is not the output's.
         """
-        if not output.is_valid():
-            raise Error("A node output that is none of the twenty-five")
+        require_node_output(output)
         self._check(node)
         var wanted = output.value_type()
         if self._types[node.value] != wanted:
@@ -6304,8 +6318,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the output is none of the twenty-five.
         """
-        if not output.is_valid():
-            raise Error("A node output that is none of the twenty-five")
+        require_node_output(output)
         return self.code[output.value * 2 + 1] > 0
 
     def _find(self, name: String, type: ValueType) raises -> Int:

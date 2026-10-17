@@ -82,6 +82,22 @@ comptime EXTERNAL_ILIAC_VEIN = PelvisVessel(11)
 comptime INTERNAL_ILIAC_VEIN = PelvisVessel(12)
 
 
+def require_pelvis_vessel(part: PelvisVessel) raises:
+    """Refuse a pelvic vessel that is not named.
+
+    Args:
+        part: The vessel.
+
+    Returns:
+        Nothing. The call returns when the vessel is named.
+
+    Raises:
+        Error: If the vessel is not named.
+    """
+    if not part.is_valid():
+        raise Error("A pelvic vessel must be a named artery or vein")
+
+
 struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
     """The implicit solid for one pelvic vessel on one side."""
 
@@ -110,8 +126,7 @@ struct PelvisVesselField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic vessel must be a named artery or vein")
+        require_pelvis_vessel(part)
         require_side(side, "A pelvis")
         self.chain = _chain(dimensions, part, side)
         self.mirror = side == LEFT and not _unpaired(part)
@@ -227,8 +242,7 @@ def is_pelvic_artery(part: PelvisVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic vessel must be a named artery or vein")
+    require_pelvis_vessel(part)
     return part.value <= MEDIAN_SACRAL_ARTERY.value
 
 
@@ -245,8 +259,7 @@ def is_unpaired_vessel(part: PelvisVessel) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A pelvic vessel must be a named artery or vein")
+    require_pelvis_vessel(part)
     return _unpaired(part)
 
 
