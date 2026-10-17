@@ -19,6 +19,7 @@ from render.framebuffer import (
     HSL,
     SrgbBytes,
     _encoded,
+    rgb_is_black,
 )
 from render.srgb import (
     LINEAR,
@@ -601,6 +602,14 @@ def test_encoding_with_the_table_matches_encoding() raises:
     # A linear output quantizes, and never reads the table.
     var linear_out = output_encoding(LINEAR_SRGB_COLOR_SPACE)
     _assert_same(linear_out.encode_with(light, table), linear_out.encode(light))
+
+
+def test_a_black_color_has_no_red_green_or_blue() raises:
+    assert_true(rgb_is_black(Color(0, 0, 0, 0)))
+    assert_true(rgb_is_black(Color(0, 0, 0, 255)))
+    assert_false(rgb_is_black(Color(1, 0, 0, 255)))
+    assert_false(rgb_is_black(Color(0, 1, 0, 255)))
+    assert_false(rgb_is_black(Color(0, 0, 1, 255)))
 
 
 def test_a_color_matches_when_every_channel_matches() raises:

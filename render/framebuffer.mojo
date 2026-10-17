@@ -145,6 +145,21 @@ def rgb_is_white(color: Color) -> Bool:
     return color.r == 255 and color.g == 255 and color.b == 255
 
 
+def rgb_is_black(color: Color) -> Bool:
+    """Return True when red, green, and blue are all zero.
+
+    Args:
+        color: The color. Alpha is not read.
+
+    Returns:
+        Whether every color channel is black.
+
+    Raises:
+        Error: Never.
+    """
+    return color.r == 0 and color.g == 0 and color.b == 0
+
+
 @fieldwise_init
 struct HSL(ImplicitlyCopyable):
     """A color as hue, saturation and lightness, each nominally zero to
