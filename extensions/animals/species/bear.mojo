@@ -40,8 +40,8 @@ from extensions.animals.kit import (
     head_local,
     reference_to_head_local,
     is_limb,
+    lid_unless_behind,
     mirrored_blob,
-    aperture_local,
 )
 from extensions.animals.noise import (
     fbm3,
@@ -72,7 +72,6 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, exp, pi, pow, sin, sqrt
-from extensions.sdf.distance import almond_distance
 
 comptime TAIL_SEGS = 2
 # The head's origin, mid cranium between the eyes and the ears.
@@ -1661,7 +1660,7 @@ def _paint_head(
     )
     col = mix3(col, mix3(c[HEAD], c[LEG], 0.6), 0.4 * b_side * (1.0 - eye_dark))
     # The lid margins: bare black skin round the aperture.
-    var lid = _lid_distance(t, p)
+    var lid = lid_unless_behind(bear_eye(t), HEAD_O, p, -0.3)
     if lid < 0.0018:
         return Paint(srgb(0x0B0908), SKIN)
     col = mix3(col, srgb(0x0B0908), smoothstep(0.0035, 0.0018, lid) * 0.7)
@@ -1715,14 +1714,3 @@ def _paint_head(
     if line * lip_f > 0.5:
         return Paint(srgb(0x1A1614), SKIN)
     return Paint(col, FUR)
-
-
-def _lid_distance(t: Traits, p: V3) -> Float64:
-    # The distance from a point to the nearer eye's aperture rim, in the
-    # aperture's plane, or far when the point is behind the eye.
-    var e = bear_eye(t)
-    var s = 1.0 if p.x > HEAD_O.x else -1.0
-    var ef = eye_frame_of(e, HEAD_O, s)
-    var q = aperture_local(e, ef, p)
-    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
-    return de if q.z > -0.3 * e.r else 1.0
