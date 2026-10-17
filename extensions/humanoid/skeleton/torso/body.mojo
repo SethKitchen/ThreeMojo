@@ -83,6 +83,7 @@ from extensions.humanoid.skeleton.torso.contents import (
     BOTH,
     SKIN,
     TorsoContents,
+    require_torso_contents,
 )
 from extensions.humanoid.skeleton.torso.muscles.dimensions import (
     torso_muscle_dimensions,
@@ -506,8 +507,7 @@ def add_body(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Torso contents must be a named layer set")
+    require_torso_contents(contents)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)
     var root_id = scene.attach(root^, parent)

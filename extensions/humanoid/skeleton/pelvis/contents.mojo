@@ -131,6 +131,22 @@ struct PelvisContents(Equatable, ImplicitlyCopyable, Writable):
         )
 
 
+def require_pelvis_contents(contents: PelvisContents) raises:
+    """Refuse a pelvis layer set that is not named.
+
+    Args:
+        contents: Which tissue layers a pelvis draws.
+
+    Returns:
+        Nothing. The call returns when the set is named.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    if not contents.is_valid():
+        raise Error(_MESSAGE)
+
+
 # The two hip bones, the sacrum and the coccyx.
 comptime BONES = PelvisContents(1)
 # Named pelvic ligaments, the labrum, the socket's cartilage and the

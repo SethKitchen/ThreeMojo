@@ -38,7 +38,11 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
 from extensions.humanoid.skeleton.pelvis.bones.geometry import (
     pelvis_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.pelvis.contents import BOTH, PelvisContents
+from extensions.humanoid.skeleton.pelvis.contents import (
+    BOTH,
+    PelvisContents,
+    require_pelvis_contents,
+)
 from extensions.humanoid.skeleton.pelvis.ligaments.dimensions import (
     ACETABULAR_CARTILAGE,
     ACETABULAR_LABRUM,
@@ -184,8 +188,7 @@ def add_pelvis(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Pelvis contents must be a named layer set")
+    require_pelvis_contents(contents)
     var pose = assemble_pelvis(spec)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)

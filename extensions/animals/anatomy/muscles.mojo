@@ -110,6 +110,7 @@ from extensions.animals.anatomy.body import (
     MAMMAL,
     BodyPlan,
     require_body_plan,
+    require_species,
     species_body,
 )
 from extensions.animals.registry import (
@@ -475,8 +476,7 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
     Raises:
         Error: If the species is not named.
     """
-    if not species.is_valid():
-        raise Error("No such species")
+    require_species(species)
     var t = List[MuscleRow]()
     var f = FROM_TEXT
     var d = DESIGN

@@ -60,6 +60,23 @@ from math.matrix4 import Matrix4
 from std.math import isfinite
 
 
+def require_bone_index(bone: Int, count: Int) raises:
+    """Refuse a bone index the skeleton does not have.
+
+    Args:
+        bone: The bone a vertex names.
+        count: How many bones the skeleton has.
+
+    Returns:
+        Nothing. The call returns when the index names a bone.
+
+    Raises:
+        Error: If the index is negative or past the last bone.
+    """
+    if bone < 0 or bone >= count:
+        raise Error("A vertex names a bone the skeleton does not have")
+
+
 @fieldwise_init
 struct Bone(ImplicitlyCopyable):
     """One scene node, and where it stood when the mesh was bound to it."""
@@ -226,8 +243,7 @@ def blend_bones(
         if weight == 0:
             continue
         var bone = bones[slot]
-        if bone < 0 or bone >= len(palette):
-            raise Error("A vertex names a bone the skeleton does not have")
+        require_bone_index(bone, len(palette))
         for element in range(16):  # pragma: no branch
             summed[element] += palette[bone].elements[element] * weight
     var blended = Matrix4()

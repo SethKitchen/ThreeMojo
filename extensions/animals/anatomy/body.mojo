@@ -201,6 +201,22 @@ def _table() -> List[SpeciesBody]:
     return t^
 
 
+def require_species(id: SpeciesId) raises:
+    """Refuse a species that is not named.
+
+    Args:
+        id: The species.
+
+    Returns:
+        Nothing. The call returns when the species is named.
+
+    Raises:
+        Error: If the species is not named.
+    """
+    if not id.is_valid():
+        raise Error("No such species")
+
+
 def species_body(id: SpeciesId) raises -> SpeciesBody:
     """Return selected reference sizes for a DESIGN species template.
 
@@ -213,6 +229,5 @@ def species_body(id: SpeciesId) raises -> SpeciesBody:
     Raises:
         Error: If the species is not named.
     """
-    if not id.is_valid():
-        raise Error("No such species")
+    require_species(id)
     return _table()[id.value].copy()

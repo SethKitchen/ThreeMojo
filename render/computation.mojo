@@ -76,6 +76,23 @@ from std.math import floor
 comptime Lanes = SIMD[DType.float32, 4]
 
 
+def require_computation_ready(programs: Int, variables: Int) raises:
+    """Refuse a computation that has not been initialized.
+
+    Args:
+        programs: How many compiled programs the computation holds.
+        variables: How many variables it holds.
+
+    Returns:
+        Nothing. The call returns when there is one program a variable.
+
+    Raises:
+        Error: If `init` has not compiled the shaders.
+    """
+    if programs != variables:
+        raise Error("A computation must be initialized before it runs")
+
+
 def _wrapped(index: Int, size: Int, wrap: Int) -> Int:
     """Return a texel index kept on an image by a wrap mode: `CLAMP`,
     `REPEAT` or `MIRROR`, as their values."""
@@ -526,8 +543,7 @@ struct GPUComputationRenderer(Movable):
         Raises:
             Error: If `init` has not compiled the shaders.
         """
-        if len(self.programs) != len(self.variables):
-            raise Error("A computation must be initialized before it runs")
+        require_computation_ready(len(self.programs), len(self.variables))
         var packed = self.packed()
         var next = 1 - self.current
         for at in range(len(self.variables)):

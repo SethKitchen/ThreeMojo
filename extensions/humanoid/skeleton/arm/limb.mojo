@@ -20,7 +20,11 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.assembly import UNSET_PAINT, add_arm
-from extensions.humanoid.skeleton.arm.contents import BOTH, ArmContents
+from extensions.humanoid.skeleton.arm.contents import (
+    BOTH,
+    ArmContents,
+    require_arm_contents,
+)
 from extensions.humanoid.skeleton.hand.assembly import add_hand
 from extensions.humanoid.skeleton.hand.contents import HandContents
 from extensions.humanoid.spec import HumanoidSpec
@@ -84,8 +88,7 @@ def add_upper_limb(
         Error: If the spec, `side`, a mesh, `contents` or the scene is
             invalid.
     """
-    if not contents.is_valid():
-        raise Error("Arm contents must be a named layer set")
+    require_arm_contents(contents)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)
     var root_id = scene.attach(root^, parent)

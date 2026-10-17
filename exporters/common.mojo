@@ -54,6 +54,7 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
     GeometryGroup,
+    require_nonnegative_index,
     require_vertex_index,
 )
 from core.deform import skin_carriers, skin_pose
@@ -203,8 +204,7 @@ def check_geometry(
     if triangles and len(geometry.index) % 3 != 0:
         raise Error("An exported index must hold whole triangles")
     for slot in range(len(geometry.index)):
-        if geometry.index[slot] < 0:
-            raise Error("An index entry cannot be negative")
+        require_nonnegative_index(geometry.index[slot])
         require_vertex_index(geometry.index[slot], count)
     if triangles and not geometry.is_indexed() and count % 3 != 0:
         raise Error(

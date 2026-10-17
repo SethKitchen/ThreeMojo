@@ -24,6 +24,22 @@ def require_curve_kind(valid: Bool) raises:
         raise Error("A curve needs a kind that exists")
 
 
+def require_distinct_points(moved: Bool) raises:
+    """Refuse a curve whose points are all the same point.
+
+    Args:
+        moved: Whether some point differs from the first.
+
+    Returns:
+        Nothing. The call returns when two points differ.
+
+    Raises:
+        Error: If every point is the same point.
+    """
+    if not moved:
+        raise Error("A curve needs two points that differ")
+
+
 def require_length_table(count: Int) raises:
     """Refuse a curve length table with fewer than two entries.
 

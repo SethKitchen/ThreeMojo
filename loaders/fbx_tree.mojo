@@ -79,6 +79,22 @@ comptime FBX_ASCII = FbxFormat(0)
 comptime FBX_BINARY = FbxFormat(1)
 
 
+def require_fbx_format(format: FbxFormat) raises:
+    """Refuse an FBX format that is neither ASCII nor binary.
+
+    Args:
+        format: Which form the file is written in.
+
+    Returns:
+        Nothing. The call returns when the format is one of the two.
+
+    Raises:
+        Error: If the format is neither ASCII nor binary.
+    """
+    if not format.is_valid():
+        raise Error("FBX: a format that is neither ASCII nor binary")
+
+
 @fieldwise_init
 struct FbxPropertyKind(Equatable, ImplicitlyCopyable, Writable):
     """What one property of an FBX node holds, as a type rather than a
@@ -474,8 +490,7 @@ def object_name(name: String, format: FbxFormat) raises -> String:
     Raises:
         Error: If `format` is none of `FBX_ASCII` and `FBX_BINARY`.
     """
-    if not format.is_valid():
-        raise Error("FBX: a format that is neither ASCII nor binary")
+    require_fbx_format(format)
     if format == FBX_BINARY:
         return name
     # three.js strips `^(\w+)::`: a word of letters, digits or `_`.

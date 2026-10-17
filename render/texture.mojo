@@ -108,6 +108,7 @@ from render.framebuffer import (
     FloatColor,
     Framebuffer,
     OPAQUE_WHITE,
+    require_depth_length,
 )
 from render.png import DecodedImage
 from render.srgb import (
@@ -2726,8 +2727,7 @@ def depth_texture_of_buffer(
             values, or the depth mode is none of the three.
     """
     require_texture_size(width, height)
-    if len(depth) != width * height:
-        raise Error("Depth buffer length does not match the dimensions")
+    require_depth_length(len(depth), width, height)
     require_depth_mode(mode)
     var pixels = List[UInt8]()
     pixels.reserve(width * height * Texture.CHANNELS)

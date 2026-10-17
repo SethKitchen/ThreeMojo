@@ -63,6 +63,7 @@ from math.curve_checks import (
     parameter_samples,
     require_control_count,
     require_curve_kind,
+    require_distinct_points,
 )
 from math.bezier import (
     cubic_bezier_slope,
@@ -254,8 +255,7 @@ struct Curve3(Copyable, Movable):
             var step = points[index] - points[0]
             if step.length() != 0:
                 moved = True
-        if not moved:
-            raise Error("A curve needs two points that differ")
+        require_distinct_points(moved)
         self.kind = kind
         self.points = points^
         self.closed = closed

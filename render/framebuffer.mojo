@@ -839,6 +839,24 @@ def require_framebuffer_size(width: Int, height: Int) raises:
         raise Error("Framebuffer dimensions must be positive")
 
 
+def require_depth_length(length: Int, width: Int, height: Int) raises:
+    """Refuse a depth buffer whose length is not one entry a pixel.
+
+    Args:
+        length: How many depth values the buffer holds.
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+
+    Returns:
+        Nothing. The call returns when the buffer holds one depth a pixel.
+
+    Raises:
+        Error: If the length is not the width times the height.
+    """
+    if length != width * height:
+        raise Error("Depth buffer length does not match the dimensions")
+
+
 def require_downsample_factor(factor: Int) raises:
     """Refuse a downsample factor below one.
 
@@ -962,8 +980,7 @@ struct Framebuffer(Movable):
         require_framebuffer_size(width, height)
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Pixel buffer length does not match the dimensions")
-        if len(depth) != width * height:
-            raise Error("Depth buffer length does not match the dimensions")
+        require_depth_length(len(depth), width, height)
         self.width = width
         self.height = height
         self.pixels = pixels^

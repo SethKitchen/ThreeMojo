@@ -7204,6 +7204,22 @@ def require_whole_triangles(corner_count: Int) raises:
         raise Error("Rasterizing needs whole triangles")
 
 
+def require_whole_segments(segment_count: Int) raises:
+    """Refuse a segment list that is not whole segments.
+
+    Args:
+        segment_count: How many endpoints the list holds.
+
+    Returns:
+        Nothing. The call returns when the count is a multiple of two.
+
+    Raises:
+        Error: If the count is not a multiple of two.
+    """
+    if segment_count % 2 != 0:
+        raise Error("Rasterizing needs whole segments")
+
+
 def _check_frame(
     corners: List[RasterVertex],
     segments: List[RasterVertex],
@@ -7224,8 +7240,7 @@ def _check_frame(
     """Refuse a frame before any of it is drawn: the checks of
     `rasterize_frame`, on whole corners, with `splats` projected splats."""
     require_whole_triangles(len(corners))
-    if len(segments) % 2 != 0:
-        raise Error("Rasterizing needs whole segments")
+    require_whole_segments(len(segments))
     if workers < 1:
         raise Error("Rasterizing needs at least one worker")
     require_shade_mode(mode)

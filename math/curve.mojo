@@ -99,6 +99,7 @@ from math.curve_checks import (
     parameter_samples,
     require_control_count,
     require_curve_kind,
+    require_distinct_points,
     require_length_table,
 )
 from math.polyline import PolylineVertex, prefix_lengths, unit_direction
@@ -401,8 +402,7 @@ struct Curve(Copyable, Movable):
             var step = points[index] - points[0]
             if step.x != 0 or step.y != 0:
                 moved = True
-        if not moved:
-            raise Error("A curve needs two points that differ")
+        require_distinct_points(moved)
         self.kind = kind
         self.points = points^
         self.radii = Vector2(0, 0)

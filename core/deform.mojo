@@ -54,7 +54,7 @@ from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from objects.skeleton import blend_bones
+from objects.skeleton import blend_bones, require_bone_index
 from objects.skinned_mesh import (
     ATTACHED,
     BONES_PER_VERTEX,
@@ -282,8 +282,7 @@ def whole_bone(named: Float32, count: Int) raises -> Int:
     if named != floor(named):
         raise Error("A bone index must be a whole number")
     var bone = Int(named)
-    if bone < 0 or bone >= count:
-        raise Error("A vertex names a bone the skeleton does not have")
+    require_bone_index(bone, count)
     return bone
 
 

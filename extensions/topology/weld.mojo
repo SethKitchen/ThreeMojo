@@ -13,6 +13,24 @@ tolerance are never merged.
 """
 
 from std.math import floor, isfinite
+
+
+def require_weld_tolerance(tolerance: Float64) raises:
+    """Refuse a weld tolerance that is not positive and finite.
+
+    Args:
+        tolerance: The merge distance, in meters.
+
+    Returns:
+        Nothing. The call returns when the tolerance is positive and finite.
+
+    Raises:
+        Error: If the tolerance is not positive and finite.
+    """
+    if not (tolerance > 0 and isfinite(tolerance)):
+        raise Error("A weld tolerance must be positive and finite")
+
+
 from generators.utils import Vec3d
 
 
@@ -42,8 +60,7 @@ struct Welder(Movable):
         Raises:
             Error: If the tolerance is not positive and finite.
         """
-        if not (tolerance > 0 and isfinite(tolerance)):
-            raise Error("A weld tolerance must be positive and finite")
+        require_weld_tolerance(tolerance)
         self.points = List[Vec3d]()
         self.tolerance = tolerance
         self._grid = Dict[Int, List[Int]]()

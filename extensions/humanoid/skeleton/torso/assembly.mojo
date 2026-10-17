@@ -36,7 +36,11 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
 from extensions.humanoid.skeleton.torso.bones.geometry import (
     torso_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.torso.contents import BOTH, TorsoContents
+from extensions.humanoid.skeleton.torso.contents import (
+    BOTH,
+    TorsoContents,
+    require_torso_contents,
+)
 from extensions.humanoid.skeleton.torso.ligaments.dimensions import (
     COSTAL_CARTILAGES,
     INTERVERTEBRAL_DISCS,
@@ -129,8 +133,7 @@ def add_torso(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Torso contents must be a named layer set")
+    require_torso_contents(contents)
     var dims = torso_muscle_dimensions(spec)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)
