@@ -554,6 +554,22 @@ def _sweep(
     return _faces(cut, placed, len(spine), uv_generator)
 
 
+def _begin_options(curve_segments: Int, steps: Int) raises -> JsonWriter:
+    """Start an extrusion options object with the curve count and the step
+    count.
+
+    A straight extrusion and a swept extrusion both start this way. Each
+    one writes its own later keys.
+    """
+    var writer = JsonWriter()
+    writer.begin_object()
+    writer.key("curveSegments")
+    writer.integer(curve_segments)
+    writer.key("steps")
+    writer.integer(steps)
+    return writer^
+
+
 def _options(
     curve_segments: Int,
     steps: Int,
@@ -566,12 +582,7 @@ def _options(
 ) raises -> JsonWriter:
     """Return three.js's `options` for an extrusion along z, every one of
     them, in an object that `_extruded` closes."""
-    var writer = JsonWriter()
-    writer.begin_object()
-    writer.key("curveSegments")
-    writer.integer(curve_segments)
-    writer.key("steps")
-    writer.integer(steps)
+    var writer = _begin_options(curve_segments, steps)
     writer.key("depth")
     writer.number(depth.to(METER))
     writer.key("bevelEnabled")
@@ -590,12 +601,7 @@ def _options(
 def _swept_options(curve_segments: Int, steps: Int) raises -> JsonWriter:
     """Return three.js's `options` for a sweep, up to its `extrudePath`,
     for the caller to write the path into."""
-    var writer = JsonWriter()
-    writer.begin_object()
-    writer.key("curveSegments")
-    writer.integer(curve_segments)
-    writer.key("steps")
-    writer.integer(steps)
+    var writer = _begin_options(curve_segments, steps)
     writer.key("extrudePath")
     return writer^
 

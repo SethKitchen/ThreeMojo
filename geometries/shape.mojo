@@ -557,6 +557,16 @@ def triangulate(shape: Shape, curve_segments: Int = 12) raises -> Contours:
     return Contours(outline^, holes^)
 
 
+def _record_shape(mut geometry: BufferGeometry, curve_segments: Int) raises:
+    """Name a flat shape and record how finely its curves were sampled.
+
+    One shape and a list of shapes both use this. Each one stores its
+    shapes afterward.
+    """
+    record_kind(geometry, SHAPE_GEOMETRY)
+    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+
+
 def shape_geometry(
     shape: Shape, curve_segments: Int = 12
 ) raises -> BufferGeometry:
@@ -591,8 +601,7 @@ def shape_geometry(
 
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, cut.index.copy())
-    record_kind(geometry, SHAPE_GEOMETRY)
-    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+    _record_shape(geometry, curve_segments)
     geometry.shapes = [shape.copy()]
     return geometry^
 
@@ -641,7 +650,6 @@ def shape_geometry(
     for at in range(len(counts)):  # pragma: no branch
         geometry.add_group(start, counts[at], MaterialIndex(at))
         start += counts[at]
-    record_kind(geometry, SHAPE_GEOMETRY)
-    geometry.parameters.set_number("curveSegments", Float64(curve_segments))
+    _record_shape(geometry, curve_segments)
     geometry.shapes = shapes.copy()
     return geometry^
