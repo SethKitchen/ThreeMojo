@@ -69,6 +69,21 @@ def ascii_space(byte: UInt8) -> Bool:
     return ascii_space(Int(byte))
 
 
+def space_tab_return(byte: UInt8) -> Bool:
+    """Return True for a space, a tab, or a carriage return.
+
+    Args:
+        byte: A byte value.
+
+    Returns:
+        Whether it is one of those three bytes.
+
+    Raises:
+        Error: Never.
+    """
+    return byte == 0x20 or byte == 0x09 or byte == 0x0D
+
+
 def ascii_digit(byte: Int) -> Bool:
     """Return True for an ASCII decimal digit.
 

@@ -54,7 +54,12 @@ runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
 from core.ordinal import ordinal_valid
-from loaders.bytes import ascii_digit, ascii_letter, is_hex_digit
+from loaders.bytes import (
+    ascii_digit,
+    ascii_letter,
+    is_hex_digit,
+    space_tab_return,
+)
 from loaders.js_text import is_js_word
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
@@ -220,13 +225,6 @@ def _is_letter(c: UInt8) -> Bool:
     return ascii_letter(Int(c)) or c == UInt8(ord("_"))
 
 
-def _is_space(c: UInt8) -> Bool:
-    """Return True for a space, a tab or a carriage return."""
-    return (
-        c == UInt8(ord(" ")) or c == UInt8(ord("\t")) or c == UInt8(ord("\r"))
-    )
-
-
 def _is_exponent(c: UInt8) -> Bool:
     """Return True for `e` or `E`."""
     return c == UInt8(ord("e")) or c == UInt8(ord("E"))
@@ -317,7 +315,7 @@ struct _Lexer(Movable):
                 line += 1
                 at += 1
                 starts_line = True
-            elif _is_space(c):
+            elif space_tab_return(c):
                 at += 1
             elif c == UInt8(ord("/")) and next == UInt8(ord("/")):
                 at = text.find("\n", at)
@@ -608,7 +606,7 @@ struct _Lexer(Movable):
         var at = 0
         while at < len(bytes):
             var c = bytes[at]
-            if _is_space(c):
+            if space_tab_return(c):
                 at += 1
                 continue
             if c == UInt8(ord("/")) and _clipped(text, at, at + 2) == "//":
@@ -760,7 +758,7 @@ struct _Lexer(Movable):
                 twice.
         """
         var at = text.find("define") + 6
-        while at < text.byte_length() and _is_space(text.as_bytes()[at]):
+        while at < text.byte_length() and space_tab_return(text.as_bytes()[at]):
             at += 1
         var end = at
         while end < text.byte_length() and is_js_word(text.as_bytes()[end]):
@@ -785,7 +783,7 @@ struct _Lexer(Movable):
         var body = List[_Token]()
         var place = 0
         while place < rest.byte_length():
-            if _is_space(rest.as_bytes()[place]):
+            if space_tab_return(rest.as_bytes()[place]):
                 place += 1
                 continue
             place = self.token(rest, place, line, body)
