@@ -68,7 +68,10 @@ from extensions.humanoid.skeleton.arm.frame import arm_muscle_dimensions
 from extensions.humanoid.skeleton.hand.skin.geometry import (
     hand_skin_from_dimensions,
 )
-from extensions.humanoid.skeleton.arm.assembly import place_mesh, resolved_paint
+from extensions.humanoid.skeleton.arm.assembly import (
+    place_mesh_node,
+    resolved_paint,
+)
 from extensions.humanoid.skeleton.complexion import iris_albedo
 from extensions.humanoid.skeleton.head.eyes import eyeball_mesh
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
@@ -530,7 +533,7 @@ def add_game_humanoid(
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
     var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-    _ = place_mesh(scene, assets, holder_id, shell^, hair)
+    _ = place_mesh_node(scene, assets, holder_id, shell^, hair)
     var face = Optional[GameFace](None)
     if facial_animation:
         var paints = List[MaterialId]()
@@ -545,7 +548,7 @@ def add_game_humanoid(
         var iris = assets.textures.add(iris_albedo(64, spec.genome))
         eye = assets.materials.add(eye_physical(iris))
     for _ in range(2):  # pragma: no branch
-        _ = place_mesh(scene, assets, holder_id, eyes.pop(0), eye)
+        _ = place_mesh_node(scene, assets, holder_id, eyes.pop(0), eye)
     var strands = List[HairStrands]()
     if guides > 0:
         strands.append(

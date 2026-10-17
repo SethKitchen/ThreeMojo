@@ -443,6 +443,27 @@ struct DracoEncodingData(Copyable, CornerVisitor, Movable):
         self.vertex_values[vertex] = len(self.value_corners)
         self.value_corners.append(corner)
 
+    def visit(
+        mut self,
+        vertex: Int,
+        corner: Int,
+        faces: List[Int],
+        mut points: List[Int],
+    ):
+        """Store the next value, reached at a corner.
+
+        Draco's `MeshAttributeIndicesEncodingObserver::OnNewVertexVisited`.
+
+        Args:
+            vertex: The vertex of the attribute's table.
+            corner: The corner it was reached at.
+            faces: The points of the mesh's corners.
+            points: The points in the order their values are stored.
+        """
+        points.append(faces[corner])
+        self.vertex_values[vertex] = len(self.value_corners)
+        self.value_corners.append(corner)
+
 
 struct EdgebreakerConnectivity(Movable):
     """What `decode_edgebreaker` reads."""
@@ -1183,6 +1204,7 @@ def traverse_depth_first(
     Raises:
         Error: If the table has a corner with no vertex.
     """
+    data.points.clear()
     var starts = List[Int]()
     for face in range(table.faces()):
         starts.append(3 * face)
@@ -1298,6 +1320,7 @@ def traverse_prediction_degree(
     Raises:
         Error: If the table has a corner with no vertex.
     """
+    data.points.clear()
     if table.vertices() == 0:
         return data.points.copy()
     var starts = List[Int]()

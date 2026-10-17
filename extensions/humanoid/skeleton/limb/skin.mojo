@@ -38,7 +38,7 @@ from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.leg.skin.dimensions import (
     SkinField as LegSkinField,
 )
-from extensions.humanoid.skeleton.place import place_mesh
+from extensions.humanoid.skeleton.place import place_mesh_node
 from materials.material import MaterialId
 from math.vector3 import Vector3, component_max, component_min
 
@@ -147,6 +147,6 @@ def add_limb_skin(
         Error: If `spec`, `side` or `detail` is refused, or the scene
             refuses the node or the mesh.
     """
-    return place_mesh(
+    return place_mesh_node(
         scene, assets, parent, limb_skin_mesh(spec, side, detail), paint
     )

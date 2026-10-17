@@ -40,7 +40,7 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
-from math.utils import edge_index, max3, saturate
+from math.utils import edge_index, max3
 from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
@@ -392,7 +392,7 @@ def sample_motion(
     """
     var moved_x = (u - history_u) * width
     var moved_y = (v_down - history_v) * height
-    return saturate(length2(moved_x, moved_y) / max_velocity_length)
+    return min(max(length2(moved_x, moved_y) / max_velocity_length, 0), 1)
 
 
 def variance_gamma(motion: Float32) -> Float32:

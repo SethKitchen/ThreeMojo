@@ -13,7 +13,7 @@ buffers through the same `LightView`; see `render.gpu.GpuComposer`.
 """
 
 from render.framebuffer import FloatColor
-from math.utils import clamp, edge_index
+from math.utils import edge_index
 
 
 # A view's pointer is not tracked by the compiler: whoever builds one keeps
@@ -260,6 +260,4 @@ def clamped_texel(coordinate: Float32, count: Int) -> Float32:
     Returns:
         The pixel position, from zero through `count - 1`.
     """
-    return clamp(
-        coordinate * Float32(count) - 0.5, Float32(0), Float32(count - 1)
-    )
+    return min(max(coordinate * Float32(count) - 0.5, 0), Float32(count - 1))

@@ -18,7 +18,7 @@ from core.search import first_match
 from render.framebuffer import Color
 from render.jpeg import (
     BLOCK_SAMPLES,
-    BitReader,
+    _BorrowedBitReader as BitReader,
     HuffmanTable,
     clamp_sample,
     cosine_table,

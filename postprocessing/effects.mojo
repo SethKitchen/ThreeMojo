@@ -43,14 +43,12 @@ from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
-from math.smoothstep import clamped_smoothstep
 from math.utils import (
     SeededRandom,
     clamp,
     glsl_mod,
     lerp,
     mix_delta,
-    saturate,
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -1134,7 +1132,7 @@ def halftone_blend(
         their combination at one, as three.js's do.
     """
     if mode == HALFTONE_LINEAR:
-        return lerp(b, a, t)
+        return a * t + b * (1 - t)
     var other: Float32
     if mode == HALFTONE_ADD:
         other = min(Float32(1), a + b)
@@ -1773,6 +1771,12 @@ struct Bokeh2Settings(ImplicitlyCopyable):
         self.samples = 4
 
 
+def _smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return GLSL's `smoothstep`, its edges in either order."""
+    var t = min(max((x - edge0) / (edge1 - edge0), Float32(0)), Float32(1))
+    return t * t * (3 - 2 * t)
+
+
 def check_bokeh2(settings: Bokeh2Settings) raises:
     """Refuse settings the shader could not run.
 
@@ -1824,20 +1828,20 @@ def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
     """
     var scale = Float32(rings) - 1.3
     var inorout = Float32(-4)
-    inorout += clamped_smoothstep(-_FEATHER, _FEATHER, pw + scale)
-    inorout += clamped_smoothstep(
+    inorout += _smoothstep(-_FEATHER, _FEATHER, pw + scale)
+    inorout += _smoothstep(
         -_FEATHER, _FEATHER, 0.309016994 * pw + 0.951056516 * ph + scale
     )
-    inorout += clamped_smoothstep(
+    inorout += _smoothstep(
         -_FEATHER, _FEATHER, -0.809016994 * pw + 0.587785252 * ph + scale
     )
-    inorout += clamped_smoothstep(
+    inorout += _smoothstep(
         -_FEATHER, _FEATHER, -0.809016994 * pw - 0.587785252 * ph + scale
     )
-    inorout += clamped_smoothstep(
+    inorout += _smoothstep(
         -_FEATHER, _FEATHER, 0.309016994 * pw - 0.951056516 * ph + scale
     )
-    return saturate(inorout)
+    return min(max(inorout, Float32(0)), Float32(1))
 
 
 def _linearize(depth: Float32, znear: Float32, zfar: Float32) -> Float32:
@@ -1967,10 +1971,12 @@ def bokeh2_pixel(
     if settings.show_focus:
         var edge = 0.002 * z
         var m = min(
-            max(clamped_smoothstep(0, edge, blur), Float32(0)), Float32(1)
+            max(_smoothstep(0, edge, blur), Float32(0)),
+            Float32(1),
         )
         var e = min(
-            max(clamped_smoothstep(1 - edge, 1, blur), Float32(0)), Float32(1)
+            max(_smoothstep(1 - edge, 1, blur), Float32(0)),
+            Float32(1),
         )
         var warm = (1 - m) * 0.6
         col = Vector3(
@@ -1991,7 +1997,7 @@ def bokeh2_pixel(
         var fade = settings.fstop / _VIGN_FADE
         var shade = min(
             max(
-                clamped_smoothstep(_VIGN_OUT + fade, _VIGN_IN + fade, dist),
+                _smoothstep(_VIGN_OUT + fade, _VIGN_IN + fade, dist),
                 Float32(0),
             ),
             Float32(1),

@@ -74,7 +74,11 @@ from extensions.humanoid.skeleton.look import (
     skin_phong,
     vein_phong,
 )
-from extensions.humanoid.skeleton.place import place_mesh, place_root
+from extensions.humanoid.skeleton.place import (
+    place_mesh,
+    place_mesh_node,
+    place_root,
+)
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.vector3 import Vector3
@@ -139,7 +143,7 @@ def add_arm(
     if contents.includes_bones():
         var bones = named_arm_bones()
         for index in range(len(bones)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -155,7 +159,7 @@ def add_arm(
                 or parts[index] == ARTICULAR_CARTILAGE
             ):
                 paint = cartilage_paint
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -167,7 +171,7 @@ def add_arm(
     if contents.includes_muscles():
         var parts = named_arm_muscles()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -182,7 +186,7 @@ def add_arm(
             var paint = vein
             if is_arm_artery(parts[index]):
                 paint = artery
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -193,7 +197,7 @@ def add_arm(
         var lymph = resolved_paint(assets, lymph_paint, lymph_phong())
         var parts = named_arm_lymph()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -204,7 +208,7 @@ def add_arm(
         var nerve = resolved_paint(assets, nerve_paint, nerve_phong())
         var parts = named_arm_nerves()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -215,7 +219,7 @@ def add_arm(
         var skin = resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _ = place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -226,7 +230,7 @@ def add_arm(
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
         var parts = named_arm_hair()
         for index in range(len(parts)):  # pragma: no branch
-            _ = place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,

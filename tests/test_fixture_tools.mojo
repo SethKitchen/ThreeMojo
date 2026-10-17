@@ -5,10 +5,11 @@
 
 """Tests for `tools.fixture_manifest` and `tools.fixture_runtime`.
 
-Each test builds a small repository in a temporary directory: a manifest,
+Most tests build a small repository in a temporary directory: a manifest,
 a generator, the locked runtime packages and a fake `node` script. The
 fake prints the runtime for `-p` and the file `words` for a generator run,
-and logs each call with its working directory.
+and logs each call with its working directory. The source-successor tests
+also bind the live sRGB table to the preserved accepted runtime evidence.
 """
 
 from std.os import getenv, setenv, unsetenv
@@ -536,6 +537,148 @@ def test_a_failing_node_is_reported() raises:
             False,
         )
     _restore(saved)
+    repo.close()
+
+
+# Independent accepted words, from the preserved `srgb` runtime entry.
+# Never derive this expectation from the current fixture manifest.
+comptime _ACCEPTED_SRGB_WORDS_SHA256 = (
+    "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b"
+)
+comptime _SRGB_BEFORE_SOURCE_SHA256 = (
+    "286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101"
+)
+comptime _SRGB_CURRENT_SOURCE_SHA256 = (
+    "9d7d0dc7f0a7c526881e469ed2b7e918fbcfb8b27258641631515b6893c5905e"
+)
+comptime _SRGB_RUNTIME_REPORT_SHA256 = (
+    "c45b8ee4c2d08d1d7486985e1c9460d2b037e1816dc04571ccf192260f93494b"
+)
+
+
+def _require_accepted_srgb_table(source: String) raises:
+    """Reject changed accepted words independently of any manifest."""
+    if word_digest(table_words(source)) != _ACCEPTED_SRGB_WORDS_SHA256:
+        raise Error("accepted sRGB words changed")
+
+
+def _srgb_source(words: List[UInt64]) -> String:
+    """Build only the table declaration for an adversarial fixture."""
+    var lines = List[String]()
+    for word in words:
+        lines.append(word_text(word))
+    return (
+        "comptime _SRGB_TO_LINEAR: List[UInt64] = [\n"
+        + String(",\n").join(lines)
+        + "\n]\n"
+    )
+
+
+def test_srgb_source_successor_preserves_the_accepted_runtime_words() raises:
+    var source = Path("loaders/js_number.mojo").read_text()
+    _require_accepted_srgb_table(source)
+    assert_equal(digest("loaders/js_number.mojo"), _SRGB_CURRENT_SOURCE_SHA256)
+    var manifest = parse_json(Path("assets/fixture-manifest.json").read_text())
+    var families = manifest.get(manifest.root(), "families")
+    var found = 0
+    for index in range(manifest.length(families)):
+        var family = manifest.at(families, index)
+        if manifest.string(manifest.get(family, "family")) == "js_number":
+            found += 1
+            var artifacts = manifest.get(family, "artifacts")
+            assert_equal(
+                manifest.string(
+                    manifest.get(artifacts, "loaders/js_number.mojo")
+                ),
+                _SRGB_CURRENT_SOURCE_SHA256,
+            )
+    assert_equal(found, 1)
+    var report_path = String("docs/fixtures/runtime-2026-10-03.json")
+    assert_equal(digest(report_path), _SRGB_RUNTIME_REPORT_SHA256)
+    var report = parse_json(Path(report_path).read_text())
+    var accepted = report.get(report.root(), "srgb")
+    assert_equal(report.string(report.get(accepted, "mode")), "verify_accepted")
+    assert_equal(report.integer(report.get(accepted, "word_count")), 256)
+    assert_true(report.boolean(report.get(accepted, "matches")))
+    assert_equal(report.length(report.get(accepted, "differences")), 0)
+    for key in ["accepted_words_sha256", "generated_words_sha256"]:
+        assert_equal(
+            report.string(report.get(accepted, key)),
+            _ACCEPTED_SRGB_WORDS_SHA256,
+        )
+    var successor = parse_json(
+        Path("docs/fixtures/srgb-source-successor-760.json").read_text()
+    )
+    for key, expected in [
+        ("before_source_sha256", String(_SRGB_BEFORE_SOURCE_SHA256)),
+        ("after_source_sha256", String(_SRGB_CURRENT_SOURCE_SHA256)),
+        ("accepted_words_sha256", String(_ACCEPTED_SRGB_WORDS_SHA256)),
+        (
+            "historical_runtime_report_sha256",
+            String(_SRGB_RUNTIME_REPORT_SHA256),
+        ),
+        ("historical_runtime_entry", String("srgb")),
+        ("historical_runtime_mode", String("verify_accepted")),
+    ]:
+        assert_equal(
+            successor.string(successor.get(successor.root(), key)), expected
+        )
+
+
+def test_srgb_successor_rejects_bit_count_and_order_changes() raises:
+    var accepted = table_words(Path("loaders/js_number.mojo").read_text())
+    # Every word is independently protected, including one-ULP changes.
+    for index in range(256):
+        var changed = accepted.copy()
+        changed[index] = changed[index] ^ UInt64(1)
+        with assert_raises(contains="accepted sRGB words changed"):
+            _require_accepted_srgb_table(_srgb_source(changed))
+    # Cover every bit position, including sign and exponent bits.
+    for bit in range(64):
+        var changed = accepted.copy()
+        changed[18] = changed[18] ^ (UInt64(1) << UInt64(bit))
+        with assert_raises(contains="accepted sRGB words changed"):
+            _require_accepted_srgb_table(_srgb_source(changed))
+    var short = accepted.copy()
+    _ = short.pop()
+    with assert_raises(contains="exactly 256"):
+        _require_accepted_srgb_table(_srgb_source(short))
+    var long = accepted.copy()
+    long.append(UInt64(0))
+    with assert_raises(contains="exactly 256"):
+        _require_accepted_srgb_table(_srgb_source(long))
+    var reordered = accepted.copy()
+    reordered[0] = accepted[1]
+    reordered[1] = accepted[0]
+    with assert_raises(contains="accepted sRGB words changed"):
+        _require_accepted_srgb_table(_srgb_source(reordered))
+
+
+def test_srgb_table_identity_does_not_accept_whole_source_drift() raises:
+    var repo = Repo()
+    var source = Path("loaders/js_number.mojo").read_text()
+    repo.write("/loaders/js_number.mojo", source)
+    var manifest = repo.manifest(repo.family_text())
+    source += "\n# An unchanged table does not authorize new source bytes.\n"
+    _require_accepted_srgb_table(source)
+    repo.write("/loaders/js_number.mojo", source)
+    var errors = check(repo.root, manifest)
+    assert_equal(len(errors), 1)
+    assert_equal(errors[0], "changed: loaders/js_number.mojo")
+    repo.close()
+
+
+def test_refreshed_manifest_does_not_redefine_the_accepted_srgb_words() raises:
+    var repo = Repo()
+    var changed = table_words(Path("loaders/js_number.mojo").read_text())
+    changed[18] = changed[18] ^ UInt64(1)
+    var source = _srgb_source(changed)
+    repo.write("/loaders/js_number.mojo", source)
+    # A self-consistent fixture hash is not the independent accepted baseline.
+    var manifest = repo.manifest(repo.family_text())
+    assert_equal(len(check(repo.root, manifest)), 0)
+    with assert_raises(contains="accepted sRGB words changed"):
+        _require_accepted_srgb_table(source)
     repo.close()
 
 

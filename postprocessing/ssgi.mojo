@@ -50,7 +50,7 @@ from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
 from math.utils import glsl_sign, mix_delta
-from math.vector3 import Vector3, reciprocal_unit
+from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
 from postprocessing.filter_nodes import interleaved_gradient_noise
 from postprocessing.sampling import LightView
@@ -231,7 +231,11 @@ struct ScreenInputs(Movable):
         var tap = view.tap(
             u * Float32(self.width) - 0.5, v_down * Float32(self.height) - 0.5
         )
-        return reciprocal_unit(Vector3(tap.r, tap.g, tap.b))
+        var n = Vector3(tap.r, tap.g, tap.b)
+        var size = n.length()
+        if size == 0:
+            return n
+        return n * (1 / size)
 
     def color(self, u: Float32, v_down: Float32) -> FloatColor:
         """Return the light read bilinear, straight.

@@ -220,7 +220,67 @@ def _distance_extra() -> List[Int]:
     ]
 
 
-struct BitReader[origin: Origin[mut=False]](Movable):
+struct BitReader(Movable):
+    """A little-endian bit stream over a byte list.
+
+    DEFLATE packs its fields from the least significant bit of each byte
+    upwards, and moves to the next byte when one runs out. A Huffman code is
+    the exception and is read a bit at a time by `Huffman.decode`, most
+    significant bit of the *code* first, which is why `read_bit` is public
+    rather than only `read_bits`.
+    """
+
+    var bytes: List[UInt8]
+    var position: Int
+    var bit: Int
+
+    def __init__(out self, bytes: List[UInt8], start: Int):
+        """Start reading at byte `start`."""
+        self.bytes = bytes.copy()
+        self.position = start
+        self.bit = 0
+
+    def read_bit(mut self) raises -> Int:
+        """Return the next bit, advancing.
+
+        Raises:
+            Error: If the stream has run out, which means it was truncated.
+        """
+        if self.position >= len(self.bytes):
+            raise Error("Compressed stream ended in the middle of a code")
+        var value = Int((self.bytes[self.position] >> UInt8(self.bit)) & 1)
+        self.bit += 1
+        if self.bit == 8:
+            self.bit = 0
+            self.position += 1
+        return value
+
+    def read_bits(mut self, count: Int) raises -> Int:
+        """Return the next `count` bits as an integer, least significant first.
+
+        Args:
+            count: How many bits to take. Zero is allowed and reads nothing,
+                which is what a symbol with no extra bits wants.
+
+        Returns:
+            The value.
+
+        Raises:
+            Error: If the stream runs out.
+        """
+        var value = 0
+        for index in range(count):
+            value |= self.read_bit() << index
+        return value
+
+    def align(mut self):
+        """Skip to the next byte boundary, as a stored block's header needs."""
+        if self.bit != 0:
+            self.bit = 0
+            self.position += 1
+
+
+struct _BorrowedBitReader[origin: Origin[mut=False]](Movable):
     """A little-endian bit stream over a byte span.
 
     DEFLATE packs its fields from the least significant bit of each byte
@@ -327,9 +387,40 @@ struct Huffman(Movable):
                 self.symbols[offsets[lengths[symbol]]] = symbol
                 offsets[lengths[symbol]] += 1
 
+    def decode(self, mut reader: BitReader) raises -> Int:
+        """Return the next symbol, reading one bit at a time.
+
+        Walks lengths upwards holding the code built so far and the first code
+        of the current length. If the code is within that length's run, the
+        symbol is at the matching offset. No lookup table is built, so a
+        malformed stream simply exhausts the lengths.
+
+        Args:
+            reader: The bit stream, positioned at a code.
+
+        Returns:
+            The symbol.
+
+        Raises:
+            Error: If no code of any length matches, which means the stream is
+                corrupt.
+        """
+        var code = 0
+        var first = 0
+        var index = 0
+        for length in range(1, MAX_BITS + 1):  # pragma: no branch
+            code |= reader.read_bit()
+            var count = self.counts[length]
+            if code - first < count:
+                return self.symbols[index + code - first]
+            index += count
+            first = (first + count) << 1
+            code <<= 1
+        raise Error("No Huffman code matches the bits read")
+
     def decode[
         origin: Origin[mut=False]
-    ](self, mut reader: BitReader[origin]) raises -> Int:
+    ](self, mut reader: _BorrowedBitReader[origin]) raises -> Int:
         """Return the next symbol, reading one bit at a time.
 
         Walks lengths upwards holding the code built so far and the first code
@@ -373,7 +464,7 @@ def _fixed_literals() -> List[Int]:
 
 def _read_dynamic_lengths[
     origin: Origin[mut=False]
-](mut reader: BitReader[origin]) raises -> List[List[Int]]:
+](mut reader: _BorrowedBitReader[origin]) raises -> List[List[Int]]:
     """Return the literal and distance code lengths a dynamic block declares.
 
     The lengths are themselves Huffman coded, by a third code whose own
@@ -464,7 +555,7 @@ def _room_for(produced: Int, more: Int, limit: Int) raises:
 def _inflate_block[
     origin: Origin[mut=False]
 ](
-    mut reader: BitReader[origin],
+    mut reader: _BorrowedBitReader[origin],
     mut out: List[UInt8],
     literals: Huffman,
     distances: Huffman,
@@ -536,7 +627,7 @@ def inflate(
         Error: If the stream is truncated, uses the reserved block type,
             expands past `limit`, or is otherwise malformed.
     """
-    var reader = BitReader(bytes, start)
+    var reader = _BorrowedBitReader(bytes, start)
     return _inflate(reader, limit)
 
 
@@ -563,7 +654,7 @@ def inflate(
 
 def _inflate[
     origin: Origin[mut=False]
-](mut reader: BitReader[origin], limit: Int) raises -> List[UInt8]:
+](mut reader: _BorrowedBitReader[origin], limit: Int) raises -> List[UInt8]:
     """Expand every block, leaving `reader` just past the last one.
 
     Separate from `inflate` because the zlib wrapper needs to know where the
@@ -662,7 +753,7 @@ def zlib_inflate(
     if (Int(bytes[1]) >> 5) & 1 == 1:
         raise Error("A zlib stream with a preset dictionary cannot be read")
 
-    var reader = BitReader(Span(bytes), 2)
+    var reader = _BorrowedBitReader(Span(bytes), 2)
     var out = _inflate(reader, limit)
 
     # The checksum sits on the next byte boundary after the last block.

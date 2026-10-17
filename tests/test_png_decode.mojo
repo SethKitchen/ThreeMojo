@@ -14,7 +14,12 @@ row filters, an overlapping back-reference, and every color type.
 """
 
 from render.framebuffer import Color, Framebuffer
-from render.inflate import BitReader, Huffman, inflate, zlib_inflate
+from render.inflate import (
+    _BorrowedBitReader as BitReader,
+    Huffman,
+    inflate,
+    zlib_inflate,
+)
 from render.png import decode, encode
 from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE
 from render.texture import NEAREST, REPEAT, texture_from

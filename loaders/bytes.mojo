@@ -154,7 +154,7 @@ def ascii_space_at(bytes: Span[UInt8, _], at: Int) -> Bool:
         Whether `at` is inside `bytes` and that byte is white space.
 
     """
-    return at < len(bytes) and ascii_space(bytes[at])
+    return at >= 0 and at < len(bytes) and ascii_space(bytes[at])
 
 
 def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
@@ -170,7 +170,7 @@ def ascii_digit_at(bytes: Span[UInt8, _], at: Int) -> Bool:
         Whether `at` is inside `bytes` and that byte is a decimal digit.
 
     """
-    return at < len(bytes) and ascii_digit(bytes[at])
+    return at >= 0 and at < len(bytes) and ascii_digit(bytes[at])
 
 
 def letter_or_underscore(byte: UInt8) -> Bool:
@@ -284,7 +284,7 @@ def js_float_byte_at(bytes: Span[UInt8, _], at: Int) -> Bool:
         Whether `at` is inside `bytes` and that byte can sit in a number.
 
     """
-    return at < len(bytes) and js_float_byte(bytes[at])
+    return at >= 0 and at < len(bytes) and js_float_byte(bytes[at])
 
 
 def ascii_letter(byte: Int) -> Bool:
