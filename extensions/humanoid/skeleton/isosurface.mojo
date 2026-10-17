@@ -18,7 +18,7 @@ from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import clamp, max3
-from math.vector3 import Vector3, centroid, midpoint, mix_delta3
+from math.vector3 import Vector3, centroid, midpoint, mix_delta3, append_vector3
 from std.math import atan2, max, min, pi
 
 comptime MIN_DETAIL = 8
@@ -304,9 +304,7 @@ def _sampled_normals(
         ) / grid.dz
         var normal = Vector3(dx, dy, dz)
         normal.normalize()
-        normals.append(normal.x)
-        normals.append(normal.y)
-        normals.append(normal.z)
+        append_vector3(normals, normal)
     var corner = 0
     while corner < len(indices):
         var i0 = indices[corner]
@@ -432,15 +430,9 @@ def _emit_triangle(
 ):
     """Append one triangle, wound so its geometric normal faces out."""
     var i0 = len(positions) // 3
-    positions.append(p0.x)
-    positions.append(p0.y)
-    positions.append(p0.z)
-    positions.append(p1.x)
-    positions.append(p1.y)
-    positions.append(p1.z)
-    positions.append(p2.x)
-    positions.append(p2.y)
-    positions.append(p2.z)
+    append_vector3(positions, p0)
+    append_vector3(positions, p1)
+    append_vector3(positions, p2)
     var e1 = p1 - p0
     var e2 = p2 - p0
     e1.cross(e2)

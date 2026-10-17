@@ -828,6 +828,24 @@ def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     return (a + b + c) * (Float32(1) / 3)
 
 
+def append_vector3(mut values: List[Float32], point: Vector3):
+    """Append `point`'s three components.
+
+    Args:
+        values: The list that receives x, y, and z.
+        point: The vector.
+
+    Returns:
+        Nothing. Three numbers are appended.
+
+    Raises:
+        Error: Never.
+    """
+    values.append(point.x)
+    values.append(point.y)
+    values.append(point.z)
+
+
 def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
     """Return `start` moved toward `end` by `t`.
 

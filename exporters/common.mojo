@@ -61,6 +61,7 @@ from core.deform import skin_carriers, skin_pose
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.vector3 import append_vector3
 from math.utils import mix_bilinear
 from core.scene import Scene
 from loaders.js_number import js_number_text
@@ -389,9 +390,7 @@ def _carry(
         if posed:
             point = carriers[vertex].transform_point(point)
         point = matrix.transform_point(point)
-        world.positions.append(point.x)
-        world.positions.append(point.y)
-        world.positions.append(point.z)
+        append_vector3(world.positions, point)
         world.triangles.append(vertex)
     if world.kind == WORLD_LINE:
         return
@@ -403,9 +402,7 @@ def _carry(
         for vertex in range(count):
             var direction = turn.transform_direction(normal.vector3(vertex))
             direction.normalize()
-            world.normals.append(direction.x)
-            world.normals.append(direction.y)
-            world.normals.append(direction.z)
+            append_vector3(world.normals, direction)
         world.with_normals = True
     if geometry.has_attribute(UV):
         world.uvs = geometry.attribute_view(UV).packed()

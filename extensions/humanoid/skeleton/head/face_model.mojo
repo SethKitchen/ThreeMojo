@@ -40,7 +40,7 @@ from core.binary import little_endian_u32
 from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from math.cross import cross_vectors
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from math.finite import require_finite
 from std.math import min
 
@@ -811,9 +811,7 @@ struct FaceModel(Movable):
                     remap[d] = len(owners)
                     var p = Int(words[unsafe_offset=owners_at + d])
                     owners.append(p)
-                    positions.append(points[p].x)
-                    positions.append(points[p].y)
-                    positions.append(points[p].z)
+                    append_vector3(positions, points[p])
                     uvs.append(floats[unsafe_offset=uvs_at + d * 2])
                     uvs.append(floats[unsafe_offset=uvs_at + d * 2 + 1])
                 indices.append(remap[d])
@@ -837,9 +835,7 @@ struct FaceModel(Movable):
         for i in range(len(owners)):  # pragma: no branch
             var n = sums[owners[i]]
             n.normalize()
-            normals.append(n.x)
-            normals.append(n.y)
-            normals.append(n.z)
+            append_vector3(normals, n)
         var geometry = BufferGeometry()
         indexed_surface(geometry, positions^, normals^, uvs^, indices^)
         return geometry^

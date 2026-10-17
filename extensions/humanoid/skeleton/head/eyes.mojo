@@ -27,7 +27,7 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadMuscleDimensions,
 )
 from extensions.humanoid.skeleton.morph import EYE_X, EYE_Y, EYE_Z
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import cos, max, min, pi, sin, sqrt
 
 # The eyeball's radius on the template, in centimeters.
@@ -161,12 +161,8 @@ def eyeball_mesh(
             var angle = u * 2 * pi
             var direction = Vector3(sz * cos(angle), sz * sin(angle), cz)
             var placed = center + direction * r
-            positions.append(placed.x)
-            positions.append(placed.y)
-            positions.append(placed.z)
-            normals.append(direction.x)
-            normals.append(direction.y)
-            normals.append(direction.z)
+            append_vector3(positions, placed)
+            append_vector3(normals, direction)
             uvs.append(u)
             uvs.append(v)
     var indices = List[Int]()

@@ -30,6 +30,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION as POSITION_ATTRIBUTE
 from core.object3d import NodeId, Object3D
 from math.curve_checks import require_at_least_one
+from math.vector3 import append_vector3
 from core.scene import Scene
 from materials.material import BASIC, Material, PointSize, points_material
 from objects.line import Line
@@ -92,9 +93,7 @@ def animation_path(
     for step in range(divisions + 1):  # pragma: no branch
         var at = Float32(step) / Float32(divisions) * clip.length
         var point = clip.tracks[track].sample_vector3(Duration(at, SECOND))
-        numbers.append(point.x)
-        numbers.append(point.y)
-        numbers.append(point.z)
+        append_vector3(numbers, point)
     var geometry = BufferGeometry()
     geometry.set_attribute(
         String(POSITION_ATTRIBUTE), BufferAttribute(numbers^, 3)

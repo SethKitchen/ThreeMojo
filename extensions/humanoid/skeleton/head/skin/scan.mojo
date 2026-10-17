@@ -63,7 +63,7 @@ from extensions.humanoid.skeleton.surface_nets import (
     project_to_surface,
     surface_gradient,
 )
-from math.vector3 import Vector3, mix_delta3
+from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import cos, max, min, sin
 
 # Where the scan's frame lands on the template, in template cm: the
@@ -762,9 +762,7 @@ def scan_skin_mesh[
                 remap[v] = len(points)
                 var p = placed[v]
                 points.append(p)
-                positions.append(p.x)
-                positions.append(p.y)
-                positions.append(p.z)
+                append_vector3(positions, p)
             indices.append(remap[v])
     if len(indices) == 0:
         raise Error("No part of the scanned head lies above the floor")
@@ -787,9 +785,7 @@ def scan_skin_mesh[
             var w = max(Float32(0), rise)
             n = n * w + g * (1 - w)
             n.normalize()
-        normals.append(n.x)
-        normals.append(n.y)
-        normals.append(n.z)
+        append_vector3(normals, n)
     var surface = finish_surface(
         positions^, normals^, indices.copy(), low.y, high.y - low.y
     )

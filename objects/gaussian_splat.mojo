@@ -49,7 +49,7 @@ from math.box_extent import _max_radius_encloses_box
 from math.matrix4 import Matrix4
 from math.norm import squared_length3
 from math.utils import max3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import floor, inf, max, min, sqrt
 from std.memory import bitcast
 from units.si import Length, METER
@@ -659,9 +659,7 @@ struct GaussianSplat(Copyable, Movable):
                 rgb = rgb + _band_sum(g.sh2, index, 2, direction)
             if degree >= 3:
                 rgb = rgb + _band_sum(g.sh3, index, 3, direction)
-            out.append(rgb.x)
-            out.append(rgb.y)
-            out.append(rgb.z)
+            append_vector3(out, rgb)
         return out^
 
 

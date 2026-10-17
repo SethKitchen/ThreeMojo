@@ -45,7 +45,7 @@ from math.box_extent import box_exterior
 from math.finite import require_finite_group, require_positive_finite
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import floor, isfinite, max, min
 from units.si import Length, METER
 
@@ -609,12 +609,8 @@ struct LightProbeGrid(Copyable, Movable):
             return flat^
         var low = self.low()
         var high = self.high()
-        flat.append(low.x)
-        flat.append(low.y)
-        flat.append(low.z)
-        flat.append(high.x)
-        flat.append(high.y)
-        flat.append(high.z)
+        append_vector3(flat, low)
+        append_vector3(flat, high)
         flat.append(Float32(self.resolution_x))
         flat.append(Float32(self.resolution_y))
         flat.append(Float32(self.resolution_z))

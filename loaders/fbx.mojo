@@ -133,7 +133,7 @@ from materials.material import (
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
 from objects.skinned_mesh import (
@@ -720,9 +720,7 @@ struct _RigRows(Movable):
             var offsets = List[Float32]()
             for vertex in vertices:  # pragma: no branch
                 var moved = target[vertex]
-                offsets.append(moved.x)
-                offsets.append(moved.y)
-                offsets.append(moved.z)
+                append_vector3(offsets, moved)
             geometry.add_morph_target(BufferAttribute(offsets^, 3))
 
 
@@ -2259,19 +2257,13 @@ struct _Face(Movable):
         for corner in order:  # pragma: no branch
             var p = self.points[corner]
             part.vertices.append(self.vertices[corner])
-            part.positions.append(p.x)
-            part.positions.append(p.y)
-            part.positions.append(p.z)
+            append_vector3(part.positions, p)
             if len(self.normals) > 0:
                 var n = self.normals[corner]
-                part.normals.append(n.x)
-                part.normals.append(n.y)
-                part.normals.append(n.z)
+                append_vector3(part.normals, n)
             if len(self.uvs) > 0:
                 part.uvs.append(self.uvs[corner].x)
                 part.uvs.append(self.uvs[corner].y)
             if len(self.colors) > 0:
                 var c = self.colors[corner]
-                part.colors.append(c.x)
-                part.colors.append(c.y)
-                part.colors.append(c.z)
+                append_vector3(part.colors, c)

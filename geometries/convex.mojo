@@ -22,7 +22,7 @@ from math.convex_hull import (
     require_hull_finite,
 )
 from std.math import isfinite
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 
 
 def convex(points: List[Vector3]) raises -> BufferGeometry:
@@ -93,9 +93,7 @@ def convex(points: List[SIMD[DType.float64, 4]]) raises -> BufferGeometry:
                 data.append(Float32(point[0]))
                 data.append(Float32(point[1]))
                 data.append(Float32(point[2]))
-                normals.append(normal.x)
-                normals.append(normal.y)
-                normals.append(normal.z)
+                append_vector3(normals, normal)
         var geometry = BufferGeometry()
         position_normal_surface(geometry, data^, normals^)
         return geometry^

@@ -44,7 +44,7 @@ from core.search import first_match
 from math.bounds import enclose_point
 from math.curve_checks import require_at_least_one
 from math.utils import clamp
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.math import max, min
@@ -411,16 +411,12 @@ struct WeldedMesh(Movable):
         var normals = List[Float32](capacity=count * 3)
         for vertex in range(count):
             var point = self.positions[vertex]
-            positions.append(point.x)
-            positions.append(point.y)
-            positions.append(point.z)
+            append_vector3(positions, point)
             var normal = sums[vertex]
             if normal.length() == 0:
                 normal = Vector3(0, 1, 0)
             normal.normalize()
-            normals.append(normal.x)
-            normals.append(normal.y)
-            normals.append(normal.z)
+            append_vector3(normals, normal)
         var geometry = BufferGeometry()
         geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
         geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))

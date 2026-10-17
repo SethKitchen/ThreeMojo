@@ -45,7 +45,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.ordinal import require_non_negative
 from materials.material import MaterialId
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from objects.line import SEGMENTS, segment_count
 from render.framebuffer import FloatColor
 from render.linerule import dash_covers
@@ -196,9 +196,7 @@ def _geometry_of(
     require_wide_colors(len(colors), len(points))
     var numbers = List[Float32]()
     for index in range(len(points)):
-        numbers.append(points[index].x)
-        numbers.append(points[index].y)
-        numbers.append(points[index].z)
+        append_vector3(numbers, points[index])
     var shape = BufferGeometry()
     shape.set_attribute(String(POSITION), BufferAttribute(numbers^, 3))
     if has_colors:
