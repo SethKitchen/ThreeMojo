@@ -606,13 +606,15 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
                 is not finite and positive, or a channel of the blend
                 constant is not from zero to one.
         """
-        if not self.is_valid():
-            raise Error(
+        require_valid(
+            self.is_valid(),
+            (
                 "A depth or stencil state names a function, an operation or"
                 " a depth mode there is not, a stencil value outside 0 to"
                 " 255, a logarithmic depth without a positive factor, or a"
                 " blend color or alpha outside 0 to 1"
-            )
+            ),
+        )
 
     def writes_depth(self) -> Bool:
         """Return True if a fragment that passes writes its depth.

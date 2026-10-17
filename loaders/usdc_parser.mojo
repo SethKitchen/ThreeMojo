@@ -55,7 +55,7 @@ headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
 from core.binary import copy_bytes, little_endian_uint
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from core.search import last_match
 
 from loaders.usd_specs import (
@@ -1549,10 +1549,10 @@ struct _Crate[origin: Origin[mut=False]](Movable):
             Error: If its spec type is not valid, or a value refuses.
         """
         var spec_type = SpecType(spec.spec_type)
-        if not spec_type.is_valid():
-            raise Error(
-                "USDC: a spec of no known type: " + String(spec.spec_type)
-            )
+        require_valid(
+            spec_type.is_valid(),
+            "USDC: a spec of no known type: " + String(spec.spec_type),
+        )
         var out = UsdSpec(spec_type)
         var at = spec.field_set
         var steps = 0

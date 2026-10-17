@@ -486,8 +486,9 @@ def check_rotation(euler: Euler, what: String) raises:
         or not isfinite(euler.z.value)
     ):
         raise Error(what + "'s angles must be finite")
-    if not euler.order.is_valid():
-        raise Error(what + "'s order must be one of the six")
+    require_valid(
+        euler.order.is_valid(), what + "'s order must be one of the six"
+    )
 
 
 def env_rotation(euler: Euler) raises -> Basis3:

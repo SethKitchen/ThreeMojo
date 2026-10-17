@@ -63,7 +63,7 @@ texture that reads `st2`, which the port has no set of coordinates for,
 and references that nest more than 64 deep.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_valid
 from core.search import first_match
 
 from core.assets import Assets
@@ -197,8 +197,9 @@ struct UsdAssets(Movable):
         Raises:
             Error: If the kind is not valid.
         """
-        if not kind.is_valid():
-            raise Error("USD: an asset of no kind: " + String(kind.value))
+        require_valid(
+            kind.is_valid(), "USD: an asset of no kind: " + String(kind.value)
+        )
         var at = self.find(name)
         if at >= 0:
             self.kinds[at] = kind

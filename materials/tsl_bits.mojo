@@ -52,6 +52,7 @@ comptime _TWO_TO_MINUS_32 = Float32(2.3283064365386963e-10)
 comptime _SMALLEST_NORMAL_HALF = Float32(6.103515625e-05)
 comptime _HALF_OVERFLOW = Float32(65520)
 comptime _HALF_INFINITY = Float32(31744)
+from core.ordinal import require_valid
 
 
 @fieldwise_init
@@ -81,8 +82,7 @@ def _check_word(g: NodeGraph, word: NodeWord, what: String) raises:
     Raises:
         Error: If the word's ref is negative, or names no `vec2` here.
     """
-    if not word.is_valid():
-        raise Error(what + " reads a word that names no node")
+    require_valid(word.is_valid(), what + " reads a word that names no node")
     _expect(g, word.halves, NODE_VEC2, what)
 
 

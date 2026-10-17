@@ -690,8 +690,10 @@ def _refuse_integer_operation(operation: NodeKind, verb: String) raises:
     Raises:
         Error: If the kind is not named.
     """
-    if not operation.is_valid():
-        raise Error("A node graph cannot " + verb + " an exact integer")
+    require_valid(
+        operation.is_valid(),
+        "A node graph cannot " + verb + " an exact integer",
+    )
 
 
 @fieldwise_init

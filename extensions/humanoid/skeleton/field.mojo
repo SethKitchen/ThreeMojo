@@ -26,6 +26,7 @@ from math.vector3 import (
 from math.finite import require_finite, require_finite_group
 from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
+from core.ordinal import require_valid
 
 
 trait DistanceField(Copyable, Movable):
@@ -117,10 +118,10 @@ def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
         Error: If `sex` or `side` is not valid, or stature is not finite
             or is outside the software range.
     """
-    if not sex.is_valid():
-        raise Error("A " + bone + " needs a male or female template")
-    if not side.is_valid():
-        raise Error("A " + bone + " needs a left or right side")
+    require_valid(
+        sex.is_valid(), "A " + bone + " needs a male or female template"
+    )
+    require_valid(side.is_valid(), "A " + bone + " needs a left or right side")
     require_finite(
         Float64(stature.value), "A " + bone + "'s stature must be finite"
     )

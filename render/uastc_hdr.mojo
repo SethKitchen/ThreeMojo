@@ -747,8 +747,10 @@ def decode_endpoints(
         Error: If the mode is not one of the sixteen, or `v` is not its
             number of values.
     """
-    if not endpoint_mode.is_valid():
-        raise Error("UASTC HDR: " + String(endpoint_mode) + " is not a mode")
+    require_valid(
+        endpoint_mode.is_valid(),
+        "UASTC HDR: " + String(endpoint_mode) + " is not a mode",
+    )
     if len(v) != endpoint_mode.values():
         raise Error("UASTC HDR: a mode's values are the wrong count")
     var mode = endpoint_mode.value
