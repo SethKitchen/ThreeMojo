@@ -441,7 +441,7 @@ def zstd_raw(bytes: List[UInt8]) -> List[UInt8]:
     out.append(UInt8(header & 255))
     out.append(UInt8((header >> 8) & 255))
     out.append(UInt8((header >> 16) & 255))
-    out.extend(bytes.copy())
+    out.extend(Span(bytes))
     return out^
 
 

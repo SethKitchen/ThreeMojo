@@ -41,7 +41,7 @@ def block(kind: Int, content: List[UInt8], size: Int = -1) -> List[UInt8]:
     """Return a last block of `kind`: its header, then `content`."""
     var stated = size if size >= 0 else len(content)
     var out = le(1 | (kind << 1) | (stated << 3), 3)
-    out.extend(content.copy())
+    out.extend(Span(content))
     return out^
 
 
@@ -52,7 +52,7 @@ def frame(body: List[UInt8], descriptor: Int = 0) -> List[UInt8]:
     out.append(UInt8(descriptor))
     if (descriptor >> 5) & 1 == 0:
         out.append(0)
-    out.extend(body.copy())
+    out.extend(Span(body))
     return out^
 
 
@@ -64,7 +64,7 @@ def compressed(section: List[UInt8]) -> List[UInt8]:
 def cat(a: List[UInt8], b: List[UInt8]) -> List[UInt8]:
     """Return `a` followed by `b`."""
     var out = a.copy()
-    out.extend(b.copy())
+    out.extend(Span(b))
     return out^
 
 

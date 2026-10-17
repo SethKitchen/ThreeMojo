@@ -131,7 +131,7 @@ def _lz4(data: List[UInt8]) -> List[UInt8]:
             out.append(255)
             rest -= 255
         out.append(UInt8(rest))
-    out.extend(data.copy())
+    out.extend(Span(data))
     return out^
 
 
@@ -164,7 +164,7 @@ def _sized(mut out: List[UInt8], data: List[UInt8]):
         data: What to append.
     """
     _put(out, len(data), 8)
-    out.extend(data.copy())
+    out.extend(Span(data))
 
 
 def _rep(
@@ -389,7 +389,7 @@ struct _Builder(Movable):
             out.append(0)
         var toc_at = len(out)
         _put(out, 0, 8)
-        out.extend(self.data.copy())
+        out.extend(Span(self.data))
         var names: List[String] = [
             "TOKENS",
             "STRINGS",

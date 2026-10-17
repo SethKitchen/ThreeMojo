@@ -2150,7 +2150,7 @@ def pack_storage(
         regions.append(Int32(len(memory)))
         regions.append(Int32(buffer.count))
         regions.append(Int32(buffer.type.value))
-        memory.extend(buffer.array.copy())
+        memory.extend(Span(buffer.array))
     for at in range(len(node.array_types)):
         var width = node.array_types[at].value
         regions.append(Int32(len(memory)))

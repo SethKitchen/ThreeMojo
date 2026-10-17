@@ -181,7 +181,7 @@ struct DracoWriter(Movable):
         Args:
             bytes: The bytes.
         """
-        self.bytes.extend(bytes.copy())
+        self.bytes.extend(Span(bytes))
 
 
 struct DracoBitWriter(Movable):

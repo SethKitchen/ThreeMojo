@@ -127,7 +127,7 @@ def _segment(marker: Int, payload: List[UInt8]) -> List[UInt8]:
     var length = len(payload) + 2
     out.append(UInt8(length >> 8))
     out.append(UInt8(length & 255))
-    out.extend(payload.copy())
+    out.extend(Span(payload))
     return out^
 
 

@@ -346,7 +346,7 @@ def test_an_alpha_slice_writes_alpha() raises:
     s.code(1, 3)
     var bytes = s.bytes()
     var level = bytes.copy()
-    level.extend(bytes.copy())
+    level.extend(Span(bytes))
     g.image(0, len(bytes), len(bytes))
     var decoded = Etc1sGlobal(g.bytes(), 1, True)
     var image = etc1s_image(decoded, 0, level, 4, 4, True)

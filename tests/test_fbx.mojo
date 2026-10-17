@@ -252,7 +252,7 @@ def joined(parts: List[List[UInt8]]) -> List[UInt8]:
     """Return byte lists one after another."""
     var out = List[UInt8]()
     for part in parts:
-        out.extend(part.copy())
+        out.extend(Span(part))
     return out^
 
 
@@ -294,7 +294,7 @@ def p_raw(bytes: List[UInt8]) -> List[UInt8]:
     """Return an `R` property."""
     var out = p_code("R")
     out.extend(le(len(bytes), 4))
-    out.extend(bytes.copy())
+    out.extend(Span(bytes))
     return out^
 
 
@@ -312,7 +312,7 @@ def p_array(
     else:
         out.extend(le(0, 4))
         out.extend(le(len(raw), 4))
-        out.extend(raw.copy())
+        out.extend(Span(raw))
     return out^
 
 

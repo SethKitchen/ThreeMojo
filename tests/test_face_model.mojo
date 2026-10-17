@@ -43,7 +43,7 @@ def _file(name: String, counts: List[Int], body: List[UInt8]) raises -> String:
         header[10] = len(body)
     for count in header:  # pragma: no branch
         _u32(bytes, count)
-    bytes.extend(body.copy())
+    bytes.extend(Span(body))
     var path = temporary_path("threemojo_face_") + name + ".bin"
     Path(path).write_bytes(bytes)
     return path

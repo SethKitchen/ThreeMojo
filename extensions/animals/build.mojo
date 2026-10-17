@@ -606,7 +606,7 @@ def _geometry(
     var starts = List[Int]()
     for k in range(SURFACE_CLASS_COUNT):  # pragma: no branch
         starts.append(len(index))
-        index.extend(buckets[k].copy())
+        index.extend(Span(buckets[k]))
     g.set_index(index^)
     for k in range(SURFACE_CLASS_COUNT):  # pragma: no branch
         var end = starts[k + 1] if k + 1 < SURFACE_CLASS_COUNT else len(g.index)

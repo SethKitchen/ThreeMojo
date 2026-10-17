@@ -135,7 +135,7 @@ def _file(header: String, data: List[UInt8] = []) -> List[UInt8]:
         The bytes.
     """
     var out = List[UInt8](header.as_bytes())
-    out.extend(data.copy())
+    out.extend(Span(data))
     return out^
 
 

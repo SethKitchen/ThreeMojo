@@ -953,7 +953,7 @@ struct _Loader(Movable):
         var index = List[Int]()
         # A group holds a triangle or more: the loop always runs.
         for triangle in triangles:  # pragma: no branch
-            index.extend(triangle.v.copy())
+            index.extend(Span(triangle.v))
         var geometry = BufferGeometry()
         geometry.set_attribute(
             String(POSITION), BufferAttribute(vertices.copy(), 3)

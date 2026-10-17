@@ -77,7 +77,7 @@ def test_glb_validates_json_utf8() raises:
     assert_equal(String(split_glb(glb(bytes_of(text)))[0].strip()), text)
     for bytes in invalid_sequences():
         var raw = bytes_of('{"name":"')
-        raw.extend(bytes.copy())
+        raw.extend(Span(bytes))
         raw.extend(bytes_of('"}'))
         with assert_raises(contains=utf8_error(bytes)):
             _ = split_glb(glb(raw^))
@@ -95,7 +95,7 @@ def test_gltf_file_readers_validate_before_scene_mutation() raises:
     var before = scene.count()
     for bytes in invalid_sequences():
         var raw = bytes_of('{"asset":{"version":"2.0"},"name":"')
-        raw.extend(bytes.copy())
+        raw.extend(Span(bytes))
         raw.extend(bytes_of('"}'))
         Path(path).write_bytes(raw)
         with assert_raises(contains=utf8_error(bytes)):
@@ -118,10 +118,10 @@ def binary_fbx(name: List[UInt8], text: List[UInt8]) -> List[UInt8]:
     le32(out, 1)
     le32(out, property_size)
     out.append(UInt8(len(name)))
-    out.extend(name.copy())
+    out.extend(Span(name))
     out.append(83)
     le32(out, len(text))
-    out.extend(text.copy())
+    out.extend(Span(text))
     out.extend(List[UInt8](length=177, fill=0))
     return out^
 
@@ -132,7 +132,7 @@ def test_fbx_text_and_binary_validate_utf8() raises:
     assert_equal(document.name(1), "é水🙂")
     for bytes in invalid_sequences():
         var raw = bytes_of('FBXVersion: 7400\nName: "')
-        raw.extend(bytes.copy())
+        raw.extend(Span(bytes))
         raw.extend(bytes_of('"\n'))
         with assert_raises(contains=utf8_error(bytes)):
             _ = parse_fbx(raw)
@@ -147,7 +147,7 @@ def test_splat_ply_header_validates_utf8() raises:
     assert_equal(good[1], "comment é水🙂")
     for bytes in invalid_sequences():
         var raw = bytes_of("ply\ncomment ")
-        raw.extend(bytes.copy())
+        raw.extend(Span(bytes))
         raw.extend(bytes_of("\nend_header\n"))
         with assert_raises(contains=utf8_error(bytes)):
             _ = _header_lines(raw)
@@ -163,7 +163,7 @@ def test_draco_metadata_validates_utf8() raises:
     assert_equal(_metadata_name(reader), "é水🙂")
     for bytes in invalid_sequences():
         var record: List[UInt8] = [UInt8(len(bytes))]
-        record.extend(bytes.copy())
+        record.extend(Span(bytes))
         var buffer = DracoBuffer(record^)
         with assert_raises(contains=utf8_error(bytes)):
             _ = _metadata_name(buffer)
@@ -179,7 +179,7 @@ def test_vtk_detection_validates_utf8() raises:
         with assert_raises(contains=utf8_error(bytes)):
             _ = parse_vtk(raw)
         raw = bytes_of("# vtk DataFile Version 3.0\nTitle\n")
-        raw.extend(bytes.copy())
+        raw.extend(Span(bytes))
         raw.extend(bytes_of("\n"))
         raw.extend(List[UInt8](length=250, fill=0))
         with assert_raises(contains=utf8_error(bytes)):
@@ -190,7 +190,7 @@ def test_ultrahdr_xmp_validates_utf8() raises:
     for bytes in invalid_sequences():
         var payload = bytes_of(XMP_NAMESPACE)
         payload.append(0)
-        payload.extend(bytes.copy())
+        payload.extend(Span(bytes))
         var size = len(payload) + 2
         var raw: List[UInt8] = [
             0xFF,

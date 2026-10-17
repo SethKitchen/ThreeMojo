@@ -1943,7 +1943,7 @@ struct _Loader(Movable):
         for owner in self.links(self.parents, id):
             if owner.id not in self.rig.channels:
                 self.rig.channels[owner.id] = List[Int]()
-            self.rig.channels[owner.id].extend(channels.copy())
+            self.rig.channels[owner.id].extend(Span(channels))
 
     def is_channel(self, id: Int) raises -> Bool:
         """Return True if an object is a `BlendShapeChannel` deformer."""

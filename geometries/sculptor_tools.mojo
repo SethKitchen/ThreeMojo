@@ -347,7 +347,7 @@ def _subdivide(
             _half_edge_split(mesh, sub, tri, c, a, b)
     var new_tris = mesh.expands_faces(_count_up(faces_before, mesh.nb_faces), 1)
     var all_tris = tris.copy()
-    all_tris.extend(new_tris.copy())
+    all_tris.extend(Span(new_tris))
     var tag = mesh.next_tag_flag()
     var result = List[Int]()
     for tri in all_tris:  # pragma: no branch

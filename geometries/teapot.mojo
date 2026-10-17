@@ -1678,7 +1678,7 @@ def teapot(
                         vertices, triangle[0], triangle[1], triangle[2]
                     ):
                         continue
-                    index.extend(triangle.copy())
+                    index.extend(Span(triangle))
         surface_count += 1
 
     var geometry = BufferGeometry()

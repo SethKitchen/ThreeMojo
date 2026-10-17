@@ -532,7 +532,7 @@ struct GPUComputationRenderer(Movable):
         var images = List[Float32]()
         var wraps = List[Int32]()
         for at in range(len(self.variables)):
-            images.extend(self.variables[at].images[self.current].copy())
+            images.extend(Span(self.variables[at].images[self.current]))
             wraps.append(Int32(self.variables[at].wrap_s.value))
             wraps.append(Int32(self.variables[at].wrap_t.value))
         return (images^, wraps^)

@@ -468,7 +468,7 @@ def zip_archive(entries: List[ZipEntry], align: Int = 1) raises -> List[UInt8]:
         out.extend(name)
         for _ in range(pad):
             out.append(0)
-        out.extend(entry.data.copy())
+        out.extend(Span(entry.data))
         append_little_endian_u32(directory, _CENTRAL_HEADER)
         append_little_endian_u16(directory, 20)
         append_little_endian_u16(directory, 20)

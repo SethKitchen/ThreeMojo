@@ -1672,7 +1672,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If the name is empty or already taken.
         """
         var at = len(self._matrices)
-        self._matrices.extend(elements.copy())
+        self._matrices.extend(Span(elements))
         return self._uniform(name, type, Lanes(Float32(at), 0, 0, 0))
 
     def uniform(mut self, name: String, value: Matrix3) raises -> NodeRef:
@@ -5819,7 +5819,7 @@ struct NodeGraph(Copyable, Movable):
                 if layout.ops[index] == NODE_VIEWPORT_TEXTURE.value:
                     program.reads_scene = True
                 at += INSTRUCTION_FLOATS
-        program.code.extend(pool.values.copy())
+        program.code.extend(Span(pool.values))
         for index in range(len(pool.names)):
             program.uniform_names.append(pool.names[index])
             program.uniform_offsets.append(base + pool.offsets[index])

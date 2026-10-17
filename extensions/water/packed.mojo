@@ -406,9 +406,9 @@ def pack_surface(
         table.append(_entry(surface.surface_side(level)))
         table.append(_entry(len(texels)))
         if level == 0:
-            texels.extend(surface.field.samples.copy())
+            texels.extend(Span(surface.field.samples))
         else:
-            texels.extend(surface.mips[level - 1].samples.copy())
+            texels.extend(Span(surface.mips[level - 1].samples))
     return (texels^, table^)
 
 
@@ -424,7 +424,7 @@ def pack_caustics(
         The texels, base texture first, and the level table.
     """
     var texels = caustics.samples.copy()
-    texels.extend(caustics.mip_px.copy())
+    texels.extend(Span(caustics.mip_px))
     var base = len(caustics.samples)
     var table: List[Int64] = [_entry(caustics.caustic_levels())]
     table.append(_entry(caustics.n))
@@ -445,7 +445,7 @@ def pack_pebbles(bed: PebbleBed) -> Tuple[List[Float32], List[Int64]]:
         The texels, base level first, and the level table.
     """
     var texels = bed.pixels.copy()
-    texels.extend(bed.mip_px.copy())
+    texels.extend(Span(bed.mip_px))
     var base = len(bed.pixels)
     var table: List[Int64] = [_entry(bed.pebble_levels())]
     table.append(_entry(bed.width))

@@ -109,7 +109,7 @@ def chunk(id: String, content: List[UInt8]) -> List[UInt8]:
     var out = List[UInt8](id.as_bytes())
     out.extend(u32(len(content)))
     out.extend(u32(0))
-    out.extend(content.copy())
+    out.extend(Span(content))
     return out^
 
 
@@ -117,7 +117,7 @@ def vox(body: List[UInt8]) -> List[UInt8]:
     """Return a VOX file of chunks."""
     var out: List[UInt8] = [86, 79, 88, 32]
     out.extend(u32(150))
-    out.extend(body.copy())
+    out.extend(Span(body))
     return out^
 
 
@@ -132,7 +132,7 @@ def size(x: Int, y: Int, z: Int) -> List[UInt8]:
 def xyzi(voxels: List[UInt8]) -> List[UInt8]:
     """Return an XYZI chunk."""
     var content = u32(len(voxels) // 4)
-    content.extend(voxels.copy())
+    content.extend(Span(voxels))
     return chunk("XYZI", content)
 
 
