@@ -25,7 +25,7 @@ function of its own.
 from cameras.camera import Camera
 from core.scene import Scene
 from math.smoothstep import smoothstep
-from math.utils import clamp
+from math.utils import edge_index
 from math.vector3 import Vector3
 from postprocessing.sampling import mix, u_of, v_of
 from postprocessing.effects import texture_pixel
@@ -132,8 +132,8 @@ struct PixelatedTexels(Movable):
 
     def _slot(self, x: Int, y: Int) -> Int:
         """Return a texel's index, held at the edges; `y` counts up."""
-        var cx = clamp(x, 0, self.width - 1)
-        var cy = clamp(y, 0, self.height - 1)
+        var cx = edge_index(x, self.width)
+        var cy = edge_index(y, self.height)
         return (self.height - 1 - cy) * self.width + cx
 
     def depth_at(self, x: Int, y: Int) -> Float32:

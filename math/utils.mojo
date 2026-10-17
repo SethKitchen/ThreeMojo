@@ -76,6 +76,25 @@ def clamp(value: Int, low: Int, high: Int) -> Int:
     return max(low, min(high, value))
 
 
+def edge_index(index: Int, count: Int) -> Int:
+    """Return an index held inside a row or a column.
+
+    An index before zero reads the first place. An index at `count` or
+    past it reads the last place.
+
+    Args:
+        index: The requested index.
+        count: How many places there are. One or more.
+
+    Returns:
+        The index from zero through `count - 1`.
+
+    Raises:
+        Error: Never.
+    """
+    return clamp(index, 0, count - 1)
+
+
 def min3(x: Float32, y: Float32, z: Float32) -> Float32:
     """Return the smallest of three numbers.
 

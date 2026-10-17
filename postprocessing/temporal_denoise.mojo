@@ -47,7 +47,7 @@ from math.norm import squared_length2
 from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.utils import clamp, mix_delta, saturate
+from math.utils import edge_index, mix_delta, saturate
 from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
 from postprocessing.traa import variance_gamma
@@ -406,8 +406,8 @@ struct ReprojectInputs(Movable):
         Returns:
             The slot.
         """
-        return clamp(y, 0, self.height - 1) * self.width + clamp(
-            x, 0, self.width - 1
+        return edge_index(y, self.height) * self.width + edge_index(
+            x, self.width
         )
 
 
@@ -451,10 +451,8 @@ def _history_tap(
     var slot = inputs.slot(x, y)
     var color = floor_channels(inputs.history[slot])
     var depth = inputs.previous_depth[slot]
-    var u = (Float32(clamp(x, 0, inputs.width - 1)) + 0.5) / Float32(
-        inputs.width
-    )
-    var v = (Float32(clamp(y, 0, inputs.height - 1)) + 0.5) / Float32(
+    var u = (Float32(edge_index(x, inputs.width)) + 0.5) / Float32(inputs.width)
+    var v = (Float32(edge_index(y, inputs.height)) + 0.5) / Float32(
         inputs.height
     )
     var seen = view_position(u, v, depth, camera.previous_projection_inverse)
@@ -938,8 +936,8 @@ struct DenoiseInputs(Movable):
         Returns:
             The depth.
         """
-        var x = clamp(Int(floor(u * Float32(self.width))), 0, self.width - 1)
-        var y = clamp(Int(floor(v * Float32(self.height))), 0, self.height - 1)
+        var x = edge_index(Int(floor(u * Float32(self.width))), self.width)
+        var y = edge_index(Int(floor(v * Float32(self.height))), self.height)
         return self.depth[y * self.width + x]
 
     def normal(self, u: Float32, v: Float32) -> Vector3:
