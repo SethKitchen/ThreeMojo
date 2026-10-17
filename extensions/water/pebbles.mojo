@@ -143,6 +143,24 @@ def require_pebble_height(height: Int) raises:
         raise Error("Pebble image height must be positive")
 
 
+def require_pebble_length(held: Int, expected: Int) raises:
+    """Refuse a pebble image whose buffer is a different length from its
+    dimensions.
+
+    Args:
+        held: How many numbers the buffer holds.
+        expected: How many numbers the dimensions require.
+
+    Returns:
+        Nothing. The call returns when the two lengths are equal.
+
+    Raises:
+        Error: If the lengths differ.
+    """
+    if held != expected:
+        raise Error("Pebble image length does not match its dimensions")
+
+
 struct PebbleBed(Movable, PebbleTexels):
     """The pebble photograph in linear RGB, row-major from the top."""
 
@@ -170,8 +188,7 @@ struct PebbleBed(Movable, PebbleTexels):
         """
         require_pebble_width(width)
         require_pebble_height(height)
-        if len(pixels) != width * height * 3:
-            raise Error("Pebble image length does not match its dimensions")
+        require_pebble_length(len(pixels), width * height * 3)
         self.width = width
         self.height = height
         self.pixels = pixels^
@@ -244,8 +261,9 @@ def pebble_bed(image: DecodedImage) raises -> PebbleBed:
     """
     require_pebble_width(image.width)
     require_pebble_height(image.height)
-    if len(image.pixels) != image.width * image.height * DecodedImage.CHANNELS:
-        raise Error("Pebble image length does not match its dimensions")
+    require_pebble_length(
+        len(image.pixels), image.width * image.height * DecodedImage.CHANNELS
+    )
     var count = image.width * image.height
     var pixels = List[Float32](length=count * 3, fill=0.0)
     for index in range(count):  # pragma: no branch

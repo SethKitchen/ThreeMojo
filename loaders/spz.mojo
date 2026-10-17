@@ -236,8 +236,7 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             is not 1 to 3, the degree is above 4, or the length is not what
             the header says.
     """
-    if len(bytes) < SPZ_HEADER_BYTES:
-        raise Error("SPZ: invalid SPZ header")
+    require_spz_header(len(bytes), SPZ_HEADER_BYTES)
     var version = le_u32(bytes, 4)
     var count = le_u32(bytes, 8)
     var stored = Int(bytes[12])
@@ -284,6 +283,24 @@ def _cut(bytes: List[UInt8], start: Int, length: Int) -> List[UInt8]:
         A copy of the run.
     """
     return copy_bytes(bytes, start, length)
+
+
+def require_spz_header(length: Int, least: Int) raises:
+    """Refuse an SPZ file whose header is shorter than the bytes it reads.
+
+    Args:
+        length: How many bytes the file has.
+        least: How many bytes the header read needs.
+
+    Returns:
+        Nothing. The call returns when the file holds at least `least`
+            bytes.
+
+    Raises:
+        Error: If the file is shorter than `least`.
+    """
+    if length < least:
+        raise Error("SPZ: invalid SPZ header")
 
 
 def require_spz_magic(magic: Int) raises:
@@ -334,8 +351,7 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             does not decompress to its field's length, or anything
             `render.zstd.zstd_decompress` raises.
     """
-    if len(bytes) < 20:
-        raise Error("SPZ: invalid SPZ header")
+    require_spz_header(len(bytes), 20)
     require_spz_magic(le_u32(bytes, 0))
     if le_u32(bytes, 4) != 4:
         raise Error("SPZ: the raw SPZ parser requires version 4")
