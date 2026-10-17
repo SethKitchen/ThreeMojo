@@ -87,8 +87,18 @@ comptime _DEFAULT_FAR = Float32(2000)
 
 # `Reflector.ReflectorShader`. The vertex shader multiplies the texture
 # matrix by the world position; see the module docstring. The fragment
-# shader reads `texture2DProj` as the division it is, and the overlay of a
-# `vec3` has its own name, because the subset has no overloads.
+# shader reads `texture2DProj` as the division it is. The subset has no
+# overloads, so the `vec3` overlay has its own name. The SSR reflector
+# uses the same two functions.
+comptime BLEND_OVERLAY_GLSL = """float blendOverlay( float base, float blend ) {
+    return( base < 0.5 ? ( 2.0 * base * blend ) : ( 1.0 - 2.0 * ( 1.0 - base ) * ( 1.0 - blend ) ) );
+}
+
+vec3 blendOverlay3( vec3 base, vec3 blend ) {
+    return vec3( blendOverlay( base.r, blend.r ), blendOverlay( base.g, blend.g ), blendOverlay( base.b, blend.b ) );
+}
+"""
+
 comptime REFLECTOR_VERTEX = """
 uniform mat4 textureMatrix;
 varying vec4 vUv;
@@ -99,24 +109,21 @@ void main() {
 }
 """
 
-comptime REFLECTOR_FRAGMENT = """
+comptime REFLECTOR_FRAGMENT = (
+    """
 uniform vec3 color;
 uniform sampler2D tDiffuse;
 varying vec4 vUv;
 
-float blendOverlay( float base, float blend ) {
-    return( base < 0.5 ? ( 2.0 * base * blend ) : ( 1.0 - 2.0 * ( 1.0 - base ) * ( 1.0 - blend ) ) );
-}
-
-vec3 blendOverlay3( vec3 base, vec3 blend ) {
-    return vec3( blendOverlay( base.r, blend.r ), blendOverlay( base.g, blend.g ), blendOverlay( base.b, blend.b ) );
-}
-
+"""
+    + BLEND_OVERLAY_GLSL
+    + """
 void main() {
     vec4 base = texture2D( tDiffuse, vUv.xy / vUv.w );
     gl_FragColor = vec4( blendOverlay3( base.rgb, color ), 1.0 );
 }
 """
+)
 
 # `Refractor.RefractorShader`: the same two shaders.
 comptime REFRACTOR_VERTEX = REFLECTOR_VERTEX

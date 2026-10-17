@@ -47,6 +47,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.reflector import (
+    BLEND_OVERLAY_GLSL,
     DEFAULT_MIRROR_COLOR,
     DEFAULT_TEXTURE_SIZE,
     NO_CLIP_BIAS,
@@ -76,9 +77,10 @@ comptime DEFAULT_GROUND_DISTANCE = Length(180.0, METER)
 comptime DEFAULT_GROUND_OPACITY = Float32(0.5)
 
 # `ReflectorForSSRPass.ReflectorShader`'s fragment shader, with
-# `perspectiveDepthToViewZ` written out, as the subset has no chunks, and
-# the overlay of a `vec3` named apart, as it has no overloads.
-comptime SSR_REFLECTOR_FRAGMENT = """
+# `perspectiveDepthToViewZ` written out, as the subset has no chunks.
+# The overlay functions are `BLEND_OVERLAY_GLSL`.
+comptime SSR_REFLECTOR_FRAGMENT = (
+    """
 uniform vec3 color;
 uniform sampler2D tDiffuse;
 uniform sampler2D tDepth;
@@ -93,14 +95,9 @@ uniform mat4 virtualCameraMatrixWorld;
 uniform vec2 resolution;
 varying vec4 vUv;
 
-float blendOverlay( float base, float blend ) {
-    return( base < 0.5 ? ( 2.0 * base * blend ) : ( 1.0 - 2.0 * ( 1.0 - base ) * ( 1.0 - blend ) ) );
-}
-
-vec3 blendOverlay3( vec3 base, vec3 blend ) {
-    return vec3( blendOverlay( base.r, blend.r ), blendOverlay( base.g, blend.g ), blendOverlay( base.b, blend.b ) );
-}
-
+"""
+    + BLEND_OVERLAY_GLSL
+    + """
 float perspectiveDepthToViewZ( float depth, float near, float far ) {
     return ( near * far ) / ( ( far - near ) * depth - far );
 }
@@ -137,6 +134,7 @@ void main() {
 #endif
 }
 """
+)
 
 
 def fresnel_coefficient(eye: Vector3) -> Float32:
