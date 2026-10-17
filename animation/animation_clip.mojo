@@ -49,8 +49,7 @@ from core.ordinal import ordinal_valid
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
 from core.user_data import UserData
-from math.finite import require_positive_finite
-from std.math import isfinite
+from math.finite import require_finite, require_positive_finite
 from units.si import Duration, SECOND
 
 
@@ -170,8 +169,7 @@ struct AnimationClip(Copyable, Movable):
         var runs = _longest(tracks)
         if Bool(duration):
             runs = duration.value().to(SECOND)
-            if not isfinite(runs):
-                raise Error("A clip's duration must be a number")
+            require_finite(Float64(runs), "A clip's duration must be a number")
         require_clip_duration(runs)
         self.name = name
         self.tracks = tracks^

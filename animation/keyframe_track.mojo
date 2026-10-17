@@ -168,7 +168,7 @@ it was built can be edited afterward.
 from core.morph import require_morph_target
 from core.object3d import NodeId
 from materials.material import MaterialId
-from math.finite import require_positive_finite
+from math.finite import require_finite, require_positive_finite
 from math.quaternion import Quaternion
 from math.utils import mix_delta
 from math.vector3 import Vector3
@@ -1037,8 +1037,9 @@ struct KeyframeTrack(Copyable, Movable):
             raise Error("A track needs at least one key")
         require_key_values(len(values), len(times) * kind.component_count())
         for index in range(len(values)):  # pragma: no branch
-            if not isfinite(values[index]):
-                raise Error("A track's values must be numbers")
+            require_finite(
+                Float64(values[index]), "A track's values must be numbers"
+            )
             if not kind.is_boolean():
                 continue
             if values[index] != 0 and values[index] != 1:
@@ -1046,8 +1047,7 @@ struct KeyframeTrack(Copyable, Movable):
         var seconds = List[Float32]()
         for index in range(len(times)):  # pragma: no branch
             var at = times[index].to(SECOND)
-            if not isfinite(at):
-                raise Error("A track's times must be numbers")
+            require_finite(Float64(at), "A track's times must be numbers")
             if at < 0:
                 raise Error("A track's times cannot be negative")
             if index > 0:
@@ -1310,8 +1310,9 @@ struct KeyframeTrack(Copyable, Movable):
                 track cannot have.
         """
         var by = offset.to(SECOND)
-        if not isfinite(by):
-            raise Error("A track cannot shift by a time that is not a number")
+        require_finite(
+            Float64(by), "A track cannot shift by a time that is not a number"
+        )
         self._require_keys()
         if self.times[0] + by < 0:
             raise Error("A track's times cannot be negative")
@@ -1743,8 +1744,10 @@ struct KeyframeTrack(Copyable, Movable):
                 cheap buys.
         """
         var seconds = at.to(SECOND)
-        if not isfinite(seconds):
-            raise Error("A track cannot be read at a time that is not a number")
+        require_finite(
+            Float64(seconds),
+            "A track cannot be read at a time that is not a number",
+        )
         if not start.is_valid() or not end.is_valid():
             raise Error("A track needs an ending mode that exists")
         check_interpolation(self.target.kind, self.interpolation)

@@ -342,6 +342,7 @@ from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from materials.material import MAX_IOR, MIN_IOR
 from math.euler import Euler
+from math.finite import require_finite
 from math.quaternion import Quaternion
 from math.utils import mix_delta
 from math.vector2 import Vector2
@@ -405,8 +406,7 @@ def require_action_weight(weight: Float32) raises:
     Raises:
         Error: If the weight is not a number, or if it is negative.
     """
-    if not isfinite(weight):
-        raise Error("An action's weight must be a number")
+    require_finite(Float64(weight), "An action's weight must be a number")
     if weight < 0:
         raise Error("An action's weight cannot be negative")
 
@@ -439,8 +439,9 @@ def require_action_time_scale(time_scale: Float32) raises:
     Raises:
         Error: If the time scale is not a number.
     """
-    if not isfinite(time_scale):
-        raise Error("An action's time scale must be a number")
+    require_finite(
+        Float64(time_scale), "An action's time scale must be a number"
+    )
 
 
 @fieldwise_init
@@ -532,8 +533,9 @@ def checked_span(duration: Duration, what: String) raises -> Float32:
         Error: If the span is not a number or is negative.
     """
     var seconds = duration.to(SECOND)
-    if not isfinite(seconds):
-        raise Error(what + " must last a time that is a number")
+    require_finite(
+        Float64(seconds), what + " must last a time that is a number"
+    )
     if seconds < 0:
         raise Error(what + " cannot last less than no time")
     return seconds
@@ -1088,8 +1090,10 @@ def _write_camera(
     out when it is asked for, so it follows the track.
     """
     var kind = target.kind
-    if not isfinite(value):
-        raise Error("An animation drove a camera to a value it cannot hold")
+    require_finite(
+        Float64(value),
+        "An animation drove a camera to a value it cannot hold",
+    )
     if kind == CAMERA_ZOOM and value <= 0:
         raise Error("An animation drove a camera's zoom to zero or below")
     if target.slot == ORTHOGRAPHIC_SLOT:
@@ -2029,8 +2033,10 @@ struct AnimationAction(Copyable, Movable):
             Error: If `time` is not a number.
         """
         var seconds = time.to(SECOND)
-        if not isfinite(seconds):
-            raise Error("An action cannot start at a time that is not a number")
+        require_finite(
+            Float64(seconds),
+            "An action cannot start at a time that is not a number",
+        )
         self.start_time = seconds
         self.scheduled = True
 
@@ -2056,10 +2062,10 @@ struct AnimationAction(Copyable, Movable):
             Error: If the step or phase sum is not finite, or the loop
                 count or reduced phase does not fit its stored type.
         """
-        if not isfinite(seconds):
-            raise Error(
-                "An action cannot advance by a time that is not a number"
-            )
+        require_finite(
+            Float64(seconds),
+            "An action cannot advance by a time that is not a number",
+        )
         self._move(seconds * self.time_scale)
 
     def _set_endings(mut self, at_start: Bool, at_end: Bool, ping_pong: Bool):
@@ -2091,13 +2097,16 @@ struct AnimationAction(Copyable, Movable):
     ) raises -> _ActionMove:
         """Check a stored Float32 step, sum, count and phase without mutation.
         """
-        if not isfinite(moved_by):
-            raise Error("An action's scaled advance must be a finite number")
+        require_finite(
+            Float64(moved_by),
+            "An action's scaled advance must be a finite number",
+        )
         if moved_by == 0:
             return _ActionMove(phase, 0, self.loop_count, 0, 0, False)
         var moved = phase + moved_by
-        if not isfinite(moved):
-            raise Error("An action's advanced phase must be a finite number")
+        require_finite(
+            Float64(moved), "An action's advanced phase must be a finite number"
+        )
         if self.loop == ONCE:
             return _ActionMove(moved, 0, self.loop_count, 0, 0, False)
         var length = self.clip.duration().to(SECOND)
@@ -2878,14 +2887,18 @@ struct AnimationMixer(Movable):
         self, delta: Duration, rewind: Bool = False
     ) raises -> _PreparedUpdate:
         """Stage every active clock before changing clocks, phases or events."""
-        if not isfinite(self.time_scale):
-            raise Error("A mixer's time scale must be a number")
+        require_finite(
+            Float64(self.time_scale), "A mixer's time scale must be a number"
+        )
         var seconds = delta.to(SECOND) * self.time_scale
-        if not isfinite(seconds):
-            raise Error("A mixer cannot advance by a time that is not a number")
+        require_finite(
+            Float64(seconds),
+            "A mixer cannot advance by a time that is not a number",
+        )
         var elapsed = seconds if rewind else self.elapsed + seconds
-        if not isfinite(elapsed):
-            raise Error("A mixer's advanced clock must be a finite number")
+        require_finite(
+            Float64(elapsed), "A mixer's advanced clock must be a finite number"
+        )
         var first = _ActionTick(0, 0, _ActionMove(0, 0, 0, 0, 0, False))
         var others = List[_ActionTick]()
         var count = 0
