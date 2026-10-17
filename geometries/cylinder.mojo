@@ -47,6 +47,7 @@ from core.ordinal import require_positive
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    record_sweep,
     require_three_segments,
 )
 from geometries.circle import FULL_TURN, check_sweep
@@ -138,8 +139,7 @@ def _record_body(
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
     geometry.parameters.set_boolean("openEnded", open_ended)
-    geometry.parameters.set_radians("thetaStart", theta_start)
-    geometry.parameters.set_radians("thetaLength", theta_length)
+    record_sweep(geometry, theta_start, theta_length)
 
 
 def cylinder(

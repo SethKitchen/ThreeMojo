@@ -36,7 +36,7 @@ made of plain points.
 """
 
 from core.buffer_geometry import BufferGeometry, LATHE_GEOMETRY
-from geometries.surface import indexed_surface, record_kind
+from geometries.surface import indexed_surface, record_kind, record_phi
 from math.curve_checks import require_at_least_one
 from core.user_data import json_number_text
 from geometries.circle import FULL_TURN, check_sweep
@@ -218,6 +218,5 @@ def lathe(
     record_kind(geometry, LATHE_GEOMETRY)
     geometry.parameters.set_json("points", _points_json(points))
     geometry.parameters.set_number("segments", Float64(segments))
-    geometry.parameters.set_radians("phiStart", phi_start)
-    geometry.parameters.set_radians("phiLength", phi_length)
+    record_phi(geometry, phi_start, phi_length)
     return geometry^
