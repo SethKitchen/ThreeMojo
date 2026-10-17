@@ -27,7 +27,7 @@ from core.assets import Assets
 from core.object3d import Object3D
 from materials.material import Material, MaterialId
 from loaders.gltf import decode_image
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_axis_extent
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -65,8 +65,9 @@ def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
     var sx = _column_length(matrix, 0)
     var sy = _column_length(matrix, 4)
     var sz = _column_length(matrix, 8)
-    if sx == 0 or sy == 0 or sz == 0:
-        raise Error(what + ": a node matrix that flattens an axis")
+    require_axis_extent(
+        sx, sy, sz, what + ": a node matrix that flattens an axis"
+    )
     var position = Vector3(0, 0, 0)
     var rotation = Quaternion.identity()
     var scale = Vector3(0, 0, 0)

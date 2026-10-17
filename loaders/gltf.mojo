@@ -256,7 +256,7 @@ from materials.material import (
     points_material,
     standard_material,
 )
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_axis_extent
 from objects.skeleton import Bone, Skeleton
 from objects.instanced_mesh import InstancedMesh
 from objects.skinned_mesh import (
@@ -3866,8 +3866,9 @@ def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
     var sx = _column_length(matrix, 0)
     var sy = _column_length(matrix, 4)
     var sz = _column_length(matrix, 8)
-    if sx == 0 or sy == 0 or sz == 0:
-        raise Error("glTF" + ": a node matrix that flattens an axis")
+    require_axis_extent(
+        sx, sy, sz, "glTF" + ": a node matrix that flattens an axis"
+    )
     var position = Vector3(0, 0, 0)
     var rotation = Quaternion.identity()
     var scale = Vector3(0, 0, 0)
