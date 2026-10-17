@@ -29,7 +29,7 @@ are not a cited caliber table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.torso.sweep import SweepField, floats
@@ -261,8 +261,7 @@ def arm_vessel_field(
     """
     dimensions.validate()
     var paths = arm_vessel_paths(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     return paths_field(dimensions.arm, paths, 1, side, 0.05)
 
 

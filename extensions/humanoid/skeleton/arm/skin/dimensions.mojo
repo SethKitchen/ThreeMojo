@@ -23,7 +23,7 @@ inside the hand's skin, which reaches up over the lower forearm. See `extensions
 """
 
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.bones.dimensions import (
     arm_bone_field,
     named_arm_bones,
@@ -135,8 +135,7 @@ struct ArmSkinField(Copyable, DistanceField, Movable):
                 field refuses its inputs.
         """
         dimensions.validate()
-        if not side.is_valid():
-            raise Error("An arm side must be RIGHT or LEFT")
+        require_side(side, "An arm")
         var arm = dimensions.arm.copy()
         var f = arm.frame
         self.mirror = side == LEFT

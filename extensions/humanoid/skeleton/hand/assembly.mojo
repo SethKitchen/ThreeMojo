@@ -17,7 +17,7 @@ the arm's wrist.
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
     place_mesh,
@@ -143,8 +143,7 @@ def add_hand(
     """
     if not contents.is_valid():
         raise Error("Hand contents must be a named layer set")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var dims = arm_muscle_dimensions(spec)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)

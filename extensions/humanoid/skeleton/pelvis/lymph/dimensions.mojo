@@ -20,7 +20,7 @@ left.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import LEFT, BodySide
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
@@ -113,8 +113,7 @@ struct PelvisLymphField(DistanceField, ImplicitlyCopyable):
         dimensions.validate()
         if not part.is_valid():
             raise Error("A pelvic lymph part must be a named group or trunk")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_side(side, "A pelvis")
         var p = dimensions.pelvis
         var f = pelvis_frame(p)
         var S = p.stature.value

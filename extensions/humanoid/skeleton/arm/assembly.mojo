@@ -17,7 +17,7 @@ the torso's scapula.
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.bones.dimensions import named_arm_bones
 from extensions.humanoid.skeleton.arm.bones.geometry import (
     arm_bone_from_dimensions,
@@ -130,8 +130,7 @@ def add_arm(
     """
     if not contents.is_valid():
         raise Error("Arm contents must be a named layer set")
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     var dims = arm_muscle_dimensions(spec)
     var root = Object3D()
     root.set_position(origin.x, origin.y, origin.z)

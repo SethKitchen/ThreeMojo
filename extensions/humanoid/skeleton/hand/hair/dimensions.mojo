@@ -18,7 +18,7 @@ separate diagrammatic radius; see
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.hair.dimensions import (
     shaft,
@@ -104,8 +104,7 @@ def hand_hair_field(
     dimensions.validate()
     if not part.is_valid():
         raise Error("A hand hair part must be a named hair group")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     var skin = HandSkinField(dimensions, RIGHT)

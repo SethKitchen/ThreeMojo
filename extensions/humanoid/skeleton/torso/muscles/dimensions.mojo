@@ -25,7 +25,7 @@ parameters. They are not a cited cross-section table.
 
 from core.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     TorsoDimensions,
@@ -172,8 +172,7 @@ def torso_muscle_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var placed = RIGHT
     if is_paired_muscle(part):
         placed = side

@@ -21,7 +21,7 @@ from the front pole, at 0, to the back, at 1, which is how
 
 from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
@@ -46,8 +46,7 @@ comptime MAX_EYE_DETAIL = 64
 
 def _side_sign(side: BodySide) raises -> Float32:
     """Return one for the right eye and minus one for the left."""
-    if not side.is_valid():
-        raise Error("An eye's side must be RIGHT or LEFT")
+    require_side(side, "An eye's")
     if side == LEFT:
         return -1
     return 1

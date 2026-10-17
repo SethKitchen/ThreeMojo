@@ -23,7 +23,7 @@ not a cited osteometric table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
@@ -311,8 +311,7 @@ def hand_bone_field(
     dimensions.validate()
     if not part.is_valid():
         raise Error("A hand bone must be a named carpal, metacarpal or phalanx")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var f = dimensions.frame
     var sweeps = List[Sweep]()
     if part.value < METACARPAL_1.value:

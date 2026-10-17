@@ -23,7 +23,7 @@ authored in template centimeters. They are not a cited width table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.field import reject
 from extensions.anatomy.soft_tissue import (
@@ -149,8 +149,7 @@ def arm_ligament_field(
     """
     dimensions.validate()
     _ = arm_ligament_tissue(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     var f = dimensions.frame
     var t = dimensions.torso.frame
     var g = shoulder_girdle(dimensions.torso)

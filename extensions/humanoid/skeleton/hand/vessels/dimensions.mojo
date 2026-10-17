@@ -22,7 +22,7 @@ template parameters. They are not a cited caliber table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     ArmMuscleDimensions,
@@ -139,8 +139,7 @@ def hand_vessel_field(
     """
     dimensions.validate()
     var artery = is_hand_artery(part)
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == DIGITAL_ARTERIES or part == DORSAL_DIGITAL_VEINS:

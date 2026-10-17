@@ -25,7 +25,7 @@ is anterior.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import LEFT, BodySide
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
@@ -148,8 +148,7 @@ struct PelvisLigamentField(DistanceField, ImplicitlyCopyable):
         dimensions.validate()
         if not part.is_valid():
             raise Error("A pelvic ligament must be a named ligament")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_side(side, "A pelvis")
         var p = dimensions.pelvis
         var S = p.stature.value
         self.part = part

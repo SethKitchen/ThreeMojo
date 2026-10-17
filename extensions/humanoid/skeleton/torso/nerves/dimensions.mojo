@@ -23,7 +23,7 @@ and mass. Geometry applies a separate diagrammatic minimum radius.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     L1,
     along_path,
@@ -104,8 +104,7 @@ def torso_nerve_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var placed = RIGHT
     if is_paired_nerve(part):
         placed = side

@@ -37,7 +37,7 @@ template. Call `validate` at every public consumer of an edited copy.
 
 from core.ordinal import ordinal_valid
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
@@ -853,8 +853,7 @@ def sided(point: Vector3, side: BodySide) raises -> Vector3:
     Raises:
         Error: If `side` is not valid.
     """
-    if not side.is_valid():
-        raise Error("A pelvis side must be RIGHT or LEFT")
+    require_side(side, "A pelvis")
     if side == LEFT:
         return flip_x(point)
     return point

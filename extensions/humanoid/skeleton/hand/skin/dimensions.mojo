@@ -25,7 +25,7 @@ shell represents the dermis for occupancy and mass.
     var d = HandSkinField(dims, RIGHT).distance(p)
 """
 
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.bones.dimensions import (
     RADIUS,
     ULNA,
@@ -136,8 +136,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
                 field refuses its inputs.
         """
         dimensions.validate()
-        if not side.is_valid():
-            raise Error("A hand side must be RIGHT or LEFT")
+        require_side(side, "A hand")
         var arm = dimensions.arm.copy()
         var f = arm.frame
         self.mirror = side == LEFT

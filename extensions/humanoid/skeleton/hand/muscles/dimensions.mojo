@@ -25,7 +25,7 @@ table.
 """
 
 from core.ordinal import ordinal_valid
-from extensions.humanoid.side import BodySide
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
     ArmMuscleDimensions,
@@ -282,8 +282,7 @@ def hand_muscle_field(
     """
     dimensions.validate()
     var tendon = is_hand_tendon(part)
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == LUMBRICALS or tendon:
