@@ -41,6 +41,7 @@ SSR pass leaves in alpha, is not ported.
 from core.ordinal import ordinal_valid
 
 from render.color_math import floor_channels
+from math.finite import require_finite_group
 from math.matrix4 import Matrix4
 from math.norm import squared_length2
 from math.sine import fraction
@@ -205,8 +206,7 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
         and isfinite(settings.denoise_flicker_suppression)
         and isfinite(settings.adaptive_trust)
     )
-    if not finite:
-        raise Error("A denoiser setting must be finite")
+    require_finite_group(finite, "A denoiser setting must be finite")
     if not (
         settings.max_velocity_length > 0
         and isfinite(settings.max_velocity_length)

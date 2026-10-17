@@ -7,6 +7,7 @@
 
 Every `Float32` value converts exactly to `Float64`, so one test covers
 both widths. `require_positive_finite` refuses a value that is not.
+`require_finite_group` refuses a caller-tested group that is not finite.
 Callers keep their own error text.
 """
 
@@ -55,4 +56,23 @@ def require_positive_finite(value: Float64, message: String) raises:
         Error: If `value` is not finite or is not greater than zero.
     """
     if not positive_finite(value):
+        raise Error(message)
+
+
+def require_finite_group(finite: Bool, message: String) raises:
+    """Refuse a group of numbers that is not finite.
+
+    The caller tests each number and passes the result.
+
+    Args:
+        finite: Whether every number in the group is finite.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when the group is finite.
+
+    Raises:
+        Error: If the group is not finite.
+    """
+    if not finite:
         raise Error(message)

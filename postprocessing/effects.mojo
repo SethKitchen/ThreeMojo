@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite_group
 from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
@@ -1790,8 +1791,7 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
         and isfinite(settings.focus_u)
         and isfinite(settings.focus_v)
     )
-    if not finite:
-        raise Error("A bokeh 2 setting must be finite")
+    require_finite_group(finite, "A bokeh 2 setting must be finite")
     if settings.texture_width < 0 or settings.texture_height < 0:
         raise Error("A bokeh 2 texture size must not be negative")
     if not (settings.znear > 0 and settings.zfar > settings.znear):

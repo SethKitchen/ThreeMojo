@@ -43,6 +43,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite_group
 from math.norm import length2
 from math.sine import fraction
 from animation.keyframe_track import LightIndex
@@ -142,8 +143,7 @@ def check_ssgi(settings: SsgiSettings) raises:
         and isfinite(settings.thickness.value)
         and isfinite(settings.backface_lighting)
     )
-    if not finite:
-        raise Error("An SSGI pass setting must be finite")
+    require_finite_group(finite, "An SSGI pass setting must be finite")
     if not (settings.radius > 0 and settings.exp_factor > 0):
         raise Error("An SSGI pass's radius and step growth must be positive")
     if settings.frame_id < 0:
@@ -616,8 +616,7 @@ def check_sss(settings: SssSettings) raises:
         and isfinite(settings.shadow_intensity)
         and isfinite(settings.quality)
     )
-    if not finite:
-        raise Error("An SSS pass setting must be finite")
+    require_finite_group(finite, "An SSS pass setting must be finite")
     if settings.frame_id < 0:
         raise Error("An SSS pass's frame count must not be negative")
 
