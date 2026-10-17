@@ -33,6 +33,7 @@ undefined. A ray that travels no distance is not dimmed at all, where
 three.js's Beer's law divides zero by zero for a black attenuation color.
 """
 
+from core.extent import require_texel_count
 from lights.lighting import environment_brdf
 from math.matrix4 import Matrix4
 from math.sine import fraction
@@ -251,8 +252,13 @@ struct TransmissionTarget(Movable):
             raise Error("Volume scene depth must match the captured image")
         if target.width <= 0 or target.height <= 0:
             raise Error("Volume scene depth needs positive raster dimensions")
-        if len(target.depth) != target.width * target.height:
-            raise Error("Volume scene depth needs one depth per raster pixel")
+        require_texel_count(
+            len(target.depth),
+            target.width,
+            target.height,
+            1,
+            "Volume scene depth needs one depth per raster pixel",
+        )
         require_depth_mode(target.depth_mode)
         require_finite(
             Float64(far.value), "Volume scene depth needs a finite far distance"

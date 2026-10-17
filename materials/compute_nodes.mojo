@@ -71,7 +71,7 @@ one launch a step. Both backends call `run_statements` on a
 `ComputeSource`, so the two agree to the float.
 """
 
-from core.extent import require_positive_extent
+from core.extent import require_positive_extent, require_texel_count
 from core.ordinal import require_index_in_count
 from materials.compute_ids import (
     ATOMIC_ADD,
@@ -404,8 +404,13 @@ struct StorageBufferStore(Movable):
                 texture's size.
         """
         var texels = self.array(texture.texels)
-        if len(texels) != texture.width * texture.height * 4:
-            raise Error("A storage texture's buffer is not its size")
+        require_texel_count(
+            len(texels),
+            texture.width,
+            texture.height,
+            4,
+            "A storage texture's buffer is not its size",
+        )
         return float_texture(
             texture.width, texture.height, texels^, filter=NEAREST
         )

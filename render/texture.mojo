@@ -94,7 +94,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.extent import require_positive_extent
+from core.extent import require_positive_extent, require_texel_count
 from core.ordinal import ordinal_valid
 
 from math.finite import require_finite, require_finite_group
@@ -1098,8 +1098,13 @@ struct Texture(Movable):
                 `NEAREST` or `BILINEAR` -- see `validate`.
         """
         require_texture_size(width, height)
-        if len(pixels) != width * height * Self.CHANNELS:
-            raise Error("Texture buffer length does not match the dimensions")
+        require_texel_count(
+            len(pixels),
+            width,
+            height,
+            Self.CHANNELS,
+            "Texture buffer length does not match the dimensions",
+        )
         self.color_space = color_space
         if color_space == SRGB:
             self.ramp = decode_ramp()
@@ -2565,8 +2570,13 @@ def data_texture(
     require_texture_size(width, height)
     if channels < 1 or channels > 4:
         raise Error("A data texture holds one through four numbers a texel")
-    if len(data) != width * height * channels:
-        raise Error("Data texture length does not match the dimensions")
+    require_texel_count(
+        len(data),
+        width,
+        height,
+        channels,
+        "Data texture length does not match the dimensions",
+    )
     var pixels = List[UInt8]()
     pixels.reserve(width * height * Texture.CHANNELS)
     # Both dimensions are positive, so the loop cannot run zero times.
@@ -2626,8 +2636,13 @@ def float_texture(
             wrap, filter or alpha mode is none of the named values.
     """
     require_texture_size(width, height)
-    if len(data) != width * height * Texture.CHANNELS:
-        raise Error("Float texture length does not match the dimensions")
+    require_texel_count(
+        len(data),
+        width,
+        height,
+        Texture.CHANNELS,
+        "Float texture length does not match the dimensions",
+    )
     # Both dimensions are positive, so the loop cannot run zero times.
     for index in range(len(data)):  # pragma: no branch
         # An infinity or a NaN poisons every filter that reaches it, and

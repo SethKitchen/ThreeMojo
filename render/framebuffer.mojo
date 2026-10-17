@@ -49,7 +49,7 @@ in any order: without it, correctness depends on the draw order or on the
 scene happening to be convex.
 """
 
-from core.extent import require_positive_extent
+from core.extent import require_positive_extent, require_texel_count
 from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
@@ -1038,8 +1038,13 @@ def require_depth_length(length: Int, width: Int, height: Int) raises:
     Raises:
         Error: If the length is not the width times the height.
     """
-    if length != width * height:
-        raise Error("Depth buffer length does not match the dimensions")
+    require_texel_count(
+        length,
+        width,
+        height,
+        1,
+        "Depth buffer length does not match the dimensions",
+    )
 
 
 def require_pixel_length(
@@ -1061,8 +1066,13 @@ def require_pixel_length(
         Error: If the length is not the width times the height times the
             channels.
     """
-    if length != width * height * channels:
-        raise Error("Pixel buffer length does not match the dimensions")
+    require_texel_count(
+        length,
+        width,
+        height,
+        channels,
+        "Pixel buffer length does not match the dimensions",
+    )
 
 
 def require_downsample_factor(factor: Int) raises:
