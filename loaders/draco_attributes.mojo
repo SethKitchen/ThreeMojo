@@ -37,7 +37,7 @@ geometric normal prediction with the wrap transform, which Draco decodes
 with an octahedron that was never set up.
 """
 
-from core.binary import little_endian_uint
+from core.binary import little_endian_uint, store_little_endian
 from loaders.draco_buffer import (
     MASK32,
     DracoBuffer,
@@ -304,8 +304,7 @@ struct DracoAttribute(Copyable, Movable):
             bits: The value; the bytes past the type's size are dropped.
         """
         var size = self.data_type.size()
-        for k in range(size):  # pragma: no branch
-            self.bytes[index * size + k] = UInt8((bits >> (8 * k)) & 0xFF)
+        store_little_endian(self.bytes, index * size, bits, size)
 
     def set_float32(mut self, index: Int, value: Float32):
         """Store a float as component `index` of a float attribute.

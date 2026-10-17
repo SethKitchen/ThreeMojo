@@ -44,6 +44,7 @@ from core.binary import (
     append_little_endian,
     append_little_endian_u32,
     copy_byte_range,
+    store_little_endian,
 )
 from core.extent import positive_extent
 from geometries.curve_modifier import to_half_float
@@ -141,9 +142,7 @@ def _write(
                     bits = 0x7FC00000
                 else:
                     bits = Int(bitcast[DType.uint32](Float32(value)))
-                # Two or four bytes. The loop always runs.
-                for k in range(size):  # pragma: no branch
-                    raw[at + k] = UInt8((bits >> (8 * k)) & 255)
+                store_little_endian(raw, at, bits, size)
     var chunks = List[List[UInt8]]()
     var block_size = width * 4 * lines * size
     # There is one block or more. The loop always runs.

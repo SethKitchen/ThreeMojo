@@ -16,6 +16,7 @@ transcoder of three.js r186, `examples/jsm/libs/basis/basis_transcoder.wasm`,
 gives for its `RGBA32` target, or `RGBA_HALF` for UASTC HDR; the tests
 compare their XXH64 hash."""
 
+from core.binary import store_little_endian
 from render.compressed_texture import (
     RGB_S3TC_DXT1_FORMAT,
     RGBA_BPTC_FORMAT,
@@ -53,8 +54,7 @@ from std.testing import (
 
 def put(mut bytes: List[UInt8], at: Int, value: Int, count: Int = 4):
     """Write a little-endian number of `count` bytes."""
-    for byte in range(count):
-        bytes[at + byte] = UInt8((value >> (byte * 8)) & 0xFF)
+    store_little_endian(bytes, at, value, count)
 
 
 struct Ktx2(Movable):

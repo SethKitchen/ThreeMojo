@@ -5,7 +5,7 @@
 
 """Missing EXR codecs against independent OpenEXR 3.1.5 decode fixtures."""
 
-from core.binary import copy_bytes
+from core.binary import copy_bytes, store_little_endian
 from render.exr import (
     decode,
     read_header,
@@ -131,8 +131,7 @@ def test_dwa_variants_against_openexr() raises:
 
 def _set32(mut bytes: List[UInt8], at: Int, value: Int):
     """Replace a fixture's bounded little-endian word."""
-    for i in range(4):
-        bytes[at + i] = UInt8((value >> (i * 8)) & 255)
+    store_little_endian(bytes, at, value, 4)
 
 
 def _first_block(bytes: List[UInt8]) raises -> Int:

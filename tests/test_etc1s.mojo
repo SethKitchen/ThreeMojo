@@ -13,6 +13,7 @@ The Huffman tables here use one code length per table, or the code-length
 code `Writer.table` writes, so a test can say which symbol each code is.
 """
 
+from core.binary import append_little_endian
 from render.etc1s import Etc1sGlobal, etc1s_image, etc1s_intensities
 from std.testing import (
     TestSuite,
@@ -96,8 +97,7 @@ struct Writer(Movable):
 def le(value: Int, count: Int) -> List[UInt8]:
     """Return `value` as `count` little-endian bytes."""
     var out = List[UInt8]()
-    for index in range(count):
-        out.append(UInt8((value >> (index * 8)) & 0xFF))
+    append_little_endian(out, value, count)
     return out^
 
 

@@ -10,7 +10,7 @@ byte by byte to reach every refusal. `assets/3mf/fixture.3mf`, written by
 Python's `zipfile`, is the deflated archive read.
 """
 
-from core.binary import copy_byte_range, copy_bytes
+from core.binary import copy_byte_range, copy_bytes, store_little_endian
 from loaders.zip import (
     ZIP_DEFLATED,
     ZIP_STORED,
@@ -56,8 +56,7 @@ def one() raises -> List[UInt8]:
 
 def poke(mut bytes: List[UInt8], at: Int, value: Int, size: Int):
     """Overwrite a little-endian value."""
-    for index in range(size):
-        bytes[at + index] = UInt8((value >> (index * 8)) & 0xFF)
+    store_little_endian(bytes, at, value, size)
 
 
 def refused(bytes: List[UInt8], message: String) raises:
