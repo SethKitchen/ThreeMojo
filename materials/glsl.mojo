@@ -58,6 +58,7 @@ from loaders.bytes import (
     ascii_digit,
     ascii_letter,
     is_exponent_mark,
+    is_sign_mark,
     is_hex_digit,
     space_tab_return,
 )
@@ -224,11 +225,6 @@ struct _Token(Copyable, Movable):
 def _is_letter(c: UInt8) -> Bool:
     """Return True for a letter or an underscore."""
     return ascii_letter(Int(c)) or c == UInt8(ord("_"))
-
-
-def _is_sign(c: UInt8) -> Bool:
-    """Return True for `+` or `-`."""
-    return c == UInt8(ord("+")) or c == UInt8(ord("-"))
 
 
 def _starts_number(c: UInt8, next: UInt8) -> Bool:
@@ -421,7 +417,7 @@ struct _Lexer(Movable):
         if base == 10 and end < len(bytes) and is_exponent_mark(bytes[end]):
             real = True
             end += 1
-            if end < len(bytes) and _is_sign(bytes[end]):
+            if end < len(bytes) and is_sign_mark(bytes[end]):
                 end += 1
             var first = end
             while end < len(bytes) and ascii_digit(bytes[end]):

@@ -66,6 +66,7 @@ from loaders.bytes import (
     ascii_letter,
     ascii_space,
     is_exponent_mark,
+    is_sign_mark,
     js_float_byte_at,
     space_tab_line,
 )
@@ -256,7 +257,7 @@ def parse_floats(
         var c = bytes[i]
         var current = String(chr(Int(c)))
         var is_space = space_tab_line(c)
-        var is_sign = c == 43 or c == 45
+        var is_sign = is_sign_mark(c)
         var is_exp = is_exponent_mark(c)
         var is_flag = c == 48 or c == 49
         var at_flag = (
@@ -297,7 +298,7 @@ def parse_floats(
             var lone_sign = is_sign and number.byte_length() == 1
             if lone_sign:
                 var first = number.as_bytes()[0]
-                var doubled = first == 43 or first == 45
+                var doubled = is_sign_mark(first)
                 if doubled:
                     _unexpected_svg(current, i)
         if state == FLOAT:
@@ -320,7 +321,7 @@ def parse_floats(
                     continue
                 if exponent.byte_length() == 1:
                     var first = exponent.as_bytes()[0]
-                    var doubled = first == 43 or first == 45
+                    var doubled = is_sign_mark(first)
                     if doubled:
                         _unexpected_svg(current, i)
         if is_space:
@@ -355,7 +356,7 @@ def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
     from `start` ends, or -1 for none."""
     var n = len(bytes)
     var i = start
-    var signed = i < n and (bytes[i] == 43 or bytes[i] == 45)
+    var signed = i < n and (is_sign_mark(bytes[i]))
     if signed:
         i += 1
     var digits = 0
@@ -372,7 +373,7 @@ def _number_end(bytes: Span[UInt8, _], start: Int) -> Int:
     var exp = i < n and bytes[i] == 101
     if exp:
         var j = i + 1
-        var exp_signed = j < n and (bytes[j] == 43 or bytes[j] == 45)
+        var exp_signed = j < n and (is_sign_mark(bytes[j]))
         if exp_signed:
             j += 1
         var exponent = j

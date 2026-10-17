@@ -59,7 +59,7 @@ keeps and draws from undefined positions.
 from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
-from loaders.bytes import ascii_digit, ascii_letter, base64_digit
+from loaders.bytes import ascii_digit, ascii_letter, base64_digit, is_sign_mark
 from loaders.utf8 import leading_utf8_bom
 from loaders.js_text import (
     is_js_space,
@@ -397,7 +397,7 @@ def _number_end(line: List[Int], at: Int) -> Int:
     if i < n and line[i] == 46:
         i += 1
     while i < n and (
-        ascii_digit(line[i]) or line[i] == 45 or line[i] == 43 or line[i] == 101
+        ascii_digit(line[i]) or is_sign_mark(line[i]) or line[i] == 101
     ):
         i += 1
     return i
@@ -1050,7 +1050,7 @@ def _look(units: List[Int], k: Int) -> Int:
     var digit = base64_digit(u)
     if digit >= 0:
         return digit
-    if u == 43 or u == 45:
+    if is_sign_mark(u):
         return 62
     if u == 47 or u == 95:
         return 63
