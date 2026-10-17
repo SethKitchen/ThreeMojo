@@ -166,7 +166,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -799,8 +799,11 @@ struct GltfModel(Copyable, Movable):
         Raises:
             Error: If the index names no mesh.
         """
-        if mesh < 0 or mesh >= len(self.first_primitives):
-            raise Error("glTF: no mesh at index " + String(mesh))
+        require_index_in_count(
+            mesh,
+            len(self.first_primitives),
+            "glTF: no mesh at index " + String(mesh),
+        )
         var found = List[GeometryId]()
         for offset in range(self.primitive_counts[mesh]):
             found.append(self.geometries[self.first_primitives[mesh] + offset])
@@ -1058,10 +1061,11 @@ def select_variant(
             count = len(scene.lines)
         else:
             count = len(scene.points)
-        if index < 0 or index >= count:
-            raise Error(
-                "glTF: the scene no longer has an object that a variant maps"
-            )
+        require_index_in_count(
+            index,
+            count,
+            "glTF: the scene no longer has an object that a variant maps",
+        )
         if object.kind == GLTF_MESH:
             scene.meshes[index].material = material
         elif object.kind == GLTF_SKINNED_MESH:
@@ -1517,8 +1521,11 @@ struct _Loader(Movable):
             # Checked against the decoded bytes when they were decoded.
             return (self.decoded_views[index], 0, length, stride)
         var buffer = self.required_integer(view, "buffer")
-        if buffer < 0 or buffer >= len(self.buffers):
-            raise Error("glTF: a buffer view names a buffer that is not there")
+        require_index_in_count(
+            buffer,
+            len(self.buffers),
+            "glTF: a buffer view names a buffer that is not there",
+        )
         if self.placeholders[buffer]:
             raise Error(
                 "glTF: only the first buffer of a .glb can have no URI, and"
@@ -1719,8 +1726,11 @@ struct _Loader(Movable):
         for index in range(self.count("textures")):
             var texture = self.entry("textures", index)
             var image = self.image_of(texture)
-            if image < 0 or image >= self.count("images"):
-                raise Error("glTF: a texture names an image that is not there")
+            require_index_in_count(
+                image,
+                self.count("images"),
+                "glTF: a texture names an image that is not there",
+            )
             # glTF's defaults, three.js's `GLTFLoader` reads them: repeat
             # both ways, linear, and trilinear down a chain.
             var sampling = GltfSampler()
@@ -2466,11 +2476,14 @@ struct _Loader(Movable):
                 var variant = self.document.integer(
                     self.document.at(variants, at)
                 )
-                if variant < 0 or variant >= len(materials):
-                    raise Error(
+                require_index_in_count(
+                    variant,
+                    len(materials),
+                    (
                         "glTF: a mapping names a material variant that is"
                         " not there"
-                    )
+                    ),
+                )
                 materials[variant] = chosen
         self.model.variant_objects.append(
             GltfVariantObject(kind, index, original, materials^)
@@ -2862,8 +2875,11 @@ struct _Loader(Movable):
     ) raises:
         """Add one node under its parent, then its meshes and its camera,
         then its children. A skinned node's meshes wait for its joints."""
-        if index < 0 or index >= len(self.model.nodes):
-            raise Error("glTF: a node index that is not there")
+        require_index_in_count(
+            index,
+            len(self.model.nodes),
+            "glTF: a node index that is not there",
+        )
         # A hierarchy that loops reaches a node twice before it can go
         # deeper than there are nodes, so this is the one check needed.
         if self.model.nodes[index] != NO_PARENT:
@@ -3201,8 +3217,11 @@ struct _Loader(Movable):
             "glTF: a node names a light and the file has none",
         )
         var lights = self.array_of(root, "lights")
-        if index < 0 or index >= self.document.length(lights):
-            raise Error("glTF: a node names a light that is not there")
+        require_index_in_count(
+            index,
+            self.document.length(lights),
+            "glTF: a node names a light that is not there",
+        )
         var entry = self.object_at(lights, index)
         var color = Color(255, 255, 255)
         var hue = self.numbers(entry, "color", 3)
@@ -3266,8 +3285,11 @@ struct _Loader(Movable):
         var bones = List[Bone]()
         for slot in range(count):
             var joint = self.document.integer(self.document.at(joints, slot))
-            if joint < 0 or joint >= len(self.model.nodes):
-                raise Error("glTF: a skin names a joint that is not there")
+            require_index_in_count(
+                joint,
+                len(self.model.nodes),
+                "glTF: a skin names a joint that is not there",
+            )
             var id = self.model.nodes[joint]
             if id == NO_PARENT:
                 raise Error(
@@ -3386,10 +3408,11 @@ struct _Loader(Movable):
             for slot in range(self.document.length(channels)):
                 var channel = self.object_at(channels, slot)
                 var sampler = self.required_integer(channel, "sampler")
-                if sampler < 0 or sampler >= self.document.length(samplers):
-                    raise Error(
-                        "glTF: a channel names a sampler that is not there"
-                    )
+                require_index_in_count(
+                    sampler,
+                    self.document.length(samplers),
+                    "glTF: a channel names a sampler that is not there",
+                )
                 var target = self.document.get(channel, "target")
                 if not self.document.has_kind(target, OBJECT):
                     raise Error("glTF: a channel needs a target object")

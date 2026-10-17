@@ -98,6 +98,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
+from core.ordinal import require_index_in_count
 from math.finite import finite_float32
 from std.math import isnan
 from std.pathlib import Path
@@ -319,15 +320,16 @@ def _index(text: String, count: Int, what: String) raises -> Int:
         value = Int(text)
     except:
         raise Error("3MF: " + what + " index is not a whole number: " + text)
-    if value < 0 or value >= count:
-        raise Error(
-            "3MF: "
-            + what
-            + " index "
-            + text
-            + " is out of range, and there are "
-            + String(count)
-        )
+    require_index_in_count(
+        value,
+        count,
+        "3MF: "
+        + what
+        + " index "
+        + text
+        + " is out of range, and there are "
+        + String(count),
+    )
     return value
 
 
