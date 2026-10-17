@@ -34,7 +34,7 @@ from core.ordinal import ordinal_valid
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
 from std.benchmark import black_box
-from math.utils import js_round
+from math.utils import js_round_int
 from math.finite import require_finite
 from std.math import max, min
 
@@ -192,19 +192,6 @@ def _mix(
         a[1] + black_box((b[1] - a[1]) * t),
         a[2] + black_box((b[2] - a[2]) * t),
     )
-
-
-def _round(x: Float64) -> Int:
-    """Return JavaScript's `Math.round`: to the nearest whole number, a half
-    up.
-
-    Args:
-        x: The number.
-
-    Returns:
-        The whole number.
-    """
-    return Int(js_round(x))
 
 
 def require_lut_bound(value: Float64) raises:
@@ -368,7 +355,7 @@ struct Lut(Copyable, Movable):
             raise Error("A color table's range needs some width")
         var clamped = max(self.min_v, min(self.max_v, alpha))
         var at = (clamped - self.min_v) / (self.max_v - self.min_v)
-        return self.lut[_round(at * Float64(self.n))]
+        return self.lut[js_round_int(at * Float64(self.n))]
 
     def canvas_pixels(self) -> List[UInt8]:
         """Return the table as an image one pixel wide and `n` high, RGBA,
@@ -398,9 +385,9 @@ struct Lut(Copyable, Movable):
                 )
                 if inside:
                     var c = _mix(self.map[j - 1], self.map[j], i)
-                    data[k * 4] = UInt8(_round(c[0] * 255))
-                    data[k * 4 + 1] = UInt8(_round(c[1] * 255))
-                    data[k * 4 + 2] = UInt8(_round(c[2] * 255))
+                    data[k * 4] = UInt8(js_round_int(c[0] * 255))
+                    data[k * 4 + 1] = UInt8(js_round_int(c[1] * 255))
+                    data[k * 4 + 2] = UInt8(js_round_int(c[2] * 255))
                     k += 1
                 j -= 1
             i -= step

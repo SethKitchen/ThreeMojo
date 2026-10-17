@@ -240,7 +240,7 @@ from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from objects.line import LOOP, SEGMENTS, LineMode
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, rgb_is_white
 from render.png import encode as encode_png
 from render.texture import CLAMP, FLOAT_TYPE, MIRROR, Texture, Wrap
 from render.texture_store import TextureId
@@ -2705,16 +2705,11 @@ def _is_opaque_white(color: FloatColor, opacity: Float32) -> Bool:
     return color.r == 1 and color.g == 1 and color.b == 1 and opacity == 1
 
 
-def _is_white(color: Color) -> Bool:
-    """Return True for white, the default specular and attenuation color."""
-    return color.r == 255 and color.g == 255 and color.b == 255
-
-
 def _has_specular(material: Material) -> Bool:
     """Return True if `KHR_materials_specular` has something to say."""
     return (
         material.specular_intensity != 1
-        or not _is_white(material.specular_color)
+        or not rgb_is_white(material.specular_color)
         or material.specular_intensity_map != NO_TEXTURE
         or material.specular_color_map != NO_TEXTURE
     )
@@ -2736,7 +2731,7 @@ def _has_volume(material: Material) -> Bool:
         material.thickness.to(METER) != 0
         or material.thickness_map != NO_TEXTURE
         or isfinite(material.attenuation_distance.to(METER))
-        or not _is_white(material.attenuation_color)
+        or not rgb_is_white(material.attenuation_color)
     )
 
 

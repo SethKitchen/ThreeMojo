@@ -383,6 +383,23 @@ def js_round(value: Float64) -> Float64:
     return whole + 1 if value - whole >= 0.5 else whole
 
 
+def js_round_int(value: Float64) -> Int:
+    """Return `value` rounded to the nearest whole number, a half up.
+
+    JavaScript's `Math.round`, stored as an `Int`. -2.5 gives -2.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The whole number.
+
+    Raises:
+        Error: Never.
+    """
+    return Int(js_round(value))
+
+
 def saturate(value: Float32) -> Float32:
     """Return `value` held from zero to one.
 

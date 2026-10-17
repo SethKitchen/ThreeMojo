@@ -43,7 +43,7 @@ opentype.js holds it, is not written: `FontLoader` does not read it.
 from loaders.font import Font, parse_font
 from loaders.json import quote_json
 from loaders.three_mf import js_key_order
-from math.utils import js_round
+from math.utils import js_round_int
 from std.math import isnan, nan
 from std.pathlib import Path
 
@@ -493,18 +493,6 @@ def _reverse(commands: List[_Command]) -> List[_Command]:
     return out^
 
 
-def _round(value: Float64) -> Int:
-    """Return JavaScript's `Math.round`: halves up.
-
-    Args:
-        value: The value.
-
-    Returns:
-        The nearest whole number.
-    """
-    return Int(js_round(value))
-
-
 def _mac_roman(byte: Int) -> Int:
     """Return the code point of a Mac Roman byte.
 
@@ -795,16 +783,16 @@ def _commands_text(commands: List[_Command], scale: Float64) -> String:
         out += c.type.lower() + " "
         if c.type != "Z":
             out += (
-                String(_round(c.x * scale))
+                String(js_round_int(c.x * scale))
                 + " "
-                + String(_round(c.y * scale))
+                + String(js_round_int(c.y * scale))
                 + " "
             )
         if c.type == "Q":
             out += (
-                String(_round(c.x1 * scale))
+                String(js_round_int(c.x1 * scale))
                 + " "
-                + String(_round(c.y1 * scale))
+                + String(js_round_int(c.y1 * scale))
                 + " "
             )
     return out^
@@ -889,10 +877,16 @@ def ttf_json(bytes: List[UInt8], reversed: Bool = False) raises -> String:
         var index = map[c]
         font.parse(index, 0)
         ref glyph = font.glyphs[index]
-        var token = '{"ha":' + String(_round(Float64(glyph.advance) * scale))
+        var token = '{"ha":' + String(
+            js_round_int(Float64(glyph.advance) * scale)
+        )
         if glyph.has_box:
-            token += ',"x_min":' + String(_round(Float64(glyph.x_min) * scale))
-            token += ',"x_max":' + String(_round(Float64(glyph.x_max) * scale))
+            token += ',"x_min":' + String(
+                js_round_int(Float64(glyph.x_min) * scale)
+            )
+            token += ',"x_max":' + String(
+                js_round_int(Float64(glyph.x_max) * scale)
+            )
         else:
             token += ',"x_min":null,"x_max":null'
         if reversed:
@@ -920,10 +914,10 @@ def ttf_json(bytes: List[UInt8], reversed: Bool = False) raises -> String:
         out += ',"familyName":' + quote_json(name.value())
     var post = offsets["post"]
     out += ',"ascender":' + String(
-        _round(Float64(font.data.i16(hhea + 4)) * scale)
+        js_round_int(Float64(font.data.i16(hhea + 4)) * scale)
     )
     out += ',"descender":' + String(
-        _round(Float64(font.data.i16(hhea + 6)) * scale)
+        js_round_int(Float64(font.data.i16(hhea + 6)) * scale)
     )
     out += ',"underlinePosition":' + String(font.data.i16(post + 8))
     out += ',"underlineThickness":' + String(font.data.i16(post + 10))

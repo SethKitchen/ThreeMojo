@@ -103,6 +103,21 @@ struct Color(ImplicitlyCopyable):
         return (Int(self.r) << 16) | (Int(self.g) << 8) | Int(self.b)
 
 
+def rgb_is_white(color: Color) -> Bool:
+    """Return True when red, green, and blue are all 255.
+
+    Args:
+        color: The color. Alpha is not read.
+
+    Returns:
+        Whether every color channel is white.
+
+    Raises:
+        Error: Never.
+    """
+    return color.r == 255 and color.g == 255 and color.b == 255
+
+
 @fieldwise_init
 struct HSL(ImplicitlyCopyable):
     """A color as hue, saturation and lightness, each nominally zero to

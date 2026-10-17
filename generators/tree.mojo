@@ -30,7 +30,7 @@ from generators.utils import (
     meters,
     radians,
 )
-from math.utils import SeededRandom, js_round, mix_delta
+from math.utils import SeededRandom, js_round_int, mix_delta
 from std.math import atan2, cos, floor, pi, pow, sin
 from units.si import (
     Angle,
@@ -271,11 +271,6 @@ def _ring_at(rings: List[TreeRing], t: Float64) raises -> TreeRing:
     )
 
 
-def _js_round(value: Float64) -> Int:
-    """Return JavaScript's `Math.round`: halves go up."""
-    return Int(js_round(value))
-
-
 def _signed(mut random: SeededRandom) -> Float64:
     """Return a number from minus one up to one, `random() * 2 - 1`."""
     return random.next() * 2 - 1
@@ -310,7 +305,7 @@ def _grow(
     check_finite(length, "A generated branch length")
     # Clamp in floating point before converting to Int. A finite length
     # and step can have a quotient far outside the integer range.
-    var sections = _js_round(
+    var sections = js_round_int(
         max(3.0, min(24.0, length / meters(p.section_length)))
     )
     var radial = max(3, p.radial_segments - level)
