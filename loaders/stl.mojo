@@ -51,7 +51,7 @@ from core.buffer_geometry import (
     MaterialIndex,
 )
 from loaders.bytes import bytes_match
-from loaders.text_number import read_finite_float32
+from loaders.text_number import file_line, read_finite_float32
 from render.srgb import srgb_to_linear
 from math.finite import require_finite
 from std.memory import bitcast
@@ -373,7 +373,7 @@ struct _Words:
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "STL line " + String(line) + ": "
+    return file_line("STL", line)
 
 
 def parse_stl_text(text: String) raises -> StlModel:

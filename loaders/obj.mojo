@@ -59,7 +59,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
-from loaders.text_number import read_finite_float32
+from loaders.text_number import file_line, read_finite_float32
 from math.vector3 import Vector3
 from std.pathlib import Path
 
@@ -273,7 +273,7 @@ struct _Part(Movable):
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "OBJ line " + String(line) + ": "
+    return file_line("OBJ", line)
 
 
 def _number(field: String, line: Int) raises -> Float32:

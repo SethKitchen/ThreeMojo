@@ -54,7 +54,7 @@ from render.texture import (
 )
 from render.srgb import LINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
-from math.finite import require_finite
+from loaders.text_number import file_line, read_finite_float32
 from std.pathlib import Path
 
 # The largest table Adobe's `.cube` specification allows.
@@ -101,7 +101,7 @@ struct LutCube(Movable):
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "LUT line " + String(line) + ": "
+    return file_line("LUT", line)
 
 
 def _number(field: String, line: Int) raises -> Float32:
@@ -118,16 +118,7 @@ def _number(field: String, line: Int) raises -> Float32:
         Error: If the field is not a number, or is not finite once it is
             a `Float32`.
     """
-    var wide: Float64
-    try:
-        wide = Float64(field)
-    except:
-        raise Error(_where(line) + "not a number: " + field)
-    var value = Float32(wide)
-    require_finite(
-        Float64(value), _where(line) + "a number must be finite: " + field
-    )
-    return value
+    return read_finite_float32(field, _where(line), "a number must be finite")
 
 
 def _triple(fields: List[String], first: Int, line: Int) raises -> Vector3:
