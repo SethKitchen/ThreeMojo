@@ -136,6 +136,32 @@ def _make_part(
     return Md2Part(index, at, textured_id, wire_id)
 
 
+def _add_root(
+    mut scene: Scene, model: Md2Model, scale: Float32, parent: NodeId
+) raises -> NodeId:
+    """Add the character root. It sits on the body's lowest point."""
+    var root = Object3D()
+    root.set_position(0, -scale * _lowest(model), 0)
+    if parent != NO_PARENT:
+        return scene.attach(root^, parent)
+    return scene.add(root^)
+
+
+def _add_model(
+    mut scene: Scene,
+    mut assets: Assets,
+    root: NodeId,
+    model: Md2Model,
+    skin: TextureId,
+    scale: Float32,
+    visible: Bool,
+    name: String,
+) raises -> Md2Part:
+    """Add one model's geometry under the root."""
+    var shape = assets.geometries.add(model.geometry.clone())
+    return _make_part(scene, assets, root, shape, skin, scale, visible, name)
+
+
 def _skin(skins: List[TextureId], index: Int) -> TextureId:
     """Return a skin, or no texture past the end, three.js's `undefined`."""
     if index < 0 or index >= len(skins):
@@ -254,20 +280,14 @@ struct MD2Character(Movable):
         require_weapon_names(len(weapon_names), len(weapons))
         self.scale = scale
         self.animation_fps = 6
-        var root = Object3D()
-        root.set_position(0, -scale * _lowest(body), 0)
-        if parent != NO_PARENT:
-            self.root = scene.attach(root^, parent)
-        else:
-            self.root = scene.add(root^)
         self.skins_body = skins_body^
         self.skins_weapon = skins_weapon^
-        var shape = assets.geometries.add(body.geometry.clone())
-        self.body = _make_part(
+        self.root = _add_root(scene, body, scale, parent)
+        self.body = _add_model(
             scene,
             assets,
             self.root,
-            shape,
+            body,
             _skin(self.skins_body, 0),
             scale,
             True,
@@ -277,19 +297,18 @@ struct MD2Character(Movable):
         self.weapons = List[Md2Part]()
         self.weapon_clips = List[List[AnimationClip]]()
         for at in range(len(weapons)):
-            var held = assets.geometries.add(weapons[at].geometry.clone())
-            var part = _make_part(
+            var weapon = _add_model(
                 scene,
                 assets,
                 self.root,
-                held,
+                weapons[at],
                 _skin(self.skins_weapon, at),
                 scale,
                 False,
                 weapon_names[at],
             )
-            self.weapon_clips.append(_clips(weapons[at], part.mesh))
-            self.weapons.append(part^)
+            self.weapon_clips.append(_clips(weapons[at], weapon.mesh))
+            self.weapons.append(weapon^)
         self.weapon = len(self.weapons) - 1
         self.active_animation_clip_name = String()
         if len(self.body_clips) > 0:
@@ -603,20 +622,14 @@ struct MD2CharacterComplex(Movable):
         self.active_animation = String()
         self.old_animation = String()
         self.blend_counter = 0
-        var root = Object3D()
-        root.set_position(0, -scale * _lowest(body), 0)
-        if parent != NO_PARENT:
-            self.root = scene.attach(root^, parent)
-        else:
-            self.root = scene.add(root^)
         self.skins_body = skins_body^
         self.skins_weapon = skins_weapon^
-        var shape = assets.geometries.add(body.geometry.clone())
-        self.body = _make_part(
+        self.root = _add_root(scene, body, scale, parent)
+        self.body = _add_model(
             scene,
             assets,
             self.root,
-            shape,
+            body,
             _skin(self.skins_body, 0),
             scale,
             True,
@@ -626,19 +639,18 @@ struct MD2CharacterComplex(Movable):
         self.weapons = List[Md2Part]()
         self.weapon_blends = List[MorphBlendMesh]()
         for at in range(len(weapons)):
-            var held = assets.geometries.add(weapons[at].geometry.clone())
-            var part = _make_part(
+            var weapon = _add_model(
                 scene,
                 assets,
                 self.root,
-                held,
+                weapons[at],
                 _skin(self.skins_weapon, at),
                 scale,
                 False,
                 weapon_names[at],
             )
-            self.weapon_blends.append(_blend(scene, part, self.animation_fps))
-            self.weapons.append(part^)
+            self.weapon_blends.append(_blend(scene, weapon, self.animation_fps))
+            self.weapons.append(weapon^)
         self.weapon = len(self.weapons) - 1
 
     def enable_shadows(self, mut scene: Scene, enable: Bool):
