@@ -59,6 +59,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from loaders.js_text import split_fields
 from loaders.text_number import file_line, read_finite_float32
 from math.vector3 import Vector3
 from std.pathlib import Path
@@ -637,11 +638,8 @@ def parse_obj(text: String) raises -> ObjModel:
             stripped = data^
         if stripped == "":
             continue
-        var fields = List[String]()
-        # The line is not empty here, so it has a first field: the loop
-        # always runs.
-        for piece in stripped.split():  # pragma: no branch
-            fields.append(String(piece))
+        # The line is not empty here, so it has a first field.
+        var fields = split_fields(stripped)
         var keyword = fields[0]
         if keyword == "v":
             _read_coordinates(vertices, fields, 3, line)

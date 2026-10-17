@@ -44,6 +44,7 @@ Related loaders: `loaders.lut_3dl` reads `.3dl` files and
 """
 
 from loaders.bytes import letter_or_underscore
+from loaders.js_text import split_fields
 from math.vector3 import Vector3
 from render.texture import (
     BILINEAR,
@@ -228,9 +229,7 @@ def parse_lut_cube(
         var stripped = String(String(raw).strip())
         if stripped.byte_length() == 0 or stripped.startswith("#"):
             continue
-        var fields = List[String]()
-        for piece in stripped.split():  # pragma: no branch
-            fields.append(String(piece))
+        var fields = split_fields(stripped)
         var key = fields[0]
         if key == "TITLE":
             title = _title(stripped, line)
