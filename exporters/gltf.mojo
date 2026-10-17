@@ -2185,16 +2185,10 @@ struct _Exporter(Movable):
         writer.end_object()
         if len(self.used) > 0:
             writer.key("extensionsUsed")
-            writer.begin_array()
-            for name in self.used:  # pragma: no branch
-                writer.string(name)
-            writer.end_array()
+            writer.strings(self.used)
         if len(self.required) > 0:
             writer.key("extensionsRequired")
-            writer.begin_array()
-            for name in self.required:  # pragma: no branch
-                writer.string(name)
-            writer.end_array()
+            writer.strings(self.required)
         if len(self.lights) > 0:
             writer.key("extensions")
             writer.begin_object()
