@@ -36,7 +36,7 @@ no chain on a 3D or an array target, and neither does this.
 """
 
 from core.extent import positive_extent
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from render.cube_texture import (
     FACE_COUNT,
@@ -250,10 +250,12 @@ struct LayeredRenderTarget(Movable):
     def _index(self, layer: Int, level: Int) raises -> Int:
         """Return where the image of `(layer, level)` is, checking both."""
         self.validate()
-        if layer < 0 or layer >= self.depth:
-            raise Error("A layered target has no such layer")
-        if level < 0 or level >= self.levels:
-            raise Error("A layered target has no such level")
+        require_index_in_count(
+            layer, self.depth, "A layered target has no such layer"
+        )
+        require_index_in_count(
+            level, self.levels, "A layered target has no such level"
+        )
         return layer * self.levels + level
 
     def image(

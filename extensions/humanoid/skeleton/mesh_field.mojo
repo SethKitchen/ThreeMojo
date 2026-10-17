@@ -25,6 +25,7 @@ This is not a three.js port. See Extensions.
     var d = field.distance(Vector3(0, 0.1, 0.2))
 """
 
+from core.ordinal import require_index_in_count
 from extensions.humanoid.skeleton.field import DistanceField, cross
 from math.box_extent import box_exterior
 from math.utils import clamp, max3
@@ -307,8 +308,11 @@ struct MeshTree(Movable):
         if len(triangles) == 0 or len(triangles) % 3 != 0:
             raise Error("A mesh field needs whole triangles")
         for index in range(len(triangles)):  # pragma: no branch
-            if triangles[index] < 0 or triangles[index] >= len(points):
-                raise Error("A mesh field's triangle names no vertex")
+            require_index_in_count(
+                triangles[index],
+                len(points),
+                "A mesh field's triangle names no vertex",
+            )
         var count = len(triangles) // 3
         self.faces = List[Vector3](capacity=count)
         self.normals = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))

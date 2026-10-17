@@ -77,7 +77,11 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_non_negative
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_non_negative,
+)
 
 from math.norm import normalized2
 from core.buffer_attribute import BufferAttribute
@@ -199,8 +203,7 @@ def segment_ends(
             segment.
     """
     var count = segment_count(mode, vertices)
-    if segment < 0 or segment >= count:
-        raise Error("Line segment index out of range")
+    require_index_in_count(segment, count, "Line segment index out of range")
     if mode == SEGMENTS:
         return (segment * 2, segment * 2 + 1)
     # The closing segment of a loop is the only one that wraps, and taking

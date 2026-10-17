@@ -30,6 +30,7 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
+from core.ordinal import require_index_in_count
 from math.polygon_hit import ray_crosses
 from math.utils import clamp
 from math.finite import require_finite_group
@@ -328,8 +329,11 @@ def _collinear(
 
 def _check_region(region: Region, layers: Int, tolerance: Float64) raises:
     """Refuse a region that is not a simple polygon on a known layer."""
-    if region.layer < 0 or region.layer >= layers:
-        raise Error("A region's layer must be from zero to the count less one")
+    require_index_in_count(
+        region.layer,
+        layers,
+        "A region's layer must be from zero to the count less one",
+    )
     if not region.id.is_valid():
         raise Error("A region id must be zero or more")
     var n = len(region.points)

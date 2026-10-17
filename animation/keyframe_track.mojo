@@ -166,6 +166,7 @@ it was built can be edited afterward.
 """
 
 from core.morph import require_morph_target
+from core.ordinal import require_index_in_count
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.finite import require_finite, require_positive_finite
@@ -1797,8 +1798,11 @@ struct KeyframeTrack(Copyable, Movable):
         if not self.target.kind.is_string():
             raise Error("Only a string track's value is a string")
         var place = Int(self.sample(at)[0])
-        if place < 0 or place >= len(self.strings):
-            raise Error("A string track's key names no string it holds")
+        require_index_in_count(
+            place,
+            len(self.strings),
+            "A string track's key names no string it holds",
+        )
         return self.strings[place]
 
     def sample_vector3(

@@ -40,6 +40,7 @@ here has no order of its own, so the bound's order is used.
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_index_in_count
 from core.scene import Scene, require_skinned_mesh
 from math.euler import Euler
 from math.utils import clamp
@@ -210,8 +211,9 @@ struct CCDIKSolver(Movable):
                 one, the mesh or a bone is no longer there, the scene is
                 stale, or a link's world matrix flattens an axis.
         """
-        if chain < 0 or chain >= len(self.iks):
-            raise Error("No IK chain has that index")
+        require_index_in_count(
+            chain, len(self.iks), "No IK chain has that index"
+        )
         require_ik_blend(blend)
         if self.mesh >= len(scene.skinned_meshes):
             raise Error("The IK solver's skinned mesh is not there")
@@ -274,8 +276,11 @@ struct CCDIKSolver(Movable):
 
 def _check_bone(bone: Int, count: Int) raises:
     """Refuse a bone index the skeleton does not have."""
-    if bone < 0 or bone >= count:
-        raise Error("An IK chain names a bone the skeleton does not have")
+    require_index_in_count(
+        bone,
+        count,
+        "An IK chain names a bone the skeleton does not have",
+    )
 
 
 def _turn(

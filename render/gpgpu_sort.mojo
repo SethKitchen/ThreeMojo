@@ -25,6 +25,7 @@ host, which runs the invocations in order, and can come in any order on
 the device, as three.js says of its own.
 """
 
+from core.ordinal import require_index_in_count
 from materials.compute_ids import WORKGROUP_ID
 from math.utils import is_power_of_two
 from materials.compute_nodes import (
@@ -598,8 +599,11 @@ struct CountingSort(Movable):
         var counts = List[Int](length=self.bin_count, fill=0)
         for place in range(self.count):  # pragma: no branch
             var bin = bins[place]
-            if bin < 0 or bin >= self.bin_count:
-                raise Error("A counting sort's bin is out of range")
+            require_index_in_count(
+                bin,
+                self.bin_count,
+                "A counting sort's bin is out of range",
+            )
             counts[bin] += 1
         var offsets = List[Int](length=self.bin_count, fill=0)
         var sum = 0

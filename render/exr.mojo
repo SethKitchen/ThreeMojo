@@ -58,7 +58,7 @@ from core.binary import (
     little_endian_u32,
     store_little_endian,
 )
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from render.float_image import FloatImage
 from render.inflate import zlib_inflate
@@ -2021,8 +2021,9 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
         _need(len(bytes), probe, 8)
         var first = little_endian_i32(bytes, probe) - header.y_min
         var count = little_endian_u32(bytes, probe + 4)
-        if first < 0 or first >= height:
-            raise Error("EXR: a block names a line outside the image")
+        require_index_in_count(
+            first, height, "EXR: a block names a line outside the image"
+        )
         if first % per_block != 0 or seen[first // per_block]:
             raise Error("EXR: overlapping or misaligned scanline blocks")
         seen[first // per_block] = True

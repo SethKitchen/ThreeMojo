@@ -83,7 +83,7 @@ for a rect area light. `Light.power` reads it and `Light.set_power` sets
 the intensity from it, as three.js's setter does.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
@@ -126,8 +126,9 @@ def require_shadow_light(index: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last light.
     """
-    if index < 0 or index >= count:
-        raise Error("A shadow map names a light that is not there")
+    require_index_in_count(
+        index, count, "A shadow map names a light that is not there"
+    )
 
 
 @fieldwise_init
@@ -232,8 +233,9 @@ def lights_of(indices: List[Int]) raises -> LightMask:
     """
     var bits = UInt64(0)
     for index in indices:
-        if index < 0 or index >= 64:
-            raise Error("A light mask names the first 64 lights alone")
+        require_index_in_count(
+            index, 64, "A light mask names the first 64 lights alone"
+        )
         bits |= UInt64(1) << UInt64(index)
     return LightMask(bits)
 

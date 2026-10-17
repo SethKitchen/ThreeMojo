@@ -19,6 +19,7 @@ keep the legacy `code` array. The reader accepts either encoding, never
 both.
 """
 
+from core.ordinal import require_index_in_count
 from exporters.json_writer import JsonWriter
 from loaders.json import ARRAY, JsonDocument
 from materials import nodes
@@ -246,8 +247,9 @@ def _offset(document: JsonDocument, entry: Int, size: Int) raises -> Int:
     """Return an entry's `offset`, once it is known to be inside a program
     of `size` floats."""
     var at = document.integer(document.get(entry, "offset"))
-    if at < 0 or at >= size:
-        raise Error("Object JSON: a node program's offset is outside it")
+    require_index_in_count(
+        at, size, "Object JSON: a node program's offset is outside it"
+    )
     return at
 
 

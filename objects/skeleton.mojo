@@ -56,6 +56,7 @@ taken as it is, as three.js's shader takes it; see
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_index_in_count
 from math.matrix4 import Matrix4, require_affine
 from math.finite import require_finite, require_finite_group
 
@@ -73,8 +74,9 @@ def require_bone_index(bone: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last bone.
     """
-    if bone < 0 or bone >= count:
-        raise Error("A vertex names a bone the skeleton does not have")
+    require_index_in_count(
+        bone, count, "A vertex names a bone the skeleton does not have"
+    )
 
 
 def require_bone_matrices(held: Int, expected: Int) raises:
@@ -155,8 +157,11 @@ struct Skeleton(Copyable, Movable):
         Raises:
             Error: If the skeleton has no bone at that index.
         """
-        if index < 0 or index >= len(self.bones):
-            raise Error("The skeleton has no bone at that index")
+        require_index_in_count(
+            index,
+            len(self.bones),
+            "The skeleton has no bone at that index",
+        )
         return self.bones[index].node
 
     def calculate_inverses(mut self, placed: List[Matrix4]) raises:

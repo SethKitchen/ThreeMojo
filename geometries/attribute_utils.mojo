@@ -39,7 +39,7 @@ it. three.js does this for a `Mesh`; here it takes the geometry, the
 weights and, for a skinned mesh, one matrix per vertex. `core.scene_utils`
 has the forms that take a mesh.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -342,8 +342,11 @@ def to_triangles_draw_mode(
     var count = geometry.vertex_count()
     for entry in range(len(strip)):  # pragma: no branch
         # Three entries at least, so this runs.
-        if strip[entry] < 0 or strip[entry] >= count:
-            raise Error("A strip names a vertex the geometry does not have")
+        require_index_in_count(
+            strip[entry],
+            count,
+            "A strip names a vertex the geometry does not have",
+        )
     var triangles = len(strip) - 2
     var index = List[Int](capacity=triangles * 3)
     if draw_mode == TRIANGLE_FAN_DRAW_MODE:

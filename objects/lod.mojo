@@ -45,7 +45,7 @@ divide it, since no camera here has one.
 """
 
 from core.object3d import NodeId
-from core.ordinal import require_non_negative
+from core.ordinal import require_index_in_count, require_non_negative
 from units.si import Length, METER
 
 
@@ -185,8 +185,9 @@ struct Lod(Copyable, Movable):
         Raises:
             Error: If there is no such level.
         """
-        if index < 0 or index >= len(self.levels):
-            raise Error("No level has that index")
+        require_index_in_count(
+            index, len(self.levels), "No level has that index"
+        )
         return self.levels[index]
 
     def level_for(self, distance: Length) -> Int:

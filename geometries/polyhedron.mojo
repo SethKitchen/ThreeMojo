@@ -34,6 +34,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from geometries.surface import require_positive_radius
 from math.norm import length2
 from core.buffer_attribute import BufferAttribute
@@ -201,8 +202,11 @@ def polyhedron(
         raise Error("A polyhedron's faces come three indices at a time")
     var given = len(vertices) // 3
     for slot in range(len(indices)):  # pragma: no branch
-        if indices[slot] < 0 or indices[slot] >= given:
-            raise Error("A polyhedron's face names a vertex that is not there")
+        require_index_in_count(
+            indices[slot],
+            given,
+            "A polyhedron's face names a vertex that is not there",
+        )
 
     var data = List[Float32]()
     for face in range(len(indices) // 3):  # pragma: no branch

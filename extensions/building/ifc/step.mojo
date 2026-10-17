@@ -25,7 +25,7 @@ backslash, `\\X\\hh` for a byte of ISO 8859-1, `\\X2\\hhhh...\\X0\\` for UTF-16
 and `\\X4\\hhhhhhhh...\\X0\\` for UTF-32 code points. The writer escapes
 every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 from loaders.bytes import (
     ascii_digit,
     ascii_letter,
@@ -378,10 +378,11 @@ struct StepFile(Movable):
             Error: If there is no such entity or attribute.
         """
         var e = self.entity(id)
-        if position < 0 or position >= len(e.arguments):
-            raise Error(
-                String("STEP entity #", id, " has no attribute ", position)
-            )
+        require_index_in_count(
+            position,
+            len(e.arguments),
+            String("STEP entity #", id, " has no attribute ", position),
+        )
         return e.arguments[position]
 
     def kind_of(self, value: Int) -> StepKind:

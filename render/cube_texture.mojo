@@ -88,7 +88,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.arc_tangent import atan2_float32
 from math.utils import clamp
@@ -143,8 +143,7 @@ def require_cube_face(index: Int) raises:
     Raises:
         Error: If the index is negative or past the sixth face.
     """
-    if index < 0 or index >= FACE_COUNT:
-        raise Error("A cube has six faces")
+    require_index_in_count(index, FACE_COUNT, "A cube has six faces")
 
 
 @fieldwise_init

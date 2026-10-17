@@ -30,7 +30,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.scaled_products import (
     _Scaled,
@@ -7656,8 +7656,11 @@ def rasterize_frame(
     check_draws(draws, triangles, len(segments) // 2, len(points), len(splats))
     for triangle in range(triangles):
         var named = corners[triangle * 3].surface
-        if named < 0 or named >= len(surfaces):
-            raise Error("A corner names a surface the frame does not have")
+        require_index_in_count(
+            named,
+            len(surfaces),
+            "A corner names a surface the frame does not have",
+        )
         if (
             corners[triangle * 3 + 1].surface != named
             or corners[triangle * 3 + 2].surface != named

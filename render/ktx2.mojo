@@ -60,7 +60,7 @@ Universal 1.50. It does not know UASTC HDR 6x6, XUASTC LDR or XUBC7, and
 three.js finds no target for UASTC HDR with alpha, so this reader
 refuses them too.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from core.binary import copy_bytes, little_endian_u32
 from render.compressed_texture import (
@@ -631,12 +631,21 @@ struct KTX2Container(Movable):
                 ETC1S image is malformed; a video has a level past the
                 sixteenth; and everything `compressed_texture` raises.
         """
-        if face < 0 or face >= self.faces:
-            raise Error("KTX2: this file has no face " + String(face))
-        if layer < 0 or layer >= self.layers:
-            raise Error("KTX2: this file has no layer " + String(layer))
-        if level < 0 or level >= self.levels:
-            raise Error("KTX2: this file has no level " + String(level))
+        require_index_in_count(
+            face,
+            self.faces,
+            "KTX2: this file has no face " + String(face),
+        )
+        require_index_in_count(
+            layer,
+            self.layers,
+            "KTX2: this file has no layer " + String(layer),
+        )
+        require_index_in_count(
+            level,
+            self.levels,
+            "KTX2: this file has no level " + String(level),
+        )
         var width = self.level_width(level)
         var height = self.level_height(level)
         if self.is_etc1s():

@@ -72,6 +72,7 @@ one launch a step. Both backends call `run_statements` on a
 """
 
 from core.extent import positive_extent
+from core.ordinal import require_index_in_count
 from materials.compute_ids import (
     ATOMIC_ADD,
     ATOMIC_AND,
@@ -341,8 +342,11 @@ struct StorageBufferStore(Movable):
         """Refuse a node that names no buffer of this store, or names one as
         another type."""
         var id = node.buffer.value
-        if id < 0 or id >= len(self.buffers):
-            raise Error("A storage buffer store has no buffer " + String(id))
+        require_index_in_count(
+            id,
+            len(self.buffers),
+            "A storage buffer store has no buffer " + String(id),
+        )
         if self.buffers[id].type != node.type:
             raise Error(
                 "A storage buffer of "

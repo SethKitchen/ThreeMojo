@@ -278,7 +278,7 @@ two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from animation.loop_time import _split_loop_time, _stored_loop_phase
 from animation.animation_clip import (
@@ -1048,8 +1048,11 @@ def _map_of(assets: Assets, target: TrackTarget) raises -> TextureId:
     var map = assets.materials.materials[target.index].map
     if map == NO_TEXTURE:
         raise Error("A map track needs a material with a map")
-    if map.value < 0 or map.value >= assets.textures.count():
-        raise Error("A map track's material names a texture that is not there")
+    require_index_in_count(
+        map.value,
+        assets.textures.count(),
+        "A map track's material names a texture that is not there",
+    )
     return map
 
 
@@ -1223,10 +1226,11 @@ def write_target(
         return
     if kind.is_string():
         var place = Int(values[at])
-        if place < 0 or place >= len(strings):
-            raise Error(
-                "An animation drove a name to a string it does not hold"
-            )
+        require_index_in_count(
+            place,
+            len(strings),
+            "An animation drove a name to a string it does not hold",
+        )
         scene.node(NodeId(target.index)).name = strings[place]
         return
     if kind.is_node():
@@ -1399,11 +1403,14 @@ def check_target(
                 " assets, delta)"
             )
         count = assets.materials.count()
-    if target.index < 0 or target.index >= count:
-        raise Error(
+    require_index_in_count(
+        target.index,
+        count,
+        (
             "A track must name a node, a mesh, a light, a material or a"
             " camera that is there"
-        )
+        ),
+    )
     if kind.is_map():
         _ = _map_of(assets, target)
 
@@ -1441,8 +1448,11 @@ def resolve_targets(
     var kind = target.kind
     for member in range(group.count()):
         var node = group.members[member].value
-        if node < 0 or node >= scene.count():
-            raise Error("A group member must be a node in the scene")
+        require_index_in_count(
+            node,
+            scene.count(),
+            "A group member must be a node in the scene",
+        )
         var reached = List[TrackTarget]()
         if kind.is_node():
             reached.append(TrackTarget(kind, node, target.slot))
@@ -2408,8 +2418,11 @@ struct AnimationMixer(Movable):
 
     def _check_index(self, index: Int) raises:
         """Refuse an index that names no action, or an uncached one."""
-        if index < 0 or index >= len(self.actions):
-            raise Error("The mixer has no action at that index")
+        require_index_in_count(
+            index,
+            len(self.actions),
+            "The mixer has no action at that index",
+        )
         if self.uncached[index]:
             raise Error("The mixer uncached the action at that index")
 

@@ -27,7 +27,7 @@ inside. That is the method of Blow and Binstock, "How to find the inertia
 tensor (or other mass properties) of a 3D solid body represented by a
 triangle mesh" (2004).
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.convex_hull import ConvexHull
 from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
@@ -720,8 +720,11 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
             raise Error("A polyhedron face needs three valid corners")
         for k in range(first, end):  # pragma: no branch
             var index = poly.face_corners[k]
-            if index < 0 or index >= len(poly.vertices):
-                raise Error("A polyhedron corner index is invalid")
+            require_index_in_count(
+                index,
+                len(poly.vertices),
+                "A polyhedron corner index is invalid",
+            )
     var volume = Float64(0)
     var moment = SIMD[DType.float64, 4](0)
     for f in range(poly.face_count()):  # pragma: no branch

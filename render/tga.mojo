@@ -28,6 +28,7 @@ sRGB, and so does this reader assume: a decoded TGA is `SRGB`.
 """
 
 from core.binary import copy_bytes, little_endian_u16
+from core.ordinal import require_index_in_count
 from render.framebuffer import Color
 from render.png import DecodedImage, require_image_pixels
 from render.srgb import SRGB
@@ -275,8 +276,11 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         var color: Color
         if kind.is_color_mapped():
             var entry = Int(data[source]) - map_first
-            if entry < 0 or entry >= map_length:
-                raise Error("A TGA pixel names an entry its map does not have")
+            require_index_in_count(
+                entry,
+                map_length,
+                "A TGA pixel names an entry its map does not have",
+            )
             color = palette[entry]
         elif kind.is_gray():
             var alpha = UInt8(255)

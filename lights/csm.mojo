@@ -40,7 +40,7 @@ fit in Float32. Component finiteness and true zero are checked separately.
 See `docs/wiki/Norm-consumers.md` for the consumer audit.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from cameras.camera import Camera
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -619,8 +619,11 @@ struct CSM(Movable):
             raise Error("A CSM needs one complete mapping per cascade")
         for index in range(self.cascades):  # pragma: no branch
             var at = self.lights[index]
-            if at < 0 or at >= len(scene.lights):
-                raise Error("A CSM's lights are not in this scene")
+            require_index_in_count(
+                at,
+                len(scene.lights),
+                "A CSM's lights are not in this scene",
+            )
             if (
                 scene.lights[at].kind != DIRECTIONAL
                 or scene.lights[at].node != self.nodes[index]

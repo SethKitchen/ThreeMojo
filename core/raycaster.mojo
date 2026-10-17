@@ -114,6 +114,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from math.norm import length2, squared_length2
 
 from math.triangle_normal import normal_or_zero
@@ -731,8 +732,11 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no batched mesh has that index, or for anything
                 `intersect_mesh` raises for, per instance.
         """
-        if index < 0 or index >= len(scene.batched_meshes):
-            raise Error("No batched mesh has that index")
+        require_index_in_count(
+            index,
+            len(scene.batched_meshes),
+            "No batched mesh has that index",
+        )
         ref batch = scene.batched_meshes[index]
         var world = scene.world_matrix(batch.node)
         var hits = List[Hit]()
@@ -869,8 +873,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 indexed, the point count does not suit the mode, or the
                 threshold is negative or not a number.
         """
-        if index < 0 or index >= len(scene.lines):
-            raise Error("No line has that index")
+        require_index_in_count(
+            index, len(scene.lines), "No line has that index"
+        )
         var line = scene.lines[index]
         var reach = self._reach(self.line_threshold)
         var hits = List[Hit]()
@@ -947,8 +952,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 or is indexed, or the threshold is negative or not a
                 number.
         """
-        if index < 0 or index >= len(scene.points):
-            raise Error("No points object has that index")
+        require_index_in_count(
+            index, len(scene.points), "No points object has that index"
+        )
         var cloud = scene.points[index]
         var reach = self._reach(self.points_threshold)
         var hits = List[Hit]()
@@ -1008,8 +1014,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no sprite has that index, it names a node or a
                 material that is not there, or no camera has been set.
         """
-        if index < 0 or index >= len(scene.sprites):
-            raise Error("No sprite has that index")
+        require_index_in_count(
+            index, len(scene.sprites), "No sprite has that index"
+        )
         if not self.has_camera:
             raise Error(
                 "A sprite faces a camera: set_from_camera must set one"
@@ -1410,8 +1417,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
                 positions or an odd count of them, its draw range is
                 invalid, or the camera's view cannot be read.
         """
-        if index < 0 or index >= len(scene.wide_lines):
-            raise Error("No wide line has that index")
+        require_index_in_count(
+            index, len(scene.wide_lines), "No wide line has that index"
+        )
         require_image_extent(width, height)
         var hits = List[Hit]()
         ref line = scene.wide_lines[index]

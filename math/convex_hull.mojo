@@ -32,6 +32,7 @@ broken one for points that are all on a line or a plane. This port refuses
 all three.
 """
 
+from core.ordinal import require_index_in_count
 from math.cross import cross_components
 from math.norm import dot3
 from math.vector3 import Vector3
@@ -99,8 +100,7 @@ def require_hull_face(face: Int, count: Int) raises:
     Raises:
         Error: If the index is negative or past the last face.
     """
-    if face < 0 or face >= count:
-        raise Error("A face index is out of range")
+    require_index_in_count(face, count, "A face index is out of range")
 
 
 # JavaScript's `Number.EPSILON`: the gap between one and the next `Float64`.

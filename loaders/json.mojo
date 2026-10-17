@@ -27,7 +27,7 @@ needs -- a byte offset, a count, an index -- exactly, up to fifty-three
 bits. `integer` refuses a number with a fraction.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from loaders.bytes import (
     ascii_digit,
@@ -196,8 +196,11 @@ struct JsonDocument(Movable):
 
     def _check(self, node: Int) raises:
         """Refuse an index that names no node."""
-        if node < 0 or node >= len(self.nodes):
-            raise Error("JSON: no node at index " + String(node))
+        require_index_in_count(
+            node,
+            len(self.nodes),
+            "JSON: no node at index " + String(node),
+        )
 
     def kind(self, node: Int) raises -> JsonKind:
         """Return what a node holds.
@@ -306,8 +309,11 @@ struct JsonDocument(Movable):
         self._check(node)
         ref found = self.nodes[node]
         require_json_object(found.kind)
-        if index < 0 or index >= len(found.keys):
-            raise Error("JSON: no key at position " + String(index))
+        require_index_in_count(
+            index,
+            len(found.keys),
+            "JSON: no key at position " + String(index),
+        )
         return found.keys[index]
 
     def at(self, node: Int, index: Int) raises -> Int:
@@ -328,8 +334,11 @@ struct JsonDocument(Movable):
         ref found = self.nodes[node]
         if found.kind != ARRAY and found.kind != OBJECT:
             raise Error("JSON: only an array or an object has children")
-        if index < 0 or index >= len(found.children):
-            raise Error("JSON: no child at position " + String(index))
+        require_index_in_count(
+            index,
+            len(found.children),
+            "JSON: no child at position " + String(index),
+        )
         return found.children[index]
 
     def number(self, node: Int) raises -> Float64:

@@ -125,6 +125,7 @@ from core.geometry_store import GeometryId
 from core.layers import Layers
 from core.morph import MorphInfluences
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from exporters.json_writer import JsonWriter
@@ -1626,11 +1627,14 @@ struct _Carried(Movable):
 
 def _node_of(node: NodeId, count: Int) raises -> Int:
     """Return a node's position, refusing one that is not in the scene."""
-    if node.value < 0 or node.value >= count:
-        raise Error(
+    require_index_in_count(
+        node.value,
+        count,
+        (
             "Object JSON: a thing names a node that is not in the scene;"
             " attach a camera to a node to write it"
-        )
+        ),
+    )
     return node.value
 
 

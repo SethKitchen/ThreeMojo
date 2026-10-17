@@ -90,6 +90,7 @@ The fish, shark, snake and spider muscles are in
 `extensions/animals/anatomy/axial.mojo`.
 """
 
+from core.ordinal import require_index_in_count
 from math.finite import require_finite_group, require_positive_finite
 from extensions.animals.kit import side_sign
 from extensions.anatomy.evidence import (
@@ -649,8 +650,11 @@ struct AnimalMuscle(Copyable, Movable):
         var out = List[V3](capacity=len(self.points))
         for k in range(len(self.points)):  # pragma: no branch
             var bone = self.bones[k]
-            if bone < 0 or bone >= len(world):
-                raise Error("A muscle path names a missing bone transform")
+            require_index_in_count(
+                bone,
+                len(world),
+                "A muscle path names a missing bone transform",
+            )
             var p = world[bone].apply(self.points[k])
             require_finite_group(
                 p.is_finite(),
@@ -704,8 +708,9 @@ struct AnimalMuscle(Copyable, Movable):
             var joint = self.joints[n]
             var bone = self.joint_bones[n]
             var span = self.spans[n]
-            if joint < 0 or joint >= len(rig.joints):
-                raise Error("A muscle names a missing joint")
+            require_index_in_count(
+                joint, len(rig.joints), "A muscle names a missing joint"
+            )
             # `spans_of` above refused a joint bone the rig lacks, and the
             # world matches the rig.
             debug_assert(bone >= 0 and bone < len(world), "A joint bone exists")
@@ -767,10 +772,12 @@ def descends(rig: Rig, bone: Int, ancestor: Int) raises -> Bool:
     Raises:
         Error: If an index or the parent chain is invalid.
     """
-    if bone < 0 or bone >= len(rig.bones):
-        raise Error("A descendant must name a bone")
-    if ancestor < 0 or ancestor >= len(rig.bones):
-        raise Error("An ancestor must name a bone")
+    require_index_in_count(
+        bone, len(rig.bones), "A descendant must name a bone"
+    )
+    require_index_in_count(
+        ancestor, len(rig.bones), "An ancestor must name a bone"
+    )
     var b = bone
     while b >= 0:
         if b == ancestor:

@@ -19,6 +19,7 @@ surface, not the volume. Blocks are sampled and vertices are placed on
 several threads. The mesh is the same for any number of them.
 """
 
+from core.ordinal import require_index_in_count
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
@@ -492,8 +493,9 @@ def _mesh_part(
         raise Error("A mesh part needs at least one primitive")
     var kmax = 0.0
     for i in part:  # pragma: no branch
-        if i < 0 or i >= len(model.prims):
-            raise Error("Mesh part index names no primitive")
+        require_index_in_count(
+            i, len(model.prims), "Mesh part index names no primitive"
+        )
         kmax = max(kmax, model.prims[i].k)
     var h = Float64(cell.to(METER))
     var threads = workers if workers > 0 else num_logical_cores()

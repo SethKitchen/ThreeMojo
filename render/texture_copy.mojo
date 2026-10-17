@@ -27,6 +27,7 @@ chain rebuilds the chain, as three.js calls `generateMipmap` after a copy
 into level zero of a texture that generates mipmaps.
 """
 
+from core.ordinal import require_index_in_count
 from render.framebuffer import Framebuffer, unit_byte
 from render.rect import Rect
 from render.srgb import LINEAR, SRGB, ColorSpace
@@ -114,8 +115,11 @@ def _check_level(texture: Texture, level: Int) raises:
     texture.validate()
     if texture.is_blank():
         raise Error("A texture copy needs a texture that holds texels")
-    if level < 0 or level >= texture.levels:
-        raise Error("A texture copy names a level the texture does not hold")
+    require_index_in_count(
+        level,
+        texture.levels,
+        "A texture copy names a level the texture does not hold",
+    )
 
 
 def _texel_start(texture: Texture, level: Int, x: Int, row: Int) -> Int:
@@ -272,8 +276,11 @@ def copy_texture_to_volume(
         destination.width,
         destination.height,
     )
-    if position.z < 0 or position.z >= destination.depth:
-        raise Error("A texture copy must lie inside both images")
+    require_index_in_count(
+        position.z,
+        destination.depth,
+        "A texture copy must lie inside both images",
+    )
     var floats = source.texel_type == FLOAT_TYPE
     for row in range(box.height):  # pragma: no branch
         var read = _texel_start(source, source_level, box.x, box.y + row)

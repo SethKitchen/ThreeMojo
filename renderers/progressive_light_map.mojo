@@ -37,6 +37,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.buffer_geometry import UV, UV1
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from geometries.plane import plane
 from materials.material import (
@@ -187,8 +188,11 @@ struct ProgressiveLightMap(Movable):
         var boxes = List[PackedBox]()
         for index in range(len(meshes)):
             var at = meshes[index]
-            if at < 0 or at >= len(scene.meshes):
-                raise Error("A light map's mesh is not in the scene")
+            require_index_in_count(
+                at,
+                len(scene.meshes),
+                "A light map's mesh is not in the scene",
+            )
             ref mesh = scene.meshes[at]
             if not assets.geometries.get(mesh.geometry).has_attribute(UV):
                 raise Error("A mesh drawn into a light map needs a uv")

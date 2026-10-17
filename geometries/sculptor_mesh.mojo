@@ -39,6 +39,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_index_in_count
 from math.vector3 import Vector3
 
 from math.triangle_normal import (
@@ -330,11 +331,14 @@ struct SculptorMesh(Movable):
         var elements = List[Int](capacity=element_count)
         for i in range(element_count):  # pragma: no branch
             var source_index = geometry.index[i] if geometry.is_indexed() else i
-            if source_index < 0 or source_index >= source_count:
-                raise Error(
+            require_index_in_count(
+                source_index,
+                source_count,
+                (
                     "SculptorMesh: Triangle indices must reference valid"
                     " positions."
-                )
+                ),
+            )
             elements.append(source_index)
             referenced[source_index] = 1
         var source = List[Float32](length=source_count * 3, fill=0)
