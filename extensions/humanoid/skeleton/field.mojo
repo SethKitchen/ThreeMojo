@@ -278,11 +278,6 @@ def finite_point(point: Vector3, name: String, bone: String) raises:
     )
 
 
-def clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`."""
-    return clamp(value, -1, 1)
-
-
 def flip_x(point: Vector3) -> Vector3:
     """Return `point` mirrored across the midline of the bone."""
     return Vector3(-point.x, point.y, point.z)

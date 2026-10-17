@@ -62,7 +62,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from math.sine import fraction
-from math.utils import max3
+from math.utils import clamp_unit, max3
 from std.math import cos, floor, log, pi, pow, sin
 from extensions.sdf.distance import almond_distance
 
@@ -1007,7 +1007,7 @@ def _paint_body(
     var neck = bone == "neck1" or bone == "neck2"
     var limb = is_limb(bone)
     var legness = smoothstep(0.55, 0.38, p.y) if limb else 0.0
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var w: Float64
     if neck:
         w = smoothstep(0.15, -0.55, up)

@@ -57,7 +57,7 @@ from extensions.sdf.vector import (
 )
 from math.norm import squared_length2
 from math.sine import fraction
-from math.utils import nearest_distance
+from math.utils import clamp_unit, nearest_distance
 from std.math import atan2, floor, sin, sqrt
 from extensions.sdf.distance import rect_distance
 
@@ -959,7 +959,7 @@ def snake_palette(t: Traits) -> Palette:
                 names[i],
                 shade_swatch(srgb(hexes[i]), warm, light, 0.1, 0.02, -0.1),
             )
-        var tone = clamp(t.get("tone", 0.0), -1.0, 1.0)
+        var tone = clamp_unit(t.get("tone", 0.0))
         var tgt = srgb(0x8F8C86) if tone < 0.0 else srgb(0x9A6A4E)
         var k = abs(tone) * 0.75
         for key in [String("ground"), "flank", "center"]:  # pragma: no branch

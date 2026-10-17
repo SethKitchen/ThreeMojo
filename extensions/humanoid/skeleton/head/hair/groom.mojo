@@ -73,7 +73,7 @@ from extensions.humanoid.skeleton.surface_nets import surface_gradient
 from extensions.humanoid.skeleton.torso.body import BodySkinField
 from extensions.humanoid.spec import HumanoidSpec
 from math.cross import cross_vectors
-from math.utils import clamp, mix_delta
+from math.utils import clamp, clamp_unit, mix_delta
 from math.vector3 import Vector3, mix_delta3
 from std.math import acos, cos, max, min, pi, pow, sin, sqrt
 
@@ -1172,7 +1172,7 @@ def _arc(
     var rb = b.length()
     var ua = a / ra
     var ub = b / rb
-    var angle = acos(clamp(ua.dot(ub), -1, 1))
+    var angle = acos(clamp_unit(ua.dot(ub)))
     var sine = max(sin(angle), Float32(1e-6))
     var count = max(1, Int(angle * (ra + rb) / 2 / spec.step))
     var travelled = Float32(0)
@@ -1283,7 +1283,7 @@ def _coil(
     # the head.
     var first = (across * cos(start) + up * sin(start)) * c + away * lean
     var bottom = away * -1
-    var climb = Int(acos(clamp(bottom.dot(first), -1, 1)) * radius / step)
+    var climb = Int(acos(clamp_unit(bottom.dot(first))) * radius / step)
     for k in range(1, climb + 1):  # pragma: no branch
         var t = Float32(k) / Float32(climb + 1)
         var d = _unit_vector(bottom * (1 - t) + first * t, first)

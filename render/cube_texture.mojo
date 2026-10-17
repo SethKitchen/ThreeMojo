@@ -91,7 +91,7 @@ limits, and explicit zero and nonfinite rules.
 from core.ordinal import ordinal_valid, require_index_in_count
 
 from math.arc_tangent import atan2_float32
-from math.utils import clamp
+from math.utils import clamp_unit
 from math.euler import Euler
 from math.vector2 import Vector2
 from math.vector3 import Vector3, mix_delta3
@@ -811,7 +811,7 @@ def equirect_uv(direction: Vector3) -> Vector2:
         return Vector2(0.5, 0.5)
     # Clamped as three.js clamps: a unit vector's y is within one bar a
     # rounding, and `asin` of a hair past one is NaN.
-    var up = clamp(unit.y, -1, 1)
+    var up = clamp_unit(unit.y)
     return Vector2(
         atan2_float32(unit.z, unit.x) / (2 * Float32(pi)) + 0.5,
         asin(up) / Float32(pi) + 0.5,

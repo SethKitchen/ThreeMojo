@@ -24,7 +24,7 @@ as the matrices `a.to_matrix() * b.to_matrix()` would.
 from math.euler import Euler
 from math.matrix4 import Matrix4
 from math.norm import dot4, length4, normalized4
-from math.utils import SeededRandom, clamp
+from math.utils import SeededRandom, clamp_unit
 from math.vector3 import Vector3
 from std.math import acos, atan2, cos, pi, sin, sqrt
 from units.si import Angle, RADIAN
@@ -574,7 +574,7 @@ struct Quaternion(Equatable, ImplicitlyCopyable):
         Returns:
             From zero to a half turn: the short way round.
         """
-        var cosine = clamp(self.dot(other), -1, 1)
+        var cosine = clamp_unit(self.dot(other))
         return Angle(2 * acos(abs(cosine)), RADIAN)
 
     def rotate_towards(mut self, other: Self, step: Angle):

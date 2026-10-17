@@ -10,7 +10,6 @@ from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from extensions.humanoid.skeleton.field import (
-    clamp_unit,
     empty_bounds,
     sd_ellipse_segment,
     sd_ellipsoid,
@@ -59,6 +58,7 @@ from extensions.humanoid.skeleton.leg.femur.mass import (
     femur_mass_from_dimensions,
     femur_occupancy,
 )
+from math.utils import clamp_unit
 from math.vector3 import Vector3, centroid
 from std.math import inf, nan
 from std.testing import (

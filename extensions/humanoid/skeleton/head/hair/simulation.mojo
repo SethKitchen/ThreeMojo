@@ -43,7 +43,7 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     follower_across,
 )
 from math.sine import fraction
-from math.utils import clamp
+from math.utils import clamp, clamp_unit
 from math.vector3 import Vector3
 from math.finite import require_finite_group
 from render.tasks import TaskGroup
@@ -115,7 +115,7 @@ struct HairPhysics(ImplicitlyCopyable):
 
 def _motion_normal(before: Vector3, after: Vector3, normal: Vector3) -> Vector3:
     """Rotate a rest normal with the shortest rotation of its tangent."""
-    var cosine = clamp(before.dot(after), -1, 1)
+    var cosine = clamp_unit(before.dot(after))
     var axis = before
     axis.cross(after)
     var turned: Vector3

@@ -472,6 +472,40 @@ def saturate(value: Float32) -> Float32:
     return clamp(value, 0, 1)
 
 
+def clamp_unit(value: Float32) -> Float32:
+    """Return `value` held from minus one to one.
+
+    An `acos` or `asin` argument uses this hold.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value within minus one and one.
+
+    Raises:
+        Error: Never.
+    """
+    return clamp(value, -1, 1)
+
+
+def clamp_unit(value: Float64) -> Float64:
+    """Return `value` held from minus one to one.
+
+    An `acos` or `asin` argument uses this hold.
+
+    Args:
+        value: The value.
+
+    Returns:
+        The value within minus one and one.
+
+    Raises:
+        Error: Never.
+    """
+    return clamp(value, -1.0, 1.0)
+
+
 def nearest_distance(value: Float64) -> Float64:
     """Return how far `value` lies from the nearest whole number.
 

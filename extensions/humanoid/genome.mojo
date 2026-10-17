@@ -19,7 +19,7 @@ set the traits in people. Many small genes set each of these traits,
 and development and environment change them too.
 """
 from core.ordinal import ordinal_valid
-from math.utils import clamp
+from math.utils import clamp_unit
 
 from std.math import isfinite
 
@@ -362,7 +362,7 @@ def _normal(seed: Int, index: Int) -> Float32:
     for k in range(4):  # pragma: no branch
         total += _unit(seed, index * 4 + k)
     var value = (total - 2) * Float32(0.78)
-    return clamp(value, -1, 1)
+    return clamp_unit(value)
 
 
 def random_genome(seed: Int) -> Genome:
@@ -431,5 +431,5 @@ def offspring(mother: Genome, father: Genome, seed: Int) raises -> Genome:
             + father.expressions[index] * t
             + mutation
         )
-        child.expressions[index] = clamp(value, -1, 1)
+        child.expressions[index] = clamp_unit(value)
     return child

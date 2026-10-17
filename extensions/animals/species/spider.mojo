@@ -64,6 +64,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from math.norm import squared_length2, squared_length3
+from math.utils import clamp_unit
 from std.math import asin, cos, pi, sin, sqrt
 
 # The builds, in procedural-animals' order.
@@ -379,7 +380,7 @@ def _chain(
         if k != free:
             drop += lens[k] * sin(el[k])
     var s = (y_tip - base.y - drop) / lens[free]
-    el[free] = asin(clamp(s, -1.0, 1.0))
+    el[free] = asin(clamp_unit(s))
     var out = List[V3]()
     var p = base
     out.append(p)

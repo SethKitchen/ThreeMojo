@@ -88,6 +88,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import cos, floor, pi, sin
 from extensions.sdf.distance import oriented_ellipsoid_estimate
 
@@ -1472,7 +1473,7 @@ def _paint_coat(
     leg: Float64,
 ) -> V3:
     # Countershading: dark along the spine, lighter low on the flanks.
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var c = mix3(
         pal.get("body"), pal.get("dorsal"), smoothstep(0.35, 0.95, up) * 0.85
     )

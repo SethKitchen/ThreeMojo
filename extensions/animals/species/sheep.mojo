@@ -93,6 +93,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.math import asin, atan2, cos, exp, floor, log, pi, pow, sin, sqrt
@@ -2302,7 +2303,7 @@ def sheep_paint(
             c = c * mix(1.0 + 0.6 * sky, 1.0, smoothstep(0.165, 0.185, h.z))
     # The fleece.
     if wool > 0.01:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         var wc = mix3(
             mix3(pal.get("crevice"), pal.get("clean"), 0.62),
             pal.get("clean"),
