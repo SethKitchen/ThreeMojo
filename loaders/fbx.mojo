@@ -150,6 +150,7 @@ from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha
 from render.texture_store import TextureId
 from std.math import atan, pi
 from std.pathlib import Path
+from units.measure import angle_degrees, length_meters
 from units.si import CENTIMETER, DEGREE, METER, Angle, Length
 
 # How deep the model hierarchy can go. The models are placed by
@@ -1690,10 +1691,10 @@ struct _Loader(Movable):
             var focal = self.value(attribute, "FocalLength", 0)
             fov = 2 * atan(0.5 * film / focal) * 180 / pi
         var camera = PerspectiveCamera(
-            Angle(Float32(fov), DEGREE),
+            angle_degrees(fov),
             Float32(aspect),
-            Length(Float32(near), METER),
-            Length(Float32(far), METER),
+            length_meters(near),
+            length_meters(far),
         )
         camera.attach(node)
         self.model.cameras.append(camera)
@@ -1733,9 +1734,7 @@ struct _Loader(Movable):
                 node,
                 intensity,
                 distance=distance,
-                angle=Angle(
-                    Float32(self.value(attribute, "InnerAngle", 60)), DEGREE
-                ),
+                angle=angle_degrees(self.value(attribute, "InnerAngle", 60)),
                 penumbra=penumbra,
                 decay=1,
             )

@@ -75,7 +75,8 @@ from math.path import Shape
 from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3
 from std.math import pi
-from units.si import Angle, Length, METER, RADIAN
+from units.measure import angle_radians, length_meters
+from units.si import Angle, Length
 
 
 def _number(
@@ -90,14 +91,14 @@ def _meters(
     doc: JsonDocument, item: Int, key: String, default: Float64
 ) raises -> Length:
     """Return a length under `key`, or `default`, in meters."""
-    return Length(Float32(_number(doc, item, key, default)), METER)
+    return length_meters(_number(doc, item, key, default))
 
 
 def _radians(
     doc: JsonDocument, item: Int, key: String, default: Float64
 ) raises -> Angle:
     """Return an angle under `key`, or `default`, in radians."""
-    return Angle(Float32(_number(doc, item, key, default)), RADIAN)
+    return angle_radians(_number(doc, item, key, default))
 
 
 def _count(
@@ -182,7 +183,7 @@ def _extruded(
         steps,
         curve_segments,
         _flag(doc, options, "bevelEnabled", True),
-        Length(Float32(thickness), METER),
+        length_meters(thickness),
         _meters(doc, options, "bevelSize", thickness - 0.1),
         _meters(doc, options, "bevelOffset", 0),
         _count(doc, options, "bevelSegments", 3),

@@ -64,7 +64,8 @@ from math.euler import ZYX, Euler, EulerOrder
 from math.quaternion import Quaternion, append_quaternion
 from math.vector3 import Vector3
 from std.math import isnan, pi
-from units.si import RADIAN, SECOND, Angle, Duration
+from units.measure import angle_radians
+from units.si import SECOND, Angle, Duration
 
 # How many FBX ticks make one second: three.js's
 # `convertFBXTimeToSeconds`.
@@ -526,7 +527,7 @@ def _vector_track(
 
 def _radians(degrees: Float64) -> Angle:
     """Return an angle in degrees as three.js's `degToRad` turns it."""
-    return Angle(Float32(degrees * pi / 180), RADIAN)
+    return angle_radians(degrees * pi / 180)
 
 
 def _turn(
@@ -534,9 +535,9 @@ def _turn(
 ) raises -> Quaternion:
     """Return the rotation three angles in radians make in an order."""
     return Euler(
-        Angle(Float32(x), RADIAN),
-        Angle(Float32(y), RADIAN),
-        Angle(Float32(z), RADIAN),
+        angle_radians(x),
+        angle_radians(y),
+        angle_radians(z),
         order,
     ).to_quaternion()
 

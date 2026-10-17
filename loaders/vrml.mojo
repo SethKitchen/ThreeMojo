@@ -143,7 +143,8 @@ from render.texture_store import NO_TEXTURE, TextureId
 from std.collections import Dict
 from std.math import cos, pi, sin, sqrt, trunc
 from std.pathlib import Path
-from units.si import METER, RADIAN, Angle, Length
+from units.measure import angle_radians
+from units.si import METER, Length
 from core.ordinal import require_valid, require_positive
 
 # three.js's `Loader.DEFAULT_MATERIAL_NAME`.
@@ -1927,7 +1928,7 @@ def vrml_scene(
         if texture.id != NO_TEXTURE:
             ref image = assets.textures.textures[texture.id.value]
             image.center = texture.center
-            image.rotation = Angle(Float32(texture.rotation), RADIAN)
+            image.rotation = angle_radians(texture.rotation)
             image.repeat = texture.repeat
             image.offset = texture.offset
     return model^

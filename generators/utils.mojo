@@ -40,6 +40,10 @@ from math.utils import SeededRandom
 from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
 from math.finite import require_finite
 from std.math import cos, isfinite, sin, sqrt
+from units.measure import (
+    angle_radians as _angle_radians,
+    length_meters as _length_meters,
+)
 from units.si import Angle, Length, METER, RADIAN
 
 # The name of the per-vertex part attribute, as three.js names it.
@@ -415,7 +419,7 @@ def length_meters(value: Float64) -> Length:
     Returns:
         The length.
     """
-    return Length(Float32(value), METER)
+    return _length_meters(value)
 
 
 def angle_radians(value: Float64) -> Angle:
@@ -427,7 +431,7 @@ def angle_radians(value: Float64) -> Angle:
     Returns:
         The angle.
     """
-    return Angle(Float32(value), RADIAN)
+    return _angle_radians(value)
 
 
 def check_finite(value: Float64, what: String) raises:

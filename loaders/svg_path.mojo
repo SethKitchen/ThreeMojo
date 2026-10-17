@@ -44,7 +44,7 @@ from math.path import Path, Shape
 from math.vector2 import Vector2, vector2_from_float64
 from render.framebuffer import FloatColor
 from std.math import atan2, cos, nan, pi, sin, sqrt
-from units.si import Angle, Length, METER, RADIAN
+from units.measure import angle_radians, length_meters
 
 # A point or a direction in the plane, in user units: x, then y.
 comptime SvgVector = SIMD[DType.float64, 2]
@@ -269,12 +269,12 @@ struct SvgCurve(Copyable, Movable):
             var center = self.points[0]
             return Curve(
                 center=vector2_from_float64(center[0], center[1]),
-                x_radius=Length(Float32(self.x_radius), METER),
-                y_radius=Length(Float32(self.y_radius), METER),
-                start=Angle(Float32(self.start_angle), RADIAN),
-                end=Angle(Float32(self.end_angle), RADIAN),
+                x_radius=length_meters(self.x_radius),
+                y_radius=length_meters(self.y_radius),
+                start=angle_radians(self.start_angle),
+                end=angle_radians(self.end_angle),
                 clockwise=self.clockwise,
-                rotation=Angle(Float32(self.rotation), RADIAN),
+                rotation=angle_radians(self.rotation),
             )
         var points = List[Vector2]()
         # `check` has passed, so there are two points or more.

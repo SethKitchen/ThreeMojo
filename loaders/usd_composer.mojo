@@ -133,6 +133,7 @@ from render.texture import (
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import nan, pi
 from std.pathlib import Path
+from units.measure import angle_degrees, angle_radians, length_meters
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 
 # How deep references may nest before the composer refuses them.
@@ -1196,7 +1197,7 @@ struct _Composer(Movable):
                 built.objects[group].node.set_scale(scale, scale, scale)
         if self.string_field("/", "upAxis") == "Z":
             built.objects[group].node.set_euler(
-                Angle(Float32(-pi / 2), RADIAN),
+                angle_radians(-pi / 2),
                 Angle(0.0, RADIAN),
                 Angle(0.0, RADIAN),
             )
@@ -1418,9 +1419,9 @@ struct _Composer(Movable):
             var r = self.vector(value, op)
             return rotation_from_euler(
                 Euler(
-                    Angle(Float32(r[0]), DEGREE),
-                    Angle(Float32(r[1]), DEGREE),
-                    Angle(Float32(r[2]), DEGREE),
+                    angle_degrees(r[0]),
+                    angle_degrees(r[1]),
+                    angle_degrees(r[2]),
                     ZYX,
                 )
             )
@@ -1431,7 +1432,7 @@ struct _Composer(Movable):
         ):
             if not self.layer.defined(value):
                 return None
-            var angle = Angle(Float32(self.layer.to_number(value)), DEGREE)
+            var angle = angle_degrees(self.layer.to_number(value))
             if op == "xformOp:rotateX":
                 return rotation_x(angle)
             if op == "xformOp:rotateY":
@@ -1525,9 +1526,9 @@ struct _Composer(Movable):
         if self.layer.truthy(rotate):
             var r = self.vector(rotate, "xformOp:rotateXYZ")
             node.set_euler(
-                Angle(Float32(r[0]), DEGREE),
-                Angle(Float32(r[1]), DEGREE),
-                Angle(Float32(r[2]), DEGREE),
+                angle_degrees(r[0]),
+                angle_degrees(r[1]),
+                angle_degrees(r[2]),
             )
         var orient = self.data("xformOp:orient", spec, attrs)
         if self.layer.truthy(orient) and self.layer.length(orient) == 4:
@@ -2447,7 +2448,7 @@ struct _Composer(Movable):
             )
         var rotation = attrs.get("inputs:rotation")
         if self.layer.is_number(rotation):
-            image.rotation = Angle(Float32(self.layer.number(rotation)), DEGREE)
+            image.rotation = angle_degrees(self.layer.number(rotation))
 
     def build_mesh(
         mut self, path: String, spec: Int, assets: UsdAssets, mut built: _Built
@@ -2569,32 +2570,32 @@ struct _Composer(Movable):
         var attrs = self.attributes(path)
         var geometry: BufferGeometry
         if type_name == "Cube":
-            var edge = Length(Float32(self.size(attrs, "size", 2)), METER)
+            var edge = length_meters(self.size(attrs, "size", 2))
             geometry = box(edge, edge, edge)
         elif type_name == "Sphere":
             geometry = sphere(
-                Length(Float32(self.size(attrs, "radius", 1)), METER), 32, 16
+                length_meters(self.size(attrs, "radius", 1)), 32, 16
             )
         elif type_name == "Cylinder":
-            var height = Length(Float32(self.size(attrs, "height", 2)), METER)
-            var radius = Length(Float32(self.size(attrs, "radius", 1)), METER)
+            var height = length_meters(self.size(attrs, "height", 2))
+            var radius = length_meters(self.size(attrs, "radius", 1))
             geometry = cylinder(radius, radius, height, 32)
         elif type_name == "Cone":
-            var height = Length(Float32(self.size(attrs, "height", 2)), METER)
-            var radius = Length(Float32(self.size(attrs, "radius", 1)), METER)
+            var height = length_meters(self.size(attrs, "height", 2))
+            var radius = length_meters(self.size(attrs, "radius", 1))
             geometry = cone(radius, height, 32)
         else:
-            var height = Length(Float32(self.size(attrs, "height", 1)), METER)
-            var radius = Length(Float32(self.size(attrs, "radius", 0.5)), METER)
+            var height = length_meters(self.size(attrs, "height", 1))
+            var radius = length_meters(self.size(attrs, "radius", 0.5))
             geometry = capsule(radius, height, 16, 32)
         var axis = attrs.get("axis")
         var name = String("Z")
         if self.layer.truthy(axis):
             name = self.layer.text(axis) if self.layer.is_string(axis) else ""
         if name == "X":
-            geometry.rotate_z(Angle(Float32(-pi / 2), RADIAN))
+            geometry.rotate_z(angle_radians(-pi / 2))
         elif name == "Z":
-            geometry.rotate_x(Angle(Float32(pi / 2), RADIAN))
+            geometry.rotate_x(angle_radians(pi / 2))
         built.geometries.append(geometry^)
         var object = _Object(path_name(path))
         object.is_mesh = True
