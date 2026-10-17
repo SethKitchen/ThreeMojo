@@ -5609,15 +5609,7 @@ struct NodeGraph(Copyable, Movable):
         if output == POSITION_NODE:
             var fragment = (
                 (_is_attribute(kind) and not local)
-                or kind == NODE_TEXTURE
-                or kind == NODE_TEXTURE_LEVEL
-                or kind == NODE_TEXTURE_GRAD
-                or kind == NODE_TEXEL_FETCH
-                or kind == NODE_TEXTURE_SIZE
-                or kind == NODE_TEXTURE_CUBE
-                or kind == NODE_TEXTURE_3D
-                or kind == NODE_TEXTURE_ARRAY
-                or kind == NODE_VIEWPORT_TEXTURE
+                or _image_sample(kind)
                 or kind == NODE_VARYING
                 or kind == NODE_DFDX
                 or kind == NODE_DFDY
@@ -5630,15 +5622,7 @@ struct NodeGraph(Copyable, Movable):
                 )
             return
         if output == SIZE_NODE and (
-            kind == NODE_TEXTURE
-            or kind == NODE_TEXTURE_LEVEL
-            or kind == NODE_TEXTURE_GRAD
-            or kind == NODE_TEXEL_FETCH
-            or kind == NODE_TEXTURE_SIZE
-            or kind == NODE_TEXTURE_CUBE
-            or kind == NODE_TEXTURE_3D
-            or kind == NODE_TEXTURE_ARRAY
-            or kind == NODE_VIEWPORT_TEXTURE
+            _image_sample(kind)
             or kind == NODE_DFDX
             or kind == NODE_DFDY
             or kind == NODE_FRAG_COORD
@@ -6127,6 +6111,25 @@ def _visit(children: List[Int], mode: Int, need: List[Int]) -> List[Int]:
     return out^
 
 
+def _image_sample(kind: NodeKind) -> Bool:
+    """Return whether a node reads an image.
+
+    A texture, a level, a gradient, a texel fetch, a size, a cube, a
+    volume, an array, and a viewport texture all do.
+    """
+    return (
+        kind == NODE_TEXTURE
+        or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXTURE_GRAD
+        or kind == NODE_TEXEL_FETCH
+        or kind == NODE_TEXTURE_SIZE
+        or kind == NODE_TEXTURE_CUBE
+        or kind == NODE_TEXTURE_3D
+        or kind == NODE_TEXTURE_ARRAY
+        or kind == NODE_VIEWPORT_TEXTURE
+    )
+
+
 def _children(
     graph: NodeGraph,
     node: Int,
@@ -6153,17 +6156,7 @@ def _children(
             " shadow: only the fragment has them"
         )
     if corner and (
-        kind == NODE_TEXTURE
-        or kind == NODE_TEXTURE_LEVEL
-        or kind == NODE_TEXTURE_GRAD
-        or kind == NODE_TEXEL_FETCH
-        or kind == NODE_TEXTURE_SIZE
-        or kind == NODE_TEXTURE_CUBE
-        or kind == NODE_TEXTURE_3D
-        or kind == NODE_TEXTURE_ARRAY
-        or kind == NODE_VIEWPORT_TEXTURE
-        or kind == NODE_DFDX
-        or kind == NODE_DFDY
+        _image_sample(kind) or kind == NODE_DFDX or kind == NODE_DFDY
     ):
         raise Error(
             "A varying runs once per corner: it reads no texture and no"
