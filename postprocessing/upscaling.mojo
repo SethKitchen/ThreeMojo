@@ -33,7 +33,7 @@ it at the frame's size.
 """
 
 from math.norm import squared_length2
-from math.utils import max3, min3
+from math.utils import clamp, max3, min3
 from postprocessing.display_nodes import replace_light, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from render.framebuffer import FloatColor
@@ -459,7 +459,7 @@ def _clamp4(
     anti-ringing clamp."""
     var low = min(min(p, q), min(s, t))
     var high = max(max(p, q), max(s, t))
-    return min(max(value, low), high)
+    return clamp(value, low, high)
 
 
 def fsr1_light(mut frame: RenderTarget, settings: UpscaleSettings):

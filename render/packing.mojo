@@ -38,7 +38,8 @@ from math.norm import length3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.finite import require_finite_group
-from std.math import floor, isfinite, max, min, sqrt
+from math.utils import saturate
+from std.math import floor, isfinite, sqrt
 
 # three.js's `PackUpscale`, `Inv255`, `ShiftRight8` and `UnpackDownscale`.
 comptime PACK_UPSCALE = Float32(256.0 / 255.0)
@@ -279,7 +280,7 @@ def normalized_distance(
     var dz = world.z - reference.z
     var dist = length3(dx, dy, dz)
     var fraction = (dist - near) / (far - near)
-    return min(max(fraction, Float32(0)), Float32(1))
+    return saturate(fraction)
 
 
 def packed_normal(facing: Vector3) -> Vector3:
