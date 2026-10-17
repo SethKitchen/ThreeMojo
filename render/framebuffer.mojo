@@ -742,6 +742,25 @@ comptime OPAQUE_WHITE = FloatColor(1.0, 1.0, 1.0, 1.0)
 comptime TRANSPARENT_BLACK = FloatColor(0.0, 0.0, 0.0, 0.0)
 
 
+def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
+    """Return linear light as the opaque sRGB bytes a material holds.
+
+    Args:
+        red: Linear red.
+        green: Linear green.
+        blue: Linear blue.
+
+    Returns:
+        The display bytes. Alpha is 255.
+
+    Raises:
+        Error: Never.
+    """
+    return FloatColor(
+        Float32(red), Float32(green), Float32(blue)
+    ).encode_opaque()
+
+
 def _to_byte(value: Float32) -> UInt8:
     """Return `value` in 0-1 as a rounded, clamped byte."""
     var scaled = value * 255 + 0.5

@@ -70,7 +70,7 @@ from materials.material import (
 from math.quaternion import Quaternion
 from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS
 from objects.mesh import Mesh
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import opaque_from_linear
 from std.math import isfinite, sqrt
 from std.pathlib import Path
 
@@ -1223,23 +1223,18 @@ def read_ldraw(path: String, var loader: LDrawLoader) raises -> LDrawModel:
 # --- into a scene ------------------------------------------------------------
 
 
-def _authored(color: Vec) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        Float32(color[0]), Float32(color[1]), Float32(color[2])
-    ).encode_opaque()
-
-
 def _material(m: LDrawMaterial) raises -> Material:
     """Return the `Material` of an LDraw material: a standard surface, or a
     basic line."""
     if m.type == "MeshStandardMaterial":
         var out = Material(
-            _authored(m.color),
+            opaque_from_linear(m.color[0], m.color[1], m.color[2]),
             kind=STANDARD,
             opacity=Float32(m.opacity),
             transparent=m.transparent,
-            emissive=_authored(m.emissive),
+            emissive=opaque_from_linear(
+                m.emissive[0], m.emissive[1], m.emissive[2]
+            ),
             roughness=Float32(m.roughness),
             metalness=Float32(m.metalness),
         )
@@ -1249,7 +1244,7 @@ def _material(m: LDrawMaterial) raises -> Material:
         out.polygon_offset_factor = Float32(m.polygon_offset_factor)
         return out^
     var out = Material(
-        _authored(m.color),
+        opaque_from_linear(m.color[0], m.color[1], m.color[2]),
         kind=BASIC,
         opacity=Float32(m.opacity),
         transparent=m.transparent,
