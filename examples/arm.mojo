@@ -79,7 +79,7 @@ from extensions.humanoid.skeleton.torso.bones.geometry import (
     torso_bone_from_dimensions,
 )
 from extensions.humanoid.spec import HumanoidSpec
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from renderers.renderer import available_workers
 from std.sys import argv
 from units.si import FOOT, GRAM, Length, METER
@@ -138,7 +138,7 @@ def main() raises:
     # The arm's middle: halfway from the shoulder to the fingertips.
     var f = arm_dimensions(person.stature, person.sex).frame
     var tip = f.hand(0, -20, 0)
-    var center = (f.shoulder + tip) * Float32(0.5)
+    var center = midpoint(f.shoulder, tip)
     var height = Float32(0.62)
     var first = len(scene.meshes)
     var anatomy = hang_centered(scene, -SPACING, height, center)

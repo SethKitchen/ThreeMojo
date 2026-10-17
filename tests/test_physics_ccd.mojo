@@ -28,7 +28,7 @@ from extensions.physics.world import PhysicsWorld
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import inf, nan, sqrt
 from std.testing import (
     TestSuite,
@@ -205,9 +205,9 @@ def _floor_peak_vertical_speed(
     var a = Vector3(-1, -1, 0)
     var b = Vector3(1, -1, 0)
     var c = Vector3(0, 1, 0)
-    var ab = (a + b) * Float32(0.5)
-    var bc = (b + c) * Float32(0.5)
-    var ca = (c + a) * Float32(0.5)
+    var ab = midpoint(a, b)
+    var bc = midpoint(b, c)
+    var ca = midpoint(c, a)
     var triangles: List[Triangle] = [Triangle(a, b, c)]
     if tessellated:
         triangles = [

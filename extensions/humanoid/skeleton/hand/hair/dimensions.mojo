@@ -32,7 +32,7 @@ from extensions.humanoid.skeleton.hand.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.hand.skin.dimensions import HandSkinField
 from extensions.humanoid.skeleton.torso.sweep import Dome, Sweep, SweepField
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 
 
 @fieldwise_init
@@ -121,7 +121,7 @@ def hand_hair_field(
     else:
         for k in range(INDEX.value, LITTLE.value + 1):  # pragma: no branch
             var joints = finger_joints(arm, Finger(k))
-            var middle = (joints[1] + joints[2]) * Float32(0.5)
+            var middle = midpoint(joints[1], joints[2])
             var root = surface_root(skin, middle, back, reach)
             sweeps.append(shaft(root, back, down, 0.004, 0.000008))
     var r = sweeps[0].stations[0].ml

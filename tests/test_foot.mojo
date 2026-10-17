@@ -937,7 +937,7 @@ def test_skin_wraps_physical_stations() raises:
     var outside = inside + Vector3(0, 0.25, 0)
     var step = 0
     while step < 18:
-        var middle = (inside + outside) * Float32(0.5)
+        var middle = midpoint(inside, outside)
         if layer.outer.distance(middle) < 0:
             inside = middle
         else:
@@ -980,7 +980,7 @@ def test_hair_roots_sit_on_the_skin() raises:
     assert_equal(foot_hair_part_label(DIGITAL_HAIR), "digital hair")
     assert_equal(foot_hair_part_label(FootHair(5)), "foot hair")
     assert_false(FootHair(-1).is_valid())
-    var mid = (dorsal.a0 + dorsal.b0) * Float32(0.5)
+    var mid = midpoint(dorsal.a0, dorsal.b0)
     assert_true(foot_hair_distance(dims, DORSAL_HAIR, mid) < 0)
     assert_equal(foot_hair_occupancy(dims, DORSAL_HAIR, mid), SOFT_FILL)
     assert_equal(
