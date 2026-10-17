@@ -45,7 +45,7 @@ from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.utils import mix_delta
-from math.vector3 import Vector3, append_float64_xyz
+from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
 from render.color_spaces import srgb_to_linear_three
 from std.math import cos, pi, sqrt
 
@@ -233,11 +233,6 @@ struct CarSpec(Copyable, Movable):
         return self.body[row * 4 + column]
 
 
-def _v(x: Float64, y: Float64, z: Float64) -> Vector3:
-    """Return a point rounded to `Float32`."""
-    return Vector3(Float32(x), Float32(y), Float32(z))
-
-
 def body_stations(spec: CarSpec) -> List[Float64]:
     """Return the z of every section of the body, from the front: the
     profile's own, and seven round each axle that shape the arch.
@@ -307,10 +302,10 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     var section = List[Vector3]()
     for i in range(5):  # pragma: no branch
         var p = right[i]
-        section.append(_v(-p.x, p.y, p.z))
+        section.append(vector3_from_float64(-p.x, p.y, p.z))
     for i in range(5):  # pragma: no branch
         var p = right[4 - i]
-        section.append(_v(p.x, p.y, p.z))
+        section.append(vector3_from_float64(p.x, p.y, p.z))
     return section^
 
 
@@ -412,7 +407,7 @@ def _roof(spec: CarSpec) raises -> BufferGeometry:
         for i in range(5):  # pragma: no branch
             var u = Float64(i) / 4
             row.append(
-                _v(
+                vector3_from_float64(
                     (u * 2 - 1) * edge.x,
                     edge.y + 4 * u * (1 - u) * 0.035,
                     edge.z,
@@ -479,10 +474,10 @@ def _rails(spec: CarSpec, side: Float64) raises -> BufferGeometry:
         var y = mix_delta(tfr.y, trr.y, t) + bow * 0.035 + rise
         var x = side * 0.63
         var row: List[Vector3] = [
-            _v(x - 0.022, y + 0.018, z),
-            _v(x + 0.022, y + 0.018, z),
-            _v(x + 0.022, y - 0.018, z),
-            _v(x - 0.022, y - 0.018, z),
+            vector3_from_float64(x - 0.022, y + 0.018, z),
+            vector3_from_float64(x + 0.022, y + 0.018, z),
+            vector3_from_float64(x + 0.022, y - 0.018, z),
+            vector3_from_float64(x - 0.022, y - 0.018, z),
         ]
         sections.append(row^)
     return part(loft(sections, True, True, True), CAR_TRIM)
@@ -500,10 +495,10 @@ def _sign(spec: CarSpec) raises -> BufferGeometry:
         var d = depths[i]
         var y = heights[i]
         var row: List[Vector3] = [
-            _v(w, y, d - 0.2),
-            _v(-w, y, d - 0.2),
-            _v(-w, y, -d - 0.2),
-            _v(w, y, -d - 0.2),
+            vector3_from_float64(w, y, d - 0.2),
+            vector3_from_float64(-w, y, d - 0.2),
+            vector3_from_float64(-w, y, -d - 0.2),
+            vector3_from_float64(w, y, -d - 0.2),
         ]
         sections.append(row^)
     return part(loft(sections, True, True, True), CAR_SIGN)
