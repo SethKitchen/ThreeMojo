@@ -54,6 +54,7 @@ empty array when it is not. A file of a version before 0.4.0 has path
 headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
+from math.finite import stored_float32
 from core.binary import copy_bytes, little_endian_uint
 from core.ordinal import ordinal_valid, require_valid, require_non_negative
 from core.search import last_match
@@ -1513,7 +1514,7 @@ struct _Crate[origin: Origin[mut=False]](Movable):
         var numbers = List[Float64](capacity=size)
         if code == _FLOAT_AS_INTS:
             for value in self.integers(size):  # pragma: no branch
-                numbers.append(Float64(Float32(Float64(value))))
+                numbers.append(stored_float32(Float64(value)))
         elif code == _FLOAT_TABLE:
             var entries = self.unsigned(4)
             self.fits(entries, 4)

@@ -8,7 +8,8 @@
 Every `Float32` value converts exactly to `Float64`, so one test covers
 both widths. `require_finite` refuses a value that is not finite.
 `finite_float32` narrows a `Float64` and refuses a result that is not
-finite. `require_positive_finite` refuses a value that is not positive
+finite. `stored_float32` is that narrowing read back as `Float64`.
+`require_positive_finite` refuses a value that is not positive
 and finite. `require_non_negative_finite` refuses a value that is not
 finite or is negative. `require_unit_finite` refuses a value outside
 zero through one, or one that is not finite. `require_unit_range` refuses
@@ -182,8 +183,23 @@ def finite_float32(value: Float64, message: String) raises -> Float32:
         Error: If the `Float32` is not finite.
     """
     var narrow = Float32(value)
-    require_finite(Float64(narrow), message)
+    require_finite(stored_float32(value), message)
     return narrow
+
+
+def stored_float32(value: Float64) -> Float64:
+    """Return `value` as a `Float32` store reads it back.
+
+    Args:
+        value: The number.
+
+    Returns:
+        `value` rounded to `Float32`, then widened to `Float64`.
+
+    Raises:
+        Error: Never.
+    """
+    return Float64(Float32(value))
 
 
 def require_finite_group(finite: Bool, message: String) raises:

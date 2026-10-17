@@ -47,6 +47,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
 from core.ordinal import require_non_negative, require_positive
 from math.norm import length3
 from loaders.bytes import ascii_digit, hex_digit_value, is_sign_mark
@@ -407,7 +408,7 @@ def _typed(value: Float64, array_type: String) -> Float64:
     if array_type == "Float64":
         return value
     if array_type == "Float32":
-        return Float64(Float32(value))
+        return stored_float32(value)
     if isnan(value) or isinf(value):
         return 0
     var bits = 8

@@ -42,6 +42,7 @@ whose table or streams are past its end, or whose streams do not hold
 what the header says, is refused too.
 """
 
+from math.finite import stored_float32
 from core.binary import copy_bytes
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
@@ -116,7 +117,7 @@ def spz_scale(byte: UInt8) -> Float64:
     Returns:
         `exp(byte / 16 - 10)`.
     """
-    return Float64(Float32(exp(Float64(byte) / 16 - 10)))
+    return stored_float32(exp(Float64(byte) / 16 - 10))
 
 
 def spz_quaternion_component(code: Int) -> Float64:

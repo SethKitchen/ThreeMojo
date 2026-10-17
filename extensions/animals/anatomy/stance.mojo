@@ -40,7 +40,7 @@ from extensions.animals.anatomy.muscles import (
 from extensions.animals.build import Animal
 from extensions.physics.quantities import NEWTON_METER, Torque
 from extensions.sdf.vector import V3
-from math.finite import require_finite
+from math.finite import stored_float32, require_finite
 from std.math import cos, isfinite
 from units.si import (
     METER,
@@ -139,7 +139,7 @@ def _load(
     var advantage = lever / ground if ground > 0.0 else 0.0
     for value in [push, need, ground, lever, sigma]:  # pragma: no branch
         require_finite(
-            Float64(Float32(value)),
+            stored_float32(value),
             "Standing loads must fit finite SI quantities",
         )
     # `sigma` fits a Float32 and the tension is a positive Float32, so the

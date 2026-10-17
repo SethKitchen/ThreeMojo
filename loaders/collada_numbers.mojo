@@ -12,7 +12,7 @@ Both also refuse a source stride below one.
 
 from core.ordinal import require_positive
 from loaders.js_text import split_fields
-from math.finite import require_finite
+from math.finite import stored_float32, require_finite
 
 
 def require_positive_stride(stride: Int) raises:
@@ -65,7 +65,7 @@ def collada_floats(text: String) raises -> List[Float64]:
     for field in split_fields(text):
         var value = collada_number(field)
         require_finite(
-            Float64(Float32(value)),
+            stored_float32(value),
             "Collada: a number must be finite: " + field,
         )
         out.append(value)

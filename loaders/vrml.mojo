@@ -69,6 +69,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
 from math.norm import normalized3, _ordinary_squared
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -1667,7 +1668,7 @@ struct _Builder(Movable):
             return to_non_indexed(indices, values, 3)
         var rounded = List[Float64]()
         for v in values:
-            rounded.append(Float64(Float32(v)))
+            rounded.append(stored_float32(v))
         return rounded^
 
     def extrusion(

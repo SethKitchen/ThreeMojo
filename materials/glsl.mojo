@@ -53,6 +53,7 @@ This replaces the old silent truncation and can refuse previously accepted
 runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
+from math.finite import stored_float32
 from core.ordinal import ordinal_valid, require_non_negative
 from core.search import first_match
 from loaders.bytes import (
@@ -3401,7 +3402,7 @@ struct _Compiler(Movable):
                     bitcast[DType.int32](UInt32(Int64(index + step)))
                 )
             else:
-                index = Float64(Float32(index + step))
+                index = stored_float32(index + step)
         var node: NodeRef
         if type.is_uint():
             var iteration = self.graph.to_uint(self.graph.Loop(count))
@@ -4612,7 +4613,7 @@ struct _Compiler(Movable):
             return self.literal(_TINT, token.number)
         if token.kind == _REAL:
             self.at += 1
-            return self.literal(_FLOAT, Float64(Float32(token.number)))
+            return self.literal(_FLOAT, stored_float32(token.number))
         if self.is_mark("("):
             self.at += 1
             var value = self.expression()
@@ -5114,7 +5115,7 @@ struct _Compiler(Movable):
             return Float64(Int32(Int64(number)))
         if to.is_bool():
             return 1 if number != 0 else 0
-        return Float64(Float32(number))
+        return stored_float32(number)
 
     def convert(
         mut self, type: _Type, args: List[_Value], var value: _Value

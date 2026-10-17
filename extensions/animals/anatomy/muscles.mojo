@@ -92,6 +92,7 @@ The fish, shark, snake and spider muscles are in
 
 from core.ordinal import require_index_in_count
 from math.finite import (
+    stored_float32,
     require_finite_group,
     require_positive_finite,
     require_non_negative_finite,
@@ -758,7 +759,7 @@ struct AnimalMuscle(Copyable, Movable):
         for k in range(1, len(p)):  # pragma: no branch
             unit += length(p[k] - p[k - 1])
         require_positive_finite(
-            Float64(Float32(unit)),
+            stored_float32(unit),
             "A muscle path length must fit a positive finite SI length",
         )
         return Length(Float32(unit), METER)
