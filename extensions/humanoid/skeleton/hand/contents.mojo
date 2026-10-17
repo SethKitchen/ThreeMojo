@@ -17,6 +17,7 @@ from extensions.humanoid.skeleton.layer_set import (
     layer_includes,
     layer_set_valid,
     layer_union,
+    require_layer_set,
 )
 
 comptime _MESSAGE = "Hand contents must be a named layer set"
@@ -140,6 +141,21 @@ struct HandContents(Equatable, ImplicitlyCopyable, Writable):
         return HandContents(
             layer_union(self.value, other.value, ALL.value, _MESSAGE)
         )
+
+
+def require_hand_contents(contents: HandContents) raises:
+    """Refuse a hand layer set that is not named.
+
+    Args:
+        contents: Which tissue layers a hand draws.
+
+    Returns:
+        Nothing. The call returns when the set is named.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    require_layer_set(contents.value, ALL.value, _MESSAGE)
 
 
 # The carpals, the metacarpals and the phalanges.

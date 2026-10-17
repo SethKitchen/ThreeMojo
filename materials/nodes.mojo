@@ -6285,6 +6285,25 @@ def _allocate(reads: List[Int], mut layout: _Layout) raises:
                     layout.c[index] = written
 
 
+def _uniform_index(names: List[String], name: String) raises -> Int:
+    """Return the index of a uniform named `name`.
+
+    Args:
+        names: The program's uniform names.
+        name: The uniform's name.
+
+    Returns:
+        The index in `names`.
+
+    Raises:
+        Error: If no uniform has that name.
+    """
+    var index = first_match(names, name)
+    if index < 0:
+        raise Error("A node program has no uniform named " + name)
+    return index
+
+
 struct NodeProgram(Copyable, Movable):
     """A compiled `NodeGraph`: the bytecode both rasterizers interpret, and
     where its uniforms are in it.
@@ -6385,19 +6404,17 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name, or its type is not `type`.
         """
-        for index in range(len(self.uniform_names)):
-            if self.uniform_names[index] == name:
-                if self.uniform_types[index] != type:
-                    raise Error(
-                        "The uniform "
-                        + name
-                        + " is a "
-                        + self.uniform_types[index].name()
-                        + ", not a "
-                        + type.name()
-                    )
-                return self.uniform_offsets[index]
-        raise Error("A node program has no uniform named " + name)
+        var index = _uniform_index(self.uniform_names, name)
+        if self.uniform_types[index] != type:
+            raise Error(
+                "The uniform "
+                + name
+                + " is a "
+                + self.uniform_types[index].name()
+                + ", not a "
+                + type.name()
+            )
+        return self.uniform_offsets[index]
 
     def _set(mut self, name: String, type: ValueType, value: Lanes) raises:
         """Write a uniform's four floats.
@@ -6701,16 +6718,14 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If no uniform has that name.
         """
-        for index in range(len(self.uniform_names)):
-            if self.uniform_names[index] == name:
-                var at = self.uniform_offsets[index]
-                return Lanes(
-                    self.code[at],
-                    self.code[at + 1],
-                    self.code[at + 2],
-                    self.code[at + 3],
-                )
-        raise Error("A node program has no uniform named " + name)
+        var index = _uniform_index(self.uniform_names, name)
+        var at = self.uniform_offsets[index]
+        return Lanes(
+            self.code[at],
+            self.code[at + 1],
+            self.code[at + 2],
+            self.code[at + 3],
+        )
 
     def read_unsigned(self, name: String) raises -> SIMD[DType.uint32, 4]:
         """Read all bits of an exact unsigned uniform.
@@ -6724,12 +6739,10 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the uniform is missing or is not unsigned.
         """
-        for index in range(len(self.uniform_names)):
-            if self.uniform_names[index] == name:
-                if not self.uniform_types[index].is_unsigned():
-                    raise Error("read_unsigned requires an unsigned uniform")
-                return bitcast[DType.uint32, 4](self.uniform(name))
-        raise Error("A node program has no uniform named " + name)
+        var index = _uniform_index(self.uniform_names, name)
+        if not self.uniform_types[index].is_unsigned():
+            raise Error("read_unsigned requires an unsigned uniform")
+        return bitcast[DType.uint32, 4](self.uniform(name))
 
     def set_frame(mut self, time: Duration, view: Matrix4):
         """Write the frame's time and view, what the `time`, view position

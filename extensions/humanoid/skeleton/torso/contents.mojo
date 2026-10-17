@@ -17,6 +17,7 @@ from extensions.humanoid.skeleton.layer_set import (
     layer_includes,
     layer_set_valid,
     layer_union,
+    require_layer_set,
 )
 
 comptime _MESSAGE = "Torso contents must be a named layer set"
@@ -143,8 +144,7 @@ def require_torso_contents(contents: TorsoContents) raises:
     Raises:
         Error: If the set is not a named layer set.
     """
-    if not contents.is_valid():
-        raise Error(_MESSAGE)
+    require_layer_set(contents.value, ALL.value, _MESSAGE)
 
 
 # The vertebrae, the ribs and the sternum.

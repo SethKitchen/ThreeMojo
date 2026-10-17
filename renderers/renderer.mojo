@@ -3016,6 +3016,24 @@ def _column_length(matrix: Matrix4, axis: Int) -> Float32:
     return Vector3(x, y, z).length()
 
 
+def require_named_map(value: Int, count: Int, name: String) raises:
+    """Refuse a map id past the textures the store holds.
+
+    Args:
+        value: The id's integer.
+        count: How many textures the store has.
+        name: What to call the map in the error.
+
+    Returns:
+        Nothing. The call returns when the id is inside the store.
+
+    Raises:
+        Error: If the id is past the store.
+    """
+    if value >= count:
+        raise Error(name + " is named that is not there")
+
+
 def _checked_data_map(
     assets: Assets, map: TextureId, name: String
 ) raises -> TextureId:
@@ -3036,8 +3054,7 @@ def _checked_data_map(
     """
     if map == NO_TEXTURE:
         return map
-    if map.value >= assets.textures.count():
-        raise Error(name + " is named that is not there")
+    require_named_map(map.value, assets.textures.count(), name)
     check_data_map(assets.textures.get(map), name)
     return map
 
@@ -3053,8 +3070,7 @@ def _stored_map(assets: Assets, map: TextureId, name: String) raises:
     Raises:
         Error: If the id names nothing in the store.
     """
-    if map.value >= assets.textures.count():
-        raise Error(name + " is named that is not there")
+    require_named_map(map.value, assets.textures.count(), name)
 
 
 def _layer_factors(

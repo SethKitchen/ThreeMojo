@@ -29,6 +29,24 @@ def require_positive_stride(stride: Int) raises:
         raise Error("Collada: a source's stride must be positive")
 
 
+def collada_number(field: String) raises -> Float64:
+    """Return one Collada number.
+
+    Args:
+        field: The text of the number.
+
+    Returns:
+        The number.
+
+    Raises:
+        Error: If `field` is not a number.
+    """
+    try:
+        return Float64(field)
+    except:
+        raise Error("Collada: not a number: " + field)
+
+
 def collada_floats(text: String) raises -> List[Float64]:
     """Return the numbers a white-space separated list holds.
 
@@ -45,11 +63,7 @@ def collada_floats(text: String) raises -> List[Float64]:
     var out = List[Float64]()
     for piece in text.split():
         var field = String(piece)
-        var value: Float64
-        try:
-            value = Float64(field)
-        except:
-            raise Error("Collada: not a number: " + field)
+        var value = collada_number(field)
         if not isfinite(Float32(value)):
             raise Error("Collada: a number must be finite: " + field)
         out.append(value)

@@ -17,6 +17,7 @@ from extensions.humanoid.skeleton.layer_set import (
     layer_includes,
     layer_set_valid,
     layer_union,
+    require_layer_set,
 )
 
 comptime _MESSAGE = "Foot contents must be a named layer set"
@@ -140,6 +141,21 @@ struct FootContents(Equatable, ImplicitlyCopyable, Writable):
         return FootContents(
             layer_union(self.value, other.value, ALL.value, _MESSAGE)
         )
+
+
+def require_foot_contents(contents: FootContents) raises:
+    """Refuse a foot layer set that is not named.
+
+    Args:
+        contents: Which tissue layers a foot draws.
+
+    Returns:
+        Nothing. The call returns when the set is named.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    require_layer_set(contents.value, ALL.value, _MESSAGE)
 
 
 # Twenty-six bones of the foot.

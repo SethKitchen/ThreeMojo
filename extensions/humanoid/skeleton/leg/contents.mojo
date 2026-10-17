@@ -17,6 +17,7 @@ from extensions.humanoid.skeleton.layer_set import (
     layer_includes,
     layer_set_valid,
     layer_union,
+    require_layer_set,
 )
 
 comptime _MESSAGE = "Leg contents must be a named layer set"
@@ -129,6 +130,21 @@ struct LegContents(Equatable, ImplicitlyCopyable, Writable):
         return LegContents(
             layer_union(self.value, other.value, ALL.value, _MESSAGE)
         )
+
+
+def require_leg_contents(contents: LegContents) raises:
+    """Refuse a leg layer set that is not named.
+
+    Args:
+        contents: Which tissue layers a leg draws.
+
+    Returns:
+        Nothing. The call returns when the set is named.
+
+    Raises:
+        Error: If the set is not a named layer set.
+    """
+    require_layer_set(contents.value, ALL.value, _MESSAGE)
 
 
 # Cortical bones and the five knee tissues.
