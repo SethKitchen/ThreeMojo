@@ -3667,6 +3667,10 @@ struct _Compiler(Movable):
             target, self.arithmetic("+" if sign > 0 else "-", target, one)
         )
 
+    def _refuse_types(mut self, given: String, held: String) raises:
+        """Refuse an assignment of one type onto another."""
+        raise self.error("cannot assign a " + given + " to a " + held)
+
     def assign(mut self, target: _Value, value: _Value) raises:
         """Make a variable, or some of its components, hold a value.
 
@@ -3693,12 +3697,7 @@ struct _Compiler(Movable):
                 + _kind_name(kind)
             )
         if value.type != target.type:
-            raise self.error(
-                "cannot assign a "
-                + value.type.name()
-                + " to a "
-                + target.type.name()
-            )
+            self._refuse_types(value.type.name(), target.type.name())
         # A point in clip space has no node: a whole assignment outside
         # every branch keeps it for `gl_Position`, and nothing else can.
         var whole = target.components == "" and self.depth == 0
@@ -3757,11 +3756,8 @@ struct _Compiler(Movable):
             Error: If the types differ, or a field cannot be assigned.
         """
         if value.type != target.type:
-            raise self.error(
-                "cannot assign a "
-                + self.type_name(value.type)
-                + " to a "
-                + self.type_name(target.type)
+            self._refuse_types(
+                self.type_name(value.type), self.type_name(target.type)
             )
         var count = len(self.structs[target.type.value - _STRUCT_BASE].names)
         for index in range(count):  # pragma: no branch
@@ -3791,12 +3787,7 @@ struct _Compiler(Movable):
                 + _kind_name(kind)
             )
         if value.type != target.type:
-            raise self.error(
-                "cannot assign a "
-                + value.type.name()
-                + " to a "
-                + target.type.name()
-            )
+            self._refuse_types(value.type.name(), target.type.name())
         var node = self.node(value)
         for index in range(size):  # pragma: no branch
             var variable = NodeVar(self.symbols[first + index].variable)
