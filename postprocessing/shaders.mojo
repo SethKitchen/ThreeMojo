@@ -44,7 +44,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from std.math import isfinite
 
@@ -1346,8 +1346,9 @@ def check_god_rays(settings: GodRaysSettings) raises:
         and isfinite(settings.resolution_scale)
     ):
         raise Error("A god-ray setting must be finite")
-    if settings.intensity < 0:
-        raise Error("A god-ray intensity must not be negative")
+    require_non_negative(
+        settings.intensity, "A god-ray intensity must not be negative"
+    )
     if settings.filter_length <= 0:
         raise Error("A god-ray filter length must be positive")
     if settings.resolution_scale <= 0 or settings.resolution_scale > 1:

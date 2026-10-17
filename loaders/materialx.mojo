@@ -30,6 +30,7 @@ node program's node that three.js's library maps it to.
 """
 
 from core.assets import Assets
+from core.ordinal import require_non_negative
 from loaders.file_path import path_directory
 from loaders.model_nodes import texture_from_file
 from loaders.xml import XmlDocument, parse_xml
@@ -270,10 +271,10 @@ struct _Reader(Movable):
     def needed(mut self, element: Int, name: String) raises -> NodeRef:
         """Return an input's node, which the element must have."""
         var found = self.input(element, name)
-        if found.value < 0:
-            raise Error(
-                "MaterialX: " + self.tag(element) + " needs its input " + name
-            )
+        require_non_negative(
+            found.value,
+            "MaterialX: " + self.tag(element) + " needs its input " + name,
+        )
         return found
 
     def node(mut self, element: Int, port: String = "") raises -> NodeRef:
@@ -393,8 +394,7 @@ struct _Reader(Movable):
     def image(mut self, element: Int, at: NodeRef) raises -> NodeRef:
         """Return an image read at a coordinate."""
         var file = self.child_named(element, "file")
-        if file < 0:
-            raise Error("MaterialX: an image needs its file")
+        require_non_negative(file, "MaterialX: an image needs its file")
         return self.graph.texture(self.texture(file), at)
 
     def library(

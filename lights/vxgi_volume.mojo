@@ -44,7 +44,7 @@ key of its numbers rounded to a few places. Here any change is detected.
 The directionally filtered radiance, `directionalRadiance`, is not ported.
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from core.assets import Assets
 from core.layers import Layers
@@ -1060,10 +1060,12 @@ struct VXGIVolume(Movable):
         """
         if self.resolution <= 0:
             raise Error("A VXGI volume's resolution must be positive")
-        if self.bounces < 0:
-            raise Error("A VXGI volume's bounces cannot be negative")
-        if self.max_lights < 0:
-            raise Error("A VXGI volume's light count cannot be negative")
+        require_non_negative(
+            self.bounces, "A VXGI volume's bounces cannot be negative"
+        )
+        require_non_negative(
+            self.max_lights, "A VXGI volume's light count cannot be negative"
+        )
         require_finite(
             Float64(self.min_opacity),
             "A VXGI volume's minimum opacity must be finite",

@@ -40,6 +40,7 @@ here cannot hold. `original_font_information`, the `name` table as
 opentype.js holds it, is not written: `FontLoader` does not read it.
 """
 
+from core.ordinal import require_non_negative
 from loaders.font import Font, parse_font
 from loaders.json import quote_json
 from loaders.three_mf import js_key_order
@@ -741,8 +742,7 @@ def _cmap[
         if windows or unicode:
             offset = data.u32(start + 4 + i * 8 + 4)
             break
-    if offset < 0:
-        raise Error("No valid cmap sub-tables found.")
+    require_non_negative(offset, "No valid cmap sub-tables found.")
     var at = start + offset
     var format = data.u16(at)
     var map = Dict[Int, Int]()

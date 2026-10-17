@@ -61,7 +61,7 @@ from std.bit import pop_count
 from std.math import acos, ceil, cos, isfinite, max, min, pi, pow, sin
 from std.math import sqrt
 from units.si import Length, METER
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 
 # `MAX_RAY`: how many sectors a slice's bit field has.
@@ -147,8 +147,9 @@ def check_ssgi(settings: SsgiSettings) raises:
     require_finite_group(finite, "An SSGI pass setting must be finite")
     if not (settings.radius > 0 and settings.exp_factor > 0):
         raise Error("An SSGI pass's radius and step growth must be positive")
-    if settings.frame_id < 0:
-        raise Error("An SSGI pass's frame count must not be negative")
+    require_non_negative(
+        settings.frame_id, "An SSGI pass's frame count must not be negative"
+    )
 
 
 # --- reading the frame, down from the top -------------------------------------
@@ -619,8 +620,9 @@ def check_sss(settings: SssSettings) raises:
         and isfinite(settings.quality)
     )
     require_finite_group(finite, "An SSS pass setting must be finite")
-    if settings.frame_id < 0:
-        raise Error("An SSS pass's frame count must not be negative")
+    require_non_negative(
+        settings.frame_id, "An SSS pass's frame count must not be negative"
+    )
 
 
 def sss_light_direction(

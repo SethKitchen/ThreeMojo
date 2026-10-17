@@ -25,6 +25,7 @@ measured along the arc of the rounded edge and the flat band between, so a
 texture is not squeezed where the surface bends.
 """
 
+from core.ordinal import require_non_negative
 from geometries.surface import (
     require_finite_extents,
     require_positive_extents,
@@ -180,8 +181,9 @@ def rounded_box(
     require_at_least_one(
         segments, "A rounded box needs one segment round each edge"
     )
-    if radius.value < 0:
-        raise Error("A rounded box needs a radius of zero or more")
+    require_non_negative(
+        radius.value, "A rounded box needs a radius of zero or more"
+    )
 
     var sizes = [
         Float64(width.value),

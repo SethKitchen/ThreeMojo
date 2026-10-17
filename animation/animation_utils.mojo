@@ -70,6 +70,7 @@ from animation.animation_clip import (
     require_frame_rate,
 )
 from animation.keyframe_track import CUBIC_SPLINE, KeyframeTrack, QUATERNION
+from core.ordinal import require_non_negative
 from math.quaternion import Quaternion
 from units.si import Duration, SECOND
 
@@ -121,8 +122,9 @@ def subclip(
             track keeps one key only.
     """
     var rate = checked_fps(fps)
-    if start_frame < 0:
-        raise Error("A subclip cannot start before frame zero")
+    require_non_negative(
+        start_frame, "A subclip cannot start before frame zero"
+    )
     if end_frame <= start_frame:
         raise Error("A subclip must end after it starts")
     var first = Float32(start_frame)
@@ -243,8 +245,9 @@ def make_clip_additive(
             is negative.
     """
     var rate = checked_fps(fps)
-    if reference_frame < 0:
-        raise Error("A reference frame cannot be before frame zero")
+    require_non_negative(
+        reference_frame, "A reference frame cannot be before frame zero"
+    )
     var at = Duration(Float32(reference_frame) / rate, SECOND)
     var made = AnimationClip(copy=target)
     for index in range(len(reference_clip.tracks)):  # pragma: no branch

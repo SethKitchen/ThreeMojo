@@ -33,6 +33,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from std.math import isfinite
 
 from math.matrix_inverse import adjugate3
@@ -586,8 +587,7 @@ struct SvgShapePath(Copyable, Movable):
         Raises:
             Error: If no outline has been started.
         """
-        if self.current < 0:
-            raise Error("SVG: a path draws before it moves")
+        require_non_negative(self.current, "SVG: a path draws before it moves")
 
     def move_to(mut self, x: Float64, y: Float64):
         """Start a new outline, three.js's `ShapePath.moveTo`.

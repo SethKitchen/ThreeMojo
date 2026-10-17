@@ -53,6 +53,7 @@ from core.binary import (
     copy_bytes,
     little_endian_u32,
 )
+from core.ordinal import require_non_negative
 from loaders.bytes import bytes_match
 from loaders.js_number import js_log2, js_parse_float, js_pow
 from loaders.xml import XmlDocument, parse_xml
@@ -433,8 +434,9 @@ def parse_ultrahdr(bytes: List[UInt8]) raises -> UltraHdrImage:
         _read_segments(bytes, images.gain_offset, end, metadata, images)
     if metadata.version.byte_length() == 0:
         raise Error("UltraHDR: not a valid UltraHDR image: no hdrgm:Version")
-    if images.gain_offset < 0:
-        raise Error("UltraHDR: there is no MPF index of the two images")
+    require_non_negative(
+        images.gain_offset, "UltraHDR: there is no MPF index of the two images"
+    )
     var sdr = decode_jpeg(
         _slice(bytes, images.primary_offset, images.primary_size)
     )

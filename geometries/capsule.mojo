@@ -20,6 +20,7 @@ has no height.
 """
 
 from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
+from core.ordinal import require_non_negative
 from geometries.surface import (
     indexed_surface,
     require_positive_radius,
@@ -63,8 +64,7 @@ def capsule(
             any segment count is too small.
     """
     require_positive_radius(radius.value, "capsule")
-    if length.value < 0:
-        raise Error("A capsule's length cannot be negative")
+    require_non_negative(length.value, "A capsule's length cannot be negative")
     require_at_least_one(
         cap_segments, "A capsule needs at least one segment on each cap"
     )

@@ -27,7 +27,7 @@ applied once. The Phong look lives in `bone.mojo`, not here.
     var weight = mass * STANDARD_GRAVITY
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from math.finite import require_finite
 from units.si import (
@@ -110,8 +110,9 @@ struct BoneTissue(ImplicitlyCopyable):
         if self.tissue_density.value <= 0:
             raise Error("A bone tissue density must be positive")
         require_finite(Float64(self.porosity), "A bone porosity must be finite")
-        if self.porosity < 0:
-            raise Error("A bone porosity cannot be negative")
+        require_non_negative(
+            self.porosity, "A bone porosity cannot be negative"
+        )
         if self.porosity > 1:
             raise Error("A bone porosity cannot exceed one")
         require_finite(
@@ -129,8 +130,9 @@ struct BoneTissue(ImplicitlyCopyable):
         require_finite(
             Float64(self.poisson_ratio), "A bone Poisson ratio must be finite"
         )
-        if self.poisson_ratio < 0:
-            raise Error("A bone Poisson ratio cannot be negative")
+        require_non_negative(
+            self.poisson_ratio, "A bone Poisson ratio cannot be negative"
+        )
         if self.poisson_ratio > 1:
             raise Error("A bone Poisson ratio cannot exceed one")
 

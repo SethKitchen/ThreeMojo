@@ -166,7 +166,12 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from core.binary import copy_bytes, little_endian_u16, little_endian_u32
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -1170,8 +1175,7 @@ def decode_base64(text: String) raises -> List[UInt8]:
 def _data_uri_bytes(uri: String) raises -> List[UInt8]:
     """Return the bytes of a `data:` URI, which must be base64."""
     var comma = uri.find(",")
-    if comma < 0:
-        raise Error("glTF: a data URI without a comma")
+    require_non_negative(comma, "glTF: a data URI without a comma")
     var header = _slice(uri, 0, comma)
     if not header.endswith(";base64"):
         raise Error("glTF: only a base64 data URI is read")
@@ -1837,8 +1841,9 @@ struct _Loader(Movable):
         if uri != "":
             return _uri_bytes(uri, self.directory)
         var view_index = self.integer(image, "bufferView", -1)
-        if view_index < 0:
-            raise Error("glTF: an image needs a uri or a bufferView")
+        require_non_negative(
+            view_index, "glTF: an image needs a uri or a bufferView"
+        )
         var view = self.view_bytes(view_index)
         return copy_bytes(self.buffers[view[0]], view[1], view[2])
 
@@ -1942,8 +1947,9 @@ struct _Loader(Movable):
                 " coordinates"
             )
         var index = self.required_integer(found, "index")
-        if index < 0:
-            raise Error("glTF: a texture index must not be negative")
+        require_non_negative(
+            index, "glTF: a texture index must not be negative"
+        )
         return index
 
     def map_of(
@@ -2595,11 +2601,10 @@ struct _Loader(Movable):
             for slot in range(len(found.names)):
                 if found.names[slot] == name:
                     var index = found.geometry.unique_attribute(found.ids[slot])
-                    if index < 0:
-                        raise Error(
-                            "glTF: a Draco attribute id is not in the Draco"
-                            " data"
-                        )
+                    require_non_negative(
+                        index,
+                        "glTF: a Draco attribute id is not in the Draco data",
+                    )
                     width = found.geometry.attributes[index].components
                     stored = found.geometry.integer_values(
                         index, _draco_type_of(component)
@@ -2636,8 +2641,9 @@ struct _Loader(Movable):
         var normalized = self.flag(accessor, "normalized") and not raw
         ref geometry = draco.geometry
         var index = geometry.unique_attribute(draco.ids[slot])
-        if index < 0:
-            raise Error("glTF: a Draco attribute id is not in the Draco data")
+        require_non_negative(
+            index, "glTF: a Draco attribute id is not in the Draco data"
+        )
         var width = geometry.attributes[index].components
         if component == COMPONENT_FLOAT:
             return (geometry.float32_values(index), width)
@@ -2673,8 +2679,7 @@ struct _Loader(Movable):
             raise Error("glTF: a primitive needs attributes")
         var geometry = BufferGeometry()
         var position = self.integer(attributes, "POSITION", -1)
-        if position < 0:
-            raise Error("glTF: a primitive needs a POSITION")
+        require_non_negative(position, "glTF: a primitive needs a POSITION")
         var draco = self.draco_of(primitive)
         var positions = self.vertex_attribute("POSITION", position, draco)
         if positions.item_size != 3:

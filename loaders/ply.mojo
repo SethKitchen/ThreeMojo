@@ -66,7 +66,12 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.binary import copy_byte_range
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 from loaders.bytes import bytes_match
 from loaders.text_number import file_line
 from loaders.js_text import split_fields
@@ -474,8 +479,9 @@ def _parse_header(
                 rows = Int(fields[2])
             except:
                 raise Error(_where(line) + "not a count: " + fields[2])
-            if rows < 0:
-                raise Error(_where(line) + "a negative count: " + fields[2])
+            require_non_negative(
+                rows, _where(line) + "a negative count: " + fields[2]
+            )
             for element in elements:
                 if element.name == fields[1]:
                     raise Error(
@@ -743,8 +749,7 @@ def parse_ply(
             names a property the vertex element has not got, or a list.
     """
     var end = _find_bytes(bytes, "end_header")
-    if end < 0:
-        raise Error("PLY: the file has no `end_header`")
+    require_non_negative(end, "PLY: the file has no `end_header`")
     var elements = List[_Element]()
     var format = _parse_header(_text(bytes, 0, end), elements, options)
     var body = end + 10  # the length of `end_header`
@@ -764,8 +769,7 @@ def parse_ply(
     for index in range(len(elements)):
         if elements[index].name == "vertex":
             vertices = index
-    if vertices < 0:
-        raise Error("PLY: the file has no `vertex` element")
+    require_non_negative(vertices, "PLY: the file has no `vertex` element")
     ref vertex = elements[vertices]
     var x = vertex.find(_names("x", "px", "posx"))
     var y = vertex.find(_names("y", "py", "posy"))
@@ -795,14 +799,14 @@ def parse_ply(
         var places = List[Int]()
         for name in options.custom_properties[attribute]:
             var place = vertex.find(_names(name))
-            if place < 0:
-                raise Error(
-                    "PLY: the custom attribute `"
-                    + options.custom_names[attribute]
-                    + "` reads `"
-                    + name
-                    + "`, which a vertex has not got"
-                )
+            require_non_negative(
+                place,
+                "PLY: the custom attribute `"
+                + options.custom_names[attribute]
+                + "` reads `"
+                + name
+                + "`, which a vertex has not got",
+            )
             places.append(place)
         custom_at.append(places^)
         custom_values.append(List[Float32]())
@@ -827,10 +831,9 @@ def parse_ply(
                     or property.name == "vertex_index"
                 ):
                     list = index
-            if list < 0:
-                raise Error(
-                    "PLY: a face must have `vertex_indices` or `vertex_index`"
-                )
+            require_non_negative(
+                list, "PLY: a face must have `vertex_indices` or `vertex_index`"
+            )
             if not element.properties[list].is_list:
                 raise Error("PLY: a face's vertex indices must be a list")
             if not element.properties[list].scalar.is_integer():
@@ -847,8 +850,9 @@ def parse_ply(
                         values.append(rows.value(bytes, property.scalar))
                         continue
                     var length = Int(rows.value(bytes, property.count))
-                    if length < 0:
-                        raise Error("a list with a negative length")
+                    require_non_negative(
+                        length, "a list with a negative length"
+                    )
                     values.append(Float64(length))
                     for _ in range(length):
                         var item = rows.value(bytes, property.scalar)

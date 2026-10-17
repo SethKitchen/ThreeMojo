@@ -26,7 +26,7 @@ from math.vector3 import (
 from math.finite import require_finite, require_finite_group
 from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 
 trait DistanceField(Copyable, Movable):
@@ -180,8 +180,9 @@ def _non_negative_measure(value: Float32, name: String, bone: String) raises:
     Raises:
         Error: If the measure is negative.
     """
-    if value < 0:
-        raise Error("A " + bone + " " + name + " cannot be negative")
+    require_non_negative(
+        value, "A " + bone + " " + name + " cannot be negative"
+    )
 
 
 def positive_length(value: Length, name: String, bone: String) raises:

@@ -14,7 +14,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from core.scene import Scene
 from core.user_data import UserData, user_data_of
 from extensions.humanoid.skeleton.head.aligned_speech import (
@@ -380,8 +380,7 @@ def bind_game_face(
                 if found >= 0:
                     raise Error("Duplicate game facial mesh")
                 found = k
-        if found < 0:
-            raise Error("A preserved game facial mesh is missing")
+        require_non_negative(found, "A preserved game facial mesh is missing")
         meshes.append(found)
         signatures.append(record.string("part_" + String(part)))
     var face = GameFace(holder, meshes, signatures)

@@ -504,8 +504,7 @@ def require_stream_start(start: Int) raises:
     Raises:
         Error: If the start is negative.
     """
-    if start < 0:
-        raise Error("A run cannot start before the stream")
+    require_non_negative(start, "A run cannot start before the stream")
 
 
 def require_instance_count(count: Int) raises:
@@ -520,8 +519,7 @@ def require_instance_count(count: Int) raises:
     Raises:
         Error: If the count is negative.
     """
-    if count < 0:
-        raise Error("An instance count cannot be negative")
+    require_non_negative(count, "An instance count cannot be negative")
 
 
 def require_group_span(start: Int, count: Int) raises:
@@ -821,11 +819,13 @@ struct BufferGeometry(Movable):
             if cap < 0:
                 return count
             return min(count, cap)
-        if cap < 0:
-            raise Error(
+        require_non_negative(
+            cap,
+            (
                 "An instanced geometry with no per-instance attribute needs"
                 " an instance count"
-            )
+            ),
+        )
         return cap
 
     def add_group(
@@ -1195,8 +1195,9 @@ struct BufferGeometry(Movable):
         Raises:
             Error: If the geometry has no such attribute.
         """
-        if slot < 0:
-            raise Error("This geometry has no attribute named " + name)
+        require_non_negative(
+            slot, "This geometry has no attribute named " + name
+        )
 
     def clone_attribute(self, name: String) raises -> BufferAttribute:
         """Return an owning copy of the named attribute.
@@ -1742,8 +1743,9 @@ struct BufferGeometry(Movable):
                 three numbers a vertex.
         """
         var slot = self._slot(String(NORMAL))
-        if slot < 0:
-            raise Error("This geometry has no attribute named normal")
+        require_non_negative(
+            slot, "This geometry has no attribute named normal"
+        )
         ref normals = self.values[slot]
         if normals.item_size < 3:
             raise Error("Normals hold three numbers a vertex")

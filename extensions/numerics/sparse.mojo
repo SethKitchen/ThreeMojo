@@ -14,6 +14,7 @@ The matrices are square, because the stiffness, mass and conductance
 matrices of an analysis are square.
 """
 
+from core.ordinal import require_non_negative
 from math.finite import require_finite
 from extensions.numerics.vector import zeros
 
@@ -53,8 +54,7 @@ struct SparseBuilder(Movable):
         Raises:
             Error: If the size is negative.
         """
-        if size < 0:
-            raise Error("A matrix size must be zero or more")
+        require_non_negative(size, "A matrix size must be zero or more")
         self.size = size
         self._rows = List[Int]()
         self._cols = List[Int]()

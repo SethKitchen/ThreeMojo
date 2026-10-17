@@ -32,6 +32,7 @@ surface that is not there. And polygons before any points, which three.js
 reads as a mesh with no positions.
 """
 
+from core.ordinal import require_non_negative
 from core.search import first_match
 from loaders.js_text import js_units
 from loaders.three_mf import js_key_order
@@ -668,18 +669,24 @@ struct _Parser[origin: Origin[mut=False]]:
     # --- where a chunk writes ----------------------------------------------
 
     def form(self) raises -> Int:
-        if self.current_form < 0:
-            raise Error("LWO: a chunk writes into a form that is not there")
+        require_non_negative(
+            self.current_form,
+            "LWO: a chunk writes into a form that is not there",
+        )
         return self.current_form
 
     def node(self) raises -> Int:
-        if self.current_node < 0:
-            raise Error("LWO: a chunk writes into a node that is not there")
+        require_non_negative(
+            self.current_node,
+            "LWO: a chunk writes into a node that is not there",
+        )
         return self.current_node
 
     def surface(self) raises -> Int:
-        if self.current_surface < 0:
-            raise Error("LWO: a chunk writes into a surface that is not there")
+        require_non_negative(
+            self.current_surface,
+            "LWO: a chunk writes into a surface that is not there",
+        )
         return self.current_surface
 
     def surface_attributes(self) raises -> Int:
@@ -1305,8 +1312,9 @@ struct _Parser[origin: Origin[mut=False]]:
             self.r.skip(length - 4)
             return
         var geometry = self.tree.child(self.current_layer, "geometry")
-        if geometry < 0:
-            raise Error("LWO: surface tags come before any polygons")
+        require_non_negative(
+            geometry, "LWO: surface tags come before any polygons"
+        )
         var indices = List[Float64]()
         while self.r.offset < final:
             indices.append(Float64(self.r.vx()))

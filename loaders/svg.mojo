@@ -89,7 +89,7 @@ from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
 from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 # The namespace an `xlink:href` attribute is in.
 comptime XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
@@ -1361,8 +1361,9 @@ struct _Parser(Movable):
             var named = svg >= 0 and id != ""
             if named:
                 used = self.find_id(svg, id)
-            if used < 0:
-                raise Error("SVG: a `use` names no element: `" + href + "`")
+            require_non_negative(
+                used, "SVG: a `use` names no element: `" + href + "`"
+            )
             if node in self.uses:
                 raise Error("SVG: a `use` draws itself: `" + href + "`")
             self.uses.append(node)

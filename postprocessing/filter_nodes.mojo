@@ -32,6 +32,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.finite import require_finite_group
 from math.norm import length2, squared_length2
 from math.smoothstep import clamped_smoothstep
@@ -174,8 +175,10 @@ def check_filters(settings: FilterSettings) raises:
         raise Error("A bilateral blur's sigmas must be positive")
     if not (settings.radius.value > 0):
         raise Error("A depth-aware blur's radius must be positive")
-    if settings.edge_radius < 0:
-        raise Error("A depth-aware blend's edge radius must not be negative")
+    require_non_negative(
+        settings.edge_radius,
+        "A depth-aware blend's edge radius must not be negative",
+    )
 
 
 # --- reading the frame -------------------------------------------------------

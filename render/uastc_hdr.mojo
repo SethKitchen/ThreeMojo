@@ -54,7 +54,7 @@ when one block does not unpack, and three.js throws. Here the decode
 raises.
 """
 from core.extent import require_positive_extent
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 from math.utils import clamp
 
 from render.compressed_texture import check_decoded_size
@@ -1085,8 +1085,9 @@ def astc_block(
         selector = bits.get(128 - weight_bits - extra, 2)
     var config_bits = 17 if partitions == 1 else 29
     var remaining = 128 - config_bits - extra - weight_bits
-    if remaining < 0:
-        raise Error("UASTC HDR: a block's weights leave no room for colors")
+    require_non_negative(
+        remaining, "UASTC HDR: a block's weights leave no room for colors"
+    )
     var value_count = 0
     for mode in modes:  # pragma: no branch
         value_count += mode.values()

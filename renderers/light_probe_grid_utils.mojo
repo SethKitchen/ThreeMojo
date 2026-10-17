@@ -30,6 +30,7 @@ It is here, beside the renderer, and not in `lights/`, because it draws.
 
 from core.assets import Assets
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from core.scene import Scene
 from lights.light import DIRECTIONAL, Light
 from lights.light_probe_grid import LightProbeGrid
@@ -311,8 +312,9 @@ def bake_light_probe_grid(
     var end = start + amount
     if start < 0 or amount < 0 or end > total:
         raise Error("A light probe grid bake names probes the grid lacks")
-    if bounces < 0:
-        raise Error("A light probe grid bake's bounces cannot be negative")
+    require_non_negative(
+        bounces, "A light probe grid bake's bounces cannot be negative"
+    )
     if bounces > 0 and amount != total:
         raise Error(
             "A light probe grid bakes every probe when the light bounces"

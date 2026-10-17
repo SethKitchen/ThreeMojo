@@ -34,7 +34,7 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
@@ -631,10 +631,9 @@ struct _Parser(Movable):
         var quote = 0
         while depth > 0:
             var byte = self.peek()
-            if byte < 0:
-                raise Error(
-                    self.where() + "a document type declaration is not closed"
-                )
+            require_non_negative(
+                byte, self.where() + "a document type declaration is not closed"
+            )
             if quote != 0:
                 if byte == quote:
                     quote = 0
@@ -760,8 +759,9 @@ struct _Parser(Movable):
         var out = List[UInt8]()
         while True:
             var byte = self.peek()
-            if byte < 0:
-                raise Error(self.where() + "an attribute value is not closed")
+            require_non_negative(
+                byte, self.where() + "an attribute value is not closed"
+            )
             if byte == quote:
                 self.at += 1
                 return String(unsafe_from_utf8=out)
@@ -868,13 +868,13 @@ struct _Parser(Movable):
         self.start_tag(document, open, texts)
         while len(open) > 0:
             var byte = self.peek()
-            if byte < 0:
-                raise Error(
-                    self.where()
-                    + "<"
-                    + document.elements[open[len(open) - 1]].name
-                    + "> is not closed"
-                )
+            require_non_negative(
+                byte,
+                self.where()
+                + "<"
+                + document.elements[open[len(open) - 1]].name
+                + "> is not closed",
+            )
             ref text = texts[len(texts) - 1]
             if byte == 38:
                 self.reference(text)

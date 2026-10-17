@@ -55,7 +55,7 @@ headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
 from core.binary import copy_bytes, little_endian_uint
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 from core.search import last_match
 
 from loaders.usd_specs import (
@@ -755,8 +755,7 @@ struct _Crate[origin: Origin[mut=False]](Movable):
             Error: If the file has no such section.
         """
         var at = self.section(name)
-        if at < 0:
-            raise Error("USDC: the file has no " + name + " section")
+        require_non_negative(at, "USDC: the file has no " + name + " section")
         return self.sections[at]
 
     def compressed(self) -> Bool:
@@ -1031,8 +1030,7 @@ struct _Crate[origin: Origin[mut=False]](Movable):
         var at = start
         while at < len(indices):
             budget -= 1
-            if budget < 0:
-                raise Error("USDC: a path tree that does not end")
+            require_non_negative(budget, "USDC: a path tree that does not end")
             var this = at
             at += 1
             var path: String

@@ -278,7 +278,12 @@ two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from animation.loop_time import _split_loop_time, _stored_loop_phase
 from animation.animation_clip import (
@@ -406,8 +411,7 @@ def require_action_weight(weight: Float32) raises:
         Error: If the weight is not a number, or if it is negative.
     """
     require_finite(Float64(weight), "An action's weight must be a number")
-    if weight < 0:
-        raise Error("An action's weight cannot be negative")
+    require_non_negative(weight, "An action's weight cannot be negative")
 
 
 def require_warp_scale(time_scale: Float32) raises:
@@ -535,8 +539,7 @@ def checked_span(duration: Duration, what: String) raises -> Float32:
     require_finite(
         Float64(seconds), what + " must last a time that is a number"
     )
-    if seconds < 0:
-        raise Error(what + " cannot last less than no time")
+    require_non_negative(seconds, what + " cannot last less than no time")
     return seconds
 
 

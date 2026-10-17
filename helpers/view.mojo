@@ -39,7 +39,7 @@ disks with a 2D canvas. This port has no canvas text. The disks are
 unlabeled, as three.js's are by default. `dispose` has no counterpart.
 """
 from core.extent import require_positive_extent
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from cameras.orthographic_camera import OrthographicCamera
 from controls.camera_frame import CameraFrame
@@ -529,8 +529,9 @@ struct ViewHelper(Movable):
             Error: If `delta` is negative.
         """
         var seconds = delta.to(SECOND)
-        if seconds < 0:
-            raise Error("A view helper cannot turn by a negative time")
+        require_non_negative(
+            seconds, "A view helper cannot turn by a negative time"
+        )
         var step = Angle(seconds * VIEW_HELPER_TURN_RATE, RADIAN)
         var arrived = _turn_towards(self._q1, self._q2, step)
         camera.position = (

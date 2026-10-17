@@ -189,7 +189,12 @@ rasterizers read them from `raster_state`. See
 `docs/wiki/Renderer-hooks-and-material-flags.md`.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from render.cube_texture import check_rotation, is_turned
 from render.cube_texture_store import (
@@ -1858,8 +1863,9 @@ struct Material(ImplicitlyCopyable):
                 "Only a phong material has a highlight: give it kind=PHONG,"
                 " or build it with phong_material"
             )
-        if emissive_intensity < 0:
-            raise Error("An emissive intensity cannot be negative")
+        require_non_negative(
+            emissive_intensity, "An emissive intensity cannot be negative"
+        )
         if (kind.is_unlit() or kind == VOLUME) and (
             emissive_map != NO_TEXTURE
             or _gives_off_light(emissive, emissive_intensity)
@@ -3784,8 +3790,9 @@ def shader_material(
         Error: If `fragment` is `NO_NODES` or negative, or `side` is none
             of its named values.
     """
-    if fragment.value < 0:
-        raise Error("A shader material needs a node program to run")
+    require_non_negative(
+        fragment.value, "A shader material needs a node program to run"
+    )
     return Material(
         _WHITE,
         side=side,

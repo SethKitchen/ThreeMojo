@@ -114,7 +114,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from math.norm import length2, squared_length2
 
 from math.triangle_normal import normal_or_zero
@@ -518,8 +518,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
         """
         if isnan(near.value) or isnan(far.value):
             raise Error("A raycaster's range must be made of numbers")
-        if near.value < 0:
-            raise Error("A raycaster's near distance cannot be negative")
+        require_non_negative(
+            near.value, "A raycaster's near distance cannot be negative"
+        )
         if far.value < near.value:
             raise Error("A raycaster's far distance cannot be below its near")
         self.ray = Ray(origin, direction)

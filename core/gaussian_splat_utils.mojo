@@ -43,7 +43,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.binary import append_little_endian_u32, little_endian_u32
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_non_negative
 from math.quaternion import quaternion_terms
 from math.norm import (
     dot3,
@@ -325,8 +325,9 @@ def packed_band(count: Int, degree: Int) raises -> List[UInt8]:
     """
     if degree < 1:
         raise Error("Gaussian splat: a packed band has a degree of 1 to 3")
-    if count < 0:
-        raise Error("Gaussian splat: a splat count cannot be negative")
+    require_non_negative(
+        count, "Gaussian splat: a splat count cannot be negative"
+    )
     return List[UInt8](
         length=count * sh_band_words(degree) * 4, fill=SH_ZERO_BYTE
     )

@@ -100,7 +100,7 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3, append_vector3
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SkinnedMesh
-from core.ordinal import require_valid
+from core.ordinal import require_valid, require_non_negative
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -600,8 +600,7 @@ def game_build_settings(
         Error: If the hair style is unnamed, the triangle budget is
             negative, or facial animation requests guide strands.
     """
-    if triangles < 0:
-        raise Error("Game triangle budget must be nonnegative")
+    require_non_negative(triangles, "Game triangle budget must be nonnegative")
     if facial_animation and guides > 0:
         raise Error(
             "Facial triangle budgets do not support strand hair; use the shell"

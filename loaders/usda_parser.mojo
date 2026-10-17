@@ -46,6 +46,7 @@ quaternion array whose length is not a multiple of four, which three.js
 pads with `undefined`.
 """
 
+from core.ordinal import require_non_negative
 from loaders.bytes import ascii_digit, ascii_space
 from loaders.js_number import js_parse_float
 from loaders.js_text import (
@@ -669,8 +670,9 @@ def _write(target: Int) raises:
         Error: If it is a string or nothing, as three.js throws in strict
             mode.
     """
-    if target < 0:
-        raise Error("USDA: a line writes into a string or into nothing")
+    require_non_negative(
+        target, "USDA: a line writes into a string or into nothing"
+    )
 
 
 def usda_tree(text: String) raises -> UsdaTree:

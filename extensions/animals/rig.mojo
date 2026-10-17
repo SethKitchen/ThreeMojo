@@ -16,6 +16,7 @@ primitives rigidly and the animal is meshed again in that pose. Joints
 keep their volume: there is no skinning to collapse them.
 """
 
+from core.ordinal import require_non_negative
 from extensions.sdf.ids import BoneId
 from extensions.sdf.vector import (
     Rigid,
@@ -108,8 +109,7 @@ struct Rig(Movable):
             Error: If the rig has no such joint.
         """
         var i = self.find_joint(name)
-        if i < 0:
-            raise Error("The rig has no joint " + name)
+        require_non_negative(i, "The rig has no joint " + name)
         return self.joints[i]
 
     def mirror_joints(mut self):

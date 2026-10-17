@@ -53,7 +53,7 @@ This replaces the old silent truncation and can refuse previously accepted
 runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_non_negative
 from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
@@ -5591,8 +5591,9 @@ def _compile(
     """
     var compiler = _Compiler(raw, toy, defines)
     compiler.shader(vertex_shader, _VERTEX)
-    if compiler.drawn < 0:
-        raise Error("GLSL vertex shader: main never writes gl_Position")
+    require_non_negative(
+        compiler.drawn, "GLSL vertex shader: main never writes gl_Position"
+    )
     for index in range(len(compiler.seen)):
         if compiler.seen[index] != compiler.drawn:
             raise Error(
@@ -5642,8 +5643,9 @@ def _compile(
             depth = node
         else:
             color = node
-    if color < 0:
-        raise Error("GLSL fragment shader: main never writes its color")
+    require_non_negative(
+        color, "GLSL fragment shader: main never writes its color"
+    )
     var rgb = compiler.graph.swizzle(NodeRef(color), "xyz")
     compiler.graph.set_output(COLOR_NODE, rgb)
     var alpha = compiler.graph.swizzle(NodeRef(color), "w")

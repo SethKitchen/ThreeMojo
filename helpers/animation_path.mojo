@@ -29,6 +29,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION as POSITION_ATTRIBUTE
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_non_negative
 from math.curve_checks import require_at_least_one
 from math.vector3 import append_vector3
 from core.scene import Scene
@@ -113,8 +114,7 @@ def require_position_track(track: Int) raises:
     Raises:
         Error: If the track index is below zero.
     """
-    if track < 0:
-        raise Error("The clip has no position track for the node")
+    require_non_negative(track, "The clip has no position track for the node")
 
 
 def animation_path_markers(

@@ -31,7 +31,7 @@ not check those, and what it makes of them is unspecified.
 """
 
 from core.binary import little_endian_u32
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from std.math import sqrt
 from std.memory import bitcast
@@ -232,8 +232,7 @@ def require_meshopt_count(count: Int) raises:
     Raises:
         Error: If the count is negative.
     """
-    if count < 0:
-        raise Error("meshopt: a count must not be negative")
+    require_non_negative(count, "meshopt: a count must not be negative")
 
 
 def require_meshopt_index_size(size: Int) raises:

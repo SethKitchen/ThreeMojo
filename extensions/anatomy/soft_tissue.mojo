@@ -48,7 +48,7 @@ elasticity.
     var mass = tissue.wet_density * volume
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from math.finite import require_finite
 from units.si import (
@@ -146,8 +146,10 @@ struct SoftTissue(ImplicitlyCopyable):
             Float64(self.water_fraction),
             "A soft tissue water fraction must be finite",
         )
-        if self.water_fraction < 0:
-            raise Error("A soft tissue water fraction cannot be negative")
+        require_non_negative(
+            self.water_fraction,
+            "A soft tissue water fraction cannot be negative",
+        )
         if self.water_fraction > 1:
             raise Error("A soft tissue water fraction cannot exceed one")
         require_finite(
@@ -160,8 +162,9 @@ struct SoftTissue(ImplicitlyCopyable):
             Float64(self.poisson_ratio),
             "A soft tissue Poisson ratio must be finite",
         )
-        if self.poisson_ratio < 0:
-            raise Error("A soft tissue Poisson ratio cannot be negative")
+        require_non_negative(
+            self.poisson_ratio, "A soft tissue Poisson ratio cannot be negative"
+        )
         if self.poisson_ratio > 1:
             raise Error("A soft tissue Poisson ratio cannot exceed one")
 

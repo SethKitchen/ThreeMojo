@@ -37,7 +37,12 @@ other than the one its `*count` declares.
 """
 
 from core.binary import copy_bytes, little_endian_uint
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from loaders.js_text import is_js_word
 from loaders.text_number import file_line
@@ -563,8 +568,7 @@ def parse_fbx_text(text: String) raises -> FbxDocument:
     # three.js finds the version with `/FBXVersion: (\d+)/` over the whole
     # text, before it reads anything else.
     var at = text.find("FBXVersion: ")
-    if at < 0:
-        raise Error("FBX: the file names no FBXVersion")
+    require_non_negative(at, "FBX: the file names no FBXVersion")
     var digits = String()
     for byte in text.as_bytes()[at + 12 :]:
         if byte < 48 or byte > 57:

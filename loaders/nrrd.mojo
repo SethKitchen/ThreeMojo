@@ -47,6 +47,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative
 from math.norm import length3
 from loaders.bytes import ascii_digit, hex_digit_value, is_sign_mark
 from loaders.js_number import js_parse_float, js_parse_int
@@ -550,8 +551,7 @@ def parse_nrrd(bytes: List[UInt8]) raises -> Volume:
         if bytes[i - 1] == 10 and bytes[i] == 10:
             end = i
             break
-    if end < 0:
-        raise Error("NRRD: no blank line ends the header")
+    require_non_negative(end, "NRRD: no blank line ends the header")
     # three.js's `_parseChars( _bytes, 0, i - 2 )`: one character short.
     var header = parse_nrrd_header(latin1_units(Span(bytes)[: max(end - 2, 0)]))
     var data = Span(bytes)[end + 1 :]

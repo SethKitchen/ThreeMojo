@@ -42,7 +42,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2, squared_length2
@@ -1260,8 +1260,9 @@ def check_ssr(settings: SsrSettings) raises:
         raise Error("An SSR setting must be finite")
     if settings.opacity < 0 or settings.opacity > 1:
         raise Error("An SSR opacity runs from zero to one")
-    if settings.thickness.value < 0:
-        raise Error("An SSR thickness must not be negative")
+    require_non_negative(
+        settings.thickness.value, "An SSR thickness must not be negative"
+    )
     if not settings.max_distance.value > 0:
         raise Error("An SSR reach must be positive")
 

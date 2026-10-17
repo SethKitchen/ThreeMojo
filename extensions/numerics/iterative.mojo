@@ -19,6 +19,7 @@ linear systems" (1952), and Saad, "Iterative Methods for Sparse Linear
 Systems" (2nd edition, 2003), algorithm 9.1.
 """
 
+from core.ordinal import require_non_negative
 from extensions.numerics.sparse import CsrMatrix
 from extensions.numerics.vector import (
     axpy,
@@ -104,8 +105,9 @@ def conjugate_gradient(
     """
     require_row_count(len(b), a.size)
     require_positive_tolerance(tolerance)
-    if max_iterations < 0:
-        raise Error("An iteration budget must be zero or more")
+    require_non_negative(
+        max_iterations, "An iteration budget must be zero or more"
+    )
     check_finite(b)
     var diagonal = a.diagonal()
     for i in range(a.size):

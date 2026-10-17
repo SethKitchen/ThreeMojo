@@ -134,7 +134,12 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -1874,11 +1879,13 @@ struct _Exporter(Movable):
         # A skeleton has at least one bone.
         for bone in first.skeleton.bones:  # pragma: no branch
             var joint = _written_slot(bone.node, written, "a bone")
-            if joint < 0:
-                raise Error(
+            require_non_negative(
+                joint,
+                (
                     "glTF: a bone rides a node that is not written: show it,"
                     " or write every node"
-                )
+                ),
+            )
             joints.append(joint)
             var inverse = bone.inverse_bind * first.bind_matrix
             for element in range(16):  # pragma: no branch
