@@ -106,6 +106,7 @@ from math.utils import clamp, edge_index
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
+from math.utils import mix_delta
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import (
@@ -143,12 +144,11 @@ from units.si import Angle, RADIAN
 def require_texture_size(width: Int, height: Int) raises:
     """Refuse a texture whose size is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The width, in pixels.
         height: The height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.
@@ -415,12 +415,11 @@ comptime FLOAT_TYPE = TexelType(1)
 def require_texel_type(texel_type: TexelType) raises:
     """Refuse a texel type that is neither bytes nor floats.
 
+    Nothing. The call returns when the type is `UNSIGNED_BYTE_TYPE`
+    or `FLOAT_TYPE`.
+
     Args:
         texel_type: What one channel is stored as.
-
-    Returns:
-        Nothing. The call returns when the type is `UNSIGNED_BYTE_TYPE`
-            or `FLOAT_TYPE`.
 
     Raises:
         Error: If the type is neither of those.
@@ -434,13 +433,12 @@ def require_texel_type(texel_type: TexelType) raises:
 def require_float_linear(texel_type: TexelType, space: ColorSpace) raises:
     """Refuse a float texture whose color space is not linear.
 
+    Nothing. The call returns when the texture is not a float, or its
+    color space is linear.
+
     Args:
         texel_type: What one channel is stored as.
         space: The color space the texture decodes with.
-
-    Returns:
-        Nothing. The call returns when the texture is not a float, or its
-            color space is linear.
 
     Raises:
         Error: If a float texture is not linear.
@@ -476,12 +474,11 @@ comptime UV_CHANNEL_1 = UvChannel(1)
 def require_uv_channel(channel: UvChannel) raises:
     """Refuse a texture channel that is neither of the two sets.
 
+    Nothing. The call returns when the channel is `UV_CHANNEL_0` or
+    `UV_CHANNEL_1`.
+
     Args:
         channel: Which coordinate set the texture reads.
-
-    Returns:
-        Nothing. The call returns when the channel is `UV_CHANNEL_0` or
-            `UV_CHANNEL_1`.
 
     Raises:
         Error: If the channel is neither of those.
@@ -605,6 +602,20 @@ def float_texel(
         The color.
     """
     return FloatColor(r, g, b, 1.0 if alpha == IGNORED else a)
+
+
+def mix(near: Float32, far: Float32, t: Float32) -> Float32:
+    """Return a channel partway from one value to another.
+
+    Args:
+        near: The first value.
+        far: The second value.
+        t: The fraction between them.
+
+    Returns:
+        The difference-first blend.
+    """
+    return mix_delta(near, far, t)
 
 
 def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
@@ -1594,11 +1605,10 @@ struct Texture(Movable):
     def _require_level(self, level: Int) raises:
         """Refuse a mip level this texture does not hold.
 
+        Nothing. The call returns when the texture holds that level.
+
         Args:
             level: The mip level.
-
-        Returns:
-            Nothing. The call returns when the texture holds that level.
 
         Raises:
             Error: If the texture has no such level.
@@ -2070,6 +2080,8 @@ def gradient_place(
     A nonfinite coordinate or gradient is refused before the wrap. A
     finite coordinate is reduced by `gradient_sample_coordinate`.
 
+    Error: Never.
+
     Args:
         u: Horizontal coordinate.
         v: Vertical coordinate.
@@ -2082,8 +2094,6 @@ def gradient_place(
         `ready` is false when an input is not finite. Otherwise `u` and
         `v` are the reduced coordinates.
 
-    Raises:
-        Error: Never.
     """
     if not texture_grad_finite(u, v, dx, dy):
         return GradientPlace(False, 0, 0)

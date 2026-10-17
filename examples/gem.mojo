@@ -12,7 +12,7 @@ transmission, thickness, attenuation and dispersion. The opaque boxes
 are drawn first, and the sphere bends and tints that picture.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

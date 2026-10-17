@@ -376,11 +376,10 @@ struct ShapePoints(Movable):
 def require_separate_holes(inside: Bool) raises:
     """Refuse a hole that lies inside another hole.
 
+    Nothing. The call returns when the point lies outside the other hole.
+
     Args:
         inside: Whether one hole's point lies inside the other hole.
-
-    Returns:
-        Nothing. The call returns when the point lies outside the other hole.
 
     Raises:
         Error: If the point lies inside the other hole.

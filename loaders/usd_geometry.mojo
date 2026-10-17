@@ -871,11 +871,10 @@ def _coordinates(
 def require_corner_indices(present: Bool) raises:
     """Refuse faces that have no corner indices.
 
+    Nothing. The call returns when the indices are present.
+
     Args:
         present: Whether the mesh carries corner indices.
-
-    Returns:
-        Nothing. The call returns when the indices are present.
 
     Raises:
         Error: If the indices are absent.

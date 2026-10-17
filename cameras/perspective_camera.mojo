@@ -76,11 +76,10 @@ struct ViewBounds(ImplicitlyCopyable):
 def require_film_gauge(gauge: Float32) raises:
     """Refuse a film gauge that is not positive.
 
+    Nothing. The call returns when the gauge is positive and finite.
+
     Args:
         gauge: The film width, in millimeters.
-
-    Returns:
-        Nothing. The call returns when the gauge is positive and finite.
 
     Raises:
         Error: If the gauge is not positive.

@@ -90,11 +90,10 @@ def _check_second_moments(
 def require_segment_length(length: Float64) raises:
     """Refuse a segment length that is negative or not finite.
 
+    Nothing. The call returns when the length is finite and zero or more.
+
     Args:
         length: The segment length, in meters.
-
-    Returns:
-        Nothing. The call returns when the length is finite and zero or more.
 
     Raises:
         Error: If the length is negative or not finite.

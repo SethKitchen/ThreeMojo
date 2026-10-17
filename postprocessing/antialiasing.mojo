@@ -706,11 +706,10 @@ comptime JITTER_LEVELS = 6
 def require_sample_level(level: Int) raises:
     """Refuse a sample level outside zero through five.
 
+    Nothing. The call returns when the level is zero through five.
+
     Args:
         level: The level. Zero is one sample. Five is 32 samples.
-
-    Returns:
-        Nothing. The call returns when the level is zero through five.
 
     Raises:
         Error: If the level is outside zero through five.

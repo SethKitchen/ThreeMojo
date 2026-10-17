@@ -41,6 +41,8 @@ and three corners, and a keyword out of place are refused, naming the
 face or the line.
 """
 
+from std.math import isfinite
+
 from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -52,9 +54,8 @@ from core.ordinal import require_positive
 from geometries.surface import position_normal_surface
 from loaders.bytes import bytes_match
 from loaders.js_text import split_fields
-from loaders.text_number import file_line, read_finite_float32
+from loaders.text_number import file_line
 from render.srgb import srgb_to_linear
-from math.finite import require_finite
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -168,13 +169,13 @@ def _float(bytes: List[UInt8], at: Int, face: Int) raises -> Float32:
         Error: If it is not finite.
     """
     var value = bitcast[DType.float32](UInt32(little_endian_u32(bytes, at)))
-    require_finite(
-        Float64(value),
-        "STL face "
-        + String(face)
-        + ": a coordinate must be a finite number, and this one is "
-        + String(value),
-    )
+    if not isfinite(value):
+        raise Error(
+            "STL face "
+            + String(face)
+            + ": a coordinate must be a finite number, and this one is "
+            + String(value)
+        )
     return value
 
 
@@ -348,11 +349,26 @@ struct _Words:
                 finite as a `Float32`.
         """
         var field = self.next("a number")
-        return read_finite_float32(
-            field,
-            _where(self.line()),
-            "a coordinate must be a finite number",
-        )
+        var wide: Float64
+        try:
+            wide = Float64(field)
+        except reason:
+            raise Error(
+                _where(self.line())
+                + "not a number: "
+                + field
+                + " ("
+                + String(reason)
+                + ")"
+            )
+        var value = Float32(wide)
+        if not isfinite(value):
+            raise Error(
+                _where(self.line())
+                + "a coordinate must be a finite number: "
+                + field
+            )
+        return value
 
     def rest_of_line(mut self) -> String:
         """Read the words left on the line of the word last read, and

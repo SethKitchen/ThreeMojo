@@ -728,12 +728,11 @@ def check_steps(steps: Int) raises:
 def require_dash_size(size: Float32) raises:
     """Refuse a dash length that is negative or not finite.
 
+    Nothing. The call returns when the length is finite and not
+    negative.
+
     Args:
         size: The dash length, in meters.
-
-    Returns:
-        Nothing. The call returns when the length is finite and not
-            negative.
 
     Raises:
         Error: If the length is negative or not finite.
@@ -744,12 +743,11 @@ def require_dash_size(size: Float32) raises:
 def require_gap_size(size: Float32) raises:
     """Refuse a gap length that is negative or not finite.
 
+    Nothing. The call returns when the length is finite and not
+    negative.
+
     Args:
         size: The gap length, in meters.
-
-    Returns:
-        Nothing. The call returns when the length is finite and not
-            negative.
 
     Raises:
         Error: If the length is negative or not finite.
@@ -763,13 +761,12 @@ def require_unmixed_data(is_data: Bool, mixes: Bool) raises:
     A normal or a depth material holds bytes. A blend would mix those
     bytes with the scene's light.
 
+    Nothing. The call returns when the material shows light, or it
+    does not blend.
+
     Args:
         is_data: Whether the material shows data rather than light.
         mixes: Whether its blending mixes with the pixel behind it.
-
-    Returns:
-        Nothing. The call returns when the material shows light, or it
-            does not blend.
 
     Raises:
         Error: If a data material blends.
@@ -784,12 +781,11 @@ def require_unmixed_data(is_data: Bool, mixes: Bool) raises:
 def require_strand_opacity(opacity: Float32) raises:
     """Refuse a strand opacity outside zero through one.
 
+    Nothing. The call returns when the opacity is finite and inside
+    that range.
+
     Args:
         opacity: The coverage, from zero through one.
-
-    Returns:
-        Nothing. The call returns when the opacity is finite and inside
-            that range.
 
     Raises:
         Error: If the opacity is not finite or is outside zero through one.

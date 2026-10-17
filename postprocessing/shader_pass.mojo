@@ -616,13 +616,12 @@ def screen_pixel[
 def require_saved_frame(length: Int, pixels: Int) raises:
     """Refuse a saved image that is neither empty nor the frame's size.
 
+    Nothing. The call returns when the image is empty or matches
+    the frame.
+
     Args:
         length: How many pixels the saved image holds.
         pixels: How many pixels the frame holds.
-
-    Returns:
-        Nothing. The call returns when the image is empty or matches
-            the frame.
 
     Raises:
         Error: If the image is present and a different size.

@@ -12,7 +12,7 @@ target. Each half is cleared to its own background and drawn by its own
 camera, and neither touches the other. The target is resolved once.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

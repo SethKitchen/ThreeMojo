@@ -35,7 +35,7 @@ It reports the median, the 95th percentile and the slowest frame of each
 stage. The numbers describe the machine that runs it.
 """
 
-from bench.timing import _percentile, _sorted
+from tools._bench_timing import _percentile, _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D

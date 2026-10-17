@@ -179,11 +179,10 @@ comptime FLOAT_TARGET = TargetType(2)
 def require_target_type(type: TargetType) raises:
     """Refuse a render target type that is none of the three.
 
+    Nothing. The call returns when the type is named.
+
     Args:
         type: The attachment storage.
-
-    Returns:
-        Nothing. The call returns when the type is named.
 
     Raises:
         Error: If the type is none of the three.

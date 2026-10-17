@@ -26,7 +26,7 @@ squares therefore run straight across a face and meet at right angles at its
 edges, rather than continuing around the cube.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

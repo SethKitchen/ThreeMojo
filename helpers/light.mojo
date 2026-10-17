@@ -39,7 +39,6 @@ each face that holds it, as three.js's wireframe draws it.
 
 from core.buffer_geometry import BufferGeometry
 from core.object3d import NO_PARENT, facing
-from core.ordinal import require_positive
 from core.scene import Scene
 from helpers.segments import Segments
 from lights.aim import light_target_position
@@ -85,7 +84,8 @@ def _paint(light: Light, color: Optional[Color]) -> FloatColor:
 def _positive(size: Length, name: String) raises -> Float32:
     """Return `size` in meters, refusing one that is not positive."""
     var meters = size.to(METER)
-    require_positive(meters, "A " + name + " helper needs a positive size")
+    if meters <= 0:
+        raise Error("A " + name + " helper needs a positive size")
     return meters
 
 

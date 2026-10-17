@@ -12,7 +12,7 @@ at plus and minus ten centimeters. Each leg carries bones, knee tissues
 and skeletal muscles.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

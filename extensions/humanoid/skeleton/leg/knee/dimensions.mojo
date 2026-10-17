@@ -94,11 +94,10 @@ struct KneePart(Equatable, ImplicitlyCopyable, Writable):
 def require_knee_part(part: KneePart) raises:
     """Refuse a knee solid that is not named.
 
+    Nothing. The call returns when the solid is named.
+
     Args:
         part: The knee solid.
-
-    Returns:
-        Nothing. The call returns when the solid is named.
 
     Raises:
         Error: If the solid is not cartilage, a meniscus, or a collateral.

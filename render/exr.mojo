@@ -549,13 +549,12 @@ def _has_rgb(channels: List[ExrChannel]) -> Bool:
 def require_exr_run(used: Int, extra: Int, limit: Int) raises:
     """Refuse an EXR run that would expand past its lines.
 
+    Nothing. The call returns when the run fits.
+
     Args:
         used: How many bytes are already written.
         extra: How many bytes the next run would write.
         limit: How many bytes the lines may hold.
-
-    Returns:
-        Nothing. The call returns when the run fits.
 
     Raises:
         Error: If the run would pass the lines.
@@ -1481,11 +1480,10 @@ def _dwa_inverse_dct(mut data: List[Float32]):
 def require_dwa_finite(bits: Int) raises:
     """Refuse a DWA coefficient whose exponent is all ones.
 
+    Nothing. The call returns when the exponent is not all ones.
+
     Args:
         bits: The half-float bits.
-
-    Returns:
-        Nothing. The call returns when the exponent is not all ones.
 
     Raises:
         Error: If the coefficient is not finite.

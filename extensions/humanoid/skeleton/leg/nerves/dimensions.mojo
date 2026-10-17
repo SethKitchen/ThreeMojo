@@ -51,11 +51,10 @@ struct NervePart(Equatable, ImplicitlyCopyable, Writable):
 def require_nerve_part(part: NervePart) raises:
     """Refuse a nerve that is not named.
 
+    Nothing. The call returns when the nerve is named.
+
     Args:
         part: The nerve.
-
-    Returns:
-        Nothing. The call returns when the nerve is named.
 
     Raises:
         Error: If the nerve is not a named peripheral nerve.

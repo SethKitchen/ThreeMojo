@@ -166,12 +166,11 @@ def require_vertex_index(vertex: Int, count: Int) raises:
     A negative entry is a different check. Callers that refuse one do
     that before they call this.
 
+    Nothing. The call returns when the entry names a vertex.
+
     Args:
         vertex: The index entry.
         count: How many vertices there are.
-
-    Returns:
-        Nothing. The call returns when the entry names a vertex.
 
     Raises:
         Error: If the entry points past the last vertex.
@@ -183,12 +182,11 @@ def require_vertex_index(vertex: Int, count: Int) raises:
 def require_stored_index(vertex: Int, count: Int) raises:
     """Refuse an index entry that is negative or past the last vertex.
 
+    Nothing. The call returns when the entry names a vertex.
+
     Args:
         vertex: The index entry.
         count: How many vertices there are.
-
-    Returns:
-        Nothing. The call returns when the entry names a vertex.
 
     Raises:
         Error: If the entry is negative or points past the last vertex.
@@ -200,11 +198,10 @@ def require_stored_index(vertex: Int, count: Int) raises:
 def require_nonnegative_index(vertex: Int) raises:
     """Refuse an index entry that is negative.
 
+    Nothing. The call returns when the entry is zero or more.
+
     Args:
         vertex: The index entry.
-
-    Returns:
-        Nothing. The call returns when the entry is zero or more.
 
     Raises:
         Error: If the entry is negative.
@@ -306,11 +303,10 @@ struct MaterialIndex(Equatable, ImplicitlyCopyable, Writable):
 def require_material_index(index: MaterialIndex) raises:
     """Refuse a material index that is negative.
 
+    Nothing. The call returns when the index is zero or more.
+
     Args:
         index: The group's material index.
-
-    Returns:
-        Nothing. The call returns when the index is zero or more.
 
     Raises:
         Error: If the index is negative.
@@ -479,11 +475,10 @@ comptime TUBE_GEOMETRY = GeometryType(19)
 def require_draw_range(range: DrawRange) raises:
     """Refuse a draw range that starts or runs a negative distance.
 
+    Nothing. The call returns when the range is valid.
+
     Args:
         range: The range.
-
-    Returns:
-        Nothing. The call returns when the range is valid.
 
     Raises:
         Error: If the start or the count is negative.
@@ -496,11 +491,10 @@ def require_draw_range(range: DrawRange) raises:
 def require_stream_start(start: Int) raises:
     """Refuse a run that starts before the stream.
 
+    Nothing. The call returns when the start is zero or more.
+
     Args:
         start: The first slot.
-
-    Returns:
-        Nothing. The call returns when the start is zero or more.
 
     Raises:
         Error: If the start is negative.
@@ -511,11 +505,10 @@ def require_stream_start(start: Int) raises:
 def require_instance_count(count: Int) raises:
     """Refuse a negative instance count.
 
+    Nothing. The call returns when the count is zero or more.
+
     Args:
         count: How many instances.
-
-    Returns:
-        Nothing. The call returns when the count is zero or more.
 
     Raises:
         Error: If the count is negative.
@@ -526,12 +519,11 @@ def require_instance_count(count: Int) raises:
 def require_group_span(start: Int, count: Int) raises:
     """Refuse a group that starts or runs a negative distance.
 
+    Nothing. The call returns when both are zero or more.
+
     Args:
         start: The first slot.
         count: How many slots.
-
-    Returns:
-        Nothing. The call returns when both are zero or more.
 
     Raises:
         Error: If either is negative.
@@ -543,12 +535,11 @@ def require_group_span(start: Int, count: Int) raises:
 def require_morph_index(target: Int, count: Int) raises:
     """Refuse a morph target the geometry does not have.
 
+    Nothing. The call returns when the index names a target.
+
     Args:
         target: Which morph target.
         count: How many position targets the geometry has.
-
-    Returns:
-        Nothing. The call returns when the index names a target.
 
     Raises:
         Error: If the index is negative or past the last target.
@@ -559,12 +550,11 @@ def require_morph_index(target: Int, count: Int) raises:
 def require_morph_cover(held: Int, expected: Int) raises:
     """Refuse a morph target that does not cover every vertex.
 
+    Nothing. The call returns when the two counts are equal.
+
     Args:
         held: How many vertices the target describes.
         expected: How many vertices the geometry has.
-
-    Returns:
-        Nothing. The call returns when the two counts are equal.
 
     Raises:
         Error: If the counts differ.
@@ -1188,19 +1178,17 @@ struct BufferGeometry(Movable):
     def _require_attribute(self, slot: Int, name: String) raises:
         """Refuse a missing attribute.
 
+        Nothing. The call returns when the attribute is present.
+
         Args:
             slot: The attribute's place, negative when it is absent.
             name: The name in the error.
 
-        Returns:
-            Nothing. The call returns when the attribute is present.
-
         Raises:
             Error: If the geometry has no such attribute.
         """
-        require_non_negative(
-            slot, "This geometry has no attribute named " + name
-        )
+        if slot < 0:
+            raise Error("This geometry has no attribute named " + name)
 
     def clone_attribute(self, name: String) raises -> BufferAttribute:
         """Return an owning copy of the named attribute.
@@ -1292,11 +1280,9 @@ struct BufferGeometry(Movable):
             Error: If either index is out of range, or an index entry points
                 past the end of the position attribute.
         """
-        require_index_in_count(
-            triangle,
-            self.triangle_count(),
-            "Triangle index out of range",
-        )
+        # Refuse a negative index before reading the geometry's positions.
+        if triangle < 0 or triangle >= self.triangle_count():
+            raise Error("Triangle index out of range")
         if corner < 0 or corner > 2:
             raise Error("A triangle has three corners")
 
@@ -1853,11 +1839,9 @@ struct BufferGeometry(Movable):
                 no positions, or if an index entry points past the last
                 vertex.
         """
-        require_index_in_count(
-            slot,
-            self.stream_length(),
-            "The triangle stream has no slot of that number",
-        )
+        # The count can raise when positions are absent; check the index first.
+        if slot < 0 or slot >= self.stream_length():
+            raise Error("The triangle stream has no slot of that number")
         if not self.is_indexed():
             return slot
         var vertex = self.index[slot]

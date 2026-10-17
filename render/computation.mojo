@@ -38,7 +38,8 @@ filter are not ported. A shader's other uniforms are set on
 `programs[variable]` after `init`, which compiles the shaders.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import index_in_count
+
 from materials.glsl import compile_shader_material
 from materials.nodes import (
     AT_RIGHT,
@@ -71,6 +72,7 @@ from render.texture import (
     Wrap,
     float_texture,
     gradient_place,
+    texture_grad_finite,
 )
 from std.math import floor
 
@@ -80,12 +82,11 @@ comptime Lanes = SIMD[DType.float32, 4]
 def require_computation_ready(programs: Int, variables: Int) raises:
     """Refuse a computation that has not been initialized.
 
+    Nothing. The call returns when there is one program a variable.
+
     Args:
         programs: How many compiled programs the computation holds.
         variables: How many variables it holds.
-
-    Returns:
-        Nothing. The call returns when there is one program a variable.
 
     Raises:
         Error: If `init` has not compiled the shaders.
@@ -225,6 +226,8 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
         Returns:
             The texel's four floats; transparent black for nonfinite inputs.
         """
+        if not texture_grad_finite(u, v, dx, dy):
+            return TRANSPARENT_BLACK
         var placed = gradient_place(
             u,
             v,
@@ -485,11 +488,8 @@ struct GPUComputationRenderer(Movable):
 
     def _check(self, variable: Int) raises:
         """Refuse a variable that is not there."""
-        require_index_in_count(
-            variable,
-            len(self.variables),
-            "A computation has no variable " + String(variable),
-        )
+        if not index_in_count(variable, len(self.variables)):
+            raise Error("A computation has no variable " + String(variable))
 
     def init(mut self) raises:
         """Compile each shader with its dependencies' samplers and the

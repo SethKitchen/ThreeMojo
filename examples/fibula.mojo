@@ -13,7 +13,7 @@ comes from Trotter and Gleser 1952. The surface is the cortical bone map.
 The program also prints each bone's tissue mass and Earth weight.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

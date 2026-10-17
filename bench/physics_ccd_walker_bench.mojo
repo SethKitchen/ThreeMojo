@@ -23,7 +23,7 @@ Run it with `mojo run -I . bench/physics_ccd_walker_bench.mojo`.
 from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import Shape, PhysicsMaterial
-from bench.contacts import bodies_missing_contact
+from tools._physics_contacts import bodies_missing_contact
 from extensions.physics.world import CollisionEvent, PhysicsWorld
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion

@@ -509,12 +509,11 @@ struct MassProperties(ImplicitlyCopyable):
 def require_capsule_half(half_height: Float64) raises:
     """Refuse a capsule half height that is negative or not finite.
 
+    Nothing. The call returns when the half height is finite and zero
+    or more.
+
     Args:
         half_height: Half the length of the segment between the spheres.
-
-    Returns:
-        Nothing. The call returns when the half height is finite and zero
-        or more.
 
     Raises:
         Error: If the half height is negative or not finite.

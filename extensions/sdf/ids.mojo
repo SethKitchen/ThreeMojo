@@ -80,12 +80,11 @@ struct TagId(Equatable, ImplicitlyCopyable, Writable):
 def require_tag(id: TagId, count: Int) raises:
     """Refuse a tag id this sculpt does not have.
 
+    Nothing. The call returns when the id names a tag.
+
     Args:
         id: The tag.
         count: How many tags the sculpt has.
-
-    Returns:
-        Nothing. The call returns when the id names a tag.
 
     Raises:
         Error: If the id is negative or past the last tag.

@@ -179,14 +179,14 @@ def text_lines(text: String) -> List[String]:
     A carriage return becomes a line feed, then the text is split at each
     line feed. An empty line is kept.
 
+    Error: Never.
+
     Args:
         text: The text.
 
     Returns:
         The lines, in order.
 
-    Raises:
-        Error: Never.
     """
     var out = List[String]()
     for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch

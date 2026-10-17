@@ -12,7 +12,7 @@ the light above a threshold bleed, darkens the corners, and applies the
 renderer's tone curve once at the end.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     framed_camera,
     gallery_renderer,

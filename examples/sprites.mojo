@@ -17,7 +17,7 @@ of sight by its material. The small blue sprite keeps its size on the
 image as it orbits, because its attenuation is off.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

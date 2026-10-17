@@ -10,19 +10,20 @@ separated list, and refuse a value that is not finite as a `Float32`.
 Both also refuse a source stride below one.
 """
 
+from std.math import isfinite
+
 from core.ordinal import require_positive
 from loaders.js_text import split_fields
-from math.finite import stored_float32, require_finite
+from math.finite import stored_float32
 
 
 def require_positive_stride(stride: Int) raises:
     """Refuse a Collada source stride that is not positive.
 
+    Nothing. The call returns when the stride is at least one.
+
     Args:
         stride: How many values one element holds.
-
-    Returns:
-        Nothing. The call returns when the stride is at least one.
 
     Raises:
         Error: If the stride is below one.
@@ -64,9 +65,7 @@ def collada_floats(text: String) raises -> List[Float64]:
     var out = List[Float64]()
     for field in split_fields(text):
         var value = collada_number(field)
-        require_finite(
-            stored_float32(value),
-            "Collada: a number must be finite: " + field,
-        )
+        if not isfinite(stored_float32(value)):
+            raise Error("Collada: a number must be finite: " + field)
         out.append(value)
     return out^

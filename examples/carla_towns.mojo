@@ -20,7 +20,7 @@ and each is also written alone beside the page.
 The town must be in the cache: the example stops if its package is not.
 """
 
-from examples.output import example_destination
+from tools._example_output import example_destination
 
 from extensions.carla.actor import ActorId
 from extensions.carla.assets import AssetRegistry

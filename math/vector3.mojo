@@ -747,6 +747,8 @@ def component_max(a: Vector3, b: Vector3) -> Vector3:
 def radians_between(a: Vector3, b: Vector3) -> Float32:
     """Return the angle between two vectors, in radians.
 
+    Error: Never.
+
     Args:
         a: One vector.
         b: The other.
@@ -754,8 +756,6 @@ def radians_between(a: Vector3, b: Vector3) -> Float32:
     Returns:
         From zero to pi. A quarter turn if either vector has no length.
 
-    Raises:
-        Error: Never.
     """
     return a.angle_to(b).to(RADIAN)
 
@@ -794,6 +794,8 @@ def reciprocal_unit(value: Vector3) -> Vector3:
 def midpoint(a: Vector3, b: Vector3) -> Vector3:
     """Return the point halfway from `a` to `b`.
 
+    Error: Never.
+
     Args:
         a: One end.
         b: The other end.
@@ -801,14 +803,14 @@ def midpoint(a: Vector3, b: Vector3) -> Vector3:
     Returns:
         Each component is the average of the two.
 
-    Raises:
-        Error: Never.
     """
     return (a + b) * Float32(0.5)
 
 
 def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     """Return the average of three points.
+
+    Error: Never.
 
     Args:
         a: The first point.
@@ -818,8 +820,6 @@ def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     Returns:
         Each component is the average of the three.
 
-    Raises:
-        Error: Never.
     """
     return (a + b + c) * (Float32(1) / 3)
 
@@ -827,15 +827,14 @@ def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 def append_vector3(mut values: List[Float32], point: Vector3):
     """Append `point`'s three components.
 
+    Nothing. Three numbers are appended.
+
+    Error: Never.
+
     Args:
         values: The list that receives x, y, and z.
         point: The vector.
 
-    Returns:
-        Nothing. Three numbers are appended.
-
-    Raises:
-        Error: Never.
     """
     values.append(point.x)
     values.append(point.y)
@@ -847,6 +846,8 @@ def vector3_from_float64(x: Float64, y: Float64, z: Float64) -> Vector3:
 
     Each component is rounded to `Float32`.
 
+    Error: Never.
+
     Args:
         x: The first component.
         y: The second component.
@@ -855,8 +856,6 @@ def vector3_from_float64(x: Float64, y: Float64, z: Float64) -> Vector3:
     Returns:
         The rounded vector.
 
-    Raises:
-        Error: Never.
     """
     return Vector3(Float32(x), Float32(y), Float32(z))
 
@@ -866,17 +865,16 @@ def append_float64_xyz(
 ):
     """Append three `Float64` components as `Float32`.
 
+    Nothing. Three numbers are appended.
+
+    Error: Never.
+
     Args:
         values: The list that receives the components.
         x: The first component.
         y: The second component.
         z: The third component.
 
-    Returns:
-        Nothing. Three numbers are appended.
-
-    Raises:
-        Error: Never.
     """
     append_vector3(values, vector3_from_float64(x, y, z))
 
@@ -931,12 +929,11 @@ def weighted_sum3(
 def require_nonzero_scale(scale: Vector3, message: String) raises:
     """Refuse a scale whose components multiply to zero.
 
+    Nothing. The call returns when the product is nonzero.
+
     Args:
         scale: The three axis scales.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when the product is nonzero.
 
     Raises:
         Error: If the product is zero.

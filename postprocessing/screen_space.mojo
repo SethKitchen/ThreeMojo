@@ -466,11 +466,10 @@ def multiply_light(mut frame: RenderTarget, values: List[Float32]):
 def require_screen_output(output: ScreenSpaceOutput) raises:
     """Refuse a screen-space output that is none of the six named outputs.
 
+    Nothing. The call returns when the output is named.
+
     Args:
         output: The output the pass writes.
-
-    Returns:
-        Nothing. The call returns when the output is named.
 
     Raises:
         Error: If the output is none of the six.
@@ -552,11 +551,10 @@ struct SsaoSettings(ImplicitlyCopyable):
 def require_ssao_samples(size: Int) raises:
     """Refuse an SSAO kernel that holds no sample.
 
+    Nothing. The call returns when the kernel holds at least one sample.
+
     Args:
         size: How many samples the kernel holds.
-
-    Returns:
-        Nothing. The call returns when the kernel holds at least one sample.
 
     Raises:
         Error: If `size` is below one.

@@ -12,7 +12,7 @@ patches of the classic model. The body, the lid, the handle and the
 spout are one geometry.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

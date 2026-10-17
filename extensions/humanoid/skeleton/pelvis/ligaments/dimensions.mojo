@@ -107,11 +107,10 @@ comptime INTERPUBIC_DISC = PelvisLigament(11)
 def require_pelvis_ligament(part: PelvisLigament) raises:
     """Refuse a pelvic ligament that is not named.
 
+    Nothing. The call returns when the ligament is named.
+
     Args:
         part: The ligament.
-
-    Returns:
-        Nothing. The call returns when the ligament is named.
 
     Raises:
         Error: If the ligament is not named.

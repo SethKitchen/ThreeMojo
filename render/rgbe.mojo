@@ -219,13 +219,12 @@ def _is_scanline_start(bytes: List[UInt8], at: Int, width: Int) -> Bool:
 def require_rgbe_span(at: Int, length: Int, count: Int) raises:
     """Refuse an RGBE read that needs more bytes than the file still holds.
 
+    Nothing. The call returns when at least `count` bytes remain.
+
     Args:
         at: The next byte to read.
         length: How many bytes the file has.
         count: How many bytes the read needs.
-
-    Returns:
-        Nothing. The call returns when at least `count` bytes remain.
 
     Raises:
         Error: If fewer than `count` bytes remain.
@@ -237,12 +236,11 @@ def require_rgbe_span(at: Int, length: Int, count: Int) raises:
 def require_rgbe_byte(at: Int, length: Int) raises:
     """Refuse an RGBE read past the file.
 
+    Nothing. The call returns when a byte remains.
+
     Args:
         at: The next byte to read.
         length: How many bytes the file has.
-
-    Returns:
-        Nothing. The call returns when a byte remains.
 
     Raises:
         Error: If the read is past the file.

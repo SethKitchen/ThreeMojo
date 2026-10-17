@@ -129,11 +129,10 @@ def member_axes(start: Vec3d, end: Vec3d, reference: Vec3d) raises -> LocalAxes:
 def require_member_length(length: Float64) raises:
     """Refuse a member length that is not positive and finite.
 
+    Nothing. The call returns when the length is positive and finite.
+
     Args:
         length: The length, in meters.
-
-    Returns:
-        Nothing. The call returns when the length is positive and finite.
 
     Raises:
         Error: If the length is not positive and finite.

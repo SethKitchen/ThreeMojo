@@ -150,11 +150,10 @@ struct InterleavedBuffer(Copyable, Movable):
     def _require_index(self, at: Int) raises:
         """Refuse an index outside the interleaved array.
 
+        Nothing. The call returns when the index names a number.
+
         Args:
             at: Where the number is, counted from the first.
-
-        Returns:
-            Nothing. The call returns when the index names a number.
 
         Raises:
             Error: If the index is outside the array.

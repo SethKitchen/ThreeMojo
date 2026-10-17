@@ -89,7 +89,7 @@ from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
 from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
-from core.ordinal import require_valid, require_non_negative, require_positive
+from core.ordinal import require_valid, require_positive
 
 # The namespace an `xlink:href` attribute is in.
 comptime XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
@@ -207,12 +207,11 @@ def _new_number(
 def _unexpected_svg(current: String, index: Int) raises:
     """Refuse one unexpected SVG number character.
 
+    Nothing. The call does not return.
+
     Args:
         current: The character.
         index: Its place in the text.
-
-    Returns:
-        Nothing. The call does not return.
 
     Raises:
         Error: The character cannot appear there.
@@ -1100,9 +1099,10 @@ struct _Parser(Movable):
             if text == "":
                 continue
             var open = text.find("(")
-            require_positive(
-                open, "SVG: a transform with no parenthesis: `" + text + "`"
-            )
+            if open <= 0:
+                raise Error(
+                    "SVG: a transform with no parenthesis: `" + text + "`"
+                )
             var type = String(text[byte=:open])
             var array = parse_floats(String(text[byte = open + 1 :]))
             var current = SvgMatrix()
@@ -1213,9 +1213,8 @@ struct _Parser(Movable):
             Error: If it has no points, or a number is not one.
         """
         var pairs = svg_point_pairs(self.doc.attribute(node, "points"))
-        require_positive(
-            len(pairs), "SVG: a `" + self.doc.name(node) + "` with no points"
-        )
+        if len(pairs) <= 0:
+            raise Error("SVG: a `" + self.doc.name(node) + "` with no points")
         var path = SvgShapePath()
         for i in range(0, len(pairs), 2):  # pragma: no branch
             var x = self.length(pairs[i])
@@ -1360,9 +1359,8 @@ struct _Parser(Movable):
             var named = svg >= 0 and id != ""
             if named:
                 used = self.find_id(svg, id)
-            require_non_negative(
-                used, "SVG: a `use` names no element: `" + href + "`"
-            )
+            if used < 0:
+                raise Error("SVG: a `use` names no element: `" + href + "`")
             if node in self.uses:
                 raise Error("SVG: a `use` draws itself: `" + href + "`")
             self.uses.append(node)

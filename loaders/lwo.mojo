@@ -342,12 +342,11 @@ def _truthy(tree: LwoTree, object: Int, key: String) -> Bool:
 def _require_lwo_value(value: LwoValue, name: String) raises:
     """Refuse an LWO attribute that has no value.
 
+    Nothing. The call returns when the value is present.
+
     Args:
         value: The attribute's value.
         name: The attribute's name in the error.
-
-    Returns:
-        Nothing. The call returns when the value is present.
 
     Raises:
         Error: If the value is missing.
@@ -577,10 +576,10 @@ struct _MaterialParser:
             if input_names.strings[i] == "Material":
                 var ref_name = _at(input_nodes, i)
                 material_node = _node(tree, nodes, ref_name)
-                require_non_negative(
-                    material_node,
-                    "LWO: the material node " + ref_name + " is not there",
-                )
+                if material_node < 0:
+                    raise Error(
+                        "LWO: the material node " + ref_name + " is not there"
+                    )
                 material_name = ref_name
                 has_material = True
         var node_attributes = -1
@@ -649,9 +648,10 @@ struct _MaterialParser:
         for k in order:
             var name = names[k]
             var node = nodes[k]
-            require_non_negative(
-                node, "LWO: the texture node for " + name + " is not there"
-            )
+            if node < 0:
+                raise Error(
+                    "LWO: the texture node for " + name + " is not there"
+                )
             var file = tree.get(node, "fileName")
             if not file.truthy():
                 raise Error(

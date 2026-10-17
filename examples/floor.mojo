@@ -36,7 +36,7 @@ tile in step across the seam. `Texture.repeat` does that at sample time.
 This example writes the scale into the `uv` attribute.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

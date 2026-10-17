@@ -230,7 +230,7 @@ def angle_between[T: PolylineVertex](start: T, end: T) -> Angle:
         if first.length_sq() == 0 or second.length_sq() == 0:
             return angle_radians(pi / 2)
         theta = first.dot(second)
-    return Angle(acos(clamp_unit(theta)), RADIAN)
+    return angle_radians(Float64(acos(clamp_unit(theta))))
 
 
 def lerp_in_place[T: PolylineVertex](mut value: T, other: T, alpha: Float32):

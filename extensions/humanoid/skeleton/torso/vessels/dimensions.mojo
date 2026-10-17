@@ -77,11 +77,10 @@ comptime SUBCLAVIAN_VEIN = TorsoVessel(9)
 def require_torso_vessel(part: TorsoVessel) raises:
     """Refuse a torso vessel that is not named.
 
+    Nothing. The call returns when the vessel is named.
+
     Args:
         part: The vessel.
-
-    Returns:
-        Nothing. The call returns when the vessel is named.
 
     Raises:
         Error: If the vessel is not named.

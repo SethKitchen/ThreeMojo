@@ -78,13 +78,12 @@ def _append_tube_vertex(
 def _require_tube_radii(radius: Float32, tube: Float32, name: String) raises:
     """Refuse a tube whose path radius or tube radius is not positive.
 
+    Nothing. The call returns when both radii are positive.
+
     Args:
         radius: The path radius.
         tube: The tube radius.
         name: `torus` or `torus knot`.
-
-    Returns:
-        Nothing. The call returns when both radii are positive.
 
     Raises:
         Error: If either radius is not positive.

@@ -13,7 +13,7 @@ map. The phase advances by one twelfth, so the rings return to their
 start after the last frame.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

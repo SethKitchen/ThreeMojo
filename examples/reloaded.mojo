@@ -12,7 +12,7 @@ The page is Exporters. `write_gltf` writes the mesh and its material.
 a glTF file from this writer does not carry lights.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

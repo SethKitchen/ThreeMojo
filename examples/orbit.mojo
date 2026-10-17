@@ -12,7 +12,7 @@ writes the result as a position. That is Vector3 and Quaternion doing the
 work the page describes.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

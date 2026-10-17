@@ -135,11 +135,10 @@ struct PelvisBone(Equatable, ImplicitlyCopyable, Writable):
 def require_pelvis_bone(part: PelvisBone) raises:
     """Refuse a pelvic bone that is not named.
 
+    Nothing. The call returns when the bone is named.
+
     Args:
         part: The bone.
-
-    Returns:
-        Nothing. The call returns when the bone is named.
 
     Raises:
         Error: If the bone is not one of the four.

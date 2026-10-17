@@ -12,7 +12,11 @@ model from the skyscraper's seed: storeys, rooms, doors, windows, a frame
 and furniture. The render view draws its outside.
 """
 
-from examples.output import example_destination, build_and_spin, gallery_camera
+from tools._example_output import (
+    example_destination,
+    build_and_spin,
+    gallery_camera,
+)
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets

@@ -61,10 +61,10 @@ texture. See `CompressedFormat.is_float`.
 the last row and column of blocks hang off the edge; the texels past the
 edge are decoded and dropped, as a GPU stores and never shows them.
 """
+
+from core.ordinal import index_in_count
 from core.ordinal import (
     ordinal_valid,
-    require_index_in_count,
-    require_valid,
 )
 
 from render.bptc import BptcTables, bc6h_block, bc7_block
@@ -656,11 +656,11 @@ def _check_payload(
             grid's.
     """
     require_texture_size(width, height)
-    require_valid(
-        format.is_valid(),
-        "A compressed format must be one of the named formats, not "
-        + String(format),
-    )
+    if not format.is_valid():
+        raise Error(
+            "A compressed format must be one of the named formats, not "
+            + String(format)
+        )
     check_decoded_size(width, height, format.is_float())
     if len(data) != level_bytes(width, height, format):
         raise Error("Compressed payload length does not match the dimensions")
@@ -994,14 +994,10 @@ struct CompressedImage(Movable):
             Error: If there is no such face or level, and everything
                 `compressed_texture` raises.
         """
-        require_index_in_count(
-            face, self.faces, "This image has no face " + String(face)
-        )
-        require_index_in_count(
-            level,
-            self.levels,
-            "This image has no level " + String(level),
-        )
+        if not index_in_count(face, self.faces):
+            raise Error("This image has no face " + String(face))
+        if not index_in_count(level, self.levels):
+            raise Error("This image has no level " + String(level))
         return compressed_texture(
             self.level_width(level),
             self.level_height(level),

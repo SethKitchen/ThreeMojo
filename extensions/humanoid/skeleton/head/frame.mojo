@@ -265,11 +265,10 @@ def head_dimensions(
 def require_head_athleticism(athleticism: Athleticism) raises:
     """Refuse a head muscle whose athleticism is not named.
 
+    Nothing. The call returns when the athleticism is named.
+
     Args:
         athleticism: `UNTONED` or `TONED`.
-
-    Returns:
-        Nothing. The call returns when the athleticism is named.
 
     Raises:
         Error: If the athleticism is not named.

@@ -12,7 +12,7 @@ from an interpolated unit normal. Shading only at the corners would crease
 every edge.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

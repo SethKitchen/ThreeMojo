@@ -77,11 +77,10 @@ comptime CORACOCLAVICULAR_LIGAMENT = TorsoLigament(6)
 def require_torso_ligament(part: TorsoLigament) raises:
     """Refuse a torso ligament that is not named.
 
+    Nothing. The call returns when the part is named.
+
     Args:
         part: The part.
-
-    Returns:
-        Nothing. The call returns when the part is named.
 
     Raises:
         Error: If the part is not named.

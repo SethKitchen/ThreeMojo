@@ -34,7 +34,6 @@ from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
     require_valid,
-    require_non_negative,
 )
 
 from math.scaled_products import (
@@ -1922,11 +1921,10 @@ comptime SHADE_SHADOW = ShadeMode(3)
 def require_shade_mode(mode: ShadeMode) raises:
     """Refuse a shading mode that is none of the four.
 
+    Nothing. The call returns when the mode is named.
+
     Args:
         mode: The mode to check.
-
-    Returns:
-        Nothing. The call returns when the mode is named.
 
     Raises:
         Error: If `mode` is none of the four.
@@ -2641,12 +2639,11 @@ def _same_range(a: RasterVertex, b: RasterVertex) -> Bool:
 def require_triangle_lighting(named: Int, count: Int) raises:
     """Refuse a triangle whose lighting is outside the frame.
 
+    Nothing. The call returns when the index is in range.
+
     Args:
         named: The lighting index stored on the triangle.
         count: How many lightings the frame holds.
-
-    Returns:
-        Nothing. The call returns when the index is in range.
 
     Raises:
         Error: If the index is outside the frame.
@@ -3275,12 +3272,11 @@ def require_linear_data(linear: Bool, name: String) raises:
     the same words. The host asks it of a texture. The GPU asks it of the
     descriptor it uploaded.
 
+    Nothing. The call returns when the map is linear.
+
     Args:
         linear: Whether the map is stored in linear color.
         name: What to call the map in the error.
-
-    Returns:
-        Nothing. The call returns when the map is linear.
 
     Raises:
         Error: If the map is not stored in linear color.
@@ -3301,13 +3297,12 @@ def require_data_descriptors(
     The host asks this of a texture. The GPU asks it of the descriptors it
     uploaded. The words are the same.
 
+    Nothing. The call returns when both descriptors say the map is data.
+
     Args:
         linear: Whether the map is stored in linear color.
         ignores_alpha: Whether the map ignores its alpha.
         name: What to call it in the error: "An alpha map", say.
-
-    Returns:
-        Nothing. The call returns when both descriptors say the map is data.
 
     Raises:
         Error: If the map is not linear, or it reads its alpha as coverage.
@@ -3417,11 +3412,10 @@ def require_gradient_texels(has_texels: Bool) raises:
     The host asks this of a texture. The GPU asks it of the flag it
     uploaded. The words are the same.
 
+    Nothing. The call returns when the map holds texels.
+
     Args:
         has_texels: Whether the map holds at least one texel.
-
-    Returns:
-        Nothing. The call returns when the map holds texels.
 
     Raises:
         Error: If the map is blank.
@@ -3438,11 +3432,10 @@ def require_gradient_bytes(holds_floats: Bool) raises:
     The host asks this of a texture. The GPU asks it of the flag it
     uploaded. The words are the same.
 
+    Nothing. The call returns when the map stores bytes.
+
     Args:
         holds_floats: Whether the map stores float texels.
-
-    Returns:
-        Nothing. The call returns when the map stores bytes.
 
     Raises:
         Error: If the map stores floats.
@@ -3459,11 +3452,10 @@ def require_gradient_row(height: Int) raises:
     The host asks this of a texture. The GPU asks it of the height it
     uploaded. The words are the same.
 
+    Nothing. The call returns when the map is one row high.
+
     Args:
         height: How many rows the map has.
-
-    Returns:
-        Nothing. The call returns when the map is one row high.
 
     Raises:
         Error: If the map has any other height.
@@ -3708,28 +3700,27 @@ def require_program_uniform(
     The host asks this of a program. The GPU asks it before a launch.
     The words are the same.
 
+    Nothing. The call returns when the uniform names an asset.
+
     Args:
         value: The uniform's id. A negative value names nothing.
         kind: The uniform, with its article: "a texture" or "an array texture".
         missing: The asset it failed to name: "texture" or "cube".
         setter: The call that names one: "set_texture".
 
-    Returns:
-        Nothing. The call returns when the uniform names an asset.
-
     Raises:
         Error: If `value` is negative.
     """
-    require_non_negative(
-        value,
-        "A node program reads "
-        + kind
-        + " uniform that names no "
-        + missing
-        + "; call "
-        + setter
-        + "() first",
-    )
+    if value < 0:
+        raise Error(
+            "A node program reads "
+            + kind
+            + " uniform that names no "
+            + missing
+            + "; call "
+            + setter
+            + "() first"
+        )
 
 
 def check_program_maps(
@@ -3914,12 +3905,11 @@ def require_ignored_alpha(ignores_alpha: Bool, name: String) raises:
     with the same words. The host asks it of a texture. The GPU asks it of
     the descriptor it uploaded.
 
+    Nothing. The call returns when the map ignores its alpha.
+
     Args:
         ignores_alpha: Whether the map ignores its alpha.
         name: What to call the map in the error.
-
-    Returns:
-        Nothing. The call returns when the map ignores its alpha.
 
     Raises:
         Error: If the map reads its alpha as coverage.
@@ -3955,12 +3945,11 @@ def require_coverage_alpha(reads_alpha: Bool, name: String) raises:
     same words. The host asks it of a texture. The GPU asks it of the
     descriptor it uploaded.
 
+    Nothing. The call returns when the map reads its alpha.
+
     Args:
         reads_alpha: Whether the map reads its alpha as coverage.
         name: What to call the map in the error.
-
-    Returns:
-        Nothing. The call returns when the map reads its alpha.
 
     Raises:
         Error: If the map ignores its alpha.
@@ -7472,11 +7461,10 @@ def _rows_of_corners(corners: List[Corner]) -> List[Int]:
 def require_whole_triangles(corner_count: Int) raises:
     """Refuse a corner list that is not whole triangles.
 
+    Nothing. The call returns when the count is a multiple of three.
+
     Args:
         corner_count: How many corners the list holds.
-
-    Returns:
-        Nothing. The call returns when the count is a multiple of three.
 
     Raises:
         Error: If the count is not a multiple of three.
@@ -7488,11 +7476,10 @@ def require_whole_triangles(corner_count: Int) raises:
 def require_whole_segments(segment_count: Int) raises:
     """Refuse a segment list that is not whole segments.
 
+    Nothing. The call returns when the count is a multiple of two.
+
     Args:
         segment_count: How many endpoints the list holds.
-
-    Returns:
-        Nothing. The call returns when the count is a multiple of two.
 
     Raises:
         Error: If the count is not a multiple of two.

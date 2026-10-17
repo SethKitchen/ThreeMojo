@@ -18,13 +18,13 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `xhigh`.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     hang_centered,
     spin_pair_gallery,
 )
-from examples.studio import (
+from tools._example_studio import (
     cast_received_shadows,
     room_lit_scene,
     studio_floor,

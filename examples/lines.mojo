@@ -14,7 +14,7 @@ path is dashed, and its dashes are measured along the path itself, so
 they keep their length as it climbs and turns.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

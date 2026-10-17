@@ -14,8 +14,12 @@ and the foot. The surfaces are physically based, lit by a room
 environment and a lamp that casts soft shadows, and tone mapped.
 """
 
-from examples.output import example_destination, gallery_camera, spin_gallery
-from examples.studio import (
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    spin_gallery,
+)
+from tools._example_studio import (
     cast_received_shadows,
     room_lit_scene,
     studio_floor,

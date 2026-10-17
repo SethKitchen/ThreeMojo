@@ -113,13 +113,12 @@ comptime RLE_GRAYSCALE = TgaImageType(11)
 def require_tga_span(start: Int, count: Int, length: Int) raises:
     """Refuse a TGA read that runs past the file.
 
+    Nothing. The call returns when the read stays inside the file.
+
     Args:
         start: The first byte to read.
         count: How many bytes the read needs.
         length: How many bytes the file has.
-
-    Returns:
-        Nothing. The call returns when the read stays inside the file.
 
     Raises:
         Error: If the read runs past the file.

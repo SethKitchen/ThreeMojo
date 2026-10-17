@@ -550,13 +550,12 @@ def _place_decomposed(
     is what remains. A zero axis length raises `flat_axis` before that
     split, so the caller names the file.
 
+    Nothing. The node holds the three parts.
+
     Args:
         node: The node to set.
         matrix: The transform relative to the node's parent.
         flat_axis: The error when an axis has no length.
-
-    Returns:
-        Nothing. The node holds the three parts.
 
     Raises:
         Error: If an axis length is zero, an entry is not finite, or a
@@ -580,13 +579,12 @@ def _place_from_column_major(
 ) raises:
     """Set a node from sixteen column-major numbers.
 
+    Nothing. The node holds the decomposed transform.
+
     Args:
         node: The node to set.
         elements: Sixteen numbers, column by column.
         flat_axis: The error when an axis has no length.
-
-    Returns:
-        Nothing. The node holds the decomposed transform.
 
     Raises:
         Error: Everything `_place_decomposed` raises.

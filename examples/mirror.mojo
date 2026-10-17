@@ -15,7 +15,7 @@ reflects that one, so the boxes go round in its surface as they go round
 the scene. The floor reflects the sky a little, mixed into its own gray.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

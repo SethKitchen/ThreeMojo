@@ -195,12 +195,11 @@ def _default_probes(size: Length) raises -> Int:
 def require_probe_product(left: Int, right: Int) raises:
     """Refuse a light-probe count that overflows the lookup.
 
+    Nothing. The call returns when the product fits.
+
     Args:
         left: The count already formed.
         right: The next axis.
-
-    Returns:
-        Nothing. The call returns when the product fits.
 
     Raises:
         Error: If `left` is greater than the probe limit divided by `right`.

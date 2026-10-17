@@ -170,11 +170,10 @@ struct HeadContents(Equatable, ImplicitlyCopyable, Writable):
 def require_head_contents(contents: HeadContents) raises:
     """Refuse a head layer set that is not named.
 
+    Nothing. The call returns when the set is named.
+
     Args:
         contents: Which tissue layers a head draws.
-
-    Returns:
-        Nothing. The call returns when the set is named.
 
     Raises:
         Error: If the set is not a named layer set.

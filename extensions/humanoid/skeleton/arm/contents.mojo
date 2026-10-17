@@ -146,11 +146,10 @@ struct ArmContents(Equatable, ImplicitlyCopyable, Writable):
 def require_arm_contents(contents: ArmContents) raises:
     """Refuse an arm layer set that is not named.
 
+    Nothing. The call returns when the set is named.
+
     Args:
         contents: Which tissue layers an arm draws.
-
-    Returns:
-        Nothing. The call returns when the set is named.
 
     Raises:
         Error: If the set is not a named layer set.

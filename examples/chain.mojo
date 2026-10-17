@@ -11,7 +11,7 @@ The scene graph is a flat array. A parent is always an earlier node. This
 file is five children in a row, so turning the first carries the rest.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

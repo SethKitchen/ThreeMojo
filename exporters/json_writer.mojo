@@ -182,13 +182,12 @@ struct JsonWriter(Movable):
     ) raises:
         """Write a three.js `metadata` object.
 
+        Nothing. The metadata object is written into this text.
+
         Args:
             version: The format version.
             type_name: The `type` field.
             generator: The `generator` field. An empty string omits it.
-
-        Returns:
-            Nothing. The metadata object is written into this text.
 
         Raises:
             Error: If a value has no place here, or `version` is not finite.
@@ -270,11 +269,10 @@ struct JsonWriter(Movable):
     def numbers(mut self, values: List[Float32]) raises:
         """Write `values` as one JSON array.
 
+        Nothing.
+
         Args:
             values: The numbers, in order. An empty list writes `[]`.
-
-        Returns:
-            Nothing.
 
         Raises:
             Error: If one number is not finite, or an array has no place
@@ -288,11 +286,10 @@ struct JsonWriter(Movable):
     def integers(mut self, values: List[Int]) raises:
         """Write `values` as one JSON array of whole numbers.
 
+        Nothing.
+
         Args:
             values: The numbers, in order. An empty list writes `[]`.
-
-        Returns:
-            Nothing.
 
         Raises:
             Error: If an array has no place here.
@@ -305,11 +302,10 @@ struct JsonWriter(Movable):
     def strings(mut self, values: List[String]) raises:
         """Write `values` as one JSON array of strings.
 
+        Nothing.
+
         Args:
             values: The strings, in order. An empty list writes `[]`.
-
-        Returns:
-            Nothing.
 
         Raises:
             Error: If an array has no place here.

@@ -250,12 +250,11 @@ struct InputEvent(ImplicitlyCopyable):
 def require_viewport_size(width: Int, height: Int) raises:
     """Refuse a viewport whose size is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The width, in pixels.
         height: The height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.
@@ -266,12 +265,11 @@ def require_viewport_size(width: Int, height: Int) raises:
 def require_view_size(width: Int, height: Int) raises:
     """Refuse a view whose size is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The width, in pixels.
         height: The height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.
@@ -284,12 +282,11 @@ def require_view_size(width: Int, height: Int) raises:
 def refuse_invalid(what: String, value: Int) raises:
     """Refuse a number that does not name its kind.
 
+    Nothing. The call raises.
+
     Args:
         what: What was refused, the words after `Invalid`.
         value: The number that was refused.
-
-    Returns:
-        Nothing. The call raises.
 
     Raises:
         Error: Always. The message is `Invalid <what>: <value>`.
@@ -300,13 +297,12 @@ def refuse_invalid(what: String, value: Int) raises:
 def require_named(valid: Bool, what: String, value: Int) raises:
     """Refuse a number that does not name its kind.
 
+    Nothing. The call returns when `valid` is true.
+
     Args:
         valid: Whether the number names a kind.
         what: What was refused, the words after `Invalid`.
         value: The number that was refused.
-
-    Returns:
-        Nothing. The call returns when `valid` is true.
 
     Raises:
         Error: If `valid` is false. The message is `Invalid <what>: <value>`.
@@ -318,11 +314,10 @@ def require_named(valid: Bool, what: String, value: Int) raises:
 def require_input(event: InputEvent) raises:
     """Refuse an event whose kind, button or key is not a named value.
 
+    Nothing. The call returns when the event is valid.
+
     Args:
         event: The event.
-
-    Returns:
-        Nothing. The call returns when the event is valid.
 
     Raises:
         Error: If the kind, button or key is invalid.

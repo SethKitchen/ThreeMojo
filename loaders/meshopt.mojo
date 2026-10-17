@@ -223,11 +223,10 @@ def _decode_bytes(
 def require_meshopt_count(count: Int) raises:
     """Refuse a meshopt count that is negative.
 
+    Nothing. The call returns when the count is zero or more.
+
     Args:
         count: How many items the buffer names.
-
-    Returns:
-        Nothing. The call returns when the count is zero or more.
 
     Raises:
         Error: If the count is negative.
@@ -238,11 +237,10 @@ def require_meshopt_count(count: Int) raises:
 def require_meshopt_index_size(size: Int) raises:
     """Refuse a meshopt index that is not two or four bytes.
 
+    Nothing. The call returns when the size is two or four.
+
     Args:
         size: How many bytes one index holds.
-
-    Returns:
-        Nothing. The call returns when the size is two or four.
 
     Raises:
         Error: If the size is neither two nor four.
@@ -254,11 +252,10 @@ def require_meshopt_index_size(size: Int) raises:
 def require_meshopt_filter(filter: MeshoptFilter) raises:
     """Refuse a meshopt filter on a buffer that is not attributes.
 
+    Nothing. The call returns when the filter is none.
+
     Args:
         filter: The filter the buffer names.
-
-    Returns:
-        Nothing. The call returns when the filter is none.
 
     Raises:
         Error: If the filter is not none.

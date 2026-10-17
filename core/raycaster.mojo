@@ -448,12 +448,11 @@ def _worn_vertex(
 def require_image_extent(width: Int, height: Int) raises:
     """Refuse an image whose width or height is not positive.
 
+    Nothing. The call returns when both sizes are positive.
+
     Args:
         width: The image width, in pixels.
         height: The image height, in pixels.
-
-    Returns:
-        Nothing. The call returns when both sizes are positive.
 
     Raises:
         Error: If the width or the height is not positive.

@@ -14,7 +14,7 @@ shows both screens on a stand. The ramp the box is shaded through is a
 data texture: three numbers, never an image file.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

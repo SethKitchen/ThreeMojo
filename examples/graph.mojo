@@ -12,7 +12,7 @@ the sine of `Renderer.time`. A `POSITION_NODE` pushes each vertex along
 its normal by the same wave. The lights still shade the sphere.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

@@ -75,6 +75,8 @@ image that cannot be read or decoded are refused, with the line they were
 found on. Text before the first `newmtl` is skipped, as three.js skips it.
 """
 
+from std.math import isfinite
+
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
@@ -82,7 +84,6 @@ from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.obj import ObjModel, read_obj
 from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side
-from math.finite import require_unit_range
 from math.vector2 import Vector2
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
@@ -97,10 +98,10 @@ from render.texture import (
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from loaders.js_text import split_fields
-from loaders.text_number import file_line, read_finite_float32
+from loaders.text_number import file_line
 from std.pathlib import Path
 from units.si import METER, Length
-from core.ordinal import require_valid, require_non_negative
+from core.ordinal import require_valid
 
 # What three.js's `MeshPhongMaterial` starts from.
 comptime _WHITE = Color(255, 255, 255)
@@ -224,7 +225,8 @@ struct MtlLibrary(Movable):
             Error: If the library has no material of that name.
         """
         var index = self.find(name)
-        require_non_negative(index, "MTL: no material is named " + name)
+        if index < 0:
+            raise Error("MTL: no material is named " + name)
         return self.materials[index]
 
     def add(mut self, name: String, material: MaterialId):
@@ -461,7 +463,22 @@ def _number(field: String, line: Int) raises -> Float32:
         Error: If the field is not a number, or is not finite once it is a
             `Float32`.
     """
-    return read_finite_float32(field, _where(line), "a number must be finite")
+    var wide: Float64
+    try:
+        wide = Float64(field)
+    except reason:
+        raise Error(
+            _where(line)
+            + "not a number: "
+            + field
+            + " ("
+            + String(reason)
+            + ")"
+        )
+    var value = Float32(wide)
+    if not isfinite(value):
+        raise Error(_where(line) + "a number must be finite: " + field)
+    return value
 
 
 def _fraction(field: String, line: Int) raises -> Float32:
@@ -479,9 +496,8 @@ def _fraction(field: String, line: Int) raises -> Float32:
             one.
     """
     var value = _number(field, line)
-    require_unit_range(
-        value, _where(line) + "must be from zero to one: " + field
-    )
+    if value < 0 or value > 1:
+        raise Error(_where(line) + "must be from zero to one: " + field)
     return value
 
 
@@ -511,9 +527,8 @@ def _channels(
         var channel = _number(field, line)
         if normalize:
             channel /= 255
-        require_unit_range(
-            channel, _where(line) + "must be from zero to one: " + field
-        )
+        if channel < 0 or channel > 1:
+            raise Error(_where(line) + "must be from zero to one: " + field)
         out.append(channel)
     return out^
 
@@ -832,10 +847,12 @@ def _build(
             surface.emissive = _color(_channels(entry.value, entry.line, False))
         elif key == "ns":
             var shininess = _number(entry.value, entry.line)
-            require_non_negative(
-                shininess,
-                _where(entry.line) + "Ns must not be negative: " + entry.value,
-            )
+            if shininess < 0:
+                raise Error(
+                    _where(entry.line)
+                    + "Ns must not be negative: "
+                    + entry.value
+                )
             surface.shininess = shininess
         elif key == "d":
             var opacity = _fraction(entry.value, entry.line)

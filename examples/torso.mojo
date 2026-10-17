@@ -19,13 +19,13 @@ The optional second argument is the mesh quality: `low`, `medium`,
 level below it. The default is `high`.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     spin_frame,
     stand_on_floor,
 )
-from examples.studio import (
+from tools._example_studio import (
     cast_received_shadows,
     room_lit_scene,
     studio_floor,
@@ -33,7 +33,7 @@ from examples.studio import (
     studio_sun,
     tissue_materials,
 )
-from examples.preview import turn_about_vertical
+from tools._example_preview import turn_about_vertical
 
 from core.assets import Assets
 from core.object3d import Object3D

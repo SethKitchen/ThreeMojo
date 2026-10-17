@@ -117,9 +117,10 @@ def _flag(
 
 def _list(doc: JsonDocument, item: Int, key: String) raises -> Int:
     """Return an array under `key`, or `NO_NODE`."""
-    return doc.optional_kind(
-        item, key, ARRAY, "Geometry JSON: " + key + " must be an array"
-    )
+    var found = doc.get(item, key)
+    if found != NO_NODE and doc.kind(found) != ARRAY:
+        raise Error("Geometry JSON: " + key + " must be an array")
+    return found
 
 
 def _lathe_points(doc: JsonDocument, item: Int) raises -> List[Vector2]:

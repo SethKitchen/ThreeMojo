@@ -119,6 +119,8 @@ struct LightView(ImplicitlyCopyable):
     def load(self, x: Int, y: Int) -> FloatColor:
         """Return one pixel, the edge pixel's past the edge: `textureLoad`.
 
+        Error: Never.
+
         Args:
             x: The column. A column past the frame reads the edge pixel.
             y: The row, down from the top. A row past the frame reads the
@@ -127,8 +129,6 @@ struct LightView(ImplicitlyCopyable):
         Returns:
             The stored light.
 
-        Raises:
-            Error: Never.
         """
         return self.at(edge_index(x, self.width), edge_index(y, self.height))
 

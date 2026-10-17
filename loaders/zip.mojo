@@ -33,6 +33,8 @@ does not write ZIP64, so an archive must stay under 4 GiB. It checks all
 field lengths before it allocates or writes the archive.
 """
 
+from core.ordinal import index_in_count
+
 from core.binary import (
     append_little_endian_u16,
     append_little_endian_u32,
@@ -40,7 +42,7 @@ from core.binary import (
     little_endian_u16,
     little_endian_u32,
 )
-from core.ordinal import require_index_in_count, require_valid, require_positive
+from core.ordinal import require_positive
 from render.checksum import crc32
 from render.inflate import inflate
 
@@ -308,14 +310,14 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
             raise Error("ZIP: an archive split across disks is not read")
         if flags & 1 == 1:
             raise Error("ZIP: an encrypted " + what + " is not read")
-        require_valid(
-            method.is_valid(),
-            "ZIP: "
-            + what
-            + " uses compression method "
-            + String(method.value)
-            + ", and only stored and deflated are read",
-        )
+        if not method.is_valid():
+            raise Error(
+                "ZIP: "
+                + what
+                + " uses compression method "
+                + String(method.value)
+                + ", and only stored and deflated are read"
+            )
         _need(directory_start, local, _LOCAL_LENGTH, what)
         if little_endian_u32(bytes, local) != _LOCAL_HEADER:
             raise Error("ZIP: the local header of " + what + " is not one")
@@ -368,11 +370,10 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
 
 def _write_length(value: Int, limit: Int, what: String) raises:
     """Refuse a negative or unrepresentable writer length before arithmetic."""
-    require_index_in_count(
-        value,
-        limit,
-        "ZIP: " + what + " is too long or needs ZIP64: " + String(value),
-    )
+    if not index_in_count(value, limit):
+        raise Error(
+            "ZIP: " + what + " is too long or needs ZIP64: " + String(value)
+        )
 
 
 def _archive_length(count: Int, local: Int, directory: Int) raises -> Int:

@@ -271,10 +271,10 @@ struct _Reader(Movable):
     def needed(mut self, element: Int, name: String) raises -> NodeRef:
         """Return an input's node, which the element must have."""
         var found = self.input(element, name)
-        require_non_negative(
-            found.value,
-            "MaterialX: " + self.tag(element) + " needs its input " + name,
-        )
+        if found.value < 0:
+            raise Error(
+                "MaterialX: " + self.tag(element) + " needs its input " + name
+            )
         return found
 
     def node(mut self, element: Int, port: String = "") raises -> NodeRef:

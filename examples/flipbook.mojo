@@ -13,7 +13,7 @@ The red box turns with it. The blue box rides a `Gyroscope`, so it follows
 the bar and keeps its own turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

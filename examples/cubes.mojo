@@ -28,7 +28,7 @@ tilt `rotation.y += 0.01` in the `XYZ` order would come to the same turn; it
 does not in general, and `core.object3d` says why.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

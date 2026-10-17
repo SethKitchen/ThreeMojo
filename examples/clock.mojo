@@ -12,7 +12,7 @@ turn is `Angle` from a `Duration` in seconds. A bare number does not
 compile in either place.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

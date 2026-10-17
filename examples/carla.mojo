@@ -17,7 +17,7 @@ logarithmic depth image. Each image is also written alone beside the
 page, as `_rgb`, `_semantic` and `_depth`. The page is CARLA.
 """
 
-from examples.output import example_destination
+from tools._example_output import example_destination
 
 from extensions.carla.camera_render import CarlaRenderer
 from extensions.carla.geometry import RoadGeometry, line, spiral

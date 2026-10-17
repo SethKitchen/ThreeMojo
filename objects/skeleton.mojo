@@ -68,12 +68,11 @@ from math.finite import require_finite, require_finite_group
 def require_bone_index(bone: Int, count: Int) raises:
     """Refuse a bone index the skeleton does not have.
 
+    Nothing. The call returns when the index names a bone.
+
     Args:
         bone: The bone a vertex names.
         count: How many bones the skeleton has.
-
-    Returns:
-        Nothing. The call returns when the index names a bone.
 
     Raises:
         Error: If the index is negative or past the last bone.
@@ -86,12 +85,11 @@ def require_bone_index(bone: Int, count: Int) raises:
 def require_bone_matrices(held: Int, expected: Int) raises:
     """Refuse a bone binding whose lists have different lengths.
 
+    Nothing. The call returns when the two lengths are equal.
+
     Args:
         held: How many items one list holds.
         expected: How many items the other list holds.
-
-    Returns:
-        Nothing. The call returns when the two lengths are equal.
 
     Raises:
         Error: If the lengths differ.

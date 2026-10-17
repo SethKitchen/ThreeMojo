@@ -140,11 +140,10 @@ comptime SEGMENTS = LineMode(2)
 def require_line_mode(mode: LineMode) raises:
     """Refuse a line mode that is not named.
 
+    Nothing. The call returns when the mode is named.
+
     Args:
         mode: The mode.
-
-    Returns:
-        Nothing. The call returns when the mode is named.
 
     Raises:
         Error: If the mode is not named.

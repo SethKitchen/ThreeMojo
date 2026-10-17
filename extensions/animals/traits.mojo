@@ -141,12 +141,11 @@ def require_color_variant(requested: Int, count: Int) raises:
     A negative request asks the caller to draw one. This refuses an index
     at or past `count`.
 
+    Nothing. The call returns when the index is below `count`.
+
     Args:
         requested: The variant index.
         count: How many variants the species has.
-
-    Returns:
-        Nothing. The call returns when the index is below `count`.
 
     Raises:
         Error: If the index is at or past `count`.

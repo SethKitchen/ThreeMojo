@@ -94,11 +94,10 @@ struct MusclePart(Equatable, ImplicitlyCopyable, Writable):
 def require_muscle_part(part: MusclePart) raises:
     """Refuse a muscle that is not named.
 
+    Nothing. The call returns when the part is named.
+
     Args:
         part: The muscle, tract, or tendon.
-
-    Returns:
-        Nothing. The call returns when the part is named.
 
     Raises:
         Error: If the part is not a named muscle, tract, or tendon.

@@ -63,11 +63,10 @@ struct FootNerve(Equatable, ImplicitlyCopyable, Writable):
 def require_foot_nerve(part: FootNerve) raises:
     """Refuse a foot nerve that is not named.
 
+    Nothing. The call returns when the nerve is named.
+
     Args:
         part: The nerve.
-
-    Returns:
-        Nothing. The call returns when the nerve is named.
 
     Raises:
         Error: If the nerve is not named.

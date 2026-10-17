@@ -371,12 +371,11 @@ comptime MAX_PIXELS = 1 << 28
 def require_image_pixels(width: Int, height: Int) raises:
     """Refuse an image whose pixel count passes the decoder limit.
 
+    Nothing. The call returns when the count is within the limit.
+
     Args:
         width: The image width, in pixels.
         height: The image height, in pixels.
-
-    Returns:
-        Nothing. The call returns when the count is within the limit.
 
     Raises:
         Error: If the width times the height passes `MAX_PIXELS`.

@@ -12,7 +12,7 @@ The GPU kernel is the same per-pixel loop. This file uses the CPU
 backends agree on.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

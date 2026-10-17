@@ -30,11 +30,10 @@ from math.vector3 import Vector3
 def require_hair_direction(direction: Vector3) raises:
     """Refuse a hair light direction that is not finite.
 
+    Nothing. The call returns when the direction is finite.
+
     Args:
         direction: The direction toward a distant light.
-
-    Returns:
-        Nothing. The call returns when the direction is finite.
 
     Raises:
         Error: If the direction is not finite.

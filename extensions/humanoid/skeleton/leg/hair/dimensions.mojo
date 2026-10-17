@@ -51,11 +51,10 @@ struct HairPart(Equatable, ImplicitlyCopyable, Writable):
 def require_hair_part(part: HairPart) raises:
     """Refuse a hair group that is not named.
 
+    Nothing. The call returns when the group is named.
+
     Args:
         part: The hair group.
-
-    Returns:
-        Nothing. The call returns when the group is named.
 
     Raises:
         Error: If the group is not named.

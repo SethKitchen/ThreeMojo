@@ -171,13 +171,12 @@ def format_of_gl(internal: Int) raises -> Tuple[CompressedFormat, ColorSpace]:
 def require_ktx_tail(at: Int, length: Int, count: Int) raises:
     """Refuse a KTX read that needs more bytes than the file still holds.
 
+    Nothing. The call returns when at least `count` bytes remain.
+
     Args:
         at: The next byte to read.
         length: How many bytes the file has.
         count: How many bytes the read needs.
-
-    Returns:
-        Nothing. The call returns when at least `count` bytes remain.
 
     Raises:
         Error: If fewer than `count` bytes remain.

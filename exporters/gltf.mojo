@@ -134,6 +134,8 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
+from core.ordinal import index_in_count
+
 from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
@@ -2443,12 +2445,11 @@ def _interpolation_name(how: Interpolation) -> String:
 def require_morph_mesh(index: Int, count: Int) raises:
     """Refuse a morph track whose mesh is not in the scene.
 
+    Nothing. The call returns when the index names a mesh.
+
     Args:
         index: The mesh index the track names.
         count: How many meshes of that kind the scene holds.
-
-    Returns:
-        Nothing. The call returns when the index names a mesh.
 
     Raises:
         Error: If the index is negative or past the last mesh.
@@ -2473,11 +2474,8 @@ def _morph_node(track: KeyframeTrack, scene: Scene) raises -> NodeId:
 
 def _written_slot(node: NodeId, written: List[Int], what: String) raises -> Int:
     """Return a scene node's index in the file, or -1 when it is left out."""
-    require_index_in_count(
-        node.value,
-        len(written),
-        "glTF: " + what + " names a node that is not in the scene",
-    )
+    if not index_in_count(node.value, len(written)):
+        raise Error("glTF: " + what + " names a node that is not in the scene")
     return written[node.value]
 
 
@@ -3028,11 +3026,10 @@ def export_gltf(
 def require_one_camera(has_camera: Bool) raises:
     """Refuse a second camera on one node.
 
+    Nothing. The call returns when the node carries no camera.
+
     Args:
         has_camera: Whether the node already carries a camera.
-
-    Returns:
-        Nothing. The call returns when the node carries no camera.
 
     Raises:
         Error: If the node already carries a camera.

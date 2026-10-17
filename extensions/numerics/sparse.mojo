@@ -22,13 +22,12 @@ from extensions.numerics.vector import zeros
 def require_matrix_index(row: Int, col: Int, size: Int) raises:
     """Refuse a row or a column outside a square matrix.
 
+    Nothing. The call returns when both indices name an entry.
+
     Args:
         row: The row index.
         col: The column index.
         size: How many rows and columns the matrix has.
-
-    Returns:
-        Nothing. The call returns when both indices name an entry.
 
     Raises:
         Error: If either index is negative or past the last entry.

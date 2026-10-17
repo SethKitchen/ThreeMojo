@@ -32,6 +32,8 @@ def rounded_lerp(x: Float64, y: Float64, t: Float64) -> Float64:
 
     This is three.js's `MathUtils.lerp`.
 
+    Error: Never.
+
     Args:
         x: The start.
         y: The end.
@@ -40,7 +42,5 @@ def rounded_lerp(x: Float64, y: Float64, t: Float64) -> Float64:
     Returns:
         The mix.
 
-    Raises:
-        Error: Never.
     """
     return rounded_product(1 - t, x) + rounded_product(t, y)

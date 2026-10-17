@@ -115,11 +115,10 @@ trait PebbleTexels:
 def require_pebble_width(width: Int) raises:
     """Refuse a pebble image whose width is not positive.
 
+    Nothing. The call returns when the width is positive.
+
     Args:
         width: Texels across.
-
-    Returns:
-        Nothing. The call returns when the width is positive.
 
     Raises:
         Error: If the width is not positive.
@@ -130,11 +129,10 @@ def require_pebble_width(width: Int) raises:
 def require_pebble_height(height: Int) raises:
     """Refuse a pebble image whose height is not positive.
 
+    Nothing. The call returns when the height is positive.
+
     Args:
         height: Texels down.
-
-    Returns:
-        Nothing. The call returns when the height is positive.
 
     Raises:
         Error: If the height is not positive.
@@ -146,12 +144,11 @@ def require_pebble_length(held: Int, expected: Int) raises:
     """Refuse a pebble image whose buffer is a different length from its
     dimensions.
 
+    Nothing. The call returns when the two lengths are equal.
+
     Args:
         held: How many numbers the buffer holds.
         expected: How many numbers the dimensions require.
-
-    Returns:
-        Nothing. The call returns when the two lengths are equal.
 
     Raises:
         Error: If the lengths differ.

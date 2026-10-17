@@ -129,11 +129,10 @@ struct StepEntity(Copyable, Movable):
 def require_step_real(value: Float64) raises:
     """Refuse a STEP real that is not finite.
 
+    Nothing. The call returns when the real is finite.
+
     Args:
         value: The real.
-
-    Returns:
-        Nothing. The call returns when the real is finite.
 
     Raises:
         Error: If the real is not finite.

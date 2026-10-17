@@ -11,7 +11,7 @@ The cube is the only mesh. As it recedes it takes the fog color. That is
 `scene.fog`, mixed after shading, in linear light.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

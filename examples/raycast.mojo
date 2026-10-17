@@ -12,7 +12,7 @@ The marker is a small cube placed at `Hit.point`. That is what
 `Raycaster.set_from_pixel` is for.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

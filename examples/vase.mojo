@@ -12,7 +12,7 @@ rings whose radius swells and narrows. Both ends are capped. The vase
 turns one whole turn.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

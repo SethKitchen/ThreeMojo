@@ -124,11 +124,10 @@ struct IkChain(Copyable, Movable):
 def require_ik_blend(blend: Float32) raises:
     """Refuse an IK blend outside zero through one.
 
+    Nothing. The call returns when the blend is inside that range.
+
     Args:
         blend: How far toward the solved pose the chain moves.
-
-    Returns:
-        Nothing. The call returns when the blend is inside that range.
 
     Raises:
         Error: If the blend is outside zero through one.

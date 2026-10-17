@@ -744,11 +744,10 @@ def _grow_guide(
 def require_hair_roots(count: Int) raises:
     """Refuse a groom that grew no strand.
 
+    Nothing. The call returns when the groom holds a strand.
+
     Args:
         count: How many strands the groom holds.
-
-    Returns:
-        Nothing. The call returns when the groom holds a strand.
 
     Raises:
         Error: If the groom holds no strand.

@@ -62,6 +62,8 @@ def clamp(value: Float64, low: Float64, high: Float64) -> Float64:
 def clamp(value: Int, low: Int, high: Int) -> Int:
     """Return `value` limited to the range from `low` to `high`.
 
+    Error: Never.
+
     Args:
         value: The value.
         low: The smallest answer.
@@ -70,8 +72,6 @@ def clamp(value: Int, low: Int, high: Int) -> Int:
     Returns:
         The value within the range.
 
-    Raises:
-        Error: Never.
     """
     return max(low, min(high, value))
 
@@ -82,6 +82,8 @@ def edge_index(index: Int, count: Int) -> Int:
     An index before zero reads the first place. An index at `count` or
     past it reads the last place.
 
+    Error: Never.
+
     Args:
         index: The requested index.
         count: How many places there are. One or more.
@@ -89,8 +91,6 @@ def edge_index(index: Int, count: Int) -> Int:
     Returns:
         The index from zero through `count - 1`.
 
-    Raises:
-        Error: Never.
     """
     return clamp(index, 0, count - 1)
 
@@ -100,6 +100,8 @@ def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
 
     A column or a row before zero reads the first place. One at the
     width or the height, or past it, reads the last place.
+
+    Error: Never.
 
     Args:
         column: The column.
@@ -111,8 +113,6 @@ def clamped_texel(column: Int, row: Int, width: Int, height: Int) -> Int:
         The place `row * width + column`, with both indexes held inside
         the image.
 
-    Raises:
-        Error: Never.
     """
     return edge_index(row, height) * width + edge_index(column, width)
 
@@ -446,14 +446,14 @@ def js_round_int(value: Float64) -> Int:
 
     JavaScript's `Math.round`, stored as an `Int`. -2.5 gives -2.
 
+    Error: Never.
+
     Args:
         value: The number.
 
     Returns:
         The whole number.
 
-    Raises:
-        Error: Never.
     """
     return Int(js_round(value))
 
@@ -477,14 +477,14 @@ def clamp_unit(value: Float32) -> Float32:
 
     An `acos` or `asin` argument uses this hold.
 
+    Error: Never.
+
     Args:
         value: The value.
 
     Returns:
         The value within minus one and one.
 
-    Raises:
-        Error: Never.
     """
     return clamp(value, -1, 1)
 
@@ -494,14 +494,14 @@ def clamp_unit(value: Float64) -> Float64:
 
     An `acos` or `asin` argument uses this hold.
 
+    Error: Never.
+
     Args:
         value: The value.
 
     Returns:
         The value within minus one and one.
 
-    Raises:
-        Error: Never.
     """
     return clamp(value, -1.0, 1.0)
 

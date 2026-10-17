@@ -173,11 +173,10 @@ def color_background(color: Color) -> Background:
 def require_texture_background(id: TextureId) raises:
     """Refuse a texture background that names no texture.
 
+    Nothing. The call returns when the id is not negative.
+
     Args:
         id: The texture.
-
-    Returns:
-        Nothing. The call returns when the id is not negative.
 
     Raises:
         Error: If the id is `NO_TEXTURE` or negative.
@@ -188,11 +187,10 @@ def require_texture_background(id: TextureId) raises:
 def require_cube_background(id: CubeTextureId) raises:
     """Refuse a cube background that names no cube texture.
 
+    Nothing. The call returns when the id is not negative.
+
     Args:
         id: The cube texture.
-
-    Returns:
-        Nothing. The call returns when the id is not negative.
 
     Raises:
         Error: If the id is `NO_CUBE_TEXTURE` or negative.

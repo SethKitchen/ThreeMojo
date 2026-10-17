@@ -42,9 +42,10 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import index_in_count
+
 from core.binary import append_little_endian_u32, little_endian_u32
 from core.ordinal import (
-    require_index_in_count,
     require_non_negative,
     require_positive,
 )
@@ -415,16 +416,10 @@ struct GaussianSplatGeometry(Copyable, Movable):
             raise Error(
                 "Gaussian splat: no spherical harmonics band " + String(degree)
             )
-        require_index_in_count(
-            splat,
-            self.count(),
-            "Gaussian splat: no splat " + String(splat),
-        )
-        require_index_in_count(
-            index,
-            sh_band_components(degree),
-            "Gaussian splat: no band number " + String(index),
-        )
+        if not index_in_count(splat, self.count()):
+            raise Error("Gaussian splat: no splat " + String(splat))
+        if not index_in_count(index, sh_band_components(degree)):
+            raise Error("Gaussian splat: no band number " + String(index))
         var at = splat * sh_band_words(degree) * 4 + index
         if degree == 1:
             return self.sh1[at]
@@ -488,13 +483,12 @@ def require_contiguous_harmonics(
 ) raises:
     """Refuse a spherical-harmonics band that skips a lower band.
 
+    Nothing. The call returns when the higher band is absent, or every
+    lower band is present.
+
     Args:
         higher_present: Whether a higher band is present.
         lower_missing: Whether a lower band is absent.
-
-    Returns:
-        Nothing. The call returns when the higher band is absent, or every
-            lower band is present.
 
     Raises:
         Error: If a higher band is present and a lower band is absent.

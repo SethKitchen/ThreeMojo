@@ -13,7 +13,7 @@ front of it as it goes. The second camera rides a node aimed at the cube,
 and its outline rides the same node.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

@@ -66,11 +66,10 @@ struct FootMuscle(Equatable, ImplicitlyCopyable, Writable):
 def require_foot_muscle(part: FootMuscle) raises:
     """Refuse a foot muscle that is not named.
 
+    Nothing. The call returns when the part is named.
+
     Args:
         part: The muscle or tendon.
-
-    Returns:
-        Nothing. The call returns when the part is named.
 
     Raises:
         Error: If the part is not a named muscle or tendon.
@@ -109,11 +108,10 @@ comptime PERONEUS_BREVIS_TENDON = FIBULARIS_BREVIS_TENDON
 def require_foot_athleticism(athleticism: Athleticism) raises:
     """Refuse a foot muscle whose athleticism is not named.
 
+    Nothing. The call returns when the athleticism is named.
+
     Args:
         athleticism: `UNTONED` or `TONED`.
-
-    Returns:
-        Nothing. The call returns when the athleticism is named.
 
     Raises:
         Error: If the athleticism is not named.

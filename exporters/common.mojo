@@ -44,7 +44,11 @@ shown or hidden, as three.js's `traverse` reaches them. Batched
 meshes, sprites and wide lines are not written.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count
+from core.ordinal import index_in_count
+
+from std.math import isfinite
+
+from core.ordinal import ordinal_valid
 
 from core.assets import Assets
 from core.buffer_geometry import (
@@ -66,25 +70,22 @@ from math.utils import mix_bilinear
 from core.scene import Scene
 from loaders.js_number import js_number_text
 from objects.line import LineMode, STRIP
-from math.finite import require_finite
 from std.memory import bitcast
 
 
 def require_finite_written_number(value: Float32) raises:
     """Refuse a number that cannot be written.
 
+    Nothing. The call returns when the number is finite.
+
     Args:
         value: The number.
-
-    Returns:
-        Nothing. The call returns when the number is finite.
 
     Raises:
         Error: If the number is not finite.
     """
-    require_finite(
-        Float64(value), "A number to write must be finite: " + String(value)
-    )
+    if not isfinite(Float64(value)):
+        raise Error("A number to write must be finite: " + String(value))
 
 
 def format_float32(value: Float32) raises -> String:
@@ -363,11 +364,8 @@ def _bucket(
 ) raises:
     """File one object under the node it rides, refusing a node the scene
     has not got."""
-    require_index_in_count(
-        node.value,
-        len(buckets),
-        what + " names a node that is not in the scene",
-    )
+    if not index_in_count(node.value, len(buckets)):
+        raise Error(what + " names a node that is not in the scene")
     buckets[node.value].append(which)
 
 

@@ -16,6 +16,8 @@ cell for cell.
 def append_cell(mut index: List[Int], a: Int, b: Int, c: Int, d: Int):
     """Append two triangles for one cell, `a b d` then `b c d`.
 
+    Nothing. Six indices are appended.
+
     Args:
         index: The index to extend.
         a: The first corner of the first triangle.
@@ -23,8 +25,6 @@ def append_cell(mut index: List[Int], a: Int, b: Int, c: Int, d: Int):
         c: The corner diagonal from `a`.
         d: The corner diagonal from `b`.
 
-    Returns:
-        Nothing. Six indices are appended.
     """
     index.append(a)
     index.append(b)

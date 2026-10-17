@@ -15,7 +15,6 @@ Twenty-four is the default. Sixty-four is the most.
 """
 
 from core.buffer_geometry import BufferGeometry
-from core.ordinal import require_positive
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
 from math.utils import clamp, max3
@@ -237,7 +236,8 @@ def _axis_cells(span: Float32, cell: Float32, least: Int) -> Int:
 
 def _require_triangles(indices: List[Int], bone: String) raises:
     """Refuse an empty isosurface."""
-    require_positive(len(indices), "A " + bone + " field produced no surface")
+    if len(indices) <= 0:
+        raise Error("A " + bone + " field produced no surface")
 
 
 def _unit_face(a: Vector3, b: Vector3, c: Vector3) -> Vector3:

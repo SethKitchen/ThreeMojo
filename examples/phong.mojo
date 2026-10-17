@@ -12,7 +12,7 @@ red plastic ball has a white spot on it. The camera rides a pivot, so the
 spot moves and the lit face stays lit.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

@@ -66,11 +66,12 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
+from core.ordinal import index_in_count
+
 from core.ordinal import (
     ordinal_valid,
     require_index_in_count,
     require_valid,
-    require_non_negative,
 )
 
 from animation.animation_clip import AnimationClip
@@ -522,12 +523,11 @@ def _require(
 def require_collada_positions(held: Int, expected: Int) raises:
     """Refuse a Collada primitive whose positions do not match its corners.
 
+    Nothing. The call returns when the two counts are equal.
+
     Args:
         held: How many position numbers were written.
         expected: How many position numbers the corners require.
-
-    Returns:
-        Nothing. The call returns when the two counts are equal.
 
     Raises:
         Error: If the counts differ.
@@ -1569,9 +1569,8 @@ struct _Loader(Movable):
         for at in range(len(self.model.material_ids)):
             if self.model.material_ids[at] == target:
                 index = at
-        require_non_negative(
-            index, "Collada: a symbol is bound to no material: " + target
-        )
+        if index < 0:
+            raise Error("Collada: a symbol is bound to no material: " + target)
         var found = self.model.materials[index]
         if not lines:
             return found
@@ -2136,12 +2135,11 @@ struct _Loader(Movable):
                     raise Error("Collada: <v> is shorter than <vcount> needs")
                 var bone = pairs[stride + joint_at]
                 var share = pairs[stride + weight_at]
-                require_index_in_count(
-                    bone,
-                    len(data.names),
-                    "Collada: a joint index outside the joints: "
-                    + String(bone),
-                )
+                if not index_in_count(bone, len(data.names)):
+                    raise Error(
+                        "Collada: a joint index outside the joints: "
+                        + String(bone)
+                    )
                 require_index_in_count(
                     share,
                     len(shares),
@@ -2235,7 +2233,8 @@ struct _Loader(Movable):
                 if self.document.attribute(found[at], "sid") == name:
                     hit = at
                     break
-            require_non_negative(hit, "Collada: a joint names no bone: " + name)
+            if hit < 0:
+                raise Error("Collada: a joint names no bone: " + name)
             used[hit] = True
             order.append(hit)
         for at in range(len(found)):

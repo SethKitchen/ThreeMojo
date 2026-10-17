@@ -11,7 +11,7 @@ The clock is fixed, so the camera does not bob. The ocean, the frame
 and the pebble photograph match the page. The page is Water.
 """
 
-from examples.output import example_destination
+from tools._example_output import example_destination
 
 from extensions.water.frame import render_water
 from extensions.water.pebbles import pebble_bed

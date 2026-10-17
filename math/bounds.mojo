@@ -163,11 +163,10 @@ def enclose_point(mut low: Vector3, mut high: Vector3, point: Vector3):
 def require_affine_bound(matrix: Matrix4) raises:
     """Refuse a bound carried through a projecting matrix.
 
+    Nothing. The call returns when the matrix is affine.
+
     Args:
         matrix: The transform.
-
-    Returns:
-        Nothing. The call returns when the matrix is affine.
 
     Raises:
         Error: If the matrix projects.

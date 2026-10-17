@@ -1342,10 +1342,8 @@ struct _Builder(Movable):
                 + field.name
                 + "` needs a Color, Coordinate, Normal or TextureCoordinate"
             )
-        require_positive(
-            len(property.fields),
-            "VRML: a `" + property.name + "` with no values",
-        )
+        if len(property.fields) <= 0:
+            raise Error("VRML: a `" + property.name + "` with no values")
         return _numbers(property.fields[0])
 
     def geometry(
@@ -1790,9 +1788,8 @@ def _surface(
 
 def _first(field: VrmlField) raises -> VrmlValue:
     """Return the first value of a field."""
-    require_positive(
-        len(field.values), "VRML: field `" + field.name + "` needs a value"
-    )
+    if len(field.values) <= 0:
+        raise Error("VRML: field `" + field.name + "` needs a value")
     return field.values[0].copy()
 
 

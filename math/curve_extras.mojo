@@ -103,11 +103,10 @@ def _scale_to(x: Float64, y: Float64, t: Float64) -> Float64:
 def require_extra_curve(kind: ExtraCurveKind) raises:
     """Refuse a named curve that is not one of the fourteen.
 
+    Nothing. The call returns when the kind is valid.
+
     Args:
         kind: Which curve.
-
-    Returns:
-        Nothing. The call returns when the kind is valid.
 
     Raises:
         Error: If the kind is not valid.

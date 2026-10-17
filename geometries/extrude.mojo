@@ -628,11 +628,10 @@ def _check_sweep(steps: Int) raises:
 def require_extrusion_shapes(count: Int) raises:
     """Refuse an extrusion that has no shape.
 
+    Nothing. The call returns when there is at least one shape.
+
     Args:
         count: How many shapes the extrusion holds.
-
-    Returns:
-        Nothing. The call returns when there is at least one shape.
 
     Raises:
         Error: If there is no shape.

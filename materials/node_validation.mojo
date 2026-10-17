@@ -15,11 +15,10 @@ from std.math import floor, isfinite, max
 def require_finite_node_code(value: Float32) raises:
     """Refuse a node-program word that is not finite.
 
+    Nothing. The call returns when the word is finite.
+
     Args:
         value: One word of the program.
-
-    Returns:
-        Nothing. The call returns when the word is finite.
 
     Raises:
         Error: If the word is not finite.

@@ -24,7 +24,7 @@ sidewalks and grass, an HDRI sky, and CARLA's own vehicle models. An asset
 the cache lacks is procedural, so the example runs without a download.
 """
 
-from examples.output import example_destination
+from tools._example_output import example_destination
 
 from extensions.carla.actor import ActorId
 from extensions.carla.assets import AssetRegistry

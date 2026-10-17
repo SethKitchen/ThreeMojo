@@ -34,11 +34,8 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
-from core.ordinal import (
-    require_index_in_count,
-    require_non_negative,
-    require_positive,
-)
+from core.ordinal import index_in_count
+
 from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
@@ -106,11 +103,8 @@ struct XmlDocument(Movable):
 
     def _check(self, element: Int) raises:
         """Refuse an index that names no element."""
-        require_index_in_count(
-            element,
-            len(self.elements),
-            "XML: no element at index " + String(element),
-        )
+        if not index_in_count(element, len(self.elements)):
+            raise Error("XML: no element at index " + String(element))
 
     def name(self, element: Int) raises -> String:
         """Return an element's name, as written.
@@ -530,7 +524,8 @@ struct _Parser(Movable):
             self.at = field_start
             var encoding = self.declaration_value("encoding")
             var bytes = encoding.as_bytes()
-            require_positive(len(bytes), self.where() + "empty encoding name")
+            if len(bytes) <= 0:
+                raise Error(self.where() + "empty encoding name")
             if not ascii_letter(Int(bytes[0])):
                 raise Error(self.where() + "invalid encoding name")
             var index = 0
@@ -634,9 +629,10 @@ struct _Parser(Movable):
         var quote = 0
         while depth > 0:
             var byte = self.peek()
-            require_non_negative(
-                byte, self.where() + "a document type declaration is not closed"
-            )
+            if byte < 0:
+                raise Error(
+                    self.where() + "a document type declaration is not closed"
+                )
             if quote != 0:
                 if byte == quote:
                     quote = 0
@@ -690,11 +686,10 @@ struct _Parser(Movable):
     def _malformed_reference(mut self, start: Int) raises:
         """Refuse a character reference whose digits are not digits.
 
+        Nothing. This call always raises.
+
         Args:
             start: Where the reference began.
-
-        Returns:
-            Nothing. This call always raises.
 
         Raises:
             Error: Always. The reference is malformed.
@@ -705,11 +700,10 @@ struct _Parser(Movable):
     def _unnamed_reference(mut self, start: Int) raises:
         """Refuse a character reference that names no character.
 
+        Nothing. This call always raises.
+
         Args:
             start: Where the reference began.
-
-        Returns:
-            Nothing. This call always raises.
 
         Raises:
             Error: Always. The reference names nothing.
@@ -762,9 +756,8 @@ struct _Parser(Movable):
         var out = List[UInt8]()
         while True:
             var byte = self.peek()
-            require_non_negative(
-                byte, self.where() + "an attribute value is not closed"
-            )
+            if byte < 0:
+                raise Error(self.where() + "an attribute value is not closed")
             if byte == quote:
                 self.at += 1
                 return String(unsafe_from_utf8=out)
@@ -871,13 +864,13 @@ struct _Parser(Movable):
         self.start_tag(document, open, texts)
         while len(open) > 0:
             var byte = self.peek()
-            require_non_negative(
-                byte,
-                self.where()
-                + "<"
-                + document.elements[open[len(open) - 1]].name
-                + "> is not closed",
-            )
+            if byte < 0:
+                raise Error(
+                    self.where()
+                    + "<"
+                    + document.elements[open[len(open) - 1]].name
+                    + "> is not closed"
+                )
             ref text = texts[len(texts) - 1]
             if byte == 38:
                 self.reference(text)

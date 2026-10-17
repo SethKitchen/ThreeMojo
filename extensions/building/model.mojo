@@ -690,12 +690,11 @@ struct ConstructionSet(ImplicitlyCopyable):
 def require_furnishing_place(center: Point2, rotation: Float64) raises:
     """Refuse a furnishing whose place is not finite.
 
+    Nothing. The call returns when the center and the turn are finite.
+
     Args:
         center: The furnishing's center in plan, in meters.
         rotation: Its turn about that center, in radians.
-
-    Returns:
-        Nothing. The call returns when the center and the turn are finite.
 
     Raises:
         Error: If the center or the turn is not finite.
@@ -707,11 +706,10 @@ def require_furnishing_place(center: Point2, rotation: Float64) raises:
 def require_furnishing_size(size: Float64) raises:
     """Refuse a furnishing size that is not positive and finite.
 
+    Nothing. The call returns when the size is positive and finite.
+
     Args:
         size: One side of the furnishing, in meters.
-
-    Returns:
-        Nothing. The call returns when the size is positive and finite.
 
     Raises:
         Error: If the size is not positive and finite.
@@ -724,11 +722,10 @@ def require_furnishing_size(size: Float64) raises:
 def require_furniture_kind(kind: FurnitureKind) raises:
     """Refuse a furniture kind that is not named.
 
+    Nothing. The call returns when the kind is valid.
+
     Args:
         kind: Which furnishing.
-
-    Returns:
-        Nothing. The call returns when the kind is valid.
 
     Raises:
         Error: If the kind is not valid.
@@ -739,11 +736,10 @@ def require_furniture_kind(kind: FurnitureKind) raises:
 def require_inside_space(inside: Bool) raises:
     """Refuse a furnishing corner that leaves its space.
 
+    Nothing. The call returns when the corner is inside.
+
     Args:
         inside: Whether the corner stands inside the space.
-
-    Returns:
-        Nothing. The call returns when the corner is inside.
 
     Raises:
         Error: If the corner leaves the space.
@@ -755,11 +751,10 @@ def require_inside_space(inside: Bool) raises:
 def require_furnishings_apart(apart: Bool) raises:
     """Refuse two furnishings whose footprints overlap.
 
+    Nothing. The call returns when the footprints stay apart.
+
     Args:
         apart: Whether the footprints stay apart.
-
-    Returns:
-        Nothing. The call returns when the footprints stay apart.
 
     Raises:
         Error: If the footprints overlap.

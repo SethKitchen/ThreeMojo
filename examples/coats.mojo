@@ -13,7 +13,7 @@ matte surface. The right sphere is gray. Its specular color map tints
 the highlight gold or blue per texel.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

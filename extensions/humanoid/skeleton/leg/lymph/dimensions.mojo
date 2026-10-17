@@ -56,11 +56,10 @@ struct LymphPart(Equatable, ImplicitlyCopyable, Writable):
 def require_lymph_part(part: LymphPart) raises:
     """Refuse a lymph solid that is not named.
 
+    Nothing. The call returns when the solid is named.
+
     Args:
         part: The lymph solid.
-
-    Returns:
-        Nothing. The call returns when the solid is named.
 
     Raises:
         Error: If the solid is not a named node group or trunk.

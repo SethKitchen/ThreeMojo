@@ -12,7 +12,7 @@ of up and itself, so the cloud orbits. The new positions are copied into
 the point geometry. One orbit brings every point home.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

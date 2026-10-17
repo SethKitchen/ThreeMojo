@@ -27,7 +27,11 @@ a `plane` laid flat: it is built facing +z, and a quarter turn about x makes
 that +y.
 """
 
-from examples.output import example_destination, fill_and_key, gallery_camera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+)
 
 from core.assets import Assets
 from core.clock import Clock

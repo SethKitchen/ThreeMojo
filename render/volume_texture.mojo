@@ -106,12 +106,11 @@ def require_volume_length(held: Int, expected: Int) raises:
     """Refuse a volume whose texel list is a different length from its
     dimensions.
 
+    Nothing. The call returns when the two lengths are equal.
+
     Args:
         held: How many numbers the list holds.
         expected: How many numbers the dimensions require.
-
-    Returns:
-        Nothing. The call returns when the two lengths are equal.
 
     Raises:
         Error: If the lengths differ.

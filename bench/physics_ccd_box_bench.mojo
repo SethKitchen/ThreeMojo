@@ -28,7 +28,7 @@ from extensions.physics.body import (
 )
 from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.shape import PhysicsMaterial, Shape
-from bench.contacts import bodies_missing_contact
+from tools._physics_contacts import bodies_missing_contact
 from extensions.physics.world import CollisionEvent, PhysicsWorld
 from math.quaternion import Quaternion
 from math.triangle import Triangle

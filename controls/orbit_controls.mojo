@@ -104,11 +104,10 @@ comptime PAN = OrbitAction(3)
 def require_dolly_factor(scale: Float32) raises:
     """Refuse a dolly factor outside zero to one.
 
+    Nothing. The call returns when the factor is in that range.
+
     Args:
         scale: The factor, between zero and one.
-
-    Returns:
-        Nothing. The call returns when the factor is in that range.
 
     Raises:
         Error: If the factor is not between zero and one.

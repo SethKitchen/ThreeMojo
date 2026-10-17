@@ -96,11 +96,10 @@ struct Edge(ImplicitlyCopyable):
 def require_face_kind(kind: FaceKind) raises:
     """Refuse a face that is neither vertical nor horizontal.
 
+    Nothing. The call returns when the kind is valid.
+
     Args:
         kind: Whether the face is vertical or horizontal.
-
-    Returns:
-        Nothing. The call returns when the kind is valid.
 
     Raises:
         Error: If the kind is not valid.
@@ -111,11 +110,10 @@ def require_face_kind(kind: FaceKind) raises:
 def require_face_corners(count: Int) raises:
     """Refuse a face with fewer than three corners.
 
+    Nothing. The call returns when the face has three corners or more.
+
     Args:
         count: How many corners the face has.
-
-    Returns:
-        Nothing. The call returns when the face has three corners or more.
 
     Raises:
         Error: If the count is below three.
@@ -127,11 +125,10 @@ def require_face_corners(count: Int) raises:
 def require_distinct_corner(repeated: Bool) raises:
     """Refuse a face that repeats a corner.
 
+    Nothing. The call returns when the corners differ.
+
     Args:
         repeated: Whether two neighboring corners are the same vertex.
-
-    Returns:
-        Nothing. The call returns when the corners differ.
 
     Raises:
         Error: If the corners are the same vertex.

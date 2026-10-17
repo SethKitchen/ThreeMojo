@@ -73,11 +73,10 @@ def _check_reference_support(
 def require_calibration_variant(variant: Variant) raises:
     """Refuse a calibration variant that is not named.
 
+    Nothing. The call returns when the variant is valid.
+
     Args:
         variant: The morph.
-
-    Returns:
-        Nothing. The call returns when the variant is valid.
 
     Raises:
         Error: If the variant is not valid.

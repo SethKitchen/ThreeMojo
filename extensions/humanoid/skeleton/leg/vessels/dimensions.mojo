@@ -52,11 +52,10 @@ struct VesselPart(Equatable, ImplicitlyCopyable, Writable):
 def require_vessel_part(part: VesselPart) raises:
     """Refuse a vessel that is not named.
 
+    Nothing. The call returns when the vessel is named.
+
     Args:
         part: The vessel.
-
-    Returns:
-        Nothing. The call returns when the vessel is named.
 
     Raises:
         Error: If the vessel is not a named artery or vein.

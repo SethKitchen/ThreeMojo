@@ -12,7 +12,7 @@ ligaments and muscles. The program also prints tissue mass and Earth
 weight.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

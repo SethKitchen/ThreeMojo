@@ -123,11 +123,10 @@ comptime REVERSED_DEPTH = DepthMode(2)
 def require_depth_mode(mode: DepthMode) raises:
     """Refuse a depth mode that is none of the three.
 
+    Nothing. The call returns when the mode is named.
+
     Args:
         mode: The mode to check.
-
-    Returns:
-        Nothing. The call returns when the mode is named.
 
     Raises:
         Error: If `mode` is none of the three.
@@ -393,14 +392,14 @@ def _is_byte(value: Int) -> Bool:
 def is_unit_fraction(value: Float32) -> Bool:
     """Return True when a value is finite and from zero to one.
 
+    Error: Never.
+
     Args:
         value: The number.
 
     Returns:
         Whether the value is finite and within zero and one.
 
-    Raises:
-        Error: Never.
     """
     return isfinite(value) and value >= 0 and value <= 1
 

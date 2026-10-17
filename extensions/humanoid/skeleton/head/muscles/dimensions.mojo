@@ -83,11 +83,10 @@ comptime ORBICULARIS_ORIS = HeadMuscle(14)
 def require_head_muscle(part: HeadMuscle) raises:
     """Refuse a head muscle that is not named.
 
+    Nothing. The call returns when the muscle is named.
+
     Args:
         part: The muscle.
-
-    Returns:
-        Nothing. The call returns when the muscle is named.
 
     Raises:
         Error: If the muscle is not named.

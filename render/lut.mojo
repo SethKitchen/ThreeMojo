@@ -29,7 +29,7 @@ range of no width, a value that is not a number, and a custom map that does
 not run from zero to one in order are refused. three.js gives no color for
 them.
 """
-from core.ordinal import ordinal_valid, require_valid, require_positive
+from core.ordinal import ordinal_valid, require_positive
 
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
@@ -90,7 +90,8 @@ def color_map(name: ColorMapName) raises -> List[ColorStop]:
     Raises:
         Error: If the value names no preset.
     """
-    require_valid(name.is_valid(), "Not a color map: " + String(name.value))
+    if not name.is_valid():
+        raise Error("Not a color map: " + String(name.value))
     var hexes: List[Int]
     if name == RAINBOW:
         hexes = [0x0000FF, 0x00FFFF, 0x00FF00, 0xFFFF00, 0xFF0000]
@@ -196,11 +197,10 @@ def _mix(
 def require_lut_bound(value: Float64) raises:
     """Refuse a color-table bound that is not finite.
 
+    Nothing. The call returns when the bound is finite.
+
     Args:
         value: The bound.
-
-    Returns:
-        Nothing. The call returns when the bound is finite.
 
     Raises:
         Error: If the bound is not finite.

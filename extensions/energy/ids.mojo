@@ -31,12 +31,11 @@ struct ZoneId(Equatable, ImplicitlyCopyable, Writable):
 def require_zone(id: ZoneId, count: Int) raises:
     """Refuse a zone id that is not in range.
 
+    Nothing. The call returns when the id names a zone.
+
     Args:
         id: The zone.
         count: How many zones there are.
-
-    Returns:
-        Nothing. The call returns when the id names a zone.
 
     Raises:
         Error: If the id is negative or past the last zone.

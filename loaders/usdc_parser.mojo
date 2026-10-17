@@ -56,7 +56,7 @@ the wrong ones; this port reads them as three.js does.
 """
 from math.finite import stored_float32
 from core.binary import copy_bytes, little_endian_uint
-from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from core.ordinal import ordinal_valid, require_non_negative
 from core.search import last_match
 
 from loaders.usd_specs import (
@@ -173,11 +173,10 @@ comptime _MAX_DEPTH = 64
 def require_usdc_count(count: Int) raises:
     """Refuse a count past this reader's limit.
 
+    Nothing. The call returns when the count is inside the limit.
+
     Args:
         count: How many items.
-
-    Returns:
-        Nothing. The call returns when the count is inside the limit.
 
     Raises:
         Error: If the count is negative or past `MAX_COUNT`.
@@ -756,7 +755,8 @@ struct _Crate[origin: Origin[mut=False]](Movable):
             Error: If the file has no such section.
         """
         var at = self.section(name)
-        require_non_negative(at, "USDC: the file has no " + name + " section")
+        if at < 0:
+            raise Error("USDC: the file has no " + name + " section")
         return self.sections[at]
 
     def compressed(self) -> Bool:
@@ -1548,10 +1548,10 @@ struct _Crate[origin: Origin[mut=False]](Movable):
             Error: If its spec type is not valid, or a value refuses.
         """
         var spec_type = SpecType(spec.spec_type)
-        require_valid(
-            spec_type.is_valid(),
-            "USDC: a spec of no known type: " + String(spec.spec_type),
-        )
+        if not spec_type.is_valid():
+            raise Error(
+                "USDC: a spec of no known type: " + String(spec.spec_type)
+            )
         var out = UsdSpec(spec_type)
         var at = spec.field_set
         var steps = 0

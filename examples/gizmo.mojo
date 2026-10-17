@@ -13,7 +13,7 @@ that points at the eye is left out, so the axes change as the camera
 goes round. The terminal window itself is `examples/viewer.mojo`.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     framed_camera,

@@ -12,7 +12,7 @@ stay with the root. That is skinning: the mesh is not parented, the bones
 carry it.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

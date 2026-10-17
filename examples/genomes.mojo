@@ -21,12 +21,12 @@ The optional second argument is the mesh quality: `low`, `medium`,
 how many frames to draw, one or more. The default is 24.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,
 )
-from examples.preview import turn_about_vertical
+from tools._example_preview import turn_about_vertical
 
 from core.assets import Assets
 from core.object3d import NodeId, Object3D

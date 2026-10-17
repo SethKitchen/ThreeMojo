@@ -506,3 +506,20 @@ struct HeadMorph(ImplicitlyCopyable):
             * clamped_smoothstep(51.5, 64.0, point.y)
         )
         return p
+
+
+def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return the Hermite step from `edge0` to `edge1`.
+
+    Error: Never.
+
+    Args:
+        edge0: Where the step starts, at zero.
+        edge1: Where it ends, at one.
+        x: The value to step.
+
+    Returns:
+        The clamped cubic step, including the original reversed-edge behavior.
+
+    """
+    return clamped_smoothstep(edge0, edge1, x)

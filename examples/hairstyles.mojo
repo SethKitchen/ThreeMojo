@@ -19,12 +19,12 @@ turns every head about the vertical, in degrees; zero shows the faces.
 The default is 140.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,
 )
-from examples.preview import turn_about_vertical
+from tools._example_preview import turn_about_vertical
 
 from core.assets import Assets
 from core.object3d import Object3D

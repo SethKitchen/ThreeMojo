@@ -12,7 +12,7 @@ the height sets the vertex color. The ground turns one whole turn. The
 field itself stays put, so the loop has no jump.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

@@ -15,7 +15,7 @@ first frame also builds the glare kernels, so it is a warm-up frame. The
 numbers describe the machine that runs it.
 """
 
-from bench.timing import _percentile, _sorted
+from tools._bench_timing import _percentile, _sorted
 from extensions.water.frame import WaterScene
 from extensions.water.pebbles import pebble_bed
 from extensions.water.resolution import SpectrumResolution

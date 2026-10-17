@@ -287,14 +287,13 @@ def cholesky(a: DenseMatrix) raises -> DenseMatrix:
 def require_triangular_sizes(rows: Int, cols: Int, count: Int) raises:
     """Refuse a triangular solve whose sizes do not match.
 
+    Nothing. The call returns when the matrix is square and the
+    right-hand side matches.
+
     Args:
         rows: How many rows the matrix has.
         cols: How many columns the matrix has.
         count: How many numbers the right-hand side has.
-
-    Returns:
-        Nothing. The call returns when the matrix is square and the
-            right-hand side matches.
 
     Raises:
         Error: If the sizes do not match.

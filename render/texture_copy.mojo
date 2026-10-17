@@ -49,12 +49,11 @@ from render.volume_texture import VOLUME_CHANNELS, VolumeImage
 def require_copy_texel(source: TexelType, destination: TexelType) raises:
     """Refuse a copy between two texel types.
 
+    Nothing. The call returns when the types match.
+
     Args:
         source: The source texel type.
         destination: The destination texel type.
-
-    Returns:
-        Nothing. The call returns when the types match.
 
     Raises:
         Error: If the types differ.
@@ -141,11 +140,10 @@ def _regenerate(mut texture: Texture, level: Int) raises:
 def require_flat_layer(layer: Int) raises:
     """Refuse a layer on a 2D texture copy.
 
+    Nothing. The call returns when the layer is zero.
+
     Args:
         layer: The layer the copy names.
-
-    Returns:
-        Nothing. The call returns when the layer is zero.
 
     Raises:
         Error: If the layer is not zero.

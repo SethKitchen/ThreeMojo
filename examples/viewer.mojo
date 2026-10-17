@@ -16,7 +16,7 @@ every second, and follows it when the terminal answers.
 This example needs a terminal. It is not run by `make animation`.
 """
 
-from examples.output import fill_and_key, gallery_camera, gallery_renderer
+from tools._example_output import fill_and_key, gallery_camera, gallery_renderer
 
 from controls.input import CTRL_C, ESCAPE, KEY_DOWN, Key, RESIZE
 from controls.orbit_controls import OrbitControls

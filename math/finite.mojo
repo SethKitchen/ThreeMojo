@@ -25,11 +25,10 @@ from std.math import isfinite
 def require_positive_tolerance(value: Float64) raises:
     """Refuse a tolerance that is not positive and finite.
 
+    Nothing. The call returns when the tolerance is positive and finite.
+
     Args:
         value: The tolerance. A `Float32` converts exactly.
-
-    Returns:
-        Nothing. The call returns when the tolerance is positive and finite.
 
     Raises:
         Error: If the tolerance is not positive and finite.
@@ -52,13 +51,12 @@ def positive_finite(value: Float64) -> Bool:
 def require_positive_finite(value: Float64, message: String) raises:
     """Refuse a number that is not finite and positive.
 
+    Nothing. The call returns when `value` is finite and greater than
+    zero.
+
     Args:
         value: The number. A `Float32` converts exactly.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is finite and greater than
-        zero.
 
     Raises:
         Error: If `value` is not finite or is not greater than zero.
@@ -70,14 +68,14 @@ def require_positive_finite(value: Float64, message: String) raises:
 def non_negative_finite(value: Float64) -> Bool:
     """Return True when `value` is finite and zero or more.
 
+    Error: Never.
+
     Args:
         value: The number. A `Float32` converts exactly.
 
     Returns:
         Whether it is a finite number, zero or more.
 
-    Raises:
-        Error: Never.
     """
     return isfinite(value) and value >= 0
 
@@ -85,12 +83,11 @@ def non_negative_finite(value: Float64) -> Bool:
 def require_non_negative_finite(value: Float64, message: String) raises:
     """Refuse a number that is not finite or is negative.
 
+    Nothing. The call returns when `value` is finite and zero or more.
+
     Args:
         value: The number. A `Float32` converts exactly.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is finite and zero or more.
 
     Raises:
         Error: If `value` is not finite or is negative.
@@ -102,14 +99,14 @@ def require_non_negative_finite(value: Float64, message: String) raises:
 def unit_finite(value: Float64) -> Bool:
     """Return True when `value` is finite and from zero through one.
 
+    Error: Never.
+
     Args:
         value: The number. A `Float32` converts exactly.
 
     Returns:
         Whether it is finite and from zero through one.
 
-    Raises:
-        Error: Never.
     """
     return isfinite(value) and value >= 0 and value <= 1
 
@@ -117,13 +114,12 @@ def unit_finite(value: Float64) -> Bool:
 def require_unit_finite(value: Float64, message: String) raises:
     """Refuse a number outside zero through one, or one that is not finite.
 
+    Nothing. The call returns when `value` is finite and from zero
+    through one.
+
     Args:
         value: The number. A `Float32` converts exactly.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is finite and from zero
-        through one.
 
     Raises:
         Error: If `value` is not finite or is outside zero through one.
@@ -137,13 +133,12 @@ def require_unit_range(value: Float32, message: String) raises:
 
     Zero and one are accepted. A value that is not finite is left as it is.
 
+    Nothing. The call returns when `value` is from zero through one,
+    or is not finite.
+
     Args:
         value: The number.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is from zero through one,
-        or is not finite.
 
     Raises:
         Error: If `value` is below zero or above one.
@@ -155,12 +150,11 @@ def require_unit_range(value: Float32, message: String) raises:
 def require_finite(value: Float64, message: String) raises:
     """Refuse a number that is not finite.
 
+    Nothing. The call returns when `value` is finite.
+
     Args:
         value: The number. A `Float32` converts exactly.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when `value` is finite.
 
     Raises:
         Error: If `value` is not finite.
@@ -190,14 +184,14 @@ def finite_float32(value: Float64, message: String) raises -> Float32:
 def stored_float32(value: Float64) -> Float64:
     """Return `value` as a `Float32` store reads it back.
 
+    Error: Never.
+
     Args:
         value: The number.
 
     Returns:
         `value` rounded to `Float32`, then widened to `Float64`.
 
-    Raises:
-        Error: Never.
     """
     return Float64(Float32(value))
 
@@ -207,12 +201,11 @@ def require_finite_group(finite: Bool, message: String) raises:
 
     The caller tests each number and passes the result.
 
+    Nothing. The call returns when the group is finite.
+
     Args:
         finite: Whether every number in the group is finite.
         message: The error text for this caller.
-
-    Returns:
-        Nothing. The call returns when the group is finite.
 
     Raises:
         Error: If the group is not finite.

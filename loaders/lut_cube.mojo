@@ -43,6 +43,8 @@ Related loaders: `loaders.lut_3dl` reads `.3dl` files and
 `loaders.lut_image` reads image strips.
 """
 
+from std.math import isfinite
+
 from loaders.bytes import letter_or_underscore
 from loaders.js_text import split_fields
 from math.vector3 import Vector3
@@ -55,7 +57,7 @@ from render.texture import (
 )
 from render.srgb import LINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
-from loaders.text_number import file_line, read_finite_float32
+from loaders.text_number import file_line
 from std.pathlib import Path
 from core.ordinal import require_valid
 
@@ -120,7 +122,15 @@ def _number(field: String, line: Int) raises -> Float32:
         Error: If the field is not a number, or is not finite once it is
             a `Float32`.
     """
-    return read_finite_float32(field, _where(line), "a number must be finite")
+    var wide: Float64
+    try:
+        wide = Float64(field)
+    except:
+        raise Error(_where(line) + "not a number: " + field)
+    var value = Float32(wide)
+    if not isfinite(value):
+        raise Error(_where(line) + "a number must be finite: " + field)
+    return value
 
 
 def _triple(fields: List[String], first: Int, line: Int) raises -> Vector3:

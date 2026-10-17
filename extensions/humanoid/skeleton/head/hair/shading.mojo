@@ -389,12 +389,11 @@ def shade_groom(
 def require_groom_fields(groom: HairGroom) raises:
     """Refuse shading fields that do not match the groom.
 
+    Nothing. The call returns when the normals, the depths, and the
+    shades match the groom.
+
     Args:
         groom: The strands.
-
-    Returns:
-        Nothing. The call returns when the normals, the depths, and the
-            shades match the groom.
 
     Raises:
         Error: If a shading field does not match the groom.

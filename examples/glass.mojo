@@ -23,7 +23,7 @@ and no outside and you should be able to see it from either. Its lighting
 follows whichever side you are looking at.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

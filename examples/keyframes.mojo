@@ -11,7 +11,7 @@ A clip holds a position track and a rotation track. The mixer writes the
 pose each frame from the clock's delta.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

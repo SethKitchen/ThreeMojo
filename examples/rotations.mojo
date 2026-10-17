@@ -11,7 +11,7 @@
 numbers would speed up in the middle and stop being a rotation.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

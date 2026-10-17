@@ -53,11 +53,10 @@ from std.math import frexp, isfinite, ldexp, sqrt
 def require_hull_count(count: Int) raises:
     """Refuse a convex hull with fewer than four points.
 
+    Nothing. The call returns when there are at least four points.
+
     Args:
         count: How many points the hull is given.
-
-    Returns:
-        Nothing. The call returns when there are at least four points.
 
     Raises:
         Error: If there are fewer than four points.
@@ -69,13 +68,12 @@ def require_hull_count(count: Int) raises:
 def require_hull_finite(x: Float64, y: Float64, z: Float64) raises:
     """Refuse a convex-hull point that is not finite.
 
+    Nothing. The call returns when all three coordinates are finite.
+
     Args:
         x: The first coordinate.
         y: The second coordinate.
         z: The third coordinate.
-
-    Returns:
-        Nothing. The call returns when all three coordinates are finite.
 
     Raises:
         Error: If any coordinate is not finite.
@@ -90,12 +88,11 @@ def require_hull_finite(x: Float64, y: Float64, z: Float64) raises:
 def require_hull_face(face: Int, count: Int) raises:
     """Refuse a face index the hull does not have.
 
+    Nothing. The call returns when the index names a face.
+
     Args:
         face: Which face.
         count: How many faces the hull has.
-
-    Returns:
-        Nothing. The call returns when the index names a face.
 
     Raises:
         Error: If the index is negative or past the last face.

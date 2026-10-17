@@ -123,12 +123,11 @@ def check_placing(matrix: Matrix4) raises:
 def require_instance_index(index: Int, count: Int) raises:
     """Refuse an instance index outside the list.
 
+    Nothing. The call returns when the index names an instance.
+
     Args:
         index: Which instance.
         count: How many instances the list holds.
-
-    Returns:
-        Nothing. The call returns when the index names an instance.
 
     Raises:
         Error: If the index is negative or past the last instance.
@@ -455,11 +454,10 @@ comptime NO_LIMIT = Int.MAX
 def require_batched_geometry(id: GeometryId) raises:
     """Refuse a negative id for a geometry in a batch.
 
+    Nothing. The call returns when the id is zero or more.
+
     Args:
         id: The geometry's id in the store.
-
-    Returns:
-        Nothing. The call returns when the id is zero or more.
 
     Raises:
         Error: If the id is negative.
@@ -470,11 +468,10 @@ def require_batched_geometry(id: GeometryId) raises:
 def require_batched_instance(geometry: GeometryId) raises:
     """Refuse a negative geometry id on a batched instance.
 
+    Nothing. The call returns when the id is zero or more.
+
     Args:
         geometry: The instance's geometry id.
-
-    Returns:
-        Nothing. The call returns when the id is zero or more.
 
     Raises:
         Error: If the id is negative.

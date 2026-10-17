@@ -275,11 +275,10 @@ def arm_dimensions(
 def require_arm_athleticism(athleticism: Athleticism) raises:
     """Refuse an arm muscle whose athleticism is not named.
 
+    Nothing. The call returns when the athleticism is named.
+
     Args:
         athleticism: `UNTONED` or `TONED`.
-
-    Returns:
-        Nothing. The call returns when the athleticism is named.
 
     Raises:
         Error: If the athleticism is not named.

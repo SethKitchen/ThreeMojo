@@ -78,13 +78,12 @@ comptime STATIC = BodyKind(0)
 def require_static_mesh(shape: ShapeKind, kind: BodyKind) raises:
     """Refuse a mesh body that is not static.
 
+    Nothing. The call returns when the body is not a mesh, or it is
+    static.
+
     Args:
         shape: The collision shape.
         kind: How the body moves.
-
-    Returns:
-        Nothing. The call returns when the body is not a mesh, or it is
-        static.
 
     Raises:
         Error: If the shape is a mesh and the kind is not static.
@@ -100,11 +99,10 @@ comptime KINEMATIC = BodyKind(2)
 def require_body_kind(kind: BodyKind) raises:
     """Refuse a body kind that is not named.
 
+    Nothing. The call returns when the kind is named.
+
     Args:
         kind: The kind.
-
-    Returns:
-        Nothing. The call returns when the kind is named.
 
     Raises:
         Error: If the kind is not named.

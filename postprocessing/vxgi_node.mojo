@@ -261,12 +261,11 @@ def _debug_view(
 def require_vxgi_normals(got: Int, pixels: Int) raises:
     """Refuse a VXGI normal buffer that is not one normal a pixel.
 
+    Nothing. The call returns when there is one normal a pixel.
+
     Args:
         got: How many normals the buffer holds.
         pixels: How many pixels the view holds.
-
-    Returns:
-        Nothing. The call returns when there is one normal a pixel.
 
     Raises:
         Error: If the counts differ.

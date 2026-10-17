@@ -90,11 +90,10 @@ from materials.material import MaterialId
 def require_mesh_material(material: MaterialId) raises:
     """Refuse a mesh material id that is negative.
 
+    Nothing. The call returns when the id is zero or more.
+
     Args:
         material: The material's id.
-
-    Returns:
-        Nothing. The call returns when the id is zero or more.
 
     Raises:
         Error: If the id is negative.

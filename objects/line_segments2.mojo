@@ -84,11 +84,10 @@ comptime STRAND_LINE_COVERAGE = LineCoverage(1)
 def require_line_coverage(coverage: LineCoverage) raises:
     """Refuse a wide-line coverage that is not named.
 
+    Nothing. The call returns when the rule is named.
+
     Args:
         coverage: The coverage rule.
-
-    Returns:
-        Nothing. The call returns when the rule is named.
 
     Raises:
         Error: If the coverage is not named.
@@ -164,12 +163,11 @@ comptime Line2 = LineSegments2
 def require_wide_colors(colors: Int, points: Int) raises:
     """Refuse a wide line that has colors, but not one a point.
 
+    Nothing. The call returns when there are no colors, or one a point.
+
     Args:
         colors: How many colors the line holds.
         points: How many points the line holds.
-
-    Returns:
-        Nothing. The call returns when there are no colors, or one a point.
 
     Raises:
         Error: If there are colors, but not one per point.
@@ -268,11 +266,10 @@ def line_geometry(
 def require_unindexed_wide_line(geometry: BufferGeometry) raises:
     """Refuse an indexed wide-line geometry.
 
+    Nothing. The call returns when the geometry has no index.
+
     Args:
         geometry: The paired-point geometry.
-
-    Returns:
-        Nothing. The call returns when the geometry has no index.
 
     Raises:
         Error: If the geometry is indexed.

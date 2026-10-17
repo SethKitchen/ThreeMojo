@@ -171,30 +171,13 @@ def typed_value(value: Float64, component: ComponentType) raises -> Int:
     return wrapped
 
 
-def require_attribute_index(index: Int, count: Int) raises:
-    """Refuse an attribute item outside the attribute.
-
-    Args:
-        index: Which item.
-        count: How many items the attribute holds.
-
-    Returns:
-        Nothing. The call returns when the index names an item.
-
-    Raises:
-        Error: If the index is negative or past the last item.
-    """
-    require_index_in_count(index, count, "Attribute vertex index out of range")
-
-
 def require_item_size(item_size: Int) raises:
     """Refuse an attribute item size that is not positive.
 
+    Nothing. The call returns when the size is positive.
+
     Args:
         item_size: How many numbers one item holds.
-
-    Returns:
-        Nothing. The call returns when the size is positive.
 
     Raises:
         Error: If the size is not positive.
@@ -546,7 +529,9 @@ struct BufferAttribute(Copyable, Movable):
             Error: If either index falls outside the attribute, or an
                 interleaved item has been made to reach past its run.
         """
-        require_attribute_index(index, self.count())
+        # Count divides by the public item size; refuse negatives first.
+        if index < 0 or index >= self.count():
+            raise Error("Attribute vertex index out of range")
         require_index_in_count(
             offset,
             self.item_size,
@@ -880,7 +865,8 @@ struct BufferAttribute(Copyable, Movable):
             raise Error("An interleaved attribute has no array of its own")
         if source.item_size < self.item_size:
             raise Error("The source item holds fewer numbers than this one")
-        require_attribute_index(source_index, source.count())
+        if source_index < 0 or source_index >= source.count():
+            raise Error("Attribute vertex index out of range")
         self._check_span(index * self.item_size, self.item_size)
         var read = source_index * source.item_size
         # An item size is positive: the constructor refuses anything else.

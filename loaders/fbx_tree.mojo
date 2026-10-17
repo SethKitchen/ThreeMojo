@@ -36,10 +36,11 @@ expands to the wrong length; an ASCII node without `:`, an unbalanced
 other than the one its `*count` declares.
 """
 
+from core.ordinal import index_in_count
+
 from core.binary import copy_bytes, little_endian_uint
 from core.ordinal import (
     ordinal_valid,
-    require_index_in_count,
     require_valid,
     require_non_negative,
 )
@@ -70,11 +71,10 @@ comptime WIDE_RECORD_VERSION = 7500
 def require_fbx_whole(value: Float64) raises:
     """Refuse an FBX number that has a fraction.
 
+    Nothing. The call returns when the number is a whole number.
+
     Args:
         value: The number.
-
-    Returns:
-        Nothing. The call returns when the number is a whole number.
 
     Raises:
         Error: If the number has a fraction.
@@ -104,11 +104,10 @@ comptime FBX_BINARY = FbxFormat(1)
 def require_fbx_format(format: FbxFormat) raises:
     """Refuse an FBX format that is neither ASCII nor binary.
 
+    Nothing. The call returns when the format is one of the two.
+
     Args:
         format: Which form the file is written in.
-
-    Returns:
-        Nothing. The call returns when the format is one of the two.
 
     Raises:
         Error: If the format is neither ASCII nor binary.
@@ -260,11 +259,8 @@ struct FbxDocument(Movable):
 
     def _check(self, node: Int) raises:
         """Refuse an index that names no node."""
-        require_index_in_count(
-            node,
-            len(self.nodes),
-            "FBX: no node at index " + String(node),
-        )
+        if not index_in_count(node, len(self.nodes)):
+            raise Error("FBX: no node at index " + String(node))
 
     def name(self, node: Int) raises -> String:
         """Return a node's name.
@@ -366,14 +362,13 @@ struct FbxDocument(Movable):
         """
         self._check(node)
         ref found = self.nodes[node].properties
-        require_index_in_count(
-            index,
-            len(found),
-            "FBX: "
-            + self.nodes[node].name
-            + " has no property "
-            + String(index),
-        )
+        if not index_in_count(index, len(found)):
+            raise Error(
+                "FBX: "
+                + self.nodes[node].name
+                + " has no property "
+                + String(index)
+            )
         if not found[index].kind.is_valid():
             raise Error("FBX: a property of a kind that is not known")
         return found[index].copy()

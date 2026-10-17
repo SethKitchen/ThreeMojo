@@ -10,6 +10,8 @@ builder takes the zero set. The mass sampler classifies the interior.
 This file holds the arithmetic those solids share.
 """
 
+from std.math import isfinite
+
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
@@ -23,10 +25,8 @@ from math.vector3 import (
     midpoint,
     mix_delta3,
 )
-from math.finite import require_finite, require_finite_group
 from std.math import max, min, pi, sqrt
 from units.si import Angle, Length
-from core.ordinal import require_valid, require_non_negative, require_positive
 
 
 trait DistanceField(Copyable, Movable):
@@ -118,13 +118,12 @@ def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
         Error: If `sex` or `side` is not valid, or stature is not finite
             or is outside the software range.
     """
-    require_valid(
-        sex.is_valid(), "A " + bone + " needs a male or female template"
-    )
-    require_valid(side.is_valid(), "A " + bone + " needs a left or right side")
-    require_finite(
-        Float64(stature.value), "A " + bone + "'s stature must be finite"
-    )
+    if not sex.is_valid():
+        raise Error("A " + bone + " needs a male or female template")
+    if not side.is_valid():
+        raise Error("A " + bone + " needs a left or right side")
+    if not isfinite(Float64(stature.value)):
+        raise Error("A " + bone + "'s stature must be finite")
     if stature < MIN_STATURE:
         raise Error("A " + bone + "'s stature must be at least 1.2 meters")
     if stature > MAX_STATURE:
@@ -134,54 +133,52 @@ def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
 def _finite_measure(value: Float32, name: String, bone: String) raises:
     """Refuse a measure that is not finite.
 
+    Nothing. The call returns when the measure is finite.
+
     Args:
         value: The measure, in its SI unit.
         name: What it measures.
         bone: Name used in the error text.
 
-    Returns:
-        Nothing. The call returns when the measure is finite.
-
     Raises:
         Error: If the measure is not finite.
     """
-    require_finite(Float64(value), "A " + bone + " " + name + " must be finite")
+    if not isfinite(Float64(value)):
+        raise Error("A " + bone + " " + name + " must be finite")
 
 
 def _positive_measure(value: Float32, name: String, bone: String) raises:
     """Refuse a measure that is not positive.
 
+    Nothing. The call returns when the measure is positive.
+
     Args:
         value: The measure, in its SI unit.
         name: What it measures.
         bone: Name used in the error text.
 
-    Returns:
-        Nothing. The call returns when the measure is positive.
-
     Raises:
         Error: If the measure is not positive.
     """
-    require_positive(value, "A " + bone + " " + name + " must be positive")
+    if value <= 0:
+        raise Error("A " + bone + " " + name + " must be positive")
 
 
 def _non_negative_measure(value: Float32, name: String, bone: String) raises:
     """Refuse a measure that is negative.
 
+    Nothing. The call returns when the measure is zero or more.
+
     Args:
         value: The measure, in its SI unit.
         name: What it measures.
         bone: Name used in the error text.
 
-    Returns:
-        Nothing. The call returns when the measure is zero or more.
-
     Raises:
         Error: If the measure is negative.
     """
-    require_non_negative(
-        value, "A " + bone + " " + name + " cannot be negative"
-    )
+    if value < 0:
+        raise Error("A " + bone + " " + name + " cannot be negative")
 
 
 def positive_length(value: Length, name: String, bone: String) raises:
@@ -273,10 +270,8 @@ def finite_point(point: Vector3, name: String, bone: String) raises:
     Raises:
         Error: If any coordinate is not finite.
     """
-    require_finite_group(
-        point.is_finite(),
-        "A " + bone + " " + name + " must be finite",
-    )
+    if not point.is_finite():
+        raise Error("A " + bone + " " + name + " must be finite")
 
 
 def flip_x(point: Vector3) -> Vector3:
@@ -926,3 +921,22 @@ def _frustum_volume(
         * (radius_a * radius_a + radius_a * radius_b + radius_b * radius_b)
         / Float32(3)
     )
+
+
+def clamp_unit(value: Float32) -> Float32:
+    """Return `value` held to minus one through one, for `acos`.
+
+    Error: Never.
+
+    Args:
+        value: The input value.
+
+    Returns:
+        The bounded value. NaN and signed zero keep their input value.
+
+    """
+    if value < -1:
+        return -1
+    if value > 1:
+        return 1
+    return value

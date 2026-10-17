@@ -133,11 +133,10 @@ def level_extent(extent: Int, level: Int) -> Int:
 def require_layered_kind(kind: TargetKind) raises:
     """Refuse a layered target whose kind is not named.
 
+    Nothing. The call returns when the kind is one of the four.
+
     Args:
         kind: Which target.
-
-    Returns:
-        Nothing. The call returns when the kind is one of the four.
 
     Raises:
         Error: If the kind is not valid.

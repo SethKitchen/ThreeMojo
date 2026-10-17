@@ -12,7 +12,7 @@ tissues and skeletal muscles. The program also prints tissue mass and
 Earth weight.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     gallery_camera,
     gallery_renderer,

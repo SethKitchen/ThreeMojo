@@ -747,10 +747,8 @@ def decode_endpoints(
         Error: If the mode is not one of the sixteen, or `v` is not its
             number of values.
     """
-    require_valid(
-        endpoint_mode.is_valid(),
-        "UASTC HDR: " + String(endpoint_mode) + " is not a mode",
-    )
+    if not endpoint_mode.is_valid():
+        raise Error("UASTC HDR: " + String(endpoint_mode) + " is not a mode")
     if len(v) != endpoint_mode.values():
         raise Error("UASTC HDR: a mode's values are the wrong count")
     var mode = endpoint_mode.value
@@ -950,11 +948,10 @@ def _bad_weight_count(count: Int, bits: Int) -> Bool:
 def require_astc_profile(profile: AstcProfile) raises:
     """Refuse an ASTC profile that is not one of the three.
 
+    Nothing. The call returns when the profile is valid.
+
     Args:
         profile: UNORM, sRGB, or HDR.
-
-    Returns:
-        Nothing. The call returns when the profile is valid.
 
     Raises:
         Error: If the profile is not valid.
@@ -965,11 +962,10 @@ def require_astc_profile(profile: AstcProfile) raises:
 def require_astc_block(block_size: Int) raises:
     """Refuse an ASTC block that is not 4x4 or 6x6.
 
+    Nothing. The call returns when the block is four or six.
+
     Args:
         block_size: The width and height of each block.
-
-    Returns:
-        Nothing. The call returns when the block is four or six.
 
     Raises:
         Error: If the block is another size.

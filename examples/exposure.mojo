@@ -11,7 +11,7 @@ Tone mapping runs once on the composited light of each pixel, after
 shading and fog. The curve stays put. Only the exposure changes.
 """
 
-from examples.output import (
+from tools._example_output import (
     example_destination,
     fill_and_key,
     gallery_camera,

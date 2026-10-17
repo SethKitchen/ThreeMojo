@@ -33,7 +33,7 @@ lists such keys first, in numeric order. This keeps every key where it was
 first set.
 """
 
-from core.ordinal import require_index_in_count, require_non_negative
+from core.ordinal import index_in_count
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -45,7 +45,7 @@ from loaders.json import (
     parse_json,
     quote_json,
 )
-from math.finite import require_finite
+from std.math import isfinite
 from units.si import RADIAN, Angle, Length, METER
 
 # The largest number every whole `Float64` below it is exactly, two to the
@@ -66,9 +66,8 @@ def json_number_text(value: Float64) raises -> String:
     Raises:
         Error: If the number is not finite.
     """
-    require_finite(
-        Float64(value), "User data: a number must be finite: " + String(value)
-    )
+    if not isfinite(value):
+        raise Error("User data: a number must be finite: " + String(value))
     if abs(value) < _EXACT and Float64(Int(value)) == value:
         return String(Int(value))
     return String(value)
@@ -157,11 +156,8 @@ struct UserData(Copyable, Movable):
         Raises:
             Error: If no key has that position.
         """
-        require_index_in_count(
-            index,
-            len(self._keys),
-            "User data: no key at position " + String(index),
-        )
+        if not index_in_count(index, len(self._keys)):
+            raise Error("User data: no key at position " + String(index))
         return self._keys[index]
 
     def _find(self, key: String) -> Int:
@@ -195,7 +191,8 @@ struct UserData(Copyable, Movable):
             Error: If the map does not hold the key.
         """
         var index = self._find(key)
-        require_non_negative(index, "User data: no key " + quote_json(key))
+        if index < 0:
+            raise Error("User data: no key " + quote_json(key))
         return self._values[index]
 
     def kind(self, key: String) raises -> JsonKind:
@@ -297,12 +294,11 @@ struct UserData(Copyable, Movable):
     def set_meters(mut self, key: String, length: Length) raises:
         """Set a key to a length in meters.
 
+        Nothing. The key holds the length in meters.
+
         Args:
             key: The key.
             length: The length.
-
-        Returns:
-            Nothing. The key holds the length in meters.
 
         Raises:
             Error: If the length in meters is not finite. The map is left
@@ -313,12 +309,11 @@ struct UserData(Copyable, Movable):
     def set_radians(mut self, key: String, angle: Angle) raises:
         """Set a key to an angle in radians.
 
+        Nothing. The key holds the angle in radians.
+
         Args:
             key: The key.
             angle: The angle.
-
-        Returns:
-            Nothing. The key holds the angle in radians.
 
         Raises:
             Error: If the angle in radians is not finite. The map is left

@@ -28,11 +28,10 @@ from math.finite import require_finite
 def require_morph_target(target: Int) raises:
     """Refuse a morph target index below zero.
 
+    Nothing. The call returns when the index is not negative.
+
     Args:
         target: Which target, from zero.
-
-    Returns:
-        Nothing. The call returns when the index is not negative.
 
     Raises:
         Error: If the target is negative.

@@ -55,11 +55,10 @@ from core.ordinal import require_valid
 def require_splat_depth(depth_mode: DepthMode) raises:
     """Refuse a Gaussian splat depth mode that is not named.
 
+    Nothing. The call returns when the mode is named.
+
     Args:
         depth_mode: How the target stores depth.
-
-    Returns:
-        Nothing. The call returns when the mode is named.
 
     Raises:
         Error: If the mode is not one of the named depth modes.

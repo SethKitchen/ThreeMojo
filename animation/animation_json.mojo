@@ -105,6 +105,7 @@ from animation.keyframe_track import (
 from exporters.json_writer import JsonWriter
 from core.user_data import user_data_of
 from loaders.json import (
+    NO_NODE,
     ARRAY,
     BOOLEAN,
     JsonDocument,
@@ -683,9 +684,9 @@ def _number_list(
     document: JsonDocument, node: Int, key: String
 ) raises -> List[Float32]:
     """Return an array of numbers under a key, as `Float32`."""
-    var list = document.required_kind(
-        node, key, ARRAY, "A track in JSON needs a " + key + " array"
-    )
+    var list = document.get(node, key)
+    if list == NO_NODE or document.kind(list) != ARRAY:
+        raise Error("A track in JSON needs a " + key + " array")
     var out = List[Float32]()
     for index in range(document.length(list)):
         out.append(Float32(document.number(document.at(list, index))))
