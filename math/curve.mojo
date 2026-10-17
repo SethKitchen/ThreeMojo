@@ -557,6 +557,23 @@ struct Curve(Copyable, Movable):
             segment = last - 1
         return segment
 
+    def _spline_frame(
+        self, t: Float32
+    ) -> Tuple[Float32, Vector2, Vector2, Vector2, Vector2]:
+        """Return the Catmull-Rom weight and the four points around `t`.
+
+        The point and the slope both read this frame. The first and last
+        stored points stand in where the spline has nothing beyond them.
+        """
+        var last = len(self.points) - 1
+        var segment = self._spline_segment(t)
+        var weight = Float32(last) * t - Float32(segment)
+        var before = self.points[max(segment - 1, 0)]
+        var start = self.points[segment]
+        var end = self.points[segment + 1]
+        var after = self.points[min(segment + 2, last)]
+        return (weight, before, start, end, after)
+
     def _spline_point(self, t: Float32) -> Vector2:
         """Return the point at `t` on a Catmull-Rom spline through every
         point, three.js's `SplineCurve.getPoint`.
@@ -566,13 +583,7 @@ struct Curve(Copyable, Movable):
         give it its directions, with the first and last point repeated
         where there is nothing beyond.
         """
-        var last = len(self.points) - 1
-        var segment = self._spline_segment(t)
-        var weight = Float32(last) * t - Float32(segment)
-        var before = self.points[max(segment - 1, 0)]
-        var start = self.points[segment]
-        var end = self.points[segment + 1]
-        var after = self.points[min(segment + 2, last)]
+        var weight, before, start, end, after = self._spline_frame(t)
         return Vector2(
             _catmull_rom(weight, before.x, start.x, end.x, after.x),
             _catmull_rom(weight, before.y, start.y, end.y, after.y),
@@ -581,13 +592,7 @@ struct Curve(Copyable, Movable):
     def _spline_slope(self, t: Float32) -> Vector2:
         """Return the direction a Catmull-Rom spline runs in at `t`, of
         whatever length the derivative gives it."""
-        var last = len(self.points) - 1
-        var segment = self._spline_segment(t)
-        var weight = Float32(last) * t - Float32(segment)
-        var before = self.points[max(segment - 1, 0)]
-        var start = self.points[segment]
-        var end = self.points[segment + 1]
-        var after = self.points[min(segment + 2, last)]
+        var weight, before, start, end, after = self._spline_frame(t)
         return Vector2(
             _catmull_rom_slope(weight, before.x, start.x, end.x, after.x),
             _catmull_rom_slope(weight, before.y, start.y, end.y, after.y),
