@@ -173,14 +173,14 @@ struct _Entry(Copyable, Movable):
 
 def _connections(
     document: FbxDocument,
-) raises -> Tuple[Dict[Int, List[_Link]], Dict[Int, List[_Link]]]:
-    """Return each object's parents and children, in file order, as
+    mut parents: Dict[Int, List[_Link]],
+    mut children: Dict[Int, List[_Link]],
+) raises:
+    """Fill each object's parents and children, in file order, as
     three.js's `parseConnections` joins them."""
-    var parents = Dict[Int, List[_Link]]()
-    var children = Dict[Int, List[_Link]]()
     var connections = document.child(document.root(), "Connections")
     if connections == NO_FBX_NODE:
-        return (parents^, children^)
+        return
     for link in document.children_named(connections, "C"):
         var child = document.integer(link, 1)
         var parent = document.integer(link, 2)
@@ -193,7 +193,6 @@ def _connections(
         if parent not in children:
             children[parent] = List[_Link]()
         children[parent].append(_Link(child, relation))
-    return (parents^, children^)
 
 
 def _links(table: Dict[Int, List[_Link]], id: Int) raises -> List[_Link]:
@@ -289,9 +288,9 @@ def read_fbx_animations(
     var clips = List[AnimationClip]()
     if len(document.children_named(objects, "AnimationCurve")) == 0:
         return clips^
-    var joined = _connections(document)
-    ref parents = joined[0]
-    ref children = joined[1]
+    var parents = Dict[Int, List[_Link]]()
+    var children = Dict[Int, List[_Link]]()
+    _connections(document, parents, children)
     var nodes = Dict[Int, _CurveNode]()
     for node in document.children_named(objects, "AnimationCurveNode"):
         var attr = object_name(document.string(node, 1), document.format)

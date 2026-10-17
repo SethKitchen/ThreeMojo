@@ -114,7 +114,12 @@ from loaders.fbx_tree import (
     require_fbx_format,
     parse_fbx,
 )
-from loaders.fbx_animation import FbxAnimatedModel, read_fbx_animations
+from loaders.fbx_animation import (
+    FbxAnimatedModel,
+    _Link,
+    _connections,
+    read_fbx_animations,
+)
 from loaders.gltf import decode_base64
 from loaders.model_nodes import (
     authored_color,
@@ -649,15 +654,6 @@ struct _Part(Movable):
 
 
 @fieldwise_init
-struct _Link(Copyable, Movable):
-    """One end of a connection: the other object's id, and the
-    connection's name, such as `DiffuseColor`, or empty."""
-
-    var id: Int
-    var relation: String
-
-
-@fieldwise_init
 struct _Cluster(Copyable, Movable):
     """One `Cluster` of a skin: the vertices it carries, how much of each,
     and where its bone stood at bind time."""
@@ -972,20 +968,7 @@ struct _Loader(Movable):
         for node in document.children(objects):
             if document.property_count(node) > 0:
                 self.objects[document.integer(node, 0)] = node
-        var connections = document.child(document.root(), "Connections")
-        if connections != NO_FBX_NODE:
-            for link in document.children_named(connections, "C"):
-                var child = document.integer(link, 1)
-                var parent = document.integer(link, 2)
-                var relation = String()
-                if document.property_count(link) > 3:
-                    relation = document.string(link, 3)
-                if child not in self.parents:
-                    self.parents[child] = List[_Link]()
-                self.parents[child].append(_Link(parent, relation))
-                if parent not in self.children:
-                    self.children[parent] = List[_Link]()
-                self.children[parent].append(_Link(child, relation))
+        _connections(document, self.parents, self.children)
         self.document = document^
 
     # --- small readers ------------------------------------------------------
