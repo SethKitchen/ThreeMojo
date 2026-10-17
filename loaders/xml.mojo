@@ -352,18 +352,13 @@ def _is_name_char(point: Int) -> Bool:
     )
 
 
-def _is_letter(byte: Int) -> Bool:
-    """Return True for an ASCII letter in an encoding name."""
-    return ascii_letter(byte)
-
-
 def _is_pubid_char(byte: Int) -> Bool:
     """Check the ASCII character set of a public identifier."""
     return (
         byte == 32
         or byte == 13
         or byte == 10
-        or _is_letter(byte)
+        or ascii_letter(byte)
         or ascii_digit(byte)
         or chr(byte) in String("-'()+,./:=?;!*#@$_%")
     )
@@ -535,13 +530,13 @@ struct _Parser(Movable):
             var bytes = encoding.as_bytes()
             if len(bytes) == 0:
                 raise Error(self.where() + "empty encoding name")
-            if not _is_letter(Int(bytes[0])):
+            if not ascii_letter(Int(bytes[0])):
                 raise Error(self.where() + "invalid encoding name")
             var index = 0
             while index < len(bytes):
                 var byte = bytes[index]
                 if not (
-                    _is_letter(Int(byte))
+                    ascii_letter(Int(byte))
                     or ascii_digit(Int(byte))
                     or byte == 46
                     or byte == 95

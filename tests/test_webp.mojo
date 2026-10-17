@@ -15,6 +15,7 @@ Streams and containers that no encoder writes are built here, bit by bit,
 for the errors that libwebp checks.
 """
 
+from core.binary import copy_byte_range
 from loaders.json import parse_json
 from render.png import decode as decode_png
 from render.webp import decode, decode_alpha, is_webp
@@ -565,6 +566,17 @@ def test_each_byte_of_the_start_code_is_checked() raises:
     flat[8] = 0
     flat[9] = 0
     _container_refused(_frame(flat^), "frame with no size")
+
+
+def test_a_byte_range_copies_up_to_its_end() raises:
+    var bytes = List[UInt8]()
+    bytes.append(1)
+    bytes.append(2)
+    bytes.append(3)
+    var copied = copy_byte_range(bytes, 1, 3)
+    assert_equal(len(copied), 2)
+    assert_equal(Int(copied[0]), 2)
+    assert_equal(len(copy_byte_range(bytes, 2, 1)), 0)
 
 
 def test_canvas_height_must_match_when_width_matches() raises:

@@ -9,6 +9,7 @@ The caller checks that the read lies inside the buffer. The integer
 readers do not allocate and do not raise. `little_endian_u16` and
 `little_endian_u32` read a fixed width. `little_endian_uint` reads zero
 through eight bytes. `copy_bytes` returns a new list and does not raise.
+`copy_byte_range` copies from one index up to another.
 """
 
 
@@ -108,3 +109,25 @@ def copy_bytes(bytes: List[UInt8], start: Int, count: Int) -> List[UInt8]:
         A copy of those bytes.
     """
     return List[UInt8](bytes[start : start + count])
+
+
+def copy_byte_range(bytes: List[UInt8], start: Int, end: Int) -> List[UInt8]:
+    """Return a copy of the bytes from `start` up to `end`.
+
+    Args:
+        bytes: The buffer.
+        start: The first byte.
+        end: The first byte not copied. An end before `start` copies
+            nothing.
+
+    Returns:
+        The copy. The caller has checked that a positive span lies
+        inside `bytes`.
+
+    Raises:
+        Error: Never.
+    """
+    var count = end - start
+    if count < 0:
+        count = 0
+    return copy_bytes(bytes, start, count)
