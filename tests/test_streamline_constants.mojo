@@ -444,5 +444,74 @@ def test_the_constants_check_refuses_a_bad_lens() raises:
             check_frame_constants(bad)
 
 
+def memory(matrix: Matrix4) -> List[Float32]:
+    """Return the sixteen floats of a matrix in memory order."""
+    var floats = List[Float32]()
+    for at in range(16):
+        floats.append(matrix.elements[at])
+    return floats^
+
+
+def row_major_multiply(a: List[Float32], b: List[Float32]) -> List[Float32]:
+    """Multiply two row-major matrices the way `sl::matrixMul` of
+    `sl_matrix_helpers.h` does."""
+    var product = List[Float32](length=16, fill=0)
+    for row in range(4):
+        for column in range(4):
+            var sum = Float32(0)
+            for at in range(4):
+                sum += a[row * 4 + at] * b[at * 4 + column]
+            product[row * 4 + column] = sum
+    return product^
+
+
+def test_a_matrix_has_streamline_s_layout_in_memory() raises:
+    # `sl::float4x4` is row-major and puts the translation in row 3. A column
+    # vector matrix of ThreeMojo holds the same floats, with no transpose.
+    var moved = memory(translation(1, 2, 3))
+    assert_equal(moved[12], 1)
+    assert_equal(moved[13], 2)
+    assert_equal(moved[14], 3)
+    assert_equal(moved[15], 1)
+    var scaled = memory(scaling(2, 3, 4))
+    assert_equal(scaled[0], 2)
+    assert_equal(scaled[5], 3)
+    assert_equal(scaled[10], 4)
+
+
+def test_the_previous_clip_matrix_is_the_row_vector_chain_of_streamline() raises:
+    # `recalculateCameraMatrices` builds clipToPrevClip left to right as
+    # clipToCameraView * cameraViewToPrevCameraView * cameraViewToClipPrev,
+    # with row-major matrices that multiply a row vector. The floats of our
+    # matrices in memory order must give the same product.
+    var current = snapshot(2)
+    var previous = snapshot(0)
+    var constants = frame_constants(
+        current,
+        previous,
+        FrameSize(1280, 720),
+        Vector2(0, 0),
+        MOTION_NORMALIZED,
+        False,
+    )
+    var view_to_world = current.view
+    view_to_world.invert()
+    var chain = row_major_multiply(
+        memory(constants.clip_to_camera_view), memory(view_to_world)
+    )
+    chain = row_major_multiply(chain, memory(previous.view))
+    chain = row_major_multiply(chain, memory(previous.projection))
+    var ours = memory(constants.clip_to_prev_clip)
+    for at in range(16):
+        assert_almost_equal(ours[at], chain[at], atol=1e-3, rtol=1e-4)
+    var back = row_major_multiply(
+        memory(constants.clip_to_prev_clip), memory(constants.prev_clip_to_clip)
+    )
+    for row in range(4):
+        for column in range(4):
+            var wanted = Float32(1) if row == column else Float32(0)
+            assert_almost_equal(back[row * 4 + column], wanted, atol=1e-3)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

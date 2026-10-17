@@ -41,7 +41,13 @@ from extensions.streamline.kinds import (
     SuperResolutionPreset,
     UpscaleMode,
 )
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def test_the_features_are_two() raises:
@@ -177,6 +183,57 @@ def test_the_buffer_kinds_are_eighteen() raises:
     assert_equal(BUFFER_DEPTH.name(), "depth")
     assert_equal(BUFFER_ALBEDO.name(), "albedo")
     assert_equal(BufferKind(18).name(), "unknown")
+
+
+def test_the_features_map_to_streamline_s_ids() raises:
+    # sl::kFeatureDLSS and sl::kFeatureDLSS_RR, sl_core_types.h.
+    assert_equal(SUPER_RESOLUTION.streamline_id(), 0)
+    assert_equal(RAY_RECONSTRUCTION.streamline_id(), 1001)
+    with assert_raises(contains="feature"):
+        _ = Feature(2).streamline_id()
+
+
+def test_the_buffer_kinds_map_to_streamline_s_buffer_types() raises:
+    # sl::BufferType, sl_core_types.h of Streamline 2.14.16. The running
+    # sl.dlss and sl.dlss_d require 0, 1, 3 and 4: the depth, the motion
+    # vectors, the scaling input color and the scaling output color.
+    var types: List[Int] = [
+        0,
+        49,
+        1,
+        10,
+        42,
+        3,
+        4,
+        13,
+        7,
+        8,
+        5,
+        14,
+        6,
+        51,
+        52,
+        40,
+        58,
+        64,
+    ]
+    for value in range(18):
+        assert_equal(BufferKind(value).streamline_type(), types[value])
+    with assert_raises(contains="eighteen"):
+        _ = BufferKind(18).streamline_type()
+    with assert_raises(contains="eighteen"):
+        _ = BufferKind(-1).streamline_type()
+
+
+def test_five_modes_have_optimal_settings() raises:
+    assert_false(MODE_OFF.has_optimal_settings())
+    assert_true(MODE_MAX_PERFORMANCE.has_optimal_settings())
+    assert_true(MODE_BALANCED.has_optimal_settings())
+    assert_true(MODE_MAX_QUALITY.has_optimal_settings())
+    assert_true(MODE_ULTRA_PERFORMANCE.has_optimal_settings())
+    assert_false(MODE_ULTRA_QUALITY.has_optimal_settings())
+    assert_true(MODE_DLAA.has_optimal_settings())
+    assert_false(UpscaleMode(7).has_optimal_settings())
 
 
 def main() raises:

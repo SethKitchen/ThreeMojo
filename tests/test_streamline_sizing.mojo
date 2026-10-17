@@ -22,6 +22,7 @@ from extensions.streamline.sizing import (
     OptimalSettings,
     check_optimal_settings,
     check_render_size,
+    estimated_optimal_settings,
     estimated_render_size,
     render_scale,
 )
@@ -44,7 +45,8 @@ def test_each_mode_renders_the_share_nvidia_publishes() raises:
     assert_almost_equal(
         render_scale(MODE_ULTRA_PERFORMANCE), 1.0 / 3.0, atol=1e-12
     )
-    assert_equal(render_scale(MODE_ULTRA_QUALITY), 0.77)
+    with assert_raises(contains="ultra quality"):
+        _ = render_scale(MODE_ULTRA_QUALITY)
     with assert_raises(contains="mode"):
         _ = render_scale(UpscaleMode(7))
     with assert_raises(contains="mode"):
@@ -67,9 +69,8 @@ def test_a_4k_output_renders_at_the_known_sizes() raises:
         estimated_render_size(MODE_ULTRA_PERFORMANCE, output),
         FrameSize(1280, 720),
     )
-    assert_equal(
-        estimated_render_size(MODE_ULTRA_QUALITY, output), FrameSize(2957, 1663)
-    )
+    with assert_raises(contains="ultra quality"):
+        _ = estimated_render_size(MODE_ULTRA_QUALITY, output)
     assert_equal(estimated_render_size(MODE_DLAA, output), output)
     assert_equal(estimated_render_size(MODE_OFF, output), output)
 
@@ -226,6 +227,64 @@ def test_the_jitter_refuses_a_bad_index_or_count() raises:
         _ = jitter_offset(-1, 32)
     with assert_raises(contains="phase"):
         _ = jitter_offset(0, 0)
+
+
+def test_the_estimate_matches_the_running_plugin() raises:
+    # Each row is what `slDLSSGetOptimalSettings` and `slDLSSDGetOptimalSettings`
+    # of Streamline 2.14.16 answered on an NVIDIA TITAN RTX with driver 610.88:
+    # the mode, the output size, the optimal size, the smallest and the largest.
+    # Both features answered alike. See docs/validation/streamline/result.tsv.
+    var rows: List[List[Int]] = [
+        [1, 3840, 2160, 1920, 1080, 1920, 1080, 3840, 2160],
+        [2, 3840, 2160, 2227, 1253, 1920, 1080, 3840, 2160],
+        [3, 3840, 2160, 2560, 1440, 1920, 1080, 3840, 2160],
+        [4, 3840, 2160, 1280, 720, 1280, 720, 1280, 720],
+        [6, 3840, 2160, 3840, 2160, 3802, 2138, 3840, 2160],
+        [1, 2560, 1440, 1280, 720, 1280, 720, 2560, 1440],
+        [2, 2560, 1440, 1485, 835, 1280, 720, 2560, 1440],
+        [3, 2560, 1440, 1707, 960, 1280, 720, 2560, 1440],
+        [4, 2560, 1440, 853, 480, 853, 480, 853, 480],
+        [6, 2560, 1440, 2560, 1440, 2534, 1426, 2560, 1440],
+        [1, 1920, 1080, 960, 540, 960, 540, 1920, 1080],
+        [2, 1920, 1080, 1114, 626, 960, 540, 1920, 1080],
+        [3, 1920, 1080, 1280, 720, 960, 540, 1920, 1080],
+        [4, 1920, 1080, 640, 360, 640, 360, 640, 360],
+        [6, 1920, 1080, 1920, 1080, 1901, 1069, 1920, 1080],
+        [1, 1280, 720, 640, 360, 640, 360, 1280, 720],
+        [2, 1280, 720, 742, 418, 640, 360, 1280, 720],
+        [3, 1280, 720, 853, 480, 640, 360, 1280, 720],
+        [4, 1280, 720, 427, 240, 427, 240, 427, 240],
+        [6, 1280, 720, 1280, 720, 1267, 713, 1280, 720],
+        [1, 1000, 563, 500, 282, 500, 282, 1000, 563],
+        [2, 1000, 563, 580, 327, 500, 282, 1000, 563],
+        [3, 1000, 563, 667, 375, 500, 282, 1000, 563],
+        [4, 1000, 563, 333, 188, 333, 188, 333, 188],
+        [6, 1000, 563, 1000, 563, 990, 557, 1000, 563],
+    ]
+    assert_equal(len(rows), 25)
+    for row in rows:
+        var output = FrameSize(row[1], row[2])
+        var settings = estimated_optimal_settings(UpscaleMode(row[0]), output)
+        assert_equal(settings.optimal_width, row[3])
+        assert_equal(settings.optimal_height, row[4])
+        assert_equal(settings.min_width, row[5])
+        assert_equal(settings.min_height, row[6])
+        assert_equal(settings.max_width, row[7])
+        assert_equal(settings.max_height, row[8])
+        check_optimal_settings(settings, output)
+
+
+def test_the_running_plugin_gives_off_and_ultra_quality_no_settings() raises:
+    # `slDLSSGetOptimalSettings` returned eErrorInvalidParameter for both.
+    var output = FrameSize(1920, 1080)
+    with assert_raises(contains="no optimal settings"):
+        _ = estimated_optimal_settings(MODE_OFF, output)
+    with assert_raises(contains="no optimal settings"):
+        _ = estimated_optimal_settings(MODE_ULTRA_QUALITY, output)
+    with assert_raises(contains="no optimal settings"):
+        _ = estimated_optimal_settings(UpscaleMode(7), output)
+    with assert_raises(contains="output"):
+        _ = estimated_optimal_settings(MODE_BALANCED, FrameSize(0, 1080))
 
 
 def main() raises:

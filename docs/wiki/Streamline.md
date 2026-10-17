@@ -1,6 +1,6 @@
 # Streamline
 
-`extensions/streamline/` holds the half of NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction integration that needs no graphics device. It does not run DLSS yet.
+`extensions/streamline/` holds the half of NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction integration that needs no graphics device. It does not run DLSS yet. A Windows probe has run both plugins, and the package agrees with what they answered. See [Checked against DLSS](#checked-against-dlss).
 
 The package types and checks everything that Streamline reads, builds the per-frame constants from a ThreeMojo camera, and checks the buffers of a frame. It also has an upscaler trait with a CPU fallback. A native binding will implement that trait. See [Extensions](Extensions).
 
@@ -98,6 +98,10 @@ DLSS 4.5 is the second-generation transformer model. NVIDIA names its Super Reso
 
 `estimated_render_size` gives the size to plan an allocation with before a device exists. It uses NVIDIA's published ratios, rounded to the nearest pixel. A 4K output gives 2560 by 1440 in Quality, 2227 by 1253 in Balanced and 1920 by 1080 in Performance.
 
+`estimated_optimal_settings` also gives the range that dynamic resolution can use. The smallest size is half the output in Quality, Balanced and Performance, and 0.99 of it in DLAA. The largest size is the output. Ultra Performance has one size.
+
+Streamline answers for five modes. For Off and for Ultra Quality it returns `eErrorInvalidParameter`, although `sl_dlss.h` lists both. `UpscaleMode.has_optimal_settings` says which modes answer. `render_scale` and `estimated_optimal_settings` refuse Ultra Quality.
+
 The size that `slDLSSGetOptimalSettings` returns is the size to render at. `OptimalSettings` holds that reply. `check_optimal_settings` refuses a reply that cannot be right. `check_render_size` says whether the size of a dynamic-resolution frame lies in the range that DLSS accepts.
 
 ## Jitter
@@ -116,6 +120,7 @@ Streamline does not say which way its `jitterOffset` points. A binding must chec
 - None of the four matrices carries the jitter. Take the snapshot before the camera is jittered.
 - The camera's position and axes are in world space. The field of view is vertical. `reset` says that the last frame is unrelated, and then the last camera is ignored.
 - `mvec_scale` is one and one for `MOTION_NORMALIZED`, and one over the render size for `MOTION_PIXELS`.
+- The matrices have Streamline's layout. `sl::float4x4` is row-major and multiplies a row vector. A `Matrix4` is column-major and multiplies a column vector. Both hold the same sixteen floats in memory. A binding copies `Matrix4.elements` with no transpose. A test checks this against the order of `matrixMul` in `sl_matrix_helpers.h`.
 
 ThreeMojo's own velocity buffer holds a displacement in normalized device coordinates. A binding must convert it to the unit that it declares.
 
@@ -138,20 +143,39 @@ Each buffer must have the size of its kind, the number of channels that the guid
 
 It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing).
 
+`examples/streamline.mojo` shows the fallback. It renders a scene at the Balanced render size. It puts three images side by side. The first is the render, stretched with the nearest texel. The second is the same render through `SpatialUpscaler`. The third is the scene rendered at the output size.
+
+A row of magnified crops sits below. Run it with `mojo run -I . examples/streamline.mojo out/streamline.png`. It is not in the gallery.
+
 ## The native binding
 
 The binding is not written. Three things block it today.
 
 1. **The platform.** Streamline's documentation covers Windows with Direct3D 11, Direct3D 12 and Vulkan 1.2. It does not mention Linux or macOS. ThreeMojo runs on macOS, Linux and WSL 2. Its GPU backend is MAX, which opens no Direct3D or Vulkan device. `slEvaluateFeature` needs the command list of such a device, and `slSetTag` needs its resources.
 2. **The runtime.** `sl.interposer`, `sl.dlss` and `nvngx_dlss` come from NVIDIA. NVIDIA ships the DLSS runtime as a separate product with its own terms. This repository does not hold it.
-3. **Unstated conventions.** The headers leave four conventions open. They are the sign of the jitter, the layout of a `float4x4`, the range of the clip depth and the unit of the motion vectors. A binding must settle each against a running DLSS.
+3. **Unstated conventions.** The headers leave three conventions open. They are the sign of the jitter, the range of the clip depth, and the sign and direction of the motion vectors. A binding must settle each against a running DLSS. The layout of a `float4x4` and the unit of the motion vectors are settled.
 
 The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771). It closes when a program on an RTX machine evaluates both features through `sl.interposer`, and a test compares the result with `SpatialUpscaler`.
+
+## Checked against DLSS
+
+`docs/validation/streamline/probe.cpp` runs `sl.dlss` and `sl.dlss_d` of Streamline 2.14.16 through Direct3D 12. It ran on an NVIDIA TITAN RTX with driver 610.88. The README in that folder says how to run it again.
+
+| Claim | Result |
+|---|---|
+| Both features run on a Turing GPU | Yes, `slIsFeatureSupported` returned `eOk` |
+| The buffers each feature requires | Depth, motion vectors, input color and output color |
+| The render size of each mode | The estimates match at five output sizes |
+| The range of the render size | Matches `estimated_optimal_settings` |
+| Off and Ultra Quality | `eErrorInvalidParameter` |
+| The layout of an options struct | Members lie in the order of the headers |
+
+The probe does not evaluate a feature. It does not settle the open conventions. The tests keep the answers it gave: `test_the_estimate_matches_the_running_plugin` holds twenty-five of them.
 
 ## Differences from Streamline
 
 - The mode and the output size have no default. Streamline's defaults, `eOff` and an invalid size, cannot run.
-- The deprecated `sharpness` field and the axes of the on-screen indicator are not carried.
+- The `sharpness` field and the axes of the on-screen indicator are not carried. Super Resolution deprecates the sharpness. Ray Reconstruction ignores it.
 - A `Bool` is always true or false. Streamline's `Boolean` has a third value, `eInvalid`.
 - An exposure that is not positive is refused. The headers do not say so.
-- `Feature`, `BufferKind` and `MotionVectorSpace` are this port's numbering. A binding maps them to Streamline's feature ids and resource tags.
+- `Feature`, `BufferKind` and `MotionVectorSpace` are this port's numbering. `Feature.streamline_id` and `BufferKind.streamline_type` give the number of `sl::Feature` and of `sl::BufferType`.

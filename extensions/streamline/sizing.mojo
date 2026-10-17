@@ -12,6 +12,12 @@ allocation with before the device is there: the ratio of each mode as NVIDIA
 publishes it, rounded to the nearest pixel. It is an estimate. The size that
 Streamline returns is the size to render at.
 
+`estimated_optimal_settings` adds the range of sizes that dynamic resolution
+can use. Both match `sl.dlss` and `sl.dlss_d` 2.14.16 on a TITAN RTX with
+driver 610.88, at 3840x2160, 2560x1440, 1920x1080, 1280x720 and 1000x563
+(`docs/validation/streamline/result.tsv`). Streamline answers for five modes.
+For off and for ultra quality it returns `eErrorInvalidParameter`.
+
 `OptimalSettings` is `sl::DLSSOptimalSettings` and `sl::DLSSDOptimalSettings`,
 which have the same seven fields. `check_optimal_settings` refuses a reply
 that cannot be right. `check_render_size` says whether the size a frame
@@ -20,6 +26,7 @@ renders at, which dynamic resolution can change, is one that DLSS accepts.
 
 from extensions.streamline.kinds import (
     MODE_BALANCED,
+    MODE_DLAA,
     MODE_MAX_PERFORMANCE,
     MODE_MAX_QUALITY,
     MODE_ULTRA_PERFORMANCE,
@@ -44,17 +51,18 @@ def render_scale(mode: UpscaleMode) raises -> Float64:
         mode: The mode.
 
     Returns:
-        One for off and for DLAA. For the others NVIDIA's ratios: Ultra
-        Quality 0.77, Quality two thirds, Balanced 0.58, Performance a half
-        and Ultra Performance a third.
+        One for off and for DLAA. For the others NVIDIA's ratios: Quality
+        two thirds, Balanced 0.58, Performance a half and Ultra Performance
+        a third.
 
     Raises:
-        Error: If the mode is not valid.
+        Error: If the mode is not valid, or is ultra quality, which
+            `sl.dlss` 2.14.16 refuses with `eErrorInvalidParameter`.
     """
     if not mode.is_valid():
         raise Error("A DLSS mode must be one of the seven")
     if mode == MODE_ULTRA_QUALITY:
-        return 0.77
+        raise Error("DLSS gives ultra quality no render size")
     if mode == MODE_MAX_QUALITY:
         return 2.0 / 3.0
     if mode == MODE_BALANCED:
@@ -137,6 +145,49 @@ struct OptimalSettings(Copyable, Movable):
         self.min_height = min_height
         self.max_width = max_width
         self.max_height = max_height
+
+
+def estimated_optimal_settings(
+    mode: UpscaleMode, output: FrameSize
+) raises -> OptimalSettings:
+    """Return what Streamline answers for a mode, before it can say.
+
+    Args:
+        mode: The mode. It must be one that `has_optimal_settings`.
+        output: The output's size.
+
+    Returns:
+        The estimated render size as the optimal size. The largest size is
+        the output. The smallest is half the output, a share of 0.99 for
+        DLAA, and the optimal size for Ultra Performance. The sharpness is
+        zero: it is a deprecated field.
+
+    Raises:
+        Error: If the mode is off or ultra quality, which Streamline gives no
+            settings, or is not valid, or the output has a side below one.
+    """
+    if not mode.has_optimal_settings():
+        raise Error("DLSS gives this mode no optimal settings")
+    var optimal = estimated_render_size(mode, output)
+    var smallest = optimal
+    if mode == MODE_DLAA:
+        smallest = FrameSize(
+            _scaled(output.width, 0.99), _scaled(output.height, 0.99)
+        )
+    elif mode != MODE_ULTRA_PERFORMANCE:
+        smallest = FrameSize(
+            _scaled(output.width, 0.5), _scaled(output.height, 0.5)
+        )
+    var largest = output if mode != MODE_ULTRA_PERFORMANCE else optimal
+    return OptimalSettings(
+        optimal.width,
+        optimal.height,
+        0,
+        smallest.width,
+        smallest.height,
+        largest.width,
+        largest.height,
+    )
 
 
 def check_optimal_settings(settings: OptimalSettings, output: FrameSize) raises:

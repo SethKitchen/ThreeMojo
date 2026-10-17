@@ -9,9 +9,17 @@
 `NormalRoughnessMode` carry the numbers of Streamline 2.14.16's
 `sl::DLSSMode`, `sl::DLSSPreset`, `sl::DLSSDPreset` and
 `sl::DLSSDNormalRoughnessMode`, from `sl_dlss.h` and `sl_dlss_d.h`. A native
-binding can pass them on as they are. `Feature`, `BufferKind` and
-`MotionVectorSpace` are this port's own numbering. A binding maps them to
-Streamline's feature ids and buffer tags.
+binding can pass them on as they are. `Feature` and `BufferKind` are this
+port's own numbering. `Feature.streamline_id` and `BufferKind.streamline_type`
+give the number of `sl::Feature` and of `sl::BufferType` that each one stands
+for. `MotionVectorSpace` is this port's alone: it only picks `mvecScale`.
+
+**Checked against the running plugins.** `sl.dlss` and `sl.dlss_d` of
+Streamline 2.14.16 were run on an NVIDIA TITAN RTX with driver 610.88. See
+`docs/validation/streamline/`. `slDLSSGetOptimalSettings` and
+`slDLSSDGetOptimalSettings` answer for five modes only. For `eOff` and for
+`eUltraQuality` they return `eErrorInvalidParameter`, although the headers
+list both. `UpscaleMode.has_optimal_settings` says which modes answer.
 
 Each is a type and not an integer, and each has `is_valid`. The type stops a
 bare integer at compile time. A value that no name stands for is still
@@ -48,6 +56,22 @@ struct Feature(Equatable, ImplicitlyCopyable, Writable):
             return "unknown"
         var names: List[String] = ["super resolution", "ray reconstruction"]
         return names[self.value]
+
+    def streamline_id(self) raises -> Int:
+        """Return the number of the feature in Streamline.
+
+        Returns:
+            `sl::kFeatureDLSS` (0) for Super Resolution, or
+            `sl::kFeatureDLSS_RR` (1001) for Ray Reconstruction.
+
+        Raises:
+            Error: If the feature is not valid.
+        """
+        if not self.is_valid():
+            raise Error(
+                "A DLSS feature must be super resolution or ray reconstruction"
+            )
+        return 0 if self.value == 0 else 1001
 
 
 # DLSS Super Resolution: `sl::kFeatureDLSS`. It upscales a render.
@@ -90,6 +114,22 @@ struct UpscaleMode(Equatable, ImplicitlyCopyable, Writable):
         ]
         return names[self.value]
 
+    def has_optimal_settings(self) -> Bool:
+        """Return True if Streamline answers `GetOptimalSettings` for it.
+
+        Returns:
+            Whether the mode is Performance, Balanced, Quality, Ultra
+            Performance or DLAA. `sl.dlss` and `sl.dlss_d` 2.14.16 return
+            `eErrorInvalidParameter` for off and for ultra quality.
+        """
+        return (
+            self.value == 1
+            or self.value == 2
+            or self.value == 3
+            or self.value == 4
+            or self.value == 6
+        )
+
 
 # `eOff`: DLSS does nothing.
 comptime MODE_OFF = UpscaleMode(0)
@@ -101,7 +141,8 @@ comptime MODE_BALANCED = UpscaleMode(2)
 comptime MODE_MAX_QUALITY = UpscaleMode(3)
 # `eUltraPerformance`.
 comptime MODE_ULTRA_PERFORMANCE = UpscaleMode(4)
-# `eUltraQuality`.
+# `eUltraQuality`. The header lists it, but `sl.dlss` 2.14.16 gives it no
+# render size.
 comptime MODE_ULTRA_QUALITY = UpscaleMode(5)
 # `eDLAA`: anti-aliasing at the output's size, without upscaling.
 comptime MODE_DLAA = UpscaleMode(6)
@@ -374,6 +415,42 @@ struct BufferKind(Equatable, ImplicitlyCopyable, Writable):
             "depth of field guide",
         ]
         return names[self.value]
+
+    def streamline_type(self) raises -> Int:
+        """Return the number of the buffer in Streamline.
+
+        Returns:
+            The `sl::BufferType` of `sl_core_types.h` that the kind stands
+            for: `kBufferTypeDepth` (0) for the depth, `kBufferTypeLinearDepth`
+            (49) for the linear depth, `kBufferTypeScalingInputColor` (3) and
+            `kBufferTypeScalingOutputColor` (4) for the colors, and so on.
+
+        Raises:
+            Error: If the kind is not valid.
+        """
+        if not self.is_valid():
+            raise Error("A tagged buffer's kind must be one of the eighteen")
+        var types: List[Int] = [
+            0,
+            49,
+            1,
+            10,
+            42,
+            3,
+            4,
+            13,
+            7,
+            8,
+            5,
+            14,
+            6,
+            51,
+            52,
+            40,
+            58,
+            64,
+        ]
+        return types[self.value]
 
 
 # Hardware depth, at the render size.

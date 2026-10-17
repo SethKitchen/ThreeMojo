@@ -12,8 +12,9 @@ things differ:
 
 - The mode and the output size have no default here. Streamline's default
   mode is `eOff` and its default size is invalid, and neither can run.
-- The deprecated `sharpness` field and the on-screen indicator's axes are
-  not carried.
+- The `sharpness` field and the on-screen indicator's axes are not carried.
+  The header deprecates the sharpness of Super Resolution, and the guide for
+  Ray Reconstruction says it ignores `sharpness` and `useAutoExposure`.
 - Streamline's `Boolean` has a third value, `eInvalid`. A `Bool` here is
   always true or false.
 

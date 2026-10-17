@@ -20,14 +20,23 @@ that DLSS can follow the pixels. `frame_constants` builds them from two
 - The camera's position and axes are in world space, the field of view is
   vertical, and `reset` says the last frame has nothing to do with this one.
 
-**Conventions kept open.** The matrices here are `Matrix4`, which is
-column-major and multiplies a column vector. Streamline's `float4x4` is
-row-major, and its headers do not say whether it multiplies a row vector or a
-column vector, or which range its clip-space depth has. A native binding
-must settle all three against a running DLSS. So must it settle the unit of
-the motion vectors: `mvec_scale` is one and one for vectors that are
+**The matrix layout is settled.** `Matrix4` is column-major and multiplies a
+column vector. Streamline's `float4x4` is row-major and multiplies a row
+vector: `sl_matrix_helpers.h` puts the translation in row 3, and builds
+`clipToPrevClip` as `clipToCameraView * cameraViewToPrevCameraView *
+cameraViewToClipPrev`, left to right. A column-major matrix of column vectors
+holds the same sixteen floats in memory as the transposed, row-major matrix of
+row vectors. A binding copies `Matrix4.elements` as it is, with no transpose.
+`tests/test_streamline_constants.mojo` checks this against the order of
+`matrixMul`.
+
+**Conventions kept open.** Streamline's headers do not say which range its
+clip-space depth has, or which way `jitterOffset` points. The unit of the
+motion vectors is not open: `mvec_scale` is one and one for vectors that are
 `MOTION_NORMALIZED`, and one over the render size for `MOTION_PIXELS`, as the
-programming guides write them.
+programming guides write them. The sign of the motion vectors is open, and so
+is whether they point from the previous frame to this one or the other way. A
+native binding must settle those against a running DLSS.
 """
 
 from cameras.camera import Camera
