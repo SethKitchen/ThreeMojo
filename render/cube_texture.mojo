@@ -88,7 +88,12 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
 
 from math.arc_tangent import atan2_float32
 from math.utils import clamp_unit
@@ -907,8 +912,7 @@ def cube_from_equirectangular(
     image.validate()
     require_equirect_texels(image)
     var edge = size.or_else(image.height)
-    if edge <= 0:
-        raise Error("A cube's faces must be at least one texel across")
+    require_positive(edge, "A cube's faces must be at least one texel across")
     var chained = mipmapped.or_else(image.levels > 1)
     var faces = List[Texture]()
     for face in range(FACE_COUNT):  # pragma: no branch

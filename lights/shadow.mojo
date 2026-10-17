@@ -75,7 +75,7 @@ was drawn. It is compared in the map's zero-to-one depth, as three.js
 compares `gl_FragCoord.z`, so a bias means the same number here as there.
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 from lights.light_slot import LightSlot
 
 from math.smoothstep import smoothstep
@@ -156,8 +156,7 @@ def require_shadow_size(size: Int) raises:
     Raises:
         Error: If the size is not positive.
     """
-    if size <= 0:
-        raise Error("A shadow map must be at least one texel a side")
+    require_positive(size, "A shadow map must be at least one texel a side")
 
 
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels

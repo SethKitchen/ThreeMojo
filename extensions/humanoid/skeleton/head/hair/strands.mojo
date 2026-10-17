@@ -27,6 +27,7 @@ from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from core.geometry_store import GeometryId
 from core.interleaved_buffer import InterleavedBuffer
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_positive
 from core.scene import Scene
 from extensions.humanoid.skeleton.complexion import hair_tone
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
@@ -108,8 +109,7 @@ struct HairStrands(Movable):
             segments += max(
                 0, groom.starts[strand + 1] - groom.starts[strand] - 1
             )
-        if segments <= 0:
-            raise Error("Hair strands need at least one segment")
+        require_positive(segments, "Hair strands need at least one segment")
         self._buffer = InterleavedBuffer(
             List[Float32](length=segments * 12, fill=0), 6
         )

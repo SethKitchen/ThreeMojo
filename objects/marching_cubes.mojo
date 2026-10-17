@@ -43,7 +43,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, UV
 from geometries.surface import position_normal_surface
 from core.geometry_store import GeometryId
-from core.ordinal import index_in_count
+from core.ordinal import index_in_count, require_positive
 from math.norm import squared_length3
 from render.framebuffer import FloatColor
 from math.finite import require_finite
@@ -127,10 +127,12 @@ struct MarchingCubes(Movable):
         Raises:
             Error: If the resolution or the triangle count is not positive.
         """
-        if resolution <= 0:
-            raise Error("A marching cubes field needs a positive resolution")
-        if max_poly_count <= 0:
-            raise Error("A marching cubes field needs room for a triangle")
+        require_positive(
+            resolution, "A marching cubes field needs a positive resolution"
+        )
+        require_positive(
+            max_poly_count, "A marching cubes field needs room for a triangle"
+        )
         self.resolution = resolution
         self.isolation = DEFAULT_ISOLATION
         self.enable_uvs = enable_uvs

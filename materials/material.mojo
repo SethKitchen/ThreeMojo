@@ -194,6 +194,7 @@ from core.ordinal import (
     require_index_in_count,
     require_valid,
     require_non_negative,
+    require_positive,
 )
 
 from render.cube_texture import check_rotation, is_turned
@@ -715,8 +716,7 @@ def check_steps(steps: Int) raises:
     Raises:
         Error: If `steps` is below one: three.js divides the ray by it.
     """
-    if steps < 1:
-        raise Error("A volume's ray takes at least one step")
+    require_positive(steps, "A volume's ray takes at least one step")
 
 
 def require_dash_size(size: Float32) raises:

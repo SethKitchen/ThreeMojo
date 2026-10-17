@@ -30,7 +30,7 @@ It is here, beside the renderer, and not in `lights/`, because it draws.
 
 from core.assets import Assets
 from core.object3d import NodeId
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from core.scene import Scene
 from lights.light import DIRECTIONAL, Light
 from lights.light_probe_grid import LightProbeGrid
@@ -86,8 +86,7 @@ def require_probe_samples(sample_count: Int) raises:
     Raises:
         Error: If the count is below one.
     """
-    if sample_count < 1:
-        raise Error("A probe bake reads one direction or more")
+    require_positive(sample_count, "A probe bake reads one direction or more")
 
 
 def project_sh(

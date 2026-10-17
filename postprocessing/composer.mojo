@@ -47,7 +47,7 @@ composer can run with its frame on the GPU; see
 `docs/wiki/GPU-backend.md`.
 """
 
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from postprocessing.sample_math import gaussian_pdf
 from cameras.camera import Camera
 from core.assets import Assets
@@ -800,8 +800,9 @@ def check_pass(step: Pass) raises:
         if not (value >= 0 and value <= 1):
             raise Error("A render pass's clear alpha runs from zero to one")
     if step.kind == CLASSIC_BLOOM:
-        if step.kernel_size < 1:
-            raise Error("A bloom's kernel needs at least one tap")
+        require_positive(
+            step.kernel_size, "A bloom's kernel needs at least one tap"
+        )
         require_positive_finite(
             Float64(step.sigma), "A bloom's sigma must be positive and finite"
         )

@@ -45,7 +45,7 @@ neither of the two.
 
 from loaders.bytes import ascii_digit, ascii_letter
 from core.order import stable_rising_order
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
 from core.user_data import UserData
@@ -119,8 +119,7 @@ def require_clip_duration(runs: Float32) raises:
     Raises:
         Error: If the length is zero or negative.
     """
-    if runs <= 0:
-        raise Error("A clip must last longer than no time")
+    require_positive(runs, "A clip must last longer than no time")
 
 
 struct AnimationClip(Copyable, Movable):

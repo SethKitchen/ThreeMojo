@@ -27,7 +27,12 @@ applied once. The Phong look lives in `bone.mojo`, not here.
     var weight = mass * STANDARD_GRAVITY
 """
 
-from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
 
 from math.finite import require_finite
 from units.si import (
@@ -107,8 +112,9 @@ struct BoneTissue(ImplicitlyCopyable):
             Float64(self.tissue_density.value),
             "A bone tissue density must be finite",
         )
-        if self.tissue_density.value <= 0:
-            raise Error("A bone tissue density must be positive")
+        require_positive(
+            self.tissue_density.value, "A bone tissue density must be positive"
+        )
         require_finite(Float64(self.porosity), "A bone porosity must be finite")
         require_non_negative(
             self.porosity, "A bone porosity cannot be negative"
@@ -119,14 +125,18 @@ struct BoneTissue(ImplicitlyCopyable):
             Float64(self.elastic_modulus.value),
             "A bone elastic modulus must be finite",
         )
-        if self.elastic_modulus.value <= 0:
-            raise Error("A bone elastic modulus must be positive")
+        require_positive(
+            self.elastic_modulus.value,
+            "A bone elastic modulus must be positive",
+        )
         require_finite(
             Float64(self.elastic_modulus_secondary.value),
             "A bone secondary modulus must be finite",
         )
-        if self.elastic_modulus_secondary.value <= 0:
-            raise Error("A bone secondary modulus must be positive")
+        require_positive(
+            self.elastic_modulus_secondary.value,
+            "A bone secondary modulus must be positive",
+        )
         require_finite(
             Float64(self.poisson_ratio), "A bone Poisson ratio must be finite"
         )

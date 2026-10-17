@@ -67,7 +67,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.interleaved_buffer import InterleavedBuffer
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.utils import (
@@ -199,8 +199,7 @@ def require_item_size(item_size: Int) raises:
     Raises:
         Error: If the size is not positive.
     """
-    if item_size <= 0:
-        raise Error("An attribute's item size must be positive")
+    require_positive(item_size, "An attribute's item size must be positive")
 
 
 struct BufferAttribute(Copyable, Movable):
@@ -312,8 +311,10 @@ struct BufferAttribute(Copyable, Movable):
             Error: If `item_size` or `mesh_per_attribute` is not positive,
                 or the data does not divide evenly into items.
         """
-        if mesh_per_attribute <= 0:
-            raise Error("An instanced attribute serves one instance or more")
+        require_positive(
+            mesh_per_attribute,
+            "An instanced attribute serves one instance or more",
+        )
         self = BufferAttribute(data^, item_size)
         self._mesh_per_attribute = mesh_per_attribute
 

@@ -26,7 +26,7 @@ three.js stores one.
 """
 
 from core.buffer_geometry import BufferGeometry
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from geometries.surface import position_normal_surface
 from generators.utils import check_finite, generator_random, meters
 from math.noise import ImprovedNoise
@@ -101,8 +101,9 @@ struct TerrainParameters(Copyable, Movable):
         """
         if not meters(self.size) > 0:
             raise Error("A terrain's size must be positive")
-        if self.segments < 1:
-            raise Error("A terrain needs one segment a side at least")
+        require_positive(
+            self.segments, "A terrain needs one segment a side at least"
+        )
         require_non_negative(
             self.octaves, "A terrain's octave count must be zero or more"
         )

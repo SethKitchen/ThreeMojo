@@ -26,6 +26,7 @@ See Bathe and Wilson, "Large eigenvalue problems in dynamic analysis"
 section 11.6.
 """
 
+from core.ordinal import require_positive
 from math.finite import require_finite, require_positive_tolerance
 from std.math import isfinite, sqrt
 from extensions.numerics.dense import (
@@ -364,8 +365,7 @@ def lowest_modes(
     if count < 1 or count > n:
         raise Error("The mode count must be from one to the matrix size")
     require_positive_tolerance(tolerance)
-    if max_iterations < 1:
-        raise Error("An iteration budget must be one or more")
+    require_positive(max_iterations, "An iteration budget must be one or more")
     var factor = SkylineFactor(k, reverse_cuthill_mckee(k))
     if not factor.is_positive_definite():
         raise Error("The stiffness must be positive definite")

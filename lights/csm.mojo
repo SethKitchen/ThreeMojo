@@ -40,7 +40,12 @@ fit in Float32. Component finiteness and true zero are checked separately.
 See `docs/wiki/Norm-consumers.md` for the consumer audit.
 """
 
-from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
 
 from cameras.camera import Camera
 from core.object3d import NO_PARENT, NodeId, Object3D
@@ -351,8 +356,7 @@ struct CSM(Movable):
                 breaks do not fit `CUSTOM_SPLIT`; or a light is refused by
                 `Light.validate`.
         """
-        if cascades < 1:
-            raise Error("A CSM needs at least one cascade")
+        require_positive(cascades, "A CSM needs at least one cascade")
         require_valid(
             mode.is_valid(), "A CSM split mode that is none of the four"
         )
@@ -522,8 +526,9 @@ struct CSM(Movable):
                 the camera's view is refused.
         """
         self._check_lights(scene)
-        if self.shadow_map_size < 1:
-            raise Error("A CSM shadow map size must be positive")
+        require_positive(
+            self.shadow_map_size, "A CSM shadow map size must be positive"
+        )
         if len(self.frustums) != self.cascades:
             raise Error("A CSM needs one frustum per cascade")
         # `_check_lights` requires cascades >= 1; lengths match above.

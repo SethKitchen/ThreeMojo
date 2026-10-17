@@ -50,6 +50,7 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
 )
+from core.ordinal import require_positive
 from loaders.bytes import ascii_digit
 from loaders.js_text import is_js_word
 from loaders.three_mf import js_key_order
@@ -724,8 +725,7 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
     var num_st = header[_NUM_TEXCOORDS]
     var num_tris = header[_NUM_TRIANGLES]
     var num_frames = header[_NUM_FRAMES]
-    if num_frames < 1:
-        raise Error("MD2: a model with no frames")
+    require_positive(num_frames, "MD2: a model with no frames")
     # Header fields 5 through 9: the five count fields before frames.
     for field in range(_NUM_SKINS, _NUM_FRAMES):  # pragma: no branch
         if header[field] < 0:

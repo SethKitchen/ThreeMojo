@@ -44,7 +44,12 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid, require_valid, require_non_negative
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
 
 from std.math import isfinite
 
@@ -314,8 +319,9 @@ def check_effect(settings: EffectSettings) raises:
         raise Error("A contrast must be below one")
     if settings.saturation > 1:
         raise Error("A saturation must not be above one")
-    if settings.sides <= 0:
-        raise Error("A kaleidoscope needs a positive number of sides")
+    require_positive(
+        settings.sides, "A kaleidoscope needs a positive number of sides"
+    )
     var sizes = (
         settings.resolution_x > 0
         and settings.resolution_y > 0
@@ -1349,8 +1355,9 @@ def check_god_rays(settings: GodRaysSettings) raises:
     require_non_negative(
         settings.intensity, "A god-ray intensity must not be negative"
     )
-    if settings.filter_length <= 0:
-        raise Error("A god-ray filter length must be positive")
+    require_positive(
+        settings.filter_length, "A god-ray filter length must be positive"
+    )
     if settings.resolution_scale <= 0 or settings.resolution_scale > 1:
         raise Error("A god-ray resolution scale runs above zero to one")
 

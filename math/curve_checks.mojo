@@ -9,6 +9,7 @@
 it for a segment, a step, or a division.
 """
 
+from core.ordinal import require_positive
 from math.polyline import PolylineVertex
 
 
@@ -112,8 +113,7 @@ def require_at_least_one(count: Int, message: String) raises:
     Raises:
         Error: If `count` is below one.
     """
-    if count < 1:
-        raise Error(message)
+    require_positive(count, message)
 
 
 def curve_sample_count(divisions: Int) raises -> Int:

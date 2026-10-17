@@ -27,7 +27,7 @@ own three corners is joined where the corners meet, to within
 each vertex. A vertex keeps its own texture coordinates.
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -943,8 +943,9 @@ def simplify(geometry: BufferGeometry, target: Int) raises -> BufferGeometry:
         Error: If `target` is less than one, or the geometry has no
             positions, holds a partial triangle, or carries morph targets.
     """
-    if target < 1:
-        raise Error("A simplified mesh must keep at least one triangle")
+    require_positive(
+        target, "A simplified mesh must keep at least one triangle"
+    )
     var welded = weld(_read_mesh(geometry))
     return simplify_welded(welded, target).to_geometry()
 

@@ -24,6 +24,7 @@ coordinate system. three.js also supports WebGPU's convention, where z runs
 """
 
 from core.extent import require_positive_extent
+from core.ordinal import require_positive
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from math.finite import require_finite_group
@@ -115,8 +116,7 @@ def perspective(
             screen winding, which is the one thing backface culling reads.
     """
     _check_finite_bounds(left, right, top, bottom, near, far)
-    if near <= 0:
-        raise Error("The near plane must be in front of the camera")
+    require_positive(near, "The near plane must be in front of the camera")
     require_far_beyond_near(near, far)
     if right <= left or top <= bottom:
         raise Error("The frustum must have positive width and height")

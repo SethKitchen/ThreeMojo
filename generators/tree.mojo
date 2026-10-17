@@ -22,7 +22,7 @@ same geometry as three.js, number for number up to `Float32` rounding.
 """
 
 from core.buffer_geometry import BufferGeometry
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from geometries.surface import position_normal_surface
 from generators.utils import (
     Vec3d,
@@ -172,8 +172,7 @@ struct TreeParameters(Copyable, Movable):
                 positive, the taper curve is negative, an active root flare
                 has no positive fraction, or a number is not finite.
         """
-        if self.levels < 1:
-            raise Error("A tree needs one level at least")
+        require_positive(self.levels, "A tree needs one level at least")
         if len(self.children) == 0:
             raise Error("A tree needs a child count for one level at least")
         if len(self.branch_angle) == 0:
@@ -207,8 +206,9 @@ struct TreeParameters(Copyable, Movable):
         check_finite(self.trunk_clear, "A trunk clearance")
         if meters(self.section_length) <= 0:
             raise Error("A tree's section length must be positive")
-        if self.radius_exponent <= 0:
-            raise Error("A tree's radius exponent must be positive")
+        require_positive(
+            self.radius_exponent, "A tree's radius exponent must be positive"
+        )
         require_non_negative(
             self.taper_curve, "A tree's taper curve must be zero or more"
         )

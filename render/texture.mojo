@@ -99,7 +99,7 @@ from core.extent import (
     require_positive_extent,
     require_texel_count,
 )
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from math.finite import require_finite, require_finite_group
 from math.utils import clamp, edge_index
@@ -1200,8 +1200,9 @@ struct Texture(Movable):
         # spend 256 steps where the eye sees them, and a float has no steps
         # to spend: three.js's HDR loaders mark their textures linear.
         require_float_linear(self.texel_type, self.color_space)
-        if self.anisotropy < 1:
-            raise Error("A texture's anisotropy is at least one")
+        require_positive(
+            self.anisotropy, "A texture's anisotropy is at least one"
+        )
         if self.anisotropy > MAX_ANISOTROPY:
             raise Error(
                 "A texture's anisotropy is at most MAX_ANISOTROPY: every"
@@ -2122,8 +2123,7 @@ struct Footprint(ImplicitlyCopyable):
             Error: If the tap count is below one or above `MAX_ANISOTROPY`,
                 or the level or either component of the step is not finite.
         """
-        if self.taps < 1:
-            raise Error("A footprint takes at least one tap")
+        require_positive(self.taps, "A footprint takes at least one tap")
         if self.taps > MAX_ANISOTROPY:
             raise Error(
                 "A footprint takes at most MAX_ANISOTROPY taps: a fragment"
@@ -2906,10 +2906,8 @@ def checkerboard(
             not divide the image evenly — which would put a half square at
             one edge and make a tiled image visibly discontinuous.
     """
-    if size <= 0:
-        raise Error("A checkerboard needs a positive size")
-    if squares <= 0:
-        raise Error("A checkerboard needs at least one square")
+    require_positive(size, "A checkerboard needs a positive size")
+    require_positive(squares, "A checkerboard needs at least one square")
     if size % squares != 0:
         raise Error("A checkerboard's squares must divide its size evenly")
 

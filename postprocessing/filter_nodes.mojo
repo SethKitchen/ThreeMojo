@@ -32,7 +32,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import require_non_negative
+from core.ordinal import require_non_negative, require_positive
 from math.finite import require_finite_group
 from math.norm import length2, squared_length2
 from math.smoothstep import clamped_smoothstep
@@ -169,8 +169,7 @@ def check_filters(settings: FilterSettings) raises:
     require_finite_group(finite, "A filter pass setting must be finite")
     if settings.curvature >= 0.5:
         raise Error("A CRT's curvature must be below a half")
-    if settings.count < 1:
-        raise Error("A radial blur takes at least one tap")
+    require_positive(settings.count, "A radial blur takes at least one tap")
     if not (settings.sigma > 0 and settings.sigma_color > 0):
         raise Error("A bilateral blur's sigmas must be positive")
     if not (settings.radius.value > 0):

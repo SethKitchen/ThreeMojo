@@ -76,7 +76,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from core.scene import Scene
 from core.search import first_match
 from exporters.gltf import gltf_pixels
@@ -1085,8 +1085,9 @@ def usdz_files(
             has a wrap or a channel that is not valid, or
             `max_texture_size` is below one.
     """
-    if options.max_texture_size < 1:
-        raise Error("USDZ: a max texture size must be one or more")
+    require_positive(
+        options.max_texture_size, "USDZ: a max texture size must be one or more"
+    )
     var count = scene.count()
     var meshes = List[List[_Drawn]](length=count, fill=List[_Drawn]())
     for mesh in scene.meshes:

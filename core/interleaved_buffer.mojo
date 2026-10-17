@@ -24,7 +24,7 @@ instance, or once per so many instances, and not once per vertex. See
 `BufferGeometry(instanced=True)`.
 """
 
-from core.ordinal import require_index_in_count
+from core.ordinal import require_index_in_count, require_positive
 from std.memory import ArcPointer
 
 
@@ -69,8 +69,7 @@ def _checked(
         Error: If the stride is not positive, or the numbers do not divide
             into whole runs of it.
     """
-    if stride <= 0:
-        raise Error("An interleaved buffer's stride must be positive")
+    require_positive(stride, "An interleaved buffer's stride must be positive")
     if len(array) % stride != 0:
         raise Error("Interleaved data does not divide evenly into strides")
     return ArcPointer(_InterleavedArray(array^, stride, mesh_per_attribute))
@@ -120,8 +119,10 @@ struct InterleavedBuffer(Copyable, Movable):
             Error: If `stride` or `mesh_per_attribute` is not positive, or
                 the numbers do not divide evenly into runs of the stride.
         """
-        if mesh_per_attribute <= 0:
-            raise Error("An instanced buffer serves one instance a run or more")
+        require_positive(
+            mesh_per_attribute,
+            "An instanced buffer serves one instance a run or more",
+        )
         self._shared = _checked(array^, stride, mesh_per_attribute)
 
     def count(self) -> Int:

@@ -72,7 +72,7 @@ one launch a step. Both backends call `run_statements` on a
 """
 
 from core.extent import require_positive_extent, require_texel_count
-from core.ordinal import require_index_in_count, require_valid
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from materials.compute_ids import (
     ATOMIC_ADD,
     ATOMIC_AND,
@@ -183,8 +183,7 @@ struct StorageBuffer(Copyable, Movable):
             Error: If `count` is not positive or `type` is not a `float` or
                 a vector.
         """
-        if count <= 0:
-            raise Error("A storage buffer needs one element or more")
+        require_positive(count, "A storage buffer needs one element or more")
         self.type = type
         self.count = count
         self.array = List[Float32](length=count * _width(type), fill=0)
@@ -453,8 +452,7 @@ def require_invocation_count(count: Int) raises:
     Raises:
         Error: If the count is not positive.
     """
-    if count <= 0:
-        raise Error("A compute node runs one invocation or more")
+    require_positive(count, "A compute node runs one invocation or more")
 
 
 struct ComputeKernel(Movable):
@@ -644,8 +642,7 @@ struct ComputeKernel(Movable):
                 a vector.
         """
         _ = _width(type)
-        if count <= 0:
-            raise Error("A workgroup array needs one element or more")
+        require_positive(count, "A workgroup array needs one element or more")
         self._array_types.append(type)
         self._array_counts.append(count)
         return WorkgroupArrayNode(

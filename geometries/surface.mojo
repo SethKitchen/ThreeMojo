@@ -15,6 +15,7 @@ below one is `require_at_least_one` in `math.curve_checks`.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from core.ordinal import require_positive
 from std.math import isfinite
 
 
@@ -103,8 +104,7 @@ def require_positive_radius(radius: Float32, name: String) raises:
     Raises:
         Error: If the radius is zero or negative.
     """
-    if radius <= 0:
-        raise Error("A " + name + " needs a positive radius")
+    require_positive(radius, "A " + name + " needs a positive radius")
 
 
 def require_three_segments(count: Int, message: String) raises:

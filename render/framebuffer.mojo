@@ -50,6 +50,7 @@ scene happening to be convex.
 """
 
 from core.extent import require_positive_extent, require_texel_count
+from core.ordinal import require_positive
 from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
@@ -1087,8 +1088,7 @@ def require_downsample_factor(factor: Int) raises:
     Raises:
         Error: If the factor is less than one.
     """
-    if factor < 1:
-        raise Error("A downsample factor is at least one")
+    require_positive(factor, "A downsample factor is at least one")
 
 
 def pixel_slot(x: Int, y: Int, width: Int, height: Int) raises -> Int:

@@ -38,7 +38,7 @@ occlusion, plus the diffuse color times the irradiance over pi. The
 normals are the frame's, or the ones `DepthView` reconstructs.
 """
 
-from core.ordinal import ordinal_valid, require_valid
+from core.ordinal import ordinal_valid, require_valid, require_positive
 
 from core.assets import Assets
 from core.scene import Scene
@@ -458,8 +458,7 @@ struct VXGINode(Movable):
                 and a half turn, a number is not finite, the distance is
                 negative, or the debug view is none of the three.
         """
-        if self.cone_count < 1:
-            raise Error("A VXGI pass needs at least one cone")
+        require_positive(self.cone_count, "A VXGI pass needs at least one cone")
         var degrees = self.cone_angle.to(DEGREE)
         if not (isfinite(degrees) and degrees > 0 and degrees < 180):
             raise Error("A VXGI cone must open between 0 and 180 degrees")
