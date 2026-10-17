@@ -651,6 +651,123 @@ struct _Library(Movable):
             self.texture_keys.append(id.value)
         return object_uuid(_TEXTURE_UUID, at)
 
+    def _texture_entry(
+        mut self,
+        at: Int,
+        mapping: Int,
+        channel: Int,
+        repeat_x: Float32,
+        repeat_y: Float32,
+        offset_x: Float32,
+        offset_y: Float32,
+        center_x: Float32,
+        center_y: Float32,
+        rotation: Float32,
+        whole_rotation: Bool,
+        wrap_s: Int,
+        wrap_t: Int,
+        format: Int,
+        stored_type: Int,
+        color_space: String,
+        min_filter: Int,
+        mag_filter: Int,
+        anisotropy: Int,
+        flip_y: Bool,
+        mipmaps: Bool,
+        data: Bool,
+    ) raises -> String:
+        """Return one texture object in three.js's `Texture.toJSON` order.
+
+        A whole rotation is written as an integer. Any other rotation is
+        written as a `Float32`. A data texture also writes `internalFormat`,
+        `premultiplyAlpha`, and `unpackAlignment`.
+
+        Args:
+            at: The texture's place in this library.
+            mapping: The three.js mapping code.
+            channel: The texture-coordinate set.
+            repeat_x: How many times the image repeats across.
+            repeat_y: How many times the image repeats down.
+            offset_x: The image's offset across.
+            offset_y: The image's offset down.
+            center_x: The rotation center across.
+            center_y: The rotation center down.
+            rotation: The rotation, in radians.
+            whole_rotation: Whether `rotation` is written as an integer.
+            wrap_s: The horizontal wrap code.
+            wrap_t: The vertical wrap code.
+            format: The texel format code.
+            stored_type: The texel type code.
+            color_space: The color-space name, or empty.
+            min_filter: The minification filter code.
+            mag_filter: The magnification filter code.
+            anisotropy: The anisotropy.
+            flip_y: Whether `v` reads the rows from the bottom.
+            mipmaps: Whether the texture generates mipmaps.
+            data: Whether this is a `DataTexture`.
+
+        Returns:
+            The texture object's JSON text.
+
+        Raises:
+            Error: If a value has no place in the object, or `rotation` is
+                not finite when it is written as a `Float32`.
+        """
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(object_uuid(_TEXTURE_UUID, at))
+        writer.key("name")
+        writer.string("")
+        writer.key("image")
+        writer.string(object_uuid(_IMAGE_UUID, at))
+        writer.key("mapping")
+        writer.integer(mapping)
+        writer.key("channel")
+        writer.integer(channel)
+        writer.key("repeat")
+        writer.numbers([repeat_x, repeat_y])
+        writer.key("offset")
+        writer.numbers([offset_x, offset_y])
+        writer.key("center")
+        writer.numbers([center_x, center_y])
+        writer.key("rotation")
+        if whole_rotation:
+            writer.integer(Int(rotation))
+        else:
+            writer.number(rotation)
+        writer.key("wrap")
+        writer.begin_array()
+        writer.integer(wrap_s)
+        writer.integer(wrap_t)
+        writer.end_array()
+        writer.key("format")
+        writer.integer(format)
+        if data:
+            writer.key("internalFormat")
+            writer.null()
+        writer.key("type")
+        writer.integer(stored_type)
+        writer.key("colorSpace")
+        writer.string(color_space)
+        writer.key("minFilter")
+        writer.integer(min_filter)
+        writer.key("magFilter")
+        writer.integer(mag_filter)
+        writer.key("anisotropy")
+        writer.integer(anisotropy)
+        writer.key("flipY")
+        writer.boolean(flip_y)
+        writer.key("generateMipmaps")
+        writer.boolean(mipmaps)
+        if data:
+            writer.key("premultiplyAlpha")
+            writer.boolean(False)
+            writer.key("unpackAlignment")
+            writer.integer(1)
+        writer.end_object()
+        return writer.finish()
+
     def flat(mut self, texture: Texture, at: Int, mapping: Mapping) raises:
         """Write one flat texture and its image as entry `at`, with a
         mapping: its own, or its cube's for a panorama. The caller records
@@ -681,49 +798,32 @@ struct _Library(Movable):
         image.string("data:image/png;base64," + encode_base64(png))
         image.end_object()
         self.images.append(image.finish())
-        var writer = JsonWriter()
-        writer.begin_object()
-        writer.key("uuid")
-        writer.string(object_uuid(_TEXTURE_UUID, at))
-        writer.key("name")
-        writer.string("")
-        writer.key("image")
-        writer.string(object_uuid(_IMAGE_UUID, at))
-        writer.key("mapping")
-        writer.integer(mapping.value)
-        writer.key("channel")
-        writer.integer(texture.channel.value)
-        writer.key("repeat")
-        writer.numbers([texture.repeat.x, texture.repeat.y])
-        writer.key("offset")
-        writer.numbers([texture.offset.x, texture.offset.y])
-        writer.key("center")
-        writer.numbers([texture.center.x, texture.center.y])
-        writer.key("rotation")
-        writer.number(texture.rotation.to(RADIAN))
-        writer.key("wrap")
-        writer.begin_array()
-        writer.integer(wrap_code(texture.wrap_s))
-        writer.integer(wrap_code(texture.wrap_t))
-        writer.end_array()
-        writer.key("format")
-        writer.integer(RGBA_FORMAT)
-        writer.key("type")
-        writer.integer(UNSIGNED_BYTE_TYPE)
-        writer.key("colorSpace")
-        writer.string(SRGB_COLOR_SPACE if texture.color_space == SRGB else "")
-        writer.key("minFilter")
-        writer.integer(filter_code(texture.min_filter))
-        writer.key("magFilter")
-        writer.integer(filter_code(texture.mag_filter))
-        writer.key("anisotropy")
-        writer.integer(texture.anisotropy)
-        writer.key("flipY")
-        writer.boolean(texture.flip_y)
-        writer.key("generateMipmaps")
-        writer.boolean(texture.levels > 1)
-        writer.end_object()
-        self.textures.append(writer.finish())
+        self.textures.append(
+            self._texture_entry(
+                at,
+                mapping.value,
+                texture.channel.value,
+                texture.repeat.x,
+                texture.repeat.y,
+                texture.offset.x,
+                texture.offset.y,
+                texture.center.x,
+                texture.center.y,
+                texture.rotation.to(RADIAN),
+                False,
+                wrap_code(texture.wrap_s),
+                wrap_code(texture.wrap_t),
+                RGBA_FORMAT,
+                UNSIGNED_BYTE_TYPE,
+                SRGB_COLOR_SPACE if texture.color_space == SRGB else "",
+                filter_code(texture.min_filter),
+                filter_code(texture.mag_filter),
+                texture.anisotropy,
+                texture.flip_y,
+                texture.levels > 1,
+                False,
+            )
+        )
 
     def cube(mut self, id: CubeTextureId, assets: Assets) raises -> String:
         """Write a cube texture and its six images once, as three.js
@@ -788,49 +888,32 @@ struct _Library(Movable):
         image.end_array()
         image.end_object()
         self.images.append(image.finish())
-        var writer = JsonWriter()
-        writer.begin_object()
-        writer.key("uuid")
-        writer.string(object_uuid(_TEXTURE_UUID, at))
-        writer.key("name")
-        writer.string("")
-        writer.key("image")
-        writer.string(object_uuid(_IMAGE_UUID, at))
-        writer.key("mapping")
-        writer.integer(cube.mapping.value)
-        writer.key("channel")
-        writer.integer(0)
-        writer.key("repeat")
-        writer.numbers([1, 1])
-        writer.key("offset")
-        writer.numbers([0, 0])
-        writer.key("center")
-        writer.numbers([0, 0])
-        writer.key("rotation")
-        writer.integer(0)
-        writer.key("wrap")
-        writer.begin_array()
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.end_array()
-        writer.key("format")
-        writer.integer(RGBA_FORMAT)
-        writer.key("type")
-        writer.integer(UNSIGNED_BYTE_TYPE)
-        writer.key("colorSpace")
-        writer.string(SRGB_COLOR_SPACE if first.color_space == SRGB else "")
-        writer.key("minFilter")
-        writer.integer(filter_code(first.min_filter))
-        writer.key("magFilter")
-        writer.integer(filter_code(first.mag_filter))
-        writer.key("anisotropy")
-        writer.integer(1)
-        writer.key("flipY")
-        writer.boolean(False)
-        writer.key("generateMipmaps")
-        writer.boolean(first.levels > 1)
-        writer.end_object()
-        self.textures.append(writer.finish())
+        self.textures.append(
+            self._texture_entry(
+                at,
+                cube.mapping.value,
+                0,
+                1,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                True,
+                CLAMP_TO_EDGE_WRAPPING,
+                CLAMP_TO_EDGE_WRAPPING,
+                RGBA_FORMAT,
+                UNSIGNED_BYTE_TYPE,
+                SRGB_COLOR_SPACE if first.color_space == SRGB else "",
+                filter_code(first.min_filter),
+                filter_code(first.mag_filter),
+                1,
+                False,
+                first.levels > 1,
+                False,
+            )
+        )
         self.texture_keys.append(key)
         return object_uuid(_TEXTURE_UUID, at)
 
@@ -911,55 +994,30 @@ struct _Library(Movable):
         self.images.append(image.finish())
         # What a `DataTexture` is built with: nearest, clamped, not flipped
         # and with no mip chain.
-        var writer = JsonWriter()
-        writer.begin_object()
-        writer.key("uuid")
-        writer.string(object_uuid(_TEXTURE_UUID, at))
-        writer.key("name")
-        writer.string("")
-        writer.key("image")
-        writer.string(object_uuid(_IMAGE_UUID, at))
-        writer.key("mapping")
-        writer.integer(UV_MAPPING)
-        writer.key("channel")
-        writer.integer(0)
-        writer.key("repeat")
-        writer.numbers([1, 1])
-        writer.key("offset")
-        writer.numbers([0, 0])
-        writer.key("center")
-        writer.numbers([0, 0])
-        writer.key("rotation")
-        writer.integer(0)
-        writer.key("wrap")
-        writer.begin_array()
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.integer(CLAMP_TO_EDGE_WRAPPING)
-        writer.end_array()
-        writer.key("format")
-        writer.integer(format)
-        writer.key("internalFormat")
-        writer.null()
-        writer.key("type")
-        writer.integer(type)
-        writer.key("colorSpace")
-        writer.string(color_space)
-        writer.key("minFilter")
-        writer.integer(NEAREST_FILTER)
-        writer.key("magFilter")
-        writer.integer(NEAREST_FILTER)
-        writer.key("anisotropy")
-        writer.integer(1)
-        writer.key("flipY")
-        writer.boolean(False)
-        writer.key("generateMipmaps")
-        writer.boolean(False)
-        writer.key("premultiplyAlpha")
-        writer.boolean(False)
-        writer.key("unpackAlignment")
-        writer.integer(1)
-        writer.end_object()
-        var text = writer.finish()
+        var text = self._texture_entry(
+            at,
+            UV_MAPPING,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            True,
+            CLAMP_TO_EDGE_WRAPPING,
+            CLAMP_TO_EDGE_WRAPPING,
+            format,
+            type,
+            color_space,
+            NEAREST_FILTER,
+            NEAREST_FILTER,
+            1,
+            False,
+            False,
+            True,
+        )
         self.textures.append(text)
         self.texture_keys.append(-1)
         return text
