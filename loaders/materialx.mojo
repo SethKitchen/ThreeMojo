@@ -30,6 +30,7 @@ node program's node that three.js's library maps it to.
 """
 
 from core.assets import Assets
+from loaders.file_path import path_directory
 from loaders.model_nodes import texture_from_file
 from loaders.xml import XmlDocument, parse_xml
 from materials.material import (
@@ -1078,8 +1079,4 @@ def load_materialx(
         Error: Everything `read_materialx` raises, and if the file cannot be
             read.
     """
-    var folder = String("")
-    var slash = path.rfind("/")
-    if slash >= 0:
-        folder = String(path[byte = 0 : slash + 1])
-    return read_materialx(Path(path).read_text(), assets, folder)
+    return read_materialx(Path(path).read_text(), assets, path_directory(path))

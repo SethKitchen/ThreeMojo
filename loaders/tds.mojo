@@ -59,6 +59,7 @@ from core.buffer_geometry import POSITION, UV, BufferGeometry, MaterialIndex
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.model_nodes import decompose_onto
 from materials.material import (
@@ -755,6 +756,6 @@ def read_3ds(
         Error: If the file cannot be read, or for anything `parse_3ds`
             refuses.
     """
-    var slash = path.rfind("/")
-    var directory = String(path[byte = : slash + 1])
-    return parse_3ds(Path(path).read_bytes(), scene, assets, directory, parent)
+    return parse_3ds(
+        Path(path).read_bytes(), scene, assets, path_directory(path), parent
+    )

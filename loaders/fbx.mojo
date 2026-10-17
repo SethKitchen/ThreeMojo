@@ -101,6 +101,7 @@ from lights.light import (
     spot_light,
 )
 from loaders.bytes import space_tab_line
+from loaders.file_path import path_directory
 from loaders.fbx_tree import (
     FBX_BYTES,
     FBX_STRING,
@@ -864,7 +865,7 @@ def read_fbx(
         Error: If the file cannot be read, `parse_fbx` refuses it, or
             everything `load_fbx` raises.
     """
-    var directory = String(path[byte = 0 : path.rfind("/") + 1])
+    var directory = path_directory(path)
     return load_fbx(
         parse_fbx(Path(path).read_bytes()), directory, scene, assets
     )

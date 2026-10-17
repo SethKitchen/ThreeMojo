@@ -75,6 +75,7 @@ from geometries.box import box
 from geometries.capsule import capsule
 from geometries.cylinder import cone, cylinder
 from geometries.sphere import sphere
+from loaders.file_path import path_name
 from loaders.gltf import decode_image
 from loaders.js_number import js_number_text
 from loaders.js_text import is_js_word
@@ -533,18 +534,6 @@ struct _Subset(Copyable, Movable):
         """
         self.indices = indices^
         self.material = material
-
-
-def _last_part(path: String) -> String:
-    """Return `path.split( '/' ).pop()`.
-
-    Args:
-        path: The path.
-
-    Returns:
-        The text after the last `/`.
-    """
-    return String(path[byte = path.rfind("/") + 1 :])
 
 
 def _split(path: String) -> List[String]:
@@ -1136,7 +1125,7 @@ struct _Composer(Movable):
         var group = composer.compose(assets, built)
         if prim == "":
             return group
-        var name = _last_part(prim)
+        var name = path_name(prim)
         for child in built.objects[group].children.copy():
             if built.objects[child].node.name == name:
                 var wrapper = _Object("")
@@ -1237,7 +1226,7 @@ struct _Composer(Movable):
         # The index holds only prims.
         for path in entries:
             var spec = self.layer.spec(path)
-            var name = _last_part(path)
+            var name = path_name(path)
             var type_name = self.type_name(spec)
             if self.build_references(
                 parent, path, spec, type_name, assets, built
@@ -1316,13 +1305,13 @@ struct _Composer(Movable):
         if len(groups) == 1:
             var mesh = self.single_mesh(groups[0], built)
             if mesh >= 0 and (type_name == "Xform" or type_name == ""):
-                built.objects[mesh].node.name = _last_part(path)
+                built.objects[mesh].node.name = path_name(path)
                 self.apply_transform(mesh, spec, attrs, built)
                 self.apply_material_binding(mesh, path, assets, built)
                 built.attach(parent, mesh)
                 self.build_hierarchy(mesh, path, assets, built)
                 return True
-        var object = built.add(_Object(_last_part(path)))
+        var object = built.add(_Object(path_name(path)))
         self.apply_transform(object, spec, attrs, built)
         for group in groups:  # pragma: no branch
             for child in built.objects[group].children.copy():
@@ -2339,7 +2328,7 @@ struct _Composer(Movable):
         if asset < 0:
             asset = assets.find(clean)
         if asset < 0:
-            var base = _last_part(clean)
+            var base = path_name(clean)
             for k in assets.order():
                 var name = assets.names[k]
                 # three.js also asks `endsWith( '/' + baseName )`, which
@@ -2473,7 +2462,7 @@ struct _Composer(Movable):
         var attrs = self.attributes(path)
         var subsets = self.subsets(path)
         var arrays = self.mesh_arrays(attrs)
-        var object = _Object(_last_part(path))
+        var object = _Object(path_name(path))
         object.is_mesh = True
         if len(subsets) > 0:
             var faces = List[List[Float64]]()
@@ -2600,7 +2589,7 @@ struct _Composer(Movable):
         elif name == "Z":
             geometry.rotate_x(Angle(Float32(pi / 2), RADIAN))
         built.geometries.append(geometry^)
-        var object = _Object(_last_part(path))
+        var object = _Object(path_name(path))
         object.is_mesh = True
         object.geometry = len(built.geometries) - 1
         object.materials.append(self.build_material(path, spec, assets, built))

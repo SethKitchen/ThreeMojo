@@ -35,6 +35,7 @@ from core.assets import Assets
 from core.binary import copy_bytes
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
+from loaders.file_path import path_directory
 from loaders.utf8 import leading_utf8_bom
 from loaders.usd_composer import (
     USD_IMAGE,
@@ -228,10 +229,10 @@ def url_base(url: String) -> String:
     Returns:
         Its folder with the last `/`, or `./` when it has none.
     """
-    var slash = url.rfind("/")
-    if slash < 0:
+    var directory = path_directory(url)
+    if directory == "":
         return "./"
-    return String(url[byte = : slash + 1])
+    return directory
 
 
 def read_usd(

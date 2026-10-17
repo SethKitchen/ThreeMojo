@@ -173,6 +173,7 @@ from exporters.common import (
     resized_image,
 )
 from exporters.json_writer import JsonWriter
+from loaders.file_path import path_directory, path_name
 from loaders.gltf import (
     COMPONENT_BYTE,
     COMPONENT_FLOAT,
@@ -357,7 +358,7 @@ def binary_name_for(path: String) -> String:
         The `.bin`'s name, without the directory: `scene.gltf` gives
         `scene.bin`, and a name with no extension gains one.
     """
-    var name = String(path[byte = path.rfind("/") + 1 :])
+    var name = path_name(path)
     var dot = name.rfind(".")
     var stem = String(name[byte=0:dot]) if dot > 0 else name
     return stem + ".bin"
@@ -3140,5 +3141,5 @@ def write_gltf(
     )
     Path(path).write_bytes(files.document)
     if len(files.binary) > 0:
-        var directory = String(path[byte = 0 : path.rfind("/") + 1])
+        var directory = path_directory(path)
         Path(directory + name).write_bytes(files.binary)

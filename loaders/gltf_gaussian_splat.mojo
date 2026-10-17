@@ -65,6 +65,7 @@ from core.gaussian_splat_utils import (
 )
 from core.user_data import UserData, user_data_of
 from loaders.fbx import sanitize_node_name
+from loaders.file_path import path_directory
 from loaders.gltf import (
     _FLAT_NODE_MATRIX,
     decode_base64,
@@ -929,7 +930,7 @@ def read_gltf_gaussian_splats(
             anything `load_gltf_gaussian_splats` raises.
     """
     var bytes = Path(path).read_bytes()
-    var directory = String(path[byte = : path.rfind("/") + 1])
+    var directory = path_directory(path)
     if len(bytes) >= 4 and le_u32(bytes, 0) == _GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf_gaussian_splats(parts[0], parts[1], directory)
@@ -1097,7 +1098,7 @@ def read_gltf_gaussian_splat_scene(
     """
     var file = Path(path)
     var bytes = file.read_bytes()
-    var directory = String(path[byte = : path.rfind("/") + 1])
+    var directory = path_directory(path)
     if len(bytes) >= 4 and le_u32(bytes, 0) == _GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf_gaussian_splat_scene(
