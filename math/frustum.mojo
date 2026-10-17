@@ -76,6 +76,22 @@ comptime FAR = 4
 comptime NEAR = 5
 
 
+def require_frustum_matrix(matrix: Matrix4) raises:
+    """Refuse a frustum matrix that is not finite.
+
+    Args:
+        matrix: A projection, or a projection times a view.
+
+    Returns:
+        Nothing. The call returns when every element is finite.
+
+    Raises:
+        Error: If the matrix is not finite.
+    """
+    if not matrix.is_finite():
+        raise Error("A frustum projection must be finite")
+
+
 @fieldwise_init
 struct Frustum(Copyable, Movable):
     """Six planes facing inward. What lies in front of all of them is in
@@ -122,8 +138,7 @@ struct Frustum(Copyable, Movable):
                 a matrix of zeros, or one whose bottom row cancels another,
                 describes no volume.
         """
-        if not matrix.is_finite():
-            raise Error("A frustum projection must be finite")
+        require_frustum_matrix(matrix)
         if not coordinate_system.is_valid():
             raise Error("A frustum reads WEBGL or WEBGPU coordinates")
         ref e = matrix.elements
@@ -186,8 +201,7 @@ struct Frustum(Copyable, Movable):
             Error: If the projection is not finite or a plane has no normal,
                 which a degenerate projection gives.
         """
-        if not projection.is_finite():
-            raise Error("A frustum projection must be finite")
+        require_frustum_matrix(projection)
         ref e = projection.elements
         var planes = List[Plane]()
         planes.append(Frustum._plane(e, 0, 1))

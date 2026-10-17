@@ -111,6 +111,38 @@ trait PebbleTexels:
         ...
 
 
+def require_pebble_width(width: Int) raises:
+    """Refuse a pebble image whose width is not positive.
+
+    Args:
+        width: Texels across.
+
+    Returns:
+        Nothing. The call returns when the width is positive.
+
+    Raises:
+        Error: If the width is not positive.
+    """
+    if width <= 0:
+        raise Error("Pebble image width must be positive")
+
+
+def require_pebble_height(height: Int) raises:
+    """Refuse a pebble image whose height is not positive.
+
+    Args:
+        height: Texels down.
+
+    Returns:
+        Nothing. The call returns when the height is positive.
+
+    Raises:
+        Error: If the height is not positive.
+    """
+    if height <= 0:
+        raise Error("Pebble image height must be positive")
+
+
 struct PebbleBed(Movable, PebbleTexels):
     """The pebble photograph in linear RGB, row-major from the top."""
 
@@ -136,10 +168,8 @@ struct PebbleBed(Movable, PebbleTexels):
             Error: If a dimension is not positive, or the buffer length
                 does not match the dimensions.
         """
-        if width <= 0:
-            raise Error("Pebble image width must be positive")
-        if height <= 0:
-            raise Error("Pebble image height must be positive")
+        require_pebble_width(width)
+        require_pebble_height(height)
         if len(pixels) != width * height * 3:
             raise Error("Pebble image length does not match its dimensions")
         self.width = width
@@ -212,10 +242,8 @@ def pebble_bed(image: DecodedImage) raises -> PebbleBed:
         Error: If a dimension is not positive, or the buffer is not one
             RGBA sample per texel.
     """
-    if image.width <= 0:
-        raise Error("Pebble image width must be positive")
-    if image.height <= 0:
-        raise Error("Pebble image height must be positive")
+    require_pebble_width(image.width)
+    require_pebble_height(image.height)
     if len(image.pixels) != image.width * image.height * DecodedImage.CHANNELS:
         raise Error("Pebble image length does not match its dimensions")
     var count = image.width * image.height

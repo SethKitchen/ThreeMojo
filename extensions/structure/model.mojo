@@ -180,6 +180,22 @@ struct GravityLoad(ImplicitlyCopyable):
     var acceleration: Float64
 
 
+def require_dof(dof: Dof) raises:
+    """Refuse a degree of freedom outside 0 to 5.
+
+    Args:
+        dof: The degree of freedom.
+
+    Returns:
+        Nothing. The call returns when the degree of freedom is valid.
+
+    Raises:
+        Error: If the degree of freedom is not valid.
+    """
+    if not dof.is_valid():
+        raise Error("A degree of freedom must be from 0 to 5")
+
+
 struct StructuralModel(Copyable, Movable):
     """Nodes, supports, members, shells, loads and added masses."""
 
@@ -303,8 +319,7 @@ struct StructuralModel(Copyable, Movable):
         """
         self.check_node(node)
         for i in range(len(dofs)):
-            if not dofs[i].is_valid():
-                raise Error("A degree of freedom must be from 0 to 5")
+            require_dof(dofs[i])
         for i in range(len(dofs)):
             self.fixed[6 * node.value + dofs[i].value] = True
 
@@ -336,8 +351,7 @@ struct StructuralModel(Copyable, Movable):
                 is not valid.
         """
         self.check_node(node)
-        if not dof.is_valid():
-            raise Error("A degree of freedom must be from 0 to 5")
+        require_dof(dof)
         return self.fixed[6 * node.value + dof.value]
 
     def add_member(

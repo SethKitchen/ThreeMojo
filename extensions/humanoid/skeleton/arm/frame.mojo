@@ -270,6 +270,22 @@ def arm_dimensions(
     return ArmDimensions(stature, sex, frame, torso^)
 
 
+def require_arm_athleticism(athleticism: Athleticism) raises:
+    """Refuse an arm muscle whose athleticism is not named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Returns:
+        Nothing. The call returns when the athleticism is named.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    if not athleticism.is_valid():
+        raise Error("An arm muscle needs a toned or untoned athleticism")
+
+
 struct ArmMuscleDimensions(Copyable, Movable):
     """Arm landmarks plus the athleticism scale for soft-tissue radii."""
 
@@ -301,8 +317,7 @@ struct ArmMuscleDimensions(Copyable, Movable):
                 named, or if the scale is not positive.
         """
         self.arm.validate()
-        if not self.athleticism.is_valid():
-            raise Error("An arm muscle needs a toned or untoned athleticism")
+        require_arm_athleticism(self.athleticism)
         if not isfinite(self.scale) or self.scale <= 0:
             raise Error(
                 "An arm muscle radius scale must be finite and positive"
@@ -321,8 +336,7 @@ def arm_muscle_dimensions(spec: HumanoidSpec) raises -> ArmMuscleDimensions:
     Raises:
         Error: If `spec` is refused, or athleticism is not named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("An arm muscle needs a toned or untoned athleticism")
+    require_arm_athleticism(spec.athleticism)
     return ArmMuscleDimensions(
         arm_dimensions(spec.stature, spec.sex, spec.genome), spec.athleticism
     )

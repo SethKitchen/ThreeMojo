@@ -162,6 +162,23 @@ struct LineSegments2(ImplicitlyCopyable):
 comptime Line2 = LineSegments2
 
 
+def require_wide_colors(colors: Int, points: Int) raises:
+    """Refuse a wide line that has colors, but not one a point.
+
+    Args:
+        colors: How many colors the line holds.
+        points: How many points the line holds.
+
+    Returns:
+        Nothing. The call returns when there are no colors, or one a point.
+
+    Raises:
+        Error: If there are colors, but not one per point.
+    """
+    if colors > 0 and colors != points:
+        raise Error("A wide line needs one color per point, or none")
+
+
 def _geometry_of(
     points: List[Vector3], colors: List[FloatColor]
 ) raises -> BufferGeometry:
@@ -178,8 +195,7 @@ def _geometry_of(
         Error: If there are colors, but not one per point.
     """
     var has_colors = len(colors) > 0
-    if has_colors and len(colors) != len(points):
-        raise Error("A wide line needs one color per point, or none")
+    require_wide_colors(len(colors), len(points))
     var numbers = List[Float32]()
     for index in range(len(points)):
         numbers.append(points[index].x)
@@ -242,8 +258,7 @@ def line_geometry(
     Raises:
         Error: If there are colors, but not one per point.
     """
-    if len(colors) > 0 and len(colors) != len(points):
-        raise Error("A wide line needs one color per point, or none")
+    require_wide_colors(len(colors), len(points))
     var pairs = List[Vector3]()
     var tints = List[FloatColor]()
     for index in range(len(points) - 1):

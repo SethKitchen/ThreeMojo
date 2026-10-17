@@ -524,6 +524,22 @@ struct _Lens(ImplicitlyCopyable):
         )
 
 
+def require_radius_factor(value: Float32) raises:
+    """Refuse a radius factor that is not positive.
+
+    Args:
+        value: The factor.
+
+    Returns:
+        Nothing. The call returns when the factor is positive.
+
+    Raises:
+        Error: If the factor is not positive.
+    """
+    if not (value > 0):
+        raise Error("The radius factor must be positive")
+
+
 struct ArcballControls(Copyable, Movable):
     """Turns pointer and wheel input into a camera moved by a virtual
     trackball."""
@@ -1012,8 +1028,7 @@ struct ArcballControls(Copyable, Movable):
         """
         for action in self.mouse_actions:
             _check_action(action.operation, action.mouse, action.key)
-        if not (self.radius_factor > 0):
-            raise Error("The radius factor must be positive")
+        require_radius_factor(self.radius_factor)
         if not (self.scale_factor > 0):
             raise Error("The scale factor must be positive")
         if not (self.focus_animation_time.value > 0):
@@ -2078,8 +2093,7 @@ struct ArcballControls(Copyable, Movable):
         Raises:
             Error: If the factor is not positive.
         """
-        if not (value > 0):
-            raise Error("The radius factor must be positive")
+        require_radius_factor(value)
         self.radius_factor = value
         self._tb_radius = self._calculate_tb_radius(lens)
         self._curve_radius = self._tb_radius

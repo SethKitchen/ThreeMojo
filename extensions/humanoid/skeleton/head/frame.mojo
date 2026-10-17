@@ -261,6 +261,22 @@ def head_dimensions(
     )
 
 
+def require_head_athleticism(athleticism: Athleticism) raises:
+    """Refuse a head muscle whose athleticism is not named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Returns:
+        Nothing. The call returns when the athleticism is named.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    if not athleticism.is_valid():
+        raise Error("A head muscle needs a toned or untoned athleticism")
+
+
 struct HeadMuscleDimensions(Copyable, Movable):
     """Head landmarks plus the athleticism scale for soft-tissue radii."""
 
@@ -292,8 +308,7 @@ struct HeadMuscleDimensions(Copyable, Movable):
                 named, or if the scale is not positive.
         """
         self.head.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A head muscle needs a toned or untoned athleticism")
+        require_head_athleticism(self.athleticism)
         if not isfinite(self.scale) or self.scale <= 0:
             raise Error(
                 "A head muscle radius scale must be finite and positive"
@@ -312,8 +327,7 @@ def head_muscle_dimensions(spec: HumanoidSpec) raises -> HeadMuscleDimensions:
     Raises:
         Error: If `spec` is refused, or athleticism is not named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A head muscle needs a toned or untoned athleticism")
+    require_head_athleticism(spec.athleticism)
     return HeadMuscleDimensions(
         head_dimensions(spec.stature, spec.sex, spec.genome), spec.athleticism
     )

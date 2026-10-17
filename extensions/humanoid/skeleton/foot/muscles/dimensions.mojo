@@ -105,6 +105,22 @@ comptime PERONEUS_LONGUS_TENDON = FIBULARIS_LONGUS_TENDON
 comptime PERONEUS_BREVIS_TENDON = FIBULARIS_BREVIS_TENDON
 
 
+def require_foot_athleticism(athleticism: Athleticism) raises:
+    """Refuse a foot muscle whose athleticism is not named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Returns:
+        Nothing. The call returns when the athleticism is named.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    if not athleticism.is_valid():
+        raise Error("A foot muscle needs a toned or untoned athleticism")
+
+
 @fieldwise_init
 struct FootMuscleDimensions(ImplicitlyCopyable):
     """Foot landmarks plus the athleticism scale for muscle bellies."""
@@ -124,8 +140,7 @@ struct FootMuscleDimensions(ImplicitlyCopyable):
                 not positive.
         """
         self.foot.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A foot muscle needs a toned or untoned athleticism")
+        require_foot_athleticism(self.athleticism)
         if not isfinite(self.scale) or self.scale <= 0:
             raise Error("A foot muscle radius scale must be positive")
         if not isfinite(self.k) or self.k <= 0:
@@ -193,8 +208,7 @@ def foot_muscle_dimensions(
         Error: If `spec` or `side` is refused, or athleticism is not
             named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A foot muscle needs a toned or untoned athleticism")
+    require_foot_athleticism(spec.athleticism)
     var foot = foot_dimensions(spec.stature, spec.sex, side)
     var scale = radius_scale(spec.athleticism)
     var S = spec.stature.value

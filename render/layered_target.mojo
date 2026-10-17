@@ -135,6 +135,22 @@ def _byte(value: Float32) -> UInt8:
     return UInt8(Int(value * 255 + 0.5))
 
 
+def require_layered_kind(kind: TargetKind) raises:
+    """Refuse a layered target whose kind is not named.
+
+    Args:
+        kind: Which target.
+
+    Returns:
+        Nothing. The call returns when the kind is one of the four.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    if not kind.is_valid():
+        raise Error("A layered target's kind must be one of the four")
+
+
 struct LayeredRenderTarget(Movable):
     """A render target of several layers, or of several levels, or both:
     three.js's 3D, array and cube render targets, and a 2D one with a
@@ -189,8 +205,7 @@ struct LayeredRenderTarget(Movable):
                 chain, a chain is not square with a power of two side, or
                 `RenderTarget` refuses the type or the samples.
         """
-        if not kind.is_valid():
-            raise Error("A layered target's kind must be one of the four")
+        require_layered_kind(kind)
         if not positive_extent(width, height, depth):
             raise Error("A layered target's dimensions must be positive")
         if kind == TARGET_2D and depth != 1:
@@ -233,8 +248,7 @@ struct LayeredRenderTarget(Movable):
             Error: If the kind is none of the four, or the images do not
                 number one per layer and level.
         """
-        if not self.kind.is_valid():
-            raise Error("A layered target's kind must be one of the four")
+        require_layered_kind(self.kind)
         if len(self.images) != self.depth * self.levels:
             raise Error("A layered target holds one image per layer and level")
 

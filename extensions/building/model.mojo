@@ -680,6 +680,54 @@ struct ConstructionSet(ImplicitlyCopyable):
     var roof: ConstructionId
 
 
+def require_furniture_kind(kind: FurnitureKind) raises:
+    """Refuse a furniture kind that is not named.
+
+    Args:
+        kind: Which furnishing.
+
+    Returns:
+        Nothing. The call returns when the kind is valid.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    if not kind.is_valid():
+        raise Error("A furniture kind is not valid")
+
+
+def require_inside_space(inside: Bool) raises:
+    """Refuse a furnishing corner that leaves its space.
+
+    Args:
+        inside: Whether the corner stands inside the space.
+
+    Returns:
+        Nothing. The call returns when the corner is inside.
+
+    Raises:
+        Error: If the corner leaves the space.
+    """
+    if not inside:
+        raise Error("A furnishing must stand inside its space")
+
+
+def require_furnishings_apart(apart: Bool) raises:
+    """Refuse two furnishings whose footprints overlap.
+
+    Args:
+        apart: Whether the footprints stay apart.
+
+    Returns:
+        Nothing. The call returns when the footprints stay apart.
+
+    Raises:
+        Error: If the footprints overlap.
+    """
+    if not apart:
+        raise Error("Two furnishings must not overlap")
+
+
 struct Building(Movable):
     """The canonical building model."""
 
@@ -1078,8 +1126,7 @@ struct Building(Movable):
                 not finite, the footprint leaves the space, or it overlaps
                 another furnishing.
         """
-        if not kind.is_valid():
-            raise Error("A furniture kind is not valid")
+        require_furniture_kind(kind)
         self.check_space(space)
         var sizes = [width.to(METER), depth.to(METER), height.to(METER)]
         for i in range(3):  # pragma: no branch
@@ -1100,13 +1147,13 @@ struct Building(Movable):
         var corners = item.corners()
         ref outline = self.spaces[space.value].outline
         for i in range(4):  # pragma: no branch
-            if not _inside(outline, corners[i], 1e-9):
-                raise Error("A furnishing must stand inside its space")
+            require_inside_space(_inside(outline, corners[i], 1e-9))
         for i in range(len(self.furnishings)):
             if self.furnishings[i].space != space:
                 continue
-            if not quads_apart(corners, self.furnishings[i].corners()):
-                raise Error("Two furnishings must not overlap")
+            require_furnishings_apart(
+                quads_apart(corners, self.furnishings[i].corners())
+            )
         self.furnishings.append(item^)
         return FurnishingId(len(self.furnishings) - 1)
 
@@ -1508,8 +1555,7 @@ struct Building(Movable):
         for i in range(len(self.furnishings)):
             ref item = self.furnishings[i]
             self.check_space(item.space)
-            if not item.kind.is_valid():
-                raise Error("A furniture kind is not valid")
+            require_furniture_kind(item.kind)
             var sizes = [item.width.value, item.depth.value, item.height.value]
             for k in range(3):  # pragma: no branch (three dimensions)
                 if not (sizes[k] > 0 and isfinite(sizes[k])):
@@ -1521,14 +1567,16 @@ struct Building(Movable):
             var corners = item.corners()
             var space = item.space.value
             for k in range(4):  # pragma: no branch (four generated corners)
-                if not _inside(self.spaces[space].outline, corners[k], 1e-9):
-                    raise Error("A furnishing must stand inside its space")
+                require_inside_space(
+                    _inside(self.spaces[space].outline, corners[k], 1e-9)
+                )
             if space not in furnishings_in:
                 furnishings_in[space] = List[Int]()
             for k in range(len(furnishings_in[space])):
                 var other = furnishings_in[space][k]
-                if not quads_apart(corners, footprints[other]):
-                    raise Error("Two furnishings must not overlap")
+                require_furnishings_apart(
+                    quads_apart(corners, footprints[other])
+                )
             footprints.append(corners^)
             furnishings_in[space].append(i)
 

@@ -208,6 +208,40 @@ def _spacing(a: Vector3, b: Vector3, power: Float32) -> Float32:
     return gap.dot(gap) ** power
 
 
+def require_catmull_type(curve_type: CatmullRomType) raises:
+    """Refuse a Catmull-Rom type that is not named.
+
+    Args:
+        curve_type: How the spline spaces its points.
+
+    Returns:
+        Nothing. The call returns when the type is valid.
+
+    Raises:
+        Error: If the type is not valid.
+    """
+    if not curve_type.is_valid():
+        raise Error("A Catmull-Rom curve needs a type that exists")
+
+
+def require_closed_catmull(closed: Bool, kind: Curve3Kind) raises:
+    """Refuse a closed curve that is not a Catmull-Rom spline.
+
+    Args:
+        closed: Whether the curve joins its last point to its first.
+        kind: Which function the curve is.
+
+    Returns:
+        Nothing. The call returns when the curve is open, or it is a
+        Catmull-Rom spline.
+
+    Raises:
+        Error: If a curve that is not a Catmull-Rom spline is closed.
+    """
+    if closed and kind != CATMULL_ROM3:
+        raise Error("Only a Catmull-Rom curve can close")
+
+
 struct Curve3(Copyable, Movable):
     """One curve in space: a kind, the points that kind reads, and for a
     Catmull-Rom spline whether it closes, its type and its tension."""
@@ -244,11 +278,9 @@ struct Curve3(Copyable, Movable):
                 spline is closed.
         """
         require_curve_kind(kind.is_valid())
-        if not curve_type.is_valid():
-            raise Error("A Catmull-Rom curve needs a type that exists")
+        require_catmull_type(curve_type)
         require_control_count(kind.control_count(), len(points))
-        if closed and kind != CATMULL_ROM3:
-            raise Error("Only a Catmull-Rom curve can close")
+        require_closed_catmull(closed, kind)
         var moved = False
         for index in range(1, len(points)):  # pragma: no branch
             # At least two points by the checks above, so this runs.
@@ -353,11 +385,9 @@ struct Curve3(Copyable, Movable):
     def _validate(self) raises:
         """Check mutable dispatch and storage in constant time."""
         require_curve_kind(self.kind.is_valid())
-        if not self.curve_type.is_valid():
-            raise Error("A Catmull-Rom curve needs a type that exists")
+        require_catmull_type(self.curve_type)
         require_control_count(self.kind.control_count(), len(self.points))
-        if self.closed and self.kind != CATMULL_ROM3:
-            raise Error("Only a Catmull-Rom curve can close")
+        require_closed_catmull(self.closed, self.kind)
 
     def point(self, t: Float32) raises -> Vector3:
         """Return the point at `t` along this curve's own parameter.

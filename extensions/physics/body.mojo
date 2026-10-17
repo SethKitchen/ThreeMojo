@@ -26,6 +26,7 @@ from extensions.physics.shape import (
     MESH,
     PhysicsMaterial,
     Shape,
+    ShapeKind,
     cross,
     _finite_vector,
     _inertia_inverse,
@@ -74,6 +75,26 @@ struct BodyKind(Equatable, ImplicitlyCopyable, Writable):
 
 
 comptime STATIC = BodyKind(0)
+
+
+def require_static_mesh(shape: ShapeKind, kind: BodyKind) raises:
+    """Refuse a mesh body that is not static.
+
+    Args:
+        shape: The collision shape.
+        kind: How the body moves.
+
+    Returns:
+        Nothing. The call returns when the body is not a mesh, or it is
+        static.
+
+    Raises:
+        Error: If the shape is a mesh and the kind is not static.
+    """
+    if shape == MESH and kind != STATIC:
+        raise Error("A mesh body must be static")
+
+
 comptime DYNAMIC = BodyKind(1)
 comptime KINEMATIC = BodyKind(2)
 
@@ -247,8 +268,7 @@ struct RigidBody(Copyable, Movable):
                 dynamic body has no mass.
         """
         require_body_kind(kind)
-        if shape.kind == MESH and kind != STATIC:
-            raise Error("A mesh body must be static")
+        require_static_mesh(shape.kind, kind)
         self._kind = kind
         self._has_dynamic_state = False
         self._dynamic_mass = 0
@@ -329,8 +349,7 @@ struct RigidBody(Copyable, Movable):
                 mass and inverse inertia must be zero.
         """
         require_body_kind(self._kind)
-        if self.shape.kind == MESH and self._kind != STATIC:
-            raise Error("A mesh body must be static")
+        require_static_mesh(self.shape.kind, self._kind)
         if self._kind == DYNAMIC:
             self._check_dynamic_state(
                 self._mass, self._inverse_mass, self._inverse_inertia
@@ -366,8 +385,7 @@ struct RigidBody(Copyable, Movable):
         """
         self.validate()
         require_body_kind(kind)
-        if self.shape.kind == MESH and kind != STATIC:
-            raise Error("A mesh body must be static")
+        require_static_mesh(self.shape.kind, kind)
         if kind == self._kind:
             return
         if kind == DYNAMIC:

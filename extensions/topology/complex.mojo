@@ -90,6 +90,54 @@ struct Edge(ImplicitlyCopyable):
     var b: VertexId
 
 
+def require_face_kind(kind: FaceKind) raises:
+    """Refuse a face that is neither vertical nor horizontal.
+
+    Args:
+        kind: Whether the face is vertical or horizontal.
+
+    Returns:
+        Nothing. The call returns when the kind is valid.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    if not kind.is_valid():
+        raise Error("A face kind must be vertical or horizontal")
+
+
+def require_face_corners(count: Int) raises:
+    """Refuse a face with fewer than three corners.
+
+    Args:
+        count: How many corners the face has.
+
+    Returns:
+        Nothing. The call returns when the face has three corners or more.
+
+    Raises:
+        Error: If the count is below three.
+    """
+    if count < 3:
+        raise Error("A face needs three corners or more")
+
+
+def require_distinct_corner(repeated: Bool) raises:
+    """Refuse a face that repeats a corner.
+
+    Args:
+        repeated: Whether two neighboring corners are the same vertex.
+
+    Returns:
+        Nothing. The call returns when the corners differ.
+
+    Raises:
+        Error: If the corners are the same vertex.
+    """
+    if repeated:
+        raise Error("A face must not repeat a corner")
+
+
 struct CellComplex(Movable):
     """Vertices, edges, faces and cells that share them."""
 
@@ -166,14 +214,11 @@ struct CellComplex(Movable):
                 vertex or cell is out of range, both sides are the same
                 cell, or the kind is not valid.
         """
-        if not kind.is_valid():
-            raise Error("A face kind must be vertical or horizontal")
-        if len(loop) < 3:
-            raise Error("A face needs three corners or more")
+        require_face_kind(kind)
+        require_face_corners(len(loop))
         for i in range(len(loop)):  # pragma: no branch
             self._check_vertex(loop[i])
-            if loop[i] == loop[(i + 1) % len(loop)]:
-                raise Error("A face must not repeat a corner")
+            require_distinct_corner(loop[i] == loop[(i + 1) % len(loop)])
         if positive:
             self._check_cell(positive.value())
         if negative:
@@ -524,15 +569,14 @@ struct CellComplex(Movable):
                 self._check_face(self.edge_faces[i][k])
         for i in range(len(self.faces)):
             ref face = self.faces[i]
-            if not face.kind.is_valid():
-                raise Error("A face kind must be vertical or horizontal")
-            if len(face.loop) < 3:
-                raise Error("A face needs three corners or more")
+            require_face_kind(face.kind)
+            require_face_corners(len(face.loop))
             # The preceding guard guarantees at least three corners.
             for k in range(len(face.loop)):  # pragma: no branch
                 self._check_vertex(face.loop[k])
-                if face.loop[k] == face.loop[(k + 1) % len(face.loop)]:
-                    raise Error("A face must not repeat a corner")
+                require_distinct_corner(
+                    face.loop[k] == face.loop[(k + 1) % len(face.loop)]
+                )
             if face.positive:
                 self._check_cell(face.positive.value())
             if face.negative:

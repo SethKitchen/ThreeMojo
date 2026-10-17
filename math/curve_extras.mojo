@@ -98,6 +98,22 @@ def _scale_to(x: Float64, y: Float64, t: Float64) -> Float64:
     return t * r + x
 
 
+def require_extra_curve(kind: ExtraCurveKind) raises:
+    """Refuse a named curve that is not one of the fourteen.
+
+    Args:
+        kind: Which curve.
+
+    Returns:
+        Nothing. The call returns when the kind is valid.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    if not kind.is_valid():
+        raise Error("A named curve's kind must be one of the fourteen")
+
+
 struct ExtraCurve(SpaceCurve):
     """One of three.js's named curves in space."""
 
@@ -117,8 +133,7 @@ struct ExtraCurve(SpaceCurve):
         Raises:
             Error: If the kind is not valid, or the scale is not finite.
         """
-        if not kind.is_valid():
-            raise Error("A named curve's kind must be one of the fourteen")
+        require_extra_curve(kind)
         if not isfinite(scale):
             raise Error("A named curve's scale must be finite")
         self.kind = kind
@@ -138,8 +153,7 @@ struct ExtraCurve(SpaceCurve):
             Error: If the mutable kind is not valid. The parameter remains
                 unbounded, as in three.js.
         """
-        if not self.kind.is_valid():
-            raise Error("A named curve's kind must be one of the fourteen")
+        require_extra_curve(self.kind)
         var s = self.scale
         if self.kind == GRANNY_KNOT:
             var a = 2 * pi * t
