@@ -54,7 +54,7 @@ from render.texture import (
 )
 from render.srgb import LINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
-from std.math import isfinite
+from math.finite import require_finite
 from std.pathlib import Path
 
 # The largest table Adobe's `.cube` specification allows.
@@ -124,8 +124,9 @@ def _number(field: String, line: Int) raises -> Float32:
     except:
         raise Error(_where(line) + "not a number: " + field)
     var value = Float32(wide)
-    if not isfinite(value):
-        raise Error(_where(line) + "a number must be finite: " + field)
+    require_finite(
+        Float64(value), _where(line) + "a number must be finite: " + field
+    )
     return value
 
 

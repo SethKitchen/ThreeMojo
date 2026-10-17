@@ -57,7 +57,7 @@ taken as it is, as three.js's shader takes it; see
 
 from core.object3d import NodeId
 from math.matrix4 import Matrix4, require_affine
-from std.math import isfinite
+from math.finite import require_finite
 
 
 def require_bone_index(bone: Int, count: Int) raises:
@@ -254,8 +254,9 @@ def blend_bones(
     var summed = Array[Float32, 16](fill=0.0)
     for slot in range(len(bones)):
         var weight = weights[slot]
-        if not isfinite(weight):
-            raise Error("A vertex's bone weights must be numbers")
+        require_finite(
+            Float64(weight), "A vertex's bone weights must be numbers"
+        )
         if weight < 0:
             raise Error("A vertex's bone weights cannot be negative")
         if weight == 0:

@@ -104,7 +104,8 @@ from math.curve_checks import (
 )
 from math.polyline import PolylineVertex, prefix_lengths, unit_direction
 from math.vector2 import Vector2
-from std.math import cos, floor, isfinite, pi, sin
+from math.finite import require_finite
+from std.math import cos, floor, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 
 # The fewest straight runs that stand in for a curve when its length is
@@ -199,8 +200,7 @@ def ellipse_sweep(start: Angle, end: Angle, clockwise: Bool) raises -> Float32:
             which three.js draws as a single point.
     """
     var difference = Float64(end.to(RADIAN)) - Float64(start.to(RADIAN))
-    if not isfinite(difference):
-        raise Error("An ellipse needs finite angles")
+    require_finite(Float64(difference), "An ellipse needs finite angles")
     if abs(difference) < Float64(SAME_ANGLE):
         raise Error("An ellipse needs two different angles")
     # Range reduction must terminate even when a turn is less than one ULP.

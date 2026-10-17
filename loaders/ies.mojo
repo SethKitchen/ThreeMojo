@@ -47,7 +47,8 @@ from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
 from render.texture import BILINEAR, IGNORED, Texture, float_texture
-from std.math import floor, isfinite, isnan, nan
+from math.finite import require_finite
+from std.math import floor, isnan, nan
 from std.memory import bitcast
 from std.pathlib import Path
 
@@ -134,8 +135,7 @@ def _js_number(text: String) raises -> Float64:
         Error: If it is not a finite number, where JavaScript gives NaN.
     """
     var value = js_string_to_number(text)
-    if not isfinite(value):
-        raise Error("IES: `" + text + "` is not a number")
+    require_finite(Float64(value), "IES: `" + text + "` is not a number")
     return value
 
 

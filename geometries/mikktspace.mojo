@@ -52,6 +52,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite
 from std.math import atan2
 from math.triangle_normal import _triangle_cross_wide, _finite_triangle
 from math.vector3 import Vector3
@@ -1106,8 +1107,10 @@ def generate_tangents(
         Error: If the three lists do not describe the same whole
             triangles, or the threshold is not finite.
     """
-    if not isfinite(angular_threshold.value):
-        raise Error("MikkTSpace needs a finite angular threshold")
+    require_finite(
+        Float64(angular_threshold.value),
+        "MikkTSpace needs a finite angular threshold",
+    )
     var corners = len(positions) // 3
     if len(positions) % 9 != 0:
         raise Error("MikkTSpace needs whole triangles")

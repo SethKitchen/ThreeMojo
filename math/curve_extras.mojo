@@ -21,7 +21,8 @@ ten-thousandth either side; see `math.space_curve.chord_tangent`.
 """
 
 from math.space_curve import Point3, SpaceCurve, chord_tangent, point3
-from std.math import cos, isfinite, pi, sin
+from math.finite import require_finite
+from std.math import cos, pi, sin
 
 
 @fieldwise_init
@@ -134,8 +135,7 @@ struct ExtraCurve(SpaceCurve):
             Error: If the kind is not valid, or the scale is not finite.
         """
         require_extra_curve(kind)
-        if not isfinite(scale):
-            raise Error("A named curve's scale must be finite")
+        require_finite(Float64(scale), "A named curve's scale must be finite")
         self.kind = kind
         self.scale = scale
 

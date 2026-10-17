@@ -46,7 +46,8 @@ from render.texture import (
     TexelType,
 )
 from render.volume_texture import Data3DTexture, VolumeImage, _check_extent
-from std.math import ceil, isfinite, log2
+from math.finite import require_finite
+from std.math import ceil, log2
 from std.pathlib import Path
 
 
@@ -89,8 +90,7 @@ def _number(text: String) raises -> Float64:
         Error: If it is not a finite number.
     """
     var value = js_string_to_number(text)
-    if not isfinite(value):
-        raise Error("3DL: `" + text + "` is not a number")
+    require_finite(Float64(value), "3DL: `" + text + "` is not a number")
     return value
 
 

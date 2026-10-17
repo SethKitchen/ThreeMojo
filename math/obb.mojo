@@ -39,7 +39,8 @@ from math.matrix4 import Matrix4, require_affine
 from math.ray import Ray
 from math.utils import clamp
 from math.vector3 import Vector3
-from std.math import isfinite, max, sqrt
+from math.finite import require_finite
+from std.math import max, sqrt
 from std.memory import bitcast
 
 # three.js's default `epsilon` for `intersectsOBB`: JavaScript's
@@ -533,11 +534,12 @@ struct OBB(ImplicitlyCopyable):
         ]
         # Three center components and nine rotation entries are always present.
         for row in range(3):  # pragma: no branch
-            if not isfinite(center[row]):
-                raise Error("An OBB center must be finite")
+            require_finite(Float64(center[row]), "An OBB center must be finite")
         for index in range(9):  # pragma: no branch
-            if not isfinite(self.rotation.elements[index]):
-                raise Error("An OBB rotation must be finite")
+            require_finite(
+                Float64(self.rotation.elements[index]),
+                "An OBB rotation must be finite",
+            )
         # Widen before multiplication: even the largest finite Float32 axes
         # and their squared lengths fit in Float64. Tiny scales stay nonzero.
         var axes = Array[Float64, 9](fill=0)
@@ -620,8 +622,10 @@ struct OBB(ImplicitlyCopyable):
                 )
             exact_center[row] = value
             moved[row] = Float32(value)
-            if not isfinite(moved[row]):
-                raise Error("An OBB transformed center must fit in Float32")
+            require_finite(
+                Float64(moved[row]),
+                "An OBB transformed center must fit in Float32",
+            )
         # Keep geometry and rounding separate. A world point made from the
         # old center and local coordinates has a bounded formation error.
         # Carry it through the matrix, then bound center subtraction and the

@@ -41,6 +41,7 @@ from math.vector3 import Vector3
 from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture, float_texture
+from math.finite import require_finite
 from std.math import (
     exp,
     exp2,
@@ -252,11 +253,14 @@ struct TransmissionTarget(Movable):
         if len(target.depth) != target.width * target.height:
             raise Error("Volume scene depth needs one depth per raster pixel")
         require_depth_mode(target.depth_mode)
-        if not isfinite(far.value):
-            raise Error("Volume scene depth needs a finite far distance")
+        require_finite(
+            Float64(far.value), "Volume scene depth needs a finite far distance"
+        )
         for index in range(VIEW_FLOATS):  # pragma: no branch
-            if not isfinite(to_screen.elements[index]):
-                raise Error("Volume scene depth needs a finite projection")
+            require_finite(
+                Float64(to_screen.elements[index]),
+                "Volume scene depth needs a finite projection",
+            )
         if to_screen._determinant_wide() == 0:
             raise Error("Volume scene depth needs an invertible projection")
         var inverse = to_screen
@@ -311,8 +315,10 @@ struct TransmissionTarget(Movable):
         ):
             raise Error("A volume needs scene depth at the raster target size")
         for index in range(len(self.volume_depth)):  # pragma: no branch
-            if not isfinite(self.volume_depth[index]):
-                raise Error("Volume scene depth must contain finite distances")
+            require_finite(
+                Float64(self.volume_depth[index]),
+                "Volume scene depth must contain finite distances",
+            )
 
     def volume_depth_at(self, x: Int, y: Int) -> Length:
         """Return a checked snapshot's exact raster sample, without filtering.

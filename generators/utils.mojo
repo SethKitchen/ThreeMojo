@@ -38,6 +38,7 @@ from math.norm import (
 from math.quaternion import quaternion_rotate, quaternion_terms
 from math.utils import SeededRandom
 from math.vector3 import Vector3
+from math.finite import require_finite
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
@@ -391,8 +392,7 @@ def check_finite(value: Float64, what: String) raises:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error(what + " must be a finite number")
+    require_finite(Float64(value), what + " must be a finite number")
 
 
 def part(geometry: BufferGeometry, id: PartId) raises -> BufferGeometry:

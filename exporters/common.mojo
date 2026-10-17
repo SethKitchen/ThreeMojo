@@ -65,7 +65,7 @@ from math.utils import mix_bilinear
 from core.scene import Scene
 from loaders.js_number import js_number_text
 from objects.line import LineMode, STRIP
-from std.math import isfinite
+from math.finite import require_finite
 from std.memory import bitcast
 
 
@@ -81,8 +81,9 @@ def require_finite_written_number(value: Float32) raises:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite(
+        Float64(value), "A number to write must be finite: " + String(value)
+    )
 
 
 def format_float32(value: Float32) raises -> String:

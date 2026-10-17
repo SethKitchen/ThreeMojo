@@ -28,7 +28,7 @@ document: `update` gives a delta of zero, and showing the page again calls
 a window system that reports the same thing.
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 from std.time import perf_counter_ns
 from units.si import Duration, SECOND
 
@@ -106,8 +106,9 @@ struct Timer(ImplicitlyCopyable):
             Error: If `timescale` is not finite. The scale is left as it
                 was.
         """
-        if not isfinite(timescale):
-            raise Error("A timer's time scale must be finite")
+        require_finite(
+            Float64(timescale), "A timer's time scale must be finite"
+        )
         self.timescale = timescale
 
     def update(mut self):

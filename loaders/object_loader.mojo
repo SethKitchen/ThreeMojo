@@ -341,7 +341,8 @@ from render.texture import (
 )
 from render.texture_store import TextureId
 from std.collections import Dict
-from std.math import inf, isfinite, pi, sqrt
+from math.finite import require_finite
+from std.math import inf, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
@@ -1218,8 +1219,10 @@ struct _Loader(Movable):
             if word < 0 or word > 0xFFFFFFFF:
                 raise Error("Object JSON: an array buffer word is 32 bits")
             var value = bitcast[DType.float32](UInt32(word))
-            if not isfinite(value):
-                raise Error("Object JSON: an array holds a number not finite")
+            require_finite(
+                Float64(value),
+                "Object JSON: an array holds a number not finite",
+            )
             numbers.append(value)
         var stride = self.integer(item, "stride", 0)
         var buffer: InterleavedBuffer

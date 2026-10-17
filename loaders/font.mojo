@@ -65,7 +65,7 @@ from math.path import Shape
 from math.shape_path import ShapePath
 from math.vector2 import Vector2
 from std.collections import Dict
-from math.finite import require_positive_finite
+from math.finite import require_finite, require_positive_finite
 from std.math import isfinite, isnan
 from std.pathlib import Path
 from units.si import Length, METER
@@ -190,8 +190,7 @@ struct Glyph(Copyable, Movable):
                 it moves, or a move draws nothing before the next move or
                 the end.
         """
-        if not isfinite(advance):
-            raise Error("its advance is not finite")
+        require_finite(Float64(advance), "its advance is not finite")
         var drawn = True
         for index in range(len(steps)):
             if steps[index].verb == MOVE_TO:
@@ -224,8 +223,7 @@ def _token_number(tokens: List[String], at: Int) raises -> Float32:
     if isnan(wide):
         raise Error("'" + tokens[at] + "' is not a number")
     var narrow = Float32(wide)
-    if not isfinite(narrow):
-        raise Error("'" + tokens[at] + "' is not finite")
+    require_finite(Float64(narrow), "'" + tokens[at] + "' is not finite")
     return narrow
 
 
@@ -359,8 +357,10 @@ struct Font(Movable):
         )
         if not isfinite(y_min) or not isfinite(y_max):
             raise Error("Font: the bounding box must be finite")
-        if not isfinite(underline_thickness):
-            raise Error("Font: the underline thickness must be finite")
+        require_finite(
+            Float64(underline_thickness),
+            "Font: the underline thickness must be finite",
+        )
         for key in glyphs.keys():
             if not _one_character(key):
                 raise Error(

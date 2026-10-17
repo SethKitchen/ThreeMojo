@@ -39,7 +39,8 @@ from core.buffer_geometry import (
 )
 from math.curve_checks import require_at_least_one
 from math.utils import glsl_sign
-from std.math import acos, isfinite, pi, sqrt
+from math.finite import require_finite
+from std.math import acos, pi, sqrt
 from units.si import Length, METER
 
 
@@ -175,8 +176,7 @@ def rounded_box(
     require_finite_extents(
         width.value, height.value, depth.value, "rounded box"
     )
-    if not isfinite(radius.value):
-        raise Error("A rounded box needs a finite radius")
+    require_finite(Float64(radius.value), "A rounded box needs a finite radius")
     require_positive_extents(
         width.value, height.value, depth.value, "rounded box"
     )

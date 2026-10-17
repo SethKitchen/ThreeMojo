@@ -97,6 +97,7 @@ limits, and explicit zero and nonfinite rules.
 from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
+from math.finite import require_finite
 from std.math import exp2
 from math.norm import length2, _ordinary_squared, squared_length2
 from math.sine import fraction
@@ -2060,8 +2061,9 @@ struct Footprint(ImplicitlyCopyable):
                 "A footprint takes at most MAX_ANISOTROPY taps: a fragment"
                 " pays for every one of them"
             )
-        if not isfinite(self.level):
-            raise Error("A footprint's level must be finite")
+        require_finite(
+            Float64(self.level), "A footprint's level must be finite"
+        )
         if not self.step.is_finite():
             raise Error("A footprint's step must be finite")
 
@@ -2575,8 +2577,9 @@ def float_texture(
     for index in range(len(data)):  # pragma: no branch
         # An infinity or a NaN poisons every filter that reaches it, and
         # every level of the chain above it: refused, not sampled.
-        if not isfinite(data[index]):
-            raise Error("A float texture holds finite numbers")
+        require_finite(
+            Float64(data[index]), "A float texture holds finite numbers"
+        )
     var image = Texture()
     image.width = width
     image.height = height
@@ -2637,8 +2640,7 @@ def _fraction_byte(value: Float32) raises -> UInt8:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A data texture holds finite numbers")
+    require_finite(Float64(value), "A data texture holds finite numbers")
     var held = value
     if held < 0:
         held = 0

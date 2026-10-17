@@ -31,7 +31,8 @@ transform overflows is also refused before integer indexing.
 
 from math.utils import SeededRandom
 from std.benchmark import black_box
-from std.math import floor, isfinite, sqrt
+from math.finite import require_finite
+from std.math import floor, sqrt
 
 # Ken Perlin's permutation of 0 to 255. three.js doubles it to 512 entries so
 # that an index up to 511 needs no wrap; here the index is wrapped instead,
@@ -785,14 +786,12 @@ def _check_finite(value: Float64) raises:
     Raises:
         Error: If it is infinite or not a number.
     """
-    if not isfinite(value):
-        raise Error("A noise coordinate must be a finite number")
+    require_finite(Float64(value), "A noise coordinate must be a finite number")
 
 
 def _check_lattice(value: Float64) raises:
     """Refuse an overflowing skew or unskew before integer indexing."""
-    if not isfinite(value):
-        raise Error("A noise lattice transform must be finite")
+    require_finite(Float64(value), "A noise lattice transform must be finite")
 
 
 def _wrap(cell: Float64) -> Int:

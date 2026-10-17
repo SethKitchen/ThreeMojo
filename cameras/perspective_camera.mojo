@@ -47,7 +47,7 @@ from cameras.camera import (
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
-from math.finite import positive_finite
+from math.finite import positive_finite, require_finite
 from math.matrix4 import Matrix4
 from math.projection import perspective, view_to_screen
 from math.vector2 import Vector2
@@ -202,13 +202,15 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             raise Error(
                 "The far plane must be finite and beyond the near plane"
             )
-        if not isfinite(self.view_shift.value):
-            raise Error("A view shift must be finite")
+        require_finite(
+            Float64(self.view_shift.value), "A view shift must be finite"
+        )
         if not _positive(self.zoom):
             raise Error("A camera's zoom must be positive, got ", self.zoom)
         require_film_gauge(self.film_gauge.value)
-        if not isfinite(self.film_offset.value):
-            raise Error("A film offset must be finite")
+        require_finite(
+            Float64(self.film_offset.value), "A film offset must be finite"
+        )
         if not _positive(self.focus.value):
             raise Error("A focus distance must be positive")
         if self._tiled():

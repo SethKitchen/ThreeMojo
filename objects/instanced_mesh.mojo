@@ -88,7 +88,7 @@ from core.ordinal import require_non_negative
 from materials.material import MaterialId
 from math.matrix4 import Matrix4, require_affine
 from render.framebuffer import Color
-from std.math import isfinite
+from math.finite import require_finite
 
 comptime WHITE = Color(255, 255, 255)
 
@@ -321,8 +321,9 @@ struct InstancedMesh(Copyable, Movable):
         """
         self._check(index)
         for target in range(len(influences)):
-            if not isfinite(influences[target]):
-                raise Error("A morph weight must be a number")
+            require_finite(
+                Float64(influences[target]), "A morph weight must be a number"
+            )
         while len(self.morphs) < len(self.matrices):
             self.morphs.append(MorphInfluences())
         self.morphs[index] = MorphInfluences(copy=influences)
