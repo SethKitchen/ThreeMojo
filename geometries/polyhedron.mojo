@@ -48,7 +48,7 @@ from core.buffer_geometry import (
 from core.user_data import UserData, json_number_text
 from math.vector3 import Vector3, append_vector3, centroid, mix_delta3
 from std.math import atan2, pi, sqrt
-from units.si import Length, METER
+from units.si import Length
 
 # The golden ratio, (1 + root 5) / 2, which the icosahedron and the
 # dodecahedron are built on.
@@ -249,7 +249,7 @@ def polyhedron(
     geometry.parameters = UserData()
     geometry.parameters.set_json("vertices", _numbers_json(vertices))
     geometry.parameters.set_json("indices", _integers_json(indices))
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -279,7 +279,7 @@ def tetrahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     var geometry = polyhedron(vertices, indices, radius, detail)
     geometry.kind = TETRAHEDRON_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -346,7 +346,7 @@ def octahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     var geometry = polyhedron(vertices, indices, radius, detail)
     geometry.kind = OCTAHEDRON_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -470,7 +470,7 @@ def icosahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     var geometry = polyhedron(vertices, indices, radius, detail)
     geometry.kind = ICOSAHEDRON_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^
 
@@ -666,6 +666,6 @@ def dodecahedron(radius: Length, detail: Int = 0) raises -> BufferGeometry:
     var geometry = polyhedron(vertices, indices, radius, detail)
     geometry.kind = DODECAHEDRON_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("detail", Float64(detail))
     return geometry^

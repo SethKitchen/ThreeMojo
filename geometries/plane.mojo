@@ -27,7 +27,7 @@ from core.buffer_geometry import BufferGeometry, PLANE_GEOMETRY
 from geometries.grid import append_cell
 from geometries.surface import indexed_surface
 from core.user_data import UserData
-from units.si import Length, METER
+from units.si import Length
 
 
 def plane(
@@ -101,8 +101,8 @@ def plane(
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = PLANE_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("width", Float64(width.to(METER)))
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
+    geometry.parameters.set_meters("width", width)
+    geometry.parameters.set_meters("height", height)
     geometry.parameters.set_number("widthSegments", Float64(width_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
     return geometry^

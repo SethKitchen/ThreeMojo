@@ -49,7 +49,7 @@ from core.user_data import UserData
 from math.curve_checks import require_at_least_one
 from math.finite import require_finite
 from std.math import cos, sin
-from units.si import Angle, Length, METER, RADIAN, TURN
+from units.si import Angle, Length, RADIAN, TURN
 
 # A whole circle: the default sweep, and the most a sweep can be, because
 # more than a turn lays the rim over itself.
@@ -155,14 +155,10 @@ def circle(
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = CIRCLE_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("segments", Float64(segments))
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
     return geometry^
 
 
@@ -250,18 +246,10 @@ def ring(
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = RING_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number(
-        "innerRadius", Float64(inner_radius.to(METER))
-    )
-    geometry.parameters.set_number(
-        "outerRadius", Float64(outer_radius.to(METER))
-    )
+    geometry.parameters.set_meters("innerRadius", inner_radius)
+    geometry.parameters.set_meters("outerRadius", outer_radius)
     geometry.parameters.set_number("thetaSegments", Float64(theta_segments))
     geometry.parameters.set_number("phiSegments", Float64(phi_segments))
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
     return geometry^

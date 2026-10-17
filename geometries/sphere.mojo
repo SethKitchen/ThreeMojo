@@ -31,7 +31,7 @@ from geometries.surface import (
 )
 from core.user_data import UserData
 from std.math import cos, isfinite, pi, sin
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, Length, RADIAN
 
 
 def sphere(
@@ -160,15 +160,11 @@ def sphere(
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     geometry.kind = SPHERE_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("widthSegments", Float64(width_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_number("phiStart", Float64(phi_start.to(RADIAN)))
-    geometry.parameters.set_number("phiLength", Float64(phi_length.to(RADIAN)))
-    geometry.parameters.set_number(
-        "thetaStart", Float64(theta_start.to(RADIAN))
-    )
-    geometry.parameters.set_number(
-        "thetaLength", Float64(theta_length.to(RADIAN))
-    )
+    geometry.parameters.set_radians("phiStart", phi_start)
+    geometry.parameters.set_radians("phiLength", phi_length)
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
     return geometry^

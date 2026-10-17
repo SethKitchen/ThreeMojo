@@ -33,7 +33,7 @@ from core.buffer_geometry import (
 )
 from core.user_data import UserData
 from geometries.surface import require_positive_extents
-from units.si import Length, METER
+from units.si import Length
 
 
 struct _Planes:
@@ -189,9 +189,9 @@ def box(
         )
     geometry.kind = BOX_GEOMETRY
     geometry.parameters = UserData()
-    geometry.parameters.set_number("width", Float64(width.to(METER)))
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
-    geometry.parameters.set_number("depth", Float64(depth.to(METER)))
+    geometry.parameters.set_meters("width", width)
+    geometry.parameters.set_meters("height", height)
+    geometry.parameters.set_meters("depth", depth)
     geometry.parameters.set_number("widthSegments", Float64(width_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
     geometry.parameters.set_number("depthSegments", Float64(depth_segments))

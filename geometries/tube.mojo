@@ -50,7 +50,7 @@ from math.curve3 import Curve3, FrenetFrames, transport_frames
 from math.curve_checks import require_at_least_one
 from math.vector3 import Vector3, append_vector3
 from std.math import cos, pi, sin
-from units.si import Length, METER
+from units.si import Length
 
 
 def _tangents(path: List[Vector3], closed: Bool) raises -> List[Vector3]:
@@ -240,7 +240,7 @@ def tube(
     geometry.parameters = UserData()
     geometry.parameters.set_json("path", path.finish())
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
+    geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_boolean("closed", closed)
     return geometry^
