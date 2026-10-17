@@ -84,6 +84,7 @@ from core.order import stable_rising_order
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
 from render.framebuffer import Color
@@ -187,14 +188,18 @@ struct InstancedMesh(Copyable, Movable):
         Raises:
             Error: If any id is negative, or the count is.
         """
-        if node.value < 0:
-            raise Error("An instanced mesh must name a scene node")
-        if geometry.value < 0:
-            raise Error("An instanced mesh must name a geometry")
-        if material.value < 0:
-            raise Error("An instanced mesh must name a material")
-        if count < 0:
-            raise Error("An instanced mesh cannot have a negative count")
+        require_non_negative(
+            node.value, "An instanced mesh must name a scene node"
+        )
+        require_non_negative(
+            geometry.value, "An instanced mesh must name a geometry"
+        )
+        require_non_negative(
+            material.value, "An instanced mesh must name a material"
+        )
+        require_non_negative(
+            count, "An instanced mesh cannot have a negative count"
+        )
         self.geometry = geometry
         self.material = material
         self.node = node
@@ -457,8 +462,7 @@ def require_batched_geometry(id: GeometryId) raises:
     Raises:
         Error: If the id is negative.
     """
-    if id.value < 0:
-        raise Error("A batched geometry must name a geometry")
+    require_non_negative(id.value, "A batched geometry must name a geometry")
 
 
 def require_batched_instance(geometry: GeometryId) raises:
@@ -473,8 +477,9 @@ def require_batched_instance(geometry: GeometryId) raises:
     Raises:
         Error: If the id is negative.
     """
-    if geometry.value < 0:
-        raise Error("A batched instance must name a geometry")
+    require_non_negative(
+        geometry.value, "A batched instance must name a geometry"
+    )
 
 
 struct BatchedMesh(Copyable, Movable):
@@ -560,10 +565,12 @@ struct BatchedMesh(Copyable, Movable):
         Raises:
             Error: If either id is negative, or a count is.
         """
-        if node.value < 0:
-            raise Error("A batched mesh must name a scene node")
-        if material.value < 0:
-            raise Error("A batched mesh must name a material")
+        require_non_negative(
+            node.value, "A batched mesh must name a scene node"
+        )
+        require_non_negative(
+            material.value, "A batched mesh must name a material"
+        )
         if (
             max_instance_count < 0
             or max_vertex_count < 0

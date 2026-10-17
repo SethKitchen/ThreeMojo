@@ -45,6 +45,7 @@ divide it, since no camera here has one.
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from units.si import Length, METER
 
 
@@ -87,8 +88,7 @@ struct Lod(Copyable, Movable):
         Raises:
             Error: If the node index is negative.
         """
-        if node.value < 0:
-            raise Error("An LOD must name a scene node")
+        require_non_negative(node.value, "An LOD must name a scene node")
         self.node = node
         self.levels = List[LodLevel]()
         self.shown = 0
@@ -126,8 +126,7 @@ struct Lod(Copyable, Movable):
                 is a level already, the distance is negative, or the
                 hysteresis is not from zero to one.
         """
-        if object.value < 0:
-            raise Error("A level must name a scene node")
+        require_non_negative(object.value, "A level must name a scene node")
         if object == self.node:
             raise Error("An LOD cannot be its own level")
         for level in self.levels:

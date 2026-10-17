@@ -83,7 +83,7 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_non_negative
 
 from math.matrix_determinant import _sum_products as _exact_products
 
@@ -203,8 +203,7 @@ def require_nonnegative_index(vertex: Int) raises:
     Raises:
         Error: If the entry is negative.
     """
-    if vertex < 0:
-        raise Error("An index entry cannot be negative")
+    require_non_negative(vertex, "An index entry cannot be negative")
 
 
 def _run_end(start: Int, count: Int, total: Int) -> Int:

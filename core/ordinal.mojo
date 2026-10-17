@@ -7,7 +7,8 @@
 
 A named id stores an integer. Zero is the first name. `last` is the
 last name. A value outside that range is not a name. Each id keeps its
-own type.
+own type. `require_non_negative` refuses a value below zero. Callers
+keep their own error text.
 """
 
 
@@ -24,3 +25,20 @@ def ordinal_valid(value: Int, last: Int) -> Bool:
     if value < 0:
         return False
     return value <= last
+
+
+def require_non_negative(value: Int, message: String) raises:
+    """Refuse a value below zero.
+
+    Args:
+        value: The stored integer.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is zero or more.
+
+    Raises:
+        Error: If `value` is below zero.
+    """
+    if value < 0:
+        raise Error(message)

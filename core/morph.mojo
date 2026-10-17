@@ -21,6 +21,7 @@ can be given for any target from zero upward.
 stays implicitly copyable: a scene adds one by value.
 """
 
+from core.ordinal import require_non_negative
 from std.math import isfinite
 
 
@@ -36,8 +37,7 @@ def require_morph_target(target: Int) raises:
     Raises:
         Error: If the target is negative.
     """
-    if target < 0:
-        raise Error("A morph target index cannot be negative")
+    require_non_negative(target, "A morph target index cannot be negative")
 
 
 struct MorphInfluences(ImplicitlyCopyable, Sized):
@@ -59,8 +59,9 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
         Raises:
             Error: If the count is negative.
         """
-        if count < 0:
-            raise Error("A mesh cannot wear a negative number of targets")
+        require_non_negative(
+            count, "A mesh cannot wear a negative number of targets"
+        )
         self.weights = List[Float32](length=count, fill=0)
 
     def __init__(out self, *, copy: Self):

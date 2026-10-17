@@ -48,7 +48,7 @@ three.js's plane does.
 and multiplied by `Scene.environment_intensity`. See `core.scene`.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_non_negative
 
 from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.framebuffer import Color
@@ -181,8 +181,7 @@ def require_texture_background(id: TextureId) raises:
     Raises:
         Error: If the id is `NO_TEXTURE` or negative.
     """
-    if id.value < 0:
-        raise Error("A texture background must name a texture")
+    require_non_negative(id.value, "A texture background must name a texture")
 
 
 def require_cube_background(id: CubeTextureId) raises:
@@ -197,8 +196,7 @@ def require_cube_background(id: CubeTextureId) raises:
     Raises:
         Error: If the id is `NO_CUBE_TEXTURE` or negative.
     """
-    if id.value < 0:
-        raise Error("A cube background must name a cube texture")
+    require_non_negative(id.value, "A cube background must name a cube texture")
 
 
 def texture_background(texture: TextureId) raises -> Background:
