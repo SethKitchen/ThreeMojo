@@ -18,6 +18,7 @@ face by a rounding error, as in three.js.
 """
 
 from core.buffer_attribute import BufferAttribute
+from geometries.surface import require_positive_extents
 from core.buffer_geometry import BufferGeometry, POSITION
 from std.math import isfinite
 from units.si import Length, METER
@@ -62,8 +63,9 @@ def box_line(
         or not isfinite(depth.value)
     ):
         raise Error("A box of lines needs finite extents")
-    if width.value <= 0 or height.value <= 0 or depth.value <= 0:
-        raise Error("A box of lines needs positive extents")
+    require_positive_extents(
+        width.value, height.value, depth.value, "box of lines"
+    )
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box of lines needs one segment each way")
     var w = Float64(width.value)

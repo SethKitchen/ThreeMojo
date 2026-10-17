@@ -43,7 +43,7 @@ from core.buffer_geometry import (
     CYLINDER_GEOMETRY,
     MaterialIndex,
 )
-from geometries.surface import indexed_surface
+from geometries.surface import indexed_surface, require_three_segments
 from core.user_data import UserData
 from geometries.circle import FULL_TURN, check_sweep
 from math.norm import normalized2
@@ -158,8 +158,9 @@ def cylinder(
         raise Error("A cylinder needs a radius at one end or the other")
     if height.value <= 0:
         raise Error("A cylinder needs a positive height")
-    if radial_segments < 3:
-        raise Error("A cylinder needs at least three segments around")
+    require_three_segments(
+        radial_segments, "A cylinder needs at least three segments around"
+    )
     if height_segments < 1:
         raise Error("A cylinder needs at least one segment down its side")
     check_sweep(theta_length)
