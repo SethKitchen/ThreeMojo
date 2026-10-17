@@ -3,6 +3,7 @@
 
 """External loader bytes must be valid UTF-8 before they become strings."""
 
+from core.binary import append_little_endian_u32
 from std.testing import TestSuite, assert_equal, assert_raises
 from std.pathlib import Path
 from core.assets import Assets
@@ -54,8 +55,7 @@ def utf8_error(bytes: List[UInt8]) raises -> String:
 
 def le32(mut out: List[UInt8], value: Int):
     """Append a little-endian 32-bit value."""
-    for shift in range(4):
-        out.append(UInt8((value >> (shift * 8)) & 255))
+    append_little_endian_u32(out, value)
 
 
 def glb(var text: List[UInt8]) -> List[UInt8]:

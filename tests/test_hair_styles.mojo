@@ -5,6 +5,7 @@
 
 """Tests for the hairstyles artists groomed, laid on any head."""
 
+from core.binary import append_little_endian_u32
 from extensions.humanoid.genome import Expression, Genome, HAIR_CURL
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT
@@ -69,8 +70,7 @@ def _dims() raises -> HeadMuscleDimensions:
 
 def _u32(mut bytes: List[UInt8], value: Int):
     """Append `value` as a little-endian 32-bit integer."""
-    for k in range(4):  # pragma: no branch
-        bytes.append(UInt8((value >> (8 * k)) & 0xFF))
+    append_little_endian_u32(bytes, value)
 
 
 def _file(

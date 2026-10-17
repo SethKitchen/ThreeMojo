@@ -16,6 +16,7 @@ surface is the same.
 """
 
 from core.assets import Assets
+from core.binary import append_little_endian
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
 from core.scene import Scene
@@ -237,8 +238,7 @@ comptime HERE = "assets/gltf/"
 def le(value: Int, width: Int) -> List[UInt8]:
     """Return a number as `width` little-endian bytes."""
     var out = List[UInt8]()
-    for index in range(width):
-        out.append(UInt8((value >> (8 * index)) & 0xFF))
+    append_little_endian(out, value, width)
     return out^
 
 

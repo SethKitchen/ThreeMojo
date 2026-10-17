@@ -19,7 +19,7 @@ tables, 32512 sequences in one block, a zero-length RLE block and an
 eight-byte content size. libzstd decodes both files to the same bytes.
 """
 
-from core.binary import copy_bytes
+from core.binary import append_little_endian, copy_bytes
 from render.zstd import xxh64, zstd_decompress
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
@@ -33,8 +33,7 @@ def fixture(name: String) raises -> List[UInt8]:
 def le(value: Int, count: Int) -> List[UInt8]:
     """Return `value` as `count` little-endian bytes."""
     var out = List[UInt8]()
-    for index in range(count):
-        out.append(UInt8((value >> (index * 8)) & 0xFF))
+    append_little_endian(out, value, count)
     return out^
 
 

@@ -15,7 +15,11 @@ Streams and containers that no encoder writes are built here, bit by bit,
 for the errors that libwebp checks.
 """
 
-from core.binary import copy_byte_range
+from core.binary import (
+    append_little_endian,
+    append_little_endian_u32,
+    copy_byte_range,
+)
 from loaders.json import parse_json
 from render.png import decode as decode_png
 from render.webp import decode, decode_alpha, is_webp
@@ -242,8 +246,7 @@ def test_a_malformed_lossless_stream_is_refused() raises:
 
 def _le32(value: Int) -> List[UInt8]:
     var out = List[UInt8]()
-    for i in range(4):
-        out.append(UInt8((value >> (8 * i)) & 0xFF))
+    append_little_endian_u32(out, value)
     return out^
 
 
@@ -269,8 +272,7 @@ def _riff(body: List[UInt8], riff: Int = -1) -> List[UInt8]:
 def _vp8x(width: Int, height: Int) -> List[UInt8]:
     var data: List[UInt8] = [0x10, 0, 0, 0]
     for value in [width - 1, height - 1]:
-        for i in range(3):
-            data.append(UInt8((value >> (8 * i)) & 0xFF))
+        append_little_endian(data, value, 3)
     return _chunk("VP8X", data)
 
 
