@@ -22,6 +22,7 @@ has no height.
 from core.buffer_geometry import BufferGeometry, CAPSULE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
+    require_at_least_one,
     require_positive_radius,
     require_three_segments,
 )
@@ -63,13 +64,15 @@ def capsule(
     require_positive_radius(radius.value, "capsule")
     if length.value < 0:
         raise Error("A capsule's length cannot be negative")
-    if cap_segments < 1:
-        raise Error("A capsule needs at least one segment on each cap")
+    require_at_least_one(
+        cap_segments, "A capsule needs at least one segment on each cap"
+    )
     require_three_segments(
         radial_segments, "A capsule needs at least three segments around"
     )
-    if height_segments < 1:
-        raise Error("A capsule needs at least one segment up its side")
+    require_at_least_one(
+        height_segments, "A capsule needs at least one segment up its side"
+    )
 
     var r = Float64(radius.to(METER))
     var height = Float64(length.to(METER))

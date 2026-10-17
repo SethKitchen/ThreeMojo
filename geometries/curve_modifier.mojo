@@ -45,6 +45,7 @@ texture does not have, so a curve past the last clamps to the last row.
 """
 
 from core.buffer_attribute import BufferAttribute
+from geometries.surface import require_at_least_one
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.matrix4 import Matrix4
 from math.sine import fraction
@@ -131,8 +132,9 @@ struct Flow(Movable):
         Raises:
             Error: If `curve_count` is less than one.
         """
-        if curve_count < 1:
-            raise Error("A flow needs room for one curve or more")
+        require_at_least_one(
+            curve_count, "A flow needs room for one curve or more"
+        )
         self.spine = List[UInt16](
             length=TEXTURE_WIDTH * TEXTURE_HEIGHT * curve_count * CHANNELS,
             fill=0,

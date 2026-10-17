@@ -41,6 +41,7 @@ from core.buffer_geometry import (
 from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
+    require_at_least_one,
     require_positive_radius,
     require_three_segments,
 )
@@ -203,8 +204,9 @@ def ring(
     require_three_segments(
         theta_segments, "A ring needs at least three segments around"
     )
-    if phi_segments < 1:
-        raise Error("A ring needs at least one segment across")
+    require_at_least_one(
+        phi_segments, "A ring needs at least one segment across"
+    )
     check_sweep(theta_length)
 
     var outer = outer_radius.value
