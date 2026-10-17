@@ -27,7 +27,8 @@ building layouts" (2010), at a much simpler level.
 """
 from core.ordinal import ordinal_valid
 
-from std.math import isfinite, sqrt
+from math.finite import positive_finite
+from std.math import sqrt
 from extensions.building.kinds import (
     BATHROOM,
     BEDROOM,
@@ -96,7 +97,7 @@ struct PlanOptions(ImplicitlyCopyable):
             self.core_length.to(METER),
         ]
         for i in range(4):  # pragma: no branch
-            if not (sizes[i] > 0 and isfinite(sizes[i])):
+            if not positive_finite(sizes[i]):
                 raise Error("Plan sizes must be positive and finite")
         if sizes[2] < sizes[1]:
             raise Error(

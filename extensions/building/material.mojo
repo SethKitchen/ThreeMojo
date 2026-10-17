@@ -18,6 +18,7 @@ Handbook of Fundamentals. The elastic values are typical of the
 materials in Eurocodes 2, 3 and 5.
 """
 
+from math.finite import positive_finite
 from std.math import isfinite
 from units.si import (
     Density64,
@@ -117,7 +118,7 @@ struct BuildingMaterial(Copyable, Movable):
             self.specific_heat.value,
         ]
         for i in range(len(positives)):  # pragma: no branch
-            if not (positives[i] > 0 and isfinite(positives[i])):
+            if not positive_finite(positives[i]):
                 raise Error(
                     "A material's density, modulus, conductivity and"
                     " specific heat must be positive and finite"
