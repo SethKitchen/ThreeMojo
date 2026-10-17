@@ -35,6 +35,7 @@ takes them.
 """
 
 from core.binary import copy_byte_range, little_endian_uint
+from math.utils import clamp
 from render.png import DecodedImage
 from render.srgb import SRGB
 from render.webp_lossless import decode_lossless, decode_lossless_stream
@@ -98,7 +99,7 @@ def unfilter_alpha(
             var left = top_left
             for x in range(width):  # pragma: no branch
                 var top = Int(alpha[at + x - width])
-                var guess = min(max(left + top - top_left, 0), 255)
+                var guess = clamp(left + top - top_left, 0, 255)
                 left = (Int(alpha[at + x]) + guess) & 0xFF
                 top_left = top
                 alpha[at + x] = UInt8(left)

@@ -30,6 +30,7 @@ raises an `Error` in the same places.
 """
 
 from core.binary import copy_bytes, little_endian_uint
+from math.utils import clamp
 from std.memory import bitcast
 
 # The low 32 bits of an `Int`.
@@ -39,6 +40,24 @@ comptime MASK32 = 0xFFFFFFFF
 comptime _L_BASE = 4096
 # The bytes the rANS coders read and write at a time.
 comptime _IO_BASE = 256
+
+
+def rans_precision_bits(symbol_bits: Int) -> Int:
+    """Return the rANS table precision, in bits.
+
+    Draco's `ComputeRAnsPrecisionFromUniqueSymbolsBitLength`. The answer
+    is `3 * symbol_bits / 2`, held from 12 to 20.
+
+    Args:
+        symbol_bits: The bits of the widest symbol.
+
+    Returns:
+        The precision, in bits.
+
+    Raises:
+        Error: Never.
+    """
+    return clamp((3 * symbol_bits) // 2, 12, 20)
 
 
 def draco_require(ok: Bool, what: String) raises:
@@ -447,7 +466,7 @@ struct RAnsSymbolDecoder(Copyable, Movable):
             symbol_bits: The bits of the widest symbol. The precision is
                 2 to the power `3 * symbol_bits / 2`, kept from 12 to 20.
         """
-        var bits = min(max((3 * symbol_bits) // 2, 12), 20)
+        var bits = rans_precision_bits(symbol_bits)
         self.precision = 1 << bits
         self.probabilities = List[Int]()
         self.starts = List[Int]()

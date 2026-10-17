@@ -134,8 +134,8 @@ def load_straight(view: LightView, x: Int, y: Int) -> FloatColor:
     Returns:
         The straight color.
     """
-    var cx = min(max(x, 0), view.width - 1)
-    var cy = min(max(y, 0), view.height - 1)
+    var cx = clamp(x, 0, view.width - 1)
+    var cy = clamp(y, 0, view.height - 1)
     return view.at(cx, cy).unpremultiplied()
 
 
