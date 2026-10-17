@@ -91,6 +91,7 @@ from renderers.render_list import (
     RenderSort,
     _Source,
     _Span,
+    _opaque_then_blended,
     _sort_by,
     _span_draw_order,
     _sort_with,
@@ -2011,30 +2012,13 @@ def _draws(
             )
         )
 
-    var solid = List[Int]()
-    var solid_depths = List[Float32]()
-    var solid_orders = List[Int]()
-    var see_through = List[Int]()
-    var see_through_depths = List[Float32]()
-    var see_through_orders = List[Int]()
+    var orders = List[Int]()
     for index in range(len(draws)):
-        if clear[index]:
-            see_through.append(index)
-            see_through_depths.append(depths[index])
-            see_through_orders.append(draws[index].order)
-        else:
-            solid.append(index)
-            # Negated, so one ascending sort serves both lists: the nearest
-            # opaque draw has the largest z and must come first.
-            solid_depths.append(-depths[index])
-            solid_orders.append(draws[index].order)
-    _sort_by(solid, solid_depths, solid_orders)
-    _sort_by(see_through, see_through_depths, see_through_orders)
+        orders.append(draws[index].order)
+    var ranked = _opaque_then_blended(clear, depths, orders)
     var ordered = List[_Draw]()
-    for position in range(len(solid)):
-        ordered.append(draws[solid[position]])
-    for position in range(len(see_through)):
-        ordered.append(draws[see_through[position]])
+    for position in range(len(ranked)):
+        ordered.append(draws[ranked[position]])
     # The scene's override draws what the frame draws, each in the list
     # its own material put it in, as three.js's `renderObjects` swaps it
     # in after the lists are made. A light's view keeps the casters' own.

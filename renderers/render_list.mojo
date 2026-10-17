@@ -189,20 +189,23 @@ def _sort_by(
         orders[slot] = order
 
 
-def _span_draw_order(spans: List[_Span]) -> List[Int]:
-    """Return span indexes, opaque nearest first, then blended furthest first.
+def _opaque_then_blended(
+    blends: List[Bool], depths: List[Float32], orders: List[Int]
+) -> List[Int]:
+    """Return indexes, opaque nearest first, then blended furthest first.
 
-    An opaque span's depth is negated so one ascending sort puts the
-    nearest opaque span first. A blended span keeps its depth, so the
-    furthest blended span comes first. Render order sorts before depth.
-    Lines and points use this order, and `_draws` uses the same two rules
-    for meshes.
+    An opaque index's depth is negated so one ascending sort puts the
+    nearest opaque index first. A blended index keeps its depth, so the
+    furthest blended index comes first. Render order sorts before depth.
+    Meshes, lines, and points use this order.
 
     Args:
-        spans: The runs, in the order they were prepared.
+        blends: Whether each index blends. One entry per index.
+        depths: Each index's camera-space depth. Larger is further.
+        orders: Each index's render order.
 
     Returns:
-        The indexes to draw, opaque runs and then blended runs.
+        The indexes to draw, opaque indexes and then blended indexes.
     """
     var solid = List[Int]()
     var solid_depths = List[Float32]()
@@ -210,15 +213,15 @@ def _span_draw_order(spans: List[_Span]) -> List[Int]:
     var see_through = List[Int]()
     var see_through_depths = List[Float32]()
     var see_through_orders = List[Int]()
-    for position in range(len(spans)):
-        if spans[position].blends:
-            see_through.append(position)
-            see_through_depths.append(spans[position].depth)
-            see_through_orders.append(spans[position].order)
+    for index in range(len(blends)):
+        if blends[index]:
+            see_through.append(index)
+            see_through_depths.append(depths[index])
+            see_through_orders.append(orders[index])
         else:
-            solid.append(position)
-            solid_orders.append(spans[position].order)
-            solid_depths.append(-spans[position].depth)
+            solid.append(index)
+            solid_orders.append(orders[index])
+            solid_depths.append(-depths[index])
     _sort_by(solid, solid_depths, solid_orders)
     _sort_by(see_through, see_through_depths, see_through_orders)
     var order = List[Int]()
@@ -227,6 +230,25 @@ def _span_draw_order(spans: List[_Span]) -> List[Int]:
     for position in range(len(see_through)):
         order.append(see_through[position])
     return order^
+
+
+def _span_draw_order(spans: List[_Span]) -> List[Int]:
+    """Return span indexes, opaque nearest first, then blended furthest first.
+
+    Args:
+        spans: The runs, in the order they were prepared.
+
+    Returns:
+        The indexes to draw, opaque runs and then blended runs.
+    """
+    var blends = List[Bool]()
+    var depths = List[Float32]()
+    var orders = List[Int]()
+    for position in range(len(spans)):
+        blends.append(spans[position].blends)
+        depths.append(spans[position].depth)
+        orders.append(spans[position].order)
+    return _opaque_then_blended(blends, depths, orders)
 
 
 def _after(
