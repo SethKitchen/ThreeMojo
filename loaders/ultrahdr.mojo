@@ -137,11 +137,6 @@ def _u32(bytes: List[UInt8], at: Int, little: Bool) -> Int:
     )
 
 
-def _starts_with(bytes: List[UInt8], at: Int, end: Int, text: String) -> Bool:
-    """Return True if the bytes from `at` start with `text`."""
-    return bytes_match(Span(bytes), at, end, text)
-
-
 def _js_number(text: String) -> Float64:
     """Return JavaScript's `Number(text)`: blank is zero, and anything
     that is not a whole number text is NaN."""
@@ -266,19 +261,23 @@ def _read_segments(
         var stop = at + 2 + length
         if length < 2 or stop > end:
             raise Error("UltraHDR: a JPEG segment runs past the file")
-        if marker == 0xE1 and _starts_with(bytes, payload, stop, XMP_NAMESPACE):
+        if marker == 0xE1 and bytes_match(
+            Span(bytes), payload, stop, XMP_NAMESPACE
+        ):
             var text = String(
                 from_utf8=Span(bytes)[
                     payload + len(XMP_NAMESPACE.as_bytes()) + 1 : stop
                 ]
             )
             _read_xmp(text, metadata)
-        elif marker == 0xE2 and _starts_with(bytes, payload, stop, "MPF\0"):
+        elif marker == 0xE2 and bytes_match(
+            Span(bytes), payload, stop, "MPF\0"
+        ):
             # three.js's offsets are from the segment's length field.
             var base = at + 2
             if base + _MPF_ENTRIES + 24 > stop:
                 raise Error("UltraHDR: the MPF segment is cut short")
-            var little = _starts_with(bytes, base + 6, stop, "II*\0")
+            var little = bytes_match(Span(bytes), base + 6, stop, "II*\0")
             images.primary_size = _u32(bytes, base + _MPF_ENTRIES, little)
             images.primary_offset = _u32(bytes, base + _MPF_ENTRIES + 4, little)
             images.gain_size = _u32(bytes, base + _MPF_ENTRIES + 16, little)

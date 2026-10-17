@@ -73,11 +73,6 @@ struct ViewBounds(ImplicitlyCopyable):
     var max_corner: Vector2
 
 
-def _positive(value: Float32) -> Bool:
-    """Return True if a number is finite and above zero."""
-    return positive_finite(Float64(value))
-
-
 def require_film_gauge(gauge: Float32) raises:
     """Refuse a film gauge that is not positive.
 
@@ -90,7 +85,7 @@ def require_film_gauge(gauge: Float32) raises:
     Raises:
         Error: If the gauge is not positive.
     """
-    if not _positive(gauge):
+    if not positive_finite(Float64(gauge)):
         raise Error("A film gauge must be positive")
 
 
@@ -192,11 +187,14 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
                 or focus is not positive and finite, or an enabled view
                 is refused by `ViewOffset.validate`.
         """
-        if not _positive(self.aspect):
+        if not positive_finite(Float64(self.aspect)):
             raise Error("The aspect ratio must be positive and finite")
-        if not (_positive(self.fov.value) and self.fov.value < Float32(pi)):
+        if not (
+            positive_finite(Float64(self.fov.value))
+            and self.fov.value < Float32(pi)
+        ):
             raise Error("The field of view must be between zero and pi")
-        if not _positive(self.near.value):
+        if not positive_finite(Float64(self.near.value)):
             raise Error("The near plane must be in front of the camera")
         if not (isfinite(self.far.value) and self.far.value > self.near.value):
             raise Error(
@@ -205,13 +203,13 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         require_finite(
             Float64(self.view_shift.value), "A view shift must be finite"
         )
-        if not _positive(self.zoom):
+        if not positive_finite(Float64(self.zoom)):
             raise Error("A camera's zoom must be positive, got ", self.zoom)
         require_film_gauge(self.film_gauge.value)
         require_finite(
             Float64(self.film_offset.value), "A film offset must be finite"
         )
-        if not _positive(self.focus.value):
+        if not positive_finite(Float64(self.focus.value)):
             raise Error("A focus distance must be positive")
         if self._tiled():
             self.view.value().validate()
@@ -251,7 +249,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         """
         var view = view_offset(full_width, full_height, x, y, width, height)
         var aspect = full_width / full_height
-        if not _positive(aspect):
+        if not positive_finite(Float64(aspect)):
             raise Error("A view offset must give a positive finite aspect")
         self.aspect = aspect
         self.view = view
@@ -305,7 +303,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             Error: If the focal length or the film gauge is not positive
                 and finite.
         """
-        if not _positive(focal_length.value):
+        if not positive_finite(Float64(focal_length.value)):
             raise Error("A focal length must be positive")
         require_film_gauge(self.film_gauge.value)
         var slope = 0.5 * self.get_film_height().value / focal_length.value

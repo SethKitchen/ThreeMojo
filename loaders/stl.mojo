@@ -126,20 +126,6 @@ struct StlModel(Movable):
         return taken^
 
 
-def _holds(bytes: List[UInt8], at: Int, word: String) -> Bool:
-    """Return True if the file holds `word` at byte `at`.
-
-    Args:
-        bytes: The file.
-        at: Where to look.
-        word: The ASCII text to look for.
-
-    Returns:
-        Whether every byte of the word is there.
-    """
-    return bytes_match(Span(bytes), at, len(bytes), word)
-
-
 def is_binary_stl(bytes: List[UInt8]) -> Bool:
     """Return True if a file is binary STL, as three.js's `isBinary`
     decides.
@@ -161,7 +147,7 @@ def is_binary_stl(bytes: List[UInt8]) -> Bool:
             return True
     # Five offsets: the loop always runs.
     for offset in range(5):  # pragma: no branch
-        if _holds(bytes, offset, "solid"):
+        if bytes_match(Span(bytes), offset, len(bytes), "solid"):
             return False
     return True
 
@@ -244,7 +230,7 @@ def _parse_binary(bytes: List[UInt8]) raises -> StlModel:
     var alpha = Float32(1)
     # Seventy places: the loop always runs.
     for at in range(_HEADER - 10):  # pragma: no branch
-        if _holds(bytes, at, "COLOR="):
+        if bytes_match(Span(bytes), at, len(bytes), "COLOR="):
             colored = True
             default_r = _channel(Int(bytes[at + 6]), 255)
             default_g = _channel(Int(bytes[at + 7]), 255)

@@ -317,11 +317,6 @@ def _line_end(bytes: Span[UInt8, _], at: Int) -> Int:
     return end
 
 
-def _starts_with(bytes: Span[UInt8, _], at: Int, word: String) -> Bool:
-    """Return True if the text at `at` starts with `word`."""
-    return bytes_match(bytes, at, len(bytes), word)
-
-
 def _string_length(bytes: Span[UInt8, _], at: Int) -> Int:
     """Return the length of three.js's `StringLiteral` at `at`, or zero."""
     var end = at + 1
@@ -432,14 +427,14 @@ def _keyword(bytes: Span[UInt8, _], at: Int, mut kind: VrmlTokenKind) -> Int:
     kind; zero for none."""
     # The list is not empty. The loop always runs.
     for name in materialize[_NODE_TYPES]():  # pragma: no branch
-        if _starts_with(bytes, at, name):
+        if bytes_match(bytes, at, len(bytes), name):
             kind = VRML_NODE_NAME
             return name.byte_length()
     var words: List[String] = ["DEF", "USE", "ROUTE", "TO"]
     var kinds: List[VrmlTokenKind] = [VRML_DEF, VRML_USE, VRML_ROUTE, VRML_TO]
     # Four words. The loop always runs.
     for w in range(len(words)):  # pragma: no branch
-        if _starts_with(bytes, at, words[w]):
+        if bytes_match(bytes, at, len(bytes), words[w]):
             kind = kinds[w]
             return words[w].byte_length()
     return 0
@@ -448,13 +443,13 @@ def _keyword(bytes: Span[UInt8, _], at: Int, mut kind: VrmlTokenKind) -> Int:
 def _literal(bytes: Span[UInt8, _], at: Int, mut kind: VrmlTokenKind) -> Int:
     """Return the length of `TRUE`, `FALSE` or `NULL` at `at`, and set its
     kind; zero for none."""
-    if _starts_with(bytes, at, "TRUE"):
+    if bytes_match(bytes, at, len(bytes), "TRUE"):
         kind = VRML_TRUE
         return 4
-    if _starts_with(bytes, at, "FALSE"):
+    if bytes_match(bytes, at, len(bytes), "FALSE"):
         kind = VRML_FALSE
         return 5
-    if _starts_with(bytes, at, "NULL"):
+    if bytes_match(bytes, at, len(bytes), "NULL"):
         kind = VRML_NULL
         return 4
     return 0
@@ -506,7 +501,7 @@ def lex_vrml(text: String) raises -> List[VrmlToken]:
         else:
             length = _literal(bytes, at, kind)
         if length == 0:
-            if _starts_with(bytes, at, "#VRML"):
+            if bytes_match(bytes, at, len(bytes), "#VRML"):
                 kind = VRML_VERSION
                 length = _line_end(bytes, at) - at
             else:
