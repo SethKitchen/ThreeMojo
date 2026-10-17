@@ -26,6 +26,7 @@ disagree with the next face.
 from core.buffer_geometry import BufferGeometry, SPHERE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
+    record_grid_segments,
     record_kind,
     record_phi,
     record_sweep,
@@ -162,8 +163,7 @@ def sphere(
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     record_kind(geometry, SPHERE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
-    geometry.parameters.set_number("widthSegments", Float64(width_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    record_grid_segments(geometry, width_segments, height_segments)
     record_phi(geometry, phi_start, phi_length)
     record_sweep(geometry, theta_start, theta_length)
     return geometry^

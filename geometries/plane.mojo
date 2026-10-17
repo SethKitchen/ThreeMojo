@@ -25,7 +25,12 @@ image at sample time.
 
 from core.buffer_geometry import BufferGeometry, PLANE_GEOMETRY
 from geometries.grid import append_cell
-from geometries.surface import indexed_surface, record_kind
+from geometries.surface import (
+    indexed_surface,
+    record_grid_segments,
+    record_kind,
+    record_width_height,
+)
 from units.si import Length
 
 
@@ -99,8 +104,6 @@ def plane(
     var geometry = BufferGeometry()
     indexed_surface(geometry, data^, normals^, uvs^, index^)
     record_kind(geometry, PLANE_GEOMETRY)
-    geometry.parameters.set_meters("width", width)
-    geometry.parameters.set_meters("height", height)
-    geometry.parameters.set_number("widthSegments", Float64(width_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    record_width_height(geometry, width, height)
+    record_grid_segments(geometry, width_segments, height_segments)
     return geometry^
