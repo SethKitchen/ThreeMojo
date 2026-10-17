@@ -811,6 +811,23 @@ def midpoint(a: Vector3, b: Vector3) -> Vector3:
     return (a + b) * Float32(0.5)
 
 
+def centroid(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+    """Return the average of three points.
+
+    Args:
+        a: The first point.
+        b: The second point.
+        c: The third point.
+
+    Returns:
+        Each component is the average of the three.
+
+    Raises:
+        Error: Never.
+    """
+    return (a + b + c) * (Float32(1) / 3)
+
+
 def mix_delta3(start: Vector3, end: Vector3, t: Float32) -> Vector3:
     """Return `start` moved toward `end` by `t`.
 

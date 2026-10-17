@@ -29,7 +29,7 @@ from math.triangle_normal import (
     _triangle_cross_wide,
 )
 from math.utils import clamp, max3, min3, saturate
-from math.vector3 import Vector3
+from math.vector3 import Vector3, centroid
 from std.math import sqrt
 
 # A segment whose squared length is at most this is a point to
@@ -176,7 +176,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Returns:
             The centroid.
         """
-        return (self.a + self.b + self.c) * (Float32(1) / 3)
+        return centroid(self.a, self.b, self.c)
 
     def plane(self) raises -> Plane:
         """Return the plane the triangle lies in. three.js: `getPlane`.

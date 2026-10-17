@@ -59,7 +59,7 @@ from extensions.humanoid.skeleton.leg.femur.mass import (
     femur_mass_from_dimensions,
     femur_occupancy,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, centroid
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -841,12 +841,8 @@ def _max_positive_centroid(
         var a = pos.vector3(ia)
         var b = pos.vector3(ib)
         var c = pos.vector3(ic)
-        var centroid = Vector3(
-            (a.x + b.x + c.x) * Float32(1.0 / 3.0),
-            (a.y + b.y + c.y) * Float32(1.0 / 3.0),
-            (a.z + b.z + c.z) * Float32(1.0 / 3.0),
-        )
-        var d = field.distance(centroid)
+        var center = centroid(a, b, c)
+        var d = field.distance(center)
         if d > worst:
             worst = d
     return worst

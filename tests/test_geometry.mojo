@@ -26,7 +26,7 @@ from geometries.sphere import sphere
 from geometries.torus import torus, torus_knot
 from geometries.tube import tube
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, centroid
 from std.math import asin, cos, isfinite, nan, pi, sin, sqrt
 from std.memory import bitcast
 from std.testing import (
@@ -1776,7 +1776,7 @@ def assert_faces_wind_outward_from_the_origin(geometry: BufferGeometry) raises:
         var c = geometry.corner(triangle, 2)
         var normal = b - a
         normal.cross(c - a)
-        var middle = (a + b + c) * (Float32(1) / 3)
+        var middle = centroid(a, b, c)
         assert_true(normal.dot(middle) > 0, "a face winds inward")
 
 
