@@ -823,11 +823,6 @@ def check_halftone(settings: HalftoneSettings) raises:
         raise Error("A halftone blending runs from zero to one")
 
 
-def _hypot(x: Float32, y: Float32) -> Float32:
-    """Return the length of (x, y): the shader's `hypot`."""
-    return length2(x, y)
-
-
 def dot_radius_distance(
     shape: HalftoneShape,
     channel: Float32,
@@ -852,7 +847,7 @@ def dot_radius_distance(
     Returns:
         The dot's radius less the point's distance: positive inside.
     """
-    var dist = _hypot(coord.x - p.x, coord.y - p.y)
+    var dist = length2(coord.x - p.x, coord.y - p.y)
     var rad = channel
     if shape == HALFTONE_DOT:
         rad = (abs(rad) ** 1.125) * rad_max
@@ -869,7 +864,7 @@ def dot_radius_distance(
     elif shape == HALFTONE_LINE:
         rad = (abs(rad) ** 1.5) * rad_max
         var dot_p = (p.x - coord.x) * normal.x + (p.y - coord.y) * normal.y
-        dist = _hypot(normal.x * dot_p, normal.y * dot_p)
+        dist = length2(normal.x * dot_p, normal.y * dot_p)
     else:
         # `HALFTONE_SQUARE`, the only shape left once it is checked.
         var theta = atan2_float32(p.y - coord.y, p.x - coord.x) - angle
@@ -925,12 +920,12 @@ def reference_cell(
     var dot_normal = n.x * p.x + n.y * p.y
     var dot_line = -n.y * p.x + n.x * p.y
     var offset = Vector2(n.x * dot_normal, n.y * dot_normal)
-    var offset_normal = glsl_mod(_hypot(offset.x, offset.y), step)
+    var offset_normal = glsl_mod(length2(offset.x, offset.y), step)
     var normal_dir = Float32(1) if dot_normal < 0 else Float32(-1)
     var normal_scale = (
         -offset_normal if offset_normal < threshold else step - offset_normal
     ) * normal_dir
-    var offset_line = glsl_mod(_hypot(p.x - offset.x, p.y - offset.y), step)
+    var offset_line = glsl_mod(length2(p.x - offset.x, p.y - offset.y), step)
     var line_dir = Float32(1) if dot_line < 0 else Float32(-1)
     var line_scale = (
         -offset_line if offset_line < threshold else step - offset_line

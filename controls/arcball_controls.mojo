@@ -90,7 +90,7 @@ from math.projection import look_at
 from math.quaternion import Quaternion
 from math.utils import clamp
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
 from std.math import acos, atan, atan2, cos, inf, pi, sin, sqrt, tan
 from units.si import (
@@ -311,19 +311,6 @@ def _moved(offset: Vector3) -> Matrix4:
         The matrix.
     """
     return translation(offset.x, offset.y, offset.z)
-
-
-def _angle_to(a: Vector3, b: Vector3) -> Float32:
-    """Return the angle between two vectors. three.js: `angleTo`.
-
-    Args:
-        a: One vector.
-        b: The other.
-
-    Returns:
-        The angle in radians, or a quarter turn if either has no length.
-    """
-    return a.angle_to(b).to(RADIAN)
 
 
 def _distance(a: Vector3, b: Vector3) -> Float32:
@@ -1440,7 +1427,7 @@ struct ArcballControls(Copyable, Movable):
         var start = self._start_cursor
         var current = self._current_cursor
         var distance = _distance(start, current)
-        var angle = _angle_to(start, current)
+        var angle = radians_between(start, current)
         var amount = max(distance / self._tb_radius, angle) * self.rotate_speed
         self._apply(
             lens, self._rotate(self._rotation_axis(start, current), amount)
