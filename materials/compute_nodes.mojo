@@ -433,6 +433,22 @@ def _zero_of(mut graph: NodeGraph, type: ValueType, x: Float32) -> NodeRef:
     return graph.float(x)
 
 
+def require_invocation_count(count: Int) raises:
+    """Refuse a compute run of no invocations.
+
+    Args:
+        count: How many invocations run.
+
+    Returns:
+        Nothing. The call returns when the count is one or more.
+
+    Raises:
+        Error: If the count is not positive.
+    """
+    if count <= 0:
+        raise Error("A compute node runs one invocation or more")
+
+
 struct ComputeKernel(Movable):
     """A compute program being built, three.js's `Fn( () => { ... } )`
     before `.compute( count )`: a `NodeGraph` for the values and the
@@ -1514,8 +1530,7 @@ struct ComputeKernel(Movable):
             Error: If a count is out of range, the kernel has no statement,
                 or the graph is refused (see `NodeGraph.compile_roots`).
         """
-        if count <= 0:
-            raise Error("A compute node runs one invocation or more")
+        require_invocation_count(count)
         if workgroup_size <= 0 or workgroup_size > MAX_WORKGROUP_SIZE:
             raise Error(
                 "A workgroup has one to "
@@ -1649,8 +1664,7 @@ struct ComputeNode(Copyable, Movable):
         Raises:
             Error: If `count` is not positive.
         """
-        if count <= 0:
-            raise Error("A compute node runs one invocation or more")
+        require_invocation_count(count)
         self.count = count
 
     def workgroups(self) -> Int:

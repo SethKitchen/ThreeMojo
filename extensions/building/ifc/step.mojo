@@ -125,6 +125,22 @@ struct StepEntity(Copyable, Movable):
         self.arguments = arguments^
 
 
+def require_step_real(value: Float64) raises:
+    """Refuse a STEP real that is not finite.
+
+    Args:
+        value: The real.
+
+    Returns:
+        Nothing. The call returns when the real is finite.
+
+    Raises:
+        Error: If the real is not finite.
+    """
+    if not isfinite(value):
+        raise Error("A STEP real must be finite")
+
+
 struct StepFile(Movable):
     """A STEP physical file: header entries, data entities and the values
     they hold."""
@@ -170,8 +186,7 @@ struct StepFile(Movable):
         Raises:
             Error: If the real is not finite.
         """
-        if not isfinite(value):
-            raise Error("A STEP real must be finite")
+        require_step_real(value)
         return self._push(StepValue(REAL, 0, value, "", List[Int]()))
 
     def string(mut self, text: String) -> Int:
@@ -575,8 +590,7 @@ def format_real(value: Float64) raises -> String:
     Raises:
         Error: If the real is not finite.
     """
-    if not isfinite(value):
-        raise Error("A STEP real must be finite")
+    require_step_real(value)
     var parts = String(value).split("e")
     var mantissa = String(parts[0])
     var exponent = String("")

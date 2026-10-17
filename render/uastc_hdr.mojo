@@ -949,6 +949,38 @@ def _bad_weight_count(count: Int, bits: Int) -> Bool:
     return count > MAX_GRID_WEIGHTS or bits < 24 or bits > 96
 
 
+def require_astc_profile(profile: AstcProfile) raises:
+    """Refuse an ASTC profile that is not one of the three.
+
+    Args:
+        profile: UNORM, sRGB, or HDR.
+
+    Returns:
+        Nothing. The call returns when the profile is valid.
+
+    Raises:
+        Error: If the profile is not valid.
+    """
+    if not profile.is_valid():
+        raise Error("ASTC: invalid profile")
+
+
+def require_astc_block(block_size: Int) raises:
+    """Refuse an ASTC block that is not 4x4 or 6x6.
+
+    Args:
+        block_size: The width and height of each block.
+
+    Returns:
+        Nothing. The call returns when the block is four or six.
+
+    Raises:
+        Error: If the block is another size.
+    """
+    if block_size != 4 and block_size != 6:
+        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+
+
 def astc_block(
     data: List[UInt8],
     at: Int,
@@ -978,10 +1010,8 @@ def astc_block(
             fit, or a malformed void extent. Also invalid sizes or profiles,
             a truncated block, or an HDR endpoint in an LDR profile.
     """
-    if not profile.is_valid():
-        raise Error("ASTC: invalid profile")
-    if block_size != 4 and block_size != 6:
-        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+    require_astc_profile(profile)
+    require_astc_block(block_size)
     if at < 0 or at > len(data) or len(data) - at < UASTC_BLOCK_BYTES:
         raise Error("ASTC: a block is truncated")
     var bits = _Bits(data, at, False)
@@ -1177,10 +1207,8 @@ def _astc_image[
         Error: If dimensions, profile, footprint or payload are invalid,
             the decoded image exceeds its resource bound, or a block is malformed.
     """
-    if not profile.is_valid():
-        raise Error("ASTC: invalid profile")
-    if block_size != 4 and block_size != 6:
-        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+    require_astc_profile(profile)
+    require_astc_block(block_size)
     if not positive_extent(width, height):
         raise Error("ASTC: dimensions must be positive")
     check_decoded_size(width, height, profile == ASTC_HDR)

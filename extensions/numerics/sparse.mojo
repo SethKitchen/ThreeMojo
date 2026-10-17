@@ -18,6 +18,24 @@ from std.math import isfinite
 from extensions.numerics.vector import zeros
 
 
+def require_matrix_index(row: Int, col: Int, size: Int) raises:
+    """Refuse a row or a column outside a square matrix.
+
+    Args:
+        row: The row index.
+        col: The column index.
+        size: How many rows and columns the matrix has.
+
+    Returns:
+        Nothing. The call returns when both indices name an entry.
+
+    Raises:
+        Error: If either index is negative or past the last entry.
+    """
+    if row < 0 or row >= size or col < 0 or col >= size:
+        raise Error("A matrix index is out of range")
+
+
 struct SparseBuilder(Movable):
     """A square matrix under assembly, as a list of triplets."""
 
@@ -55,8 +73,7 @@ struct SparseBuilder(Movable):
         Raises:
             Error: If an index is out of range or the value is not finite.
         """
-        if row < 0 or row >= self.size or col < 0 or col >= self.size:
-            raise Error("A matrix index is out of range")
+        require_matrix_index(row, col, self.size)
         if not isfinite(value):
             raise Error("A matrix entry must be a finite number")
         if value == 0:
@@ -181,8 +198,7 @@ struct CsrMatrix(Copyable, Movable):
         Raises:
             Error: If an index is out of range.
         """
-        if row < 0 or row >= self.size or col < 0 or col >= self.size:
-            raise Error("A matrix index is out of range")
+        require_matrix_index(row, col, self.size)
         var lo = self.row_start[row]
         var hi = self.row_start[row + 1]
         while lo < hi:

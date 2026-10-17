@@ -1105,6 +1105,22 @@ struct Fn(Copyable, Movable):
         return answer
 
 
+def require_unsigned_width(width: Int) raises:
+    """Refuse an unsigned uniform wider than four components.
+
+    Args:
+        width: How many components the uniform has.
+
+    Returns:
+        Nothing. The call returns when the width is four or less.
+
+    Raises:
+        Error: If the width is above four.
+    """
+    if width > 4:
+        raise Error("An unsigned uniform has one to four components")
+
+
 struct NodeGraph(Copyable, Movable):
     """A graph of nodes being built, three.js's TSL expressions.
 
@@ -1523,8 +1539,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If the width is outside one through four, or the name
                 is empty or already used.
         """
-        if width > 4:
-            raise Error("An unsigned uniform has one to four components")
+        require_unsigned_width(width)
         var lanes = Lanes(0)
         for lane in range(width):  # pragma: no branch
             lanes[lane] = bitcast[DType.float32](value[lane])
@@ -6431,8 +6446,7 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the name, width, or unsigned type does not match.
         """
-        if width > 4:
-            raise Error("An unsigned uniform has one to four components")
+        require_unsigned_width(width)
         var lanes = Lanes(0)
         for lane in range(width):  # pragma: no branch
             lanes[lane] = bitcast[DType.float32](value[lane])

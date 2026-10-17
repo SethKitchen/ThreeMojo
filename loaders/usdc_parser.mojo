@@ -169,6 +169,22 @@ comptime MAX_COUNT = 1 << 26
 comptime _MAX_DEPTH = 64
 
 
+def require_usdc_count(count: Int) raises:
+    """Refuse a count past this reader's limit.
+
+    Args:
+        count: How many items.
+
+    Returns:
+        Nothing. The call returns when the count is inside the limit.
+
+    Raises:
+        Error: If the count is negative or past `MAX_COUNT`.
+    """
+    if count < 0 or count > MAX_COUNT:
+        raise Error("USDC: a count past this reader's limit")
+
+
 def is_crate(bytes: Span[UInt8, _]) -> Bool:
     """Return three.js's `isCrateFile`: the bytes start with `PXR-USDC`.
 
@@ -402,8 +418,7 @@ def decompress_integers32(
         Error: If the count is past `MAX_COUNT`, or the LZ4 bytes are
             refused.
     """
-    if count < 0 or count > MAX_COUNT:
-        raise Error("USDC: a count past this reader's limit")
+    require_usdc_count(count)
     var size = count * 4 + ((count * 2 + 7) >> 3) + 4
     return decode_integers32(decompress_lz4(compressed, size), count)
 
@@ -580,8 +595,7 @@ struct _Crate(Movable):
             Error: If the count is negative or past `MAX_COUNT`, or the
                 items would pass the end of the file.
         """
-        if count < 0 or count > MAX_COUNT:
-            raise Error("USDC: a count past this reader's limit")
+        require_usdc_count(count)
         self.need(count * size)
 
     def unsigned(mut self, width: Int) raises -> Int:
@@ -756,8 +770,7 @@ struct _Crate(Movable):
             Error: If it passes the end or `MAX_COUNT`.
         """
         var value = self.unsigned(8)
-        if value < 0 or value > MAX_COUNT:
-            raise Error("USDC: a count past this reader's limit")
+        require_usdc_count(value)
         return value
 
     def integers(mut self, count: Int) raises -> List[Int]:

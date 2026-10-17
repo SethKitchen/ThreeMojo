@@ -382,6 +382,25 @@ def _clip_plane[
     return kept^
 
 
+def require_depth_planes(near: Float32, far: Float32) raises:
+    """Refuse depth planes that are not finite and ordered.
+
+    Args:
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+
+    Returns:
+        Nothing. The call returns when both planes are finite and far lies
+        beyond near.
+
+    Raises:
+        Error: If either plane is not finite, or far does not lie beyond
+            near.
+    """
+    if not isfinite(near) or not isfinite(far) or far <= near:
+        raise Error("The depth planes must be finite, with far beyond near")
+
+
 def clip_depth(
     a: ClipVertex,
     b: ClipVertex,
@@ -433,8 +452,7 @@ def clip_depth(
             prohibition lives in `math.projection.perspective` and
             `PerspectiveCamera`, which both still refuse it.
     """
-    if not isfinite(near) or not isfinite(far) or far <= near:
-        raise Error("The depth planes must be finite, with far beyond near")
+    require_depth_planes(near, far)
     return clip_ordered(a, b, c, near, far, sides, any_of)
 
 
@@ -584,8 +602,7 @@ def clip_segment(
             frustum inside out; see `clip_depth` on a near plane behind
             the camera.
     """
-    if not isfinite(near) or not isfinite(far) or far <= near:
-        raise Error("The depth planes must be finite, with far beyond near")
+    require_depth_planes(near, far)
 
     var first = a
     var second = b

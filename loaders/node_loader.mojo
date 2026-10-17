@@ -349,6 +349,23 @@ def _flag(
     return document.optional_boolean(item, key, default)
 
 
+def require_node_object(document: JsonDocument, item: Int) raises:
+    """Refuse a node JSON value that is not an object.
+
+    Args:
+        document: The JSON document.
+        item: The node.
+
+    Returns:
+        Nothing. The call returns when the node is an object.
+
+    Raises:
+        Error: If the node is not an object.
+    """
+    if document.kind(item) != OBJECT:
+        raise Error("Node JSON: a node must be an object")
+
+
 struct NodeLoader(Movable):
     """Reads node JSON into a `NodeGraph`: three.js's `NodeLoader`.
 
@@ -427,8 +444,7 @@ struct NodeLoader(Movable):
 
     def _index(mut self, document: JsonDocument, item: Int) raises -> String:
         """Index one node, and return its uuid."""
-        if document.kind(item) != OBJECT:
-            raise Error("Node JSON: a node must be an object")
+        require_node_object(document, item)
         var uuid = _text(document, item, "uuid")
         _ = _text(document, item, "type")
         if uuid in self._items:
@@ -451,8 +467,7 @@ struct NodeLoader(Movable):
         Raises:
             Error: If a node is refused; see `node`.
         """
-        if document.kind(item) != OBJECT:
-            raise Error("Node JSON: a node must be an object")
+        require_node_object(document, item)
         var list = document.get(item, "nodes")
         if list != NO_NODE:
             self.parse_nodes(document, list)

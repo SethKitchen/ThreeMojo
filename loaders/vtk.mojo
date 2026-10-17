@@ -1485,6 +1485,22 @@ def _slot_of(
     return slots[element]
 
 
+def require_vtk_piece(piece: Int) raises:
+    """Refuse a PolyData element that has no Piece.
+
+    Args:
+        piece: The Piece element, or `NO_ELEMENT`.
+
+    Returns:
+        Nothing. The call returns when a Piece is present.
+
+    Raises:
+        Error: If the Piece is absent.
+    """
+    if piece == NO_ELEMENT:
+        raise Error("VTK: the PolyData has no Piece")
+
+
 def parse_vtk_xml(text: String) raises -> BufferGeometry:
     """Read a VTK XML poly data file, three.js's `parseXML`.
 
@@ -1516,8 +1532,7 @@ def parse_vtk_xml(text: String) raises -> BufferGeometry:
         if poly_data < 0:
             raise Error("VTK: the file has no one PolyData")
         var piece = _only(document, poly_data, "Piece")
-        if piece == NO_ELEMENT:
-            raise Error("VTK: the PolyData has no Piece")
+        require_vtk_piece(piece)
         if piece != _MANY:
             var order: List[String] = [
                 "PointData",
@@ -1552,8 +1567,7 @@ def parse_vtk_xml(text: String) raises -> BufferGeometry:
     if poly_data == _MANY:
         raise Error("VTK: the file has more than one PolyData")
     var piece = _only(document, poly_data, "Piece")
-    if piece == NO_ELEMENT:
-        raise Error("VTK: the PolyData has no Piece")
+    require_vtk_piece(piece)
     _needs_attributes(document, root, "VTKFile")
     var compressed = document.has_attribute(root, "compressor")
     var header_type = _attribute_of(document, root, "header_type").or_else("")

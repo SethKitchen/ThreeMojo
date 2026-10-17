@@ -867,6 +867,22 @@ def _coordinates(
     return uvs.values.copy()
 
 
+def require_corner_indices(present: Bool) raises:
+    """Refuse faces that have no corner indices.
+
+    Args:
+        present: Whether the mesh carries corner indices.
+
+    Returns:
+        Nothing. The call returns when the indices are present.
+
+    Raises:
+        Error: If the indices are absent.
+    """
+    if not present:
+        raise Error("USD: faces with no corner indices")
+
+
 def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
     """Build a mesh's geometry, three.js's `_buildGeometry`.
 
@@ -890,8 +906,7 @@ def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
         indices = UsdArray(mesh.indices.values.copy())
     var pattern: Optional[List[Float64]] = None
     if mesh.counts.filled():
-        if not mesh.indices.present:
-            raise Error("USD: faces with no corner indices")
+        require_corner_indices(mesh.indices.present)
         var cut = triangulate_with_pattern(
             mesh.indices.values, mesh.counts.values, points, hole_map
         )
@@ -1054,8 +1069,7 @@ def build_usd_geometry_with_subsets(
             geometry.add_group(
                 start * 3, (len(order) - start) * 3, MaterialIndex(current)
             )
-    if not mesh.indices.present:
-        raise Error("USD: faces with no corner indices")
+    require_corner_indices(mesh.indices.present)
     var cut = triangulate_with_pattern(
         mesh.indices.values, counts, points, hole_map
     )

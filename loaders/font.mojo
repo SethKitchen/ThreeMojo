@@ -150,6 +150,22 @@ struct OutlineStep(Copyable, Movable):
         )
 
 
+def require_outline_drawn(drawn: Bool) raises:
+    """Refuse a move that draws nothing.
+
+    Args:
+        drawn: Whether the outline drew since the previous move.
+
+    Returns:
+        Nothing. The call returns when the outline drew.
+
+    Raises:
+        Error: If the outline moved and drew nothing.
+    """
+    if not drawn:
+        raise Error("an outline moves and draws nothing")
+
+
 struct Glyph(Copyable, Movable):
     """One character of a font: how far it moves the pen on, and its
     outline."""
@@ -178,15 +194,13 @@ struct Glyph(Copyable, Movable):
         var drawn = True
         for index in range(len(steps)):
             if steps[index].verb == MOVE_TO:
-                if not drawn:
-                    raise Error("an outline moves and draws nothing")
+                require_outline_drawn(drawn)
                 drawn = False
             elif index == 0:
                 raise Error("an outline draws before it moves")
             else:
                 drawn = True
-        if not drawn:
-            raise Error("an outline moves and draws nothing")
+        require_outline_drawn(drawn)
         self.advance = advance
         self.steps = steps^
 

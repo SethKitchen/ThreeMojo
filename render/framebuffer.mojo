@@ -857,6 +857,29 @@ def require_depth_length(length: Int, width: Int, height: Int) raises:
         raise Error("Depth buffer length does not match the dimensions")
 
 
+def require_pixel_length(
+    length: Int, width: Int, height: Int, channels: Int
+) raises:
+    """Refuse a pixel buffer whose length disagrees with the image.
+
+    Args:
+        length: How many bytes the buffer holds.
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+        channels: How many bytes one pixel holds.
+
+    Returns:
+        Nothing. The call returns when the buffer holds one pixel's bytes
+        for every pixel.
+
+    Raises:
+        Error: If the length is not the width times the height times the
+            channels.
+    """
+    if length != width * height * channels:
+        raise Error("Pixel buffer length does not match the dimensions")
+
+
 def require_downsample_factor(factor: Int) raises:
     """Refuse a downsample factor below one.
 
@@ -942,8 +965,7 @@ struct Framebuffer(Movable):
                 disagrees with them.
         """
         require_framebuffer_size(width, height)
-        if len(pixels) != width * height * Self.CHANNELS:
-            raise Error("Pixel buffer length does not match the dimensions")
+        require_pixel_length(len(pixels), width, height, Self.CHANNELS)
         self.width = width
         self.height = height
         self.pixels = pixels^
@@ -978,8 +1000,7 @@ struct Framebuffer(Movable):
                 length disagrees with them.
         """
         require_framebuffer_size(width, height)
-        if len(pixels) != width * height * Self.CHANNELS:
-            raise Error("Pixel buffer length does not match the dimensions")
+        require_pixel_length(len(pixels), width, height, Self.CHANNELS)
         require_depth_length(len(depth), width, height)
         self.width = width
         self.height = height

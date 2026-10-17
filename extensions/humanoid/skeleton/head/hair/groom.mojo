@@ -740,6 +740,22 @@ def _grow_guide(
         levels.append(lift)
 
 
+def require_hair_roots(count: Int) raises:
+    """Refuse a groom that grew no strand.
+
+    Args:
+        count: How many strands the groom holds.
+
+    Returns:
+        Nothing. The call returns when the groom holds a strand.
+
+    Raises:
+        Error: If the groom holds no strand.
+    """
+    if count == 0:
+        raise Error("No guide found a root on the scalp's hair")
+
+
 def groom_hair(
     dimensions: HeadMuscleDimensions,
     spec: GroomSpec,
@@ -816,8 +832,7 @@ def groom_hair(
             _follow(
                 groom, spec, points, normals, depths, key, follower + 1, lead
             )
-    if len(groom) == 0:
-        raise Error("No guide found a root on the scalp's hair")
+    require_hair_roots(len(groom))
     return groom^
 
 
@@ -1065,8 +1080,7 @@ def _designed(
         # Hair gathered to a tie is pulled straight over the scalp.
         var taut = travelled if tied else Float32(0)
         _finish(groom, strand, field, body, spec, probe, key, False, taut, True)
-    if len(groom) == 0:
-        raise Error("No guide found a root on the scalp's hair")
+    require_hair_roots(len(groom))
     return groom^
 
 
