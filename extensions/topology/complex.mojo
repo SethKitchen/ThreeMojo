@@ -21,6 +21,7 @@ information modeling of buildings using non-manifold topology with ASM
 and DesignScript" (2013).
 """
 
+from core.search import first_match
 from math.finite import require_finite_group
 from std.math import sqrt
 from extensions.topology.ids import (
@@ -373,11 +374,7 @@ struct CellComplex(Movable):
             var other = self.other_side(faces[i], c)
             if not other:
                 continue
-            var seen = False
-            for k in range(len(out)):
-                if out[k] == other.value():
-                    seen = True
-            if not seen:
+            if first_match(out, other.value()) < 0:
                 out.append(other.value())
         return out^
 

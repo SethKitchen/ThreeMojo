@@ -23,6 +23,7 @@ from core.buffer_geometry import (
 from core.object3d import Object3D
 from geometries.plane import plane
 from core.assets import Assets
+from core.search import first_match
 from materials.material import (
     BACK_SIDE,
     BLEND,
@@ -721,12 +722,7 @@ def test_a_sphere_shades_smoothly_across_a_triangle() raises:
     for y in range(HEIGHT):
         for x in range(WIDTH):
             var value = image.get_pixel(x, y).r
-            var known = False
-            for index in range(len(seen)):
-                if seen[index] == value:
-                    known = True
-                    break
-            if not known:
+            if first_match(seen, value) < 0:
                 seen.append(value)
                 shades += 1
     # A flat-shaded sphere would show one value per triangle band; smooth
