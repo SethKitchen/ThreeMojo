@@ -1,0 +1,157 @@
+# Streamline
+
+`extensions/streamline/` holds the half of NVIDIA's DLSS 4.5 Super Resolution and Ray Reconstruction integration that needs no graphics device. It does not run DLSS yet.
+
+The package types and checks everything that Streamline reads, builds the per-frame constants from a ThreeMojo camera, and checks the buffers of a frame. It also has an upscaler trait with a CPU fallback. A native binding will implement that trait. See [Extensions](Extensions).
+
+The values follow the Streamline 2.14.16 headers `sl_dlss.h`, `sl_dlss_d.h` and `sl_consts.h`, and its programming guides for [DLSS Super Resolution](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS.md) and [DLSS Ray Reconstruction](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_RR.md).
+
+## What is here and what is not
+
+| Part | State |
+|---|---|
+| Modes, presets and buffer kinds as types | Done |
+| Options of both features, with checks | Done |
+| Render size, jitter and the check of Streamline's reply | Done |
+| Per-frame constants from two cameras | Done |
+| Check of the tagged buffers of a frame | Done |
+| `Upscaler` trait and the `SpatialUpscaler` fallback | Done |
+| Loading `sl.interposer` and calling `slEvaluateFeature` | Open, see [the native binding](#the-native-binding) |
+
+## Call it
+
+This example plans a Balanced 4K frame with the DLSS 4.5 model, checks its buffers, and builds the constants.
+
+```mojo
+from cameras.perspective_camera import PerspectiveCamera
+from core.scene import Scene
+from extensions.streamline.constants import CameraSnapshot, frame_constants
+from extensions.streamline.jitter import jitter_offset, jitter_phase_count
+from extensions.streamline.kinds import (
+    BUFFER_DEPTH,
+    BUFFER_INPUT_COLOR,
+    BUFFER_MOTION_VECTORS,
+    BUFFER_OUTPUT_COLOR,
+    MODE_BALANCED,
+    MOTION_PIXELS,
+    SR_PRESET_M,
+)
+from extensions.streamline.options import SuperResolutionOptions
+from extensions.streamline.sizing import FrameSize, estimated_render_size
+from extensions.streamline.tags import TaggedBuffer, check_super_resolution_tags
+from math.vector3 import Vector3
+from units.si import DEGREE, METER, Angle, Length
+
+var output = FrameSize(3840, 2160)
+var options = SuperResolutionOptions(MODE_BALANCED, output.width, output.height)
+options.use_dlss_4_5(SR_PRESET_M)
+var render = estimated_render_size(options.mode, output)
+
+var tags = List[TaggedBuffer]()
+tags.append(TaggedBuffer(BUFFER_DEPTH, render.width, render.height, 1, False))
+tags.append(TaggedBuffer(BUFFER_MOTION_VECTORS, render.width, render.height, 2, False))
+tags.append(TaggedBuffer(BUFFER_INPUT_COLOR, render.width, render.height, 4, False))
+tags.append(TaggedBuffer(BUFFER_OUTPUT_COLOR, output.width, output.height, 4, False))
+check_super_resolution_tags(options, render, tags)
+
+var camera = PerspectiveCamera(
+    Angle(50.0, DEGREE), 16.0 / 9.0, Length(0.1, METER), Length(100.0, METER)
+)
+camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+var now = CameraSnapshot(camera, Scene())
+camera.place(Vector3(0.1, 0, 5), Vector3(0.1, 0, 0))
+var before = CameraSnapshot(camera, Scene())
+var phases = jitter_phase_count(render, output)
+var constants = frame_constants(
+    now, before, render, jitter_offset(7, phases), MOTION_PIXELS, False
+)
+```
+
+Every check raises an `Error` that names the field. The example runs on the pinned toolchain.
+
+## Modes and presets
+
+`UpscaleMode`, `SuperResolutionPreset`, `DenoiserPreset` and `NormalRoughnessMode` carry the numbers of `sl::DLSSMode`, `sl::DLSSPreset`, `sl::DLSSDPreset` and `sl::DLSSDNormalRoughnessMode`. Each has `is_valid`. A binding can pass the number on as it is.
+
+| Feature | Type | Valid values | DLSS 4.5 model |
+|---|---|---|---|
+| Both | `UpscaleMode` | 0 to 6: off, performance, balanced, quality, ultra performance, ultra quality, DLAA | |
+| Super Resolution | `SuperResolutionPreset` | default, and E to O | `SR_PRESET_L` and `SR_PRESET_M` |
+| Ray Reconstruction | `DenoiserPreset` | default, and D to O | `RR_PRESET_F` |
+
+Streamline removed the presets A to D of Super Resolution and A to C of Ray Reconstruction. Their numbers are not valid. Streamline replaces some presets by the default model. `reverts_to_default` says which.
+
+DLSS 4.5 is the second-generation transformer model. NVIDIA names its Super Resolution presets M and L. Streamline's header calls Ray Reconstruction preset F "the latest and default transformer model". The headers do not name a DLSS version, so `is_dlss_4_5` records that mapping and nothing more.
+
+`use_dlss_4_5` on either options type sets the preset of every mode at once. Super Resolution takes L, which is sharper, or M, which is closer in speed to the first-generation model.
+
+## Options
+
+`SuperResolutionOptions` is `sl::DLSSOptions`, and `RayReconstructionOptions` is `sl::DLSSDOptions`. The fields keep Streamline's order and defaults. `check_super_resolution` and `check_ray_reconstruction` refuse what no Streamline call can use:
+
+- A mode, a preset or a normal and roughness mode that is not valid.
+- An output side of zero, or one that does not fit the `uint32_t` field.
+- A pre-exposure or an exposure scale that is not finite and positive.
+- For Ray Reconstruction, a view matrix that is not finite, or two view matrices that are not inverses.
+
+## Render size
+
+`estimated_render_size` gives the size to plan an allocation with before a device exists. It uses NVIDIA's published ratios, rounded to the nearest pixel. A 4K output gives 2560 by 1440 in Quality, 2227 by 1253 in Balanced and 1920 by 1080 in Performance.
+
+The size that `slDLSSGetOptimalSettings` returns is the size to render at. `OptimalSettings` holds that reply. `check_optimal_settings` refuses a reply that cannot be right. `check_render_size` says whether the size of a dynamic-resolution frame lies in the range that DLSS accepts.
+
+## Jitter
+
+DLSS needs a camera moved by a fraction of a pixel each frame. `jitter_offset` gives the Halton offsets in bases two and three, less a half, in render pixels. They are the offsets that `JitteredCamera` takes.
+
+`jitter_phase_count` gives eight samples for every output pixel that one render pixel covers. That is this port's rule. Streamline requires no count.
+
+Streamline does not say which way its `jitterOffset` points. A binding must check the sign against a running DLSS.
+
+## Constants
+
+`frame_constants` builds `sl::Constants` from two `CameraSnapshot` values: this frame's camera and the last frame's. It follows `sl_consts.h`:
+
+- `clip_to_prev_clip` takes a point from this frame's clip space to the last frame's. Only the camera moves. `prev_clip_to_clip` is its inverse.
+- None of the four matrices carries the jitter. Take the snapshot before the camera is jittered.
+- The camera's position and axes are in world space. The field of view is vertical. `reset` says that the last frame is unrelated, and then the last camera is ignored.
+- `mvec_scale` is one and one for `MOTION_NORMALIZED`, and one over the render size for `MOTION_PIXELS`.
+
+ThreeMojo's own velocity buffer holds a displacement in normalized device coordinates. A binding must convert it to the unit that it declares.
+
+## Tagged buffers
+
+`check_super_resolution_tags` and `check_ray_reconstruction_tags` ask what the programming guides ask of a frame, and name the buffer that fails.
+
+| Feature | Needs |
+|---|---|
+| Super Resolution | Depth, motion vectors and input color at the render size. Output color at the output size. |
+| Ray Reconstruction | Noisy input color, motion vectors, diffuse albedo, specular albedo and output color. Depth or linear depth. Normals and roughness. Specular motion vectors or specular hit distance. |
+
+The exposure is optional for both. Ray Reconstruction takes two buffers for the normals and the roughness in the unpacked mode, and one `BUFFER_NORMAL_ROUGHNESS` in the packed mode.
+
+Each buffer must have the size of its kind, the number of channels that the guides give, and, for an albedo, a linear encoding. A kind that the feature does not read is accepted. Integrations tag one set of buffers for every feature.
+
+## The fallback upscaler
+
+`Upscaler` is the trait a program draws through. `SpatialUpscaler` implements it on the CPU with the EASU and RCAS passes of [FSR1](Post-processing). It runs where DLSS cannot.
+
+It is not DLSS. It reads the color only, so it adds no detail that the render lacks. It does not denoise, so `supports` is false for Ray Reconstruction. A program that wants a denoised path-traced frame without DLSS must denoise it first with the passes in [Post-processing](Post-processing).
+
+## The native binding
+
+The binding is not written. Three things block it today.
+
+1. **The platform.** Streamline's documentation covers Windows with Direct3D 11, Direct3D 12 and Vulkan 1.2. It does not mention Linux or macOS. ThreeMojo runs on macOS, Linux and WSL 2. Its GPU backend is MAX, which opens no Direct3D or Vulkan device. `slEvaluateFeature` needs the command list of such a device, and `slSetTag` needs its resources.
+2. **The runtime.** `sl.interposer`, `sl.dlss` and `nvngx_dlss` come from NVIDIA. NVIDIA ships the DLSS runtime as a separate product with its own terms. This repository does not hold it.
+3. **Unstated conventions.** The headers leave four conventions open. They are the sign of the jitter, the layout of a `float4x4`, the range of the clip depth and the unit of the motion vectors. A binding must settle each against a running DLSS.
+
+The tracking issue is [#771](https://github.com/SethKitchen/ThreeMojo/issues/771). It closes when a program on an RTX machine evaluates both features through `sl.interposer`, and a test compares the result with `SpatialUpscaler`.
+
+## Differences from Streamline
+
+- The mode and the output size have no default. Streamline's defaults, `eOff` and an invalid size, cannot run.
+- The deprecated `sharpness` field and the axes of the on-screen indicator are not carried.
+- A `Bool` is always true or false. Streamline's `Boolean` has a third value, `eInvalid`.
+- An exposure that is not positive is refused. The headers do not say so.
+- `Feature`, `BufferKind` and `MotionVectorSpace` are this port's numbering. A binding maps them to Streamline's feature ids and resource tags.
