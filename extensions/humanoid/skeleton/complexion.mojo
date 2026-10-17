@@ -34,18 +34,13 @@ from extensions.humanoid.genome import (
 from math.norm import squared_length2
 from math.smoothstep import clamped_smoothstep, hermite_fade
 from math.utils import clamp, mix_bilinear, mix_delta
-from render.framebuffer import Color
+from render.framebuffer import Color, rounded_byte
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
 from std.math import cos, floor, max, min, sin, sqrt
 
 comptime MIN_MAP = 8
 comptime MAX_MAP = 512
-
-
-def _byte(value: Float32) -> UInt8:
-    """Return `value` rounded and held to one byte."""
-    return UInt8(Int(clamp(value, 0, 255) + Float32(0.5)))
 
 
 @fieldwise_init
@@ -78,7 +73,9 @@ struct Tone(ImplicitlyCopyable):
         Returns:
             The color, each channel rounded and held to 0 through 255.
         """
-        return Color(_byte(self.r), _byte(self.g), _byte(self.b))
+        return Color(
+            rounded_byte(self.r), rounded_byte(self.g), rounded_byte(self.b)
+        )
 
 
 def _ramp(stops: List[Tone], t: Float32) -> Tone:
@@ -408,9 +405,9 @@ def skin_albedo_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
             r = mix_delta(r, r * Float32(0.55), mole)
             g = mix_delta(g, g * Float32(0.45), mole)
             b = mix_delta(b, b * Float32(0.42), mole)
-            pixels.append(_byte(r))
-            pixels.append(_byte(g))
-            pixels.append(_byte(b))
+            pixels.append(rounded_byte(r))
+            pixels.append(rounded_byte(g))
+            pixels.append(rounded_byte(b))
             pixels.append(255)
     return pixels^
 
@@ -456,7 +453,7 @@ def skin_relief_pixels(size: Int) raises -> List[UInt8]:
                 - Float32(0.45) * pore
                 + Float32(0.25) * broad
             )
-            var level = _byte(height * 255)
+            var level = rounded_byte(height * 255)
             pixels.append(level)
             pixels.append(level)
             pixels.append(level)
@@ -547,9 +544,9 @@ def iris_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
                     mix_delta(base.g * 0.4, tone.g, t),
                     mix_delta(base.b * 0.4, tone.b, t),
                 )
-            pixels.append(_byte(tone.r))
-            pixels.append(_byte(tone.g))
-            pixels.append(_byte(tone.b))
+            pixels.append(rounded_byte(tone.r))
+            pixels.append(rounded_byte(tone.g))
+            pixels.append(rounded_byte(tone.b))
             pixels.append(255)
     return pixels^
 
@@ -607,9 +604,9 @@ def hair_pixels(size: Int, genome: Genome) raises -> List[UInt8]:
             var strand = _fbm(fx + sway, fy, size, 64, 3, 137, 2)
             var clump = _fbm(fx + sway, fy, size, 12, 2, 139, 2)
             var shade = 1 + Float32(1.1) * strand + Float32(0.5) * clump
-            pixels.append(_byte(base.r * shade))
-            pixels.append(_byte(base.g * shade))
-            pixels.append(_byte(base.b * shade))
+            pixels.append(rounded_byte(base.r * shade))
+            pixels.append(rounded_byte(base.g * shade))
+            pixels.append(rounded_byte(base.b * shade))
             pixels.append(255)
     return pixels^
 

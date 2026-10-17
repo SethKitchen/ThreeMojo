@@ -24,6 +24,7 @@ so each channel is rounded after each disc.
 from core.extent import positive_extent
 from math.norm import squared_length2, squared_length3
 from math.utils import SeededRandom, mix_delta
+from render.framebuffer import rounded_byte
 from render.srgb import LINEAR
 from render.texture import BILINEAR, REPEAT, Texture
 from std.math import ceil, floor, sqrt
@@ -34,12 +35,6 @@ comptime FLAKE_COUNT = 4000
 # the farthest is from the pixel's center: 0.375 across and down.
 comptime _SAMPLES = 4
 comptime _REACH = 0.5304
-
-
-def _byte(value: Float64) -> UInt8:
-    """Return a CSS `rgb()` channel as a canvas keeps it: rounded to the
-    nearest whole number, and held from 0 to 255."""
-    return UInt8(Int(max(0.0, min(255.0, value)) + 0.5))
 
 
 def _coverage(
@@ -106,9 +101,9 @@ def flakes_texture(
         ny /= length
         nz /= length
         var color: List[Float64] = [
-            Float64(_byte(nx * 127 + 127)),
-            Float64(_byte(ny * 127 + 127)),
-            Float64(_byte(nz * 255)),
+            Float64(rounded_byte(nx * 127 + 127)),
+            Float64(rounded_byte(ny * 127 + 127)),
+            Float64(rounded_byte(nz * 255)),
         ]
         var left = max(0, Int(floor(center_x - radius)))
         var right = min(width - 1, Int(ceil(center_x + radius)))
@@ -124,7 +119,7 @@ def flakes_texture(
                 var at = (y * width + x) * 4
                 for channel in range(3):  # pragma: no branch
                     var old = Float64(pixels[at + channel])
-                    pixels[at + channel] = _byte(
+                    pixels[at + channel] = rounded_byte(
                         mix_delta(old, color[channel], share)
                     )
     return Texture(width, height, pixels^, REPEAT, BILINEAR, LINEAR)
