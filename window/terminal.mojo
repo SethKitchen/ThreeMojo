@@ -35,7 +35,7 @@ from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
-from window.present import require_presented_frame
+from window.present import require_open, require_presented_frame
 
 comptime STANDARD_INPUT = 0
 comptime STANDARD_OUTPUT = 1
@@ -305,8 +305,7 @@ struct TerminalWindow(Movable):
             Error: If the window is closed, or the terminal cannot be
                 written.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         _write_all(self.output_fd, SIZE_QUERY)
 
     def resize(mut self, width: Int, height: Int) raises:
@@ -321,8 +320,7 @@ struct TerminalWindow(Movable):
             Error: If the window is closed, the size is not positive, or
                 the terminal cannot be written.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         if not positive_extent(width, height):
             raise Error(
                 "A window's size must be positive, got ", width, "x", height
@@ -349,8 +347,7 @@ struct TerminalWindow(Movable):
                 the terminal cannot be read. A timeout must be nonnegative,
                 finite, and fit native poll milliseconds.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         var milliseconds = poll_milliseconds(timeout)
         # `struct pollfd` is an int and two shorts: the descriptor, then
         # the events asked for in the low half of the next int, and the

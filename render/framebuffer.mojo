@@ -822,6 +822,28 @@ def _encoded(bits: Int) -> UInt8:
     return _to_byte(linear_to_srgb(bitcast[DType.float32](UInt32(bits))))
 
 
+def pixel_slot(x: Int, y: Int, width: Int, height: Int) raises -> Int:
+    """Return the index of pixel `(x, y)` in a row-major image.
+
+    Rows run from the top. The index is `y * width + x`.
+
+    Args:
+        x: Column.
+        y: Row from the top.
+        width: The image width in pixels.
+        height: The image height in pixels.
+
+    Returns:
+        The pixel's index, from zero.
+
+    Raises:
+        Error: If the coordinate is outside the image.
+    """
+    if x < 0 or x >= width or y < 0 or y >= height:
+        raise Error("Pixel coordinate out of bounds")
+    return y * width + x
+
+
 struct Framebuffer(Movable):
     """A width x height buffer of RGBA pixels, stored row-major from the top."""
 
@@ -919,9 +941,7 @@ struct Framebuffer(Movable):
 
     def _offset(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y)'s red channel."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return (y * self.width + x) * Self.CHANNELS
+        return pixel_slot(x, y, self.width, self.height) * Self.CHANNELS
 
     def set_pixel(mut self, x: Int, y: Int, color: Color) raises:
         """Write `color` to pixel (x, y)."""
@@ -933,9 +953,7 @@ struct Framebuffer(Movable):
 
     def depth_at(self, x: Int, y: Int) raises -> Float32:
         """Return the depth recorded at pixel (x, y)."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return self.depth[y * self.width + x]
+        return self.depth[pixel_slot(x, y, self.width, self.height)]
 
     def test_depth(mut self, x: Int, y: Int, z: Float32) raises -> Bool:
         """Return True if `z` is nearer than what is stored, and claim it.
@@ -944,9 +962,7 @@ struct Framebuffer(Movable):
         invites the caller to do one without the other, which is how a depth
         buffer quietly stops working.
         """
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        var slot = y * self.width + x
+        var slot = pixel_slot(x, y, self.width, self.height)
         if z >= self.depth[slot]:
             return False
         self.depth[slot] = z

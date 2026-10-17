@@ -50,7 +50,7 @@ from std.ffi import OwnedDLHandle, c_int, external_call
 from std.os.path import exists
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
-from window.present import require_presented_frame
+from window.present import require_open, require_presented_frame
 
 # Linux finds Xlib by its soname.
 comptime LIBRARY = "libX11.so.6"
@@ -438,8 +438,7 @@ struct X11Window(Movable):
         Raises:
             Error: If the window is closed or the size is not positive.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         if not positive_extent(width, height):
             raise Error(
                 "A window's size must be positive, got ", width, "x", height
@@ -465,8 +464,7 @@ struct X11Window(Movable):
             Error: If the window is closed, or the timeout is negative,
                 nonfinite, or too large for native poll milliseconds.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         var milliseconds = poll_milliseconds(timeout)
         var events = List[InputEvent]()
         if self._lib.call["XPending", c_int](self._display) == 0:
