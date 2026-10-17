@@ -50,6 +50,7 @@ from lights.light import (
     PROJECTOR_SPOT,
     spot_light,
 )
+from lights.shadow import _clip_point
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureStore
@@ -102,24 +103,10 @@ def projector_attenuation(
         From zero outside the rectangle, or behind the light, to one
         well inside it.
     """
-    var x = (
-        frame[0] * position.x
-        + frame[4] * position.y
-        + frame[8] * position.z
-        + frame[12]
-    )
-    var y = (
-        frame[1] * position.x
-        + frame[5] * position.y
-        + frame[9] * position.z
-        + frame[13]
-    )
-    var w = (
-        frame[3] * position.x
-        + frame[7] * position.y
-        + frame[11] * position.z
-        + frame[15]
-    )
+    var clip = _clip_point(frame, position)
+    var x = clip[0]
+    var y = clip[1]
+    var w = clip[3]
     if w <= 0:
         return 0
     # The shadow matrix's half and half: a map coordinate from zero to

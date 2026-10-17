@@ -1114,6 +1114,34 @@ def biased_position(
     return position + normal * normal_bias
 
 
+def _clip_point(
+    frame: SIMD[DType.float32, 16], position: Vector3
+) -> SIMD[DType.float32, 4]:
+    """Return a point in a column-major frame, before dividing by w.
+
+    Lane zero is x, one is y, two is z, and three is w. A lane is that
+    row of the frame times the position, plus the translation.
+    """
+    return SIMD[DType.float32, 4](
+        frame[0] * position.x
+        + frame[4] * position.y
+        + frame[8] * position.z
+        + frame[12],
+        frame[1] * position.x
+        + frame[5] * position.y
+        + frame[9] * position.z
+        + frame[13],
+        frame[2] * position.x
+        + frame[6] * position.y
+        + frame[10] * position.z
+        + frame[14],
+        frame[3] * position.x
+        + frame[7] * position.y
+        + frame[11] * position.z
+        + frame[15],
+    )
+
+
 def shadow_coordinate(
     frame: SIMD[DType.float32, 16], position: Vector3
 ) -> Vector3:
@@ -1136,30 +1164,11 @@ def shadow_coordinate(
     Returns:
         The map coordinate.
     """
-    var x = (
-        frame[0] * position.x
-        + frame[4] * position.y
-        + frame[8] * position.z
-        + frame[12]
-    )
-    var y = (
-        frame[1] * position.x
-        + frame[5] * position.y
-        + frame[9] * position.z
-        + frame[13]
-    )
-    var z = (
-        frame[2] * position.x
-        + frame[6] * position.y
-        + frame[10] * position.z
-        + frame[14]
-    )
-    var w = (
-        frame[3] * position.x
-        + frame[7] * position.y
-        + frame[11] * position.z
-        + frame[15]
-    )
+    var clip = _clip_point(frame, position)
+    var x = clip[0]
+    var y = clip[1]
+    var z = clip[2]
+    var w = clip[3]
     if w <= 0:
         return Vector3(0.5, 0.5, 2)
     var rcp = 1 / w
