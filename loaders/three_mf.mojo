@@ -75,6 +75,7 @@ from core.scene import Scene
 from loaders.bytes import hex_digit_value
 from loaders.gltf import decode_image
 from loaders.js_number import js_parse_float
+from loaders.js_text import split_fields
 from loaders.model_nodes import decompose_onto
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry, unzip
@@ -213,8 +214,8 @@ def three_mf_transform(text: String) raises -> Matrix4:
         Error: If there are not twelve finite numbers.
     """
     var numbers = List[Float32]()
-    for piece in text.split():
-        numbers.append(_finite(String(piece), "a transform"))
+    for piece in split_fields(text):
+        numbers.append(_finite(piece, "a transform"))
     if len(numbers) != 12:
         raise Error("3MF: a transform must have twelve numbers: " + text)
     var matrix = Matrix4()

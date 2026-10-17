@@ -93,6 +93,7 @@ from lights.light import (
 from loaders.collada_animation import read_collada_animations
 from loaders.collada_id import collada_reference
 from loaders.collada_numbers import collada_floats, require_positive_stride
+from loaders.js_text import split_fields
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
@@ -367,8 +368,7 @@ def _ints(text: String) raises -> List[Int]:
         Error: If one is not a whole number.
     """
     var out = List[Int]()
-    for piece in text.split():
-        var field = String(piece)
+    for field in split_fields(text):
         try:
             out.append(Int(field))
         except:
@@ -2098,8 +2098,8 @@ struct _Loader(Movable):
         )
         if names == NO_ELEMENT:
             raise Error("Collada: a skin's joints must be a Name_array")
-        for piece in self.document.text(names).split():
-            data.names.append(String(piece))
+        for name in split_fields(self.document.text(names)):
+            data.names.append(name)
         var inverses = self.source_of(
             self.skin_source(sources, joint_inputs["INV_BIND_MATRIX"][0])
         )

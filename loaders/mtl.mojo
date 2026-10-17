@@ -969,11 +969,8 @@ def _read_infos(text: String) raises -> List[_Info]:
             stripped = data^
         if stripped == "":
             continue
-        var first = String()
         # The line is not empty, so it has a first field.
-        for piece in stripped.split():  # pragma: no branch
-            first = String(piece)
-            break
+        var first = split_fields(stripped)[0]
         var key = first.lower()
         var value = String(stripped[byte = first.byte_length() :].strip())
         if key == "newmtl":

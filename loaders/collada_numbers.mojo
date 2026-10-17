@@ -10,6 +10,7 @@ separated list, and refuse a value that is not finite as a `Float32`.
 Both also refuse a source stride below one.
 """
 
+from loaders.js_text import split_fields
 from std.math import isfinite
 
 
@@ -61,8 +62,7 @@ def collada_floats(text: String) raises -> List[Float64]:
             `Float32`.
     """
     var out = List[Float64]()
-    for piece in text.split():
-        var field = String(piece)
+    for field in split_fields(text):
         var value = collada_number(field)
         if not isfinite(Float32(value)):
             raise Error("Collada: a number must be finite: " + field)
