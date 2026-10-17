@@ -778,6 +778,24 @@ def _read_quant_tables(
         at += 1 + BLOCK_SAMPLES
 
 
+def require_huffman_span(at: Int, need: Int, end: Int) raises:
+    """Refuse a Huffman table that does not fit its segment.
+
+    Args:
+        at: Where the table starts in the segment.
+        need: How many bytes the next read needs.
+        end: Where the segment ends.
+
+    Returns:
+        Nothing. The call returns when the read stays inside the segment.
+
+    Raises:
+        Error: If the read would pass the segment.
+    """
+    if at + need > end:
+        raise Error("A Huffman table does not fit its segment")
+
+
 def _read_huffman_tables(
     bytes: List[UInt8],
     start: Int,
@@ -806,15 +824,13 @@ def _read_huffman_tables(
             raise Error("A Huffman table's class must be zero or one")
         if id >= TABLE_COUNT:
             raise Error("A Huffman table id must be zero through three")
-        if at + 17 > end:
-            raise Error("A Huffman table does not fit its segment")
+        require_huffman_span(at, 17, end)
         var counts = List[Int]()
         var total = 0
         for index in range(16):  # pragma: no branch
             counts.append(Int(bytes[at + 1 + index]))
             total += counts[index]
-        if at + 17 + total > end:
-            raise Error("A Huffman table does not fit its segment")
+        require_huffman_span(at, 17 + total, end)
         var symbols = List[UInt8]()
         for index in range(total):
             symbols.append(bytes[at + 17 + index])

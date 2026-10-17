@@ -241,6 +241,24 @@ def require_lzf_backref(at: Int, length: Int) raises:
         raise Error("PCD: LZF data ends inside a back reference")
 
 
+def require_lzf_room(used: Int, extra: Int, limit: Int) raises:
+    """Refuse an LZF expansion that would pass its declared size.
+
+    Args:
+        used: How many bytes are already written.
+        extra: How many bytes the next run would write.
+        limit: How many bytes the output may hold.
+
+    Returns:
+        Nothing. The call returns when the run fits.
+
+    Raises:
+        Error: If the run would pass the declared size.
+    """
+    if used + extra > limit:
+        raise Error("PCD: LZF output is larger than its declared size")
+
+
 def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
     """Expand LZF data, three.js's `decompressLZF`.
 
@@ -268,8 +286,7 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
         at += 1
         if control < 32:
             var run = control + 1
-            if len(out) + run > out_length:
-                raise Error("PCD: LZF output is larger than its declared size")
+            require_lzf_room(len(out), run, out_length)
             if at + run > len(data):
                 raise Error("PCD: LZF data ends inside a run of literals")
             for _ in range(run):  # pragma: no branch
@@ -285,8 +302,7 @@ def decompress_lzf(data: List[UInt8], out_length: Int) raises -> List[UInt8]:
             require_lzf_backref(at, len(data))
         back -= Int(data[at])
         at += 1
-        if len(out) + length + 2 > out_length:
-            raise Error("PCD: LZF output is larger than its declared size")
+        require_lzf_room(len(out), length + 2, out_length)
         if back < 0:
             raise Error("PCD: an LZF back reference before the start")
         # A reference copies two bytes or more: the loop always runs.

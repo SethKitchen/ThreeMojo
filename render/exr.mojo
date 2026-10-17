@@ -535,6 +535,24 @@ def _has_rgb(channels: List[ExrChannel]) -> Bool:
     return _has(channels, "R") and _has(channels, "G") and _has(channels, "B")
 
 
+def require_exr_run(used: Int, extra: Int, limit: Int) raises:
+    """Refuse an EXR run that would expand past its lines.
+
+    Args:
+        used: How many bytes are already written.
+        extra: How many bytes the next run would write.
+        limit: How many bytes the lines may hold.
+
+    Returns:
+        Nothing. The call returns when the run fits.
+
+    Raises:
+        Error: If the run would pass the lines.
+    """
+    if used + extra > limit:
+        raise Error("EXR: a run-length block expands past its lines")
+
+
 def run_length_decode(
     bytes: List[UInt8], start: Int, size: Int, expected: Int
 ) raises -> List[UInt8]:
@@ -565,15 +583,13 @@ def run_length_decode(
         if count >= 128:
             var literal = 256 - count
             _need(end, at, literal)
-            if len(out) + literal > expected:
-                raise Error("EXR: a run-length block expands past its lines")
+            require_exr_run(len(out), literal, expected)
             for step in range(literal):  # pragma: no branch
                 out.append(bytes[at + step])
             at += literal
             continue
         _need(end, at, 1)
-        if len(out) + count + 1 > expected:
-            raise Error("EXR: a run-length block expands past its lines")
+        require_exr_run(len(out), count + 1, expected)
         for _ in range(count + 1):  # pragma: no branch
             out.append(bytes[at])
         at += 1
