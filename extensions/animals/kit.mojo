@@ -15,6 +15,7 @@ from extensions.animals.options import AnimalRandom
 from extensions.sdf.distance import almond_distance
 from extensions.sdf.field import SdfModel
 from extensions.sdf.sculpt import ell_y
+from math.norm import squared_length3
 from extensions.sdf.vector import (
     V3,
     dot,
@@ -423,7 +424,7 @@ def mirrored_blob(h: V3, c: V3, r: V3) -> Float64:
     var dx = (abs(h.x) - c.x) / r.x
     var dy = (h.y - c.y) / r.y
     var dz = (h.z - c.z) / r.z
-    return exp(-(dx * dx + dy * dy + dz * dz))
+    return exp(-squared_length3[DType.float64](dx, dy, dz))
 
 
 def mirrored_ell_bottom(h: V3, c: V3, r: V3) -> Float64:

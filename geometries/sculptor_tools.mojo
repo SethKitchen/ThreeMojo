@@ -40,7 +40,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2, length3, reciprocal_normalized3
+from math.norm import length2, length3, reciprocal_normalized3, squared_length3
 from geometries.sculptor_mesh import SculptorMesh
 from geometries.sculptor_utils import (
     Point3,
@@ -709,7 +709,7 @@ def _dec_try(
     var dx = (v1.x + v2.x + v3.x) / 3.0 - center.x
     var dy = (v1.y + v2.y + v3.y) / 3.0 - center.y
     var dz = (v1.z + v2.z + v3.z) / 3.0 - center.z
-    var fall_off = dx * dx + dy * dy + dz * dz
+    var fall_off = squared_length3[DType.float64](dx, dy, dz)
     if fall_off >= radius2 * 2.0:
         return
     if fall_off < radius2:

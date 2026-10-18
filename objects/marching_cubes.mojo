@@ -42,6 +42,7 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
+from math.norm import squared_length3
 from render.framebuffer import FloatColor
 from std.math import floor, isfinite, sqrt
 
@@ -266,7 +267,10 @@ struct MarchingCubes(Movable):
                         var dx = Float64(x) - xs
                         var dy = Float64(y) - ys
                         var dz = Float64(z) - zs
-                        var ratio = sqrt(dx * dx + dy * dy + dz * dz) / radius
+                        var ratio = (
+                            sqrt(squared_length3[DType.float64](dx, dy, dz))
+                            / radius
+                        )
                         var contrib = 1 - ratio * ratio * ratio * (
                             ratio * (ratio * 6 - 15) + 10
                         )

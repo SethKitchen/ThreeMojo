@@ -52,6 +52,7 @@ from math.norm import (
     length2,
     length3,
     reciprocal_normalized3,
+    squared_length3,
 )
 from core.buffer_geometry import BufferGeometry, POSITION
 from geometries.sculptor_utils import (
@@ -947,7 +948,7 @@ struct SculptorMesh(Movable):
             var dx = _outside(loose[0], loose[3], center.x)
             var dy = _outside(loose[1], loose[4], center.y)
             var dz = _outside(loose[2], loose[5], center.z)
-            if dx * dx + dy * dy + dz * dz > radius_sq:
+            if squared_length3[DType.float64](dx, dy, dz) > radius_sq:
                 continue
             if collect_leaves and len(self.cells[cell].children) != 8:
                 self._queue_leaf(cell)
@@ -1247,7 +1248,7 @@ def _sqr_dist_to(merged: List[Float32], candidate: Int, p: Point3) -> Float64:
     var dx = q.x - p.x
     var dy = q.y - p.y
     var dz = q.z - p.z
-    return dx * dx + dy * dy + dz * dz
+    return squared_length3[DType.float64](dx, dy, dz)
 
 
 def _check_triangles(faces: List[Int], positions: List[Float32]) raises:

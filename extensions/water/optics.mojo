@@ -16,6 +16,7 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
+from math.norm import squared_length3
 from math.sine import sin_float32
 from math.vector3 import Vector3
 from std.math import cos, exp, floor, fma, log, pow, sin, sqrt
@@ -346,7 +347,7 @@ def sky_radiance(
     Returns:
         Linear radiance.
     """
-    var length = sqrt(dx * dx + dy * dy + dz * dz)
+    var length = sqrt(squared_length3[DType.float32](dx, dy, dz))
     var x = dx
     var y = dy
     var z = dz
