@@ -46,7 +46,7 @@ from loaders.draco_buffer import (
     to_int32,
     truncated_divide,
 )
-from loaders.draco_mesh import NONE, DracoCornerTable
+from loaders.draco_mesh import NONE, DracoCornerTable, next_parallelogram_corner
 from std.math import sqrt
 from std.memory import bitcast
 
@@ -1041,15 +1041,9 @@ struct PredictionScheme(Copyable, Movable):
                 found.append(one.value().copy())
                 if len(found) == 4:
                     break
-            if first_pass:
-                corner = data.table.swing_left(corner)
-            else:
-                corner = data.table.swing_right(corner)
-            if corner == start:
-                break
-            if corner == NONE and first_pass:
-                first_pass = False
-                corner = data.table.swing_right(start)
+            corner = next_parallelogram_corner(
+                data.table, corner, start, first_pass
+            )
         return found^
 
     def _tex_coords(

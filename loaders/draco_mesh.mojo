@@ -1050,6 +1050,40 @@ def decode_edgebreaker(
     return out^
 
 
+def next_parallelogram_corner(
+    table: DracoCornerTable,
+    corner: Int,
+    start: Int,
+    mut first_pass: Bool,
+) -> Int:
+    """Return the next corner of a constrained parallelogram walk.
+
+    The walk goes left around the vertex first. When that side ends it
+    starts again to the right of `start`. A return to `start` ends it.
+
+    Args:
+        table: The corner table.
+        corner: The corner just visited.
+        start: The corner the walk began at.
+        first_pass: True while the walk is still going left. Set to false
+            when it turns to the right.
+
+    Returns:
+        The next corner, or `NONE` when the walk is finished.
+    """
+    var next: Int
+    if first_pass:
+        next = table.swing_left(corner)
+    else:
+        next = table.swing_right(corner)
+    if next == start:
+        return NONE
+    if next == NONE and first_pass:
+        first_pass = False
+        return table.swing_right(start)
+    return next
+
+
 def depth_first_walk[
     V: CornerVisitor
 ](
