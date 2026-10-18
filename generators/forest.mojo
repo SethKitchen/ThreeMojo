@@ -38,6 +38,7 @@ from generators.utils import (
 from geometries.polyhedron import icosahedron
 from geometries.utils import merge_vertices
 from math.noise import ImprovedNoise
+from math.smoothstep import clamped_smoothstep
 from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import pi, sin, sqrt
@@ -141,8 +142,7 @@ def smooth_blend(edge0: Float64, edge1: Float64, x: Float64) -> Float64:
     Returns:
         A number from zero to one.
     """
-    var t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
-    return t * t * (3 - 2 * t)
+    return clamped_smoothstep(edge0, edge1, x)
 
 
 def blob_noise(x: Float64, y: Float64, z: Float64) -> Float64:

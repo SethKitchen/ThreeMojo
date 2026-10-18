@@ -42,6 +42,7 @@ from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
+from math.smoothstep import clamped_smoothstep
 from math.utils import SeededRandom, clamp
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -1815,8 +1816,7 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
 
 def _smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     """Return GLSL's `smoothstep`, its edges in either order."""
-    var t = min(max((x - edge0) / (edge1 - edge0), Float32(0)), Float32(1))
-    return t * t * (3 - 2 * t)
+    return clamped_smoothstep(edge0, edge1, x)
 
 
 def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:

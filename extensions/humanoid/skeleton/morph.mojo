@@ -55,7 +55,7 @@ from extensions.humanoid.genome import (
 )
 from extensions.humanoid.sex import MALE, Sex
 from math.norm import squared_length3
-from math.utils import clamp
+from math.smoothstep import clamped_smoothstep
 from math.vector3 import Vector3
 from std.math import cos, isfinite, max, min, sin
 
@@ -127,8 +127,7 @@ def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
         Zero below `edge0`, one above `edge1`, and a smooth curve
         between.
     """
-    var t = clamp((x - edge0) / (edge1 - edge0), 0, 1)
-    return t * t * (3 - 2 * t)
+    return clamped_smoothstep(edge0, edge1, x)
 
 
 def bump(point: Vector3, center: Vector3, radius: Float32) -> Float32:
