@@ -27,6 +27,7 @@ chain rebuilds the chain, as three.js calls `generateMipmap` after a copy
 into level zero of a texture that generates mipmaps.
 """
 
+from core.extent import positive_extent
 from render.framebuffer import Framebuffer
 from render.rect import Rect
 from render.srgb import LINEAR, SRGB, ColorSpace
@@ -353,7 +354,7 @@ def framebuffer_texture(
         Error: If a dimension is not positive, the texel type is none of
             the two, or `Texture.validate` refuses the color space.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Texture dimensions must be positive")
     if not texel_type.is_valid():
         raise Error(

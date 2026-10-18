@@ -84,6 +84,7 @@ and `light_at` premultiply it first, where they read it as light. The
 kernel keeps its running color the same way.
 """
 
+from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from math.vector2 import Vector2
@@ -730,7 +731,7 @@ struct RenderTarget(Movable, SampleSource):
                 refuses the type or the outputs, or `check_samples`
                 refuses the sample count.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Render target dimensions must be positive")
         check_target(type, outputs)
         check_samples(samples)

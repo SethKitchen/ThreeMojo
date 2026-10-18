@@ -35,6 +35,7 @@ side is a power of two, so that every level halves exactly. three.js keeps
 no chain on a 3D or an array target, and neither does this.
 """
 
+from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from render.cube_texture import (
@@ -189,7 +190,7 @@ struct LayeredRenderTarget(Movable):
         """
         if not kind.is_valid():
             raise Error("A layered target's kind must be one of the four")
-        if width <= 0 or height <= 0 or depth <= 0:
+        if not positive_extent(width, height, depth):
             raise Error("A layered target's dimensions must be positive")
         if kind == TARGET_2D and depth != 1:
             raise Error("A 2D target has one layer")

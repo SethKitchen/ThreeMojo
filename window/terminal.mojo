@@ -29,6 +29,7 @@ differs by platform. The window never reads it: it asks the C library to
 fill it and to make it raw, in a buffer larger than any platform's.
 """
 
+from core.extent import positive_extent
 from controls.input import InputDecoder, InputEvent
 from render.framebuffer import Framebuffer
 from std.ffi import c_int, external_call
@@ -212,7 +213,7 @@ struct TerminalWindow(Movable):
             Error: If the size is not positive, the input is not a
                 terminal, or the terminal cannot be set or written.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error(
                 "A window's size must be positive, got ", width, "x", height
             )
@@ -333,7 +334,7 @@ struct TerminalWindow(Movable):
         """
         if not self.is_open:
             raise Error("The window is closed")
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error(
                 "A window's size must be positive, got ", width, "x", height
             )

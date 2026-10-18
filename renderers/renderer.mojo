@@ -133,6 +133,7 @@ from core.buffer_geometry import (
     MaterialIndex,
 )
 from core.assets import Assets
+from core.extent import positive_extent
 from core.geometry_store import GeometryId
 from core.fog import FogView
 from lights.light import (
@@ -5951,7 +5952,7 @@ struct Renderer(Movable):
         Raises:
             Error: If either dimension is not positive, or `workers` is.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Renderer dimensions must be positive")
         if workers < 1:
             raise Error("A renderer needs at least one worker")

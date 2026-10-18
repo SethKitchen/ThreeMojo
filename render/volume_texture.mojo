@@ -47,6 +47,7 @@ neither kind: three.js reads them only from a custom shader or from
 `DecodedVolume` through the same `filter_volume` as the host.
 """
 
+from core.extent import positive_extent
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import (
@@ -80,7 +81,7 @@ def _check_extent(width: Int, height: Int, depth: Int, channels: Int) raises:
         Error: If a dimension is not positive or `channels` is not one
             through four, or the stored RGBA size cannot fit in Int.
     """
-    if width <= 0 or height <= 0 or depth <= 0:
+    if not positive_extent(width, height, depth):
         raise Error("A volume texture's dimensions must be positive")
     if channels < 1 or channels > VOLUME_CHANNELS:
         raise Error("A volume texture holds one through four numbers a texel")

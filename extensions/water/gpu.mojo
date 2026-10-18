@@ -18,6 +18,7 @@ This module imports MAX, so it builds only where MAX is installed.
 """
 
 from cameras.camera import Camera
+from core.extent import positive_extent
 from core.scene import Scene
 from extensions.water.caustics import CausticField
 from extensions.water.frame import (
@@ -265,7 +266,7 @@ struct GpuWater(Movable):
         Raises:
             Error: If a size is not positive, or a device step fails.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Water image dimensions must be positive")
         var surface = scene._surface()
         var caustics = scene._caustics(surface)
@@ -301,7 +302,7 @@ struct GpuWater(Movable):
             Error: If a size or the view is not valid, or a device step
                 fails.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Water image dimensions must be positive")
         require_view(view)
         if view == CAUSTICS:

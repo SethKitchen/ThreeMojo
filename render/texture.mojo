@@ -94,6 +94,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.extent import positive_extent
 from core.ordinal import ordinal_valid
 
 from std.math import exp2
@@ -1043,7 +1044,7 @@ struct Texture(Movable):
                 mode is none of the named values, or the filter is not
                 `NEAREST` or `BILINEAR` -- see `validate`.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("Texture dimensions must be positive")
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Texture buffer length does not match the dimensions")
@@ -2484,7 +2485,7 @@ def data_texture(
             through four, the data holds any number that is not finite,
             or its length is not `width * height * channels`.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Texture dimensions must be positive")
     if channels < 1 or channels > 4:
         raise Error("A data texture holds one through four numbers a texel")
@@ -2548,7 +2549,7 @@ def float_texture(
             not `width * height * 4`, a number is not finite, or the
             wrap, filter or alpha mode is none of the named values.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Texture dimensions must be positive")
     if len(data) != width * height * Texture.CHANNELS:
         raise Error("Float texture length does not match the dimensions")
@@ -2745,7 +2746,7 @@ def depth_texture_of_buffer(
             does not match them, the wrap mode is none of the named
             values, or the depth mode is none of the three.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Texture dimensions must be positive")
     if len(depth) != width * height:
         raise Error("Depth buffer length does not match the dimensions")

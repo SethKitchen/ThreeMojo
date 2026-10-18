@@ -32,6 +32,7 @@ No composer pass reads this: three.js's SSR node reads it in its
 environment mode, which `postprocessing.ssr_node` does not port.
 """
 
+from core.extent import positive_extent
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -136,7 +137,7 @@ struct EquirectEnvironment(Copyable, Movable):
             Error: If a size is not positive, or the texels are not one a
                 texel of the size.
         """
-        if width <= 0 or height <= 0:
+        if not positive_extent(width, height):
             raise Error("An environment's size must be positive")
         if len(texels) != width * height:
             raise Error("An environment needs one texel a texel")

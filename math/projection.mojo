@@ -23,6 +23,7 @@ coordinate system. three.js also supports WebGPU's convention, where z runs
 0 to 1 rather than -1 to +1; only the WebGL form is ported here.
 """
 
+from core.extent import positive_extent
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.math import isfinite
@@ -337,7 +338,7 @@ def viewport(width: Int, height: Int) raises -> Matrix4:
     Raises:
         Error: If either dimension is not positive.
     """
-    if width <= 0 or height <= 0:
+    if not positive_extent(width, height):
         raise Error("Viewport dimensions must be positive")
 
     var half_width = Float32(width) / 2
