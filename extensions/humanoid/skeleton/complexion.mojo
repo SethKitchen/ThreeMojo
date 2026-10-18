@@ -32,7 +32,7 @@ from extensions.humanoid.genome import (
     check_genome,
 )
 from math.norm import squared_length2
-from math.smoothstep import clamped_smoothstep
+from math.smoothstep import clamped_smoothstep, hermite_fade
 from math.utils import clamp, mix_delta
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
@@ -260,8 +260,8 @@ def value_noise(
     var iy = Int(fy)
     var tx = x - fx
     var ty = y - fy
-    tx = tx * tx * (3 - 2 * tx)
-    ty = ty * ty * (3 - 2 * ty)
+    tx = hermite_fade(tx)
+    ty = hermite_fade(ty)
     var x0 = _wrap(ix, period)
     var x1 = _wrap(ix + 1, period)
     var y0 = _wrap(iy, up)

@@ -66,6 +66,7 @@ from extensions.humanoid.rig.joints import (
     Joint,
 )
 from math.quaternion import Quaternion
+from math.smoothstep import hermite_fade
 from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import cos, exp, pi, sin
@@ -480,7 +481,7 @@ def jump_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         var u = (t - at[span]) / (at[span + 1] - at[span])
         u = clamp(u, 0, 1)
         # Eased, so each key pose is held for a moment.
-        u = u * u * (3 - 2 * u)
+        u = hermite_fade(u)
         poses.append(keys[span].blend(keys[span + 1], u))
     return clip_from_poses("jump", bones, rig, poses, seconds)
 
