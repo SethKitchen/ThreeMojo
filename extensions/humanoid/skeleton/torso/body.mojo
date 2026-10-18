@@ -71,7 +71,8 @@ from extensions.humanoid.skeleton.surface_nets import (
     share_height,
 )
 from geometries.utils import merge_geometries
-from extensions.humanoid.skeleton.look import skin_phong
+from extensions.humanoid.skeleton.look import UNSET_PAINT, skin_phong
+from extensions.humanoid.skeleton.place import place_mesh
 from extensions.humanoid.skeleton.pelvis.contents import PelvisContents
 from extensions.humanoid.skeleton.pelvis.lower_body import (
     LowerBodySkinField,
@@ -89,12 +90,8 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
 from std.math import max, min
 
-# Optional `add_body` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 # Where the body's mesh hands over to the head's, in template
 # centimeters: on the neck, below the chin, where the skin is upright
 # and a level cut crosses it cleanly.
@@ -620,11 +617,13 @@ def add_body(
             skin = assets.materials.add(
                 skin_phong(genome=spec.genome, tinted=True)
             )
-        var shape = assets.geometries.add(
-            body_skin_mesh(spec, skin_detail, workers)
+        _ = place_mesh(
+            scene,
+            assets,
+            root_id,
+            body_skin_mesh(spec, skin_detail, workers),
+            skin,
         )
-        var nid = scene.attach(Object3D(), root_id)
-        scene.add_mesh(Mesh(shape, skin, nid))
         var arms = arm_muscle_dimensions(spec)
         for s in range(2):  # pragma: no branch
             var side = RIGHT
@@ -636,8 +635,7 @@ def add_body(
             # The hands have no zones of color, but a tinted skin needs
             # the attribute on every mesh it paints.
             untinted(hand_skin)
-            var hand = assets.geometries.add(hand_skin^)
-            scene.add_mesh(Mesh(hand, skin, scene.attach(Object3D(), root_id)))
+            _ = place_mesh(scene, assets, root_id, hand_skin^, skin)
         # The skin's lids open on the eyes, and the scalp's hair lies on
         # it: they come with it.
         _ = add_head(

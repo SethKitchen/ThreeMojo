@@ -24,6 +24,7 @@ from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     lymph_phong,
     nerve_phong,
@@ -82,10 +83,6 @@ from extensions.humanoid.skeleton.pelvis.vessels.geometry import (
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from extensions.humanoid.skeleton.place import place_mesh
-
-# Optional `add_pelvis` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 
 
 @fieldwise_init
@@ -199,7 +196,7 @@ def add_pelvis(
     if contents.includes_bones():
         var bones = named_pelvis_bones()
         for index in range(len(bones)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -220,7 +217,7 @@ def add_pelvis(
             for s in range(2):  # pragma: no branch
                 if s == 1 and is_midline(band):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -233,7 +230,7 @@ def add_pelvis(
         var parts = named_pelvis_muscles()
         for index in range(len(parts)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -254,7 +251,7 @@ def add_pelvis(
             for s in range(2):  # pragma: no branch
                 if s == 1 and is_unpaired_vessel(vessel):
                     continue
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -268,7 +265,7 @@ def add_pelvis(
         var groups = named_pelvis_lymph()
         for index in range(len(groups)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -282,7 +279,7 @@ def add_pelvis(
         var trunks = named_pelvis_nerves()
         for index in range(len(trunks)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -295,7 +292,7 @@ def add_pelvis(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh(
             scene,
             assets,
             root_id,

@@ -733,6 +733,10 @@ def add_complexion(
     return Complexion(skin, hair, eyes)
 
 
+# A negative id asks an assembler to create the default look for that layer.
+comptime UNSET_PAINT = MaterialId(-1)
+
+
 def resolved_paint(
     mut assets: Assets, paint: MaterialId, var material: Material
 ) raises -> MaterialId:

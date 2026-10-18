@@ -65,6 +65,7 @@ from extensions.humanoid.skeleton.foot.vessels.geometry import (
     vessel_from_dimensions,
 )
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     hair_phong,
     lymph_phong,
@@ -75,10 +76,6 @@ from extensions.humanoid.skeleton.look import (
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from extensions.humanoid.skeleton.place import place_mesh
-
-# Optional `add_foot` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
 
 
 @fieldwise_init
@@ -173,7 +170,7 @@ def add_foot(
         var bones = named_foot_bones()
         var b_index = 0
         while b_index < len(bones):
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -185,7 +182,7 @@ def add_foot(
         var bands = named_foot_ligaments()
         var g_index = 0
         while g_index < len(bands):
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -201,7 +198,7 @@ def add_foot(
             var paint = muscle_paint
             if is_tendon(part):
                 paint = tendon_paint
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -219,7 +216,7 @@ def add_foot(
             var paint = vein
             if is_artery(vessel):
                 paint = artery
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -232,7 +229,7 @@ def add_foot(
         var nodes = named_foot_lymph()
         var l_index = 0
         while l_index < len(nodes):
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -245,7 +242,7 @@ def add_foot(
         var trunks = named_foot_nerves()
         var n_index = 0
         while n_index < len(trunks):
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -257,7 +254,7 @@ def add_foot(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh(
             scene,
             assets,
             root_id,
@@ -271,7 +268,7 @@ def add_foot(
         var groups = named_foot_hair()
         var h_index = 0
         while h_index < len(groups):
-            place_mesh(
+            _ = place_mesh(
                 scene,
                 assets,
                 root_id,

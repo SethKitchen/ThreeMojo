@@ -17,7 +17,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 
 from core.buffer_geometry import BufferGeometry
 from core.assets import Assets
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -38,9 +38,9 @@ from extensions.humanoid.skeleton.leg.assembly import assemble_leg
 from extensions.humanoid.skeleton.leg.skin.dimensions import (
     SkinField as LegSkinField,
 )
+from extensions.humanoid.skeleton.place import place_mesh
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
 from std.math import max, min
 
 
@@ -156,7 +156,6 @@ def add_limb_skin(
         Error: If `spec`, `side` or `detail` is refused, or the scene
             refuses the node or the mesh.
     """
-    var shape = assets.geometries.add(limb_skin_mesh(spec, side, detail))
-    var nid = scene.attach(Object3D(), parent)
-    scene.add_mesh(Mesh(shape, paint, nid))
-    return nid
+    return place_mesh(
+        scene, assets, parent, limb_skin_mesh(spec, side, detail), paint
+    )

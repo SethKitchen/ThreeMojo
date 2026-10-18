@@ -239,14 +239,14 @@ def main() raises:
     )
     # The clavicle and the scapula the arm hangs from.
     var torso = torso_dimensions(person.stature, person.sex)
-    place_mesh(
+    _ = place_mesh(
         scene,
         assets,
         anatomy[1],
         torso_bone_from_dimensions(torso, CLAVICLE, RIGHT, detail),
         bone,
     )
-    place_mesh(
+    _ = place_mesh(
         scene,
         assets,
         anatomy[1],
