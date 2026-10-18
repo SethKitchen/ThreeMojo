@@ -2734,7 +2734,7 @@ def test_bits_are_read_low_to_high_and_align_stops_at_a_boundary() raises:
     # `align` is a no-op when the reader already sits on a byte boundary, and
     # a stored block reached from a compressed one can arrive either way.
     var bytes: List[UInt8] = [UInt8(0b10110101), UInt8(0xFF)]
-    var reader = BitReader(bytes, 0)
+    var reader = BitReader(Span(bytes), 0)
     assert_equal(reader.read_bits(3), 5)
     reader.align()
     assert_equal(reader.position, 1)
@@ -2751,7 +2751,7 @@ def test_an_incomplete_huffman_code_refuses_bits_it_cannot_match() raises:
     var lengths: List[Int] = [2]
     var code = Huffman(lengths)
     var ones: List[UInt8] = [UInt8(0xFF), UInt8(0xFF), UInt8(0xFF)]
-    var reader = BitReader(ones, 0)
+    var reader = BitReader(Span(ones), 0)
     with assert_raises():
         _ = code.decode(reader)
 
