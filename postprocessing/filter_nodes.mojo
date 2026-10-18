@@ -32,6 +32,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite_group
 from math.norm import length2, squared_length2
 from math.smoothstep import clamped_smoothstep
 from math.utils import (
@@ -164,8 +165,7 @@ def check_filters(settings: FilterSettings) raises:
         and isfinite(settings.blend_b)
         and isfinite(settings.edge_strength)
     )
-    if not finite:
-        raise Error("A filter pass setting must be finite")
+    require_finite_group(finite, "A filter pass setting must be finite")
     if settings.curvature >= 0.5:
         raise Error("A CRT's curvature must be below a half")
     if settings.count < 1:

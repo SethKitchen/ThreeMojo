@@ -36,6 +36,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite_group
 from math.norm import length2
 from math.sine import fraction
 
@@ -174,8 +175,7 @@ def check_display(settings: DisplaySettings) raises:
         and isfinite(settings.focal_length.value)
         and isfinite(settings.bokeh_scale)
     )
-    if not finite:
-        raise Error("A display pass setting must be finite")
+    require_finite_group(finite, "A display pass setting must be finite")
     if settings.sigma < 0:
         raise Error("A Gaussian blur's sigma must not be negative")
     if not (settings.resolution_scale > 0 and settings.down_sample_ratio > 0):
