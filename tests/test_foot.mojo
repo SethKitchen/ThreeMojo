@@ -245,7 +245,7 @@ from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaField,
     tibia_dimensions,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import inf, max, min, nan
 from std.testing import (
     TestSuite,
@@ -522,13 +522,13 @@ def test_bone_occupancy_is_shell_then_trabecular() raises:
     var high = center + Vector3(0, 0.04, 0)
     var step = 0
     while step < 16:
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if bone_distance(dims, HALLUX_PROXIMAL, middle) < -field.shell:
             low = middle
         else:
             high = middle
         step += 1
-    var shell = (low + high) * Float32(0.5)
+    var shell = midpoint(low, high)
     assert_equal(
         foot_bone_occupancy(dims, HALLUX_PROXIMAL, shell), CORTICAL_FILL
     )

@@ -28,7 +28,7 @@ from extensions.humanoid.skeleton.occupancy import (
     CORTICAL_FILL,
     TRABECULAR_FILL,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -149,7 +149,7 @@ def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
     var low = Vector3(0.011, -0.027, 0.019)
     var high = Vector3(0.048, 0.026, 0.048)
     var size = high - low
-    var center = (low + high) * 0.5
+    var center = midpoint(low, high)
     var expected_mass = 1200 * size.x * size.y * size.z
     var expected = SIMD[DType.float32, 8](
         expected_mass * (size.y * size.y + size.z * size.z) / 12,

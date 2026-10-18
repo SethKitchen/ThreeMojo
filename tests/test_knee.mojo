@@ -337,7 +337,7 @@ def test_knee_subtraction_removes_buried_zero_sets() raises:
     assert_true(cartilage.lens_distance(low) < 0)
     assert_true(cartilage.lens_distance(high) > 0)
     for _ in range(40):
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if cartilage.lens_distance(middle) < 0:
             low = middle
         else:

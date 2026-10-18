@@ -101,7 +101,7 @@ from extensions.humanoid.skeleton.torso.bones.dimensions import (
     torso_dimensions,
 )
 from materials.material import MaterialId
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -495,7 +495,7 @@ def test_add_head_draws_the_eyes() raises:
 def test_brow_box_rejects_each_side() raises:
     var dims = head_muscle_dimensions(_person())
     var brows = _Brows(dims, HeadSkinField(dims))
-    var middle = (brows.low + brows.high) * 0.5
+    var middle = midpoint(brows.low, brows.high)
     assert_equal(brows.weight(Vector3(brows.low.x - 1, middle.y, middle.z)), 0)
     assert_equal(brows.weight(Vector3(brows.high.x + 1, middle.y, middle.z)), 0)
 
