@@ -9,7 +9,8 @@ Each example builds its own scene. This file reads the path from the
 first argument, turns a node, and stores the frames. A full circle is
 one turn divided across the frames. An example that built its own frames
 can write them here. It can also copy one tile into a sheet, light a
-scene and spin it, or hang a part on a turning node.
+scene and spin it, hang a part on a turning node, or write a third
+of a turn.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -17,11 +18,13 @@ from core.assets import Assets
 from core.clock import Clock
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from examples.preview import add_sky_and_sun
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
+from std.math import cos, pi, sin
 from std.pathlib import Path
 from std.sys import argv, stderr
 from units.si import MILLISECOND, Angle, DEGREE
@@ -343,6 +346,53 @@ def spin_clip(
     var frames = _collect_spins(
         renderer, camera, assets, scene, node, frame_count
     )
+    write_example(frames, destination, delay_ms, frame_count, frame_clock)
+
+
+def point_on_circle(
+    center: Vector2, radius: Float32, angle: Float32
+) -> Vector2:
+    """Return the point `radius` from `center` at `angle` radians.
+
+    Args:
+        center: The circle's center.
+        radius: The distance from the center.
+        angle: The direction, in radians.
+
+    Returns:
+        The point.
+    """
+    return Vector2(
+        center.x + radius * cos(angle), center.y + radius * sin(angle)
+    )
+
+
+def write_third_turn[
+    frame_at: def(Float32) raises thin -> Framebuffer,
+](frame_count: Int, delay_ms: Int, destination: String) raises:
+    """Render a third of a turn and write the frames.
+
+    A three-fold shape lands on itself after a third of a turn, so the
+    loop is seamless without repeating a frame.
+
+    Parameters:
+        frame_at: Renders one frame at an angle in radians.
+
+    Args:
+        frame_count: How many frames cover the third of a turn.
+        delay_ms: How long each frame is shown, in milliseconds.
+        destination: The path of the animated PNG.
+
+    Raises:
+        Error: If a frame or the write fails.
+    """
+    var frame_clock = Clock()
+    frame_clock.start()
+    var frames = List[Framebuffer]()
+    for index in range(frame_count):
+        var angle = Float32(2) * Float32(pi) * Float32(index)
+        angle = angle / (Float32(3) * Float32(frame_count))
+        frames.append(frame_at(angle))
     write_example(frames, destination, delay_ms, frame_count, frame_clock)
 
 
