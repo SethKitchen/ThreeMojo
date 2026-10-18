@@ -30,7 +30,12 @@ so degrees cannot be passed where radians are meant.
 """
 
 from math.matrix4 import Matrix4
-from math.square_matrix import _post_multiply, _transpose_square
+from math.square_matrix import (
+    _elements_equal,
+    _post_multiply,
+    _scale_elements,
+    _transpose_square,
+)
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.matrix_inverse import (
@@ -77,10 +82,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Returns:
             Whether the nine elements match.
         """
-        for index in range(9):  # pragma: no branch
-            if self.elements[index] != other.elements[index]:
-                return False
-        return True
+        return _elements_equal[3](self.elements, other.elements)
 
     def __ne__(self, other: Self) -> Bool:
         """Return True if any element differs.
@@ -374,8 +376,7 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         Args:
             factor: The number.
         """
-        for index in range(9):  # pragma: no branch
-            self.elements[index] *= factor
+        _scale_elements[3](self.elements, factor)
 
     def extract_basis(
         self, mut x_axis: Vector3, mut y_axis: Vector3, mut z_axis: Vector3

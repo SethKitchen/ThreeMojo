@@ -50,3 +50,46 @@ def _post_multiply[
                 total += left[k * n + row] * right[column * n + k]
             result[column * n + row] = total
     left = result^
+
+
+@always_inline
+def _elements_equal[
+    n: Int
+](left: Array[Float32, n * n], right: Array[Float32, n * n]) -> Bool:
+    """Return True when every element matches.
+
+    `n` is three or four, so the loop runs.
+
+    Parameters:
+        n: The side length.
+
+    Args:
+        left: One matrix.
+        right: The other matrix.
+
+    Returns:
+        Whether the elements are equal.
+    """
+    for index in range(n * n):  # pragma: no branch
+        if left[index] != right[index]:
+            return False
+    return True
+
+
+@always_inline
+def _scale_elements[
+    n: Int
+](mut elements: Array[Float32, n * n], factor: Float32):
+    """Multiply every element by one number.
+
+    `n` is three or four, so the loop runs.
+
+    Parameters:
+        n: The side length.
+
+    Args:
+        elements: The matrix, changed in place.
+        factor: The number.
+    """
+    for index in range(n * n):  # pragma: no branch
+        elements[index] *= factor
