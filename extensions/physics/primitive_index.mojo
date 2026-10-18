@@ -16,16 +16,44 @@ bounds. Queries return input indices; callers restore their own tie order.
 from math.bounds import Box3
 from math.ray import Ray
 from math.vector3 import Vector3
-from extensions.physics.center_order import sort_by_center
+from extensions.physics.center_order import _MedianNode, build_median
 from extensions.physics.shape import component
 from std.math import isfinite
 
 
 @fieldwise_init
-struct _Node(ImplicitlyCopyable):
+struct _Node(ImplicitlyCopyable, Movable, _MedianNode):
     var box: Box3
     var entry: Int
     var escape: Int
+
+    @staticmethod
+    def blank(box: Box3) -> Self:
+        """Return an interior node whose box is `box`.
+
+        Args:
+            box: The bounds of this node.
+
+        Returns:
+            A node with no entry and an unset escape.
+        """
+        return _Node(box, -1, 0)
+
+    def set_entry(mut self, entry: Int):
+        """Record the leaf's entry.
+
+        Args:
+            entry: The index this leaf holds.
+        """
+        self.entry = entry
+
+    def set_escape(mut self, escape: Int):
+        """Record the index just past this node's subtree.
+
+        Args:
+            escape: One past the last node of the subtree.
+        """
+        self.escape = escape
 
 
 struct _PrimitiveIndex(Movable):
@@ -90,30 +118,9 @@ struct _PrimitiveIndex(Movable):
                 self.nodes[i].box = box
 
     def _build(mut self, start: Int, end: Int):
-        var box = self.boxes[self.order[start]]
-        for i in range(start + 1, end):
-            box.expand_by_point(self.boxes[self.order[i]].min)
-            box.expand_by_point(self.boxes[self.order[i]].max)
-        var node = len(self.nodes)
-        self.nodes.append(_Node(box, -1, 0))
-        if end - start == 1:
-            self.nodes[node].entry = self.order[start]
-        else:
-            var dx = Float64(box.max.x) - Float64(box.min.x)
-            var dy = Float64(box.max.y) - Float64(box.min.y)
-            var dz = Float64(box.max.z) - Float64(box.min.z)
-            var axis = 0
-            if dy > dx:
-                axis = 1
-            if dz > max(dx, dy):
-                axis = 2
-            sort_by_center(
-                self.boxes, self.order, self.buffer, start, end, axis
-            )
-            var middle = start + (end - start) // 2
-            self._build(start, middle)
-            self._build(middle, end)
-        self.nodes[node].escape = len(self.nodes)
+        build_median(
+            self.nodes, self.boxes, self.order, self.buffer, start, end
+        )
 
     def overlap(self, box: Box3, mut found: List[Int]) -> Int:
         found.clear()
