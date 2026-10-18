@@ -33,7 +33,7 @@ from extensions.humanoid.skeleton.surface_nets import (
     share_height,
 )
 from geometries.utils import merge_geometries
-from math.vector3 import Vector3
+from math.vector3 import Vector3, centroid
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -83,9 +83,11 @@ def _leave_covered_out(
         var a = geometry.index[t]
         var b = geometry.index[t + 1]
         var c = geometry.index[t + 2]
-        var middle = (
-            positions.vector3(a) + positions.vector3(b) + positions.vector3(c)
-        ) / 3
+        var middle = centroid(
+            positions.vector3(a),
+            positions.vector3(b),
+            positions.vector3(c),
+        )
         if _drawn_by_scan(scan, middle, seam, near):
             continue
         kept.append(a)

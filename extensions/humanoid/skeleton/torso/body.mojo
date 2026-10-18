@@ -92,7 +92,7 @@ from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
 from math.smoothstep import hermite_fade
 from math.utils import max3, min3, mix_delta
-from math.vector3 import Vector3
+from math.vector3 import Vector3, centroid
 from std.math import max, min
 
 # Where the body's mesh hands over to the head's, in template
@@ -423,9 +423,11 @@ def _leave_hands_out(mut geometry: BufferGeometry, field: BodySkinField) raises:
         var a = geometry.index[t]
         var b = geometry.index[t + 1]
         var c = geometry.index[t + 2]
-        var middle = (
-            positions.vector3(a) + positions.vector3(b) + positions.vector3(c)
-        ) / 3
+        var middle = centroid(
+            positions.vector3(a),
+            positions.vector3(b),
+            positions.vector3(c),
+        )
         if field.hand_draws(middle):
             continue
         kept.append(a)

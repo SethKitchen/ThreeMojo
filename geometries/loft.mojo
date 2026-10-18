@@ -51,6 +51,7 @@ from math.triangle_normal import polygon_normal
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.earcut import triangulate_shape
+from geometries.grid import append_cell
 from math.shape_path import is_clockwise
 from math.vector2 import Vector2, component_max, component_min
 from math.vector3 import Vector3
@@ -258,12 +259,7 @@ def loft(
             var b = row * per_row + column + 1
             var c = (row + 1) * per_row + column + 1
             var d = (row + 1) * per_row + column
-            indices.append(a)
-            indices.append(b)
-            indices.append(d)
-            indices.append(b)
-            indices.append(c)
-            indices.append(d)
+            append_cell(indices, a, b, c, d)
     if cap_start:
         _cap(sections, 0, vertices, uvs, indices)
     if cap_end:

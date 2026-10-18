@@ -44,7 +44,7 @@ from extensions.humanoid.skeleton.head.hair.groom import (
 )
 from math.sine import fraction
 from math.utils import clamp, clamp_unit
-from math.vector3 import Vector3
+from math.vector3 import Vector3, centroid
 from math.finite import require_finite_group
 from render.tasks import TaskGroup
 from std.math import max, min
@@ -383,12 +383,12 @@ struct HairSimulation(Movable):
             var a = self.initial[first + k]
             var b = self.initial[first + k + 1]
             var c = self.initial[first + k + 2]
-            var rest = (b - (a + b + c) / 3).length()
-            var middle = (
-                self.now[first + k]
-                + self.now[first + k + 1]
-                + self.now[first + k + 2]
-            ) / 3
+            var rest = (b - centroid(a, b, c)).length()
+            var middle = centroid(
+                self.now[first + k],
+                self.now[first + k + 1],
+                self.now[first + k + 2],
+            )
             var h = self.now[first + k + 1] - middle
             var height = h.length()
             if height < Float32(1e-9):
