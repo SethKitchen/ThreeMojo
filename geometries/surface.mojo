@@ -11,9 +11,11 @@ same way. `position_normal_surface` writes positions and normals.
 also writes the triangle index. `record_kind` names the solid and starts
 its parameter record. `record_sweep` writes the theta sweep.
 `record_phi` writes the phi sweep. `record_tube` writes a tube's two
-radii. They share the checks for a positive
-radius, three segments, and positive or finite box extents. A count
-below one is `require_at_least_one` in `math.curve_checks`.
+radii. `record_width_height` writes a rectangle's width and height.
+`record_grid_segments` writes its two segment counts. They share the
+checks for a positive radius, three segments, and positive or finite box
+extents. A count below one is `require_at_least_one` in
+`math.curve_checks`.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -177,6 +179,46 @@ def record_tube(
     """
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_meters("tube", tube)
+
+
+def record_width_height(
+    mut geometry: BufferGeometry, width: Length, height: Length
+) raises:
+    """Record a rectangle's width and height.
+
+    Args:
+        geometry: The solid, after `record_kind`.
+        width: The width.
+        height: The height.
+
+    Returns:
+        Nothing. `width` and `height` hold the lengths in meters.
+
+    Raises:
+        Error: If either length in meters is not finite.
+    """
+    geometry.parameters.set_meters("width", width)
+    geometry.parameters.set_meters("height", height)
+
+
+def record_grid_segments(
+    mut geometry: BufferGeometry, width_segments: Int, height_segments: Int
+) raises:
+    """Record how many cells a grid has across and down.
+
+    Args:
+        geometry: The solid, after `record_kind`.
+        width_segments: How many cells across.
+        height_segments: How many cells down.
+
+    Returns:
+        Nothing. `widthSegments` and `heightSegments` are set.
+
+    Raises:
+        Error: If either count is not finite as a number.
+    """
+    geometry.parameters.set_number("widthSegments", Float64(width_segments))
+    geometry.parameters.set_number("heightSegments", Float64(height_segments))
 
 
 def require_positive_radius(radius: Float32, name: String) raises:
