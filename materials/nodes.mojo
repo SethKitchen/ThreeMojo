@@ -142,6 +142,7 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
+from math.norm import squared_length3
 from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.framebuffer import Color, FloatColor, OPAQUE_WHITE
@@ -7259,7 +7260,7 @@ def _lanes(v: Vector3) -> Lanes:
 
 def _unit(v: Vector3) -> Vector3:
     """Return a vector at a length of one, or zero for a zero vector."""
-    var size = sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+    var size = sqrt(squared_length3[DType.float32](v.x, v.y, v.z))
     return Vector3(v.x / size, v.y / size, v.z / size) if size != 0 else v
 
 
@@ -8500,7 +8501,7 @@ def offset_normal(normal: Vector3, offset: Lanes) -> Vector3:
     var x = normal.x + offset[0]
     var y = normal.y + offset[1]
     var z = normal.z + offset[2]
-    var size = sqrt(x * x + y * y + z * z)
+    var size = sqrt(squared_length3[DType.float32](x, y, z))
     return Vector3(x / size, y / size, z / size) if size != 0 else Vector3(
         x, y, z
     )

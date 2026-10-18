@@ -67,6 +67,7 @@ from cameras.camera import Camera
 from core.extent import positive_extent
 from core.scene import Scene
 from math.finite import positive_finite
+from math.norm import squared_length3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -1382,7 +1383,7 @@ struct WaterScene(Movable):
                 not point above the horizon.
         """
         var length = sqrt(
-            toward.x * toward.x + toward.y * toward.y + toward.z * toward.z
+            squared_length3[DType.float32](toward.x, toward.y, toward.z)
         )
         if not (positive_finite(Float64(length))):
             raise Error("A water sun direction must be finite and nonzero")

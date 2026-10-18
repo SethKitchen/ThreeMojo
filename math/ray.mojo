@@ -213,11 +213,11 @@ def _distance_sq_ratio[
         var x = Float64(point.x) - Float64(origin.x)
         var y = Float64(point.y) - Float64(origin.y)
         var z = Float64(point.z) - Float64(origin.z)
-        return (x * x + y * y + z * z, 1)
+        return (squared_length3[DType.float64](x, y, z), 1)
     return (
-        products.cross_x * products.cross_x
-        + products.cross_y * products.cross_y
-        + products.cross_z * products.cross_z,
+        squared_length3[DType.float64](
+            products.cross_x, products.cross_y, products.cross_z
+        ),
         products.norm_sq,
     )
 
@@ -840,7 +840,7 @@ struct Ray(ImplicitlyCopyable):
         var dz = Float64(self.direction.z)
         var norm = squared_length3[DType.float64](dx, dy, dz)
         var projection = x * dx + y * dy + z * dz
-        var distance = x * x + y * y + z * z
+        var distance = squared_length3[DType.float64](x, y, z)
         var radius = Float64(sphere.radius) * Float64(sphere.radius)
         var outside = distance - radius
         var discriminant = projection * projection - norm * outside

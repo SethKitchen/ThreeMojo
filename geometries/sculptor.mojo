@@ -51,7 +51,12 @@ limits, and explicit zero and nonfinite rules.
 """
 from core.ordinal import ordinal_valid
 
-from math.norm import length2, length3, reciprocal_normalized3
+from math.norm import (
+    length2,
+    length3,
+    reciprocal_normalized3,
+    squared_length3,
+)
 from cameras.camera import Camera, project_point, unproject_point
 from controls.input import PRIMARY, PointerButton
 from core.assets import Assets
@@ -1294,7 +1299,7 @@ struct Sculptor(Movable):
         var px = hit.x - o.x
         var py = hit.y - o.y
         var pz = hit.z - o.z
-        var denominator = d.x * d.x + d.y * d.y + d.z * d.z
+        var denominator = squared_length3[DType.float64](d.x, d.y, d.z)
         var projection = (
             d.x * px + d.y * py + d.z * pz
         ) / denominator if denominator > 0 else 0.0
