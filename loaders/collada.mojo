@@ -84,6 +84,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
 from lights.light import (
     ambient_light,
     directional_light,
@@ -1646,10 +1647,7 @@ struct _Loader(Movable):
                 or kind == "lines"
                 or kind == "linestrips"
             ):
-                var at = -1
-                for index in range(len(kinds)):
-                    if kinds[index] == kind:
-                        at = index
+                var at = first_match(kinds, kind)
                 if at < 0:
                     at = len(kinds)
                     kinds.append(kind)

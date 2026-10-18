@@ -34,6 +34,7 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
+from core.search import first_match
 from loaders.bytes import (
     ascii_digit,
     ascii_letter,
@@ -147,10 +148,7 @@ struct XmlDocument(Movable):
             Error: If the index names no element.
         """
         self._check(element)
-        for name in self.elements[element].attribute_names:
-            if name == key:
-                return True
-        return False
+        return first_match(self.elements[element].attribute_names, key) >= 0
 
     def attribute(
         self, element: Int, key: String, default: String = ""
@@ -171,10 +169,10 @@ struct XmlDocument(Movable):
         """
         self._check(element)
         ref found = self.elements[element]
-        for index in range(len(found.attribute_names)):
-            if found.attribute_names[index] == key:
-                return found.attribute_values[index]
-        return default
+        var index = first_match(found.attribute_names, key)
+        if index < 0:
+            return default
+        return found.attribute_values[index]
 
     def children(self, element: Int) raises -> List[Int]:
         """Return an element's child elements.
@@ -821,11 +819,8 @@ struct _Parser(Movable):
             self.expect(61, "'=' after an attribute name")
             _ = self.skip_space()
             var value = self.attribute_value()
-            for seen in element.attribute_names:
-                if seen == key:
-                    raise Error(
-                        self.where() + "an attribute given twice: " + key
-                    )
+            if first_match(element.attribute_names, key) >= 0:
+                raise Error(self.where() + "an attribute given twice: " + key)
             element.attribute_names.append(key^)
             element.attribute_values.append(value^)
         document.elements.append(element^)
