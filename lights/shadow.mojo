@@ -1072,11 +1072,7 @@ def biased_position(
     Returns:
         The position to project into the map.
     """
-    return Vector3(
-        position.x + normal.x * normal_bias,
-        position.y + normal.y * normal_bias,
-        position.z + normal.z * normal_bias,
-    )
+    return position + normal * normal_bias
 
 
 def shadow_coordinate(

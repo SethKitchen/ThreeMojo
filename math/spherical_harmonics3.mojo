@@ -205,11 +205,7 @@ struct SphericalHarmonics3(Equatable, ImplicitlyCopyable, Writable):
                 index, normal
             ) if irradiance else sh_basis(index, normal)
             var term = self._at(index)
-            total = Vector3(
-                total.x + term.x * weight,
-                total.y + term.y * weight,
-                total.z + term.z * weight,
-            )
+            total = total + term * weight
         return total
 
     def add(mut self, other: Self):

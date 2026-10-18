@@ -806,11 +806,7 @@ def physical_outgoing(
     Returns:
         The outgoing light, linear.
     """
-    var diffuse = Vector3(
-        direct.diffuse.x + surface.diffuse.x * indirect.x * occlusion,
-        direct.diffuse.y + surface.diffuse.y * indirect.y * occlusion,
-        direct.diffuse.z + surface.diffuse.z * indirect.z * occlusion,
-    )
+    var diffuse = direct.diffuse + surface.diffuse * indirect * occlusion
     var specular = direct.specular
     var coat = direct.clearcoat
     var sheen = direct.sheen
@@ -849,43 +845,20 @@ def physical_outgoing(
         # three.js's `computeSpecularOcclusion`, which dims a reflection
         # less than the diffuse where the surface faces the eye.
         var shade = specular_occlusion(dot_nv, occlusion, roughness)
-        specular = Vector3(
-            specular.x
-            + radiance.x * single.x * shade
-            + multi.x * irradiance.x * shade,
-            specular.y
-            + radiance.y * single.y * shade
-            + multi.y * irradiance.y * shade,
-            specular.z
-            + radiance.z * single.z * shade
-            + multi.z * irradiance.z * shade,
+        specular = (
+            specular + radiance * single * shade + multi * irradiance * shade
         )
-        diffuse = Vector3(
-            diffuse.x + surface.diffuse.x * kept * irradiance.x * occlusion,
-            diffuse.y + surface.diffuse.y * kept * irradiance.y * occlusion,
-            diffuse.z + surface.diffuse.z * kept * irradiance.z * occlusion,
-        )
+        diffuse = diffuse + surface.diffuse * kept * irradiance * occlusion
         if clearcoat > 0:
             var gloss = environment_brdf(
                 dot_nv_coat.x, CLEARCOAT_F0, 1, clearcoat_roughness
             )
-            coat = Vector3(
-                coat.x + coat_radiance.x * gloss.x * occlusion,
-                coat.y + coat_radiance.y * gloss.y * occlusion,
-                coat.z + coat_radiance.z * gloss.z * occlusion,
-            )
+            coat = coat + coat_radiance * gloss * occlusion
         if layers.sheen:
             # three.js's `sheenSpecularIndirect`: its irradiance is pi
             # times the one here, and `aomap_fragment` occludes it.
             var cloth = ibl_sheen(dot_nv, layers.sheen_roughness) * Float32(pi)
-            sheen = Vector3(
-                sheen.x
-                + irradiance.x * layers.sheen_color.x * cloth * occlusion,
-                sheen.y
-                + irradiance.y * layers.sheen_color.y * cloth * occlusion,
-                sheen.z
-                + irradiance.z * layers.sheen_color.z * cloth * occlusion,
-            )
+            sheen = sheen + irradiance * layers.sheen_color * cloth * occlusion
     if transmission > 0:
         # three.js's `transmission_fragment`: the diffuse light, direct and
         # indirect together, gives way to what the surface shows through
@@ -986,11 +959,7 @@ def scattering_through(
     Returns:
         The light's share that shows through, before its color.
     """
-    var half = Vector3(
-        toward_light.x + normal.x * distortion,
-        toward_light.y + normal.y * distortion,
-        toward_light.z + normal.z * distortion,
-    )
+    var half = toward_light + normal * distortion
     half.normalize()
     var facing = clamp(-toward_eye.dot(half), 0, 1)
     # The power as `exp2` of `log2`, as `blinn_phong` spells it, with zero
@@ -1090,11 +1059,7 @@ def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
     Returns:
         The arriving light, linear.
     """
-    return Vector3(
-        direct.x * mask + indirect.x,
-        direct.y * mask + indirect.y,
-        direct.z * mask + indirect.z,
-    )
+    return direct * mask + indirect
 
 
 def occluded_light(
@@ -1121,11 +1086,7 @@ def occluded_light(
     Returns:
         The arriving light, linear.
     """
-    return Vector3(
-        arriving.x - indirect.x + (indirect.x + baked.x) * occlusion,
-        arriving.y - indirect.y + (indirect.y + baked.y) * occlusion,
-        arriving.z - indirect.z + (indirect.z + baked.z) * occlusion,
-    )
+    return arriving - indirect + (indirect + baked) * occlusion
 
 
 def physical_light(
@@ -1183,11 +1144,7 @@ def physical_light(
                 layers.sheen_color,
                 layers.sheen_roughness,
             )
-            sheen = Vector3(
-                sheen.x + irradiance.x * cloth.x,
-                sheen.y + irradiance.y * cloth.y,
-                sheen.z + irradiance.z * cloth.z,
-            )
+            sheen = sheen + irradiance * cloth
         var lobe = ggx(
             toward_light,
             toward_eye,
@@ -1197,16 +1154,8 @@ def physical_light(
             roughness,
             layers,
         )
-        specular = Vector3(
-            specular.x + irradiance.x * lobe.x,
-            specular.y + irradiance.y * lobe.y,
-            specular.z + irradiance.z * lobe.z,
-        )
-        diffuse = Vector3(
-            diffuse.x + irradiance.x * surface.diffuse.x,
-            diffuse.y + irradiance.y * surface.diffuse.y,
-            diffuse.z + irradiance.z * surface.diffuse.z,
-        )
+        specular = specular + irradiance * lobe
+        diffuse = diffuse + irradiance * surface.diffuse
     if coat_lambert > 0:
         var lobe = ggx(
             toward_light,
@@ -1216,11 +1165,7 @@ def physical_light(
             1,
             clearcoat_roughness,
         )
-        coat = Vector3(
-            coat.x + light.x * coat_lambert * lobe.x,
-            coat.y + light.y * coat_lambert * lobe.y,
-            coat.z + light.z * coat_lambert * lobe.z,
-        )
+        coat = coat + light * coat_lambert * lobe
     return Reflected(diffuse, specular, coat, sheen)
 
 
@@ -2863,16 +2808,9 @@ struct Lighting(Movable):
                     fresnel,
                 )
                 ref glow = self.rect_radiances[index]
-                diffuse = Vector3(
-                    diffuse.x + added.diffuse.x * glow.r,
-                    diffuse.y + added.diffuse.y * glow.g,
-                    diffuse.z + added.diffuse.z * glow.b,
-                )
-                specular = Vector3(
-                    specular.x + added.specular.x * glow.r,
-                    specular.y + added.specular.y * glow.g,
-                    specular.z + added.specular.z * glow.b,
-                )
+                var tint = Vector3(glow.r, glow.g, glow.b)
+                diffuse = diffuse + added.diffuse * tint
+                specular = specular + added.specular * tint
             scaled = Reflected(
                 diffuse, specular, scaled.clearcoat, scaled.sheen
             )
