@@ -617,6 +617,24 @@ def screen_pixel[
     return shown.premultiplied()
 
 
+def require_saved_frame(length: Int, pixels: Int) raises:
+    """Refuse a saved image that is neither empty nor the frame's size.
+
+    Args:
+        length: How many pixels the saved image holds.
+        pixels: How many pixels the frame holds.
+
+    Returns:
+        Nothing. The call returns when the image is empty or matches
+            the frame.
+
+    Raises:
+        Error: If the image is present and a different size.
+    """
+    if length != 0 and length != pixels:
+        raise Error("A saved image must be the frame's size")
+
+
 def shader_light(
     mut frame: RenderTarget,
     program: NodeProgram,
@@ -642,8 +660,7 @@ def shader_light(
     var width = frame.width
     var height = frame.height
     var count = width * height
-    if len(saved) != 0 and len(saved) != count:
-        raise Error("A saved image must be the frame's size")
+    require_saved_frame(len(saved), count)
     for index in range(len(program.textures)):
         if program.textures[index].value >= textures.count():
             raise Error("A shader pass reads a texture that is not there")

@@ -437,10 +437,7 @@ struct Scene(Movable):
                 raise Error(
                     "An LOD level must name a node that is in the scene"
                 )
-            if level.object.value in above:
-                raise Error(
-                    "A node cannot go under itself or its own descendant"
-                )
+            self._refuse_listed(level.object.value, above)
         for level in lod.levels:
             self.add(level.object, parent=lod.node)
         self.lods.append(lod^)
@@ -471,8 +468,7 @@ struct Scene(Movable):
         require_lod_index(index, len(self.lods))
         self._check(object)
         var holder = self.lods[index].node
-        if object.value in self._chain(holder):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(object.value, holder)
         self.lods[index].add_level(object, distance, hysteresis)
         self.add(object, parent=holder)
         self._show_level(index)
@@ -698,8 +694,7 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         self._stale = True
         return self._nodes[index.value]
 
@@ -782,8 +777,7 @@ struct Scene(Movable):
         """
         self._check(child)
         self._check_parent(parent)
-        if child.value in self._chain(parent):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(child.value, parent)
         self._nodes[child.value].parent = parent
         self._removed[child.value] = False
         for at in range(len(self._sequence)):  # pragma: no branch
@@ -817,8 +811,7 @@ struct Scene(Movable):
         """
         self._check(child)
         self._check_parent(parent)
-        if child.value in self._chain(parent):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(child.value, parent)
         var carry = self._world_now(parent)
         carry.invert()
         carry.multiply(self._world_now(self._nodes[child.value].parent))
@@ -957,8 +950,7 @@ struct Scene(Movable):
         _check_type(node)
         var parent = node.parent
         var moved = parent != self._nodes[index.value].parent
-        if index.value in self._chain(parent):
-            raise Error("A node cannot go under itself or its own descendant")
+        self._refuse_under(index.value, parent)
         var removed = self._removed[index.value]
         self._nodes[index.value] = node^
         if moved:
@@ -1009,8 +1001,7 @@ struct Scene(Movable):
                 along up is not refused: `facing` settles both, as three.js
                 does.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         var eye = self.world_position(index)
         var desired = facing(eye, target, self._nodes[index.value].up, camera)
         var parent = self._nodes[index.value].parent
@@ -1122,8 +1113,7 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         return self._nodes[index.value].render_order
 
     def light_shown(self, light: Light) raises -> Bool:
@@ -1483,6 +1473,40 @@ struct Scene(Movable):
         if parent != NO_PARENT:
             if parent.value < 0 or parent.value >= len(self._nodes):
                 raise Error("A node's parent must already be in the scene")
+
+    def _refuse_listed(self, child: Int, above: List[Int]) raises:
+        """Refuse a node that is already in a parent chain.
+
+        Args:
+            child: The node's index.
+            above: The parent and every node above it.
+
+        Returns:
+            Nothing. The call returns when the child is not in that chain.
+
+        Raises:
+            Error: If the child would go under itself or its own
+                descendant.
+        """
+        if child in above:
+            raise Error("A node cannot go under itself or its own descendant")
+
+    def _refuse_under(self, child: Int, parent: NodeId) raises:
+        """Refuse a node placed under itself or its own descendant.
+
+        Args:
+            child: The node's index.
+            parent: The node it would go under.
+
+        Returns:
+            Nothing. The call returns when the parent is not the child
+                and is not under the child.
+
+        Raises:
+            Error: If the child would go under itself or its own
+                descendant, or a parent link names no node or loops.
+        """
+        self._refuse_listed(child, self._chain(parent))
 
     def _chain(self, index: NodeId) raises -> List[Int]:
         """Return a node and every node above it, nearest first, or nothing

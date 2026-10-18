@@ -747,6 +747,23 @@ def require_gap_size(size: Float32) raises:
         raise Error("A gap size cannot be negative")
 
 
+def require_strand_opacity(opacity: Float32) raises:
+    """Refuse a strand opacity outside zero through one.
+
+    Args:
+        opacity: The coverage, from zero through one.
+
+    Returns:
+        Nothing. The call returns when the opacity is finite and inside
+            that range.
+
+    Raises:
+        Error: If the opacity is not finite or is outside zero through one.
+    """
+    if not isfinite(opacity) or opacity < 0 or opacity > 1:
+        raise Error("Strand opacity must be finite and between zero and one")
+
+
 @fieldwise_init
 struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     """Whether a surface is lit, as a type rather than a bare int.

@@ -386,6 +386,27 @@ def shade_groom(
     return colors^
 
 
+def require_groom_fields(groom: HairGroom) raises:
+    """Refuse shading fields that do not match the groom.
+
+    Args:
+        groom: The strands.
+
+    Returns:
+        Nothing. The call returns when the normals, the depths, and the
+            shades match the groom.
+
+    Raises:
+        Error: If a shading field does not match the groom.
+    """
+    if (
+        len(groom.normals) != len(groom.points)
+        or len(groom.depths) != len(groom.points)
+        or len(groom.shades) != len(groom)
+    ):
+        raise Error("Hair shading fields must match the groom")
+
+
 def shade_groom_into(
     groom: HairGroom,
     look: HairLook,
@@ -430,12 +451,7 @@ def shade_groom_into(
             raise Error("Hair strand starts must partition the points")
     if len(colors) != count * 3:
         raise Error("Hair color storage needs three floats per point")
-    if (
-        len(groom.normals) != count
-        or len(groom.depths) != count
-        or len(groom.shades) != len(groom)
-    ):
-        raise Error("Hair shading fields must match the groom")
+    require_groom_fields(groom)
     if len(optical_depths) != 0 and len(optical_depths) != count * len(lights):
         raise Error("Hair optical depths need one value per point and light")
     for index in range(len(optical_depths)):

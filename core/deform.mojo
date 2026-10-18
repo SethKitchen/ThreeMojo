@@ -60,6 +60,7 @@ from objects.skinned_mesh import (
     BONES_PER_VERTEX,
     SKIN_INDEX,
     SKIN_WEIGHT,
+    require_skin_width,
 )
 from render.rasterizer import check_data_map
 from render.texture_store import NO_TEXTURE, TextureStore
@@ -391,11 +392,8 @@ def skin_carriers(
         raise Error("A skinned mesh needs skinIndex and skinWeight")
     ref bones = geometry.attribute_view(String(SKIN_INDEX))
     ref weights = geometry.attribute_view(String(SKIN_WEIGHT))
-    if (
-        bones.item_size != BONES_PER_VERTEX
-        or weights.item_size != BONES_PER_VERTEX
-    ):
-        raise Error("A skin attribute holds four numbers a vertex")
+    require_skin_width(bones.item_size)
+    require_skin_width(weights.item_size)
     if bones.count() != vertex_count or weights.count() != vertex_count:
         raise Error("A skin attribute must cover every vertex")
     var count = len(pose.palette)
