@@ -213,6 +213,22 @@ def activation_rate(
     return Frequency(Float32((excitation - activation) / tau), PER_SECOND)
 
 
+def require_fiber_length(length: Float64) raises:
+    """Refuse a fiber length that is not finite and positive.
+
+    Args:
+        length: The fiber length, in meters.
+
+    Returns:
+        Nothing. The call returns when the length is finite and positive.
+
+    Raises:
+        Error: If the length is not finite and positive.
+    """
+    if not positive_finite(length):
+        raise Error("A fiber length must be finite and positive")
+
+
 @fieldwise_init
 struct MuscleArchitecture(ImplicitlyCopyable, Writable):
     """The measured architecture of one muscle-tendon unit."""
@@ -332,8 +348,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         Raises:
             Error: If the architecture or fiber length is invalid.
         """
-        if not (positive_finite(Float64(fiber_m))):
-            raise Error("A fiber length must be finite and positive")
+        require_fiber_length(fiber_m)
         var s = self.thickness() / fiber_m
         if s >= 1.0:
             return asin(1.0)
@@ -360,8 +375,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         """
         self.check()
         _check_activation(activation)
-        if not (positive_finite(Float64(fiber.value))):
-            raise Error("A fiber length must be finite and positive")
+        require_fiber_length(Float64(fiber.value))
         if not isfinite(velocity.value):
             raise Error("A fiber velocity must be finite")
         var l0 = Float64(self.fiber_length.value)

@@ -84,6 +84,22 @@ def _check_second_moments(
         raise Error("A sampled tensor must be physically admissible")
 
 
+def require_segment_length(length: Float64) raises:
+    """Refuse a segment length that is negative or not finite.
+
+    Args:
+        length: The segment length, in meters.
+
+    Returns:
+        Nothing. The call returns when the length is finite and zero or more.
+
+    Raises:
+        Error: If the length is negative or not finite.
+    """
+    if not (isfinite(length) and length >= 0.0):
+        raise Error("A segment length must be finite and nonnegative")
+
+
 @fieldwise_init
 struct SegmentInertia(ImplicitlyCopyable):
     """The inertial properties of one segment.
@@ -115,8 +131,7 @@ struct SegmentInertia(ImplicitlyCopyable):
         """
         if not (positive_finite(Float64(self.mass.value))):
             raise Error("A segment must have finite positive mass")
-        if not (isfinite(self.length.value) and self.length.value >= 0.0):
-            raise Error("A segment length must be finite and nonnegative")
+        require_segment_length(Float64(self.length.value))
         var values: List[Float32] = [
             self.center.x,
             self.center.y,
@@ -275,8 +290,7 @@ struct InertiaTally(Copyable, Movable):
                 admissible, or the SI output cannot represent it.
         """
         self._check_sums()
-        if not (isfinite(length) and length >= 0.0):
-            raise Error("A segment length must be finite and nonnegative")
+        require_segment_length(Float64(length))
         var mass = self.mass
         # _check_sums already established finite nonnegative mass.
         if mass == 0.0:

@@ -81,6 +81,22 @@ comptime PECTORALIS_MINOR = TorsoMuscle(13)
 comptime SUBCLAVIUS = TorsoMuscle(14)
 
 
+def require_torso_athleticism(athleticism: Athleticism) raises:
+    """Refuse a torso muscle whose athleticism is not named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Returns:
+        Nothing. The call returns when the athleticism is named.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    if not athleticism.is_valid():
+        raise Error("A torso muscle needs a toned or untoned athleticism")
+
+
 struct TorsoMuscleDimensions(Copyable, Movable):
     """Torso landmarks plus the athleticism scale for muscle radii."""
 
@@ -112,8 +128,7 @@ struct TorsoMuscleDimensions(Copyable, Movable):
                 named, or if the scale is not positive.
         """
         self.torso.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A torso muscle needs a toned or untoned athleticism")
+        require_torso_athleticism(self.athleticism)
         if not isfinite(self.scale) or self.scale <= 0:
             raise Error("A torso muscle radius scale must be positive")
 
@@ -130,8 +145,7 @@ def torso_muscle_dimensions(spec: HumanoidSpec) raises -> TorsoMuscleDimensions:
     Raises:
         Error: If `spec` is refused, or athleticism is not named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A torso muscle needs a toned or untoned athleticism")
+    require_torso_athleticism(spec.athleticism)
     return TorsoMuscleDimensions(
         torso_dimensions(spec.stature, spec.sex, spec.genome), spec.athleticism
     )

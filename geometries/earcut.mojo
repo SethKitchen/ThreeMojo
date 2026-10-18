@@ -834,6 +834,22 @@ def _earcut_linked(
             break
 
 
+def require_even_points(count: Int) raises:
+    """Refuse a point list whose length is odd.
+
+    Args:
+        count: How many numbers the list holds, x then y for each point.
+
+    Returns:
+        Nothing. The call returns when the count is even.
+
+    Raises:
+        Error: If the count is odd.
+    """
+    if count % 2 != 0:
+        raise Error("earcut: a point list of odd length")
+
+
 def earcut(
     data: List[Float64], hole_indices: List[Int] = List[Int]()
 ) raises -> List[Int]:
@@ -854,8 +870,7 @@ def earcut(
             it, before the one before it, or where the outline would
             have no point.
     """
-    if len(data) % 2 != 0:
-        raise Error("earcut: a point list of odd length")
+    require_even_points(len(data))
     var points = len(data) // 2
     for at in range(len(hole_indices)):
         var low = 1 if at == 0 else hole_indices[at - 1] + 1
@@ -903,8 +918,7 @@ def drop_closing_point(mut points: List[Float64]) raises:
     Raises:
         Error: If the list has an odd length.
     """
-    if len(points) % 2 != 0:
-        raise Error("earcut: a point list of odd length")
+    require_even_points(len(points))
     var n = len(points)
     var repeats = (
         n > 4 and points[n - 2] == points[0] and points[n - 1] == (points[1])

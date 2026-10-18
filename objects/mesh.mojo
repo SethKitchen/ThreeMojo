@@ -86,6 +86,22 @@ from core.object3d import NodeId
 from materials.material import MaterialId
 
 
+def require_mesh_material(material: MaterialId) raises:
+    """Refuse a mesh material id that is negative.
+
+    Args:
+        material: The material's id.
+
+    Returns:
+        Nothing. The call returns when the id is zero or more.
+
+    Raises:
+        Error: If the id is negative.
+    """
+    if material.value < 0:
+        raise Error("A mesh must name a material")
+
+
 struct Mesh(ImplicitlyCopyable):
     """A geometry drawn with a given material at a given scene node."""
 
@@ -155,8 +171,7 @@ struct Mesh(ImplicitlyCopyable):
             raise Error("A mesh must name a scene node")
         if geometry.value < 0:
             raise Error("A mesh must name a geometry")
-        if material.value < 0:
-            raise Error("A mesh must name a material")
+        require_mesh_material(material)
         self.geometry = geometry
         self.material = material
         self.node = node
@@ -201,8 +216,7 @@ struct Mesh(ImplicitlyCopyable):
         if len(materials) == 0:
             raise Error("A mesh with a material list needs one material")
         for index in range(len(materials)):  # pragma: no branch
-            if materials[index].value < 0:
-                raise Error("A mesh must name a material")
+            require_mesh_material(materials[index])
         self = Mesh(
             geometry,
             materials[0],

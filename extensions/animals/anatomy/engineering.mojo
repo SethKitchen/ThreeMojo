@@ -68,6 +68,22 @@ def _check_reference_support(
         )
 
 
+def require_calibration_variant(variant: Variant) raises:
+    """Refuse a calibration variant that is not named.
+
+    Args:
+        variant: The morph.
+
+    Returns:
+        Nothing. The call returns when the variant is valid.
+
+    Raises:
+        Error: If the variant is not valid.
+    """
+    if not variant.is_valid():
+        raise Error("A calibration variant must be named")
+
+
 @fieldwise_init
 struct Calibration(ImplicitlyCopyable, Writable):
     """How a species' sculpt maps onto its published size."""
@@ -108,8 +124,7 @@ struct Calibration(ImplicitlyCopyable, Writable):
                 reference estimates were not explicitly requested.
         """
         var body = species_body(self.species)
-        if not self.variant.is_valid():
-            raise Error("A calibration variant must be named")
+        require_calibration_variant(self.variant)
         if self.variant.value >= len(species_variants(self.species)):
             raise Error("A calibration variant must belong to its species")
         if self.variant.value < 0 and body.variant >= 0:
@@ -209,8 +224,7 @@ def calibrate(
             unsupported estimates lack opt-in, or the sculpt cannot be measured.
     """
     var body = species_body(species)
-    if not variant.is_valid():
-        raise Error("A calibration variant must be named")
+    require_calibration_variant(variant)
     var morph = variant.value
     var matched = body.variant < 0 or morph == body.variant
     if morph < 0:

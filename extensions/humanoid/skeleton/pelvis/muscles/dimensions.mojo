@@ -158,6 +158,22 @@ struct PelvisChainSet(ImplicitlyCopyable):
     var c2: PelvisChain
 
 
+def require_pelvis_athleticism(athleticism: Athleticism) raises:
+    """Refuse a pelvic muscle whose athleticism is not named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Returns:
+        Nothing. The call returns when the athleticism is named.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    if not athleticism.is_valid():
+        raise Error("A pelvic muscle needs a toned or untoned athleticism")
+
+
 @fieldwise_init
 struct PelvisMuscleDimensions(ImplicitlyCopyable):
     """Pelvis landmarks, femur landmarks, leg junctions and the scale.
@@ -194,8 +210,7 @@ struct PelvisMuscleDimensions(ImplicitlyCopyable):
                 positive, or if a landmark is not finite.
         """
         self.pelvis.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A pelvic muscle needs a toned or untoned athleticism")
+        require_pelvis_athleticism(self.athleticism)
         if not isfinite(self.scale) or self.scale <= 0:
             raise Error("A pelvic muscle radius scale must be positive")
         if not isfinite(self.k) or self.k <= 0:
@@ -302,8 +317,7 @@ def pelvis_muscle_dimensions(
     Raises:
         Error: If `spec` is refused, or athleticism is not named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A pelvic muscle needs a toned or untoned athleticism")
+    require_pelvis_athleticism(spec.athleticism)
     var pelvis = pelvis_dimensions(spec.stature, spec.sex)
     var femur = femur_dimensions(spec.stature, spec.sex, RIGHT)
     var S = spec.stature.value

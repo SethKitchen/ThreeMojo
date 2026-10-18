@@ -99,6 +99,24 @@ comptime BLOCK_SAMPLES = 64
 # How many quantization and Huffman tables a file can define: four each,
 # by a two-bit id.
 comptime TABLE_COUNT = 4
+
+
+def require_quant_table(id: Int) raises:
+    """Refuse a quantization table id past three.
+
+    Args:
+        id: The table id.
+
+    Returns:
+        Nothing. The call returns when the id is zero through three.
+
+    Raises:
+        Error: If the id is past three.
+    """
+    if id >= TABLE_COUNT:
+        raise Error("A quantization table id must be zero through three")
+
+
 # The most components a frame can hold here: gray, or luma and two chroma.
 comptime MAX_COMPONENTS = 3
 # The ids a three-component frame gives its luma, its blue difference and
@@ -743,8 +761,7 @@ def _read_quant_tables(
                 "A sixteen-bit quantization table is not supported: this"
                 " decoder reads baseline JPEG"
             )
-        if id >= TABLE_COUNT:
-            raise Error("A quantization table id must be zero through three")
+        require_quant_table(id)
         if at + 1 + BLOCK_SAMPLES > end:
             raise Error("A quantization table does not fit its segment")
         var table = List[Int]()
@@ -864,8 +881,7 @@ def _read_frame(
         var table = Int(bytes[at + 2])
         if h == 0 or v == 0 or h > MAX_SAMPLING or v > MAX_SAMPLING:
             raise Error("A sampling factor must be one or two")
-        if table >= TABLE_COUNT:
-            raise Error("A quantization table id must be zero through three")
+        require_quant_table(table)
         for earlier in range(len(components)):
             if components[earlier].id == id:
                 raise Error("Two components share one id")

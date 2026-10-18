@@ -507,6 +507,23 @@ struct MassProperties(ImplicitlyCopyable):
         self.inertia = inertia
 
 
+def require_capsule_half(half_height: Float64) raises:
+    """Refuse a capsule half height that is negative or not finite.
+
+    Args:
+        half_height: Half the length of the segment between the spheres.
+
+    Returns:
+        Nothing. The call returns when the half height is finite and zero
+        or more.
+
+    Raises:
+        Error: If the half height is negative or not finite.
+    """
+    if not (isfinite(half_height) and half_height >= 0):
+        raise Error("A capsule's half height must be zero or more")
+
+
 struct Shape(Copyable, Movable):
     """One collision shape in its body's frame."""
 
@@ -589,8 +606,7 @@ struct Shape(Copyable, Movable):
                 half height is negative or not finite.
         """
         _check_size(radius.value)
-        if not (isfinite(half_height.value) and half_height.value >= 0):
-            raise Error("A capsule's half height must be zero or more")
+        require_capsule_half(Float64(half_height.value))
         var out = Shape(CAPSULE)
         out.radius = radius.value
         out.half_height = half_height.value
@@ -668,8 +684,7 @@ struct Shape(Copyable, Movable):
 
     def _capsule(self, mass: Float32) raises -> Matrix3:
         _check_size(self.radius)
-        if not (isfinite(self.half_height) and self.half_height >= 0):
-            raise Error("A capsule's half height must be zero or more")
+        require_capsule_half(Float64(self.half_height))
         var r = Float64(self.radius)
         var h = 2 * Float64(self.half_height)
         # Cancel the common pi*r*r. Neither volume nor a small mass
