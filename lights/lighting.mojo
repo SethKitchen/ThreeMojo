@@ -945,6 +945,45 @@ def scattering_through(
     return lit * scale + ambient
 
 
+def _rgb(color: FloatColor) -> Vector3:
+    """Return the red, green, and blue of `color`.
+
+    Args:
+        color: The color.
+
+    Returns:
+        Its three channels. Alpha is left out.
+    """
+    return Vector3(color.r, color.g, color.b)
+
+
+def _opaque(rgb: Vector3) -> FloatColor:
+    """Return an opaque color from linear red, green, and blue.
+
+    Args:
+        rgb: The three channels.
+
+    Returns:
+        The color. Alpha is one.
+    """
+    return FloatColor(rgb.x, rgb.y, rgb.z)
+
+
+def _add_rgb(base: FloatColor, added: Vector3) -> FloatColor:
+    """Return `base` with `added` summed into red, green, and blue.
+
+    Alpha stays one, as a lit sum keeps it.
+
+    Args:
+        base: The color so far.
+        added: The light to add.
+
+    Returns:
+        The sum.
+    """
+    return _opaque(_rgb(base) + added)
+
+
 def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
     """Return one light's color at a step of a volume's ray: three.js's
     `VolumetricLightingModel.direct`, which multiplies a light's color,
@@ -961,11 +1000,7 @@ def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
     Returns:
         The color, linear.
     """
-    return Vector3(
-        light.x * reach * through.x * through.x,
-        light.y * reach * through.y * through.y,
-        light.z * reach * through.z * through.z,
-    )
+    return ((light * reach) * through) * through
 
 
 def rect_volume_light(
@@ -1447,12 +1482,7 @@ struct Lighting(Movable):
                 continue
             if light.kind == AMBIENT:
                 var fill = light.radiance()
-                self.ambient = FloatColor(
-                    self.ambient.r + fill.r,
-                    self.ambient.g + fill.g,
-                    self.ambient.b + fill.b,
-                    1.0,
-                )
+                self.ambient = _add_rgb(self.ambient, _rgb(fill))
             elif light.kind == LIGHT_PROBE:
                 # Summed as three.js sums them: each coefficient times the
                 # probe's intensity, the color unread.
@@ -1892,12 +1922,7 @@ struct Lighting(Movable):
                 index, position, normal, receives, shape
             )
             ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * (lambert * through.x),
-                total.g + light.g * (lambert * through.y),
-                total.b + light.b * (lambert * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(light) * (through * lambert))
         for index in range(len(self.positions)):
             # From the surface to the bulb: how far, and which way.
             var ray = light_vector(self.positions[index], position)
@@ -1919,12 +1944,7 @@ struct Lighting(Movable):
                 self.point_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.point_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * (bare * through.x),
-                total.g + bulb.g * (bare * through.y),
-                total.b + bulb.b * (bare * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(bulb) * (through * bare))
         for index in range(len(self.sky_directions)):
             # How far the surface is turned toward the sky: one facing it,
             # zero facing the ground, a half edge-on. three.js's
@@ -1932,15 +1952,7 @@ struct Lighting(Movable):
             var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
             ref sky = self.skies[index]
             ref ground = self.grounds[index]
-            var lift = FloatColor(
-                ground.r + (sky.r - ground.r) * weight,
-                ground.g + (sky.g - ground.g) * weight,
-                ground.b + (sky.b - ground.b) * weight,
-                1.0,
-            )
-            total = FloatColor(
-                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
-            )
+            total = _add_rgb(total, mix_delta3(_rgb(ground), _rgb(sky), weight))
         for index in range(len(self.spot_positions)):
             var ray = light_vector(self.spot_positions[index], position)
             var toward = ray[0]
@@ -1972,12 +1984,7 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            total = FloatColor(
-                total.r + bulb.r * tint.x * (bare * through.x),
-                total.g + bulb.g * tint.y * (bare * through.y),
-                total.b + bulb.b * tint.z * (bare * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, (_rgb(bulb) * tint) * (through * bare))
         return total.scaled(self.scale)
 
     def toon_at[
@@ -2032,12 +2039,7 @@ struct Lighting(Movable):
                 index, position, normal, receives, shape
             )
             ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * (tone * through.x),
-                total.g + light.g * (tone * through.y),
-                total.b + light.b * (tone * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(light) * (through * tone))
         for index in range(len(self.positions)):
             var ray = light_vector(self.positions[index], position)
             var toward = ray[0]
@@ -2054,26 +2056,13 @@ struct Lighting(Movable):
                 self.point_shadows[index], position, normal, receives, shape
             )
             ref bulb = self.point_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * (bare * through.x),
-                total.g + bulb.g * (bare * through.y),
-                total.b + bulb.b * (bare * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(bulb) * (through * bare))
         for index in range(len(self.sky_directions)):
             # Indirect, so it is not stepped: the same sum as `intensity_at`.
             var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
             ref sky = self.skies[index]
             ref ground = self.grounds[index]
-            var lift = FloatColor(
-                ground.r + (sky.r - ground.r) * weight,
-                ground.g + (sky.g - ground.g) * weight,
-                ground.b + (sky.b - ground.b) * weight,
-                1.0,
-            )
-            total = FloatColor(
-                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
-            )
+            total = _add_rgb(total, mix_delta3(_rgb(ground), _rgb(sky), weight))
         for index in range(len(self.spot_positions)):
             var ray = light_vector(self.spot_positions[index], position)
             var toward = ray[0]
@@ -2100,12 +2089,7 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            total = FloatColor(
-                total.r + bulb.r * tint.x * (bare * through.x),
-                total.g + bulb.g * tint.y * (bare * through.y),
-                total.b + bulb.b * tint.z * (bare * through.z),
-                1.0,
-            )
+            total = _add_rgb(total, (_rgb(bulb) * tint) * (through * bare))
         return total.scaled(self.scale)
 
     def specular_at[
@@ -2157,9 +2141,7 @@ struct Lighting(Movable):
         # seen along.
         if toward_eye.length() == 0:
             return FloatColor(0.0, 0.0, 0.0, 1.0)
-        var red = Float32(0)
-        var green = Float32(0)
-        var blue = Float32(0)
+        var sum = Vector3(0, 0, 0)
         for index in range(len(self.directions)):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
@@ -2175,9 +2157,7 @@ struct Lighting(Movable):
                 shininess,
             )
             ref light = self.radiances[index]
-            red += light.r * (lambert * through.x) * sent.x
-            green += light.g * (lambert * through.y) * sent.y
-            blue += light.b * (lambert * through.z) * sent.z
+            sum = sum + (_rgb(light) * (through * lambert)) * sent
         for index in range(len(self.positions)):
             var ray = light_vector(self.positions[index], position)
             var toward = ray[0]
@@ -2199,9 +2179,7 @@ struct Lighting(Movable):
                 toward, toward_eye, normal, specular, shininess
             )
             ref bulb = self.point_radiances[index]
-            red += bulb.r * (bare * through.x) * sent.x
-            green += bulb.g * (bare * through.y) * sent.y
-            blue += bulb.b * (bare * through.z) * sent.z
+            sum = sum + (_rgb(bulb) * (through * bare)) * sent
         for index in range(len(self.spot_positions)):
             var ray = light_vector(self.spot_positions[index], position)
             var toward = ray[0]
@@ -2234,10 +2212,8 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            red += bulb.r * tint.x * (bare * through.x) * sent.x
-            green += bulb.g * tint.y * (bare * through.y) * sent.y
-            blue += bulb.b * tint.z * (bare * through.z) * sent.z
-        return FloatColor(red, green, blue, 1.0).scaled(self.scale)
+            sum = sum + ((_rgb(bulb) * tint) * (through * bare)) * sent
+        return _opaque(sum).scaled(self.scale)
 
     def ambient_at(self, normal: Vector3, position: Vector3) -> FloatColor:
         """Return the ambient term, the light probes' irradiance and the
@@ -2260,18 +2236,11 @@ struct Lighting(Movable):
             The light, linear and unscaled. Alpha is one.
         """
         var lift = self.probe.get_irradiance_at(normal)
-        var total = FloatColor(
-            self.ambient.r + lift.x,
-            self.ambient.g + lift.y,
-            self.ambient.b + lift.z,
-            1.0,
-        )
+        var total = _add_rgb(self.ambient, lift)
         if self.grid.is_empty():
             return total
         var grid = self.grid.irradiance_at(position, normal)
-        return FloatColor(
-            total.r + grid.x, total.g + grid.y, total.b + grid.z, 1.0
-        )
+        return _add_rgb(total, grid)
 
     def scattered_at[
         R: ShadowShape = Unshaped
@@ -2311,9 +2280,7 @@ struct Lighting(Movable):
         var toward_eye = toward_eye_at(self.eye, self.toward_eye, position)
         if toward_eye.length() == 0:
             return FloatColor(0.0, 0.0, 0.0, 1.0)
-        var red = Float32(0)
-        var green = Float32(0)
-        var blue = Float32(0)
+        var sum = Vector3(0, 0, 0)
         for index in range(len(self.directions)):
             var sent = scattering_through(
                 self.directions[index],
@@ -2328,9 +2295,7 @@ struct Lighting(Movable):
                 index, position, normal, receives, shape
             )
             ref light = self.radiances[index]
-            red += light.r * (sent * shadowed.x)
-            green += light.g * (sent * shadowed.y)
-            blue += light.b * (sent * shadowed.z)
+            sum = sum + _rgb(light) * (shadowed * sent)
         for index in range(len(self.positions)):
             var ray = light_vector(self.positions[index], position)
             var toward = ray[0]
@@ -2354,9 +2319,7 @@ struct Lighting(Movable):
                 ambient,
             )
             ref bulb = self.point_radiances[index]
-            red += bulb.r * (sent * (bare * shadowed.x))
-            green += bulb.g * (sent * (bare * shadowed.y))
-            blue += bulb.b * (sent * (bare * shadowed.z))
+            sum = sum + _rgb(bulb) * ((shadowed * bare) * sent)
         for index in range(len(self.spot_positions)):
             var ray = light_vector(self.spot_positions[index], position)
             var toward = ray[0]
@@ -2388,10 +2351,8 @@ struct Lighting(Movable):
             )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
-            red += bulb.r * tint.x * (sent * (bare * shadowed.x))
-            green += bulb.g * tint.y * (sent * (bare * shadowed.y))
-            blue += bulb.b * tint.z * (sent * (bare * shadowed.z))
-        return FloatColor(red, green, blue, 1.0)
+            sum = sum + (_rgb(bulb) * tint) * ((shadowed * bare) * sent)
+        return _opaque(sum)
 
     def volume_light_at(
         self, position: Vector3, normal: Vector3, receives: Bool
@@ -2422,7 +2383,7 @@ struct Lighting(Movable):
             var distance = light_vector(self.positions[index], position)[1]
             ref bulb = self.point_radiances[index]
             total = total + shadowed_twice(
-                Vector3(bulb.r, bulb.g, bulb.b),
+                _rgb(bulb),
                 falloff(distance, self.decays[index], self.cutoffs[index]),
                 self.shadow_through(
                     self.point_shadows[index], position, normal, receives
@@ -2444,7 +2405,7 @@ struct Lighting(Movable):
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
             total = total + shadowed_twice(
-                Vector3(bulb.r * tint.x, bulb.g * tint.y, bulb.b * tint.z),
+                _rgb(bulb) * tint,
                 rim
                 * falloff(
                     distance, self.spot_decays[index], self.spot_cutoffs[index]
@@ -2460,7 +2421,7 @@ struct Lighting(Movable):
                 self.rect_positions[index],
                 self.rect_half_widths[index],
                 self.rect_half_heights[index],
-                Vector3(glow.r, glow.g, glow.b),
+                _rgb(glow),
                 self.up,
                 self.back,
             )
@@ -2496,12 +2457,7 @@ struct Lighting(Movable):
                 distance, self.decays[index], self.cutoffs[index]
             )
             ref bulb = self.point_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(bulb) * reach)
         for index in range(len(self.spot_positions)):
             var ray = light_vector(self.spot_positions[index], position)
             var toward = ray[0]
@@ -2524,21 +2480,11 @@ struct Lighting(Movable):
                 )
             )
             ref bulb = self.spot_radiances[index]
-            total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(bulb) * reach)
         for index in range(len(self.directions)):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * lambert,
-                total.g + light.g * lambert,
-                total.b + light.b * lambert,
-                1.0,
-            )
+            total = _add_rgb(total, _rgb(light) * lambert)
         return total.scaled(self.scale)
 
     def indirect_at(self, normal: Vector3, position: Vector3) -> FloatColor:
@@ -2565,15 +2511,7 @@ struct Lighting(Movable):
             var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
             ref sky = self.skies[index]
             ref ground = self.grounds[index]
-            var lift = FloatColor(
-                ground.r + (sky.r - ground.r) * weight,
-                ground.g + (sky.g - ground.g) * weight,
-                ground.b + (sky.b - ground.b) * weight,
-                1.0,
-            )
-            total = FloatColor(
-                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
-            )
+            total = _add_rgb(total, mix_delta3(_rgb(ground), _rgb(sky), weight))
         return total.scaled(self.scale)
 
     def physical_at[
@@ -2646,11 +2584,7 @@ struct Lighting(Movable):
             )
             sum = physical_light(
                 sum,
-                Vector3(
-                    light.r * through.x,
-                    light.g * through.y,
-                    light.b * through.z,
-                ),
+                _rgb(light) * through,
                 lambert,
                 coat_lambert,
                 self.directions[index],
@@ -2687,11 +2621,7 @@ struct Lighting(Movable):
             ref bulb = self.point_radiances[index]
             sum = physical_light(
                 sum,
-                Vector3(
-                    bulb.r * (bare * through.x),
-                    bulb.g * (bare * through.y),
-                    bulb.b * (bare * through.z),
-                ),
+                _rgb(bulb) * (through * bare),
                 lambert,
                 coat_lambert,
                 toward,
@@ -2735,11 +2665,7 @@ struct Lighting(Movable):
             var tint = self.spot_tint(index, position, normal)
             sum = physical_light(
                 sum,
-                Vector3(
-                    bulb.r * tint.x * (bare * through.x),
-                    bulb.g * tint.y * (bare * through.y),
-                    bulb.b * tint.z * (bare * through.z),
-                ),
+                (_rgb(bulb) * tint) * (through * bare),
                 lambert,
                 coat_lambert,
                 toward,
@@ -2783,7 +2709,7 @@ struct Lighting(Movable):
                     fresnel,
                 )
                 ref glow = self.rect_radiances[index]
-                var tint = Vector3(glow.r, glow.g, glow.b)
+                var tint = _rgb(glow)
                 diffuse = diffuse + added.diffuse * tint
                 specular = specular + added.specular * tint
             scaled = Reflected(
@@ -2815,9 +2741,5 @@ struct Lighting(Movable):
         """
         var total = self.intensity_at(normal, position)
         var surface = FloatColor(srgb=base)
-        return FloatColor(
-            surface.r * total.r,
-            surface.g * total.g,
-            surface.b * total.b,
-            surface.a,
-        )
+        var rgb = _rgb(surface) * _rgb(total)
+        return FloatColor(rgb.x, rgb.y, rgb.z, surface.a)
