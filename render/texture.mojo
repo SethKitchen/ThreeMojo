@@ -120,7 +120,12 @@ from render.srgb import (
 )
 from render.float_image import FloatImage
 from render.texture_buffer import TextureBuffer
-from render.raster_state import STANDARD_DEPTH, DepthMode, window_depth
+from render.raster_state import (
+    STANDARD_DEPTH,
+    DepthMode,
+    require_depth_mode,
+    window_depth,
+)
 from std.math import ceil, floor, fma, isfinite, log2, sqrt
 from std.memory import bitcast
 from units.si import Angle, RADIAN
@@ -2693,8 +2698,7 @@ def depth_texture_of_buffer(
         raise Error("Texture dimensions must be positive")
     if len(depth) != width * height:
         raise Error("Depth buffer length does not match the dimensions")
-    if not mode.is_valid():
-        raise Error("A depth mode that is none of the three")
+    require_depth_mode(mode)
     var pixels = List[UInt8]()
     pixels.reserve(width * height * Texture.CHANNELS)
     # Both dimensions are positive, so the loop always runs.

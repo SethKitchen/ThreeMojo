@@ -70,6 +70,7 @@ from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
     RasterState,
+    require_depth_mode,
     cleared_depth,
     fragment_depth,
     shades,
@@ -222,6 +223,7 @@ from render.rasterizer import (
     Draw,
     RasterVertex,
     ShadeMode,
+    require_shade_mode,
     Triangle,
     TangentFrame,
     check_alpha_map,
@@ -10058,14 +10060,12 @@ struct GpuRenderer(Movable):
                 `custom_tone_mapping` names a program that is not in
                 `programs`.
         """
-        if not depth_mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(depth_mode)
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
         if len(lines) % 2 != 0:
             raise Error("Rasterizing needs whole segments")
-        if not mode.is_valid():
-            raise Error("A shading mode that is none of the four")
+        require_shade_mode(mode)
         if mode == SHADE_SHADOW:
             raise Error(
                 "A shadow map's colors are drawn on the host: the kernel"
