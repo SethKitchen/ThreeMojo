@@ -50,6 +50,7 @@ past most of these and yields `NaN`, or throws a `RangeError`.
 """
 
 from core.buffer_attribute import BufferAttribute
+from core.search import first_match
 from loaders.js_text import split_fields
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from render.srgb import srgb_to_linear
@@ -337,10 +338,7 @@ struct PcdHeader(Copyable, Movable):
         Returns:
             Its position in `fields`, or -1.
         """
-        for index in range(len(self.fields)):
-            if self.fields[index] == name:
-                return index
-        return -1
+        return first_match(self.fields, name)
 
     def check(self) raises:
         """Refuse a header this loader cannot read.
