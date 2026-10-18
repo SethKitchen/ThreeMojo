@@ -76,6 +76,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from core.search import first_match
 from exporters.gltf import gltf_pixels
@@ -1050,8 +1051,11 @@ def _build(
 def _file(mut meshes: List[List[_Drawn]], node: NodeId, drawn: _Drawn) raises:
     """File a mesh under its node, refusing a node the scene has not
     got."""
-    if node.value < 0 or node.value >= len(meshes):
-        raise Error("USDZ: a mesh names a node that is not in the scene")
+    require_index_in_count(
+        node.value,
+        len(meshes),
+        "USDZ: a mesh names a node that is not in the scene",
+    )
     meshes[node.value].append(drawn)
 
 

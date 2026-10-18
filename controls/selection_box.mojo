@@ -53,6 +53,7 @@ from controls.input import (
 )
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from math.bounds import Plane
 from math.frustum import Frustum
@@ -80,8 +81,11 @@ struct _NodeObjects(Movable):
 
     def link(mut self, index: Int, node: NodeId) raises:
         """Prepend an object while its source list is visited in reverse."""
-        if node.value < 0 or node.value >= len(self.heads):
-            raise Error("A selection object names a node that is not there")
+        require_index_in_count(
+            node.value,
+            len(self.heads),
+            "A selection object names a node that is not there",
+        )
         self.next[index] = self.heads[node.value]
         self.heads[node.value] = index
 

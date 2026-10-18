@@ -134,7 +134,7 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -2462,8 +2462,11 @@ def _morph_node(track: KeyframeTrack, scene: Scene) raises -> NodeId:
 
 def _written_slot(node: NodeId, written: List[Int], what: String) raises -> Int:
     """Return a scene node's index in the file, or -1 when it is left out."""
-    if node.value < 0 or node.value >= len(written):
-        raise Error("glTF: " + what + " names a node that is not in the scene")
+    require_index_in_count(
+        node.value,
+        len(written),
+        "glTF: " + what + " names a node that is not in the scene",
+    )
     return written[node.value]
 
 

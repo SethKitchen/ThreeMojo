@@ -16,6 +16,7 @@ cannot dangle. `NO_DATA_3D_TEXTURE` and `NO_DATA_ARRAY_TEXTURE` are the
 absence of one.
 """
 
+from core.ordinal import require_index_in_count
 from render.volume_texture import Data3DTexture, DataArrayTexture
 
 
@@ -88,8 +89,9 @@ struct Data3DTextureStore(Movable):
         Raises:
             Error: If no 3D texture has that id.
         """
-        if id.value < 0 or id.value >= len(self.textures):
-            raise Error("No 3D texture has that id")
+        require_index_in_count(
+            id.value, len(self.textures), "No 3D texture has that id"
+        )
         return self.textures[id.value]
 
 
@@ -134,6 +136,7 @@ struct DataArrayTextureStore(Movable):
         Raises:
             Error: If no array texture has that id.
         """
-        if id.value < 0 or id.value >= len(self.textures):
-            raise Error("No array texture has that id")
+        require_index_in_count(
+            id.value, len(self.textures), "No array texture has that id"
+        )
         return self.textures[id.value]

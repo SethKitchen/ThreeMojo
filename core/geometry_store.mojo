@@ -25,6 +25,7 @@ that is the moment to add one, not before.
 """
 
 from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_index_in_count
 
 from std.memory import ArcPointer
 
@@ -83,8 +84,9 @@ struct GeometryStore(Movable):
         Raises:
             Error: If no geometry has that id.
         """
-        if id.value < 0 or id.value >= len(self.geometries):
-            raise Error("No geometry has that id")
+        require_index_in_count(
+            id.value, len(self.geometries), "No geometry has that id"
+        )
 
     def get(
         self, id: GeometryId

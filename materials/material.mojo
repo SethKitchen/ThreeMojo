@@ -189,7 +189,7 @@ rasterizers read them from `raster_state`. See
 `docs/wiki/Renderer-hooks-and-material-flags.md`.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_index_in_count
 
 from render.cube_texture import check_rotation, is_turned
 from render.cube_texture_store import (
@@ -4017,6 +4017,7 @@ struct MaterialStore(Movable):
         Raises:
             Error: If no material has that id.
         """
-        if id.value < 0 or id.value >= len(self.materials):
-            raise Error("No material has that id")
+        require_index_in_count(
+            id.value, len(self.materials), "No material has that id"
+        )
         return self.materials[id.value]
