@@ -35,6 +35,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     srgb,
 )
@@ -2594,14 +2595,7 @@ def chicken_paint(
             c, pal.get("spangle"), spot * 0.8 * (0.5 if tract == 4 else 1.0)
         )
     var kv = 0.22
-    return Paint(
-        V3(
-            c.x * (1.0 + kv * cv),
-            c.y * (1.0 + kv * cv),
-            c.z * (1.0 + kv * 0.8 * cv),
-        ),
-        FEATHER,
-    )
+    return Paint(channel_gain(c, cv, kv, kv, kv * 0.8), FEATHER)
 
 
 def _index(bone: String) raises -> Float64:

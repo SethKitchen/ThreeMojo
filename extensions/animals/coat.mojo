@@ -345,6 +345,44 @@ def channel_gain(
     )
 
 
+def channel_pair(
+    color: V3,
+    first: Float64,
+    second: Float64,
+    red_first: Float64,
+    green_first: Float64,
+    blue_first: Float64,
+    red_second: Float64,
+    green_second: Float64,
+    blue_second: Float64,
+) -> V3:
+    """Return a color scaled by two weighted amounts on each channel.
+
+    Each channel is multiplied by one plus its first weight times
+    `first`, plus its second weight times `second`. Each weight product
+    is formed before the adds.
+
+    Args:
+        color: The color, in linear light.
+        first: The first amount.
+        second: The second amount.
+        red_first: The first weight of red.
+        green_first: The first weight of green.
+        blue_first: The first weight of blue.
+        red_second: The second weight of red.
+        green_second: The second weight of green.
+        blue_second: The second weight of blue.
+
+    Returns:
+        The scaled color.
+    """
+    return V3(
+        color.x * (1.0 + red_first * first + red_second * second),
+        color.y * (1.0 + green_first * first + green_second * second),
+        color.z * (1.0 + blue_first * first + blue_second * second),
+    )
+
+
 def body_region(part: SurfacePart, bone: String) -> Int:
     """Return the coat region of one vertex.
 

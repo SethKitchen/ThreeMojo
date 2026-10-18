@@ -23,6 +23,7 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    channel_pair,
     palette_of,
     shade_swatch,
     srgb,
@@ -2322,21 +2323,13 @@ def sheep_paint(
         var britch = smoothstep(-0.35, -0.5, p.z) * smoothstep(0.55, 0.35, p.y)
         wc = mix3(wc, pal.get("stain"), max(low, britch) * 0.3)
         var sn = vnoise3(p * 45.0) - 0.5
-        wc = V3(
-            wc.x * (1.0 + 0.035 * cv + 0.05 * sn),
-            wc.y * (1.0 + 0.03 * cv + 0.05 * sn),
-            wc.z * (1.0 + 0.025 * cv + 0.045 * sn),
-        )
+        wc = channel_pair(wc, cv, sn, 0.035, 0.03, 0.025, 0.05, 0.05, 0.045)
         # The crimp: a fine, tight curl over the staple tips.
         var crimp = vnoise3(p * 520.0) - 0.5
         wc = wc * (1.0 + 0.12 * crimp)
         c = mix3(c, wc, wool)
     elif region <= 1:
         var tn = vnoise3(p * 160.0) - 0.5
-        c = V3(
-            c.x * (1.0 + 0.08 * cv + 0.14 * tn),
-            c.y * (1.0 + 0.07 * cv + 0.14 * tn),
-            c.z * (1.0 + 0.06 * cv + 0.14 * tn),
-        )
+        c = channel_pair(c, cv, tn, 0.08, 0.07, 0.06, 0.14, 0.14, 0.14)
     _ = lamb
     return Paint(c, surface)
