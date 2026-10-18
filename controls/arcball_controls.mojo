@@ -60,6 +60,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from controls.input import (
     InputEvent,
     NO_BUTTON,
+    require_input,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -1151,12 +1152,7 @@ struct ArcballControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, a setting
                 is refused, or a size is not positive.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         if width <= 0 or height <= 0:
             raise Error("A viewport's size must be positive")
         self.check()

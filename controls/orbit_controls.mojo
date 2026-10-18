@@ -44,6 +44,7 @@ from controls.input import (
     ARROW_UP,
     KEY_DOWN,
     InputEvent,
+    require_input,
     Key,
     MIDDLE,
     POINTER_DOWN,
@@ -441,12 +442,7 @@ struct OrbitControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or an
                 action is invalid.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         if not self.enabled:
             return
         if event.kind == POINTER_DOWN:

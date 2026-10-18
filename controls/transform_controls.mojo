@@ -62,6 +62,7 @@ from cameras.camera import Camera
 from controls.input import (
     InputEvent,
     POINTER_DOWN,
+    require_input,
     POINTER_MOVE,
     POINTER_UP,
     PRIMARY,
@@ -516,12 +517,7 @@ struct TransformControls(Copyable, Movable):
                 not in the scene, or the camera or the scene cannot be
                 read.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         self.check()
         var events = List[TransformEvent]()
         if not self.enabled:

@@ -151,6 +151,13 @@ comptime ESCAPE = Key(27)
 comptime CTRL_C = Key(3)
 # No key: a pointer or a wheel event.
 comptime NO_KEY = Key(-1)
+# The letters a walker uses, as three.js's `event.code` names them.
+comptime KEY_W = Key(119)
+comptime KEY_A = Key(97)
+comptime KEY_S = Key(115)
+comptime KEY_D = Key(100)
+comptime KEY_R = Key(114)
+comptime KEY_F = Key(102)
 
 
 struct InputEvent(ImplicitlyCopyable):
@@ -213,6 +220,26 @@ struct InputEvent(ImplicitlyCopyable):
         self.shift = shift
         self.alt = alt
         self.ctrl = ctrl
+
+
+def require_input(event: InputEvent) raises:
+    """Refuse an event whose kind, button or key is not a named value.
+
+    Args:
+        event: The event.
+
+    Returns:
+        Nothing. The call returns when the event is valid.
+
+    Raises:
+        Error: If the kind, button or key is invalid.
+    """
+    if not event.kind.is_valid():
+        raise Error("Invalid input kind: ", event.kind.value)
+    if not event.button.is_valid():
+        raise Error("Invalid pointer button: ", event.button.value)
+    if not event.key.is_valid():
+        raise Error("Invalid key: ", event.key.value)
 
 
 def _is_digit(byte: UInt8) -> Bool:
