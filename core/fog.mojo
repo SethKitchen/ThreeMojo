@@ -40,9 +40,8 @@ tone map and encode it. That newer order is the one kept here, where every
 other mix happens, in the linear working space, so that halfway into the
 fog really is half the light of each. The fog color is decoded from sRGB on
 the way in, as a light's is.
-The fog reaches every material, lit or not, since three.js's
-`Material.fog` defaults to on and is not ported. The uv debug view is not
-fogged: it shows coordinates, not light.
+`Material.fog` defaults to on, except on a data material. The uv debug
+view is not fogged: it shows coordinates, not light.
 
 **The mix is a weighted sum, not a lerp.** `surface + (fog - surface) * veil`
 is the textbook form and the wrong one for light that has no top: a
