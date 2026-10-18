@@ -55,6 +55,7 @@ subset and compatibility limits.
 """
 from core.ordinal import ordinal_valid
 from loaders.bytes import ascii_digit, ascii_letter, is_hex_digit
+from loaders.js_text import is_js_word
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.volume_texture_store import (
@@ -219,11 +220,6 @@ def _is_letter(c: UInt8) -> Bool:
     return ascii_letter(Int(c)) or c == UInt8(ord("_"))
 
 
-def _is_word_byte(c: UInt8) -> Bool:
-    """Return True for a byte a name can hold after its first."""
-    return _is_letter(c) or ascii_digit(c)
-
-
 def _is_space(c: UInt8) -> Bool:
     """Return True for a space, a tab or a carriage return."""
     return (
@@ -369,7 +365,7 @@ struct _Lexer(Movable):
         var next = bytes[at + 1] if at + 1 < len(bytes) else UInt8(0)
         if _is_letter(c):
             var end = at
-            while end < len(bytes) and _is_word_byte(bytes[end]):
+            while end < len(bytes) and is_js_word(bytes[end]):
                 end += 1
             var word = String(text[byte=at:end])
             for index in range(len(self.names)):
@@ -461,11 +457,9 @@ struct _Lexer(Movable):
                 if number > 4294967295.0:
                     raise self.error(line, "an integer literal exceeds 32 bits")
         var suffix_end = end
-        if end < len(bytes) and _is_word_byte(bytes[end]):
+        if end < len(bytes) and is_js_word(bytes[end]):
             var c = _letter(text, end)
-            var alone = end + 1 >= len(bytes) or not _is_word_byte(
-                bytes[end + 1]
-            )
+            var alone = end + 1 >= len(bytes) or not is_js_word(bytes[end + 1])
             if not real and alone and (c == "u" or c == "U"):
                 kind = _UINT_TOKEN
                 suffix_end += 1
@@ -620,8 +614,8 @@ struct _Lexer(Movable):
             if c == UInt8(ord("/")) and _clipped(text, at, at + 2) == "//":
                 break
             var end = at + 1
-            if _is_word_byte(c):
-                while end < len(bytes) and _is_word_byte(bytes[end]):
+            if is_js_word(c):
+                while end < len(bytes) and is_js_word(bytes[end]):
                     end += 1
             elif _listed(_clipped(text, at, at + 2), " && || == != <= >= "):
                 end = at + 2
@@ -769,7 +763,7 @@ struct _Lexer(Movable):
         while at < text.byte_length() and _is_space(text.as_bytes()[at]):
             at += 1
         var end = at
-        while end < text.byte_length() and _is_word_byte(text.as_bytes()[end]):
+        while end < text.byte_length() and is_js_word(text.as_bytes()[end]):
             end += 1
         var macro = String(text[byte=at:end])
         if macro == "":

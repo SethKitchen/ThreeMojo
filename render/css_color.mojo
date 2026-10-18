@@ -30,12 +30,8 @@ three.js warns and leaves the color unchanged for a string it cannot read.
 Here that string is refused.
 """
 
-from loaders.bytes import (
-    ascii_digit,
-    ascii_letter,
-    ascii_space,
-    hex_digit_value,
-)
+from loaders.bytes import ascii_digit, ascii_space, hex_digit_value
+from loaders.js_text import is_js_word
 from render.framebuffer import FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace, linear_to_srgb, srgb_to_linear
 from math.utils import js_round_int
@@ -364,13 +360,6 @@ def color_name_hex(name: String) -> Optional[Int]:
     return None
 
 
-def _is_word(byte: UInt8) -> Bool:
-    """Return True for a letter, a digit or an underscore: a regular
-    expression's `\\w`."""
-    var letter = ascii_letter(Int(byte))
-    return letter or ascii_digit(byte) or byte == 95
-
-
 struct _Scanner(Movable):
     """A cursor over the bytes of a string, for the few patterns a CSS
     color has."""
@@ -561,7 +550,7 @@ def parse_style(style: String, space: ColorSpace = SRGB) raises -> FloatColor:
     """
     var bytes = style.as_bytes()
     var name_end = 0
-    while name_end < len(bytes) and _is_word(bytes[name_end]):
+    while name_end < len(bytes) and is_js_word(bytes[name_end]):
         name_end += 1
     var open = name_end
     var close = open + 1
