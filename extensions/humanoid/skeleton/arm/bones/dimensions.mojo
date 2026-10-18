@@ -19,6 +19,7 @@ osteometric table.
     var d = arm_bone_distance(dims, HUMERUS, RIGHT, dims.frame.elbow)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions, ArmFrame
 from extensions.humanoid.skeleton.torso.sweep import (
@@ -45,9 +46,7 @@ struct ArmBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named arm bone."""
-        if self.value < 0:
-            return False
-        return self.value <= ULNA.value
+        return ordinal_valid(self.value, ULNA.value)
 
 
 comptime HUMERUS = ArmBone(0)

@@ -27,6 +27,7 @@ table. A female template is narrower and shallower through the chest.
     var d = torso_bone_distance(dims, T7, RIGHT, dims.centers[6])
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.genome import (
     CHEST_DEPTH,
     Genome,
@@ -114,9 +115,7 @@ struct TorsoBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named torso bone."""
-        if self.value < 0:
-            return False
-        return self.value <= SCAPULA.value
+        return ordinal_valid(self.value, SCAPULA.value)
 
 
 comptime T1 = TorsoBone(0)

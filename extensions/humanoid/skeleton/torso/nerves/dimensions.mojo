@@ -22,6 +22,7 @@ and mass. Geometry applies a separate diagrammatic minimum radius.
     var d = torso_nerve_distance(dims, SPINAL_CORD, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     L1,
@@ -57,9 +58,7 @@ struct TorsoNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= BRACHIAL_PLEXUS.value
+        return ordinal_valid(self.value, BRACHIAL_PLEXUS.value)
 
 
 comptime SPINAL_CORD = TorsoNerve(0)

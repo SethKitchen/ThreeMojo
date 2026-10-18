@@ -25,6 +25,7 @@ diagrammatic minimum radius so the current isosurface can show them.
     var d = pelvis_vessel_distance(dims, EXTERNAL_ILIAC_ARTERY, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -63,9 +64,7 @@ struct PelvisVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= INTERNAL_ILIAC_VEIN.value
+        return ordinal_valid(self.value, INTERNAL_ILIAC_VEIN.value)
 
 
 comptime ABDOMINAL_AORTA = PelvisVessel(0)

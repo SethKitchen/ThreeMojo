@@ -19,6 +19,7 @@ table. Geometry applies a separate diagrammatic minimum radius.
     var d = arm_lymph_distance(dims, CUBITAL_NODES, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -39,9 +40,7 @@ struct ArmLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic."""
-        if self.value < 0:
-            return False
-        return self.value <= LATERAL_LYMPHATICS.value
+        return ordinal_valid(self.value, LATERAL_LYMPHATICS.value)
 
 
 comptime CUBITAL_NODES = ArmLymph(0)

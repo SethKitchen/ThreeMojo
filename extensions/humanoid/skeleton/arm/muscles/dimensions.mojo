@@ -24,6 +24,7 @@ a cited cross-section table.
     var d = arm_muscle_distance(dims, BICEPS_BRACHII, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -61,9 +62,7 @@ struct ArmMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named arm muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= EXTENSOR_INDICIS.value
+        return ordinal_valid(self.value, EXTENSOR_INDICIS.value)
 
 
 comptime DELTOID = ArmMuscle(0)

@@ -23,6 +23,7 @@ parameters. They are not a cited cross-section table.
     var d = torso_muscle_distance(dims, ERECTOR_SPINAE, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -57,9 +58,7 @@ struct TorsoMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named torso muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= SUBCLAVIUS.value
+        return ordinal_valid(self.value, SUBCLAVIUS.value)
 
 
 comptime RECTUS_ABDOMINIS = TorsoMuscle(0)

@@ -23,6 +23,7 @@ authored in template centimeters. They are not a cited lumen table.
     var d = head_vessel_distance(dims, COMMON_CAROTID_ARTERY, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -50,9 +51,7 @@ struct HeadVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= VERTEBRAL_ARTERY.value
+        return ordinal_valid(self.value, VERTEBRAL_ARTERY.value)
 
 
 comptime COMMON_CAROTID_ARTERY = HeadVessel(0)

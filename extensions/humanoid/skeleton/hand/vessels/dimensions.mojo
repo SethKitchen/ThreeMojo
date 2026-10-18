@@ -21,6 +21,7 @@ template parameters. They are not a cited caliber table.
     var d = hand_vessel_distance(dims, DEEP_PALMAR_ARCH, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -58,9 +59,7 @@ struct HandVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= DORSAL_DIGITAL_VEINS.value
+        return ordinal_valid(self.value, DORSAL_DIGITAL_VEINS.value)
 
 
 comptime SUPERFICIAL_PALMAR_ARCH = HandVessel(0)

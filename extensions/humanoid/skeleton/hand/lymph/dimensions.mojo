@@ -20,6 +20,7 @@ minimum radius.
     var d = hand_lymph_distance(dims, PALMAR_PLEXUS, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -53,9 +54,7 @@ struct HandLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named lymphatic."""
-        if self.value < 0:
-            return False
-        return self.value <= DORSAL_LYMPHATICS.value
+        return ordinal_valid(self.value, DORSAL_LYMPHATICS.value)
 
 
 comptime PALMAR_PLEXUS = HandLymph(0)

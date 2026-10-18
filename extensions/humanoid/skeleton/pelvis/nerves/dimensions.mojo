@@ -20,6 +20,7 @@ separate diagrammatic minimum radius.
     var d = pelvis_nerve_distance(dims, PUDENDAL_NERVE, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
@@ -55,9 +56,7 @@ struct PelvisNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= LATERAL_FEMORAL_CUTANEOUS_NERVE.value
+        return ordinal_valid(self.value, LATERAL_FEMORAL_CUTANEOUS_NERVE.value)
 
 
 comptime LUMBOSACRAL_TRUNK = PelvisNerve(0)

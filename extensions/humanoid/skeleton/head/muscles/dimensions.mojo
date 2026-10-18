@@ -25,6 +25,7 @@ parameters. They are not a cited cross-section table.
     var d = head_muscle_distance(dims, MASSETER, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
@@ -57,9 +58,7 @@ struct HeadMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= ORBICULARIS_ORIS.value
+        return ordinal_valid(self.value, ORBICULARIS_ORIS.value)
 
 
 comptime STERNOCLEIDOMASTOID = HeadMuscle(0)

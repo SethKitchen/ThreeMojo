@@ -21,6 +21,7 @@ not a cited node count or size table.
     var d = head_lymph_distance(dims, DEEP_CERVICAL_NODES, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
@@ -51,9 +52,7 @@ struct HeadLymph(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named group."""
-        if self.value < 0:
-            return False
-        return self.value <= SUPRACLAVICULAR_NODES.value
+        return ordinal_valid(self.value, SUPRACLAVICULAR_NODES.value)
 
 
 comptime DEEP_CERVICAL_NODES = HeadLymph(0)

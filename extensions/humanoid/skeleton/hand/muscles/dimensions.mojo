@@ -24,6 +24,7 @@ table.
     var d = hand_muscle_distance(dims, ADDUCTOR_POLLICIS, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import (
     ArmDimensions,
@@ -60,9 +61,7 @@ struct HandMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hand muscle or tendon group."""
-        if self.value < 0:
-            return False
-        return self.value <= THUMB_EXTENSOR_TENDONS.value
+        return ordinal_valid(self.value, THUMB_EXTENSOR_TENDONS.value)
 
 
 comptime ABDUCTOR_POLLICIS_BREVIS = HandMuscle(0)

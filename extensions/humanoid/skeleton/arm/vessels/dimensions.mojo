@@ -28,6 +28,7 @@ are not a cited caliber table.
     var d = arm_vessel_distance(dims, BRACHIAL_ARTERY, RIGHT, p)
 """
 
+from extensions.humanoid.skeleton.ordinal import ordinal_valid
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
@@ -48,9 +49,7 @@ struct ArmVessel(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named vessel."""
-        if self.value < 0:
-            return False
-        return self.value <= MEDIAN_CUBITAL_VEIN.value
+        return ordinal_valid(self.value, MEDIAN_CUBITAL_VEIN.value)
 
 
 comptime AXILLARY_ARTERY = ArmVessel(0)
