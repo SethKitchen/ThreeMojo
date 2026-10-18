@@ -34,6 +34,7 @@ from extensions.animals.parts import (
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     side_sign,
+    digitigrade_fore,
     digitigrade_hind,
     EyeSpec,
     eye_frame_of,
@@ -682,16 +683,10 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var arm = (1.18 if male else 1.0) * t.get("armK")
     for side in [String("L"), String("R")]:  # pragma: no branch
         var s = side_sign(side)
-        var lat = V3(s, 0.0, 0.0)
         # FRONT: short and upright, with four slender fingers.
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var lat, _, sh, e, w, mc, toe, _, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "armpit",
@@ -718,7 +713,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = ell_y(
             m,
             "palm",
-            rig.bone("metacarpus" + side),
+            meta,
             lerp(w, mc, 0.55),
             dp,
             V3(0.0045, 0.0068, 0.0022),
