@@ -77,7 +77,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.ordinal import ordinal_valid
+from core.ordinal import ordinal_valid, require_non_negative
 
 from math.norm import normalized2
 from core.buffer_attribute import BufferAttribute
@@ -164,8 +164,7 @@ def segment_count(mode: LineMode, vertices: Int) raises -> Int:
             with nothing to join it to.
     """
     require_line_mode(mode)
-    if vertices < 0:
-        raise Error("A line cannot have fewer than no points")
+    require_non_negative(vertices, "A line cannot have fewer than no points")
     if mode == SEGMENTS:
         if vertices % 2 != 0:
             raise Error("Line segments come in pairs of points")
@@ -277,12 +276,9 @@ struct Line(ImplicitlyCopyable):
             Error: If any id is negative, the mode is not a named one, or
                 a conditional line's mode is not `SEGMENTS`.
         """
-        if node.value < 0:
-            raise Error("A line must name a scene node")
-        if geometry.value < 0:
-            raise Error("A line must name a geometry")
-        if material.value < 0:
-            raise Error("A line must name a material")
+        require_non_negative(node.value, "A line must name a scene node")
+        require_non_negative(geometry.value, "A line must name a geometry")
+        require_non_negative(material.value, "A line must name a material")
         require_line_mode(mode)
         if conditional and not (mode == SEGMENTS):
             raise Error(

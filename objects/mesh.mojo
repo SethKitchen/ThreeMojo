@@ -83,6 +83,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from materials.material import MaterialId
 
 
@@ -98,8 +99,7 @@ def require_mesh_material(material: MaterialId) raises:
     Raises:
         Error: If the id is negative.
     """
-    if material.value < 0:
-        raise Error("A mesh must name a material")
+    require_non_negative(material.value, "A mesh must name a material")
 
 
 struct Mesh(ImplicitlyCopyable):
@@ -167,10 +167,8 @@ struct Mesh(ImplicitlyCopyable):
         Raises:
             Error: If any id is negative.
         """
-        if node.value < 0:
-            raise Error("A mesh must name a scene node")
-        if geometry.value < 0:
-            raise Error("A mesh must name a geometry")
+        require_non_negative(node.value, "A mesh must name a scene node")
+        require_non_negative(geometry.value, "A mesh must name a geometry")
         require_mesh_material(material)
         self.geometry = geometry
         self.material = material

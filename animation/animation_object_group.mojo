@@ -41,6 +41,7 @@ have is refused at `AnimationMixer.update`, where the scene is known.
 """
 
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 
 
 struct AnimationObjectGroup(Copyable, Movable):
@@ -68,8 +69,7 @@ struct AnimationObjectGroup(Copyable, Movable):
         Raises:
             Error: If the node index is below zero.
         """
-        if node.value < 0:
-            raise Error("A group member must name a node")
+        require_non_negative(node.value, "A group member must name a node")
         if self.contains(node):
             return
         self.members.append(node)

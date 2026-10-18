@@ -36,6 +36,7 @@ through `render.splatrule`.
 
 from core.gaussian_splat_utils import GaussianSplatGeometry
 from core.object3d import NodeId
+from core.ordinal import require_non_negative
 from math.ray_query import RayQuery
 from math.ray import (
     _distance_sq_ratio,
@@ -174,8 +175,9 @@ struct GaussianSplat(Copyable, Movable):
         Raises:
             Error: If the node id is negative.
         """
-        if node.value < 0:
-            raise Error("A Gaussian splat must name a scene node")
+        require_non_negative(
+            node.value, "A Gaussian splat must name a scene node"
+        )
         var count = geometry.count()
         self.splat_geometry = geometry^
         self.node = node
