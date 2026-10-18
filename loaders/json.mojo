@@ -329,6 +329,28 @@ struct JsonDocument(Movable):
             return default
         return self.integer(found)
 
+    def optional_number(
+        self, node: Int, key: String, default: Float64
+    ) raises -> Float64:
+        """Return an object's number under `key`, or `default`.
+
+        Args:
+            node: The object's index.
+            key: The key.
+            default: The number when the key is absent.
+
+        Returns:
+            The number, or `default`.
+
+        Raises:
+            Error: If the node is not an object, or the value is not a
+                number.
+        """
+        var found = self.get(node, key)
+        if found == NO_NODE:
+            return default
+        return self.number(found)
+
     def optional_finite(
         self, node: Int, key: String, default: Float32, label: String
     ) raises -> Float32:

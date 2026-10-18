@@ -336,9 +336,9 @@ struct NodeMaterialGraph(Movable):
 
 def _text(document: JsonDocument, item: Int, key: String) raises -> String:
     """Return a node's string field, refusing one that is not a string."""
-    var at = document.get(item, key)
-    if at == NO_NODE or document.kind(at) != STRING:
-        raise Error("Node JSON: a node's " + key + " must be a string")
+    var at = document.required_kind(
+        item, key, STRING, "Node JSON: a node's " + key + " must be a string"
+    )
     return document.string(at)
 
 
@@ -346,10 +346,7 @@ def _flag(
     document: JsonDocument, item: Int, key: String, default: Bool
 ) raises -> Bool:
     """Return a node's boolean field, or `default` where it is absent."""
-    var at = document.get(item, key)
-    if at == NO_NODE:
-        return default
-    return document.boolean(at)
+    return document.optional_boolean(item, key, default)
 
 
 struct NodeLoader(Movable):
