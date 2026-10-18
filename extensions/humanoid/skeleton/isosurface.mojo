@@ -17,6 +17,7 @@ Twenty-four is the default. Sixty-four is the most.
 from core.buffer_geometry import BufferGeometry
 from geometries.surface import indexed_surface
 from extensions.humanoid.skeleton.field import DistanceField
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import atan2, max, min, pi
 
@@ -219,11 +220,7 @@ def mesh_checked[
 
 def _clamp01(value: Float32) -> Float32:
     """Return `value` held to 0 through 1."""
-    if value < 0:
-        return 0
-    if value > 1:
-        return 1
-    return value
+    return clamp(value, 0, 1)
 
 
 def _long_cells(detail: Int) -> Int:

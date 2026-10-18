@@ -14,6 +14,7 @@ from extensions.humanoid.sex import Sex
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
 from math.cross import cross_vectors
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import isfinite, max, min, pi, sqrt
 from units.si import Angle, Length
@@ -234,11 +235,7 @@ def finite_point(point: Vector3, name: String, bone: String) raises:
 
 def clamp_unit(value: Float32) -> Float32:
     """Return `value` held to minus one through one, for `acos`."""
-    if value < -1:
-        return -1
-    if value > 1:
-        return 1
-    return value
+    return clamp(value, -1, 1)
 
 
 def flip_x(point: Vector3) -> Vector3:

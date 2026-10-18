@@ -55,6 +55,7 @@ from extensions.humanoid.genome import (
 )
 from extensions.humanoid.sex import MALE, Sex
 from math.norm import squared_length3
+from math.utils import clamp
 from math.vector3 import Vector3
 from std.math import cos, isfinite, max, min, sin
 
@@ -114,11 +115,6 @@ comptime _EYE_SHIFTS = SIMD[DType.float32, 32](
 )
 
 
-def _clamp01(value: Float32) -> Float32:
-    """Return `value` held to 0 through 1."""
-    return max(Float32(0), min(Float32(1), value))
-
-
 def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     """Return the Hermite step from `edge0` to `edge1`.
 
@@ -131,7 +127,7 @@ def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
         Zero below `edge0`, one above `edge1`, and a smooth curve
         between.
     """
-    var t = _clamp01((x - edge0) / (edge1 - edge0))
+    var t = clamp((x - edge0) / (edge1 - edge0), 0, 1)
     return t * t * (3 - 2 * t)
 
 
