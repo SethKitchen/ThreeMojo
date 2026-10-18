@@ -16,7 +16,12 @@ bounds. Queries return input indices; callers restore their own tie order.
 from math.bounds import Box3
 from math.ray import Ray
 from math.vector3 import Vector3
-from extensions.physics.center_order import _MedianNode, build_median
+from extensions.physics.center_order import (
+    _MedianNode,
+    _MedianView,
+    build_median,
+    collect_median,
+)
 from extensions.physics.shape import component
 from std.math import isfinite
 
@@ -54,6 +59,14 @@ struct _Node(ImplicitlyCopyable, Movable, _MedianNode):
             escape: One past the last node of the subtree.
         """
         self.escape = escape
+
+    def median_view(self) -> _MedianView:
+        """Return this node's box, entry, and escape.
+
+        Returns:
+            The view.
+        """
+        return _MedianView(self.box, self.entry, self.escape)
 
 
 def _overlap_misses(query: Box3, box: Box3) -> Bool:
@@ -152,41 +165,11 @@ struct _PrimitiveIndex(Movable):
             self.nodes, self.boxes, self.order, self.buffer, start, end
         )
 
-    def _collect[
-        Q: ImplicitlyCopyable, //, misses: def(Q, Box3) thin -> Bool
-    ](self, query: Q, mut found: List[Int]) -> Int:
-        """Walk the tree and keep every leaf `misses` does not reject.
-
-        Parameters:
-            Q: The query.
-            misses: True when a node's box is outside the query.
-
-        Args:
-            query: What `misses` tests each box against.
-            found: The leaf entries, replaced.
-
-        Returns:
-            How many nodes the walk read.
-        """
-        found.clear()
-        var visited = 0
-        var i = 0
-        while i < len(self.nodes):
-            visited += 1
-            ref node = self.nodes[i]
-            if misses(query, node.box):
-                i = node.escape
-                continue
-            if node.entry >= 0:
-                found.append(node.entry)
-            i += 1
-        return visited
-
     def overlap(self, box: Box3, mut found: List[Int]) -> Int:
-        return self._collect[_overlap_misses](box, found)
+        return collect_median[_overlap_misses](self.nodes, box, found)
 
     def ray(self, ray: Ray, mut found: List[Int]) -> Int:
-        return self._collect[_ray_misses](ray, found)
+        return collect_median[_ray_misses](self.nodes, ray, found)
 
     def axis_line(
         self, origin: Vector3, axis: Int, mut found: List[Int]
@@ -195,7 +178,8 @@ struct _PrimitiveIndex(Movable):
         # longitudinal culling could change rounded legacy narrow answers.
         var first = (axis + 1) % 3
         var second = (axis + 2) % 3
-        return self._collect[_axis_misses](
+        return collect_median[_axis_misses](
+            self.nodes,
             _AxisLine(
                 component(origin, first),
                 component(origin, second),

@@ -10,7 +10,12 @@ Each triangle occurs once. Median splits bound depth by ceil(log2(T)); escape
 links bound a query to at most 2*T-1 node visits, without a traversal stack.
 """
 
-from extensions.physics.center_order import _MedianNode, build_median
+from extensions.physics.center_order import (
+    _MedianNode,
+    _MedianView,
+    build_median,
+    collect_median,
+)
 from extensions.physics.shape import _wide
 from math.bounds import Box3
 from math.next_float import next_binary64_up
@@ -74,6 +79,32 @@ struct _CCDNode(ImplicitlyCopyable, Movable, _MedianNode):
         """
         self.escape = escape
 
+    def median_view(self) -> _MedianView:
+        """Return this node's box, entry, and escape.
+
+        Returns:
+            The view.
+        """
+        return _MedianView(self.box, self.entry, self.escape)
+
+
+@fieldwise_init
+struct _SweepBounds(ImplicitlyCopyable):
+    """The outward bounds of one swept query."""
+
+    var low: SIMD[DType.float64, 4]
+    var high: SIMD[DType.float64, 4]
+
+
+def _sweep_misses(bounds: _SweepBounds, box: Box3) -> Bool:
+    """Return True when `box` misses the swept bounds."""
+    var low = _wide(box.min)
+    var high = _wide(box.max)
+    for axis in range(3):  # pragma: no branch
+        if high[axis] < bounds.low[axis] or low[axis] > bounds.high[axis]:
+            return True
+    return False
+
 
 struct _Builder(Movable):
     # These O(T) arrays are build scratch and are not retained by the world.
@@ -130,24 +161,7 @@ struct _CCDIndex(Movable):
         reach: Float64,
         mut found: List[Int],
     ) -> Int:
-        found.clear()
         var bounds = _bounds(start, travel, reach)
-        var visited = 0
-        var i = 0
-        while i < len(self.nodes):
-            visited += 1
-            ref node = self.nodes[i]
-            var low = _wide(node.box.min)
-            var high = _wide(node.box.max)
-            var overlaps = True
-            for axis in range(3):  # pragma: no branch
-                if high[axis] < bounds[0][axis] or low[axis] > bounds[1][axis]:
-                    overlaps = False
-                    break
-            if not overlaps:
-                i = node.escape
-                continue
-            if node.entry >= 0:
-                found.append(node.entry)
-            i += 1
-        return visited
+        return collect_median[_sweep_misses](
+            self.nodes, _SweepBounds(bounds[0], bounds[1]), found
+        )

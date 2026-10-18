@@ -5,7 +5,8 @@
 
 """Order index entries by the center of their bounds.
 
-The primitive index and the CCD index split on this key.
+The primitive index and the CCD index split on this key, and both walk
+the tree it builds.
 """
 
 from math.bounds import Box3
@@ -73,6 +74,15 @@ def sort_by_center(
         width *= 2
 
 
+@fieldwise_init
+struct _MedianView(ImplicitlyCopyable):
+    """A node's box, leaf entry, and escape link."""
+
+    var box: Box3
+    var entry: Int
+    var escape: Int
+
+
 trait _MedianNode(ImplicitlyCopyable, Movable):
     """A tree node with a box, a leaf entry, and an escape link."""
 
@@ -101,6 +111,14 @@ trait _MedianNode(ImplicitlyCopyable, Movable):
 
         Args:
             escape: One past the last node of the subtree.
+        """
+        ...
+
+    def median_view(self) -> _MedianView:
+        """Return this node's box, entry, and escape.
+
+        Returns:
+            The view.
         """
         ...
 
@@ -155,3 +173,39 @@ def build_median[
         build_median(nodes, boxes, order, buffer, start, middle)
         build_median(nodes, boxes, order, buffer, middle, end)
     nodes[node].set_escape(len(nodes))
+
+
+def collect_median[
+    N: _MedianNode,
+    Q: ImplicitlyCopyable,
+    //,
+    misses: def(Q, Box3) thin -> Bool,
+](nodes: List[N], query: Q, mut found: List[Int]) -> Int:
+    """Walk a median tree and keep every leaf `misses` does not reject.
+
+    Parameters:
+        N: The node type.
+        Q: The query.
+        misses: True when a node's box is outside the query.
+
+    Args:
+        nodes: The tree, with escape links.
+        query: What `misses` tests each box against.
+        found: The leaf entries, replaced.
+
+    Returns:
+        How many nodes the walk read.
+    """
+    found.clear()
+    var visited = 0
+    var i = 0
+    while i < len(nodes):
+        visited += 1
+        var node = nodes[i].median_view()
+        if misses(query, node.box):
+            i = node.escape
+            continue
+        if node.entry >= 0:
+            found.append(node.entry)
+        i += 1
+    return visited
