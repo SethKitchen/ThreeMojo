@@ -1781,6 +1781,42 @@ struct Lighting(Movable):
             * falloff(distance, self.decays[index], self.cutoffs[index]),
         )
 
+    def _direction_weight[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        index: Int,
+        normal: Vector3,
+        position: Vector3,
+        receives: Bool,
+        shape: R,
+    ) -> Tuple[Bool, Float32, Vector3]:
+        """Return whether a directional light faces the surface, its Lambert
+        cosine, and what its shadow lets through.
+
+        The cosine is held at zero. A cosine of zero is unlit, and the
+        shadow is not read.
+
+        Args:
+            index: Which directional light, in the order they were resolved.
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+            receives: Whether shadows fall on this surface.
+            shape: What the surface makes of the shadow.
+
+        Returns:
+            Whether the light faces the surface, the held cosine, and the
+            shadow weight.
+        """
+        var lambert = max(Float32(0), normal.dot(self.directions[index]))
+        if lambert == 0:
+            return False, Float32(0), Vector3(0, 0, 0)
+        return (
+            True,
+            lambert,
+            self.direction_through(index, position, normal, receives, shape),
+        )
+
     def _add_hemisphere(self, total: FloatColor, normal: Vector3) -> FloatColor:
         """Add every hemisphere light's ground-to-sky mix.
 
@@ -2030,12 +2066,11 @@ struct Lighting(Movable):
         """
         var total = self.ambient_at(normal, position)
         for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            if lambert == 0:
-                continue
-            var through = self.direction_through(
-                index, position, normal, receives, shape
+            var lit, lambert, through = self._direction_weight(
+                index, normal, position, receives, shape
             )
+            if not lit:
+                continue
             ref light = self.radiances[index]
             total = _add_rgb(total, rgb_channels(light) * (through * lambert))
         for index in range(len(self.positions)):
@@ -2224,12 +2259,11 @@ struct Lighting(Movable):
             return FloatColor(0.0, 0.0, 0.0, 1.0)
         var sum = Vector3(0, 0, 0)
         for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            if lambert == 0:
-                continue
-            var through = self.direction_through(
-                index, position, normal, receives, shape
+            var lit, lambert, through = self._direction_weight(
+                index, normal, position, receives, shape
             )
+            if not lit:
+                continue
             var sent = blinn_phong(
                 self.directions[index],
                 toward_eye,
