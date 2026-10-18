@@ -329,13 +329,6 @@ def clip_to_aabb(history: Vector3, low: Vector3, high: Vector3) -> Vector3:
     return history
 
 
-def _load(colors: LightView, x: Int, y: Int) -> FloatColor:
-    """Return a texel, the edge texel's past the edge: `textureLoad`."""
-    return colors.at(
-        clamp(x, 0, colors.width - 1), clamp(y, 0, colors.height - 1)
-    )
-
-
 # --- TemporalReprojectNode ---------------------------------------------------
 
 
@@ -640,7 +633,7 @@ def temporal_reproject_pixel(
     var view = LightView(inputs.signal, w, h)
     for at in range(8):  # pragma: no branch
         var near = floor_channels(
-            _load(view, x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
+            view.load(x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
         )
         var c = _dampened(near, flicker)
         m1 = m1 + c

@@ -116,6 +116,24 @@ struct LightView(ImplicitlyCopyable):
             self.floats[unsafe_offset=at + 3],
         )
 
+    def load(self, x: Int, y: Int) -> FloatColor:
+        """Return one pixel, the edge pixel's past the edge: `textureLoad`.
+
+        Args:
+            x: The column. A column past the frame reads the edge pixel.
+            y: The row, down from the top. A row past the frame reads the
+                edge pixel.
+
+        Returns:
+            The stored light.
+
+        Raises:
+            Error: Never.
+        """
+        return self.at(
+            clamp(x, 0, self.width - 1), clamp(y, 0, self.height - 1)
+        )
+
     def tap(self, x: Float32, y: Float32) -> FloatColor:
         """Return the light at a point in pixel coordinates, blended from
         the four pixels around it and held at the edges.
