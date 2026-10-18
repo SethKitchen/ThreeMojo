@@ -57,7 +57,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
-from math.utils import saturate
+from math.utils import max3, min3, saturate
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, OPAQUE_WHITE
 from std.math import exp2, isfinite, log2, max, min
@@ -322,14 +322,14 @@ def _neutral(
     var er = r * exposure
     var eg = g * exposure
     var eb = b * exposure
-    var darkest = min(er, min(eg, eb))
+    var darkest = min3(er, eg, eb)
     var offset = Float32(0.04)
     if darkest < 0.08:
         offset = darkest - 6.25 * darkest * darkest
     er -= offset
     eg -= offset
     eb -= offset
-    var peak = max(er, max(eg, eb))
+    var peak = max3(er, eg, eb)
     if peak < NEUTRAL_START:
         return FloatColor(er, eg, eb)
     var d = 1 - NEUTRAL_START

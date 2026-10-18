@@ -15,7 +15,7 @@ from extensions.humanoid.side import BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE
 from math.cross import cross_vectors
 from math.norm import squared_length3
-from math.utils import clamp
+from math.utils import clamp, min3
 from math.vector3 import Vector3, component_max, component_min, mix_delta3
 from std.math import isfinite, max, min, pi, sqrt
 from units.si import Angle, Length
@@ -375,7 +375,7 @@ def sd_ellipsoid(point: Vector3, center: Vector3, radii: Vector3) -> Float32:
     var qz = pz / radii.z
     var k1 = sqrt(squared_length3[DType.float32](qx, qy, qz))
     if k1 == 0:
-        return -min(radii.x, min(radii.y, radii.z))
+        return -min3(radii.x, radii.y, radii.z)
     return k0 * (k0 - 1) / k1
 
 

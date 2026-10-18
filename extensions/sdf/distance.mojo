@@ -18,6 +18,7 @@ from extensions.sdf.vector import (
     length,
 )
 from math.norm import squared_length2
+from math.utils import min3
 from std.math import sqrt
 
 
@@ -130,7 +131,7 @@ def ellipsoid_estimate(p: V3, c: V3, r: V3) -> Float64:
         The estimated distance. It is negative inside.
     """
     var q = V3((p.x - c.x) / r.x, (p.y - c.y) / r.y, (p.z - c.z) / r.z)
-    return (length(q) - 1.0) * min(r.x, min(r.y, r.z))
+    return (length(q) - 1.0) * min3(r.x, r.y, r.z)
 
 
 def oriented_ellipsoid_estimate(
@@ -154,4 +155,4 @@ def oriented_ellipsoid_estimate(
     var f = frame_zy(z_dir, up)
     var d = p - c
     var u = V3(dot(d, f.x) / r.x, dot(d, f.y) / r.y, dot(d, f.z) / r.z)
-    return (length(u) - 1.0) * min(r.x, min(r.y, r.z))
+    return (length(u) - 1.0) * min3(r.x, r.y, r.z)

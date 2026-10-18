@@ -28,7 +28,7 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
-from math.utils import clamp
+from math.utils import clamp, max3, min3
 from math.vector3 import Vector3
 from std.math import sqrt
 
@@ -342,7 +342,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
                 `undefined` there and fails later.
         """
         var count = len(points)
-        if min(a, min(b, c)) < 0 or max(a, max(b, c)) >= count:
+        if min3(a, b, c) < 0 or max3(a, b, c) >= count:
             raise Error("A triangle corner index is outside the point list")
         return Triangle(points[a], points[b], points[c])
 

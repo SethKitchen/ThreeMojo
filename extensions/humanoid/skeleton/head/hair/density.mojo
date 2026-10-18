@@ -18,6 +18,7 @@ or third-party implementation is added by this module.
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.bounds import enclose_point
+from math.utils import max3
 from math.vector3 import Vector3
 from std.math import ceil, floor, isfinite, max
 from std.sys import size_of
@@ -117,7 +118,7 @@ struct HairDensity(Movable):
             var p = _checked_density_point(groom.points[index])
             enclose_point(low, high, p)
         var span = high - low
-        var longest = max(span.x, max(span.y, span.z))
+        var longest = max3(span.x, span.y, span.z)
         # Keep a clear boundary cell. Four cells use a single interior
         # cell, with the same finite floor.
         var cell = max(
