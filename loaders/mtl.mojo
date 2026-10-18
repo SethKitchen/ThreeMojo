@@ -94,7 +94,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import isfinite
+from loaders.text_number import read_finite_float32
 from std.pathlib import Path
 from units.si import METER, Length
 
@@ -456,22 +456,7 @@ def _number(field: String, line: Int) raises -> Float32:
         Error: If the field is not a number, or is not finite once it is a
             `Float32`.
     """
-    var wide: Float64
-    try:
-        wide = Float64(field)
-    except reason:
-        raise Error(
-            _where(line)
-            + "not a number: "
-            + field
-            + " ("
-            + String(reason)
-            + ")"
-        )
-    var value = Float32(wide)
-    if not isfinite(value):
-        raise Error(_where(line) + "a number must be finite: " + field)
-    return value
+    return read_finite_float32(field, _where(line), "a number must be finite")
 
 
 def _fraction(field: String, line: Int) raises -> Float32:
