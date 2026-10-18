@@ -54,6 +54,7 @@ from render.compressed_texture import (
     check_decoded_size,
     level_bytes,
 )
+from render.ktx_id import ktx_file_id
 from render.srgb import LINEAR, SRGB, ColorSpace
 
 # The identifier, then the endianness word and twelve more.
@@ -70,20 +71,7 @@ def identifier() -> List[UInt8]:
     Returns:
         The identifier.
     """
-    return [
-        0xAB,
-        0x4B,
-        0x54,
-        0x58,
-        0x20,
-        0x31,
-        0x31,
-        0xBB,
-        0x0D,
-        0x0A,
-        0x1A,
-        0x0A,
-    ]
+    return ktx_file_id(0x31, 0x31)
 
 
 def _word(bytes: List[UInt8], at: Int, big_endian: Bool) -> Int:
