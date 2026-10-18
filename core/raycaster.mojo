@@ -140,7 +140,7 @@ from core.buffer_geometry import (
     UV1,
 )
 from core.buffer_attribute import BufferAttribute
-from core.scene import Scene, require_lod_index
+from core.scene import Scene, require_instanced_mesh, require_lod_index
 from math.ray_query import RayQuery
 from math.bounds import Sphere
 from math.matrix4 import Matrix4
@@ -674,8 +674,7 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             Error: If no instanced mesh has that index, or for anything
                 `intersect_mesh` raises for, per instance.
         """
-        if index < 0 or index >= len(scene.instanced_meshes):
-            raise Error("No instanced mesh has that index")
+        require_instanced_mesh(index, len(scene.instanced_meshes))
         ref group = scene.instanced_meshes[index]
         var mesh = Mesh(group.geometry, group.material, group.node)
         var world = scene.world_matrix(group.node)

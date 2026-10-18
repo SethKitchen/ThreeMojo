@@ -165,6 +165,7 @@ two lists still agree before it reads them -- the same argument
 it was built can be edited afterward.
 """
 
+from core.morph import require_morph_target
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.quaternion import Quaternion
@@ -619,8 +620,7 @@ def morph_target(mesh: MeshIndex, target: Int) raises -> TrackTarget:
         Error: If the target is negative. There is no upper limit: a mesh
             wears as many targets as its geometry carries.
     """
-    if target < 0:
-        raise Error("A morph target index cannot be negative")
+    require_morph_target(target)
     return TrackTarget(MORPH_INFLUENCE, mesh.value, target)
 
 
@@ -640,8 +640,7 @@ def skinned_morph_target(
     Raises:
         Error: If the target is negative. There is no upper limit.
     """
-    if target < 0:
-        raise Error("A morph target index cannot be negative")
+    require_morph_target(target)
     return TrackTarget(SKINNED_MORPH_INFLUENCE, mesh.value, target)
 
 

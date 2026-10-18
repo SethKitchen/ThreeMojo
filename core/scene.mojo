@@ -106,6 +106,23 @@ from objects.sprite import Sprite
 comptime ZERO_ANGLE = Angle(0.0, RADIAN)
 
 
+def require_instanced_mesh(index: Int, count: Int) raises:
+    """Refuse an instanced-mesh index the scene does not have.
+
+    Args:
+        index: Which mesh, as its position in the scene's list.
+        count: How many instanced meshes the scene has.
+
+    Returns:
+        Nothing. The call returns when the index names a mesh.
+
+    Raises:
+        Error: If no instanced mesh has that index.
+    """
+    if index < 0 or index >= count:
+        raise Error("No instanced mesh has that index")
+
+
 def require_skinned_mesh(index: Int, count: Int) raises:
     """Refuse a skinned-mesh index the scene does not have.
 

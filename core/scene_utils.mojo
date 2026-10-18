@@ -36,7 +36,7 @@ from core.deform import morphed_positions, skin_carriers, skin_pose
 from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.order import stable_rising_order
-from core.scene import Scene
+from core.scene import Scene, require_instanced_mesh
 from geometries.attribute_utils import (
     MorphedAttributes,
     compute_morphed_attributes,
@@ -76,8 +76,7 @@ def create_meshes_from_instanced_mesh(
             not in the scene, or an instance's matrix has no extent along
             an axis.
     """
-    if index < 0 or index >= len(scene.instanced_meshes):
-        raise Error("No instanced mesh has that index")
+    require_instanced_mesh(index, len(scene.instanced_meshes))
     var instanced = scene.instanced_meshes[index].copy()
     var group = scene.get(instanced.node)
     group.parent = NO_PARENT
@@ -219,8 +218,7 @@ def sort_instanced_mesh(
         Error: If there is no instanced mesh of that index, there is not
             one key for each instance, or its geometry is not in the store.
     """
-    if index < 0 or index >= len(scene.instanced_meshes):
-        raise Error("No instanced mesh has that index")
+    require_instanced_mesh(index, len(scene.instanced_meshes))
     ref mesh = scene.instanced_meshes[index]
     if len(keys) != mesh.count():
         raise Error("Sorting instances needs one key for each instance")

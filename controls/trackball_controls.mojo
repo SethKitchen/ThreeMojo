@@ -42,7 +42,6 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from core.extent import positive_extent
 from math.norm import length2, squared_length2
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -52,6 +51,7 @@ from controls.input import (
     KEY_DOWN,
     button_choice,
     refuse_invalid,
+    require_viewport_size,
     require_input,
     KEY_UP,
     Key,
@@ -279,8 +279,7 @@ struct TrackballControls(Copyable, Movable):
                 an action is invalid, or a size is not positive.
         """
         require_input(event)
-        if not positive_extent(viewport_width, viewport_height):
-            raise Error("A viewport's size must be positive")
+        require_viewport_size(viewport_width, viewport_height)
         if not self.enabled:
             return
         self._width = viewport_width

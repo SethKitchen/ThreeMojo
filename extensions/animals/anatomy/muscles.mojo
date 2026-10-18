@@ -109,6 +109,7 @@ from extensions.animals.anatomy.body import (
     BIRD,
     MAMMAL,
     BodyPlan,
+    require_body_plan,
     species_body,
 )
 from extensions.animals.registry import (
@@ -415,8 +416,7 @@ def plan_muscles(plan: BodyPlan) raises -> List[MuscleSpec]:
     Raises:
         Error: If the plan is not named.
     """
-    if not plan.is_valid():
-        raise Error("A body plan must be named")
+    require_body_plan(plan)
     if plan == MAMMAL:
         return _mammal()
     if plan == BIRD:
