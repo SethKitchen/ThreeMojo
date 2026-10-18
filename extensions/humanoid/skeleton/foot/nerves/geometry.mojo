@@ -20,6 +20,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 )
 from extensions.humanoid.skeleton.foot.nerves.dimensions import (
     FootNerve,
+    require_foot_nerve,
     display_nerve_field,
     nerve_part_label,
 )
@@ -72,8 +73,7 @@ def nerve_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot nerve must be a named nerve")
+    require_foot_nerve(part)
     var label = nerve_part_label(part)
     var field = display_nerve_field(dimensions, part)
     return mesh_checked(field, field.low, field.high, detail, label)

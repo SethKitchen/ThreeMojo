@@ -22,6 +22,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
 from extensions.humanoid.skeleton.leg.nerves.dimensions import (
     NerveField,
     NervePart,
+    require_nerve_part,
     nerve_distance,
 )
 from extensions.anatomy.soft_tissue import (
@@ -100,8 +101,7 @@ def nerve_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A nerve part must be a named peripheral nerve")
+    require_nerve_part(part)
     tissue.validate()
     var field = NerveField(dimensions, part)
     var volume = tube_chain_volume(field.chain)

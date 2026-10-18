@@ -17,6 +17,7 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.foot.bones.dimensions import (
     FootBone,
+    require_foot_bone,
     FootBoneField,
     FootDimensions,
     bone_part_label,
@@ -71,8 +72,7 @@ def bone_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot bone must be one of the twenty-six bones")
+    require_foot_bone(part)
     var label = bone_part_label(part)
     var field = FootBoneField(dimensions, part)
     return mesh_checked(field, field.low, field.high, detail, label)

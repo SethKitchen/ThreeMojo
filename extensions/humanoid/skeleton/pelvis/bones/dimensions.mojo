@@ -132,6 +132,22 @@ struct PelvisBone(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, COCCYX.value)
 
 
+def require_pelvis_bone(part: PelvisBone) raises:
+    """Refuse a pelvic bone that is not named.
+
+    Args:
+        part: The bone.
+
+    Returns:
+        Nothing. The call returns when the bone is named.
+
+    Raises:
+        Error: If the bone is not one of the four.
+    """
+    if not part.is_valid():
+        raise Error("A pelvic bone must be one of the four bones")
+
+
 comptime RIGHT_HIP_BONE = PelvisBone(0)
 comptime LEFT_HIP_BONE = PelvisBone(1)
 comptime SACRUM = PelvisBone(2)
@@ -649,8 +665,7 @@ struct PelvisBoneField(Copyable, DistanceField, Movable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic bone must be one of the four bones")
+        require_pelvis_bone(part)
         var S = dimensions.stature.value
         self.part = part
         self.hip_bone = HipBoneShape(dimensions)

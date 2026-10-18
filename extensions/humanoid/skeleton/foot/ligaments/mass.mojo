@@ -21,6 +21,7 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
 from extensions.humanoid.skeleton.foot.chain import segment_volume
 from extensions.humanoid.skeleton.foot.ligaments.dimensions import (
     FootLigament,
+    require_foot_ligament,
     FootLigamentField,
     ligament_distance,
 )
@@ -98,8 +99,7 @@ def ligament_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot ligament must be a named ligament")
+    require_foot_ligament(part)
     tissue.validate()
     var field = FootLigamentField(dimensions, part)
     var volume = segment_volume(field.segments)

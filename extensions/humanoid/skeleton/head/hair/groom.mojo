@@ -60,6 +60,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     PONYTAIL,
     SPACE_BUNS,
     HairStyle,
+    require_hair_style,
     HairStyleFile,
     hair_style_path,
 )
@@ -762,8 +763,7 @@ def groom_hair(
             not named or its file cannot be read, or if no guide finds a
             root.
     """
-    if not style.is_valid():
-        raise Error("A hair style must be a named style")
+    require_hair_style(style)
     if style == LAYERED or style == MOHAWK:
         return _laid(dimensions, spec, seed, style)
     if style != GROWN:

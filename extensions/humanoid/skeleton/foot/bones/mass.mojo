@@ -17,6 +17,7 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.foot.bones.dimensions import (
     FootBone,
+    require_foot_bone,
     FootBoneField,
     FootDimensions,
     bone_part_label,
@@ -115,8 +116,7 @@ def foot_bone_mass_from_dimensions(
             fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot bone must be one of the twenty-six bones")
+    require_foot_bone(part)
     var label = bone_part_label(part)
     var field = FootBoneField(dimensions, part)
     return sample_bone_mass[foot_bone_field_occupancy](

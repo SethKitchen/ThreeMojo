@@ -50,6 +50,22 @@ struct FootHair(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, DIGITAL_HAIR.value)
 
 
+def require_foot_hair(part: FootHair) raises:
+    """Refuse a foot hair group that is not named.
+
+    Args:
+        part: The hair group.
+
+    Returns:
+        Nothing. The call returns when the group is named.
+
+    Raises:
+        Error: If the group is not named.
+    """
+    if not part.is_valid():
+        raise Error("A foot hair part must be a named hair group")
+
+
 comptime DORSAL_HAIR = FootHair(0)
 comptime DIGITAL_HAIR = FootHair(1)
 
@@ -89,8 +105,7 @@ struct FootHairField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot hair part must be a named hair group")
+        require_foot_hair(part)
         var foot = dimensions.foot
         var S = foot.stature.value
         var lat = Float32(1)

@@ -15,6 +15,7 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.foot.hair.dimensions import (
     FootHair,
+    require_foot_hair,
     FootHairField,
     foot_hair_distance,
 )
@@ -100,8 +101,7 @@ def foot_hair_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot hair part must be a named hair group")
+    require_foot_hair(part)
     tissue.validate()
     var field = FootHairField(dimensions, part)
     var length = six_segment_length(

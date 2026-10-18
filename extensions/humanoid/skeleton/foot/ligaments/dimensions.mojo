@@ -52,6 +52,22 @@ struct FootLigament(Equatable, ImplicitlyCopyable, Writable):
         return ordinal_valid(self.value, LISFRANC.value)
 
 
+def require_foot_ligament(part: FootLigament) raises:
+    """Refuse a foot ligament that is not named.
+
+    Args:
+        part: The ligament.
+
+    Returns:
+        Nothing. The call returns when the ligament is named.
+
+    Raises:
+        Error: If the ligament is not named.
+    """
+    if not part.is_valid():
+        raise Error("A foot ligament must be a named ligament")
+
+
 comptime ANTERIOR_TALOFIBULAR = FootLigament(0)
 comptime CALCANEOFIBULAR = FootLigament(1)
 comptime POSTERIOR_TALOFIBULAR = FootLigament(2)
@@ -87,8 +103,7 @@ struct FootLigamentField(DistanceField, ImplicitlyCopyable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A foot ligament must be a named ligament")
+        require_foot_ligament(part)
         self.segments = _segments(dimensions, part)
         var S = dimensions.stature.value
         self.k = 0.0008 * S

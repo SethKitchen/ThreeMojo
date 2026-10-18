@@ -17,6 +17,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisBone,
+    require_pelvis_bone,
     PelvisBoneField,
     PelvisDimensions,
     pelvis_bone_label,
@@ -66,8 +67,7 @@ def pelvis_bone_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A pelvic bone must be one of the four bones")
+    require_pelvis_bone(part)
     var label = pelvis_bone_label(part)
     var field = PelvisBoneField(dimensions, part)
     return mesh_checked(field, field.low, field.high, detail, label)

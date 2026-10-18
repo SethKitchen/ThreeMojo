@@ -18,6 +18,7 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.foot.hair.dimensions import (
     FootHair,
+    require_foot_hair,
     FootHairField,
     foot_hair_part_label,
 )
@@ -74,8 +75,7 @@ def hair_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A foot hair part must be a named hair group")
+    require_foot_hair(part)
     var label = foot_hair_part_label(part)
     var field = FootHairField(dimensions, part)
     var radius = 0.0015 * dimensions.foot.stature.value

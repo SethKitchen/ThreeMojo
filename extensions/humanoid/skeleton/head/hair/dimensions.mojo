@@ -29,6 +29,7 @@ from extensions.humanoid.skeleton.head.hair.styles import (
     PIXIE,
     MOHAWK,
     HairStyle,
+    require_hair_style,
 )
 from extensions.humanoid.skeleton.head.skin.dimensions import HeadSkinField
 from extensions.humanoid.skeleton.field import (
@@ -361,8 +362,7 @@ struct HairShape(Copyable, DistanceField, Movable):
             Error: If `dimensions.validate` refuses the copy, if `part`
                 is not named, or if `side` or `style` is not valid.
         """
-        if not style.is_valid():
-            raise Error("A hair style must be a named style")
+        require_hair_style(style)
         self.group = head_hair_field(dimensions, part, side, skin)
         self.scalp = not is_paired_head_hair(part)
         self.skin = skin.copy()
