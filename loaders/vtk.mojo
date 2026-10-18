@@ -56,7 +56,7 @@ replacement characters. And an index past the points, which three.js
 keeps and draws from undefined positions.
 """
 
-from core.binary import little_endian_u32
+from core.binary import big_endian_u32, little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
 from loaders.bytes import ascii_digit, ascii_letter, base64_digit, is_sign_mark
@@ -726,18 +726,21 @@ def parse_vtk_ascii(text: String) raises -> BufferGeometry:
 # --- legacy binary -----------------------------------------------------------
 
 
-struct _Binary:
-    """A legacy binary file, read as three.js's `DataView` reads it."""
+struct _Binary[origin: Origin[mut=False]]:
+    """A legacy binary file, read as three.js's `DataView` reads it.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
         """Hold the file.
 
         Args:
-            bytes: The file.
+            bytes: The file. The caller keeps it.
         """
-        self.bytes = bytes^
+        self.bytes = bytes
 
     def word(self, at: Int) raises -> UInt32:
         """Return the big-endian 32 bits at a byte.
@@ -753,10 +756,7 @@ struct _Binary:
         """
         if at + 4 > len(self.bytes):
             raise Error("VTK: a value runs past the end, at byte " + String(at))
-        var value: UInt32 = 0
-        for k in range(4):  # pragma: no branch
-            value = (value << 8) | UInt32(self.bytes[at + k])
-        return value
+        return UInt32(big_endian_u32(self.bytes, at))
 
     def float(self, at: Int) raises -> Float64:
         """Return a big-endian 32-bit float.
@@ -846,7 +846,7 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
             array would have a negative length, or an index is past the
             points.
     """
-    var file = _Binary(bytes.copy())
+    var file = _Binary(Span(bytes))
     var points = List[Float64]()
     var normals = List[Float64]()
     var indices = List[Float64]()
@@ -856,7 +856,7 @@ def parse_vtk_binary(bytes: List[UInt8]) raises -> BufferGeometry:
     var index = 0
     while True:
         var end = file.line_end(index)
-        var line = latin1_units(Span(file.bytes)[index:end])
+        var line = latin1_units(file.bytes[index:end])
         var next = end + 1
         if _starts(line, "DATASET"):
             var dataset = _second_word(line)
