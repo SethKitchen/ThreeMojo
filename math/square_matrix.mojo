@@ -139,6 +139,30 @@ def copy_elements[count: Int](elements: Array[Float32, count]) -> List[Float32]:
     return values^
 
 
+def fill_elements[
+    count: Int
+](mut elements: Array[Float32, count], values: List[Float32]):
+    """Copy numbers into matrix storage, in order.
+
+    `count` is nine or sixteen, so the loop runs.
+
+    Parameters:
+        count: How many elements the matrix stores.
+
+    Args:
+        elements: The matrix storage. The call writes it from the start.
+        values: At least `count` numbers, in the same order.
+
+    Returns:
+        Nothing. The first `count` numbers are stored.
+
+    Raises:
+        Error: Never.
+    """
+    for index in range(count):  # pragma: no branch
+        elements[index] = values[index]
+
+
 def store_elements[
     count: Int
 ](mut dest: List[Float32], at: Int, elements: Array[Float32, count]):
