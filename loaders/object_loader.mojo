@@ -234,6 +234,7 @@ from loaders.gltf import decode_base64, decode_image
 from materials.node_json import read_node_program
 from loaders.node_loader import NodeLoader, plain_material_type
 from materials.nodes import NodeProgramId
+from loaders.js_number import is_decimal_text
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -429,16 +430,6 @@ def light_type_names() -> List[String]:
         "RectAreaLight",
         "LightProbe",
     ]
-
-
-def _is_count(text: String) -> Bool:
-    """Return True if a text holds decimal digits and nothing else: an
-    index, not a name. Every caller has a text of one character or more."""
-    var bytes = text.as_bytes()
-    for at in range(len(bytes)):  # pragma: no branch
-        if bytes[at] < 48 or bytes[at] > 57:
-            return False
-    return True
 
 
 def _position_of(names: List[String], name: String) -> Int:
@@ -2833,7 +2824,7 @@ struct _Loader(Movable):
                 # three.js's `material[ index ]`: a mesh's list of
                 # materials, which a mesh with one material has not.
                 var listed = self.material_list(item)
-                if not _is_count(path.object_index):
+                if not is_decimal_text(path.object_index):
                     return None
                 var slot = atol(path.object_index)
                 if slot >= len(listed):
@@ -2855,7 +2846,7 @@ struct _Loader(Movable):
             var index = path.property_index
             if (
                 index != ""
-                and not _is_count(index)
+                and not is_decimal_text(index)
                 and not index.startswith("-")
             ):
                 # A target's name, three.js's `morphTargetDictionary`.

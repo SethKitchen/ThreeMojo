@@ -47,7 +47,13 @@ pads with `undefined`.
 """
 
 from loaders.js_number import js_parse_float
-from loaders.js_text import is_js_space, js_string, js_trim, js_units
+from loaders.js_text import (
+    is_js_space,
+    is_js_word,
+    js_string,
+    js_trim,
+    js_units,
+)
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -100,23 +106,6 @@ def _is_space(byte: UInt8) -> Bool:
         feed or a carriage return.
     """
     return byte == 0x20 or (byte >= 0x09 and byte <= 0x0D)
-
-
-def _is_word(byte: UInt8) -> Bool:
-    """Return True for a byte that JavaScript's `\\w` matches.
-
-    Args:
-        byte: The byte.
-
-    Returns:
-        Whether it is a letter, a digit or `_`.
-    """
-    return (
-        (byte >= 0x30 and byte <= 0x39)
-        or (byte >= 0x41 and byte <= 0x5A)
-        or (byte >= 0x61 and byte <= 0x7A)
-        or byte == 0x5F
-    )
 
 
 def _trim(text: String) -> String:
@@ -173,7 +162,7 @@ def _run(bytes: Span[UInt8, _], start: Int, space: Bool) -> Int:
     """
     var end = start
     while end < len(bytes) and (
-        _is_space(bytes[end]) if space else _is_word(bytes[end])
+        _is_space(bytes[end]) if space else is_js_word(bytes[end])
     ):
         end += 1
     return end - start

@@ -38,6 +38,7 @@ other than the one its `*count` declares.
 
 from core.ordinal import ordinal_valid
 
+from loaders.js_text import is_js_word
 from render.inflate import zlib_inflate
 from std.memory import bitcast
 
@@ -482,19 +483,9 @@ def object_name(name: String, format: FbxFormat) raises -> String:
         return name
     # `cut` is positive here: the loop always runs.
     for byte in name.as_bytes()[:cut]:  # pragma: no branch
-        if not _is_word(Int(byte)):
+        if not is_js_word(byte):
             return name
     return String(name[byte = cut + 2 :])
-
-
-def _is_word(byte: Int) -> Bool:
-    """Return True for a byte of `\\w`: a letter, a digit or `_`."""
-    return (
-        (byte >= 48 and byte <= 57)
-        or (byte >= 65 and byte <= 90)
-        or (byte >= 97 and byte <= 122)
-        or byte == 95
-    )
 
 
 def parse_fbx(bytes: List[UInt8]) raises -> FbxDocument:
