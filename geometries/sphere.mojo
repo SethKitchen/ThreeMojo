@@ -27,6 +27,8 @@ from core.buffer_geometry import BufferGeometry, SPHERE_GEOMETRY
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    record_phi,
+    record_sweep,
     require_positive_radius,
     require_three_segments,
 )
@@ -162,8 +164,6 @@ def sphere(
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("widthSegments", Float64(width_segments))
     geometry.parameters.set_number("heightSegments", Float64(height_segments))
-    geometry.parameters.set_radians("phiStart", phi_start)
-    geometry.parameters.set_radians("phiLength", phi_length)
-    geometry.parameters.set_radians("thetaStart", theta_start)
-    geometry.parameters.set_radians("thetaLength", theta_length)
+    record_phi(geometry, phi_start, phi_length)
+    record_sweep(geometry, theta_start, theta_length)
     return geometry^

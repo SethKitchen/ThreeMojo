@@ -9,7 +9,8 @@ A plane, a sphere, a tube and the other generated solids all finish the
 same way. `position_normal_surface` writes positions and normals.
 `textured_surface` also writes texture coordinates. `indexed_surface`
 also writes the triangle index. `record_kind` names the solid and starts
-its parameter record. They share the checks for a positive
+its parameter record. `record_sweep` writes the theta sweep.
+`record_phi` writes the phi sweep. They share the checks for a positive
 radius, three segments, and positive or finite box extents. A count
 below one is `require_at_least_one` in `math.curve_checks`.
 """
@@ -25,6 +26,7 @@ from core.buffer_geometry import (
 from core.user_data import UserData
 from core.ordinal import require_positive
 from std.math import isfinite
+from units.si import Angle
 
 
 def position_normal_surface(
@@ -114,6 +116,46 @@ def record_kind(mut geometry: BufferGeometry, kind: GeometryType):
     """
     geometry.kind = kind
     geometry.parameters = UserData()
+
+
+def record_sweep(
+    mut geometry: BufferGeometry, theta_start: Angle, theta_length: Angle
+) raises:
+    """Record where a theta sweep starts and how far it runs.
+
+    Args:
+        geometry: The solid, after `record_kind`.
+        theta_start: Where the sweep starts.
+        theta_length: How far it sweeps.
+
+    Returns:
+        Nothing. `thetaStart` and `thetaLength` hold the angles in radians.
+
+    Raises:
+        Error: If either angle in radians is not finite.
+    """
+    geometry.parameters.set_radians("thetaStart", theta_start)
+    geometry.parameters.set_radians("thetaLength", theta_length)
+
+
+def record_phi(
+    mut geometry: BufferGeometry, phi_start: Angle, phi_length: Angle
+) raises:
+    """Record where a phi sweep starts and how far it runs.
+
+    Args:
+        geometry: The solid, after `record_kind`.
+        phi_start: Where the sweep starts.
+        phi_length: How far it sweeps.
+
+    Returns:
+        Nothing. `phiStart` and `phiLength` hold the angles in radians.
+
+    Raises:
+        Error: If either angle in radians is not finite.
+    """
+    geometry.parameters.set_radians("phiStart", phi_start)
+    geometry.parameters.set_radians("phiLength", phi_length)
 
 
 def require_positive_radius(radius: Float32, name: String) raises:

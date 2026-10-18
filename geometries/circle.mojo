@@ -43,6 +43,7 @@ from geometries.grid import append_cell
 from geometries.surface import (
     indexed_surface,
     record_kind,
+    record_sweep,
     require_positive_radius,
     require_three_segments,
 )
@@ -156,8 +157,7 @@ def circle(
     record_kind(geometry, CIRCLE_GEOMETRY)
     geometry.parameters.set_meters("radius", radius)
     geometry.parameters.set_number("segments", Float64(segments))
-    geometry.parameters.set_radians("thetaStart", theta_start)
-    geometry.parameters.set_radians("thetaLength", theta_length)
+    record_sweep(geometry, theta_start, theta_length)
     return geometry^
 
 
@@ -248,6 +248,5 @@ def ring(
     geometry.parameters.set_meters("outerRadius", outer_radius)
     geometry.parameters.set_number("thetaSegments", Float64(theta_segments))
     geometry.parameters.set_number("phiSegments", Float64(phi_segments))
-    geometry.parameters.set_radians("thetaStart", theta_start)
-    geometry.parameters.set_radians("thetaLength", theta_length)
+    record_sweep(geometry, theta_start, theta_length)
     return geometry^
