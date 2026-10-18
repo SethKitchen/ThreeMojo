@@ -65,6 +65,7 @@ from math.path import Shape
 from math.shape_path import ShapePath
 from math.vector2 import Vector2
 from std.collections import Dict
+from math.finite import require_positive_finite
 from std.math import isfinite, isnan
 from std.pathlib import Path
 from units.si import Length, METER
@@ -353,8 +354,9 @@ struct Font(Movable):
             Error: If the resolution is not positive and finite, a metric
                 is not finite, or a key is not one character.
         """
-        if not isfinite(resolution) or resolution <= 0:
-            raise Error("Font: the resolution must be positive")
+        require_positive_finite(
+            Float64(resolution), "Font: the resolution must be positive"
+        )
         if not isfinite(y_min) or not isfinite(y_max):
             raise Error("Font: the bounding box must be finite")
         if not isfinite(underline_thickness):
@@ -447,8 +449,7 @@ struct Font(Movable):
                 has no glyph and the font has no `?`.
         """
         var em = Float64(size.to(METER))
-        if not isfinite(em) or em <= 0:
-            raise Error("Font: a text size must be positive")
+        require_positive_finite(em, "Font: a text size must be positive")
         var scale = em / Float64(self.resolution)
         var line = (
             Float64(self.y_max)

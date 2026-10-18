@@ -38,6 +38,7 @@ def require_hair_direction(direction: Vector3) raises:
         raise Error("Hair optical depth needs a finite light direction")
 
 
+from math.finite import require_positive_finite
 from std.math import ceil, floor, isfinite, max
 from std.sys import size_of
 from units.si import Length, METER
@@ -100,8 +101,10 @@ struct HairDensity(Movable):
         ):
             raise Error("Hair density needs four through 64 cells per axis")
         var diameter = self.diameter.to(METER)
-        if not isfinite(diameter) or diameter <= 0:
-            raise Error("Hair density needs a finite positive fiber diameter")
+        require_positive_finite(
+            Float64(diameter),
+            "Hair density needs a finite positive fiber diameter",
+        )
 
     def rebuild(mut self, groom: HairGroom) raises:
         """Replace the volume with the current strand positions.

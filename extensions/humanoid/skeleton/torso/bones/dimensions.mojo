@@ -57,7 +57,8 @@ from extensions.humanoid.skeleton.torso.sweep import (
 )
 from math.utils import mix_delta
 from math.vector3 import Vector3, mix_delta3
-from std.math import cos, isfinite, max, min, sin
+from math.finite import require_positive_finite
+from std.math import cos, max, min, sin
 from units.si import Length
 
 # The female template against the male one: narrower and shallower
@@ -230,10 +231,10 @@ struct TorsoFrame(ImplicitlyCopyable):
             self.head,
             self.neck,
         ]:  # pragma: no branch
-            if not isfinite(value) or value <= 0:
-                raise Error(
-                    "An anatomy frame scale must be finite and positive"
-                )
+            require_positive_finite(
+                Float64(value),
+                "An anatomy frame scale must be finite and positive",
+            )
         finite_point(self.anchor, "anchor", "anatomy frame")
         self.morph.validate()
 

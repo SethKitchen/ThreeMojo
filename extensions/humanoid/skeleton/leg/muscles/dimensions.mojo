@@ -69,6 +69,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     PelvisDimensions,
     pelvis_dimensions,
 )
+from math.finite import require_positive_finite
 from math.vector3 import Vector3, mix_delta3
 from std.math import isfinite, sqrt
 from units.si import Length
@@ -227,12 +228,15 @@ struct MuscleDimensions(ImplicitlyCopyable):
         check_spec(self.stature, self.sex, self.side, "muscle")
         if not self.athleticism.is_valid():
             raise Error("A muscle needs a toned or untoned athleticism")
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error("A muscle radius scale must be positive")
-        if not isfinite(self.k) or self.k <= 0:
-            raise Error("A muscle blend radius must be positive")
-        if not isfinite(self.epsilon) or self.epsilon <= 0:
-            raise Error("A muscle gradient step must be positive")
+        require_positive_finite(
+            Float64(self.scale), "A muscle radius scale must be positive"
+        )
+        require_positive_finite(
+            Float64(self.k), "A muscle blend radius must be positive"
+        )
+        require_positive_finite(
+            Float64(self.epsilon), "A muscle gradient step must be positive"
+        )
         # The packed SIMD has exactly BELLY_SLOTS (512) entries.
         for slot in range(BELLY_SLOTS):  # pragma: no branch
             if not isfinite(self.bellies[slot]):

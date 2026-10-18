@@ -6,7 +6,8 @@
 """Whether a real number is finite and greater than zero.
 
 Every `Float32` value converts exactly to `Float64`, so one test covers
-both widths.
+both widths. `require_positive_finite` refuses a value that is not.
+Callers keep their own error text.
 """
 
 from std.math import isfinite
@@ -24,8 +25,7 @@ def require_positive_tolerance(value: Float64) raises:
     Raises:
         Error: If the tolerance is not positive and finite.
     """
-    if not positive_finite(value):
-        raise Error("A tolerance must be positive and finite")
+    require_positive_finite(value, "A tolerance must be positive and finite")
 
 
 def positive_finite(value: Float64) -> Bool:
@@ -38,3 +38,21 @@ def positive_finite(value: Float64) -> Bool:
         Whether it is a positive finite number.
     """
     return isfinite(value) and value > 0
+
+
+def require_positive_finite(value: Float64, message: String) raises:
+    """Refuse a number that is not finite and positive.
+
+    Args:
+        value: The number. A `Float32` converts exactly.
+        message: The error text for this caller.
+
+    Returns:
+        Nothing. The call returns when `value` is finite and greater than
+        zero.
+
+    Raises:
+        Error: If `value` is not finite or is not greater than zero.
+    """
+    if not positive_finite(value):
+        raise Error(message)

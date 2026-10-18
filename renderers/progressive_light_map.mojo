@@ -60,7 +60,8 @@ from render.target import FLOAT_TARGET, RenderTarget
 from render.texture import IGNORED, UV_CHANNEL_1, Texture, float_texture
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
-from std.math import isfinite, max, min
+from math.finite import require_positive_finite
+from std.math import max, min
 from units.si import Length, METER
 
 
@@ -265,8 +266,10 @@ struct ProgressiveLightMap(Movable):
             Error: If the blend window is not a positive finite number, or
                 the draw raises.
         """
-        if not isfinite(blend_window) or blend_window <= 0:
-            raise Error("A light map's blend window must be positive")
+        require_positive_finite(
+            Float64(blend_window),
+            "A light map's blend window must be positive",
+        )
         if len(self.meshes) == 0:
             return
         var active = 0 if self.buffer1_active else 1

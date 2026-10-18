@@ -12,6 +12,7 @@ an error bound for that approximation.
 """
 
 from math.vector3 import Vector3
+from math.finite import require_positive_finite
 from std.math import ceil, isfinite, min
 from units.si import Length
 
@@ -51,8 +52,9 @@ struct SampleGrid(ImplicitlyCopyable):
                 the step is not finite and positive, or the work exceeds
                 `MAX_SAMPLE_CELLS`.
         """
-        if not isfinite(step.value) or step.value <= 0:
-            raise Error("A sample step must be finite and positive")
+        require_positive_finite(
+            Float64(step.value), "A sample step must be finite and positive"
+        )
         var counts = SIMD[DType.float64, 4](1)
         for axis in range(3):  # pragma: no branch
             var lo = Float64(low.get_component(axis))

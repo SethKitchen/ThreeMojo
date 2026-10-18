@@ -49,6 +49,7 @@ from core.ordinal import ordinal_valid
 
 from animation.keyframe_track import KeyframeTrack, TrackTarget
 from core.user_data import UserData
+from math.finite import require_positive_finite
 from std.math import isfinite
 from units.si import Duration, SECOND
 
@@ -65,8 +66,9 @@ def require_frame_rate(fps: Float32) raises:
     Raises:
         Error: If the rate is not a number or is not above zero.
     """
-    if not isfinite(fps) or fps <= 0:
-        raise Error("A frame rate must be a number above zero")
+    require_positive_finite(
+        Float64(fps), "A frame rate must be a number above zero"
+    )
 
 
 @fieldwise_init

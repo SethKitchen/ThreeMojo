@@ -89,6 +89,7 @@ from geometries.sculptor_utils import (
 )
 from math.ray import Ray
 from math.vector3 import Vector3
+from math.finite import require_positive_finite
 from std.math import floor, inf, isfinite, sqrt
 from units.si import Length, METER
 
@@ -959,10 +960,10 @@ struct Sculptor(Movable):
             Whether the ray meets the mesh.
         """
         var radius = Float64(world_radius.value)
-        if not isfinite(radius) or radius <= 0:
-            raise Error(
-                "Sculptor: worldRadius must be a finite number greater than 0."
-            )
+        require_positive_finite(
+            radius,
+            "Sculptor: worldRadius must be a finite number greater than 0.",
+        )
         var origin = _point(ray.origin)
         var direction = _point(ray.direction)
         var length_sq = direction.dot(direction)
