@@ -53,6 +53,7 @@ from lights.light import (
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureStore
+from math.utils import saturate
 from std.math import acos, max, min, sqrt
 from units.si import Angle
 
@@ -128,7 +129,7 @@ def projector_attenuation(
     var box = sd_box(u, v, 0.5)
     var capped = min(penumbra_cos, PROJECTOR_PENUMBRA_CAP)
     var angle_factor = Float32(-1.0) / ((Float32(1.0) - acos(capped)) - 1.0)
-    return min(max(box * -2.0 * angle_factor, Float32(0)), Float32(1))
+    return saturate(box * -2.0 * angle_factor)
 
 
 def projector_aspect(light: Light, textures: TextureStore) raises -> Float32:
