@@ -1817,6 +1817,60 @@ struct Lighting(Movable):
             self.direction_through(index, position, normal, receives, shape),
         )
 
+    def _spot_weight[
+        R: ShadowShape = Unshaped
+    ](
+        self,
+        index: Int,
+        normal: Vector3,
+        position: Vector3,
+        receives: Bool,
+        shape: R,
+    ) -> Tuple[Bool, Vector3, Float32, Vector3]:
+        """Return whether a spot light faces the surface, its offset, the
+        weighted Lambert term, and what its shadow lets through.
+
+        A surface on the bulb has no direction. A surface outside the cone,
+        or whose cosine is zero or below, is unlit. Otherwise the cosine is
+        the normal's dot with the offset, divided by the offset's length
+        afterwards, then multiplied by the cone weight and the distance
+        falloff.
+
+        Args:
+            index: Which spot light, in the order they were resolved.
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+            receives: Whether shadows fall on this surface.
+            shape: What the surface makes of the shadow.
+
+        Returns:
+            Whether the light faces the surface, the offset from the
+            surface to the bulb, the weighted Lambert term, and the shadow
+            weight.
+        """
+        var toward, distance, direction_length, rim = self._spot_reach(
+            index, position
+        )
+        if distance == 0:
+            return False, toward, Float32(0), Vector3(0, 0, 0)
+        if rim <= 0:
+            return False, toward, Float32(0), Vector3(0, 0, 0)
+        var lambert = normal.dot(toward) / direction_length
+        if lambert <= 0:
+            return False, toward, Float32(0), Vector3(0, 0, 0)
+        return (
+            True,
+            toward,
+            lambert
+            * rim
+            * falloff(
+                distance, self.spot_decays[index], self.spot_cutoffs[index]
+            ),
+            self.shadow_through(
+                self.spot_shadows[index], position, normal, receives, shape
+            ),
+        )
+
     def _add_hemisphere(self, total: FloatColor, normal: Vector3) -> FloatColor:
         """Add every hemisphere light's ground-to-sky mix.
 
@@ -2084,26 +2138,11 @@ struct Lighting(Movable):
             total = _add_rgb(total, rgb_channels(bulb) * (through * bare))
         total = self._add_hemisphere(total, normal)
         for index in range(len(self.spot_positions)):
-            var toward, distance, direction_length, rim = self._spot_reach(
-                index, position
+            var lit, _, bare, through = self._spot_weight(
+                index, normal, position, receives, shape
             )
-            if distance == 0:
+            if not lit:
                 continue
-            if rim <= 0:
-                continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = (
-                lambert
-                * rim
-                * falloff(
-                    distance, self.spot_decays[index], self.spot_cutoffs[index]
-                )
-            )
-            var through = self.shadow_through(
-                self.spot_shadows[index], position, normal, receives, shape
-            )
             ref bulb = self.spot_radiances[index]
             var tint = self.spot_tint(index, position, normal)
             total = _add_rgb(
@@ -2287,26 +2326,11 @@ struct Lighting(Movable):
             ref bulb = self.point_radiances[index]
             sum = sum + (rgb_channels(bulb) * (through * bare)) * sent
         for index in range(len(self.spot_positions)):
-            var toward, distance, direction_length, rim = self._spot_reach(
-                index, position
+            var lit, toward, bare, through = self._spot_weight(
+                index, normal, position, receives, shape
             )
-            if distance == 0:
+            if not lit:
                 continue
-            if rim <= 0:
-                continue
-            var lambert = normal.dot(toward) / direction_length
-            if lambert <= 0:
-                continue
-            var bare = (
-                lambert
-                * rim
-                * falloff(
-                    distance, self.spot_decays[index], self.spot_cutoffs[index]
-                )
-            )
-            var through = self.shadow_through(
-                self.spot_shadows[index], position, normal, receives, shape
-            )
             toward.normalize()
             var sent = blinn_phong(
                 toward, toward_eye, normal, specular, shininess
