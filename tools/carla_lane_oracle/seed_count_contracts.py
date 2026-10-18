@@ -775,7 +775,7 @@ def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _oper
                 edge = cleanup_edges[path]
                 require(expected == edge['before_sha256'],
                         'full-audit edge does not extend the immutable count input: ' + path)
-                expected = edge['after_sha256']
+                expected = full_audit.provenance_after_sha256(edge)
             require(hashlib.sha256((_typed_source.historical_bytes(root, root/path, (root/path).read_bytes(), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner) if _operation is None else _typed_source.historical_bytes(root, path, full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)) if _inputs is None else
                               _typed_source.historical_bytes(root, path, _inputs.raw(_input_owner, root, path), _operation=_operation, _inputs=_inputs, _input_owner=_input_owner)).hexdigest() == expected,
                     'historical record, live dependency or regression fixture changed: '+path)

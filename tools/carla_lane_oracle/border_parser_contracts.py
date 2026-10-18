@@ -205,7 +205,7 @@ def verify(root, *, _operation=None):
                             'Map consumer edge does not extend the immutable parser record')
                 elif group == 'unchanged_inputs' and path in consumers:
                     require(expected == consumers[path]['before_sha256']
-                            and actual == consumers[path]['after_sha256'],
+                            and actual == full_audit.provenance_after_sha256(consumers[path]),
                             'runtime boundary consumer does not extend the record: ' + path)
                 else:
                     require(actual == expected,
