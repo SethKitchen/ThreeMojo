@@ -33,7 +33,8 @@ from core.ordinal import ordinal_valid
 
 from render.color_spaces import srgb_to_linear_three
 from render.framebuffer import FloatColor
-from math.utils import js_round_int, rounded_product
+from math.rounded_product import rounded_product
+from math.utils import js_round_int
 from math.finite import require_finite
 from std.math import max, min
 

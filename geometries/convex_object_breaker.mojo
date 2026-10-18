@@ -47,7 +47,8 @@ from geometries.convex import convex
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.bounds import Plane
 from math.quaternion import Quaternion, quaternion_terms
-from math.utils import SeededRandom, rounded_product
+from math.rounded_product import rounded_product
+from math.utils import SeededRandom
 from math.vector3 import Vector3
 from std.collections import Set
 from std.math import cos, pi, sin, sqrt

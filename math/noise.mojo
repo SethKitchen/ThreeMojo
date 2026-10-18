@@ -29,7 +29,8 @@ transform overflows is also refused before integer indexing.
 `random()` method and uses `Math.random` by default, which cannot be seeded.
 """
 
-from math.utils import SeededRandom, rounded_product
+from math.rounded_product import rounded_lerp, rounded_product
+from math.utils import SeededRandom
 from math.finite import require_finite
 from std.math import floor, sqrt
 
@@ -816,20 +817,6 @@ def _fade(t: Float64) -> Float64:
     return t * t * t * (rounded_product(t, rounded_product(t, 6) - 15) + 10)
 
 
-def _lerp(x: Float64, y: Float64, t: Float64) -> Float64:
-    """Return three.js's `MathUtils.lerp`, `(1 - t) * x + t * y`.
-
-    Args:
-        x: The start.
-        y: The end.
-        t: The fraction.
-
-    Returns:
-        The mix.
-    """
-    return rounded_product(1 - t, x) + rounded_product(t, y)
-
-
 def _grad(hash: Int, x: Float64, y: Float64, z: Float64) -> Float64:
     """Return the dot product of a hashed gradient and an offset.
 
@@ -894,27 +881,27 @@ struct ImprovedNoise(ImplicitlyCopyable):
         var b = _perm(cx + 1) + cy
         var ba = _perm(b) + cz
         var bb = _perm(b + 1) + cz
-        return _lerp(
-            _lerp(
-                _lerp(
+        return rounded_lerp(
+            rounded_lerp(
+                rounded_lerp(
                     _grad(_perm(aa), fx, fy, fz),
                     _grad(_perm(ba), x_minus1, fy, fz),
                     u,
                 ),
-                _lerp(
+                rounded_lerp(
                     _grad(_perm(ab), fx, y_minus1, fz),
                     _grad(_perm(bb), x_minus1, y_minus1, fz),
                     u,
                 ),
                 v,
             ),
-            _lerp(
-                _lerp(
+            rounded_lerp(
+                rounded_lerp(
                     _grad(_perm(aa + 1), fx, fy, z_minus1),
                     _grad(_perm(ba + 1), x_minus1, fy, z_minus1),
                     u,
                 ),
-                _lerp(
+                rounded_lerp(
                     _grad(_perm(ab + 1), fx, y_minus1, z_minus1),
                     _grad(_perm(bb + 1), x_minus1, y_minus1, z_minus1),
                     u,
