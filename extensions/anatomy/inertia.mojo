@@ -17,6 +17,7 @@ Sums are in `Float64`, so a million cells keep their precision.
 """
 
 from math.finite import positive_finite
+from math.utils import min3
 from math.vector3 import Vector3
 from std.math import isfinite, sqrt
 from units.si import (
@@ -72,9 +73,9 @@ def _check_second_moments(
     var d = xy / scale
     var e = xz / scale
     var f = yz / scale
-    if min(a, min(b, c)) < -tolerance:
+    if min3(a, b, c) < -tolerance:
         raise Error("A sampled tensor must have nonnegative second moments")
-    if min(a * b - d * d, min(a * c - e * e, b * c - f * f)) < -tolerance:
+    if min3(a * b - d * d, a * c - e * e, b * c - f * f) < -tolerance:
         raise Error("A sampled tensor must be physically admissible")
     var determinant = (
         a * b * c + 2 * d * e * f - a * f * f - b * e * e - c * d * d
@@ -130,7 +131,7 @@ struct SegmentInertia(ImplicitlyCopyable):
         comptime for axis in range(9):
             if not isfinite(values[axis]):
                 raise Error("Segment mass properties must be finite")
-        if min(self.xx.value, min(self.yy.value, self.zz.value)) < 0.0:
+        if min3(self.xx.value, self.yy.value, self.zz.value) < 0.0:
             raise Error("An inertia diagonal must be nonnegative")
         var x = Float64(self.xx.value)
         var y = Float64(self.yy.value)

@@ -33,6 +33,7 @@ it at the frame's size.
 """
 
 from math.norm import squared_length2
+from math.utils import max3, min3
 from postprocessing.display_nodes import replace_light, scaled_size
 from postprocessing.sampling import LightView, u_of, v_of
 from render.framebuffer import FloatColor
@@ -194,8 +195,8 @@ def rcas_pixel(
     )
     if denoise:
         var nz = (bl + dl + fl + hl) * 0.25 - el
-        var nz_range = max(max(bl, dl), max(el, max(fl, hl))) - min(
-            min(bl, dl), min(el, min(fl, hl))
+        var nz_range = max(max(bl, dl), max3(el, fl, hl)) - min(
+            min(bl, dl), min3(el, fl, hl)
         )
         var ratio = abs(nz) / max(nz_range, Float32(1.0 / 65536.0))
         lobe *= 1 - min(max(ratio, Float32(0)), Float32(1)) * 0.5

@@ -111,6 +111,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.utils import max3, min3
 from std.math import asin, cbrt, cos, floor, ceil, pi, pow, sin, sqrt
 
 comptime NECK_SEGS = 4
@@ -681,10 +682,10 @@ comptime _NY = 160
 
 
 def _tri(mut st: _Stack, a: V3, b: V3, c: V3):
-    var x0 = Int(floor(min(a.x, min(b.x, c.x)) - _X0))
-    var x1 = Int(ceil(max(a.x, max(b.x, c.x)) - _X0))
-    var y0 = Int(floor(min(a.y, min(b.y, c.y)) - _Y0))
-    var y1 = Int(ceil(max(a.y, max(b.y, c.y)) - _Y0))
+    var x0 = Int(floor(min3(a.x, b.x, c.x) - _X0))
+    var x1 = Int(ceil(max3(a.x, b.x, c.x) - _X0))
+    var y0 = Int(floor(min3(a.y, b.y, c.y) - _Y0))
+    var y1 = Int(ceil(max3(a.y, b.y, c.y) - _Y0))
     var den = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
     if abs(den) < 1e-9:
         return

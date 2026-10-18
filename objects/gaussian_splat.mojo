@@ -47,6 +47,7 @@ from math.bounds import Box3, Sphere
 from math.box_extent import _max_radius_encloses_box
 from math.matrix4 import Matrix4
 from math.norm import squared_length3
+from math.utils import max3
 from math.vector3 import Vector3
 from std.math import floor, inf, isfinite, max, min, sqrt
 from std.memory import bitcast
@@ -240,7 +241,7 @@ struct GaussianSplat(Copyable, Movable):
         var x = abs(Float64(c[index * 6]) + regularizer) + xy + xz
         var y = abs(Float64(c[index * 6 + 3]) + regularizer) + xy + yz
         var z = abs(Float64(c[index * 6 + 5]) + regularizer) + xz + yz
-        return _sqrt_bound(max(x, max(y, z)))
+        return _sqrt_bound(max3(x, y, z))
 
     def _center(self, index: Int) -> Vector3:
         """Return a splat's center.
@@ -425,7 +426,7 @@ struct GaussianSplat(Copyable, Movable):
         var c11 = Float64(c[index * 6 + 3])
         var c12 = Float64(c[index * 6 + 4])
         var c22 = Float64(c[index * 6 + 5])
-        var largest = max(c00, max(c11, c22))
+        var largest = max3(c00, c11, c22)
         if not largest > 0:
             return None
         var center = self._center(index)

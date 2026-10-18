@@ -64,6 +64,7 @@ from extensions.animals.registry import species_name, species_of
 from geometries.plane import plane
 from lights.light import directional_light, hemisphere_light
 from materials.material import Material, MaterialId
+from math.utils import max3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
@@ -207,7 +208,7 @@ def main() raises:
                 var box = game.bounding_box()
                 var size = box.max - box.min
                 center = (box.max + box.min) * 0.5
-                reach = max(size.x, max(size.y, size.z))
+                reach = max3(size.x, size.y, size.z)
                 floor_y = box.min.y
             var layers = anatomy_layers(real, muscles, pose)
             var camera = gallery_camera(

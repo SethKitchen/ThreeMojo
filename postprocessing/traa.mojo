@@ -40,6 +40,7 @@ limits, and explicit zero and nonfinite rules.
 
 from render.color_math import floor_channels
 from math.norm import length2
+from math.utils import max3
 from math.sine import fraction
 from cameras.camera import Camera
 from core.assets import Assets
@@ -464,8 +465,8 @@ def flicker_reduction(
     Returns:
         The mix.
     """
-    var squeeze_now = 1 / (max(current.r, max(current.g, current.b)) + 1)
-    var squeeze_then = 1 / (max(history.r, max(history.g, history.b)) + 1)
+    var squeeze_now = 1 / (max3(current.r, current.g, current.b) + 1)
+    var squeeze_then = 1 / (max3(history.r, history.g, history.b) + 1)
     var light_now = luminance_of(
         current.r * squeeze_now,
         current.g * squeeze_now,

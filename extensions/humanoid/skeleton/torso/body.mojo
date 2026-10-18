@@ -90,6 +90,7 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 from extensions.humanoid.skeleton.torso.skin.dimensions import TorsoSkinField
 from materials.material import MaterialId
 from math.smoothstep import hermite_fade
+from math.utils import max3, min3
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -197,16 +198,12 @@ struct BodySkinField(Copyable, DistanceField, Movable):
         self.low = Vector3(
             min(self.lower.low.x, self.left_arm.low.x),
             min(self.lower.low.y, self.right_arm.low.y),
-            min(self.lower.low.z, min(self.torso.low.z, self.right_arm.low.z)),
+            min3(self.lower.low.z, self.torso.low.z, self.right_arm.low.z),
         )
         self.high = Vector3(
             max(self.lower.high.x, self.right_arm.high.x),
-            max(
-                self.head.high.y, max(self.torso.high.y, self.right_arm.high.y)
-            ),
-            max(
-                self.lower.high.z, max(self.torso.high.z, self.right_arm.high.z)
-            ),
+            max3(self.head.high.y, self.torso.high.y, self.right_arm.high.y),
+            max3(self.lower.high.z, self.torso.high.z, self.right_arm.high.z),
         )
 
     def distance(self, point: Vector3) -> Float32:

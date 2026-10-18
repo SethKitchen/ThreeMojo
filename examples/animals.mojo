@@ -44,6 +44,7 @@ from geometries.plane import plane
 from lights.light import directional_light, hemisphere_light
 from lights.shadow import PCF_SOFT_SHADOW_MAP
 from materials.material import Material, MaterialId
+from math.utils import max3
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
@@ -102,7 +103,7 @@ def tiles(id: SpeciesId, renderer: Renderer) raises -> List[Framebuffer]:
     var box = geometry.bounding_box()
     var size = box.max - box.min
     var center = (box.max + box.min) * 0.5
-    var reach = max(size.x, max(size.y, size.z))
+    var reach = max3(size.x, size.y, size.z)
     var assets = Assets()
     var shape = assets.geometries.add(geometry^)
     var materials = List[MaterialId]()

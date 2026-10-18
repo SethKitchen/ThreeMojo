@@ -225,6 +225,7 @@ from materials.material import (
 from math.matrix4 import Matrix4
 from math.utils import (
     ComponentType,
+    max3,
     INT16_COMPONENT,
     INT32_COMPONENT,
     INT8_COMPONENT,
@@ -1320,7 +1321,7 @@ struct _Exporter(Movable):
                 material.ao_map_intensity,
             )
         var glow = FloatColor(srgb=material.emissive)
-        if max(glow.r, max(glow.g, glow.b)) > 0:
+        if max3(glow.r, glow.g, glow.b) > 0:
             writer.key("emissiveFactor")
             writer.begin_array()
             writer.number(glow.r)

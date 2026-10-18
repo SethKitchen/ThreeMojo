@@ -30,7 +30,7 @@ from extensions.sdf.vector import (
 )
 from math.norm import squared_length2
 from math.sine import fraction
-from math.utils import clamp
+from math.utils import clamp, max3
 from std.math import atan2, acos, cos, isfinite, pi, sin, sqrt
 from units.si import METER, SECOND, Duration, Length
 
@@ -145,7 +145,7 @@ def solve_two_bone(
     var projected = root + direction * reach
     # The bind bend: which side of the root-to-end line the middle lies.
     var e = end - root
-    var scale = max(la, max(lb, reach))
+    var scale = max3(la, lb, reach)
     var bend_cross = (e.y / scale) * (a.z / scale) - (e.z / scale) * (
         a.y / scale
     )
