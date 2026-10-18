@@ -14,6 +14,24 @@ from math.vector2 import Vector2
 from render.pointrule import gl_point_coord
 
 
+def sample_pixel(x: Int, y: Int, context: NodeContext) -> Tuple[Int, Int]:
+    """Return the pixel a derivative sample reads.
+
+    Args:
+        x: The pixel column.
+        y: The pixel row, counted down from the top.
+        context: Which sample. `AT_RIGHT` steps one column to the right.
+            `AT_UP` steps one row up, which is one less in this count.
+
+    Returns:
+        The column and the row.
+    """
+    return (
+        x + (1 if context == AT_RIGHT else 0),
+        y - (1 if context == AT_UP else 0),
+    )
+
+
 def pixel_frag_coord(
     x: Int,
     y: Int,
@@ -34,8 +52,7 @@ def pixel_frag_coord(
         The pixel center from the bottom left, the depth from zero to
         one, and one.
     """
-    var sample_x = x + (1 if context == AT_RIGHT else 0)
-    var sample_y = y - (1 if context == AT_UP else 0)
+    var sample_x, sample_y = sample_pixel(x, y, context)
     return SIMD[DType.float32, 4](
         Float32(sample_x) + 0.5,
         Float32(height - sample_y) - 0.5,
@@ -66,8 +83,7 @@ def sampled_point_coord(
     """
     if context.is_corner():
         return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
-    var sample_x = x + (1 if context == AT_RIGHT else 0)
-    var sample_y = y - (1 if context == AT_UP else 0)
+    var sample_x, sample_y = sample_pixel(x, y, context)
     var place = gl_point_coord(center, size, sample_x, sample_y)
     return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
 

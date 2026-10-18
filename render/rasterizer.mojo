@@ -119,6 +119,7 @@ from render.texture import (
 )
 from render.screen_coord import (
     pixel_frag_coord,
+    sample_pixel,
     sampled_point_coord,
     screen_size_coord,
 )
@@ -127,8 +128,6 @@ from materials.nodes import (
     AO_NODE,
     BACKDROP_ALPHA_NODE,
     BACKDROP_NODE,
-    AT_RIGHT,
-    AT_UP,
     COLOR_NODE,
     CORNER_A,
     CORNER_B,
@@ -5816,8 +5815,7 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         """Return each corner's perspective-correct weight at this pixel,
         or at the pixel to its right or above it, from the triangle's own
         edge functions, as `_sample_map` measures a footprint."""
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
+        var x, y = sample_pixel(self.x, self.y, context)
         var weights = _weights(self.coverage, x, y)
         return perspective_shares(
             weights.wa,
@@ -6137,13 +6135,14 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each end's perspective-correct weight at this pixel, or
         at the pixel to its right or above it, from `toward_at`."""
+        var x, y = sample_pixel(self.x, self.y, context)
         var toward = toward_at(
             Vector2(self.a[].x, self.a[].y),
             Vector2(self.b[].x, self.b[].y),
             self.a[].inv_w,
             self.b[].inv_w,
-            self.x + (1 if context == AT_RIGHT else 0),
-            self.y - (1 if context == AT_UP else 0),
+            x,
+            y,
         )
         return SIMD[DType.float32, 4](1 - toward, toward, 0, 0)
 
