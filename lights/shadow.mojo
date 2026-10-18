@@ -124,6 +124,23 @@ comptime PCF_SOFT_SHADOW_MAP = ShadowMapType(2)
 # with Chebyshev's bound.
 comptime VSM_SHADOW_MAP = ShadowMapType(3)
 
+
+def require_shadow_type(shadow_type: ShadowMapType) raises:
+    """Refuse a shadow map type that is none of the four.
+
+    Args:
+        shadow_type: The filter to check.
+
+    Returns:
+        Nothing. The call returns when the type is named.
+
+    Raises:
+        Error: If `shadow_type` is none of the four.
+    """
+    if not shadow_type.is_valid():
+        raise Error("A shadow map type that is none of the four")
+
+
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels
 # a side, no bias, one texel of blur, and eight blur samples for a
 # variance map.
@@ -449,8 +466,7 @@ struct ShadowMap(Copyable, LightSlot, Movable):
         """
         if size <= 0:
             raise Error("A shadow map must be at least one texel a side")
-        if not shadow_type.is_valid():
-            raise Error("A shadow map type that is none of the four")
+        require_shadow_type(shadow_type)
         var squares = 1
         if shadow_type == VSM_SHADOW_MAP:
             squares = 2
@@ -519,8 +535,7 @@ struct ShadowMap(Copyable, LightSlot, Movable):
         """
         if size <= 0:
             raise Error("A shadow map must be at least one texel a side")
-        if not shadow_type.is_valid():
-            raise Error("A shadow map type that is none of the four")
+        require_shadow_type(shadow_type)
         if len(depths) != CUBE_FACES * size * size:
             raise Error("A point light's shadow must fill six square faces")
         if len(colors) != 0 and len(colors) != 4 * CUBE_FACES * size * size:

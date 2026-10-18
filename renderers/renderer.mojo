@@ -154,6 +154,7 @@ from lights.shadow import (
     VSM_SHADOW_MAP,
     ShadowMap,
     ShadowMapType,
+    require_shadow_type,
     SpotLightMap,
     cube_direction,
     cube_stored,
@@ -9509,8 +9510,7 @@ struct Renderer(Movable):
                 names a node or a target the scene lacks, or anything
                 `prepare` raises for the casters.
         """
-        if not self.shadow_map_type.is_valid():
-            raise Error("A shadow map type that is none of the four")
+        require_shadow_type(self.shadow_map_type)
         self._state[].shadow_items.clear()
         self._state[].shadow_lights.clear()
         var variance = self.shadow_map_type == VSM_SHADOW_MAP
