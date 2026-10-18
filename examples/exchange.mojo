@@ -12,7 +12,7 @@ and `read_ifc` reads it back. The render view draws the model that came
 back, cut away above its first storey.
 """
 
-from examples.output import build_and_spin, example_destination
+from examples.output import example_destination, build_and_spin, gallery_camera
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -70,13 +70,15 @@ def _camera() raises -> PerspectiveCamera:
     Raises:
         Error: If the camera's settings are not valid.
     """
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.5, METER),
-        Length(300, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(30, 26, 34),
+        Vector3(0, 2, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.5, METER),
+        far=Length(300, METER),
     )
-    camera.place(Vector3(30, 26, 34), Vector3(0, 2, 0))
     return camera^
 
 

@@ -11,7 +11,7 @@ A clip holds a position track and a rotation track. The mixer writes the
 pose each frame from the clock's delta.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from animation.animation_clip import AnimationClip
 from animation.animation_mixer import AnimationAction, AnimationMixer
@@ -133,13 +133,15 @@ def main() raises:
     var which = mixer.add(AnimationAction(clip^))
     mixer.action(which).play()
 
-    var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.7, 3.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(45.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.7, 3.2), Vector3(0, 0, 0))
 
     var delta = Duration(CLIP_SECONDS / Float32(FRAMES), SECOND)
     var frame_clock = Clock()

@@ -11,7 +11,7 @@ The cube is the only mesh. As it recedes it takes the fog color. That is
 `scene.fog`, mixed after shading, in linear light.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -87,13 +87,15 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.94))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.4, 4.5),
+        Vector3(0, 0, -6),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
-    camera.place(Vector3(0, 0.4, 4.5), Vector3(0, 0, -6))
 
     var frame_clock = Clock()
     frame_clock.start()

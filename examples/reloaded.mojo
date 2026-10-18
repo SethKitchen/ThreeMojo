@@ -12,9 +12,8 @@ The page is Exporters. `write_gltf` writes the mesh and its material.
 a glTF file from this writer does not carry lights.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
@@ -65,13 +64,15 @@ def main() raises:
     loaded.add_light(ambient_light(Color(255, 255, 255), 0.4))
     loaded.add_light(directional_light(Color(255, 250, 240), lamp_node, 2.5))
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.3, 0.7, 3.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
-    camera.place(Vector3(0.3, 0.7, 3.2), Vector3(0, 0, 0))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))

@@ -15,10 +15,9 @@ reflects that one, so the boxes go round in its surface as they go round
 the scene. The floor reflects the sky a little, mixed into its own gray.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.cube_camera import CubeCamera
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
 from core.clock import Clock
@@ -164,13 +163,15 @@ def main() raises:
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.2))
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 1.0, 4.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(45.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 1.0, 4.2), Vector3(0, 0, 0))
     camera.layers.enable(1)
     var eye = CubeCamera(Length(0.1, METER), Length(50.0, METER), MIRROR_SIZE)
     eye.attach(center_node)

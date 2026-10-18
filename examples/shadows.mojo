@@ -12,7 +12,7 @@ the floor only receives. The map is a soft percentage-closer filter, so
 the edge of the shadow is a band rather than a step.
 """
 
-from examples.output import example_destination, write_example
+from examples.output import example_destination, gallery_camera, write_example
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -112,13 +112,15 @@ def main() raises:
     scene.add_light(sun)
     scene.add_light(ambient_light(Color(180, 190, 210), 0.35))
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(2.4, 1.8, 2.6),
+        Vector3(0, 0.2, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
-    camera.place(Vector3(2.4, 1.8, 2.6), Vector3(0, 0.2, 0))
 
     var frame_clock = Clock()
     frame_clock.start()
