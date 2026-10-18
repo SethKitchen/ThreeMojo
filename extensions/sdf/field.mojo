@@ -38,7 +38,7 @@ from extensions.sdf.vector import (
 from math.norm import squared_length2, squared_length3
 from math.utils import max3, min3
 from std.collections import Dict
-from std.math import isfinite, sqrt
+from std.math import sqrt
 
 # The value of an empty field: far outside everything.
 comptime FAR = 1e9
@@ -392,11 +392,11 @@ struct SdfModel(Movable):
         """
         if not min3(r.x, r.y, r.z) > 0.0:
             raise Error("An ellipsoid's radii must be positive")
-        if not (isfinite(axis.x) and isfinite(axis.y) and isfinite(axis.z)):
+        if not axis.is_finite():
             raise Error("An ellipsoid axis must be finite and nonzero")
         if max3(abs(axis.x), abs(axis.y), abs(axis.z)) == 0.0:
             raise Error("An ellipsoid axis must be finite and nonzero")
-        if not (isfinite(up.x) and isfinite(up.y) and isfinite(up.z)):
+        if not up.is_finite():
             raise Error("An ellipsoid up hint must be finite")
         var f = frame_zy(axis, up)
         return self._push(

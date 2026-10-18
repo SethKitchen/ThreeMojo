@@ -371,6 +371,14 @@ struct _Vector(ImplicitlyCopyable):
         self.y = y
         self.z = z
 
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x`, `y`, and `z` are all finite.
+        """
+        return isfinite(self.x) and isfinite(self.y) and isfinite(self.z)
+
     def length_sq(self) -> Float64:
         """Return three.js's `lengthSq`."""
         return (
@@ -463,13 +471,13 @@ def normal_attribute(
         var c = _point(coord, faces[f * 3 + 2])
         var cb = _Vector(c.x - b.x, c.y - b.y, c.z - b.z)
         var ab = _Vector(a.x - b.x, a.y - b.y, a.z - b.z)
-        if not (isfinite(cb.x) and isfinite(cb.y) and isfinite(cb.z)):
+        if not cb.is_finite():
             cb = _Vector(
                 c.x * 0.5 - b.x * 0.5,
                 c.y * 0.5 - b.y * 0.5,
                 c.z * 0.5 - b.z * 0.5,
             )
-        if not (isfinite(ab.x) and isfinite(ab.y) and isfinite(ab.z)):
+        if not ab.is_finite():
             ab = _Vector(
                 a.x * 0.5 - b.x * 0.5,
                 a.y * 0.5 - b.y * 0.5,

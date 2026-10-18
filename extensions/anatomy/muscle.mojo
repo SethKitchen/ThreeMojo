@@ -508,7 +508,7 @@ def moment_arm(
             length.
     """
     for p in [origin, insertion, center, axis]:  # pragma: no branch
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+        if not p.is_finite():
             raise Error("Muscle moment-arm points and axis must be finite")
     var line = origin - insertion
     var reach = line.length()

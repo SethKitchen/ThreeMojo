@@ -507,9 +507,7 @@ struct CellComplex(Movable):
             raise Error("A weld tolerance must be positive and finite")
         for i in range(len(self.welder.points)):
             var point = self.welder.points[i]
-            if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
-            ):
+            if not point.is_finite():
                 raise Error("A vertex must have finite coordinates")
         if len(self.edge_faces) != len(self.edges):
             raise Error("Each edge needs an incident-face list")

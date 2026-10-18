@@ -13,7 +13,7 @@ Coordinates are meters.
 from generators.utils import Vec3d
 from math.smoothstep import hermite_fade
 from math.utils import mix_delta
-from std.math import cos, isfinite, sin, sqrt
+from std.math import cos, sin
 
 # A point or a direction, in meters.
 comptime V3 = Vec3d
@@ -260,13 +260,13 @@ def frame_zy(z_dir: V3, up_hint: V3) -> Frame:
     var x_axis = V3(1.0, 0.0, 0.0)
     var y_axis = V3(0.0, 1.0, 0.0)
     var z_axis = V3(0.0, 0.0, 1.0)
-    if not (isfinite(z_dir.x) and isfinite(z_dir.y) and isfinite(z_dir.z)):
+    if not z_dir.is_finite():
         return Frame(x_axis, y_axis, z_axis)
     if max(abs(z_dir.x), max(abs(z_dir.y), abs(z_dir.z))) == 0.0:
         return Frame(x_axis, y_axis, z_axis)
     var z = normalize(z_dir)
     var up = V3(0.0, 0.0, 0.0)
-    if isfinite(up_hint.x) and isfinite(up_hint.y) and isfinite(up_hint.z):
+    if up_hint.is_finite():
         var scale = max(abs(up_hint.x), max(abs(up_hint.y), abs(up_hint.z)))
         if scale > 0.0:
             up = V3(up_hint.x / scale, up_hint.y / scale, up_hint.z / scale)

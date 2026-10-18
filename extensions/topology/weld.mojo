@@ -93,7 +93,7 @@ struct Welder(Movable):
         Raises:
             Error: If a coordinate is not finite.
         """
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+        if not p.is_finite():
             raise Error("A point must have finite coordinates")
         var found = self.find(p)
         if found >= 0:
