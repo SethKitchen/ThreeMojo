@@ -20,6 +20,7 @@ Raw normals and areas retain their Float32 arithmetic and output limits.
 """
 
 from math.bounds import Box3, Plane
+from math.cross import wide_cross, widen_vector
 from math.matrix4 import Matrix4
 from math.norm import length3
 from math.triangle_normal import (
@@ -43,24 +44,6 @@ def _cross(a: Vector3, b: Vector3) -> Vector3:
     return out
 
 
-comptime _WideVector = SIMD[DType.float64, 4]
-
-
-def _wide(point: Vector3) -> _WideVector:
-    """Widen coordinates before subtracting or multiplying them."""
-    return _WideVector(Float64(point.x), Float64(point.y), Float64(point.z), 0)
-
-
-def _wide_cross(a: _WideVector, b: _WideVector) -> _WideVector:
-    """Return a cross product without narrowing its components."""
-    return _WideVector(
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-        0,
-    )
-
-
 def _wide_unit(value: Float64) -> Float64:
     """Limit a segment parameter to its closed interval."""
     return clamp(value, 0.0, 1.0)
@@ -79,10 +62,10 @@ def _segment_closest_points(
     Recompute the other parameter when an endpoint constrains the minimum.
     The caller chooses when a short segment counts as a point.
     """
-    var first = _wide(start1)
-    var second = _wide(start2)
-    var d1 = _wide(end1) - first
-    var d2 = _wide(end2) - second
+    var first = widen_vector(start1)
+    var second = widen_vector(start2)
+    var d1 = widen_vector(end1) - first
+    var d2 = widen_vector(end2) - second
     var r = first - second
     var a = (d1 * d1).reduce_add()
     var e = (d2 * d2).reduce_add()
@@ -99,11 +82,11 @@ def _segment_closest_points(
             s = _wide_unit(-c / a)
         else:
             var b = (d1 * d2).reduce_add()
-            var normal = _wide_cross(d1, d2)
+            var normal = wide_cross(d1, d2)
             var denom = (normal * normal).reduce_add()
             if denom != 0:
                 s = _wide_unit(
-                    (_wide_cross(d2, r) * normal).reduce_add() / denom
+                    (wide_cross(d2, r) * normal).reduce_add() / denom
                 )
             else:
                 # Preserve Octree's tie choice for parallel overlapping lines.
@@ -249,16 +232,16 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Widen before subtracting: the small cross product remains nonzero
         even when Float32 dot products round two thin edges to parallel.
         """
-        var origin = _wide(self.a)
-        var b = _wide(self.b) - origin
-        var c = _wide(self.c) - origin
-        var offset = _wide(point) - origin
-        var normal = _wide_cross(b, c)
+        var origin = widen_vector(self.a)
+        var b = widen_vector(self.b) - origin
+        var c = widen_vector(self.c) - origin
+        var offset = widen_vector(point) - origin
+        var normal = wide_cross(b, c)
         var denom = (normal * normal).reduce_add()
         if denom == 0:
             return None
-        var at_b = (_wide_cross(offset, c) * normal).reduce_add() / denom
-        var at_c = (_wide_cross(b, offset) * normal).reduce_add() / denom
+        var at_b = (wide_cross(offset, c) * normal).reduce_add() / denom
+        var at_c = (wide_cross(b, offset) * normal).reduce_add() / denom
         return Vector3(Float32(1 - at_b - at_c), Float32(at_b), Float32(at_c))
 
     def contains_point(self, point: Vector3) raises -> Bool:

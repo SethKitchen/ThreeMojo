@@ -8,6 +8,8 @@
 `Vector3.cross` keeps the product in one statement. A caller that must
 leave both inputs unchanged uses `cross_vectors`. `cross_components`
 is that product for any width, including the `Float64` vectors.
+`widen_vector` and `wide_cross` keep a `Float32` vector in four
+`Float64` lanes.
 """
 
 from math.vector3 import Vector3
@@ -60,3 +62,38 @@ def cross_components[
         az * bx - ax * bz,
         ax * by - ay * bx,
     )
+
+
+def widen_vector(value: Vector3) -> SIMD[DType.float64, 4]:
+    """Return a vector in four `Float64` lanes.
+
+    Products of finite `Float32` coordinates through degree five fit in
+    `Float64`. The fourth lane is zero.
+
+    Args:
+        value: The vector.
+
+    Returns:
+        The widened vector.
+    """
+    return SIMD[DType.float64, 4](
+        Float64(value.x), Float64(value.y), Float64(value.z), 0
+    )
+
+
+def wide_cross(
+    a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    """Return the cross product of two widened vectors.
+
+    Args:
+        a: The first vector.
+        b: The second vector.
+
+    Returns:
+        `a` crossed with `b`. The fourth lane is zero.
+    """
+    var x, y, z = cross_components[DType.float64](
+        a[0], a[1], a[2], b[0], b[1], b[2]
+    )
+    return SIMD[DType.float64, 4](x, y, z, 0)
