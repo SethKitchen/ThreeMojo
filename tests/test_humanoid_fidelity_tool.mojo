@@ -78,7 +78,7 @@ comptime SNAPSHOT_DIGEST = (
 )
 """The Python tool's digest of the synthetic snapshot."""
 comptime HELD_DIGEST = (
-    "e4ca898c1d831d6d42f05c179ef1376bfeb2cacb4d846db78f447f38c6cfb933"
+    "bf4c34d97fc88a94f4c83ae708f453c9ce6f5a2d44aa1eb7dfbaed482f4b78ab"
 )
 """The Python tool's digest of the snapshot that holds the evidence."""
 

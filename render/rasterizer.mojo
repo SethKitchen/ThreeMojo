@@ -30,6 +30,12 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+)
+
 from math.scaled_products import (
     _Scaled,
     _sum_products as _scaled_products,
@@ -37,8 +43,9 @@ from math.scaled_products import (
 )
 
 from math.norm import length2, normalized3, _ordinary_squared
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector2 import Vector2, weighted_sum2
+from math.utils import clamp, max3, min3, mix_delta
+from math.vector3 import Vector3, weighted_sum3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from units.si import Length, METER
 from materials.material import (
@@ -52,6 +59,9 @@ from materials.material import (
     VOLUME,
     DEFAULT_STEPS,
     check_steps,
+    require_dash_size,
+    require_gap_size,
+    require_unmixed_data,
     LAMBERT,
     MAX_IOR,
     MIN_IOR,
@@ -72,7 +82,6 @@ from materials.material import (
     OBJECT_SPACE_NORMAL_MAP,
     TANGENT_SPACE_NORMAL_MAP,
     combine_light,
-    _is_unit_fraction,
 )
 from render.cube_texture import (
     Basis3,
@@ -103,6 +112,7 @@ from render.packing import (
     check_distance_range,
     packed_depth_fragment,
     packed_distance_fragment,
+    packed_normal,
 )
 from render.srgb import LINEAR
 from render.texture import (
@@ -112,16 +122,21 @@ from render.texture import (
     UV_CHANNEL_1,
     Texture,
     UvPlacement,
+    require_uv_channel,
     anisotropic_footprint,
     mix_straight,
+)
+from render.screen_coord import (
+    pixel_frag_coord,
+    sample_pixel,
+    sampled_point_coord,
+    screen_size_coord,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from materials.nodes import (
     AO_NODE,
     BACKDROP_ALPHA_NODE,
     BACKDROP_NODE,
-    AT_RIGHT,
-    AT_UP,
     COLOR_NODE,
     CORNER_A,
     CORNER_B,
@@ -151,6 +166,7 @@ from materials.nodes import (
     offset_normal,
     has_output,
     perspective_shares,
+    perspective_shares_over,
     run_nodes,
 )
 from render.transmission import (
@@ -203,9 +219,16 @@ from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
     first_covered,
-    gl_point_coord,
     last_covered,
     mip_level_of,
+)
+from math.curve_checks import require_at_least_one
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_finite_group,
+    require_non_negative_finite,
+    require_unit_finite,
 )
 from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
@@ -461,10 +484,10 @@ def _bounds(
     Returns:
         The rows and columns to scan, possibly empty.
     """
-    var left = min(triangle.a.x, min(triangle.b.x, triangle.c.x))
-    var right = max(triangle.a.x, max(triangle.b.x, triangle.c.x))
-    var top = min(triangle.a.y, min(triangle.b.y, triangle.c.y))
-    var bottom = max(triangle.a.y, max(triangle.b.y, triangle.c.y))
+    var left = min3(triangle.a.x, triangle.b.x, triangle.c.x)
+    var right = max3(triangle.a.x, triangle.b.x, triangle.c.x)
+    var top = min3(triangle.a.y, triangle.b.y, triangle.c.y)
+    var bottom = max3(triangle.a.y, triangle.b.y, triangle.c.y)
     var lowest = height - 1
     if last_row >= 0:
         lowest = min(lowest, last_row)
@@ -728,12 +751,14 @@ struct LayerFactors(ImplicitlyCopyable):
         var darkest = min(min(color.x, color.y), color.z)
         if not isfinite(color.dot(color)) or darkest < 0:
             raise Error("A triangle's sheen color cannot be negative")
-        if not _is_unit_fraction(self.sheen_roughness):
-            raise Error(
-                "A triangle's sheen roughness must be between zero and one"
-            )
-        if not _is_unit_fraction(self.iridescence):
-            raise Error("A triangle's iridescence must be between zero and one")
+        require_unit_finite(
+            Float64(self.sheen_roughness),
+            "A triangle's sheen roughness must be between zero and one",
+        )
+        require_unit_finite(
+            Float64(self.iridescence),
+            "A triangle's iridescence must be between zero and one",
+        )
         var ior = self.iridescence_ior
         if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
             raise Error(
@@ -761,8 +786,10 @@ struct LayerFactors(ImplicitlyCopyable):
         if not isfinite(tint.dot(tint)) or faintest < 0:
             raise Error("A triangle's specular color cannot be negative")
         var scale = self.clearcoat_normal_scale
-        if not isfinite(scale.x) or not isfinite(scale.y):
-            raise Error("A triangle's clearcoat normal scale must be finite")
+        require_finite_group(
+            scale.is_finite(),
+            "A triangle's clearcoat normal scale must be finite",
+        )
         var coat_lowest = min(
             min(
                 self.specular_intensity_map.value,
@@ -820,14 +847,17 @@ struct TextureFrames(Equatable, ImplicitlyCopyable):
             Error: If the normal map type is none of the two, or the
                 refraction ratio is negative or not finite.
         """
-        if not self.normal_map_type.is_valid():
-            raise Error(
+        require_valid(
+            self.normal_map_type.is_valid(),
+            (
                 "A triangle's normal map type must be TANGENT_SPACE_NORMAL_MAP"
                 " or OBJECT_SPACE_NORMAL_MAP"
-            )
+            ),
+        )
         var ratio = self.refraction_ratio
-        if not isfinite(ratio) or ratio < 0:
-            raise Error("A triangle's refraction ratio cannot be negative")
+        require_non_negative_finite(
+            Float64(ratio), "A triangle's refraction ratio cannot be negative"
+        )
 
 
 def env_direction(
@@ -1880,18 +1910,27 @@ struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four modes there are."""
-        return (
-            self == SHADE_LIT
-            or self == SHADE_UV
-            or self == SHADE_TEXTURE
-            or self == SHADE_SHADOW
-        )
+        return ordinal_valid(self.value, SHADE_SHADOW.value)
 
 
 comptime SHADE_LIT = ShadeMode(0)
 comptime SHADE_UV = ShadeMode(1)
 comptime SHADE_TEXTURE = ShadeMode(2)
 comptime SHADE_SHADOW = ShadeMode(3)
+
+
+def require_shade_mode(mode: ShadeMode) raises:
+    """Refuse a shading mode that is none of the four.
+
+    Nothing. The call returns when the mode is named.
+
+    Args:
+        mode: The mode to check.
+
+    Raises:
+        Error: If `mode` is none of the four.
+    """
+    require_valid(mode.is_valid(), "A shading mode that is none of the four")
 
 
 def _coordinates_at(
@@ -1908,25 +1947,28 @@ def _coordinates_at(
     `second` reads `u1` and `v1` rather than `u` and `v`: the coordinates
     a map on `UV_CHANNEL_1` is sampled at.
     """
-    var inv_w = (
-        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
     )
-    var share_a = weights.wa
-    var share_b = weights.wb
-    var share_c = weights.wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = weights.wa * a.inv_w * rcp
-        share_b = weights.wb * b.inv_w * rcp
-        share_c = weights.wc * c.inv_w * rcp
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     if second:
-        return Vector2(
-            a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
-            a.v1 * share_a + b.v1 * share_b + c.v1 * share_c,
+        return weighted_sum2(
+            Vector2(a.u1, a.v1),
+            Vector2(b.u1, b.v1),
+            Vector2(c.u1, c.v1),
+            share_a,
+            share_b,
+            share_c,
         )
-    return Vector2(
-        a.u * share_a + b.u * share_b + c.u * share_c,
-        a.v * share_a + b.v * share_b + c.v * share_c,
+    return weighted_sum2(
+        Vector2(a.u, a.v),
+        Vector2(b.u, b.v),
+        Vector2(c.u, c.v),
+        share_a,
+        share_b,
+        share_c,
     )
 
 
@@ -1942,22 +1984,13 @@ def _world_at(
     tangent frame a normal map needs is measured from the positions at the
     pixels one over and one up, as their coordinates are.
     """
-    var inv_w = (
-        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
     )
-    var share_a = weights.wa
-    var share_b = weights.wb
-    var share_c = weights.wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = weights.wa * a.inv_w * rcp
-        share_b = weights.wb * b.inv_w * rcp
-        share_c = weights.wc * c.inv_w * rcp
-    return Vector3(
-        a.world.x * share_a + b.world.x * share_b + c.world.x * share_c,
-        a.world.y * share_a + b.world.y * share_b + c.world.y * share_c,
-        a.world.z * share_a + b.world.z * share_b + c.world.z * share_c,
-    )
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
+    return weighted_sum3(a.world, b.world, c.world, share_a, share_b, share_c)
 
 
 def _cross(left: Vector3, right: Vector3) -> Vector3:
@@ -2007,16 +2040,8 @@ def tangent_frame(
     """
     var q1_perp = _cross(along_y, normal)
     var q0_perp = _cross(normal, along_x)
-    var tangent = Vector3(
-        q1_perp.x * uv_along_x.x + q0_perp.x * uv_along_y.x,
-        q1_perp.y * uv_along_x.x + q0_perp.y * uv_along_y.x,
-        q1_perp.z * uv_along_x.x + q0_perp.z * uv_along_y.x,
-    )
-    var bitangent = Vector3(
-        q1_perp.x * uv_along_x.y + q0_perp.x * uv_along_y.y,
-        q1_perp.y * uv_along_x.y + q0_perp.y * uv_along_y.y,
-        q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
-    )
+    var tangent = q1_perp * uv_along_x.x + q0_perp * uv_along_y.x
+    var bitangent = q1_perp * uv_along_x.y + q0_perp * uv_along_y.y
     var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
     var position_scale = max(
         max(abs(along_x.x), max(abs(along_x.y), abs(along_x.z))),
@@ -2041,12 +2066,7 @@ def tangent_frame(
     var ax = [along_x.x, along_x.y, along_x.z]
     var ay = [along_y.x, along_y.y, along_y.z]
     var n = [normal.x, normal.y, normal.z]
-    var finite = (
-        isfinite(uv_along_x.x)
-        and isfinite(uv_along_x.y)
-        and isfinite(uv_along_y.x)
-        and isfinite(uv_along_y.y)
-    )
+    var finite = uv_along_x.is_finite() and uv_along_y.is_finite()
     for axis in range(3):  # pragma: no branch
         finite = (
             finite
@@ -2138,10 +2158,8 @@ def mapped_normal(
     var map_x = (texel.r * 2 - 1) * scale.x
     var map_y = (texel.g * 2 - 1) * scale.y
     var map_z = texel.b * 2 - 1
-    var perturbed = Vector3(
-        tangent.x * map_x + bitangent.x * map_y + normal.x * map_z,
-        tangent.y * map_x + bitangent.y * map_y + normal.y * map_z,
-        tangent.z * map_x + bitangent.z * map_y + normal.z * map_z,
+    var perturbed = weighted_sum3(
+        tangent, bitangent, normal, map_x, map_y, map_z
     )
     if perturbed.length() == 0:
         return normal
@@ -2335,21 +2353,14 @@ def _normal_at(
     roughness needs it at the pixels one right and one up. A zero normal
     stays zero, as it does in the loop.
     """
-    var inv_w = (
-        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    var shares = perspective_shares(
+        weights.wa, weights.wb, weights.wc, a.inv_w, b.inv_w, c.inv_w
     )
-    var share_a = weights.wa
-    var share_b = weights.wb
-    var share_c = weights.wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = weights.wa * a.inv_w * rcp
-        share_b = weights.wb * b.inv_w * rcp
-        share_c = weights.wc * c.inv_w * rcp
-    var facing = Vector3(
-        a.normal.x * share_a + b.normal.x * share_b + c.normal.x * share_c,
-        a.normal.y * share_a + b.normal.y * share_b + c.normal.y * share_c,
-        a.normal.z * share_a + b.normal.z * share_b + c.normal.z * share_c,
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
+    var facing = weighted_sum3(
+        a.normal, b.normal, c.normal, share_a, share_b, share_c
     )
     if facing.length() != 0:
         facing.normalize()
@@ -2404,8 +2415,8 @@ def mip_level(
         and isfinite(along_y.y * down)
     ):
         return anisotropic_footprint(along_x, along_y, width, height, 1).level
-    var in_x = _length(along_x.x * across, along_x.y * down)
-    var in_y = _length(along_y.x * across, along_y.y * down)
+    var in_x = length2(along_x.x * across, along_x.y * down)
+    var in_y = length2(along_y.x * across, along_y.y * down)
     if not isfinite(in_x) or not isfinite(in_y):
         return anisotropic_footprint(along_x, along_y, width, height, 1).level
     var longest = in_x
@@ -2414,11 +2425,6 @@ def mip_level(
     if longest <= 0:
         return 0
     return log2(longest)
-
-
-def _length(x: Float32, y: Float32) -> Float32:
-    """Return the length of a two-component vector."""
-    return length2(x, y)
 
 
 def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:
@@ -2449,22 +2455,6 @@ def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:
     var bytes = FloatColor(r, g, b, 1.0).quantize()
     var decoded = FloatColor(srgb=bytes)
     return FloatColor(decoded.r, decoded.g, decoded.b, a)
-
-
-def packed_normal(facing: Vector3) -> Vector3:
-    """Return a unit normal mapped into zero to one per axis, three.js's
-    `packNormalToRGB`: each component halved and moved up by a half, so a
-    surface square-on to the camera is (0.5, 0.5, 1).
-
-    Args:
-        facing: The unit normal, in the space it is to be shown in.
-
-    Returns:
-        The three channels, before quantization.
-    """
-    return Vector3(
-        facing.x * 0.5 + 0.5, facing.y * 0.5 + 0.5, facing.z * 0.5 + 0.5
-    )
 
 
 def packed_depth(z: Float32) -> Float32:
@@ -2506,11 +2496,7 @@ def _place(
 ) -> Vector3:
     """Return three clip positions interpolated as a varying: x, y and w,
     each by the fragment's weights corrected for perspective."""
-    return Vector3(
-        a.x * shares[0] + b.x * shares[1] + c.x * shares[2],
-        a.y * shares[0] + b.y * shares[1] + c.y * shares[2],
-        a.z * shares[0] + b.z * shares[1] + c.z * shares[2],
-    )
+    return weighted_sum3(a, b, c, shares[0], shares[1], shares[2])
 
 
 def fragment_velocity(
@@ -2624,8 +2610,10 @@ def check_data_state(a: RasterVertex, b: RasterVertex, c: RasterVertex) raises:
         c.depth_packing != a.depth_packing
     ):
         raise Error("A triangle's corners disagree about their depth packing")
-    if not a.depth_packing.is_valid():
-        raise Error("A triangle's depth packing is none of the four")
+    require_valid(
+        a.depth_packing.is_valid(),
+        "A triangle's depth packing is none of the four",
+    )
     if a.depth_packing != BASIC_DEPTH_PACKING and a.kind != DEPTH:
         raise Error("Only a depth triangle packs its depth")
     if a.kind == DISTANCE:
@@ -2647,6 +2635,22 @@ def _same_range(a: RasterVertex, b: RasterVertex) -> Bool:
         and a.near_distance == b.near_distance
         and a.far_distance == b.far_distance
     )
+
+
+def require_triangle_lighting(named: Int, count: Int) raises:
+    """Refuse a triangle whose lighting is outside the frame.
+
+    Nothing. The call returns when the index is in range.
+
+    Args:
+        named: The lighting index stored on the triangle.
+        count: How many lightings the frame holds.
+
+    Raises:
+        Error: If the index is outside the frame.
+    """
+    if named < 0 or named > count:
+        raise Error("A triangle names a lighting the frame does not have")
 
 
 def check_triangle_state(
@@ -2733,20 +2737,26 @@ def check_triangle_state(
     # Before the agreement check below, because not-a-number is not equal
     # to itself: a NaN threshold would be reported as three corners
     # disagreeing when what is wrong is the number.
-    if not isfinite(a.alpha_test) or a.alpha_test < 0 or a.alpha_test > 1:
-        raise Error("A triangle's alpha test must be between zero and one")
+    require_unit_finite(
+        Float64(a.alpha_test),
+        "A triangle's alpha test must be between zero and one",
+    )
     # Before its agreement check for the reason above: not a number is not
     # equal to itself.
-    if not isfinite(a.shininess) or a.shininess < 0:
-        raise Error("A triangle's shininess cannot be negative")
+    require_non_negative_finite(
+        Float64(a.shininess), "A triangle's shininess cannot be negative"
+    )
     if b.shininess != a.shininess or c.shininess != a.shininess:
         raise Error("A triangle's corners disagree about their shininess")
     if b.alpha_test != a.alpha_test or c.alpha_test != a.alpha_test:
         raise Error("A triangle's corners disagree about their alpha test")
-    if not a.blend.is_valid():
-        raise Error("A triangle's blend policy is not a blending mode there is")
-    if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the thirteen")
+    require_valid(
+        a.blend.is_valid(),
+        "A triangle's blend policy is not a blending mode there is",
+    )
+    require_valid(
+        a.kind.is_valid(), "A triangle's material kind is none of the thirteen"
+    )
     if a.volume_scene_depth and a.kind != VOLUME:
         raise Error("Only a VOLUME triangle reads volume scene depth")
     if b.volume_scene_depth != a.volume_scene_depth or (
@@ -2795,11 +2805,7 @@ def check_triangle_state(
     # the pixel would hold part of each and resolve as neither. Refused
     # here so that both backends refuse it, and so that `RenderTarget.blend`
     # can say a mixture is always light. See `render.target`.
-    if a.kind.is_data() and a.blend.mixes():
-        raise Error(
-            "A normal or depth material cannot blend: a pixel holds its"
-            " bytes or the scene's light, not a mixture of the two"
-        )
+    require_unmixed_data(a.kind.is_data(), a.blend.mixes())
     if a.texture != NO_TEXTURE and a.texture.value < 0:
         raise Error("A triangle names a texture id that nothing can hold")
     if a.emissive_map != NO_TEXTURE and a.emissive_map.value < 0:
@@ -2825,8 +2831,10 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their reflectivity")
     if b.combine != a.combine or c.combine != a.combine:
         raise Error("A triangle's corners disagree about their combine")
-    if not a.combine.is_valid():
-        raise Error("A triangle's combine is none of the three operations")
+    require_valid(
+        a.combine.is_valid(),
+        "A triangle's combine is none of the three operations",
+    )
     if not a.kind.reflects() and a.env_map != NO_CUBE_TEXTURE:
         raise Error(
             "Only a basic, lambert or phong triangle reflects an"
@@ -2844,26 +2852,37 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their frames")
     # The physical terms and the normal maps, asked as the rest are: the
     # numbers before their agreement checks, then the maps, then the kind.
-    if not _is_unit_fraction(a.roughness):
-        raise Error("A triangle's roughness must be between zero and one")
-    if not _is_unit_fraction(a.metalness):
-        raise Error("A triangle's metalness must be between zero and one")
-    if not isfinite(a.env_map_intensity) or a.env_map_intensity < 0:
-        raise Error("A triangle's env map intensity cannot be negative")
-    if not _is_unit_fraction(a.specular_intensity):
-        raise Error(
-            "A triangle's specular intensity must be between zero and one"
-        )
-    if not _is_unit_fraction(a.clearcoat):
-        raise Error("A triangle's clearcoat must be between zero and one")
-    if not _is_unit_fraction(a.clearcoat_roughness):
-        raise Error(
-            "A triangle's clearcoat roughness must be between zero and one"
-        )
-    if not isfinite(a.normal_scale.x) or not isfinite(a.normal_scale.y):
-        raise Error("A triangle's normal scale must be finite")
-    if not isfinite(a.bump_scale):
-        raise Error("A triangle's bump scale must be finite")
+    require_unit_finite(
+        Float64(a.roughness),
+        "A triangle's roughness must be between zero and one",
+    )
+    require_unit_finite(
+        Float64(a.metalness),
+        "A triangle's metalness must be between zero and one",
+    )
+    require_non_negative_finite(
+        Float64(a.env_map_intensity),
+        "A triangle's env map intensity cannot be negative",
+    )
+    require_unit_finite(
+        Float64(a.specular_intensity),
+        "A triangle's specular intensity must be between zero and one",
+    )
+    require_unit_finite(
+        Float64(a.clearcoat),
+        "A triangle's clearcoat must be between zero and one",
+    )
+    require_unit_finite(
+        Float64(a.clearcoat_roughness),
+        "A triangle's clearcoat roughness must be between zero and one",
+    )
+    require_finite_group(
+        a.normal_scale.is_finite(),
+        "A triangle's normal scale must be finite",
+    )
+    require_finite(
+        Float64(a.bump_scale), "A triangle's bump scale must be finite"
+    )
     if (
         b.roughness != a.roughness
         or c.roughness != a.roughness
@@ -2931,10 +2950,14 @@ def check_triangle_state(
     # The two baked maps and their intensities, asked as the material asks
     # them: agreed, finite, not negative, and only where an indirect
     # diffuse term is read. The numbers first, since a NaN never agrees.
-    if not isfinite(a.ao_map_intensity) or a.ao_map_intensity < 0:
-        raise Error("A triangle's ao map intensity cannot be negative")
-    if not isfinite(a.light_map_intensity) or a.light_map_intensity < 0:
-        raise Error("A triangle's light map intensity cannot be negative")
+    require_non_negative_finite(
+        Float64(a.ao_map_intensity),
+        "A triangle's ao map intensity cannot be negative",
+    )
+    require_non_negative_finite(
+        Float64(a.light_map_intensity),
+        "A triangle's light map intensity cannot be negative",
+    )
     if (
         b.ao_map != a.ao_map
         or c.ao_map != a.ao_map
@@ -2980,8 +3003,10 @@ def check_triangle_state(
         )
     # The volume, asked as the material asks it: the numbers first, since a
     # NaN never agrees, then the agreement, the ids and the kind.
-    if not _is_unit_fraction(a.transmission):
-        raise Error("A triangle's transmission must be between zero and one")
+    require_unit_finite(
+        Float64(a.transmission),
+        "A triangle's transmission must be between zero and one",
+    )
     if not _is_depth(a.thickness):
         raise Error("A triangle's thickness cannot be negative")
     var tint = a.attenuation_color
@@ -2989,8 +3014,9 @@ def check_triangle_state(
         raise Error("A triangle's attenuation color cannot be negative")
     if not (a.attenuation_distance > 0):
         raise Error("A triangle's attenuation distance must be above zero")
-    if not isfinite(a.dispersion) or a.dispersion < 0:
-        raise Error("A triangle's dispersion cannot be negative")
+    require_non_negative_finite(
+        Float64(a.dispersion), "A triangle's dispersion cannot be negative"
+    )
     if not isfinite(a.ior) or a.ior < MIN_IOR or a.ior > MAX_IOR:
         raise Error(
             "A triangle's index of refraction must be between one and 2.333"
@@ -3010,8 +3036,10 @@ def check_triangle_state(
     # The node program, asked as the material asks it.
     if b.nodes != a.nodes or c.nodes != a.nodes:
         raise Error("A triangle's corners disagree about their node program")
-    if not a.nodes.is_valid():
-        raise Error("A triangle names a node program id that nothing can hold")
+    require_valid(
+        a.nodes.is_valid(),
+        "A triangle names a node program id that nothing can hold",
+    )
     if a.nodes != NO_NODES and not a.kind.takes_nodes():
         raise Error(
             "A data or shadow triangle runs no node graph: it shows"
@@ -3021,14 +3049,7 @@ def check_triangle_state(
 
 def _is_depth(value: Vector3) -> Bool:
     """Return True if every axis of `value` is finite and not negative."""
-    return (
-        isfinite(value.x)
-        and isfinite(value.y)
-        and isfinite(value.z)
-        and value.x >= 0
-        and value.y >= 0
-        and value.z >= 0
-    )
+    return value.is_finite() and value.x >= 0 and value.y >= 0 and value.z >= 0
 
 
 def _same_volume(a: RasterVertex, b: RasterVertex) -> Bool:
@@ -3245,6 +3266,56 @@ def check_alpha_map(image: Texture) raises:
     check_data_map(image, "An alpha map")
 
 
+def require_linear_data(linear: Bool, name: String) raises:
+    """Refuse a data map that is not stored in linear color.
+
+    A data map, a gradient map and a map read from its alpha ask this with
+    the same words. The host asks it of a texture. The GPU asks it of the
+    descriptor it uploaded.
+
+    Nothing. The call returns when the map is linear.
+
+    Args:
+        linear: Whether the map is stored in linear color.
+        name: What to call the map in the error.
+
+    Raises:
+        Error: If the map is not stored in linear color.
+    """
+    if not linear:
+        raise Error(
+            name
+            + " holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+
+
+def require_data_descriptors(
+    linear: Bool, ignores_alpha: Bool, name: String
+) raises:
+    """Refuse a data map whose descriptors are not linear and ignored.
+
+    The host asks this of a texture. The GPU asks it of the descriptors it
+    uploaded. The words are the same.
+
+    Nothing. The call returns when both descriptors say the map is data.
+
+    Args:
+        linear: Whether the map is stored in linear color.
+        ignores_alpha: Whether the map ignores its alpha.
+        name: What to call it in the error: "An alpha map", say.
+
+    Raises:
+        Error: If the map is not linear, or it reads its alpha as coverage.
+    """
+    require_linear_data(linear, name)
+    if not ignores_alpha:
+        raise Error(
+            name
+            + " must ignore its own alpha; build the texture with alpha=IGNORED"
+        )
+
+
 def check_data_map(image: Texture, name: String) raises:
     """Refuse a map that holds data and is not stored as data.
 
@@ -3262,17 +3333,9 @@ def check_data_map(image: Texture, name: String) raises:
         Error: If the texture's color space is not `LINEAR`, or it reads its
             alpha as coverage.
     """
-    if image.color_space != LINEAR:
-        raise Error(
-            name
-            + " holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
-    if image.alpha != IGNORED:
-        raise Error(
-            name
-            + " must ignore its own alpha; build the texture with alpha=IGNORED"
-        )
+    require_data_descriptors(
+        image.color_space == LINEAR, image.alpha == IGNORED, name
+    )
 
 
 # How far off the middle of a matcap a surface square-on to the camera is
@@ -3341,7 +3404,68 @@ def matcap_fallback(v: Float32) -> Float32:
     Returns:
         How much light the surface shows, in every channel.
     """
-    return MATCAP_FLOOR + (MATCAP_CEILING - MATCAP_FLOOR) * v
+    return mix_delta(MATCAP_FLOOR, MATCAP_CEILING, v)
+
+
+def require_gradient_texels(has_texels: Bool) raises:
+    """Refuse a gradient map that holds no texels.
+
+    The host asks this of a texture. The GPU asks it of the flag it
+    uploaded. The words are the same.
+
+    Nothing. The call returns when the map holds texels.
+
+    Args:
+        has_texels: Whether the map holds at least one texel.
+
+    Raises:
+        Error: If the map is blank.
+    """
+    if not has_texels:
+        raise Error(
+            "A gradient map must hold texels: name no map for the fallback"
+        )
+
+
+def require_gradient_bytes(holds_floats: Bool) raises:
+    """Refuse a gradient map whose tones are floats.
+
+    The host asks this of a texture. The GPU asks it of the flag it
+    uploaded. The words are the same.
+
+    Nothing. The call returns when the map stores bytes.
+
+    Args:
+        holds_floats: Whether the map stores float texels.
+
+    Raises:
+        Error: If the map stores floats.
+    """
+    if holds_floats:
+        raise Error(
+            "A gradient map must hold bytes: its tones are read one byte each"
+        )
+
+
+def require_gradient_row(height: Int) raises:
+    """Refuse a gradient map that is not one row high.
+
+    The host asks this of a texture. The GPU asks it of the height it
+    uploaded. The words are the same.
+
+    Nothing. The call returns when the map is one row high.
+
+    Args:
+        height: How many rows the map has.
+
+    Raises:
+        Error: If the map has any other height.
+    """
+    if height != 1:
+        raise Error(
+            "A gradient map must be one row high: it is a lookup table, not"
+            " a picture, and a taller image has no unambiguous row"
+        )
 
 
 def check_gradient_map(image: Texture) raises:
@@ -3374,29 +3498,12 @@ def check_gradient_map(image: Texture) raises:
             color space is not `LINEAR`, it reads its alpha as coverage, or
             it holds floats.
     """
-    if image.is_blank():
-        raise Error(
-            "A gradient map must hold texels: name no map for the fallback"
-        )
-    if image.height != 1:
-        raise Error(
-            "A gradient map must be one row high: it is a lookup table, not"
-            " a picture, and a taller image has no unambiguous row"
-        )
-    if image.color_space != LINEAR:
-        raise Error(
-            "A gradient map holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
-    if image.alpha != IGNORED:
-        raise Error(
-            "A gradient map must ignore its own alpha; build the texture"
-            " with alpha=IGNORED"
-        )
-    if image.texel_type == FLOAT_TYPE:
-        raise Error(
-            "A gradient map must hold bytes: its tones are read one byte each"
-        )
+    require_gradient_texels(not image.is_blank())
+    require_gradient_row(image.height)
+    require_data_descriptors(
+        image.color_space == LINEAR, image.alpha == IGNORED, "A gradient map"
+    )
+    require_gradient_bytes(image.texel_type == FLOAT_TYPE)
 
 
 def gradient_ramp(image: Texture) raises -> List[Float32]:
@@ -3481,11 +3588,7 @@ def check_triangle_maps(
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
     # only when the map will be opened: SHADE_LIT never reads it.
     if a.emissive_map != NO_TEXTURE and mode == SHADE_TEXTURE:
-        if textures.get(a.emissive_map).alpha != IGNORED:
-            raise Error(
-                "An emissive map must ignore its alpha; build the texture"
-                " with alpha=IGNORED"
-            )
+        check_color_map(textures.get(a.emissive_map), "An emissive map")
     # An alpha map holds data, and says so twice: linear, or the sRGB curve
     # changes what its bytes mean, and alpha ignored, or filtering weights
     # its green by an alpha that means nothing.
@@ -3498,11 +3601,7 @@ def check_triangle_maps(
     # A matcap's own alpha means nothing, so only a texture built to
     # ignore it filters accordingly -- the rule an emissive map follows.
     if a.matcap != NO_TEXTURE and mode != SHADE_UV:
-        if textures.get(a.matcap).alpha != IGNORED:
-            raise Error(
-                "A matcap must ignore its alpha; build the texture with"
-                " alpha=IGNORED"
-            )
+        check_color_map(textures.get(a.matcap), "A matcap")
     # The environment a reflecting surface samples, which must be there:
     # asked before the first fragment, as the store's own `get` would ask
     # it at the first fragment and a band with no fragment would not.
@@ -3594,6 +3693,37 @@ def check_triangle_maps(
     )
 
 
+def require_program_uniform(
+    value: Int, kind: String, missing: String, setter: String
+) raises:
+    """Refuse a node-program uniform that names no asset.
+
+    The host asks this of a program. The GPU asks it before a launch.
+    The words are the same.
+
+    Nothing. The call returns when the uniform names an asset.
+
+    Args:
+        value: The uniform's id. A negative value names nothing.
+        kind: The uniform, with its article: "a texture" or "an array texture".
+        missing: The asset it failed to name: "texture" or "cube".
+        setter: The call that names one: "set_texture".
+
+    Raises:
+        Error: If `value` is negative.
+    """
+    if value < 0:
+        raise Error(
+            "A node program reads "
+            + kind
+            + " uniform that names no "
+            + missing
+            + "; call "
+            + setter
+            + "() first"
+        )
+
+
 def check_program_maps(
     nodes: NodeProgramId,
     mode: ShadeMode,
@@ -3625,32 +3755,33 @@ def check_program_maps(
         ref program = programs.get(nodes)
         if mode == SHADE_TEXTURE:
             for index in range(len(program.textures)):
-                if program.textures[index].value < 0:
-                    raise Error(
-                        "A node program reads a texture uniform that names"
-                        " no texture; call set_texture() first"
-                    )
+                require_program_uniform(
+                    program.textures[index].value,
+                    "a texture",
+                    "texture",
+                    "set_texture",
+                )
                 _ = textures.get(program.textures[index]).width
             for index in range(len(program.cubes)):
-                if program.cubes[index].value < 0:
-                    raise Error(
-                        "A node program reads a cube uniform that names no"
-                        " cube; call set_cube() first"
-                    )
+                require_program_uniform(
+                    program.cubes[index].value, "a cube", "cube", "set_cube"
+                )
                 _ = cubes.get(program.cubes[index]).size
             for index in range(len(program.volumes)):
-                if program.volumes[index].value < 0:
-                    raise Error(
-                        "A node program reads a 3D texture uniform that names"
-                        " no texture; call set_volume() first"
-                    )
+                require_program_uniform(
+                    program.volumes[index].value,
+                    "a 3D texture",
+                    "texture",
+                    "set_volume",
+                )
                 _ = volumes.get(program.volumes[index]).image.width
             for index in range(len(program.arrays)):
-                if program.arrays[index].value < 0:
-                    raise Error(
-                        "A node program reads an array texture uniform that"
-                        " names no texture; call set_array() first"
-                    )
+                require_program_uniform(
+                    program.arrays[index].value,
+                    "an array texture",
+                    "texture",
+                    "set_array",
+                )
                 _ = arrays.get(program.arrays[index]).image.width
 
 
@@ -3667,8 +3798,7 @@ def check_channel(image: Texture) raises:
     Raises:
         Error: If its channel is not `UV_CHANNEL_0` or `UV_CHANNEL_1`.
     """
-    if not image.channel.is_valid():
-        raise Error("A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1")
+    require_uv_channel(image.channel)
 
 
 # Where each map's placement is in `surface_maps` and `map_placements`:
@@ -3769,12 +3899,35 @@ def map_placements(
     return placed^
 
 
+def require_ignored_alpha(ignores_alpha: Bool, name: String) raises:
+    """Refuse a color map that reads its alpha as coverage.
+
+    An emissive map, a light map, a matcap and a sheen color map ask this
+    with the same words. The host asks it of a texture. The GPU asks it of
+    the descriptor it uploaded.
+
+    Nothing. The call returns when the map ignores its alpha.
+
+    Args:
+        ignores_alpha: Whether the map ignores its alpha.
+        name: What to call the map in the error.
+
+    Raises:
+        Error: If the map reads its alpha as coverage.
+    """
+    if not ignores_alpha:
+        raise Error(
+            name
+            + " must ignore its alpha; build the texture with alpha=IGNORED"
+        )
+
+
 def check_color_map(image: Texture, name: String) raises:
     """Refuse a map of color whose alpha is read as coverage.
 
-    The rule `check_light_map` states, for a map that holds a color and
-    no coverage: a sheen color map. Filtered as coverage, a texel with a
-    low alpha would darken its neighbors. Shared by both backends.
+    The rule `require_ignored_alpha` states, for a map that holds a color
+    and no coverage: a sheen color map. Filtered as coverage, a texel with
+    a low alpha would darken its neighbors. Shared by both backends.
 
     Args:
         image: The texture named as the map.
@@ -3783,10 +3936,29 @@ def check_color_map(image: Texture, name: String) raises:
     Raises:
         Error: If the texture reads its alpha as coverage.
     """
-    if image.alpha != IGNORED:
+    require_ignored_alpha(image.alpha == IGNORED, name)
+
+
+def require_coverage_alpha(reads_alpha: Bool, name: String) raises:
+    """Refuse a map whose number is not read from its alpha.
+
+    A sheen roughness map and a specular intensity map ask this with the
+    same words. The host asks it of a texture. The GPU asks it of the
+    descriptor it uploaded.
+
+    Nothing. The call returns when the map reads its alpha.
+
+    Args:
+        reads_alpha: Whether the map reads its alpha as coverage.
+        name: What to call the map in the error.
+
+    Raises:
+        Error: If the map ignores its alpha.
+    """
+    if not reads_alpha:
         raise Error(
             name
-            + " must ignore its alpha; build the texture with alpha=IGNORED"
+            + " is read from its alpha; build the texture with alpha=COVERAGE"
         )
 
 
@@ -3807,34 +3979,8 @@ def check_alpha_data_map(image: Texture, name: String) raises:
         Error: If the texture's color space is not `LINEAR`, or it ignores
             its alpha.
     """
-    if image.color_space != LINEAR:
-        raise Error(
-            name
-            + " holds data, not color; build the texture with"
-            " color_space=LINEAR"
-        )
-    if image.alpha != COVERAGE:
-        raise Error(
-            name
-            + " is read from its alpha; build the texture with alpha=COVERAGE"
-        )
-
-
-def _shared(
-    a: Vector3,
-    b: Vector3,
-    c: Vector3,
-    share_a: Float32,
-    share_b: Float32,
-    share_c: Float32,
-) -> Vector3:
-    """Return three corners' values mixed by their shares, one component
-    at a time, in the order the kernel mixes them."""
-    return Vector3(
-        a.x * share_a + b.x * share_b + c.x * share_c,
-        a.y * share_a + b.y * share_b + c.y * share_c,
-        a.z * share_a + b.z * share_b + c.z * share_c,
-    )
+    require_linear_data(image.color_space == LINEAR, name)
+    require_coverage_alpha(image.alpha == COVERAGE, name)
 
 
 def check_light_map(image: Texture) raises:
@@ -3851,11 +3997,7 @@ def check_light_map(image: Texture) raises:
     Raises:
         Error: If the texture reads its alpha as coverage.
     """
-    if image.alpha != IGNORED:
-        raise Error(
-            "A light map must ignore its alpha; build the texture with"
-            " alpha=IGNORED"
-        )
+    require_ignored_alpha(image.alpha == IGNORED, "A light map")
 
 
 def rasterize_shaded(
@@ -3970,8 +4112,7 @@ def rasterize_shaded(
             or a pixel
             write lands out of bounds — the last of which the loop prevents.
     """
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_shade_mode(mode)
     # A frame that asked these of each surface already passes `checked`.
     if not checked:
         check_triangle_state(a, b, c)
@@ -4179,20 +4320,17 @@ def rasterize_shaded(
                 continue
             # Nothing in the renderer produces a zero here: clipping removes
             # everything at or in front of the near plane, and an
-            # *orthographic* camera leaves w at one, not zero — so its inv_w
-            # is one and the correction divides by one rather than needing
-            # this branch. The guard is for hand-built input, where the
-            # alternative is silent infinities.
-            var share_a = wa
-            var share_b = wb
-            var share_c = wc
-            if inv_w != 0:
-                # One reciprocal, three multiplies: the same arithmetic the
-                # GPU kernel does, so the two still round alike.
-                var rcp = Float32(1) / inv_w
-                share_a = wa * a.inv_w * rcp
-                share_b = wb * b.inv_w * rcp
-                share_c = wc * c.inv_w * rcp
+            # orthographic camera leaves w at one, not zero, so its inv_w
+            # is one and the correction divides by one. The guard is for
+            # hand-built input. `perspective_shares_over` is that
+            # correction over the `inv_w` the depth used, and the GPU kernel
+            # calls it the same way, so the two still round alike.
+            var shares = perspective_shares_over(
+                inv_w, wa, wb, wc, a.inv_w, b.inv_w, c.inv_w
+            )
+            var share_a = shares[0]
+            var share_b = shares[1]
+            var share_c = shares[2]
             var moved = Vector2(0, 0)
             if keeps_velocities:
                 moved = fragment_velocity(
@@ -4208,10 +4346,18 @@ def rasterize_shaded(
             # for a target that keeps them; zero for every other surface.
             var metal_rough = Vector2(0, 0)
 
+            var rgb = weighted_sum3(
+                Vector3(a.color.r, a.color.g, a.color.b),
+                Vector3(b.color.r, b.color.g, b.color.b),
+                Vector3(c.color.r, c.color.g, c.color.b),
+                share_a,
+                share_b,
+                share_c,
+            )
             var base = FloatColor(
-                a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
-                a.color.g * share_a + b.color.g * share_b + c.color.g * share_c,
-                a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
+                rgb.x,
+                rgb.y,
+                rgb.z,
                 interpolate_alpha(
                     a.color.a, b.color.a, c.color.a, share_b, share_c
                 ),
@@ -4244,16 +4390,8 @@ def rasterize_shaded(
                 # the average of two unit vectors is shorter than either, so
                 # a normal interpolated and left alone dims the middle of
                 # every triangle.
-                facing = Vector3(
-                    a.normal.x * share_a
-                    + b.normal.x * share_b
-                    + c.normal.x * share_c,
-                    a.normal.y * share_a
-                    + b.normal.y * share_b
-                    + c.normal.y * share_c,
-                    a.normal.z * share_a
-                    + b.normal.z * share_b
-                    + c.normal.z * share_c,
+                facing = weighted_sum3(
+                    a.normal, b.normal, c.normal, share_a, share_b, share_c
                 )
                 if facing.length() != 0:
                     facing.normalize()
@@ -4275,16 +4413,8 @@ def rasterize_shaded(
                 or catches
                 or noded
             ):
-                spot = Vector3(
-                    a.world.x * share_a
-                    + b.world.x * share_b
-                    + c.world.x * share_c,
-                    a.world.y * share_a
-                    + b.world.y * share_b
-                    + c.world.y * share_c,
-                    a.world.z * share_a
-                    + b.world.z * share_b
-                    + c.world.z * share_c,
+                spot = weighted_sum3(
+                    a.world, b.world, c.world, share_a, share_b, share_c
                 )
             # The raw texture coordinates, both pairs, for the two modes
             # that read them and for a node graph. Each map places them
@@ -4294,11 +4424,23 @@ def rasterize_shaded(
             var v = Float32(0)
             var uv1 = Vector2(0, 0)
             if mode != SHADE_LIT or noded:
-                u = a.u * share_a + b.u * share_b + c.u * share_c
-                v = a.v * share_a + b.v * share_b + c.v * share_c
-                uv1 = Vector2(
-                    a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
-                    a.v1 * share_a + b.v1 * share_b + c.v1 * share_c,
+                var uv = weighted_sum2(
+                    Vector2(a.u, a.v),
+                    Vector2(b.u, b.v),
+                    Vector2(c.u, c.v),
+                    share_a,
+                    share_b,
+                    share_c,
+                )
+                u = uv.x
+                v = uv.y
+                uv1 = weighted_sum2(
+                    Vector2(a.u1, a.v1),
+                    Vector2(b.u1, b.v1),
+                    Vector2(c.u1, c.v1),
+                    share_a,
+                    share_b,
+                    share_c,
                 )
             var uv = Vector2(u, v)
             # The normal before any map perturbs it: what a clear coat lies
@@ -4516,7 +4658,7 @@ def rasterize_shaded(
                     if a.receives_shadow:
                         mask = lighting.shadow_mask(spot, facing)
                     var light = gouraud_light(
-                        _shared(
+                        weighted_sum3(
                             a.gouraud_direct,
                             b.gouraud_direct,
                             c.gouraud_direct,
@@ -4524,7 +4666,7 @@ def rasterize_shaded(
                             share_b,
                             share_c,
                         ),
-                        _shared(
+                        weighted_sum3(
                             a.gouraud_indirect,
                             b.gouraud_indirect,
                             c.gouraud_indirect,
@@ -4668,7 +4810,7 @@ def rasterize_shaded(
             if (bakes or occludes) and not physical:
                 var indirect = Vector3(arriving.r, arriving.g, arriving.b)
                 if a.kind == GOURAUD:
-                    indirect = _shared(
+                    indirect = weighted_sum3(
                         a.gouraud_indirect,
                         b.gouraud_indirect,
                         c.gouraud_indirect,
@@ -5109,9 +5251,9 @@ def rasterize_shaded(
                     if has_output(nodes, BACKDROP_ALPHA_NODE):
                         share = run_nodes(nodes, BACKDROP_ALPHA_NODE, given)[0]
                     shaded = FloatColor(
-                        shaded.r + (backdrop[0] - shaded.r) * share,
-                        shaded.g + (backdrop[1] - shaded.g) * share,
-                        shaded.b + (backdrop[2] - shaded.b) * share,
+                        mix_delta(shaded.r, backdrop[0], share),
+                        mix_delta(shaded.g, backdrop[1], share),
+                        mix_delta(shaded.b, backdrop[2], share),
                         shaded.a,
                     )
                 # Thrown away where the mask is zero, three.js's `maskNode`
@@ -5380,12 +5522,8 @@ def rasterize_shaded(
                 var indirect = Vector3(
                     around.r + baked.x, around.g + baked.y, around.b + baked.z
                 )
-                var dot_nv = max(
-                    Float32(0), min(Float32(1), facing.dot(toward_eye))
-                )
-                var dot_nv_coat = max(
-                    Float32(0), min(Float32(1), coat_normal.dot(toward_eye))
-                )
+                var dot_nv = clamp(facing.dot(toward_eye), 0, 1)
+                var dot_nv_coat = clamp(coat_normal.dot(toward_eye), 0, 1)
                 # The environment along the rough reflection and around
                 # the normal, three.js's `getIBLRadiance` and
                 # `getIBLIrradiance`, each read at a roughness: the
@@ -5694,6 +5832,82 @@ def _code_of(
     )
 
 
+def _host_level[
+    origin: Origin[mut=False]
+](
+    textures: Pointer[TextureStore, origin],
+    slot: Int,
+    u: Float32,
+    v: Float32,
+    level: Float32,
+) -> FloatColor:
+    """Return one stored texture at a mip level."""
+    return textures[].textures[slot].sample_level(u, v, level)
+
+
+def _host_grad[
+    origin: Origin[mut=False]
+](
+    textures: Pointer[TextureStore, origin],
+    slot: Int,
+    u: Float32,
+    v: Float32,
+    dx: Vector2,
+    dy: Vector2,
+) -> FloatColor:
+    """Return one stored texture read with explicit gradients."""
+    return textures[].textures[slot]._sample_grad(u, v, dx, dy)
+
+
+def _host_cube[
+    origin: Origin[mut=False]
+](
+    cubes: Pointer[CubeTextureStore, origin], slot: Int, direction: Vector3
+) -> FloatColor:
+    """Return one stored cube read in a direction."""
+    return cubes[].textures[slot].sample(direction)
+
+
+def _host_volume[
+    origin: Origin[mut=False]
+](
+    volumes: Pointer[Data3DTextureStore, origin], slot: Int, at: Vector3
+) -> FloatColor:
+    """Return one stored volume read."""
+    return volumes[].textures[slot].sample(at.x, at.y, at.z)
+
+
+def _host_array[
+    origin: Origin[mut=False]
+](
+    arrays: Pointer[DataArrayTextureStore, origin], slot: Int, at: Vector3
+) -> FloatColor:
+    """Return one stored array texture read."""
+    return arrays[].textures[slot].sample(at.x, at.y, at.z)
+
+
+def _host_fetch[
+    origin: Origin[mut=False]
+](
+    textures: Pointer[TextureStore, origin],
+    slot: Int,
+    x: Int,
+    y: Int,
+    level: Int,
+) -> FloatColor:
+    """Return one stored texel by its column and row."""
+    return textures[].textures[slot].fetch(x, y, level)
+
+
+def _host_size[
+    origin: Origin[mut=False]
+](textures: Pointer[TextureStore, origin], slot: Int, level: Int) -> SIMD[
+    DType.float32, 4
+]:
+    """Return one stored texture level's size."""
+    return textures[].textures[slot].fetch_size(level)
+
+
 struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     """The host's `NodeSource`: a program in its store, and one triangle's
     own footprint for the textures it reads, as `_sample_map` reads the
@@ -5783,40 +5997,39 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
     ) -> FloatColor:
         """Return a texture read at (u, v) and a mip level, through the
         texture's two filters, as `Texture.sample_level` reads it."""
-        return self.textures[].textures[slot].sample_level(u, v, level)
+        return _host_level(self.textures, slot, u, v, level)
 
     def sample_grad(
         self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
     ) -> FloatColor:
         """Read explicit gradients through the texture's checked sampler."""
-        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+        return _host_grad(self.textures, slot, u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].textures[slot].sample(direction)
+        return _host_cube(self.cubes, slot, direction)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, `Data3DTexture.sample`."""
-        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_volume(self.volumes, slot, at)
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, `DataArrayTexture.sample`."""
-        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_array(self.arrays, slot, at)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
-        return self.textures[].textures[slot].fetch(x, y, level)
+        return _host_fetch(self.textures, slot, x, y, level)
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return a texture level's size, `Texture.fetch_size`."""
-        return self.textures[].textures[slot].fetch_size(level)
+        return _host_size(self.textures, slot, level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each corner's perspective-correct weight at this pixel,
         or at the pixel to its right or above it, from the triangle's own
         edge functions, as `_sample_map` measures a footprint."""
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
+        var x, y = sample_pixel(self.x, self.y, context)
         var weights = _weights(self.coverage, x, y)
         return perspective_shares(
             weights.wa,
@@ -5838,20 +6051,13 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def behind(self, u: Float32, v: Float32) -> FloatColor:
         """Return the opaque scene behind at a place on the target: the
@@ -5955,33 +6161,33 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
     ) -> FloatColor:
         """Return a texture read at (u, v) and a mip level,
         `Texture.sample_level`."""
-        return self.textures[].textures[slot].sample_level(u, v, level)
+        return _host_level(self.textures, slot, u, v, level)
 
     def sample_grad(
         self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
     ) -> FloatColor:
         """Read explicit gradients through the texture's checked sampler."""
-        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+        return _host_grad(self.textures, slot, u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].textures[slot].sample(direction)
+        return _host_cube(self.cubes, slot, direction)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, `Data3DTexture.sample`."""
-        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_volume(self.volumes, slot, at)
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, `DataArrayTexture.sample`."""
-        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_array(self.arrays, slot, at)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
-        return self.textures[].textures[slot].fetch(x, y, level)
+        return _host_fetch(self.textures, slot, x, y, level)
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return a texture level's size, `Texture.fetch_size`."""
-        return self.textures[].textures[slot].fetch_size(level)
+        return _host_size(self.textures, slot, level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return the whole weight on the first corner: every corner is
@@ -5998,20 +6204,13 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return where the pixel is in the point, GLSL's `gl_PointCoord`:
@@ -6024,17 +6223,13 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         Returns:
             The two numbers, then zeros.
         """
-        if context.is_corner():
-            return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        var place = gl_point_coord(
+        return sampled_point_coord(
+            context,
+            self.x,
+            self.y,
             Vector2(self.point[].x, self.point[].y),
             self.point[].point_size,
-            x,
-            y,
         )
-        return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the point's coordinates, world position, normal, color
@@ -6123,44 +6318,45 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
     ) -> FloatColor:
         """Return a texture read at (u, v) and a mip level,
         `Texture.sample_level`."""
-        return self.textures[].textures[slot].sample_level(u, v, level)
+        return _host_level(self.textures, slot, u, v, level)
 
     def sample_grad(
         self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
     ) -> FloatColor:
         """Read explicit gradients through the texture's checked sampler."""
-        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+        return _host_grad(self.textures, slot, u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
-        return self.cubes[].textures[slot].sample(direction)
+        return _host_cube(self.cubes, slot, direction)
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, `Data3DTexture.sample`."""
-        return self.volumes[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_volume(self.volumes, slot, at)
 
     def sample_array(self, slot: Int, at: Vector3) -> FloatColor:
         """Return an array texture read, `DataArrayTexture.sample`."""
-        return self.arrays[].textures[slot].sample(at.x, at.y, at.z)
+        return _host_array(self.arrays, slot, at)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, `Texture.fetch`."""
-        return self.textures[].textures[slot].fetch(x, y, level)
+        return _host_fetch(self.textures, slot, x, y, level)
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return a texture level's size, `Texture.fetch_size`."""
-        return self.textures[].textures[slot].fetch_size(level)
+        return _host_size(self.textures, slot, level)
 
     def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return each end's perspective-correct weight at this pixel, or
         at the pixel to its right or above it, from `toward_at`."""
+        var x, y = sample_pixel(self.x, self.y, context)
         var toward = toward_at(
             Vector2(self.a[].x, self.a[].y),
             Vector2(self.b[].x, self.b[].y),
             self.a[].inv_w,
             self.b[].inv_w,
-            self.x + (1 if context == AT_RIGHT else 0),
-            self.y - (1 if context == AT_UP else 0),
+            x,
+            y,
         )
         return SIMD[DType.float32, 4](1 - toward, toward, 0, 0)
 
@@ -6174,20 +6370,13 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one end's coordinates, world position, normal, color and
@@ -6238,12 +6427,10 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
             `RasterState.check`, or if they disagree about the fog or the
             node program.
     """
-    if not a.blend.is_valid():
-        raise Error("A line needs a blend policy that exists")
+    require_valid(a.blend.is_valid(), "A line needs a blend policy that exists")
     if a.blend != b.blend:
         raise Error("A line's ends must agree about blending")
-    if not a.kind.is_valid():
-        raise Error("A line needs a material kind that exists")
+    require_valid(a.kind.is_valid(), "A line needs a material kind that exists")
     if a.kind != b.kind:
         raise Error("A line's ends must agree about the material")
     if not a.kind.is_unlit():
@@ -6252,10 +6439,8 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
         raise Error("A line's ends must agree about the node program")
     # The first end is checked before the two are compared: a dash that
     # is not a number agrees with nothing, itself included.
-    if not isfinite(a.dash_size) or a.dash_size < 0:
-        raise Error("A dash size cannot be negative")
-    if not isfinite(a.gap_size) or a.gap_size < 0:
-        raise Error("A gap size cannot be negative")
+    require_dash_size(a.dash_size)
+    require_gap_size(a.gap_size)
     if a.dash_size != b.dash_size or a.gap_size != b.gap_size:
         raise Error("A line's ends must agree about the dashes")
     if a.state != b.state:
@@ -6411,13 +6596,13 @@ def rasterize_line(
             continue
         # The depth the buffer tests and keeps, from the interpolated
         # `1 / w` as a triangle's is; see `rasterize_shaded`.
-        var stored_z = fragment_depth(a.state, a.z + (b.z - a.z) * share, total)
+        var stored_z = fragment_depth(
+            a.state, mix_delta(a.z, b.z, share), total
+        )
         var toward = far / total
         # The gap test comes before the depth test, as a discard does: a
         # pixel in a gap is not drawn and claims nothing.
-        var along = (
-            a.line_distance + (b.line_distance - a.line_distance) * toward
-        )
+        var along = mix_delta(a.line_distance, b.line_distance, toward)
         if not dash_covers(along, a.dash_size, a.gap_size):
             continue
         # Straight, as a varying is everywhere else in this file and
@@ -6427,7 +6612,7 @@ def rasterize_line(
         var color = mix_straight(a.color, b.color, toward)
         var veil = Float32(0)
         if fogged:
-            var depth = a.view_depth + (b.view_depth - a.view_depth) * toward
+            var depth = mix_delta(a.view_depth, b.view_depth, toward)
             veil = fog.factor_at(depth)
         # Everything above this line belongs to the step and not to the
         # pixel: the share, the depth, the dash and the color are the same
@@ -6455,7 +6640,7 @@ def rasterize_line(
             if noded:
                 nodes.x = x
                 nodes.y = y
-                nodes.depth = a.z + (b.z - a.z) * share
+                nodes.depth = mix_delta(a.z, b.z, share)
                 given = here_inputs(nodes, textured)
                 if has_output(nodes, COLOR_NODE):
                     var diffuse = run_nodes(nodes, COLOR_NODE, given)
@@ -6567,20 +6752,21 @@ def check_point_state(point: RasterVertex) raises:
             depth, color and stencil state is refused by
             `RasterState.check`.
     """
-    if not point.blend.is_valid():
-        raise Error("A point needs a blend policy that exists")
-    if not point.kind.is_valid():
-        raise Error("A point needs a material kind that exists")
+    require_valid(
+        point.blend.is_valid(), "A point needs a blend policy that exists"
+    )
+    require_valid(
+        point.kind.is_valid(), "A point needs a material kind that exists"
+    )
     if not point.kind.is_unlit():
         raise Error("A point's material must be unlit")
-    if not isfinite(point.point_size) or point.point_size <= 0:
-        raise Error("A point needs a size above zero")
-    if (
-        not isfinite(point.alpha_test)
-        or point.alpha_test < 0
-        or point.alpha_test > 1
-    ):
-        raise Error("A point's alpha test must be between zero and one")
+    require_positive_finite(
+        Float64(point.point_size), "A point needs a size above zero"
+    )
+    require_unit_finite(
+        Float64(point.alpha_test),
+        "A point's alpha test must be between zero and one",
+    )
     if point.texture != NO_TEXTURE and point.texture.value < 0:
         raise Error("A point names a texture id that nothing can hold")
     if point.alpha_map != NO_TEXTURE and point.alpha_map.value < 0:
@@ -6691,8 +6877,7 @@ def rasterize_point(
             view is refused by `FogView.validate`, or the point names a
             texture the store does not have.
     """
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_shade_mode(mode)
     check_point_state(point)
     fog.validate()
     check_point_maps(point, mode, textures, cubes, programs, volumes, arrays)
@@ -6900,12 +7085,7 @@ struct DrawKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or
         `DRAW_POINTS` or `DRAW_SPLATS`."""
-        return (
-            self == DRAW_TRIANGLES
-            or self == DRAW_SEGMENTS
-            or self == DRAW_POINTS
-            or self == DRAW_SPLATS
-        )
+        return ordinal_valid(self.value, DRAW_SPLATS.value)
 
     def stride(self) -> Int:
         """Return how many corners one primitive of this kind takes: three
@@ -6977,11 +7157,13 @@ def check_draws(
     """
     for index in range(len(draws)):
         ref draw = draws[index]
-        if not draw.kind.is_valid():
-            raise Error(
-                "A draw needs a kind that exists: DRAW_TRIANGLES,"
-                " DRAW_SEGMENTS or DRAW_POINTS"
-            )
+        require_valid(
+            draw.kind.is_valid(),
+            (
+                "A draw needs a kind that exists: DRAW_TRIANGLES, DRAW_SEGMENTS"
+                " or DRAW_POINTS"
+            ),
+        )
         var held = triangles
         if draw.kind == DRAW_SEGMENTS:
             held = segments
@@ -7278,6 +7460,36 @@ def _rows_of_corners(corners: List[Corner]) -> List[Int]:
     return rows^
 
 
+def require_whole_triangles(corner_count: Int) raises:
+    """Refuse a corner list that is not whole triangles.
+
+    Nothing. The call returns when the count is a multiple of three.
+
+    Args:
+        corner_count: How many corners the list holds.
+
+    Raises:
+        Error: If the count is not a multiple of three.
+    """
+    if corner_count % 3 != 0:
+        raise Error("Rasterizing needs whole triangles")
+
+
+def require_whole_segments(segment_count: Int) raises:
+    """Refuse a segment list that is not whole segments.
+
+    Nothing. The call returns when the count is a multiple of two.
+
+    Args:
+        segment_count: How many endpoints the list holds.
+
+    Raises:
+        Error: If the count is not a multiple of two.
+    """
+    if segment_count % 2 != 0:
+        raise Error("Rasterizing needs whole segments")
+
+
 def _check_frame(
     corners: List[RasterVertex],
     segments: List[RasterVertex],
@@ -7297,14 +7509,10 @@ def _check_frame(
 ) raises:
     """Refuse a frame before any of it is drawn: the checks of
     `rasterize_frame`, on whole corners, with `splats` projected splats."""
-    if len(corners) % 3 != 0:
-        raise Error("Rasterizing needs whole triangles")
-    if len(segments) % 2 != 0:
-        raise Error("Rasterizing needs whole segments")
-    if workers < 1:
-        raise Error("Rasterizing needs at least one worker")
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the four")
+    require_whole_triangles(len(corners))
+    require_whole_segments(len(segments))
+    require_at_least_one(workers, "Rasterizing needs at least one worker")
+    require_shade_mode(mode)
     # Refused here, before any band starts, for the reason the triangle
     # state is: whether or not a triangle is visible, and however many
     # workers there are.
@@ -7331,8 +7539,7 @@ def _check_frame(
             arrays,
         )
         var named = corners[triangle * 3].lights
-        if named < 0 or named > len(lightings):
-            raise Error("A triangle names a lighting the frame does not have")
+        require_triangle_lighting(named, len(lightings))
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
         check_program_maps(
@@ -7546,14 +7753,16 @@ def rasterize_frame(
         Error: As the other overload, and also if a triangle's corners name
             different surfaces or a corner names one the list does not have.
     """
-    if len(corners) % 3 != 0:
-        raise Error("Rasterizing needs whole triangles")
+    require_whole_triangles(len(corners))
     var triangles = len(corners) // 3
     check_draws(draws, triangles, len(segments) // 2, len(points), len(splats))
     for triangle in range(triangles):
         var named = corners[triangle * 3].surface
-        if named < 0 or named >= len(surfaces):
-            raise Error("A corner names a surface the frame does not have")
+        require_index_in_count(
+            named,
+            len(surfaces),
+            "A corner names a surface the frame does not have",
+        )
         if (
             corners[triangle * 3 + 1].surface != named
             or corners[triangle * 3 + 2].surface != named

@@ -24,7 +24,6 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     head_hair_label,
 )
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
-from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.skeleton.surface_nets import mesh_surface
 from extensions.humanoid.spec import HumanoidSpec
 
@@ -86,5 +85,4 @@ def head_hair_from_dimensions(
     """
     var field = HairShape(dimensions, part, side, style)
     var label = head_hair_label(part)
-    check_detail(detail, label)
     return mesh_surface(field, field.low, field.high, detail, label, workers)

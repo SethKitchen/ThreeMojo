@@ -10,12 +10,44 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 
 if __package__:
     from . import full_audit_cleanup_contracts as cleanup
 else:
     import full_audit_cleanup_contracts as cleanup
+
+
+def common758_leaf_texts(source):
+    """Exact old leaf inputs derived from one fully admitted physical root.
+
+    These strings are test data, never a production filesystem view. The old
+    complete positive baselines pass before any existing negative is applied.
+    """
+    source = Path(source)
+    bindings = cleanup.proof_bindings(source)
+    typed, shared, scaled = (cleanup.typed_boundary, cleanup.shared_helpers,
+                             cleanup.scaled_float32)
+    paths = set(typed.SOURCE_PATHS) | set(shared.SOURCE_PATHS) | set(shared.PROVIDERS)
+    paths |= set(scaled.SOURCE_PATHS) | set(scaled.PROVIDER_INPUTS)
+    physical = {name: (source/name).read_bytes() for name in paths}
+    if any(cleanup.sha(raw) != bindings[name] for name, raw in physical.items()):
+        raise AssertionError('leaf fixture differs from admitted physical input')
+    selected = cleanup._pr760_image_selected(physical)
+    texts = {name: (cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8'))
+             if selected and name in cleanup.pr760_stage.CARLA_REGISTRY_PATHS
+             else cleanup.qualification_predecessor_bytes(name, raw).decode('utf-8')
+             if selected and name == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+             else raw.decode('utf-8')) for name, raw in physical.items()}
+    typed.verify_sources({name: texts[name] for name in typed.SOURCE_PATHS})
+    shared.verify_correspondence({name: texts[name] for name in
+                                  (*shared.SOURCE_PATHS, *shared.PROVIDERS)})
+    scaled.verify_sources({name: texts[name] for name in scaled.SOURCE_PATHS})
+    for name, raw in physical.items():
+        if (source/name).read_bytes() != raw:
+            raise AssertionError('leaf fixture source changed after transport: ' + name)
+    return texts
 
 
 def verified_predecessors(source):
@@ -36,23 +68,42 @@ def write_predecessors(root, predecessors):
 
 
 def copy_shared_helper_inputs(root, source):
-    """Copy the verified arithmetic helper closure into a partial fixture."""
+    """Build an explicitly historical arithmetic-only physical test fixture.
+
+    The source first passes its full current admission. Current partial-root
+    refusal and current complete-root positives remain separate controls.
+    """
     bindings = cleanup.shared_helper_proof_bindings(source)
     bindings.update(cleanup.scaled_float32_proof_bindings(source))
+    copied_bindings = {}
     for name, digest in bindings.items():
         raw = (Path(source)/name).read_bytes()
         if cleanup.sha(raw) != digest:
             raise AssertionError('shared-helper fixture source changed: ' + name)
+        if name in cleanup.pr760_stage.CARLA_REGISTRY_PATHS:
+            edge = cleanup.pr760_stage.EDGES[name]
+            if cleanup.sha(raw) == edge['after_sha256']:
+                raw = cleanup.pr760_stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
+                if cleanup.sha(raw) != edge['before_sha256']:
+                    raise AssertionError('historical helper predecessor changed: ' + name)
+        if name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):
+            raw = cleanup.qualification_predecessor_bytes(name, raw)
+        copied_bindings[name] = cleanup.sha(raw)
         target = Path(root)/name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(raw)
-        if cleanup.sha(target.read_bytes()) != digest:
+        if cleanup.sha(target.read_bytes()) != copied_bindings[name]:
             raise AssertionError('shared-helper fixture copy changed: ' + name)
     copied = cleanup.shared_helper_proof_bindings(root)
     copied.update(cleanup.scaled_float32_proof_bindings(root))
-    if copied != bindings:
+    # Stage-only implementation metadata is not part of historical leaf admission.
+    stage_only = {'tools/carla_lane_oracle/pr760_arithmetic_stage.py',
+                  cleanup.PR760_IMAGE, cleanup.PR760_OWNER_PREDECESSOR}
+    expected = {name: digest for name, digest in copied_bindings.items()
+                if name not in stage_only}
+    if copied != expected:
         raise AssertionError('shared-helper fixture closure changed')
-    return bindings
+    return copied
 
 
 def copy_current_root(case, source, *, destination=None):
@@ -66,8 +117,9 @@ def copy_current_root(case, source, *, destination=None):
         case.addCleanup(directory.cleanup)
         destination = Path(directory.name)
     destination = Path(destination)
+    admitted = cleanup.proof_bindings(source)
     paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.DEPENDENCY_TOOL_SHA256,
-             *cleanup.SOURCE_PATHS}
+             *cleanup.SOURCE_PATHS, *admitted}
     # The accepted-successor consumer also binds this proof document.
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
     # Supplemental witness-format proof inputs are physically copied too.
@@ -99,18 +151,90 @@ def copy_current_root(case, source, *, destination=None):
             raise AssertionError('fixture source is a symlink: ' + name)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(original, target)
+        if name in admitted and cleanup.sha(target.read_bytes()) != admitted[name]:
+            raise AssertionError('fixture admitted input copy changed: ' + name)
     cleanup.verify(destination, exact=True)
     return destination
 
 
-def copy_historical_boundary_root(case, source, *, destination=None):
-    """Admit current bytes, then create the complete historical main2d81 graph.
+def _historical_hair_predecessors(root):
+    """Separate exact hair provenance for a still-current copied test root.
+
+    Only density and groom have the four local density row admission. Shading
+    and strands are transported by exact source provenance, not new theorems.
+    No original source is written until every endpoint and reread succeeds.
+    """
+    # Coverage uses its real package namespace, as the operation tests do.
+    tools = str(Path(__file__).resolve().parents[1])
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    import coverage_loop_proofs as loops
+    stage = cleanup.pr760_stage
+    physical = {name: (root/name).read_bytes() for name in stage.HAIR_SOURCE_PATHS}
+    for name, raw in physical.items():
+        if cleanup.sha(raw) != stage.EDGES[name]['after_sha256']:
+            raise AssertionError('historical hair fixture current endpoint changed: ' + name)
+    rows = loops.density760_loops(root)
+    if (set(rows) != {131, 167, 178, 245}
+            or any(row['dependency_sha256'] != loops.DENSITY760_INPUTS
+                   for row in rows.values())):
+        raise AssertionError('historical hair fixture lacks independent density admission')
+    predecessors = {}
+    for name, raw in physical.items():
+        previous = stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
+        expected = (loops.DENSITY_AFTER_SHA256 if name == loops.DENSITY_SOURCE
+                    else loops.GUARDED_LOOP_SOURCE_SHA256[name])
+        if (cleanup.sha(previous) != stage.EDGES[name]['before_sha256']
+                or cleanup.sha(previous) != expected):
+            raise AssertionError('historical hair fixture predecessor changed: ' + name)
+        predecessors[name] = previous
+    for name, raw in physical.items():
+        if (root/name).read_bytes() != raw:
+            raise AssertionError('historical hair fixture source changed after transport: ' + name)
+    return predecessors
+
+
+def copy_common758_boundary_root(case, source, *, destination=None):
+    """Admit current bytes, then create the complete common758 predecessor graph.
 
     This is physical test data, never a production root adapter. Old tests
     retain their old byte/line and method-identity claims on this named root.
     Current source acceptance and mutation controls use copy_current_root.
     """
     root = copy_current_root(case, source, destination=destination)
+    typed = cleanup.typed_boundary
+    # Current root admission above owns the physical source; only this isolated
+    # historical test fixture receives the reviewed exact main predecessors.
+    stage = cleanup.pr760_stage
+    examples = {name: (root/name).read_bytes() for name in stage.EXAMPLE_PATHS}
+    selected = cleanup._pr760_image_selected(examples)
+    if selected:
+        hair_predecessors = _historical_hair_predecessors(root)
+        for name, previous in hair_predecessors.items():
+            (root/name).write_bytes(previous)
+        for name in stage.CARLA_REGISTRY_PATHS:
+            raw = (root/name).read_bytes()
+            previous = stage.predecessor_source(name, raw.decode('utf-8')).encode('utf-8')
+            if cleanup.sha(raw) != stage.EDGES[name]['after_sha256'] or cleanup.sha(previous) != stage.EDGES[name]['before_sha256']:
+                raise AssertionError('historical fixture PR760 endpoint changed: ' + name)
+            (root/name).write_bytes(previous)
+    for name in ('tools/test_conditioned_coverage_loops.py', 'tools/carla_lane_oracle/test_typed_boundary_contracts.py', 'tools/carla_lane_oracle/test_shared_helper_contracts.py', 'tools/carla_lane_oracle/test_scaled_float32_contracts.py', 'tools/carla_lane_oracle/test_common758_current_successor.py', 'tools/carla_lane_oracle/test_witness_format_contracts.py', 'tools/carla_lane_oracle/test_coverage_invariant_contracts.py', 'tools/carla_lane_oracle/test_expectation_binding_successor.py'):
+        target = root/name
+        raw = target.read_bytes()
+        # A module fixture can already be pre-typed when a case copies it.
+        # The complete source root was admitted above; preserve only this exact
+        # immutable endpoint, outside the two-endpoint qualification inverse.
+        if (name == 'tools/carla_lane_oracle/test_witness_format_contracts.py'
+                and cleanup.sha(raw) == typed.EDGES[name]['before_sha256']):
+            continue
+        target.write_bytes(cleanup.qualification_predecessor_bytes(name, raw))
+    cleanup.verify(root, exact=True)
+    return root
+
+
+def copy_historical_boundary_root(case, source, *, destination=None):
+    """Admit current bytes, then construct the preserved pre-typed graph."""
+    root = copy_common758_boundary_root(case, source, destination=destination)
     typed = cleanup.typed_boundary
     for name in typed.SOURCE_PATHS:
         path = root/name

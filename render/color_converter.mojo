@@ -21,7 +21,7 @@ arithmetic approaches. Every other input gives three.js's numbers.
 """
 
 from render.framebuffer import FloatColor
-from std.math import floor
+from math.sine import fraction
 
 
 @fieldwise_init
@@ -57,7 +57,7 @@ def set_hsv(
         Error: Never; `FloatColor`'s HSL constructor raises only for a
             color space other than the two it takes.
     """
-    var h = hue - floor(hue)
+    var h = fraction(hue)
     var s = min(max(saturation, Float32(0)), Float32(1))
     var v = min(max(value, Float32(0)), Float32(1))
     var twice = (2 - s) * v

@@ -192,30 +192,43 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         self.assertEqual(self.support_positive['repo_root'], str(ROOT))
 
     def test_current_physical_mutations_reject_before_historical_projection(self):
-        root = cleanup_fixtures.copy_current_root(self, ROOT)
-        for name in ('arc_translation', 'global_domain_error'):
-            case = next(case for case in CASES if case[0] == name)
-            _, _, file, function, before, after = case
-            path = root/'extensions/carla'/file
-            original = path.read_bytes()
-            changed = replace_in_function(original.decode('utf-8'), function, before, after)
-            message = ('reviewed typed boundary successor: unknown complete typed endpoint: '
-                       'extensions/carla/' + file)
-            try:
-                path.write_bytes(changed.encode('utf-8'))
-                self.assertEqual(path.read_text(encoding='utf-8'), changed)
-                for verifier in (sampled.verify, runtime.verify):
-                    with self.subTest(case=name, verifier=verifier.__module__):
-                        with self.assertRaises(cleanup._OperationCoherenceError) as raised:
-                            verifier(root)
-                        self.assertIs(type(raised.exception), cleanup._OperationCoherenceError)
-                        self.assertEqual(str(raised.exception), message)
-                        self.assertIs(type(raised.exception.__cause__), ValueError)
-                        self.assertEqual(str(raised.exception.__cause__), message)
-            finally:
-                path.write_bytes(original)
-            self.assertEqual(path.read_bytes(), original)
-            self.assertEqual((root/contracts.PINS).read_bytes(), self.pin)
+        # Current physical admission precedes the preserved typed boundary.
+        # Exercise both complete images so the old rejection contract survives.
+        for cohort, fixture in (
+                ('pr760', cleanup_fixtures.copy_current_root),
+                ('common758', cleanup_fixtures.copy_common758_boundary_root)):
+            root = fixture(self, ROOT)
+            for verifier in (sampled.verify, runtime.verify):
+                verifier(root)
+            for name in ('arc_translation', 'global_domain_error'):
+                case = next(case for case in CASES if case[0] == name)
+                _, _, file, function, before, after = case
+                path = root/'extensions/carla'/file
+                original = path.read_bytes()
+                changed = replace_in_function(original.decode('utf-8'), function, before, after)
+                prefix, cause = (
+                    ('full-audit cleanup successor: PR760 physical input changed: ',
+                     cleanup.ContractError) if cohort == 'pr760' else
+                    ('reviewed typed boundary successor: unknown complete typed endpoint: ',
+                     ValueError))
+                message = prefix + 'extensions/carla/' + file
+                try:
+                    path.write_bytes(changed.encode('utf-8'))
+                    self.assertEqual(path.read_text(encoding='utf-8'), changed)
+                    for verifier in (sampled.verify, runtime.verify):
+                        with self.subTest(cohort=cohort, case=name, verifier=verifier.__module__):
+                            with self.assertRaises(cleanup._OperationCoherenceError) as raised:
+                                verifier(root)
+                            self.assertIs(type(raised.exception), cleanup._OperationCoherenceError)
+                            self.assertEqual(str(raised.exception), message)
+                            self.assertIs(type(raised.exception.__cause__), cause)
+                            self.assertEqual(str(raised.exception.__cause__), message)
+                finally:
+                    path.write_bytes(original)
+                self.assertEqual(path.read_bytes(), original)
+                self.assertEqual((root/contracts.PINS).read_bytes(), self.pin)
+            for verifier in (sampled.verify, runtime.verify):
+                verifier(root)
 
     def test_benign_comment_semantics_and_split_read_rejection(self):
         read = Path.read_text

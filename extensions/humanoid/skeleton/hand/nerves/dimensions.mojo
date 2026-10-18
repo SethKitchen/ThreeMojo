@@ -23,7 +23,8 @@ template parameters. They are not a cited caliber table.
     var d = hand_nerve_distance(dims, MEDIAN_BRANCHES, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmMuscleDimensions
 from extensions.humanoid.skeleton.arm.muscles.dimensions import paths_field
 from extensions.humanoid.skeleton.field import cross
@@ -57,9 +58,7 @@ struct HandNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= DIGITAL_NERVES.value
+        return ordinal_valid(self.value, DIGITAL_NERVES.value)
 
 
 # The recurrent branch and the common palmar digital nerves.
@@ -81,14 +80,12 @@ def hand_nerve_label(part: HandNerve) -> String:
         A short American English label, or `"hand nerve"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "hand nerve"
     var names = List[String]()
     names.append("median branches")
     names.append("ulnar branches")
     names.append("superficial radial nerve")
     names.append("digital nerves")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "hand nerve")
 
 
 def named_hand_nerves() -> List[HandNerve]:
@@ -121,10 +118,8 @@ def hand_nerve_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hand nerve must be a named nerve")
-    if not side.is_valid():
-        raise Error("A hand side must be RIGHT or LEFT")
+    require_valid(part.is_valid(), "A hand nerve must be a named nerve")
+    require_side(side, "A hand")
     var arm = dimensions.arm.copy()
     var f = arm.frame
     if part == DIGITAL_NERVES:

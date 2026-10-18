@@ -16,9 +16,13 @@ from extensions.water.pebbles import (
     sample_pebble_grad,
 )
 from math.arc_tangent import atan2_float32
+from math.smoothstep import hermite_fade
+from math.sine import fraction
+from math.utils import mix_bilinear, mix_delta
+from math.norm import squared_length2, squared_length3
 from math.sine import sin_float32
-from math.vector3 import Vector3
-from std.math import cos, exp, floor, fma, log, pow, sin, sqrt
+from math.vector3 import Vector3, mix_delta3
+from std.math import cos, exp, floor, fma, log, max, pow, sin, sqrt
 from units.si import DEGREE, Angle
 
 
@@ -93,9 +97,9 @@ def hash12(x: Float32, y: Float32) -> Float32:
     # differently. Each step is a Float32 operation rounded once.
     var c = Float32(0.1031)
     var k = Float32(33.33)
-    var px = _fract(_times(x, c))
-    var py = _fract(_times(y, c))
-    var pz = _fract(_times(x, c))
+    var px = fraction(_times(x, c))
+    var py = fraction(_times(y, c))
+    var pz = fraction(_times(x, c))
     var dot = _plus(
         _plus(_times(px, _plus(py, k)), _times(py, _plus(pz, k))),
         _times(pz, _plus(px, k)),
@@ -103,7 +107,7 @@ def hash12(x: Float32, y: Float32) -> Float32:
     px = _plus(px, dot)
     py = _plus(py, dot)
     pz = _plus(pz, dot)
-    return _fract(_times(_plus(px, py), pz))
+    return fraction(_times(_plus(px, py), pz))
 
 
 def _times(a: Float32, b: Float32) -> Float32:
@@ -117,10 +121,6 @@ def _plus(a: Float32, b: Float32) -> Float32:
     # Each operand comes from `_times`, `_plus` or `_fract`, and none of
     # them is a plain product, so the sum cannot fuse. It rounds once.
     return a + b
-
-
-def _fract(value: Float32) -> Float32:
-    return value - floor(value)
 
 
 def _sin(value: Float32) -> Float32:
@@ -144,15 +144,16 @@ def value_noise(x: Float32, y: Float32) -> Float32:
     var iy = floor(y)
     var fx = x - ix
     var fy = y - iy
-    var ux = fx * fx * (3.0 - 2.0 * fx)
-    var uy = fy * fy * (3.0 - 2.0 * fy)
-    var a = hash12(ix, iy)
-    var b = hash12(ix + 1.0, iy)
-    var c = hash12(ix, iy + 1.0)
-    var d = hash12(ix + 1.0, iy + 1.0)
-    var ab = a + (b - a) * ux
-    var cd = c + (d - c) * ux
-    return ab + (cd - ab) * uy
+    var ux = hermite_fade(fx)
+    var uy = hermite_fade(fy)
+    return mix_bilinear(
+        hash12(ix, iy),
+        hash12(ix + 1.0, iy),
+        hash12(ix, iy + 1.0),
+        hash12(ix + 1.0, iy + 1.0),
+        ux,
+        uy,
+    )
 
 
 def fbm2(x: Float32, y: Float32) -> Float32:
@@ -194,7 +195,7 @@ def fresnel(cos_i: Float32, ior: Float32) -> Float32:
     var ct = sqrt(1.0 - st2)
     var rs = (ci - ior * ct) / (ci + ior * ct)
     var rp = (ior * ci - ct) / (ior * ci + ct)
-    return 0.5 * (rs * rs + rp * rp)
+    return 0.5 * squared_length2[DType.float32](rs, rp)
 
 
 @fieldwise_init
@@ -235,12 +236,8 @@ def refract(
     if k < 0.0:
         return Refracted(False, 0.0, 0.0, 0.0)
     var scale = eta * cosi + sqrt(k)
-    return Refracted(
-        True,
-        eta * ix - scale * nx,
-        eta * iy - scale * ny,
-        eta * iz - scale * nz,
-    )
+    var bent = Vector3(ix, iy, iz) * eta - Vector3(nx, ny, nz) * scale
+    return Refracted(True, bent.x, bent.y, bent.z)
 
 
 def refracted_sun(sun: Vector3) -> Refracted:
@@ -346,7 +343,7 @@ def sky_radiance(
     Returns:
         Linear radiance.
     """
-    var length = sqrt(dx * dx + dy * dy + dz * dz)
+    var length = sqrt(squared_length3[DType.float32](dx, dy, dz))
     var x = dx
     var y = dy
     var z = dz
@@ -358,11 +355,7 @@ def sky_radiance(
     var zen = Vector3(0.11, 0.27, 0.62)
     var hor = Vector3(0.66, 0.78, 0.90)
     var t = pow(clamp01(y), Float32(0.42))
-    var color = Vector3(
-        hor.x + (zen.x - hor.x) * t,
-        hor.y + (zen.y - hor.y) * t,
-        hor.z + (zen.z - hor.z) * t,
-    )
+    var color = mix_delta3(hor, zen, t)
     var glow = Float32(0.0)
     if mu > 0.0:
         glow = (
@@ -383,13 +376,13 @@ def sky_radiance(
     ridge += 0.002 * (value_noise(azimuth * 900.0, 3.0) - 0.5)
     var hx = x
     var hz = z
-    var hlen = sqrt(hx * hx + hz * hz)
+    var hlen = sqrt(squared_length2[DType.float32](hx, hz))
     if hlen > 1e-5:
         hx /= hlen
         hz /= hlen
     var sx = sun.x
     var sz = sun.z
-    var slen = sqrt(sx * sx + sz * sz)
+    var slen = sqrt(squared_length2[DType.float32](sx, sz))
     if slen > 1e-5:
         sx /= slen
         sz /= slen
@@ -404,7 +397,7 @@ def sky_radiance(
     var cliff = smoothstep(0.42, 0.18, u + 0.25 * (tex - 0.5)) * smoothstep(
         0.35, 0.75, value_noise(azimuth * 18.0, 1.0)
     )
-    var land_r = pine + (rock - pine) * cliff
+    var land_r = mix_delta(pine, rock, cliff)
     var land_g = (
         0.070 * (0.6 + 0.8 * tex)
         + (
@@ -426,16 +419,16 @@ def sky_radiance(
     land_g *= shade
     land_b *= shade
     var aerial = 0.38 + 0.25 * back
-    land_r = land_r + (hor.x * 0.92 - land_r) * aerial
-    land_g = land_g + (hor.y * 0.92 - land_g) * aerial
-    land_b = land_b + (hor.z * 0.92 - land_b) * aerial
+    land_r = mix_delta(land_r, hor.x * 0.92, aerial)
+    land_g = mix_delta(land_g, hor.y * 0.92, aerial)
+    land_b = mix_delta(land_b, hor.z * 0.92, aerial)
     var cover = smoothstep(ridge + 2e-4, ridge - 2e-4, y)
     if y < -0.3:
         cover = 0.0
     return Vector3(
-        color.x + (land_r - color.x) * cover,
-        color.y + (land_g - color.y) * cover,
-        color.z + (land_b - color.z) * cover,
+        mix_delta(color.x, land_r, cover),
+        mix_delta(color.y, land_g, cover),
+        mix_delta(color.z, land_b, cover),
     )
 
 
@@ -521,10 +514,12 @@ def bed_color[
         dy_x,
     )
     var mix_c = smoothstep(0.45, 0.62, fbm2(x * 0.21 + 40.0, z * 0.21 + 40.0))
-    var r = fine.r + (coarse.r - fine.r) * mix_c
-    var g = fine.g + (coarse.g - fine.g) * mix_c
-    var b = fine.b + (coarse.b - fine.b) * mix_c
-    var h = fine.height + (coarse.height - fine.height) * mix_c
+    var rgb = mix_delta3(
+        Vector3(fine.r, fine.g, fine.b),
+        Vector3(coarse.r, coarse.g, coarse.b),
+        mix_c,
+    )
+    var h = mix_delta(fine.height, coarse.height, mix_c)
     var zone = fbm2(x * 0.16 + 3.0, z * 0.16 + 3.0) + 0.10 * (
         value_noise(x * 2.5, z * 2.5) - 0.5
     )
@@ -539,10 +534,11 @@ def bed_color[
     sand_g = sand_g * sand_g * 1.4
     sand_b = sand_b * sand_b * 1.4
     var sand_m = smoothstep(h + 0.02, h + 0.16, (zone - 0.46) * 1.6)
-    r = r + (sand_r - r) * sand_m
-    g = g + (sand_g - g) * sand_m
-    b = b + (sand_b - b) * sand_m
-    h = h + (0.42 + 0.05 * marks - h) * sand_m
+    rgb = mix_delta3(rgb, Vector3(sand_r, sand_g, sand_b), sand_m)
+    h = mix_delta(h, 0.42 + 0.05 * marks, sand_m)
+    var r = rgb.x
+    var g = rgb.y
+    var b = rgb.z
     var lum = r * 0.3 + g * 0.55 + b * 0.15
     r = lum + (r - lum) * 0.8
     g = lum + (g - lum) * 0.8
@@ -612,7 +608,7 @@ def _pebbles[
         (first.r - second.r) + (first.g - second.g) + (first.b - second.b)
     )
     var mix = smoothstep(0.2, 0.8, blend - 0.1 * delta)
-    var color = _blend_pebble(first, second, mix)
+    var color = first.mix(second, mix)
     # The page blurs the height lookup by six times the color footprint.
     var wide_a = sample_pebble_grad(
         bed,
@@ -632,26 +628,6 @@ def _pebbles[
         du_dy * 6.0,
         dv_dy * 6.0,
     )
-    var wide = _blend_pebble(wide_a, wide_b, mix)
+    var wide = wide_a.mix(wide_b, mix)
     var height = wide.r * 0.3 + wide.g * 0.55 + wide.b * 0.15
     return BedColor(color.r, color.g, color.b, height)
-
-
-def _blend_pebble(a: PebbleSample, b: PebbleSample, t: Float32) -> PebbleSample:
-    var s = 1.0 - t
-    return PebbleSample(a.r * s + b.r * t, a.g * s + b.g * t, a.b * s + b.b * t)
-
-
-def max(a: Float32, b: Float32) -> Float32:
-    """Return the larger of two floats.
-
-    Args:
-        a: The first value.
-        b: The second value.
-
-    Returns:
-        `a` when it is greater, otherwise `b`.
-    """
-    if a > b:
-        return a
-    return b

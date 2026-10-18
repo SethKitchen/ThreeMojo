@@ -30,8 +30,9 @@ The revealage is kept as a float, where three.js keeps eight bits.
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
+from math.utils import mix_delta
 from postprocessing.screen_space import DepthView
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.rasterizer import DRAW_SPLATS
 from render.target import FLOAT_TARGET, RenderTarget
 from renderers.draw_filter import NO_OIT_DRAWS, ONE_OIT_DRAW, oit_capable
@@ -69,7 +70,7 @@ struct OitAccumulation(Movable):
         Args:
             count: How many pixels.
         """
-        self.accum = List[FloatColor](length=count, fill=FloatColor(0, 0, 0, 0))
+        self.accum = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
         self.revealage = List[Float32](length=count, fill=1)
 
     def add(mut self, slot: Int, light: FloatColor, distance: Float32):
@@ -110,9 +111,9 @@ def oit_composite(
     var g = accum.g / share
     var b = accum.b / share
     return FloatColor(
-        r + (beauty.r - r) * revealage,
-        g + (beauty.g - g) * revealage,
-        b + (beauty.b - b) * revealage,
+        mix_delta(r, beauty.r, revealage),
+        mix_delta(g, beauty.g, revealage),
+        mix_delta(b, beauty.b, revealage),
         beauty.a,
     )
 

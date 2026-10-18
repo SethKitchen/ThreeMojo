@@ -20,15 +20,16 @@ separate diagrammatic minimum radius.
     var d = pelvis_nerve_distance(dims, PUDENDAL_NERVE, RIGHT, p)
 """
 
-from extensions.humanoid.side import LEFT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, LEFT, BodySide
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
     field_gradient,
-    flip_x,
+    mirrored_tube_distance,
     mix_point,
-    tube_chain_bounds,
-    tube_chain_distance,
+    tube_root_bounds,
+    widen_for_display,
 )
 from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     pelvis_frame,
@@ -39,7 +40,6 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscleDimensions,
 )
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -55,9 +55,7 @@ struct PelvisNerve(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named nerve."""
-        if self.value < 0:
-            return False
-        return self.value <= LATERAL_FEMORAL_CUTANEOUS_NERVE.value
+        return ordinal_valid(self.value, LATERAL_FEMORAL_CUTANEOUS_NERVE.value)
 
 
 comptime LUMBOSACRAL_TRUNK = PelvisNerve(0)
@@ -100,15 +98,13 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
                 is not named, or if `side` is not valid.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic nerve must be a named nerve")
-        if not side.is_valid():
-            raise Error("A pelvis side must be RIGHT or LEFT")
+        require_valid(part.is_valid(), "A pelvic nerve must be a named nerve")
+        require_side(side, "A pelvis")
         self.chain = _chain(dimensions, part)
         self.mirror = side == LEFT
         self.k = Float32(0.00025)
         self.epsilon = Float32(0.00015)
-        var box = tube_chain_bounds(self.chain, Float32(0.003) + self.chain.r0)
+        var box = tube_root_bounds(self.chain)
         var placed = sided_bounds(box.low, box.high, side)
         self.low = placed.low
         self.high = placed.high
@@ -118,9 +114,7 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        if self.mirror:
-            return tube_chain_distance(self.chain, flip_x(point), self.k)
-        return tube_chain_distance(self.chain, point, self.k)
+        return mirrored_tube_distance(self.chain, self.mirror, self.k, point)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
@@ -136,15 +130,9 @@ struct PelvisNerveField(DistanceField, ImplicitlyCopyable):
             A wider copy with a larger blend and box.
         """
         var field = self
-        field.chain.r0 = max(field.chain.r0, least)
-        field.chain.r1 = max(field.chain.r1, least)
-        field.chain.r2 = max(field.chain.r2, least)
-        field.chain.r3 = max(field.chain.r3, least)
-        field.chain.r4 = max(field.chain.r4, least)
-        field.k = Float32(0.4) * least
-        field.epsilon = Float32(0.25) * least
-        field.low = field.low - Vector3(least, least, least)
-        field.high = field.high + Vector3(least, least, least)
+        widen_for_display(
+            field.chain, field.k, field.epsilon, field.low, field.high, least
+        )
         return field
 
 

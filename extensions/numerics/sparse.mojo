@@ -14,8 +14,26 @@ The matrices are square, because the stiffness, mass and conductance
 matrices of an analysis are square.
 """
 
-from std.math import isfinite
+from core.ordinal import require_non_negative
+from math.finite import require_finite
 from extensions.numerics.vector import zeros
+
+
+def require_matrix_index(row: Int, col: Int, size: Int) raises:
+    """Refuse a row or a column outside a square matrix.
+
+    Nothing. The call returns when both indices name an entry.
+
+    Args:
+        row: The row index.
+        col: The column index.
+        size: How many rows and columns the matrix has.
+
+    Raises:
+        Error: If either index is negative or past the last entry.
+    """
+    if row < 0 or row >= size or col < 0 or col >= size:
+        raise Error("A matrix index is out of range")
 
 
 struct SparseBuilder(Movable):
@@ -35,8 +53,7 @@ struct SparseBuilder(Movable):
         Raises:
             Error: If the size is negative.
         """
-        if size < 0:
-            raise Error("A matrix size must be zero or more")
+        require_non_negative(size, "A matrix size must be zero or more")
         self.size = size
         self._rows = List[Int]()
         self._cols = List[Int]()
@@ -55,10 +72,8 @@ struct SparseBuilder(Movable):
         Raises:
             Error: If an index is out of range or the value is not finite.
         """
-        if row < 0 or row >= self.size or col < 0 or col >= self.size:
-            raise Error("A matrix index is out of range")
-        if not isfinite(value):
-            raise Error("A matrix entry must be a finite number")
+        require_matrix_index(row, col, self.size)
+        require_finite(Float64(value), "A matrix entry must be a finite number")
         if value == 0:
             return
         self._rows.append(row)
@@ -181,8 +196,7 @@ struct CsrMatrix(Copyable, Movable):
         Raises:
             Error: If an index is out of range.
         """
-        if row < 0 or row >= self.size or col < 0 or col >= self.size:
-            raise Error("A matrix index is out of range")
+        require_matrix_index(row, col, self.size)
         var lo = self.row_start[row]
         var hi = self.row_start[row + 1]
         while lo < hi:

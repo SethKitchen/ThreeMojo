@@ -44,6 +44,12 @@ shown or hidden, as three.js's `traverse` reaches them. Batched
 meshes, sprites and wide lines are not written.
 """
 
+from core.ordinal import index_in_count
+
+from std.math import isfinite
+
+from core.ordinal import ordinal_valid
+
 from core.assets import Assets
 from core.buffer_geometry import (
     COLOR,
@@ -52,16 +58,34 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
     GeometryGroup,
+    require_nonnegative_index,
+    require_vertex_index,
 )
 from core.deform import skin_carriers, skin_pose
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from math.vector3 import append_vector3
+from math.utils import mix_bilinear
 from core.scene import Scene
 from loaders.js_number import js_number_text
 from objects.line import LineMode, STRIP
-from std.math import isfinite
 from std.memory import bitcast
+
+
+def require_finite_written_number(value: Float32) raises:
+    """Refuse a number that cannot be written.
+
+    Nothing. The call returns when the number is finite.
+
+    Args:
+        value: The number.
+
+    Raises:
+        Error: If the number is not finite.
+    """
+    if not isfinite(Float64(value)):
+        raise Error("A number to write must be finite: " + String(value))
 
 
 def format_float32(value: Float32) raises -> String:
@@ -78,8 +102,7 @@ def format_float32(value: Float32) raises -> String:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite_written_number(value)
     var short = String(value)
     if Float32(Float64(short)) == value:
         return short
@@ -102,8 +125,7 @@ def format_js_float32(value: Float32) raises -> String:
     Raises:
         Error: If the number is not finite.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite_written_number(value)
     return js_number_text(Float64(value))
 
 
@@ -134,8 +156,7 @@ def push_f32(mut out: List[UInt8], value: Float32, little: Bool) raises:
         Error: If the number is not finite. Every loader here refuses
             one, so no file is written with one.
     """
-    if not isfinite(value):
-        raise Error("A number to write must be finite: " + String(value))
+    require_finite_written_number(value)
     push_word(out, Int(bitcast[DType.uint32](value)), 4, little)
 
 
@@ -199,10 +220,8 @@ def check_geometry(
     if triangles and len(geometry.index) % 3 != 0:
         raise Error("An exported index must hold whole triangles")
     for slot in range(len(geometry.index)):
-        if geometry.index[slot] < 0:
-            raise Error("An index entry cannot be negative")
-        if geometry.index[slot] >= count:
-            raise Error("An index entry points past the last vertex")
+        require_nonnegative_index(geometry.index[slot])
+        require_vertex_index(geometry.index[slot], count)
     if triangles and not geometry.is_indexed() and count % 3 != 0:
         raise Error(
             "A geometry without an index must hold whole triangles to be"
@@ -225,7 +244,7 @@ struct WorldKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is `WORLD_MESH`, `WORLD_LINE` or
         `WORLD_POINTS`."""
-        return self == WORLD_MESH or self == WORLD_LINE or self == WORLD_POINTS
+        return ordinal_valid(self.value, WORLD_POINTS.value)
 
 
 # Triangles: a `Mesh`, a `SkinnedMesh` or an `InstancedMesh`.
@@ -345,7 +364,7 @@ def _bucket(
 ) raises:
     """File one object under the node it rides, refusing a node the scene
     has not got."""
-    if node.value < 0 or node.value >= len(buckets):
+    if not index_in_count(node.value, len(buckets)):
         raise Error(what + " names a node that is not in the scene")
     buckets[node.value].append(which)
 
@@ -369,9 +388,7 @@ def _carry(
         if posed:
             point = carriers[vertex].transform_point(point)
         point = matrix.transform_point(point)
-        world.positions.append(point.x)
-        world.positions.append(point.y)
-        world.positions.append(point.z)
+        append_vector3(world.positions, point)
         world.triangles.append(vertex)
     if world.kind == WORLD_LINE:
         return
@@ -383,9 +400,7 @@ def _carry(
         for vertex in range(count):
             var direction = turn.transform_direction(normal.vector3(vertex))
             direction.normalize()
-            world.normals.append(direction.x)
-            world.normals.append(direction.y)
-            world.normals.append(direction.z)
+            append_vector3(world.normals, direction)
         world.with_normals = True
     if geometry.has_attribute(UV):
         world.uvs = geometry.attribute_view(UV).packed()
@@ -555,7 +570,5 @@ def resized_image(
                 var b = Float64(pixels[(y0 * width + x1) * 4 + channel])
                 var c = Float64(pixels[(y1 * width + x0) * 4 + channel])
                 var d = Float64(pixels[(y1 * width + x1) * 4 + channel])
-                var top = a + (b - a) * tx
-                var bottom = c + (d - c) * tx
-                out.append(UInt8(Int(top + (bottom - top) * ty + 0.5)))
+                out.append(UInt8(Int(mix_bilinear(a, b, c, d, tx, ty) + 0.5)))
     return out^

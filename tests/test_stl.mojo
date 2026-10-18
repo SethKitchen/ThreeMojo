@@ -12,6 +12,7 @@ and every way a file can be wrong is given to the parser and refused.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.binary import append_little_endian_u32
 from core.buffer_geometry import COLOR, NORMAL, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
@@ -51,8 +52,7 @@ def assert_point(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
 
 def put_u32(mut bytes: List[UInt8], value: Int):
     """Append a little-endian 32-bit word."""
-    for shift in range(4):
-        bytes.append(UInt8((value >> (shift * 8)) & 0xFF))
+    append_little_endian_u32(bytes, value)
 
 
 def put_f32(mut bytes: List[UInt8], value: Float32):
@@ -63,9 +63,7 @@ def put_f32(mut bytes: List[UInt8], value: Float32):
 def header(text: String) -> List[UInt8]:
     """Return an 80-byte header that starts with `text`, padded with
     spaces."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     while len(bytes) < 80:
         bytes.append(0x20)
     return bytes^
@@ -102,9 +100,7 @@ def one_face(text: String, packed: Int = 0) -> List[UInt8]:
 
 def ascii_bytes(text: String) -> List[UInt8]:
     """Return a text as the bytes of a file."""
-    var bytes = List[UInt8]()
-    for byte in text.as_bytes():
-        bytes.append(byte)
+    var bytes = List[UInt8](text.as_bytes())
     return bytes^
 
 

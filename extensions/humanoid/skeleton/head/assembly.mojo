@@ -18,9 +18,10 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.skeleton.place import place_root
 from extensions.humanoid.skeleton.arm.assembly import (
     UNSET_PAINT,
-    place_mesh,
+    place_mesh_node,
     resolved_paint,
 )
 from extensions.humanoid.skeleton.head.bones.dimensions import (
@@ -29,7 +30,11 @@ from extensions.humanoid.skeleton.head.bones.dimensions import (
 from extensions.humanoid.skeleton.head.bones.geometry import (
     head_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.head.contents import BOTH, HeadContents
+from extensions.humanoid.skeleton.head.contents import (
+    BOTH,
+    HeadContents,
+    require_head_contents,
+)
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
 from extensions.humanoid.skeleton.head.hair.dimensions import SCALP_HAIR
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
@@ -173,17 +178,14 @@ def add_head(
         Error: If the spec, a mesh, `contents`, the hair style or the
             scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Head contents must be a named layer set")
+    require_head_contents(contents)
     var dims = head_muscle_dimensions(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     var sides: List[BodySide] = [RIGHT, LEFT]
     if contents.includes_bones():
         var bones = named_head_bones()
         for index in range(len(bones)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -200,7 +202,7 @@ def add_head(
             if is_paired_head_ligament(parts[index]):
                 count = 2
             for s in range(count):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -216,7 +218,7 @@ def add_head(
             if is_paired_head_muscle(parts[index]):
                 count = 2
             for s in range(count):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -234,7 +236,7 @@ def add_head(
             if is_head_artery(parts[index]):
                 paint = artery
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -248,7 +250,7 @@ def add_head(
         var parts = named_head_lymph()
         for index in range(len(parts)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -265,7 +267,7 @@ def add_head(
             if is_paired_head_nerve(parts[index]):
                 count = 2
             for s in range(count):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -291,7 +293,7 @@ def add_head(
         # ridge: only the scalp's hair is a mesh. It is meshed nearly
         # as finely as the skin, fine enough for a close crop.
         var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-        place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,
@@ -324,7 +326,7 @@ def add_head(
             var iris = assets.textures.add(iris_albedo(64, spec.genome))
             eye = assets.materials.add(eye_physical(iris))
         for s in range(2):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,

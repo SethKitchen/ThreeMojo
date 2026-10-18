@@ -36,6 +36,7 @@ from lights.light_probe_grid import LightProbeGrid
 from materials.material import MaterialId
 from math.vector3 import Vector3
 from render.cube_texture import FACE_COUNT, CubeTexture
+from render.framebuffer import append_float_rgb
 from render.target import FLOAT_TARGET, RenderTarget
 from render.texture import BILINEAR, CLAMP, IGNORED, Texture, float_texture
 from renderers.renderer import Renderer
@@ -215,9 +216,7 @@ def scene_cube(
         var data = List[Float32](capacity=size * size * 4)
         for slot in range(size * size):  # pragma: no branch
             var seen = target.straight_at(slot)
-            data.append(seen.r)
-            data.append(seen.g)
-            data.append(seen.b)
+            append_float_rgb(data, seen)
             data.append(1)
         faces.append(
             float_texture(size, size, data^, CLAMP, BILINEAR, False, IGNORED)

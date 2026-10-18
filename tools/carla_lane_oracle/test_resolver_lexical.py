@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Bounded differential controls for resolver-only lexical acceleration.
 
-The reference body is frozen from candidate-v6's resolver_unshadowed, with only
-its function name changed. Its globals are rebound to the deployed checker so
-both versions use the same unchanged helpers and real filesystem operations.
+The historical reference is frozen from candidate-v6's resolver_unshadowed,
+with only its function name changed. The current unoptimized reference adds
+only PR760's reviewed consumed-coordinate suffix guard (9ed7e659). Both rebind
+globals to the deployed checker to share unchanged helpers and real filesystem
+operations. The historical reference still checks every unchanged case.
 All checks remain active under python -O; no repository-wide census is run.
 """
 from contextlib import ExitStack
@@ -72,8 +74,69 @@ def _baseline_resolver_unshadowed(root, paths):
         return False
 
 
+def _successor_resolver_unshadowed(root, paths):
+    """Refuse alternate qualified-module and namespace lookup surfaces.
+
+    Every reviewed import begins at a protected top-level namespace. Guard
+    those namespace names conservatively everywhere, including every compiled
+    entry directory, repository root and supplied include root. Imported-module
+    directories are not Mojo lookup roots. An unrelated leaf basename elsewhere
+    cannot shadow a qualified import and is not itself a namespace competitor.
+    Exact consumed module/prefix coordinates still reject case, alternate
+    suffix/package and symlink changes. Only three exact regular wiki files are
+    inert. Include roots receive structural checks only: maintained generation
+    origins and source/staged manifests bind instrumented coverage bytes.
+    """
+    root = Path(root)
+    if not root.is_dir() or not _root_unaliased(root):
+        return False
+    allowed = set(paths)
+    coordinates = {path.casefold() for path in allowed}
+    stems = {str(Path(p).with_suffix('')).casefold() for p in allowed}
+    canonical_prefixes = {str(parent) for p in allowed for parent in Path(p).parents if str(parent) != '.'}
+    prefixes = {prefix.casefold() for prefix in canonical_prefixes}
+    top = {Path(p).parts[0].casefold() for p in allowed} | {'std'}
+    inert = {'docs/wiki/Math.md', 'docs/wiki/Units.md', 'docs/wiki/Extensions.md'}
+    try:
+        for folder, directories, files in os.walk(root, followlinks=False):
+            relative_dir = _relative_path(Path(folder), root).as_posix()
+            directories[:] = [name for name in directories if name not in SKIP
+                              and (Path(relative_dir) / name).as_posix() != 'coverage/build']
+            for name in directories + files:
+                path = Path(folder) / name
+                relative = _relative_path(path, root).as_posix()
+                folded = relative.casefold()
+                stem = str(Path(relative).with_suffix('')).casefold()
+                # Namespace roots remain protected at every actual lookup root.
+                scoped_name = name.split('.')[0].casefold()
+                # PR760 deliberately refuses suffixes appended to consumed
+                # coordinates, including origin sidecars unless allowlisted.
+                coordinate_suffix = any(
+                    (relative[:-len(name)] + name[:index]).casefold() in coordinates
+                    for index, character in enumerate(name) if character == '.')
+                relevant = (coordinate_suffix or folded in stems or folded in prefixes or stem in stems
+                            or stem in prefixes or scoped_name in top
+                            or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
+                if not relevant:
+                    continue
+                if relative in inert and not path.is_symlink() and path.is_file():
+                    continue
+                if path.is_symlink():
+                    return False
+                if path.is_dir():
+                    if relative not in canonical_prefixes:
+                        return False
+                    continue
+                if relative not in allowed or not path.is_file():
+                    return False
+        return True
+    except OSError:
+        return False
+
+
 # Rebinding shares only the unchanged dependencies, never the tested resolver.
-BASELINE = types.FunctionType(_baseline_resolver_unshadowed.__code__, vars(cleanup))
+HISTORICAL = types.FunctionType(_baseline_resolver_unshadowed.__code__, vars(cleanup))
+BASELINE = types.FunctionType(_successor_resolver_unshadowed.__code__, vars(cleanup))
 ALLOWED = ('math/vector.mojo', 'units/value.mojo', 'extensions/carla/curve.mojo')
 PATH_PROBES = ('is_symlink', 'is_dir', 'is_file', 'stat', 'lstat')
 
@@ -168,8 +231,10 @@ class ResolverLexicalTests(unittest.TestCase):
                           for index, names in enumerate(batches))
         return outcome, events, lexical
 
-    def equivalent(self, expected=None, **kwargs):
+    def equivalent(self, expected=None, *, historical=True, **kwargs):
         reference = self.observe(BASELINE, **kwargs)
+        if historical:
+            self.assertEqual(reference[:2], self.observe(HISTORICAL, **kwargs)[:2])
         actual = self.observe(cleanup.resolver_unshadowed, **kwargs)
         self.assertEqual(actual[:2], reference[:2])
         if expected is not None:
@@ -229,6 +294,68 @@ class ResolverLexicalTests(unittest.TestCase):
         self.write('docs/wiki/Math.txt')
         self.equivalent(False)
 
+    def test_scoped_math_preserves_the_historical_wiki_guard(self):
+        # A sparse physical resolver control, not complete source admission.
+        # Source and include roots owe the same historical wiki exception even
+        # when the current source census scopes bare math lookup elsewhere.
+        lookup = {'math_entries': frozenset(('.', 'tests', 'examples'))}
+        inert = ('docs/wiki/Math.md', 'docs/wiki/Units.md',
+                 'docs/wiki/Extensions.md')
+        alternatives = ('docs/wiki/Math.txt', 'docs/wiki/math.md',
+                        'docs/wiki/MATH.md', 'docs/wiki/Math.md.mojopkg',
+                        'docs/wiki/Math.mojo', 'docs/wiki/Math.mojoc',
+                        'docs/wiki/Math.mojopkg', 'docs/wiki/Math',
+                        'docs/Wiki/Math.md', 'Docs/wiki/Math.md')
+        target = self.write('ordinary/target.txt')
+        for label in ('source', 'include'):
+            paths = ALLOWED + (tuple(path + '.cov-origin' for path in ALLOWED)
+                               if label == 'include' else ())
+            for index, relative in enumerate(inert + alternatives):
+                for kind in ('file', 'directory', 'symlink', 'dangling-symlink'):
+                    with self.subTest(root=label, relative=relative, kind=kind):
+                        root = self.fixture(label + '-' + str(index) + '-' + kind)
+                        path = root/relative
+                        path.parent.mkdir(parents=True)
+                        if kind == 'file':
+                            path.write_text('Inert documentation.\n')
+                        elif kind == 'directory':
+                            path.mkdir()
+                        else:
+                            path.symlink_to(target if kind == 'symlink'
+                                            else self.root/'missing-target')
+                        expected = kind == 'file' and relative in inert
+                        self.assertEqual(HISTORICAL(root, paths), expected)
+                        self.assertEqual(BASELINE(root, paths), expected)
+                        self.assertEqual(cleanup.resolver_unshadowed(root, paths), expected)
+                        self.assertEqual(cleanup.resolver_unshadowed(
+                            root, paths, **lookup), expected)
+
+    def test_scoped_wiki_guard_keeps_lookup_and_coordinate_protection(self):
+        lookup = {'math_entries': frozenset(('.', 'tests', 'examples'))}
+        target = self.write('ordinary/target.txt')
+        cases = (
+            ('ordinary/Math.txt', True), ('ordinary/Math.md', True),
+            ('math.mojo', False), ('tests/Math.txt', False),
+            ('examples/Math.md', False), ('math/vector.mojo', True),
+            ('math/vector.mojopkg', False),
+            ('math/vector.mojo.cov-origin', False),
+            ('math/vector/__init__.mojo', False),
+        )
+        for index, (relative, regular_allowed) in enumerate(cases):
+            for kind in ('file', 'symlink'):
+                with self.subTest(relative=relative, kind=kind):
+                    root = self.fixture('scoped-' + str(index) + '-' + kind)
+                    path = root/relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if kind == 'file':
+                        path.write_text('# resolver control\n')
+                    else:
+                        path.symlink_to(target)
+                    expected = regular_allowed and (kind == 'file'
+                               or relative.startswith('ordinary/'))
+                    self.assertEqual(cleanup.resolver_unshadowed(
+                        root, ALLOWED, **lookup), expected)
+
     def test_relevant_symlinks_and_root_aliases_are_refused(self):
         target = self.write('ordinary/target.txt')
         for index, (relative, destination, directory) in enumerate((
@@ -287,13 +414,52 @@ class ResolverLexicalTests(unittest.TestCase):
             with self.subTest(name=name):
                 root = self.fixture('name-' + str(index))
                 self.write('math/' + name, root)
-                self.equivalent(root=root)
+                self.equivalent(root=root, historical=name != 'vector.mojo.py')
         root = self.fixture('unicode-allowed')
         self.write('Straße/σχήμα.mojo', root)
         self.equivalent(True, root=root, paths=('Straße/σχήμα.mojo',))
         root = self.fixture('unicode-alias')
         self.write('STRASSE/σχήμα.mojo', root)
         self.equivalent(False, root=root, paths=('Straße/σχήμα.mojo',))
+
+    def test_consumed_coordinate_suffix_successor_preserves_exact_probes(self):
+        # This is an intentional security-contract successor, not a lexical
+        # optimization difference. Keep the old outcome visible and compare
+        # the complete new filesystem trace against the unoptimized reference.
+        for index, relative in enumerate((
+                'math/vector.mojo.py', 'math/vector.mojo.origin.json',
+                'math/VECTOR.MOJO.py', 'math/vector.mojo..py',
+                'units/value.mojo.origin', 'extensions/carla/curve.mojo.py')):
+            for kind in ('file', 'directory', 'symlink'):
+                with self.subTest(relative=relative, kind=kind):
+                    root = self.fixture('suffix-' + str(index) + '-' + kind)
+                    target = root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if kind == 'file':
+                        self.write(relative, root)
+                    elif kind == 'directory':
+                        target.mkdir()
+                    else:
+                        target.symlink_to(root / 'missing')
+                    self.assertEqual(self.observe(HISTORICAL, root=root)[0],
+                                     ('return', True))
+                    _, actual = self.equivalent(False, root=root, historical=False)
+                    probes = [event[0] for event in actual[1]
+                              if event[0] in ('Path.is_symlink', 'Path.is_dir', 'Path.is_file')
+                              and event[1][1] == str(target)]
+                    self.assertEqual(probes, ['Path.is_symlink'] if kind == 'symlink'
+                                     else ['Path.is_symlink', 'Path.is_dir'])
+
+    def test_coordinate_sidecar_requires_exact_allowlisting(self):
+        relative = 'math/vector.mojo.origin.json'
+        self.write(relative)
+        self.equivalent(True, paths=(*ALLOWED, relative))
+        self.equivalent(False, historical=False)
+        # Similar names at unrelated coordinates are still irrelevant.
+        root = self.fixture('unrelated-suffix')
+        self.write('ordinary/vector.mojo.origin.json', root)
+        self.write('math/vectors.mojo.origin.json', root)
+        self.equivalent(True, root=root)
 
     def test_root_dot_and_relative_root_forms(self):
         for root in ('.', Path('.'), Path('/'), os.path.relpath(self.root)):

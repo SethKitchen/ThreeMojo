@@ -26,6 +26,7 @@ the skin ends in a cut at the base of the neck.
 
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     field_gradient,
@@ -58,6 +59,7 @@ from extensions.humanoid.skeleton.torso.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.sculpt import Sculpt
 from extensions.humanoid.skeleton.torso.sweep import SweepField
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -164,9 +166,7 @@ struct TorsoSkinField(Copyable, DistanceField, Movable):
         for section in range(TORSO_SKIN_SECTIONS):  # pragma: no branch
             var y = bottom + spacing * Float32(section)
             var t_up = min(max((y - waist) / (ribs - waist), 0), 1)
-            covers.append(
-                self.belly + (self.chest - self.belly) * t_up + self.dermis
-            )
+            covers.append(mix_delta(self.belly, self.chest, t_up) + self.dermis)
         # Ten passes bridge the dips between the ribs, which skin and
         # fat span, so the chest reads smooth. Then eight passes round
         # off each section that stands proud, so the skin shows no
@@ -223,8 +223,7 @@ struct TorsoSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def torso_fat(sex: Sex, belly: Bool) -> Float32:

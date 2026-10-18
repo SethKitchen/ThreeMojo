@@ -40,8 +40,10 @@ here has no order of its own, so the bound's order is used.
 """
 
 from core.object3d import NodeId
-from core.scene import Scene
+from core.ordinal import require_index_in_count, require_non_negative
+from core.scene import Scene, require_skinned_mesh
 from math.euler import Euler
+from math.utils import clamp_unit
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import acos, sqrt
@@ -119,6 +121,21 @@ struct IkChain(Copyable, Movable):
         self.blend_factor = None
 
 
+def require_ik_blend(blend: Float32) raises:
+    """Refuse an IK blend outside zero through one.
+
+    Nothing. The call returns when the blend is inside that range.
+
+    Args:
+        blend: How far toward the solved pose the chain moves.
+
+    Raises:
+        Error: If the blend is outside zero through one.
+    """
+    if not (blend >= 0 and blend <= 1):
+        raise Error("An IK blend factor must be from zero to one")
+
+
 struct CCDIKSolver(Movable):
     """Solves IK chains on one skinned mesh's skeleton: three.js's
     `CCDIKSolver`."""
@@ -145,20 +162,19 @@ struct CCDIKSolver(Movable):
                 the skeleton does not have, a chain's iteration count is
                 negative, or its blend factor is not from zero to one.
         """
-        if mesh < 0 or mesh >= len(scene.skinned_meshes):
-            raise Error("No skinned mesh has that index")
+        require_skinned_mesh(mesh, len(scene.skinned_meshes))
         var count = scene.skinned_meshes[mesh].bone_count()
         for chain in iks:
             _check_bone(chain.target, count)
             _check_bone(chain.effector, count)
             for link in chain.links:
                 _check_bone(link.index, count)
-            if chain.iteration < 0:
-                raise Error("An IK chain cannot iterate a negative number")
+            require_non_negative(
+                chain.iteration, "An IK chain cannot iterate a negative number"
+            )
             if Bool(chain.blend_factor):
                 var blend = chain.blend_factor.value()
-                if not (blend >= 0 and blend <= 1):
-                    raise Error("An IK blend factor must be from zero to one")
+                require_ik_blend(blend)
         self.mesh = mesh
         self.iks = iks^
 
@@ -195,10 +211,10 @@ struct CCDIKSolver(Movable):
                 one, the mesh or a bone is no longer there, the scene is
                 stale, or a link's world matrix flattens an axis.
         """
-        if chain < 0 or chain >= len(self.iks):
-            raise Error("No IK chain has that index")
-        if not (blend >= 0 and blend <= 1):
-            raise Error("An IK blend factor must be from zero to one")
+        require_index_in_count(
+            chain, len(self.iks), "No IK chain has that index"
+        )
+        require_ik_blend(blend)
         if self.mesh >= len(scene.skinned_meshes):
             raise Error("The IK solver's skinned mesh is not there")
         ref ik = self.iks[chain]
@@ -232,9 +248,7 @@ struct CCDIKSolver(Movable):
                 to_target.apply_quaternion(facing)
                 to_target.normalize()
                 # Rounding can carry the dot of two unit vectors past one.
-                var cosine = max(
-                    Float32(-1), min(Float32(1), to_target.dot(to_effector))
-                )
+                var cosine = clamp_unit(to_target.dot(to_effector))
                 var angle = acos(cosine)
                 if angle < SMALLEST_TURN:
                     continue
@@ -262,8 +276,11 @@ struct CCDIKSolver(Movable):
 
 def _check_bone(bone: Int, count: Int) raises:
     """Refuse a bone index the skeleton does not have."""
-    if bone < 0 or bone >= count:
-        raise Error("An IK chain names a bone the skeleton does not have")
+    require_index_in_count(
+        bone,
+        count,
+        "An IK chain names a bone the skeleton does not have",
+    )
 
 
 def _turn(

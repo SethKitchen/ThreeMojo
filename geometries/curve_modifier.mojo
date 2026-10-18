@@ -45,8 +45,11 @@ texture does not have, so a curve past the last clamps to the last row.
 """
 
 from core.buffer_attribute import BufferAttribute
+from core.ordinal import require_index_in_count, require_non_negative
+from math.curve_checks import require_at_least_one
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.matrix4 import Matrix4
+from math.sine import fraction
 from math.space_curve import (
     Point3,
     SpaceCurve,
@@ -54,9 +57,9 @@ from math.space_curve import (
     length_of,
     spaced_points3,
 )
+from render.data_utils import to_half_float as half_bits
 from render.exr import half_to_float
-from std.math import floor, isnan
-from std.memory import bitcast
+from std.math import floor
 from units.si import Length, METER
 
 # Numbers a texel holds: red, green, blue and alpha.
@@ -69,17 +72,13 @@ comptime TEXTURE_HEIGHT = 4
 # How many runs measure the length a spine texture's points are spaced
 # by: three.js sets `arcLengthDivisions` to half the points.
 comptime SPINE_DIVISIONS = TEXTURE_WIDTH // 2
-# The largest half float, which three.js clamps to.
-comptime HALF_MAX = 65504.0
 
 
 def to_half_float(value: Float64) -> UInt16:
     """Return a number as the bits of a half float, three.js's
     `DataUtils.toHalfFloat`.
 
-    The number is clamped to the largest half and rounded to a float, and
-    the float's extra fraction bits are cut off, not rounded, as three.js's
-    tables do.
+    The conversion is `render.data_utils.to_half_float`.
 
     Args:
         value: The number.
@@ -87,31 +86,7 @@ def to_half_float(value: Float64) -> UInt16:
     Returns:
         The sixteen bits.
     """
-    # JavaScript's clamp lets a NaN through.
-    var clamped = value if isnan(value) else max(
-        -HALF_MAX, min(HALF_MAX, value)
-    )
-    var f = bitcast[DType.uint32](Float32(clamped))
-    var e = Int((f >> 23) & 0x1FF)
-    var exponent = (e & 0xFF) - 127
-    var sign = 0x8000 if e >= 0x100 else 0
-    var fraction = Int(f & 0x007FFFFF)
-    var base: Int
-    var shift: Int
-    if exponent < -27:
-        base = 0
-        shift = 24
-    elif exponent < -14:
-        base = 0x0400 >> (-exponent - 14)
-        shift = -exponent - 1
-    elif exponent <= 15:
-        base = (exponent + 15) << 10
-        shift = 13
-    else:
-        # Clamping leaves only a NaN out here, which keeps a fraction.
-        base = 0x7C00
-        shift = 13
-    return UInt16((base | sign) + (fraction >> shift))
+    return half_bits(value)
 
 
 def _half_row(x: Float32, y: Float32, z: Float32) -> SIMD[DType.uint16, 4]:
@@ -158,8 +133,9 @@ struct Flow(Movable):
         Raises:
             Error: If `curve_count` is less than one.
         """
-        if curve_count < 1:
-            raise Error("A flow needs room for one curve or more")
+        require_at_least_one(
+            curve_count, "A flow needs room for one curve or more"
+        )
         self.spine = List[UInt16](
             length=TEXTURE_WIDTH * TEXTURE_HEIGHT * curve_count * CHANNELS,
             fill=0,
@@ -189,8 +165,9 @@ struct Flow(Movable):
             Error: If there is no room for a curve of that index, or the
                 curve refuses a point.
         """
-        if index < 0 or index >= self.curve_count:
-            raise Error("A flow has no curve of that index")
+        require_index_in_count(
+            index, self.curve_count, "A flow has no curve of that index"
+        )
         var length = length_of(curve)
         self.spine_length = length
         self.curve_lengths[index] = length
@@ -237,10 +214,14 @@ struct Flow(Movable):
         Raises:
             Error: If the texel is not in the texture.
         """
-        if x < 0 or x >= TEXTURE_WIDTH:
-            raise Error("A spine texel must lie along the row")
-        if row < 0 or row >= TEXTURE_HEIGHT * self.curve_count:
-            raise Error("A spine texel must lie in a row of the texture")
+        require_index_in_count(
+            x, TEXTURE_WIDTH, "A spine texel must lie along the row"
+        )
+        require_index_in_count(
+            row,
+            TEXTURE_HEIGHT * self.curve_count,
+            "A spine texel must lie in a row of the texture",
+        )
         var at = self._at(x, row)
         return SIMD[DType.float32, 4](
             half_to_float(self.spine[at]),
@@ -289,7 +270,7 @@ struct Flow(Movable):
             portion = (world[0] + self.spine_offset.value) / spine_length
         var mt = portion * self.path_segment + self.path_offset
         mt = mt + instance_offset
-        mt = mt - floor(mt)
+        mt = fraction(mt)
         var row = Int(floor(mt)) + row_offset
         var spine_pos = self.sample(mt, row)
         var a = self.sample(mt, row + 1)
@@ -387,16 +368,20 @@ struct InstancedFlow(Movable):
             Error: If `count` is negative or `curve_count` is less than
                 one.
         """
-        if count < 0:
-            raise Error("An instanced flow cannot have a negative count")
+        require_non_negative(
+            count, "An instanced flow cannot have a negative count"
+        )
         self.flow = Flow(curve_count)
         self.offsets = List[Float32](length=count, fill=0)
         self.which_curve = List[Int](length=count, fill=0)
 
     def _check(self, index: Int) raises:
         """Refuse an instance that is not there."""
-        if index < 0 or index >= len(self.offsets):
-            raise Error("An instanced flow has no instance of that index")
+        require_index_in_count(
+            index,
+            len(self.offsets),
+            "An instanced flow has no instance of that index",
+        )
 
     def instance_matrix(self, index: Int) raises -> Matrix4:
         """Return the matrix three.js writes for an instance, its
@@ -447,8 +432,11 @@ struct InstancedFlow(Movable):
             Error: If there is no such instance or no such curve.
         """
         self._check(index)
-        if curve < 0 or curve >= self.flow.curve_count:
-            raise Error("An instanced flow has no curve of that index")
+        require_index_in_count(
+            curve,
+            self.flow.curve_count,
+            "An instanced flow has no curve of that index",
+        )
         self.which_curve[index] = curve
 
     def deform_instance(

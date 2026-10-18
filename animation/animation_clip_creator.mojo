@@ -44,10 +44,12 @@ from animation.keyframe_track import (
     node_target,
 )
 from core.object3d import NodeId
+from core.ordinal import require_positive
 from materials.material import MaterialId
+from math.finite import require_finite
 from math.utils import SeededRandom
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, append_float_rgb
 from std.math import ceil, isfinite
 from units.si import Duration, SECOND
 
@@ -127,8 +129,10 @@ def _key_count(duration: Duration) raises -> Int:
     counts before generating keys or advancing the random generator.
     """
     var seconds = duration.to(SECOND)
-    if not isfinite(seconds):
-        raise Error("An animation needs a finite, representable key count")
+    require_finite(
+        Float64(seconds),
+        "An animation needs a finite, representable key count",
+    )
     if seconds <= 0:
         return 0
     var limit = seconds * KEYS_A_SECOND
@@ -259,8 +263,7 @@ def create_material_color_animation(
     Raises:
         Error: If there is no color, or the duration is not above zero.
     """
-    if len(colors) == 0:
-        raise Error("A color animation needs at least one color")
+    require_positive(len(colors), "A color animation needs at least one color")
     var step = Float32(0)
     if len(colors) > 1:
         step = duration.to(SECOND) / Float32(len(colors) - 1)
@@ -268,9 +271,7 @@ def create_material_color_animation(
     var values = List[Float32]()
     for index in range(len(colors)):  # pragma: no branch
         times.append(Duration(Float32(index) * step, SECOND))
-        values.append(colors[index].r)
-        values.append(colors[index].g)
-        values.append(colors[index].b)
+        append_float_rgb(values, colors[index])
     return _clip(
         KeyframeTrack(
             material_target(material, MATERIAL_COLOR), times, values^

@@ -23,7 +23,9 @@ from extensions.animals.coat import (
     Paint,
     Palette,
     mix3,
+    channel_pair,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import (
@@ -36,18 +38,23 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y, cone_or_ball
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     aperture_tilt_along,
     draw_u32,
     imul32,
     is_limb,
+    is_upper_limb,
     is_front_limb,
     pick_weighted,
     stream_of,
     lid_distance,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import fbm3, vnoise3, centered_fbm, centered_value
 from extensions.animals.options import (
     ADULT,
     FEMALE,
@@ -62,7 +69,11 @@ from extensions.animals.species.hoofed import (
     HeadFrame,
     head_frame,
     hoofed_bones,
+    ClovenHoof,
+    HornPoint,
+    add_cloven_hoof,
     dewclaw_balls,
+    horn_parameter,
 )
 from extensions.animals.traits import Traits
 from extensions.sdf.vector import (
@@ -82,6 +93,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from render.tasks import TaskGroup
 from std.collections import Dict
 from std.math import asin, atan2, cos, exp, floor, log, pi, pow, sin, sqrt
@@ -202,10 +214,8 @@ def sheep_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var f0: List[Float64] = [0.05, 0.04, 0.06, 0.05, 0.004]
     var f1: List[Float64] = [0.12, 0.09, 0.1, 0.12, 0.015]
     var u = 0.5 + 0.5 * R.g()
-    var fleece = (
-        0.012
-        + 0.01 * R.next() if lamb else f0[variant]
-        + (f1[variant] - f0[variant]) * u
+    var fleece = 0.012 + 0.01 * R.next() if lamb else mix(
+        f0[variant], f1[variant], u
     )
     fleece = clamp(fleece, 0.0, 0.15)
     var staple = max(0.005, min(0.018, 0.25 * fleece + 0.004)) * (
@@ -428,15 +438,6 @@ def sheep_rig(t: Traits) raises -> Rig:
     return rig^
 
 
-@fieldwise_init
-struct HornPoint(ImplicitlyCopyable):
-    """One station of a horn's center line: where, how thick, how far."""
-
-    var p: V3
-    var r: Float64
-    var t: Float64
-
-
 def _horn_path(t: Traits, s: Float64) -> List[HornPoint]:
     # The ram's spiral: from the poll up and back, down behind the ear,
     # forward under it and up again beside the eye, drifting outward.
@@ -490,8 +491,7 @@ def _top_y(z: Float64, roman: Float64) -> Float64:
     return (
         0.046
         - 0.194 * z
-        + (0.004 + 0.011 * roman)
-        * sin(pi * max(0.0, min(1.0, (z + 0.02) / 0.21)))
+        + (0.004 + 0.011 * roman) * sin(pi * clamp((z + 0.02) / 0.21, 0.0, 1.0))
     )
 
 
@@ -1004,10 +1004,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.024 if ear == EAR_SMALL else 0.028
     )
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var ln = length(tip - base)
         var facing = _ear_facing(ear, up, s)
         var lat = normalize(cross(up, facing))
@@ -1085,19 +1082,11 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: fine-boned, with long cannons.
     var lk = 1.0 + 0.1 * heavy
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         var cf = rig.j("fcoffin" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
         _ = ell_y(
             m,
             "scapmuscle",
@@ -1183,20 +1172,14 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var fpaw = rig.bone("fpaw" + side)
         dewclaw_balls(m, fpaw, mc, s, -0.02, 0.0052)
         _ = m.cone("pastern", fpaw, mc, cf, 0.0148, 0.0158, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 0.97)
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         var chf = rig.j("hcoffin" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
         _ = ell_y(
             m,
             "thigh",
@@ -1299,7 +1282,6 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.01,
         )
-        var hpaw = rig.bone("hpaw" + side)
         dewclaw_balls(m, hpaw, mt, s, -0.02, 0.0052)
         _ = m.cone("pastern", hpaw, mt, chf, 0.0145, 0.0155, k=0.01)
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.93)
@@ -1530,7 +1512,7 @@ def _fleece(
             groups.append(False)
     # The legs: wool over the upper arm, the thigh and the gaskin.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var sh = rig.j("shoulder" + side)
         var e = rig.j("elbow" + side)
         var w = rig.j("wrist" + side)
@@ -1739,7 +1721,7 @@ def _locks(
             var jx = (R.next() - 0.5) * 0.05
             var jy = (R.next() - 0.5) * 0.05
             var jz = (R.next() - 0.5) * 0.05
-            p = pr.c + (pr.b - pr.c) * tt + V3(jx, jy, jz)
+            p = lerp(pr.c, pr.b, tt) + V3(jx, jy, jz)
         starts.append(p)
     # Each projection onto the fleece is independent: share them out.
     var projected = List[V3](length=tries, fill=V3(0.0, 0.0, 0.0))
@@ -1824,51 +1806,30 @@ def _locks(
 
 
 def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
-    # Two claws with a cleft between them, heel bulbs behind, flat on the
-    # ground.
-    var zc = (c.z + toe_j.z) * 0.5
-    for k in [1.0, -1.0]:  # pragma: no branch
-        var x = c.x + 0.0102 * k * w
-        var top = V3(x, c.y + 0.008, c.z - 0.004)
-        var toe = V3(x - 0.002 * k, 0.006, toe_j.z - 0.004)
-        var heel = V3(x, 0.008, c.z - 0.015)
-        _ = m.cone("hoof", bone, top, toe, 0.0112 * w, 0.0052 * w, k=0.006)
-        _ = m.cone(
-            "hoof",
-            bone,
-            heel,
-            V3(toe.x, 0.006, zc + 0.004),
-            0.0108 * w,
-            0.0088 * w,
-            k=0.008,
-        )
-        _ = m.sphere(
-            "heelbulb", bone, V3(x, 0.013, c.z - 0.019), 0.0102 * w, k=0.008
-        )
-    _ = m.cone(
-        "coronet",
+    add_cloven_hoof(
+        m,
         bone,
-        c + V3(0, 0.012, -0.01),
-        c + V3(0, 0.006, 0.008),
-        0.0165 * w,
-        0.0165 * w,
-        k=0.008,
-    )
-    _ = m.ell(
-        "cleft",
-        bone,
-        V3(c.x, 0.006, zc + 0.012),
-        V3(0.0022, 0.02, 0.028),
-        k=0.002,
-        carve=True,
-    )
-    _ = m.ell(
-        "sole",
-        bone,
-        V3(c.x, -0.1 + 0.001, zc),
-        V3(0.1, 0.1, 0.1),
-        k=0.002,
-        carve=True,
+        c,
+        toe_j,
+        w,
+        ClovenHoof(
+            spread=0.0102,
+            toe_inset=0.002,
+            toe_height=0.006,
+            toe_back=0.004,
+            wall_root=0.0112,
+            wall_tip=0.0052,
+            heel_back=0.015,
+            heel_root=0.0108,
+            heel_tip=0.0088,
+            heel_forward=0.004,
+            bulb_height=0.013,
+            bulb_back=0.019,
+            bulb_radius=0.0102,
+            coronet_radius=0.0165,
+            cleft_forward=0.012,
+            cleft_length=0.028,
+        ),
     )
 
 
@@ -2051,11 +2012,7 @@ def sheep_palette(t: Traits) raises -> Palette:
         var c = base.get(name)
         out.set(
             name,
-            V3(
-                c.x * (1.0 + 0.05 * k + l),
-                c.y * (1.0 + l),
-                c.z * (1.0 - 0.06 * k + l),
-            ),
+            shade_swatch(c, k, l, 0.05, 0.0, -0.06),
         )
     out.set("horn", srgb(Int(t.get("hornColor", 0.0))))
     out.set("hornDark", srgb(0x6E5A42))
@@ -2080,18 +2037,7 @@ def _wool_tag(tag: String) -> Bool:
 
 
 def _horn_t(t: Traits, p: V3) -> Float64:
-    var pth = _horn_path(t, 1.0 if p.x >= 0.0 else -1.0)
-    var best = 1e9
-    var bt = 0.0
-    for i in range(len(pth) - 1):
-        var a = pth[i].p
-        var ab = pth[i + 1].p - a
-        var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
-        var dd = length(p - (a + ab * u))
-        if dd < best:
-            best = dd
-            bt = pth[i].t + (pth[i + 1].t - pth[i].t) * u
-    return bt
+    return horn_parameter(_horn_path(t, 1.0 if p.x >= 0.0 else -1.0), p)
 
 
 def _face_flow(h: V3) -> V3:
@@ -2159,13 +2105,8 @@ def sheep_paint(
         region = 1
     var legness = 0.0
     if is_limb(bone):
-        var upper = (
-            bone.startswith("scapula")
-            or bone.startswith("humerus")
-            or bone.startswith("femur")
-        )
-        legness = smoothstep(0.5, 0.36, p.y) if upper else 1.0
-    var cv = fbm3(p * 6.0, 3) - 0.5
+        legness = smoothstep(0.5, 0.36, p.y) if is_upper_limb(bone) else 1.0
+    var cv = centered_fbm(p, 6.0, 3)
     var c: V3
     var surface = FUR
     # How woolly, and where on a lock: crest 1, crevice 0.
@@ -2186,14 +2127,14 @@ def sheep_paint(
             # No region is 3, so the body, the neck and the tail are left.
             var knee_y = 0.3 if is_front_limb(bone) else 0.26
             wool = 1.0 - legness * smoothstep(knee_y + 0.03, knee_y - 0.03, p.y)
-            crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
+            crest = 0.5 + (centered_fbm(p, 40.0, 2))
     if region == 2 and woolly:
         wool = 1.0
-        crest = 0.4 + 0.4 * (fbm3(p * 40.0, 2) - 0.5)
+        crest = 0.4 + 0.4 * (centered_fbm(p, 40.0, 2))
     # The face's edge: the wool starts behind the ears and the jaw.
     var edge = not black and (region == 1 or region == 2)
     if edge:
-        var rag = 0.006 * (vnoise3(p * 120.0) - 0.5)
+        var rag = 0.006 * (centered_value(p, 120.0))
         var y_jaw = -0.14 + 0.387 * (h.z + 0.03)
         var wl = max(
             smoothstep(-0.061, -0.071, h.z + rag),
@@ -2202,7 +2143,7 @@ def sheep_paint(
         # On the neck and the head `wool` is none or full, and `wl` is one at
         # most, so only bare skin takes the edge's wool.
         if wl > wool:
-            crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
+            crest = 0.5 + (centered_fbm(p, 40.0, 2))
             wool = wl
     if region <= 1 or region == 4:
         c = mix3(
@@ -2272,8 +2213,8 @@ def sheep_paint(
         var ef = eye_frame_of(e, HEAD_O, 1.0 if p.x >= 0.0 else -1.0)
         var eye_d = length(p - ef.c)
         c = mix3(c, pal.get("muzzle"), smoothstep(0.024, 0.012, eye_d) * 0.2)
-        var tn = vnoise3(p * 160.0) - 0.5
-        c = c * (1.0 + 0.16 * tn + 0.08 * (fbm3(p * 30.0, 2) - 0.5))
+        var tn = centered_value(p, 160.0)
+        c = c * (1.0 + 0.16 * tn + 0.08 * (centered_fbm(p, 30.0, 2)))
         # Streaks drawn out along the hair flow: short hair, not rubber.
         var flow = _face_flow(h)
         var al = dot(p, flow)
@@ -2362,7 +2303,7 @@ def sheep_paint(
             c = c * mix(1.0 + 0.6 * sky, 1.0, smoothstep(0.165, 0.185, h.z))
     # The fleece.
     if wool > 0.01:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         var wc = mix3(
             mix3(pal.get("crevice"), pal.get("clean"), 0.62),
             pal.get("clean"),
@@ -2382,22 +2323,14 @@ def sheep_paint(
         var low = smoothstep(0.34, 0.2, p.y) * (1.0 - legness * 0.5)
         var britch = smoothstep(-0.35, -0.5, p.z) * smoothstep(0.55, 0.35, p.y)
         wc = mix3(wc, pal.get("stain"), max(low, britch) * 0.3)
-        var sn = vnoise3(p * 45.0) - 0.5
-        wc = V3(
-            wc.x * (1.0 + 0.035 * cv + 0.05 * sn),
-            wc.y * (1.0 + 0.03 * cv + 0.05 * sn),
-            wc.z * (1.0 + 0.025 * cv + 0.045 * sn),
-        )
+        var sn = centered_value(p, 45.0)
+        wc = channel_pair(wc, cv, sn, 0.035, 0.03, 0.025, 0.05, 0.05, 0.045)
         # The crimp: a fine, tight curl over the staple tips.
-        var crimp = vnoise3(p * 520.0) - 0.5
+        var crimp = centered_value(p, 520.0)
         wc = wc * (1.0 + 0.12 * crimp)
         c = mix3(c, wc, wool)
     elif region <= 1:
-        var tn = vnoise3(p * 160.0) - 0.5
-        c = V3(
-            c.x * (1.0 + 0.08 * cv + 0.14 * tn),
-            c.y * (1.0 + 0.07 * cv + 0.14 * tn),
-            c.z * (1.0 + 0.06 * cv + 0.14 * tn),
-        )
+        var tn = centered_value(p, 160.0)
+        c = channel_pair(c, cv, tn, 0.08, 0.07, 0.06, 0.14, 0.14, 0.14)
     _ = lamb
     return Paint(c, surface)

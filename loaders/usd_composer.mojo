@@ -63,6 +63,9 @@ texture that reads `st2`, which the port has no set of coordinates for,
 and references that nest more than 64 deep.
 """
 
+from core.ordinal import ordinal_valid
+from core.search import first_match
+
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
@@ -72,8 +75,10 @@ from geometries.box import box
 from geometries.capsule import capsule
 from geometries.cylinder import cone, cylinder
 from geometries.sphere import sphere
+from loaders.file_path import path_name
 from loaders.gltf import decode_image
 from loaders.js_number import js_number_text
+from loaders.js_text import is_js_word
 from loaders.model_nodes import authored_color, decompose_onto
 from loaders.three_mf import js_key_order
 from loaders.usd_geometry import (
@@ -105,10 +110,11 @@ from math.matrix4 import (
     scaling,
     translation,
 )
-from math.quaternion import Quaternion
-from math.vector2 import Vector2
+from math.quaternion import Quaternion, quaternion_from_float64
+from math.vector3 import vector3_from_float64
+from math.vector2 import Vector2, vector2_from_float64
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, rgb_is_white
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
@@ -127,6 +133,7 @@ from render.texture import (
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import nan, pi
 from std.pathlib import Path
+from units.measure import angle_degrees, angle_radians, length_meters
 from units.si import DEGREE, METER, RADIAN, Angle, Length
 
 # How deep references may nest before the composer refuses them.
@@ -148,7 +155,7 @@ struct UsdAssetKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for `USD_IMAGE` and `USD_LAYER`."""
-        return self == USD_IMAGE or self == USD_LAYER
+        return ordinal_valid(self.value, USD_LAYER.value)
 
 
 # A PNG, a JPEG or an AVIF file.
@@ -214,10 +221,7 @@ struct UsdAssets(Movable):
         Returns:
             Its place, or -1.
         """
-        for k in range(len(self.names)):
-            if self.names[k] == name:
-                return k
-        return -1
+        return first_match(self.names, name)
 
     def order(self) -> List[Int]:
         """Return the files' places in JavaScript's key order.
@@ -534,18 +538,6 @@ struct _Subset(Copyable, Movable):
         self.material = material
 
 
-def _last_part(path: String) -> String:
-    """Return `path.split( '/' ).pop()`.
-
-    Args:
-        path: The path.
-
-    Returns:
-        The text after the last `/`.
-    """
-    return String(path[byte = path.rfind("/") + 1 :])
-
-
 def _split(path: String) -> List[String]:
     """Return `path.split( '/' )`.
 
@@ -588,23 +580,6 @@ def _no_angles(text: String) -> String:
     return text.replace("<", "").replace(">", "")
 
 
-def _is_word(byte: UInt8) -> Bool:
-    """Return True for a byte that `\\w` matches.
-
-    Args:
-        byte: The byte.
-
-    Returns:
-        Whether it is a letter, a digit or `_`.
-    """
-    return (
-        (byte >= 0x30 and byte <= 0x39)
-        or (byte >= 0x41 and byte <= 0x5A)
-        or (byte >= 0x61 and byte <= 0x7A)
-        or byte == 0x5F
-    )
-
-
 def variant_path_match(path: String) -> Optional[Tuple[String, String]]:
     """Match three.js's `VARIANT_PATH_REGEX`,
     `^(.+?)\\/\\{(\\w+)=(\\w+)\\}\\/(.+)$`: a path inside a variant.
@@ -623,13 +598,13 @@ def variant_path_match(path: String) -> Optional[Tuple[String, String]]:
             continue
         var at = i + 2
         var first = at
-        while at < n and _is_word(bytes[at]):
+        while at < n and is_js_word(bytes[at]):
             at += 1
         if at == first or at >= n or bytes[at] != 0x3D:
             continue
         at += 1
         var second = at
-        while at < n and _is_word(bytes[at]):
+        while at < n and is_js_word(bytes[at]):
             at += 1
         var closes = at + 1 < n and bytes[at] == 0x7D and bytes[at + 1] == 0x2F
         if at == second or not closes or at + 2 >= n:
@@ -1152,7 +1127,7 @@ struct _Composer(Movable):
         var group = composer.compose(assets, built)
         if prim == "":
             return group
-        var name = _last_part(prim)
+        var name = path_name(prim)
         for child in built.objects[group].children.copy():
             if built.objects[child].node.name == name:
                 var wrapper = _Object("")
@@ -1221,7 +1196,7 @@ struct _Composer(Movable):
                 built.objects[group].node.set_scale(scale, scale, scale)
         if self.string_field("/", "upAxis") == "Z":
             built.objects[group].node.set_euler(
-                Angle(Float32(-pi / 2), RADIAN),
+                angle_radians(-pi / 2),
                 Angle(0.0, RADIAN),
                 Angle(0.0, RADIAN),
             )
@@ -1253,7 +1228,7 @@ struct _Composer(Movable):
         # The index holds only prims.
         for path in entries:
             var spec = self.layer.spec(path)
-            var name = _last_part(path)
+            var name = path_name(path)
             var type_name = self.type_name(spec)
             if self.build_references(
                 parent, path, spec, type_name, assets, built
@@ -1332,13 +1307,13 @@ struct _Composer(Movable):
         if len(groups) == 1:
             var mesh = self.single_mesh(groups[0], built)
             if mesh >= 0 and (type_name == "Xform" or type_name == ""):
-                built.objects[mesh].node.name = _last_part(path)
+                built.objects[mesh].node.name = path_name(path)
                 self.apply_transform(mesh, spec, attrs, built)
                 self.apply_material_binding(mesh, path, assets, built)
                 built.attach(parent, mesh)
                 self.build_hierarchy(mesh, path, assets, built)
                 return True
-        var object = built.add(_Object(_last_part(path)))
+        var object = built.add(_Object(path_name(path)))
         self.apply_transform(object, spec, attrs, built)
         for group in groups:  # pragma: no branch
             for child in built.objects[group].children.copy():
@@ -1419,7 +1394,8 @@ struct _Composer(Movable):
             if not self.layer.truthy(value):
                 return None
             var t = self.vector(value, op)
-            return translation(Float32(t[0]), Float32(t[1]), Float32(t[2]))
+            var offset = vector3_from_float64(t[0], t[1], t[2])
+            return translation(offset.x, offset.y, offset.z)
         if op == "xformOp:scale":
             if not self.layer.truthy(value):
                 return None
@@ -1434,16 +1410,17 @@ struct _Composer(Movable):
                 var n = self.layer.to_number(value)
                 s = [n, n, n]
             scale = s.copy()
-            return scaling(Float32(s[0]), Float32(s[1]), Float32(s[2]))
+            var wide = vector3_from_float64(s[0], s[1], s[2])
+            return scaling(wide.x, wide.y, wide.z)
         if op == "xformOp:rotateXYZ":
             if not self.layer.truthy(value):
                 return None
             var r = self.vector(value, op)
             return rotation_from_euler(
                 Euler(
-                    Angle(Float32(r[0]), DEGREE),
-                    Angle(Float32(r[1]), DEGREE),
-                    Angle(Float32(r[2]), DEGREE),
+                    angle_degrees(r[0]),
+                    angle_degrees(r[1]),
+                    angle_degrees(r[2]),
                     ZYX,
                 )
             )
@@ -1454,7 +1431,7 @@ struct _Composer(Movable):
         ):
             if not self.layer.defined(value):
                 return None
-            var angle = Angle(Float32(self.layer.to_number(value)), DEGREE)
+            var angle = angle_degrees(self.layer.to_number(value))
             if op == "xformOp:rotateX":
                 return rotation_x(angle)
             if op == "xformOp:rotateY":
@@ -1475,11 +1452,11 @@ struct _Composer(Movable):
         Returns:
             The quaternion, as given.
         """
-        return Quaternion(
-            Float32(self.layer.element_number(id, 0)),
-            Float32(self.layer.element_number(id, 1)),
-            Float32(self.layer.element_number(id, 2)),
-            Float32(self.layer.element_number(id, 3)),
+        return quaternion_from_float64(
+            self.layer.element_number(id, 0),
+            self.layer.element_number(id, 1),
+            self.layer.element_number(id, 2),
+            self.layer.element_number(id, 3),
         )
 
     def apply_transform(
@@ -1521,7 +1498,8 @@ struct _Composer(Movable):
             if Bool(scale):
                 var s = scale.value().copy()
                 if s[0] < 0 and s[1] < 0 and s[2] < 0:
-                    node.set_scale(Float32(s[0]), Float32(s[1]), Float32(s[2]))
+                    var wide = vector3_from_float64(s[0], s[1], s[2])
+                    node.set_scale(wide.x, wide.y, wide.z)
                     var q = node.quaternion
                     node.quaternion = Quaternion(q.x, -q.y, q.z, -q.w)
             return
@@ -1529,15 +1507,17 @@ struct _Composer(Movable):
         var translate = self.data("xformOp:translate", spec, attrs)
         if self.layer.truthy(translate):
             var t = self.vector(translate, "xformOp:translate")
-            node.set_position(Float32(t[0]), Float32(t[1]), Float32(t[2]))
+            var place = vector3_from_float64(t[0], t[1], t[2])
+            node.set_position(place.x, place.y, place.z)
         var scale = self.data("xformOp:scale", spec, attrs)
         if self.layer.truthy(scale):
             if self.layer.is_array(scale):
-                node.set_scale(
-                    Float32(self.layer.element_number(scale, 0)),
-                    Float32(self.layer.element_number(scale, 1)),
-                    Float32(self.layer.element_number(scale, 2)),
+                var wide = vector3_from_float64(
+                    self.layer.element_number(scale, 0),
+                    self.layer.element_number(scale, 1),
+                    self.layer.element_number(scale, 2),
                 )
+                node.set_scale(wide.x, wide.y, wide.z)
             else:
                 var n = Float32(self.layer.to_number(scale))
                 node.set_scale(n, n, n)
@@ -1545,9 +1525,9 @@ struct _Composer(Movable):
         if self.layer.truthy(rotate):
             var r = self.vector(rotate, "xformOp:rotateXYZ")
             node.set_euler(
-                Angle(Float32(r[0]), DEGREE),
-                Angle(Float32(r[1]), DEGREE),
-                Angle(Float32(r[2]), DEGREE),
+                angle_degrees(r[0]),
+                angle_degrees(r[1]),
+                angle_degrees(r[2]),
             )
         var orient = self.data("xformOp:orient", spec, attrs)
         if self.layer.truthy(orient) and self.layer.length(orient) == 4:
@@ -2099,8 +2079,8 @@ struct _Composer(Movable):
                 var v = s.value().copy()
                 var x = v[0] if len(v) > 0 else nan[DType.float64]()
                 var y = v[1] if len(v) > 1 else nan[DType.float64]()
-                built.materials[material].normal_scale = Vector2(
-                    Float32(x), Float32(y)
+                built.materials[material].normal_scale = vector2_from_float64(
+                    x, y
                 )
         var roughness = self.connected_texture(
             shader, "inputs:roughness", LINEAR, assets, built
@@ -2355,7 +2335,7 @@ struct _Composer(Movable):
         if asset < 0:
             asset = assets.find(clean)
         if asset < 0:
-            var base = _last_part(clean)
+            var base = path_name(clean)
             for k in assets.order():
                 var name = assets.names[k]
                 # three.js also asks `endsWith( '/' + baseName )`, which
@@ -2452,22 +2432,22 @@ struct _Composer(Movable):
         """
         var scale = attrs.get("inputs:scale")
         if self.layer.is_array(scale) and self.layer.length(scale) >= 2:
-            image.repeat = Vector2(
-                Float32(self.layer.element_number(scale, 0)),
-                Float32(self.layer.element_number(scale, 1)),
+            image.repeat = vector2_from_float64(
+                self.layer.element_number(scale, 0),
+                self.layer.element_number(scale, 1),
             )
         var translation = attrs.get("inputs:translation")
         if (
             self.layer.is_array(translation)
             and self.layer.length(translation) >= 2
         ):
-            image.offset = Vector2(
-                Float32(self.layer.element_number(translation, 0)),
-                Float32(self.layer.element_number(translation, 1)),
+            image.offset = vector2_from_float64(
+                self.layer.element_number(translation, 0),
+                self.layer.element_number(translation, 1),
             )
         var rotation = attrs.get("inputs:rotation")
         if self.layer.is_number(rotation):
-            image.rotation = Angle(Float32(self.layer.number(rotation)), DEGREE)
+            image.rotation = angle_degrees(self.layer.number(rotation))
 
     def build_mesh(
         mut self, path: String, spec: Int, assets: UsdAssets, mut built: _Built
@@ -2489,7 +2469,7 @@ struct _Composer(Movable):
         var attrs = self.attributes(path)
         var subsets = self.subsets(path)
         var arrays = self.mesh_arrays(attrs)
-        var object = _Object(_last_part(path))
+        var object = _Object(path_name(path))
         object.is_mesh = True
         if len(subsets) > 0:
             var faces = List[List[Float64]]()
@@ -2515,7 +2495,7 @@ struct _Composer(Movable):
         var tint = attrs.get("primvars:displayColor")
         if self.layer.truthy(tint) and self.layer.length(tint) >= 3:
             for material in object.materials:  # pragma: no branch
-                var white = _is_white(built.materials[material].color)
+                var white = rgb_is_white(built.materials[material].color)
                 if white and built.materials[material].map == NO_TEXTURE:
                     var color = self.color(tint, "displayColor")
                     if Bool(color):
@@ -2589,52 +2569,40 @@ struct _Composer(Movable):
         var attrs = self.attributes(path)
         var geometry: BufferGeometry
         if type_name == "Cube":
-            var edge = Length(Float32(self.size(attrs, "size", 2)), METER)
+            var edge = length_meters(self.size(attrs, "size", 2))
             geometry = box(edge, edge, edge)
         elif type_name == "Sphere":
             geometry = sphere(
-                Length(Float32(self.size(attrs, "radius", 1)), METER), 32, 16
+                length_meters(self.size(attrs, "radius", 1)), 32, 16
             )
         elif type_name == "Cylinder":
-            var height = Length(Float32(self.size(attrs, "height", 2)), METER)
-            var radius = Length(Float32(self.size(attrs, "radius", 1)), METER)
+            var height = length_meters(self.size(attrs, "height", 2))
+            var radius = length_meters(self.size(attrs, "radius", 1))
             geometry = cylinder(radius, radius, height, 32)
         elif type_name == "Cone":
-            var height = Length(Float32(self.size(attrs, "height", 2)), METER)
-            var radius = Length(Float32(self.size(attrs, "radius", 1)), METER)
+            var height = length_meters(self.size(attrs, "height", 2))
+            var radius = length_meters(self.size(attrs, "radius", 1))
             geometry = cone(radius, height, 32)
         else:
-            var height = Length(Float32(self.size(attrs, "height", 1)), METER)
-            var radius = Length(Float32(self.size(attrs, "radius", 0.5)), METER)
+            var height = length_meters(self.size(attrs, "height", 1))
+            var radius = length_meters(self.size(attrs, "radius", 0.5))
             geometry = capsule(radius, height, 16, 32)
         var axis = attrs.get("axis")
         var name = String("Z")
         if self.layer.truthy(axis):
             name = self.layer.text(axis) if self.layer.is_string(axis) else ""
         if name == "X":
-            geometry.rotate_z(Angle(Float32(-pi / 2), RADIAN))
+            geometry.rotate_z(angle_radians(-pi / 2))
         elif name == "Z":
-            geometry.rotate_x(Angle(Float32(pi / 2), RADIAN))
+            geometry.rotate_x(angle_radians(pi / 2))
         built.geometries.append(geometry^)
-        var object = _Object(_last_part(path))
+        var object = _Object(path_name(path))
         object.is_mesh = True
         object.geometry = len(built.geometries) - 1
         object.materials.append(self.build_material(path, spec, assets, built))
         var at = built.add(object^)
         self.apply_transform(at, spec, attrs, built)
         return at
-
-
-def _is_white(color: Color) -> Bool:
-    """Return three.js's `color.r === 1 && color.g === 1 && color.b === 1`.
-
-    Args:
-        color: The color.
-
-    Returns:
-        Whether it is white.
-    """
-    return color.r == 255 and color.g == 255 and color.b == 255
 
 
 def _is_primitive(type_name: String) -> Bool:

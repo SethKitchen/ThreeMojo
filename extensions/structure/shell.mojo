@@ -27,7 +27,8 @@ local y axis is -∂w/∂x. These are right-handed rotations, the same as the
 frame element's.
 """
 
-from std.math import isfinite
+from math.norm import squared_length2
+from math.finite import require_finite, require_positive_finite
 from extensions.building.material import BuildingMaterial
 from extensions.numerics.dense import DenseMatrix
 from extensions.structure.frame import LocalAxes
@@ -166,12 +167,14 @@ struct ShellElement(Copyable, Movable):
         """
         material.check()
         var t = thickness.to(METER)
-        if not (t > 0 and isfinite(t)):
-            raise Error("A shell thickness must be positive and finite")
+        require_positive_finite(
+            t, "A shell thickness must be positive and finite"
+        )
         var values = [a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z]
         for i in range(len(values)):  # pragma: no branch
-            if not isfinite(values[i]):
-                raise Error("A shell's corners must be finite")
+            require_finite(
+                Float64(values[i]), "A shell's corners must be finite"
+            )
         var ab = b - a
         var ac = c - a
         var normal = ab.cross(ac)
@@ -235,7 +238,7 @@ struct ShellElement(Copyable, Movable):
         for k in range(3):  # pragma: no branch
             var xij = self.x[ii[k]] - self.x[jj[k]]
             var yij = self.y[ii[k]] - self.y[jj[k]]
-            var l2 = xij * xij + yij * yij
+            var l2 = squared_length2[DType.float64](xij, yij)
             out.append(-xij / l2)
             out.append(0.75 * xij * yij / l2)
             out.append((0.25 * xij * xij - 0.5 * yij * yij) / l2)

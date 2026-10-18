@@ -20,7 +20,7 @@ wall's bottom or top edge meets the floor faces at the same vertices.
 Coordinates are z up: a plan point (x, y) lies at height z.
 """
 
-from std.math import isfinite
+from math.finite import require_finite
 from extensions.topology.arrangement import (
     Arrangement,
     Point2,
@@ -91,7 +91,7 @@ def _points_on(
     for i in range(len(overlay.points)):  # pragma: no branch
         var p = overlay.points[i]
         var t = (p - a).dot(d) / length_squared
-        var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+        var foot = a + d * t
         var offset = p - foot
         var near_end = (
             t * t * length_squared <= tolerance * tolerance
@@ -141,8 +141,7 @@ def build_storeys(
     var z = List[Float64](capacity=len(levels))
     for i in range(len(levels)):  # pragma: no branch
         var value = levels[i].to(METER)
-        if not isfinite(value):
-            raise Error("A level must be finite")
+        require_finite(Float64(value), "A level must be finite")
         if i > 0 and not (value > z[i - 1] + tol):
             raise Error("Levels must increase by more than the tolerance")
         z.append(value)

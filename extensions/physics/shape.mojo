@@ -27,13 +27,26 @@ inside. That is the method of Blow and Binstock, "How to find the inertia
 tensor (or other mass properties) of a 3D solid body represented by a
 triangle mesh" (2004).
 """
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
 
 from math.convex_hull import ConvexHull
+from math.cross import cross_vectors, wide_cross, wide_dot, widen_vector
+from math.finite import (
+    finite_float32,
+    require_finite,
+    require_positive_finite,
+    require_non_negative_finite,
+)
 from math.matrix3 import Matrix3
 from math.matrix_determinant import _determinant3_f32
 from math.triangle import Triangle
-from math.vector3 import Vector3
-from std.math import atan2, isfinite, sqrt
+from math.vector3 import Vector3, vector3_from_float64
+from std.math import atan2, sqrt
 from units.si import Length, METER
 
 # Two hull faces are one face when their normals and offsets agree this
@@ -53,7 +66,7 @@ struct ShapeKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is 0 to 4.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 comptime SPHERE = ShapeKind(0)
@@ -91,8 +104,9 @@ struct PhysicsMaterial(ImplicitlyCopyable):
             Error: If the friction is negative or not finite, or the
                 restitution is outside zero to one.
         """
-        if not (isfinite(self.friction) and self.friction >= 0):
-            raise Error("A friction must be zero or more and finite")
+        require_non_negative_finite(
+            Float64(self.friction), "A friction must be zero or more and finite"
+        )
         if not (self.restitution >= 0 and self.restitution <= 1):
             raise Error("A restitution must be from zero to one")
 
@@ -126,9 +140,7 @@ def cross(a: Vector3, b: Vector3) -> Vector3:
     Returns:
         The product a x b.
     """
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
+    return cross_vectors(a, b)
 
 
 def unit_or(v: Vector3, fallback: Vector3) -> Vector3:
@@ -163,43 +175,24 @@ def any_perpendicular(n: Vector3) -> Vector3:
 
 # Widen before subtracting coordinates or multiplying lengths. All products
 # through degree five of finite Float32 coordinates fit in Float64.
-def _wide(v: Vector3) -> SIMD[DType.float64, 4]:
-    return SIMD[DType.float64, 4](Float64(v.x), Float64(v.y), Float64(v.z), 0)
-
-
-def _wide_cross(
-    a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
-) -> SIMD[DType.float64, 4]:
-    return SIMD[DType.float64, 4](
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-        0,
-    )
-
-
-def _wide_dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
 def _finite_vector(v: Vector3) raises:
     for i in range(3):  # pragma: no branch
-        if not isfinite(component(v, i)):
-            raise Error("A mass center or shape position must be finite")
+        require_finite(
+            Float64(component(v, i)),
+            "A mass center or shape position must be finite",
+        )
 
 
 def _narrow_finite(value: Float64) raises -> Float32:
-    var out = Float32(value)
-    if not isfinite(out):
-        raise Error("A mass property must fit in Float32")
-    return out
+    return finite_float32(value, "A mass property must fit in Float32")
 
 
 def _inertia_determinant(inertia: Matrix3) raises -> Float64:
     # Sylvester's criterion on the stored values, without a tolerance.
     for i in range(9):  # pragma: no branch
-        if not isfinite(inertia.elements[i]):
-            raise Error("An inertia tensor must be finite")
+        require_finite(
+            Float64(inertia.elements[i]), "An inertia tensor must be finite"
+        )
     for i in range(3):  # pragma: no branch
         for j in range(i + 1, 3):
             if inertia.elements[3 * i + j] != inertia.elements[3 * j + i]:
@@ -288,25 +281,23 @@ struct Polyhedron(Copyable, Movable):
             corners: The corner indices, counter-clockwise from outside.
                 There must be three at least, not all on one line.
         """
-        var a = _wide(self.vertices[corners[0]])
-        var b = _wide(self.vertices[corners[1]])
+        var a = widen_vector(self.vertices[corners[0]])
+        var b = widen_vector(self.vertices[corners[1]])
         var wide_normal = SIMD[DType.float64, 4](0)
         # `corners[1]` above: there are two at least, and a face has three.
         for i in range(2, len(corners)):  # pragma: no branch
-            wide_normal += _wide_cross(
-                b - a, _wide(self.vertices[corners[i]]) - a
+            wide_normal += wide_cross(
+                b - a, widen_vector(self.vertices[corners[i]]) - a
             )
-        var length = sqrt(_wide_dot(wide_normal, wide_normal))
+        var length = sqrt(wide_dot(wide_normal, wide_normal))
         var normal = Vector3(0, 0, 1)
         if length > 0:
             wide_normal /= length
-            normal = Vector3(
-                Float32(wide_normal[0]),
-                Float32(wide_normal[1]),
-                Float32(wide_normal[2]),
+            normal = vector3_from_float64(
+                wide_normal[0], wide_normal[1], wide_normal[2]
             )
         self.normals.append(normal)
-        self.offsets.append(Float32(_wide_dot(_wide(normal), a)))
+        self.offsets.append(Float32(wide_dot(widen_vector(normal), a)))
         # `corners[0]` above: the list is not empty.
         for i in range(len(corners)):  # pragma: no branch
             self.face_corners.append(corners[i])
@@ -348,9 +339,9 @@ struct Polyhedron(Copyable, Movable):
         """
         var sum = SIMD[DType.float64, 4](0)
         for v in self.vertices:
-            sum += _wide(v)
+            sum += widen_vector(v)
         sum /= Float64(len(self.vertices))
-        return Vector3(Float32(sum[0]), Float32(sum[1]), Float32(sum[2]))
+        return vector3_from_float64(sum[0], sum[1], sum[2])
 
     def support(self, direction: Vector3) -> Float32:
         """Return how far the solid reaches along a direction.
@@ -471,15 +462,19 @@ def _ordered(
     var middle = SIMD[DType.float64, 4](0)
     # A face has three corners at least.
     for m in members:  # pragma: no branch
-        middle += _wide(vertices[m])
+        middle += widen_vector(vertices[m])
     middle /= Float64(len(members))
     var u = any_perpendicular(normal)
     var w = cross(normal, u)
     var angles = List[Float32]()
     for m in members:  # pragma: no branch
-        var r = _wide(vertices[m]) - middle
+        var r = widen_vector(vertices[m]) - middle
         angles.append(
-            Float32(atan2(_wide_dot(r, _wide(w)), _wide_dot(r, _wide(u))))
+            Float32(
+                atan2(
+                    wide_dot(r, widen_vector(w)), wide_dot(r, widen_vector(u))
+                )
+            )
         )
     var out = members.copy()
     # Insertion sort by angle: a face has few corners.
@@ -511,12 +506,21 @@ struct MassProperties(ImplicitlyCopyable):
         self.inertia = inertia
 
 
-def _diagonal(x: Float32, y: Float32, z: Float32) -> Matrix3:
-    var m = Matrix3()
-    m.elements[0] = x
-    m.elements[4] = y
-    m.elements[8] = z
-    return m
+def require_capsule_half(half_height: Float64) raises:
+    """Refuse a capsule half height that is negative or not finite.
+
+    Nothing. The call returns when the half height is finite and zero
+    or more.
+
+    Args:
+        half_height: Half the length of the segment between the spheres.
+
+    Raises:
+        Error: If the half height is negative or not finite.
+    """
+    require_non_negative_finite(
+        Float64(half_height), "A capsule's half height must be zero or more"
+    )
 
 
 struct Shape(Copyable, Movable):
@@ -601,8 +605,7 @@ struct Shape(Copyable, Movable):
                 half height is negative or not finite.
         """
         _check_size(radius.value)
-        if not (isfinite(half_height.value) and half_height.value >= 0):
-            raise Error("A capsule's half height must be zero or more")
+        require_capsule_half(Float64(half_height.value))
         var out = Shape(CAPSULE)
         out.radius = radius.value
         out.half_height = half_height.value
@@ -640,8 +643,7 @@ struct Shape(Copyable, Movable):
         Raises:
             Error: If there are no triangles.
         """
-        if len(triangles) == 0:
-            raise Error("A mesh needs at least one triangle")
+        require_positive(len(triangles), "A mesh needs at least one triangle")
         var out = Shape(MESH)
         out.triangles = triangles^
         return out^
@@ -661,14 +663,13 @@ struct Shape(Copyable, Movable):
                 symmetric positive-definite Float32 tensor.
         """
         _check_size(mass)
-        if not self.kind.is_valid():
-            raise Error("Shape kind is not valid")
+        require_valid(self.kind.is_valid(), "Shape kind is not valid")
         var props = MassProperties(Vector3(0, 0, 0), Matrix3())
         if self.kind == SPHERE:
             _check_size(self.radius)
             var r = Float64(self.radius)
             var i = _narrow_finite(0.4 * Float64(mass) * r * r)
-            props.inertia = _diagonal(i, i, i)
+            props.inertia = Matrix3.diagonal(i, i, i)
         elif self.kind == CAPSULE:
             props.inertia = self._capsule(mass)
         elif self.kind == MESH:
@@ -680,8 +681,7 @@ struct Shape(Copyable, Movable):
 
     def _capsule(self, mass: Float32) raises -> Matrix3:
         _check_size(self.radius)
-        if not (isfinite(self.half_height) and self.half_height >= 0):
-            raise Error("A capsule's half height must be zero or more")
+        require_capsule_half(Float64(self.half_height))
         var r = Float64(self.radius)
         var h = 2 * Float64(self.half_height)
         # Cancel the common pi*r*r. Neither volume nor a small mass
@@ -694,12 +694,13 @@ struct Shape(Copyable, Movable):
             0.4 * r * r + h * h * 0.25 + 0.375 * h * r
         )
         var across32 = _narrow_finite(across)
-        return _diagonal(across32, across32, _narrow_finite(axial))
+        return Matrix3.diagonal(across32, across32, _narrow_finite(axial))
 
 
 def _check_size(value: Float32) raises:
-    if not (isfinite(value) and value > 0):
-        raise Error("A shape dimension or mass must be positive and finite")
+    require_positive_finite(
+        Float64(value), "A shape dimension or mass must be positive and finite"
+    )
 
 
 def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
@@ -715,7 +716,7 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
     var origin = SIMD[DType.float64, 4](0)
     for v in poly.vertices:  # pragma: no branch
         _finite_vector(v)
-        origin += _wide(v)
+        origin += widen_vector(v)
     origin /= Float64(len(poly.vertices))
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
@@ -724,19 +725,24 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
             raise Error("A polyhedron face needs three valid corners")
         for k in range(first, end):  # pragma: no branch
             var index = poly.face_corners[k]
-            if index < 0 or index >= len(poly.vertices):
-                raise Error("A polyhedron corner index is invalid")
+            require_index_in_count(
+                index,
+                len(poly.vertices),
+                "A polyhedron corner index is invalid",
+            )
     var volume = Float64(0)
     var moment = SIMD[DType.float64, 4](0)
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
-        var a = _wide(poly.vertices[poly.face_corners[first]]) - origin
+        var a = widen_vector(poly.vertices[poly.face_corners[first]]) - origin
         for k in range(
             first + 1, poly.face_start[f + 1] - 1
         ):  # pragma: no branch
-            var b = _wide(poly.vertices[poly.face_corners[k]]) - origin
-            var d = _wide(poly.vertices[poly.face_corners[k + 1]]) - origin
-            var det = _wide_dot(a, _wide_cross(b, d))
+            var b = widen_vector(poly.vertices[poly.face_corners[k]]) - origin
+            var d = (
+                widen_vector(poly.vertices[poly.face_corners[k + 1]]) - origin
+            )
+            var det = wide_dot(a, wide_cross(b, d))
             volume += det / 6
             moment += (a + b + d) * (det / 24)
     if not volume > 0:
@@ -745,13 +751,15 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
     var covariance = List[Float64](length=9, fill=0)
     for f in range(poly.face_count()):  # pragma: no branch
         var first = poly.face_start[f]
-        var a = _wide(poly.vertices[poly.face_corners[first]]) - center
+        var a = widen_vector(poly.vertices[poly.face_corners[first]]) - center
         for k in range(
             first + 1, poly.face_start[f + 1] - 1
         ):  # pragma: no branch
-            var b = _wide(poly.vertices[poly.face_corners[k]]) - center
-            var d = _wide(poly.vertices[poly.face_corners[k + 1]]) - center
-            var det = _wide_dot(a, _wide_cross(b, d))
+            var b = widen_vector(poly.vertices[poly.face_corners[k]]) - center
+            var d = (
+                widen_vector(poly.vertices[poly.face_corners[k + 1]]) - center
+            )
+            var det = wide_dot(a, wide_cross(b, d))
             var total = a + b + d
             for i in range(3):  # pragma: no branch
                 for j in range(i, 3):  # pragma: no branch
@@ -766,7 +774,7 @@ def _polyhedron_mass(poly: Polyhedron, mass: Float32) raises -> MassProperties:
                         / 120
                     )
     var density = Float64(mass) / volume
-    var inertia = _diagonal(
+    var inertia = Matrix3.diagonal(
         _narrow_finite(density * (covariance[4] + covariance[8])),
         _narrow_finite(density * (covariance[0] + covariance[8])),
         _narrow_finite(density * (covariance[0] + covariance[4])),

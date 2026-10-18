@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
 from math.scaled_products import (
     _grow_products,
     _Scaled,
@@ -51,7 +52,7 @@ from std.math import isfinite
 
 from math.triangle_normal import _difference_product_wide
 
-from math.norm import _ordinary_squared, normalized3
+from math.norm import _ordinary_squared, normalized3, squared_length3
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -346,7 +347,7 @@ def _project(
         var exact = normalized3(scaled[0], scaled[1], scaled[2])
         var direct = normalized3(nx, ny, nz)
         if (
-            not _ordinary_squared(nx * nx + ny * ny + nz * nz)
+            not _ordinary_squared(squared_length3[DType.float64](nx, ny, nz))
             or abs(direct[0] - exact[0]) > 1e-14
             or abs(direct[1] - exact[1]) > 1e-14
             or abs(direct[2] - exact[2]) > 1e-14
@@ -461,7 +462,7 @@ def triangulate_ngon_with_holes(
     var all = outer.copy()
     for hole in holes:
         flat_holes.append(_flat_2d(hole, points, basis[0], basis[1]))
-        all.extend(hole.copy())
+        all.extend(Span(hole))
     var out = List[Float64]()
     var flat = _flat_2d(outer, points, basis[0], basis[1])
     for index in triangulate_shape(flat, flat_holes):
@@ -783,9 +784,7 @@ def compute_vertex_normals(
         var y = Float64(normals[v * 3 + 1])
         var z = Float64(normals[v * 3 + 2])
         if not _ordinary_squared(
-            Float32(x) * Float32(x)
-            + Float32(y) * Float32(y)
-            + Float32(z) * Float32(z)
+            squared_length3[DType.float32](Float32(x), Float32(y), Float32(z))
         ):
             var scaled = _common_scale[DType.float64, 3](
                 [
@@ -795,14 +794,14 @@ def compute_vertex_normals(
                 ]
             )
             var unit = normalized3(scaled[0], scaled[1], scaled[2])
-            x = Float64(Float32(unit[0]))
-            y = Float64(Float32(unit[1]))
-            z = Float64(Float32(unit[2]))
-        var length = sqrt(x * x + y * y + z * z)
+            x = stored_float32(unit[0])
+            y = stored_float32(unit[1])
+            z = stored_float32(unit[2])
+        var length = sqrt(squared_length3[DType.float64](x, y, z))
         if length > 0:
-            x = Float64(Float32(x / length))
-            y = Float64(Float32(y / length))
-            z = Float64(Float32(z / length))
+            x = stored_float32(x / length)
+            y = stored_float32(y / length)
+            z = stored_float32(z / length)
         out.append(x)
         out.append(y)
         out.append(z)
@@ -869,6 +868,21 @@ def _coordinates(
     return uvs.values.copy()
 
 
+def require_corner_indices(present: Bool) raises:
+    """Refuse faces that have no corner indices.
+
+    Nothing. The call returns when the indices are present.
+
+    Args:
+        present: Whether the mesh carries corner indices.
+
+    Raises:
+        Error: If the indices are absent.
+    """
+    if not present:
+        raise Error("USD: faces with no corner indices")
+
+
 def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
     """Build a mesh's geometry, three.js's `_buildGeometry`.
 
@@ -892,8 +906,7 @@ def build_usd_geometry(mesh: UsdMeshArrays) raises -> BufferGeometry:
         indices = UsdArray(mesh.indices.values.copy())
     var pattern: Optional[List[Float64]] = None
     if mesh.counts.filled():
-        if not mesh.indices.present:
-            raise Error("USD: faces with no corner indices")
+        require_corner_indices(mesh.indices.present)
         var cut = triangulate_with_pattern(
             mesh.indices.values, mesh.counts.values, points, hole_map
         )
@@ -1056,8 +1069,7 @@ def build_usd_geometry_with_subsets(
             geometry.add_group(
                 start * 3, (len(order) - start) * 3, MaterialIndex(current)
             )
-    if not mesh.indices.present:
-        raise Error("USD: faces with no corner indices")
+    require_corner_indices(mesh.indices.present)
     var cut = triangulate_with_pattern(
         mesh.indices.values, counts, points, hole_map
     )

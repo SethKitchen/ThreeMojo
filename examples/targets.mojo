@@ -12,7 +12,13 @@ and a normal attachment. The top band is that light through ACES, so a
 bright lamp keeps its color. The bottom band is the view-space normal.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import NodeId, Object3D
@@ -33,10 +39,7 @@ from render.target import (
     TargetOutput,
 )
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, tone_map
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/targets.png"
 comptime WIDTH = 240
@@ -97,13 +100,9 @@ def show(light: FloatImage, normals: FloatImage) raises -> Framebuffer:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HALF, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HALF, Color(16, 18, 26))
     var assets = Assets()
     var ball = assets.geometries.add(sphere(Length(0.85, METER), 36, 24))
     var paint = assets.materials.add(Material(Color(180, 186, 196)))
@@ -122,13 +121,15 @@ def main() raises:
     outputs.append(OUTPUT_NORMAL)
     var held = RenderTarget(WIDTH, HALF, Color(0, 0, 0), FLOAT_TARGET, outputs^)
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HALF),
-        Length(0.1, METER),
-        Length(20.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HALF,
+        Vector3(0.15, 0.2, 2.6),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.15, 0.2, 2.6), Vector3(0, 0, 0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
@@ -142,12 +143,4 @@ def main() raises:
         var normals = held.attachment(1)
         frames.append(show(light^, normals^))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

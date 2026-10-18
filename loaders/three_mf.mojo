@@ -66,14 +66,21 @@ mesh nor components, where three.js reads `undefined` or recurses without
 end.
 """
 
+from std.math import isfinite
+
+from core.ordinal import index_in_count
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, UV, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
+from loaders.bytes import hex_digit_value
 from loaders.gltf import decode_image
 from loaders.js_number import js_parse_float
+from loaders.js_text import split_fields
 from loaders.model_nodes import decompose_onto
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry, unzip
@@ -81,7 +88,7 @@ from materials.material import PHONG, STANDARD, Material, MaterialId
 from math.matrix4 import Matrix4
 from objects.mesh import Mesh
 from render.css_color import parse_style
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, append_float_rgb
 from render.srgb import SRGB, linear_to_srgb
 from render.texture import (
     BILINEAR,
@@ -95,7 +102,8 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import isfinite, isnan
+from core.ordinal import require_non_negative
+from std.math import isnan
 from std.pathlib import Path
 from units.si import CENTIMETER, FOOT, INCH, METER, MILLIMETER, Length
 
@@ -211,8 +219,8 @@ def three_mf_transform(text: String) raises -> Matrix4:
         Error: If there are not twelve finite numbers.
     """
     var numbers = List[Float32]()
-    for piece in text.split():
-        numbers.append(_finite(String(piece), "a transform"))
+    for piece in split_fields(text):
+        numbers.append(_finite(piece, "a transform"))
     if len(numbers) != 12:
         raise Error("3MF: a transform must have twelve numbers: " + text)
     var matrix = Matrix4()
@@ -316,7 +324,7 @@ def _index(text: String, count: Int, what: String) raises -> Int:
         value = Int(text)
     except:
         raise Error("3MF: " + what + " index is not a whole number: " + text)
-    if value < 0 or value >= count:
+    if not index_in_count(value, count):
         raise Error(
             "3MF: "
             + what
@@ -330,7 +338,7 @@ def _index(text: String, count: Int, what: String) raises -> Int:
 
 def _kept_metadata(name: String) -> Bool:
     """Return True for the eight metadata names three.js keeps."""
-    for kept in [
+    var kept: List[String] = [
         "Title",
         "Designer",
         "Description",
@@ -339,10 +347,8 @@ def _kept_metadata(name: String) -> Bool:
         "Rating",
         "CreationDate",
         "ModificationDate",
-    ]:  # pragma: no branch
-        if name == kept:
-            return True
-    return False
+    ]
+    return first_match(kept, name) >= 0
 
 
 def _local(name: String) -> String:
@@ -920,9 +926,7 @@ struct _Loader(Movable):
                 if text == "":
                     text = first
                 var color = colors[_index(text, len(colors), "color")]
-                values.append(color.r)
-                values.append(color.g)
-                values.append(color.b)
+                append_float_rgb(values, color)
         var geometry = BufferGeometry()
         geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
         geometry.set_attribute(String(COLOR), BufferAttribute(values^, 3))
@@ -950,7 +954,7 @@ struct _Loader(Movable):
         var index = List[Int]()
         # A group holds a triangle or more: the loop always runs.
         for triangle in triangles:  # pragma: no branch
-            index.extend(triangle.v.copy())
+            index.extend(Span(triangle.v))
         var geometry = BufferGeometry()
         geometry.set_attribute(
             String(POSITION), BufferAttribute(vertices.copy(), 3)
@@ -1115,14 +1119,8 @@ def _hex_byte(display: String) raises -> Int:
     """
     var value = 0
     for byte in display.as_bytes()[7:9]:  # pragma: no branch
-        var digit: Int
-        if byte >= 48 and byte <= 57:
-            digit = Int(byte) - 48
-        elif byte >= 97 and byte <= 102:
-            digit = Int(byte) - 87
-        elif byte >= 65 and byte <= 70:
-            digit = Int(byte) - 55
-        else:
+        var digit = hex_digit_value(Int(byte))
+        if digit < 0:
             raise Error("3MF: a color's alpha is not hex: " + display)
         value = value * 16 + digit
     return value
@@ -1206,10 +1204,12 @@ def parse_3mf(
             models.append(index)
         elif role == 4:
             textures[loader.entries[index].name] = index
-    if rels < 0:
-        raise Error("3MF: the archive has no relationship file `_rels/.rels`")
-    if root_model < 0:
-        raise Error("3MF: the archive has no root model in `3D/`")
+    require_non_negative(
+        rels, "3MF: the archive has no relationship file `_rels/.rels`"
+    )
+    require_non_negative(
+        root_model, "3MF: the archive has no root model in `3D/`"
+    )
     models.append(root_model)
     var targets = loader.relationship_targets(rels)
     if model_rels >= 0:
@@ -1232,8 +1232,9 @@ def parse_3mf(
             for part in range(len(loader.parts)):  # pragma: no branch
                 if loader.parts[part].name == name:
                     start = part
-    if start < 0:
-        raise Error("3MF: `_rels/.rels` names no model part the archive has")
+    require_non_negative(
+        start, "3MF: `_rels/.rels` names no model part the archive has"
+    )
     loader.model.unit = loader.parts[start].unit
     loader.metadata(start)
     loader.model.first_mesh = len(scene.meshes)

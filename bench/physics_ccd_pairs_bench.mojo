@@ -28,6 +28,7 @@ from extensions.physics.body import DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD
 from extensions.physics.shape import Shape, PhysicsMaterial
 from extensions.physics.world import CollisionEvent, PhysicsWorld, _StepState
+from math.norm import squared_length3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -173,7 +174,8 @@ def _overlap(world: PhysicsWorld, first: Int, count: Int) -> Float64:
             var dz = Float64(p.z) - Float64(q.z)
             deepest = max(
                 deepest,
-                2 * Float64(_RADIUS) - sqrt(dx * dx + dy * dy + dz * dz),
+                2 * Float64(_RADIUS)
+                - sqrt(squared_length3[DType.float64](dx, dy, dz)),
             )
     return deepest
 

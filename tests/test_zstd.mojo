@@ -19,6 +19,7 @@ tables, 32512 sequences in one block, a zero-length RLE block and an
 eight-byte content size. libzstd decodes both files to the same bytes.
 """
 
+from core.binary import append_little_endian, copy_bytes
 from render.zstd import xxh64, zstd_decompress
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises
@@ -32,8 +33,7 @@ def fixture(name: String) raises -> List[UInt8]:
 def le(value: Int, count: Int) -> List[UInt8]:
     """Return `value` as `count` little-endian bytes."""
     var out = List[UInt8]()
-    for index in range(count):
-        out.append(UInt8((value >> (index * 8)) & 0xFF))
+    append_little_endian(out, value, count)
     return out^
 
 
@@ -41,7 +41,7 @@ def block(kind: Int, content: List[UInt8], size: Int = -1) -> List[UInt8]:
     """Return a last block of `kind`: its header, then `content`."""
     var stated = size if size >= 0 else len(content)
     var out = le(1 | (kind << 1) | (stated << 3), 3)
-    out.extend(content.copy())
+    out.extend(Span(content))
     return out^
 
 
@@ -52,7 +52,7 @@ def frame(body: List[UInt8], descriptor: Int = 0) -> List[UInt8]:
     out.append(UInt8(descriptor))
     if (descriptor >> 5) & 1 == 0:
         out.append(0)
-    out.extend(body.copy())
+    out.extend(Span(body))
     return out^
 
 
@@ -64,7 +64,7 @@ def compressed(section: List[UInt8]) -> List[UInt8]:
 def cat(a: List[UInt8], b: List[UInt8]) -> List[UInt8]:
     """Return `a` followed by `b`."""
     var out = a.copy()
-    out.extend(b.copy())
+    out.extend(Span(b))
     return out^
 
 
@@ -98,7 +98,7 @@ def test_a_malformed_stream_is_refused() raises:
         _ = zstd_decompress([1, 2, 3, 4])
     var reference = fixture("reference.zst")
     with assert_raises(contains="cut short"):
-        _ = zstd_decompress(List[UInt8](reference[:6]))
+        _ = zstd_decompress(copy_bytes(reference, 0, 6))
     with assert_raises(contains="cut short"):
         _ = zstd_decompress([0x50, 0x2A, 0x4D, 0x18, 5, 0, 0, 0])
     with assert_raises(contains="more than was expected"):

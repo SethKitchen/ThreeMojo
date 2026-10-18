@@ -37,8 +37,8 @@ from extensions.humanoid.skeleton.arm.bones.mass import (
     arm_bone_mass,
     arm_bone_mass_from_dimensions,
     arm_bone_occupancy,
-    fill_at,
 )
+from extensions.humanoid.skeleton.shell_sample import fill_at
 from extensions.humanoid.skeleton.arm.contents import (
     ALL,
     BONES,

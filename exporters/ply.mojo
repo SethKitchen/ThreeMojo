@@ -57,6 +57,7 @@ from loaders.ply import (
 )
 from render.srgb import linear_to_srgb
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 
 def color_byte(value: Float32) -> Int:
@@ -149,8 +150,7 @@ def export_ply(
             a mesh is not whole triangles, or anything
             `exporters.common.world_meshes` raises.
     """
-    if not format.is_valid():
-        raise Error("PLY: a format that is none of the three")
+    require_valid(format.is_valid(), "PLY: a format that is none of the three")
     var meshes = world_meshes(
         scene, assets, WorldOptions(points=True, whole_triangles=False)
     )

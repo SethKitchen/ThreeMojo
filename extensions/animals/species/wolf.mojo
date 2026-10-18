@@ -24,6 +24,7 @@ from extensions.animals.coat import (
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -33,10 +34,15 @@ from extensions.sdf.sculpt import (
     tube,
 )
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     add_orbit_lid_and_socket,
     eye_frame_of,
     head_local,
+    reference_to_head_local,
     is_limb,
 )
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -723,10 +729,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: erect and triangular, set wide, with a cupped front.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(V3(0.32 * s, 0.05, 1))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
@@ -790,19 +793,10 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS: long and lean, with big feet and elbows tucked in.
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var scap = rig.bone("scapula" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
@@ -885,15 +879,9 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             0.011,
         )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "thigh",
@@ -1364,11 +1352,7 @@ def wolf_palette(t: Traits) raises -> Palette:
             c = mix3(c, pale.get(name), 0.35 * tone)
         elif tone < 0.0 and not keep_pale:
             c = mix3(c, black.get(name), -0.25 * tone)
-        c = V3(
-            c.x * (1.0 + 0.1 * warm + light),
-            c.y * (1.0 + 0.02 * warm + light),
-            c.z * (1.0 - 0.1 * warm + light),
-        )
+        c = shade_swatch(c, warm, light, 0.1, 0.02, -0.1)
         var masked = (
             name == "cheek"
             or name == "throat"
@@ -1384,11 +1368,9 @@ def wolf_palette(t: Traits) raises -> Palette:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    var x = (p.x - HEAD_O.x) / t.get("headW") / HS
-    var y = (p.y - HEAD_O.y) / HS
-    var z = (p.z - HEAD_O.z) / HS
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    return reference_to_head_local(
+        HEAD_O, HS, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def wolf_paint(

@@ -56,11 +56,15 @@ Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
+from core.ordinal import ordinal_valid
 
 from cameras.camera import Camera
 from controls.input import (
     InputEvent,
     POINTER_DOWN,
+    require_named,
+    require_view_size,
+    require_input,
     POINTER_MOVE,
     POINTER_UP,
     PRIMARY,
@@ -81,10 +85,11 @@ from math.euler import Euler, XYZ
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
 from math.ray import Ray
+from math.utils import clamp, js_round
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, radians_between
 from render.framebuffer import Color, FloatColor
-from std.math import acos, atan2, cos, floor, inf, pi, sin, sqrt
+from std.math import acos, atan2, cos, inf, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 # An axis this close to the line of sight is hidden, and a plane this close
@@ -119,7 +124,7 @@ struct TransformMode(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a mode.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # three.js: `'translate'`.
@@ -166,7 +171,7 @@ struct TransformAxis(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a handle.
         """
-        return self.value >= 0 and self.value <= 9
+        return ordinal_valid(self.value, 9)
 
     def name(self) raises -> String:
         """Return three.js's name for this handle.
@@ -178,8 +183,7 @@ struct TransformAxis(Equatable, ImplicitlyCopyable, Writable):
         Raises:
             Error: If the handle is invalid.
         """
-        if not self.is_valid():
-            raise Error("Invalid transform axis: ", self.value)
+        require_named(self.is_valid(), "transform axis", self.value)
         var names: List[String] = [
             "",
             "X",
@@ -236,7 +240,7 @@ struct TransformEventKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 4
+        return ordinal_valid(self.value, 4)
 
 
 # `axis` changed. three.js: `axis-changed`.
@@ -466,12 +470,11 @@ struct TransformControls(Copyable, Movable):
                 is not a handle of the mode, the size is not positive, or a
                 snap is set and not positive.
         """
-        if not self.mode.is_valid():
-            raise Error("Invalid transform mode: ", self.mode.value)
-        if not self.space.is_valid():
-            raise Error("Invalid transform space: ", self.space.value)
-        if not self.axis.is_valid():
-            raise Error("Invalid transform axis: ", self.axis.value)
+        require_named(self.mode.is_valid(), "transform mode", self.mode.value)
+        require_named(
+            self.space.is_valid(), "transform space", self.space.value
+        )
+        require_named(self.axis.is_valid(), "transform axis", self.axis.value)
         if self.axis != NO_HANDLE and not _has_handle(self.mode, self.axis):
             raise Error("The mode has no handle ", self.axis.name())
         if not (self.size > 0):
@@ -515,12 +518,7 @@ struct TransformControls(Copyable, Movable):
                 not in the scene, or the camera or the scene cannot be
                 read.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         self.check()
         var events = List[TransformEvent]()
         if not self.enabled:
@@ -532,8 +530,7 @@ struct TransformControls(Copyable, Movable):
             return events^
         if not Bool(self.node):
             return events^
-        if width <= 0 or height <= 0:
-            raise Error("A view must have a positive width and height")
+        require_view_size(width, height)
         scene.update()
         var frame = TransformFrame(camera, scene, self.node.value())
         self.raycaster.set_from_camera(
@@ -928,8 +925,7 @@ struct TransformControls(Copyable, Movable):
         if local:
             turn = self._quaternion_start
         node.position = (
-            _divided(turn.rotate(offset), frame.parent.scale)
-            + self._position_start
+            turn.rotate(offset) / frame.parent.scale + self._position_start
         )
         if Bool(self.translation_snap):
             var step = self.translation_snap.value().to(METER)
@@ -1032,7 +1028,7 @@ struct TransformControls(Copyable, Movable):
                 angle = offset.dot(across) * speed
         if self.axis == HANDLE_E or in_plane:
             axis = eye
-            angle = _angle_between(self._point_end, self._point_start)
+            angle = radians_between(self._point_end, self._point_start)
             var start = self._point_start
             var end = self._point_end
             start.normalize()
@@ -1043,7 +1039,7 @@ struct TransformControls(Copyable, Movable):
         self._rotation_axis = axis
         if Bool(self.rotation_snap):
             var step = self.rotation_snap.value().to(RADIAN)
-            angle = _js_round(angle / step) * step
+            angle = js_round(angle / step) * step
         var turned: Quaternion
         if local:
             turned = self._quaternion_start
@@ -1196,13 +1192,13 @@ struct TransformControls(Copyable, Movable):
         var own = _handle_color(handle)
         # three.js's `setColors` recolors the red, green and blue
         # materials, and the yellow of the eye's ring with the active one.
-        if _same(own, RED):
+        if own == RED:
             own = self.x_color
-        elif _same(own, GREEN):
+        elif own == GREEN:
             own = self.y_color
-        elif _same(own, BLUE):
+        elif own == BLUE:
             own = self.z_color
-        elif _same(own, YELLOW):
+        elif own == YELLOW:
             own = self.active_color
         return FloatColor(srgb=self.active_color) if active else FloatColor(
             srgb=own
@@ -1224,15 +1220,10 @@ comptime ACTIVE_COLOR = YELLOW
 comptime AXIS_FACING = Float32(0.9)
 
 
-def _same(a: Color, b: Color) -> Bool:
-    """Return whether two colors are one: every channel equal."""
-    return a.r == b.r and a.g == b.g and a.b == b.b and a.a == b.a
-
-
 def _within(value: Float32, low: Length, high: Length) -> Float32:
     """Return a coordinate kept between two limits, three.js's
     `Math.max( min, Math.min( max, value ) )`."""
-    return max(low.to(METER), min(high.to(METER), value))
+    return clamp(value, low.to(METER), high.to(METER))
 
 
 def _long_line(
@@ -1418,32 +1409,6 @@ def _masked(offset: Vector3, axis: TransformAxis) raises -> Vector3:
     )
 
 
-def _divided(value: Vector3, by: Vector3) -> Vector3:
-    """Return `value` divided by `by`, part by part.
-
-    Args:
-        value: The dividend.
-        by: The divisor.
-
-    Returns:
-        The quotient.
-    """
-    return Vector3(value.x / by.x, value.y / by.y, value.z / by.z)
-
-
-def _js_round(value: Float32) -> Float32:
-    """Return the nearest whole number, halves up, as JavaScript's
-    `Math.round` rounds.
-
-    Args:
-        value: The number.
-
-    Returns:
-        The whole number.
-    """
-    return floor(value + 0.5)
-
-
 def _snapped(
     value: Vector3, step: Float32, axis: TransformAxis
 ) raises -> Vector3:
@@ -1462,9 +1427,9 @@ def _snapped(
         Error: If the handle is invalid.
     """
     return Vector3(
-        _js_round(value.x / step) * step if axis.has("X") else value.x,
-        _js_round(value.y / step) * step if axis.has("Y") else value.y,
-        _js_round(value.z / step) * step if axis.has("Z") else value.z,
+        js_round(value.x / step) * step if axis.has("X") else value.x,
+        js_round(value.y / step) * step if axis.has("Y") else value.y,
+        js_round(value.z / step) * step if axis.has("Z") else value.z,
     )
 
 
@@ -1479,7 +1444,7 @@ def _scale_step(value: Float32, step: Float32) -> Float32:
     Returns:
         The rounded scale, or `step` where it rounds to zero.
     """
-    var rounded = _js_round(value / step) * step
+    var rounded = js_round(value / step) * step
     return rounded if rounded != 0 else step
 
 
@@ -1494,19 +1459,6 @@ def _ratio(numerator: Float32, denominator: Float32) -> Float32:
         How many times longer.
     """
     return numerator / denominator if denominator != 0 else 1
-
-
-def _angle_between(a: Vector3, b: Vector3) -> Float32:
-    """Return the angle between two directions, three.js's `angleTo`.
-
-    Args:
-        a: One direction.
-        b: The other.
-
-    Returns:
-        The angle in radians, or a quarter turn when either has no length.
-    """
-    return a.angle_to(b).to(RADIAN)
 
 
 def _baked(

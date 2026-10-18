@@ -52,24 +52,26 @@ from loaders.draco_attributes import (
     DracoPrediction,
     DracoTransform,
     Octahedron,
-    _abs_sum,
-    _cross,
-    _dot,
-    _int_sqrt,
+    _add_face_normal,
+    _limit_normal,
+    _mirrored_values,
+    _predicted_tex_sides,
+    _tex_neighbor,
     _rotate,
     _rotation_count,
-    _sub,
     product32,
 )
 from loaders.draco_buffer import draco_require, to_int32, truncated_divide
-from loaders.draco_mesh import NONE, DracoCornerTable
+from loaders.draco_mesh import (
+    NONE,
+    DracoCornerTable,
+    next_parallelogram_corner,
+)
 from loaders.vrml_geometry import product
 from std.math import ceil, floor, isinf, isnan
 
 # The most parallelograms the constrained prediction mixes.
 comptime _MAX_PARALLELOGRAMS = 4
-# The largest `Int`, as C++'s `int64_t`.
-comptime _INT64_MAX = 0x7FFFFFFFFFFFFFFF
 
 
 struct EncoderAttribute(Copyable, Movable):
@@ -501,18 +503,7 @@ def _parallelogram(
     var o = map[data.table.vertex(opposite)]
     var n = map[data.table.vertex(data.table.next(opposite))]
     var r = map[data.table.vertex(data.table.previous(opposite))]
-    if o >= p or n >= p or r >= p:
-        return None
-    var out = List[Int](capacity=components)
-    for c in range(components):  # pragma: no branch
-        out.append(
-            to_int32(
-                values[n * components + c]
-                + values[r * components + c]
-                - values[o * components + c]
-            )
-        )
-    return out^
+    return _mirrored_values(o, n, r, p, values, components)
 
 
 def _previous(values: List[Int], p: Int, components: Int) -> List[Int]:
@@ -629,15 +620,9 @@ struct _Scheme(Movable):
                     found.append(one.value().copy())
                     if len(found) == _MAX_PARALLELOGRAMS:
                         break
-                if first_pass:
-                    corner = data.table.swing_left(corner)
-                else:
-                    corner = data.table.swing_right(corner)
-                if corner == start:
-                    break
-                if corner == NONE and first_pass:
-                    first_pass = False
-                    corner = data.table.swing_right(start)
+                corner = next_parallelogram_corner(
+                    data.table, corner, start, first_pass
+                )
             var n = len(found)
             var offset = p * components
             var previous = _previous(values, p, components)
@@ -709,46 +694,16 @@ struct _Scheme(Movable):
             if p_u == n_u and p_v == n_v:
                 return [p_u, p_v]
             ref points = data.order.points
-            var tip = positions.at(points[p])
-            var next_pos = positions.at(points[next])
-            var prev_pos = positions.at(points[prev])
-            var pn = _sub(prev_pos, next_pos)
-            var pn_norm2 = _dot(pn, pn)
-            if pn_norm2 != 0:
-                var cn = _sub(tip, next_pos)
-                var cn_dot_pn = _dot(pn, cn)
-                var pn_u = p_u - n_u
-                var pn_v = p_v - n_v
-                draco_require(
-                    max(abs(n_u), abs(n_v)) <= _INT64_MAX // pn_norm2,
-                    "a texture coordinate prediction overflows",
-                )
-                draco_require(
-                    cn_dot_pn <= _INT64_MAX // max(abs(pn_u), abs(pn_v)),
-                    "a texture coordinate prediction overflows",
-                )
-                var x_u = n_u * pn_norm2 + cn_dot_pn * pn_u
-                var x_v = n_v * pn_norm2 + cn_dot_pn * pn_v
-                var pn_max = max(max(abs(pn[0]), abs(pn[1])), abs(pn[2]))
-                draco_require(
-                    cn_dot_pn <= _INT64_MAX // pn_max,
-                    "a texture coordinate prediction overflows",
-                )
-                var x_pos = List[Int](capacity=3)
-                for k in range(3):  # pragma: no branch
-                    x_pos.append(
-                        next_pos[k]
-                        + truncated_divide(cn_dot_pn * pn[k], pn_norm2)
-                    )
-                var cx = _sub(tip, x_pos)
-                var cx_norm2 = _dot(cx, cx)
-                var norm = _int_sqrt(UInt64(cx_norm2) * UInt64(pn_norm2))
-                var cx_u = pn_v * norm
-                var cx_v = -pn_u * norm
-                var u0 = truncated_divide(x_u + cx_u, pn_norm2)
-                var v0 = truncated_divide(x_v + cx_v, pn_norm2)
-                var u1 = truncated_divide(x_u - cx_u, pn_norm2)
-                var v1 = truncated_divide(x_v - cx_v, pn_norm2)
+            var ready, u0, v0, u1, v1 = _predicted_tex_sides(
+                n_u,
+                n_v,
+                p_u,
+                p_v,
+                positions.at(points[p]),
+                positions.at(points[next]),
+                positions.at(points[prev]),
+            )
+            if ready:
                 var c_u = values[p * 2]
                 var c_v = values[p * 2 + 1]
                 var d0 = (c_u - u0) * (c_u - u0) + (c_v - v0) * (c_v - v0)
@@ -758,14 +713,7 @@ struct _Scheme(Movable):
                     return [to_int32(u0), to_int32(v0)]
                 self.orientations.append(False)
                 return [to_int32(u1), to_int32(v1)]
-        var offset: Int
-        if next < p:
-            offset = next * 2
-        elif p > 0:
-            offset = (p - 1) * 2
-        else:
-            return [0, 0]
-        return [values[offset], values[offset + 1]]
+        return _tex_neighbor(values, next, p)
 
     def _normals(
         mut self,
@@ -793,15 +741,8 @@ struct _Scheme(Movable):
                 var prev = positions.at(
                     points[map[table.vertex(table.previous(c))]]
                 )
-                var cross = _cross(_sub(next, center), _sub(prev, center))
-                for k in range(3):  # pragma: no branch
-                    normal[k] += cross[k]
-            var sum = _abs_sum(normal)
-            var upper = 1 << 29
-            if sum > upper:
-                var quotient = sum // upper
-                for k in range(3):  # pragma: no branch
-                    normal[k] = truncated_divide(normal[k], quotient)
+                _add_face_normal(normal, center, next, prev)
+            _limit_normal(normal)
             var canonical = o.canonicalize_vector(
                 to_int32(normal[0]), to_int32(normal[1]), to_int32(normal[2])
             )

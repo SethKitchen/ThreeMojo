@@ -49,11 +49,16 @@ from animation.keyframe_track import (
     node_target,
 )
 from core.object3d import NodeId
+from loaders.collada_id import collada_reference
+from loaders.collada_numbers import (
+    collada_floats,
+    collada_number,
+    require_positive_stride,
+)
 from loaders.xml import NO_ELEMENT, XmlDocument
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import isfinite
 from units.si import SECOND, Duration
 
 
@@ -85,18 +90,7 @@ def _numbers(document: XmlDocument, element: Int) raises -> List[Float64]:
     Raises:
         Error: If one is not a finite number.
     """
-    var out = List[Float64]()
-    for piece in document.text(element).split():
-        var field = String(piece)
-        var value: Float64
-        try:
-            value = Float64(field)
-        except:
-            raise Error("Collada: not a number: " + field)
-        if not isfinite(Float32(value)):
-            raise Error("Collada: a number must be finite: " + field)
-        out.append(value)
-    return out^
+    return collada_floats(document.text(element))
 
 
 def _whole(text: String) raises -> Int:
@@ -109,17 +103,6 @@ def _whole(text: String) raises -> Int:
         return Int(text)
     except:
         raise Error("Collada: not a whole number: " + text)
-
-
-def _reference(url: String) raises -> String:
-    """Return the id a `#id` reference names.
-
-    Raises:
-        Error: If the reference does not begin with `#`.
-    """
-    if not url.startswith("#"):
-        raise Error("Collada: a reference must be #id, not '" + url + "'")
-    return String(url[byte=1:])
 
 
 def _source(document: XmlDocument, element: Int) raises -> _Source:
@@ -140,8 +123,7 @@ def _source(document: XmlDocument, element: Int) raises -> _Source:
         var accessor = document.child(common, "accessor")
         if accessor != NO_ELEMENT:
             stride = _whole(document.attribute(accessor, "stride"))
-    if stride < 1:
-        raise Error("Collada: a source's stride must be positive")
+    require_positive_stride(stride)
     return _Source(values^, stride)
 
 
@@ -216,7 +198,7 @@ def read_collada_animations(
     for clip in listed:  # pragma: no branch
         var tracks = List[KeyframeTrack]()
         for instance in document.children_named(clip, "instance_animation"):
-            var id = _reference(document.attribute(instance, "url"))
+            var id = collada_reference(document.attribute(instance, "url"))
             var found = -1
             # An animation with no id cannot be named: three.js gives it a
             # random one.
@@ -256,10 +238,7 @@ def _numbers_or_zero(text: String) raises -> Float64:
     var field = String(text.strip())
     if field == "":
         return 0
-    try:
-        return Float64(field)
-    except:
-        raise Error("Collada: not a number: " + field)
+    return collada_number(field)
 
 
 @fieldwise_init
@@ -293,7 +272,7 @@ def _animation_tracks(
             samplers[id] = child
         elif name == "channel":
             var target = document.attribute(child, "target")
-            var sampler = _reference(document.attribute(child, "source"))
+            var sampler = collada_reference(document.attribute(child, "source"))
             var replaced = False
             for at in range(len(channels)):
                 if channels[at].target == target:
@@ -309,9 +288,9 @@ def _animation_tracks(
         for put in document.children_named(samplers[channel.sampler], "input"):
             var semantic = document.attribute(put, "semantic")
             if semantic == "INPUT":
-                input = _reference(document.attribute(put, "source"))
+                input = collada_reference(document.attribute(put, "source"))
             elif semantic == "OUTPUT":
-                output = _reference(document.attribute(put, "source"))
+                output = collada_reference(document.attribute(put, "source"))
         if input not in sources or output not in sources:
             raise Error("Collada: a sampler names no source")
         _channel_tracks(

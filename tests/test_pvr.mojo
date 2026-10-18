@@ -7,6 +7,7 @@
 0.180's `PVRLoader` reads them, from `assets/pvrtc/three_pvr.mjs`, and their
 levels decoded as `PVRTDecompress.cpp` decodes them."""
 
+from core.binary import store_little_endian
 from loaders.json import parse_json
 from render.compressed_texture import (
     RGB_PVRTC_2BPPV1_FORMAT,
@@ -76,8 +77,7 @@ def _header(words: List[Int]) -> List[UInt8]:
     """
     var out = List[UInt8](length=52, fill=0)
     for k in range(len(words)):
-        for byte in range(4):
-            out[k * 4 + byte] = UInt8((words[k] >> (8 * byte)) & 0xFF)
+        store_little_endian(out, k * 4, words[k], 4)
     return out^
 
 

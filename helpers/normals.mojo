@@ -27,6 +27,7 @@ ported, so the attribute comes from a loader or from the caller.
 """
 
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.ordinal import require_positive
 from helpers.segments import Segments
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -53,8 +54,7 @@ def _sticks(
     """Return one stick per vertex along the attribute `name`, carried by
     `carry` and made `size` long."""
     var length = size.to(METER)
-    if length <= 0:
-        raise Error("A vertex helper needs a positive size")
+    require_positive(length, "A vertex helper needs a positive size")
     ref positions = geometry.attribute_view(String(POSITION))
     ref directions = geometry.attribute_view(name)
     if directions.count() != positions.count():

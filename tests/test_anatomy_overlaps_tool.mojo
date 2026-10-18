@@ -5,8 +5,8 @@
 
 """Check the #595 overlap evidence, its bindings and its classification.
 
-The repaired evidence records the binding of the Python tool it came from,
-so its binding check runs on a small source tree. The unrepaired
+The repaired evidence must match the current source and tool bindings.
+Small source trees separately check changed inputs. The unrepaired
 localization stays pinned to its recorded bytes.
 """
 
@@ -503,6 +503,10 @@ def test_the_evidence_binding_follows_source_and_tool() raises:
     with assert_raises(contains="stale source"):
         check_current(root.root + "/current.json", root.root)
     root.close()
+
+
+def test_current_evidence_matches_the_source_and_tool_bindings() raises:
+    check_current(CURRENT, ".")
 
 
 def main() raises:

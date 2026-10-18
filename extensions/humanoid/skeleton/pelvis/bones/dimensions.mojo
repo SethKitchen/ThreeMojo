@@ -35,8 +35,9 @@ template. Call `validate` at every public consumer of an edited copy.
     var d = pelvis_bone_distance(dims, SACRUM, dims.promontory)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.sex import MALE, Sex
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import (
     Bounds,
     DistanceField,
@@ -55,6 +56,8 @@ from extensions.humanoid.skeleton.field import (
     ud_triangle,
 )
 from extensions.humanoid.skeleton.leg.femur.dimensions import femur_dimensions
+from math.catmull import catmull_rom_point
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import cos, max, min, sin
 from units.si import DEGREE, Angle, Length
@@ -126,9 +129,23 @@ struct PelvisBone(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named pelvic bone."""
-        if self.value < 0:
-            return False
-        return self.value <= COCCYX.value
+        return ordinal_valid(self.value, COCCYX.value)
+
+
+def require_pelvis_bone(part: PelvisBone) raises:
+    """Refuse a pelvic bone that is not named.
+
+    Nothing. The call returns when the bone is named.
+
+    Args:
+        part: The bone.
+
+    Raises:
+        Error: If the bone is not one of the four.
+    """
+    require_valid(
+        part.is_valid(), "A pelvic bone must be one of the four bones"
+    )
 
 
 comptime RIGHT_HIP_BONE = PelvisBone(0)
@@ -461,7 +478,9 @@ struct HipBoneShape(Copyable, Movable):
             var after = rim[min(span + 2, last)]
             for step in range(1, WING_STEPS + 1):  # pragma: no branch
                 var t = Float32(step) / Float32(WING_STEPS)
-                var here = _spline(before, rim[span], rim[span + 1], after, t)
+                var here = catmull_rom_point(
+                    before, rim[span], rim[span + 1], after, t
+                )
                 self.plates.append(_Plate(d.hub, previous, here))
                 previous = here
         # The walls of the socket's two columns.
@@ -563,7 +582,7 @@ struct HipBoneShape(Copyable, Movable):
             Float32(0),
             Float32(1) - (point - self.hub).length() / self.reach,
         )
-        var half = self.thin + (self.thick - self.thin) * near
+        var half = mix_delta(self.thin, self.thick, near)
         # The plates meet edge to edge, so they join with a hard minimum:
         # one sheet, with no ridge where two plates meet.
         var sheet = Float32(1.0e9)
@@ -646,8 +665,7 @@ struct PelvisBoneField(Copyable, DistanceField, Movable):
                 is not named.
         """
         dimensions.validate()
-        if not part.is_valid():
-            raise Error("A pelvic bone must be one of the four bones")
+        require_pelvis_bone(part)
         var S = dimensions.stature.value
         self.part = part
         self.hip_bone = HipBoneShape(dimensions)
@@ -681,10 +699,7 @@ struct PelvisBoneField(Copyable, DistanceField, Movable):
             self.shell = HIP_SHELL * S
             box = self.hip_bone.bounds(0.004)
             if self.mirror:
-                box = Bounds(
-                    Vector3(-box.high.x, box.low.y, box.low.z),
-                    Vector3(-box.low.x, box.high.y, box.high.z),
-                )
+                box = box.mirrored_on_x()
         self.low = box.low
         self.high = box.high
 
@@ -853,8 +868,7 @@ def sided(point: Vector3, side: BodySide) raises -> Vector3:
     Raises:
         Error: If `side` is not valid.
     """
-    if not side.is_valid():
-        raise Error("A pelvis side must be RIGHT or LEFT")
+    require_side(side, "A pelvis")
     if side == LEFT:
         return flip_x(point)
     return point
@@ -1053,9 +1067,7 @@ def sided_bounds(low: Vector3, high: Vector3, side: BodySide) -> Bounds:
         The same box on the right, or mirrored on x on the left.
     """
     if side == LEFT:
-        return Bounds(
-            Vector3(-high.x, low.y, low.z), Vector3(-low.x, high.y, high.z)
-        )
+        return Bounds(low, high).mirrored_on_x()
     return Bounds(low, high)
 
 
@@ -1070,19 +1082,6 @@ def _shift_lateral(mut dims: PelvisDimensions, shift: Vector3):
     dims.ischium = dims.ischium + shift
     dims.obturator = dims.obturator + shift
     dims.notch = dims.notch + shift
-
-
-def _spline(
-    p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: Float32
-) -> Vector3:
-    """Return the Catmull-Rom point `t` of the way from `p1` to `p2`."""
-    var t2 = t * t
-    var t3 = t2 * t
-    var w0 = Float32(0.5) * (-t3 + 2 * t2 - t)
-    var w1 = Float32(0.5) * (3 * t3 - 5 * t2 + 2)
-    var w2 = Float32(0.5) * (-3 * t3 + 4 * t2 + t)
-    var w3 = Float32(0.5) * (t3 - t2)
-    return p0 * w0 + p1 * w1 + p2 * w2 + p3 * w3
 
 
 def _sacral_station(

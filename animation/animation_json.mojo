@@ -50,6 +50,7 @@ from animation.animation_clip import (
     AnimationBlendMode,
     AnimationClip,
     NORMAL_BLEND_MODE,
+    require_blend_mode,
 )
 from animation.keyframe_track import (
     BEZIER,
@@ -104,10 +105,10 @@ from animation.keyframe_track import (
 from exporters.json_writer import JsonWriter
 from core.user_data import user_data_of
 from loaders.json import (
+    NO_NODE,
     ARRAY,
     BOOLEAN,
     JsonDocument,
-    NO_NODE,
     NUMBER,
     OBJECT,
     parse_json,
@@ -547,10 +548,7 @@ def write_track(
     writer.key("name")
     writer.string(name)
     writer.key("times")
-    writer.begin_array()
-    for key in range(len(track.times)):  # pragma: no branch
-        writer.number(track.times[key])
-    writer.end_array()
+    writer.numbers(track.times)
     writer.key("values")
     writer.begin_array()
     if kind.is_string():
@@ -572,23 +570,13 @@ def write_track(
         writer.key("settings")
         writer.begin_object()
         writer.key("inTangents")
-        _numbers(writer, track.in_tangents)
+        writer.numbers(track.in_tangents)
         writer.key("outTangents")
-        _numbers(writer, track.out_tangents)
+        writer.numbers(track.out_tangents)
         writer.end_object()
     writer.key("type")
     writer.string(kind.value_type_name())
     writer.end_object()
-
-
-def _numbers(mut writer: JsonWriter, values: List[Float32]) raises:
-    """Write a list of numbers as an array."""
-    writer.begin_array()
-    # A Bezier track's control points, which `validate` has found to be
-    # two for each of its values, and a track has at least one value.
-    for index in range(len(values)):  # pragma: no branch
-        writer.number(values[index])
-    writer.end_array()
 
 
 def write_clip(
@@ -611,8 +599,7 @@ def write_clip(
     """
     if len(names) != len(clip.tracks):
         raise Error("A clip to write needs one name a track")
-    if not clip.blend_mode.is_valid():
-        raise Error("A clip needs a blend mode that exists")
+    require_blend_mode(clip.blend_mode)
     writer.begin_object()
     writer.key("name")
     writer.string(clip.name)
@@ -653,17 +640,17 @@ def track_names(document: JsonDocument, clip: Int) raises -> List[String]:
     """
     if document.kind(clip) != OBJECT:
         raise Error("A clip in JSON must be an object")
-    var tracks = document.get(clip, "tracks")
-    if tracks == NO_NODE or document.kind(tracks) != ARRAY:
-        raise Error("A clip in JSON needs a tracks array")
+    var tracks = document.required_kind(
+        clip, "tracks", ARRAY, "A clip in JSON needs a tracks array"
+    )
     var names = List[String]()
     for index in range(document.length(tracks)):
         var track = document.at(tracks, index)
         if document.kind(track) != OBJECT:
             raise Error("A track in JSON must be an object")
-        var name = document.get(track, "name")
-        if name == NO_NODE:
-            raise Error("A track in JSON needs a name")
+        var name = document.required(
+            track, "name", "A track in JSON needs a name"
+        )
         names.append(document.string(name))
     return names^
 
@@ -750,9 +737,9 @@ def read_track(
             refuses.
     """
     var kind = target.kind
-    var type_node = document.get(track, "type")
-    if type_node == NO_NODE:
-        raise Error("A track in JSON needs a type")
+    var type_node = document.required(
+        track, "type", "A track in JSON needs a type"
+    )
     if not _type_fits(document.string(type_node), kind):
         raise Error(
             "A track's type must be its property's: " + kind.value_type_name()
@@ -768,9 +755,9 @@ def read_track(
         how = _interpolation_of(
             document.integer(document.get(track, "interpolation"))
         )
-    var values = document.get(track, "values")
-    if values == NO_NODE or document.kind(values) != ARRAY:
-        raise Error("A track in JSON needs a values array")
+    var values = document.required_kind(
+        track, "values", ARRAY, "A track in JSON needs a values array"
+    )
     if kind.is_string():
         var texts = List[String]()
         for index in range(document.length(values)):
@@ -790,9 +777,9 @@ def read_track(
     numbers = _lane(numbers, stride, 1, target.slot if stride > 1 else 0)
     if how != BEZIER:
         return KeyframeTrack(target, times, numbers^, how)
-    var settings = document.get(track, "settings")
-    if settings == NO_NODE or document.kind(settings) != OBJECT:
-        raise Error("A Bezier track in JSON needs its settings")
+    var settings = document.required_kind(
+        track, "settings", OBJECT, "A Bezier track in JSON needs its settings"
+    )
     var lane = target.slot if stride > 1 else 0
     var ins = _lane(
         _number_list(document, settings, "inTangents"), stride, 2, lane

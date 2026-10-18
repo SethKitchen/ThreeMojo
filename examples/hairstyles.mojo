@@ -19,7 +19,13 @@ turns every head about the vertical, in degrees; zero shows the faces.
 The default is 140.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+)
+from tools._example_preview import turn_about_vertical
+
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -50,11 +56,10 @@ from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.tonemap import ACES_FILMIC_TONE_MAPPING
 from renderers.environment import pmrem_from_scene
-from renderers.renderer import Renderer, available_workers
-from std.math import cos, sin
+from renderers.renderer import available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
+from units.si import Angle, FOOT, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/hairstyles.png"
 comptime DEFAULT_QUALITY = "high"
@@ -99,26 +104,9 @@ def _model() raises -> HumanoidSpec:
     return HumanoidSpec(Length(5.6, FOOT), FEMALE, UNTONED, genome)
 
 
-def _turned(v: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned by `angle` radians about the vertical.
-
-    Args:
-        v: The vector.
-        angle: The turn, counterclockwise seen from above.
-
-    Returns:
-        The turned vector.
-    """
-    var c = cos(angle)
-    var s = sin(angle)
-    return Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c)
-
-
 def main() raises:
     var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var level = quality_named(String(DEFAULT_QUALITY))
     if len(args) > 2:
         level = quality_named(String(args[2]))
@@ -127,8 +115,7 @@ def main() raises:
         degrees = Float32(Float64(String(args[3])))
     var turn = degrees * Float32(0.017453292)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(24, 25, 28))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(24, 25, 28))
     renderer.tone_mapping = ACES_FILMIC_TONE_MAPPING
     renderer.tone_mapping_exposure = 1.0
     renderer.local_clipping_enabled = True
@@ -204,27 +191,25 @@ def main() raises:
     var fill_node = scene.add(fill^)
     scene.add_light(directional_light(Color(210, 220, 255), fill_node, 0.9))
     var eye = Vector3(0.0, 0.05, 2.75)
-    var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(30.0, METER),
-    )
-    camera.place(eye, Vector3(0.0, 0.02, 0.0))
+    var camera = gallery_camera(WIDTH, HEIGHT, eye, Vector3(0.0, 0.02, 0.0))
     var key_toward = Vector3(-1.2, 1.6, -2.0)
     key_toward.normalize()
     var fill_toward = Vector3(1.0, 0.8, 2.0)
     fill_toward.normalize()
     var lights = List[HairLight]()
-    lights.append(HairLight(_turned(key_toward, -turn), KEY_RADIANCE))
     lights.append(
-        HairLight(_turned(fill_toward, -turn), Vector3(0.5, 0.55, 0.65))
+        HairLight(turn_about_vertical(key_toward, -turn), KEY_RADIANCE)
+    )
+    lights.append(
+        HairLight(
+            turn_about_vertical(fill_toward, -turn), Vector3(0.5, 0.55, 0.65)
+        )
     )
     for index in range(len(hairs)):
         hairs[index].shade(
             assets,
             lights,
-            _turned(eye - places[index], -turn) + center,
+            turn_about_vertical(eye - places[index], -turn) + center,
             AMBIENT,
         )
     scene.update()

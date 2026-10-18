@@ -37,6 +37,8 @@ three.js reads only it, and the old Radiance run-length scheme, which
 three.js does not read either, is not read.
 """
 
+from core.binary import copy_bytes
+from loaders.bytes import space_tab_return
 from render.float_image import FloatImage
 from render.png import MAX_PIXELS
 
@@ -57,11 +59,6 @@ comptime RUN_FLAG = 128
 comptime MAX_DIGITS = 9
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for a space, a tab or a carriage return."""
-    return byte == 0x20 or byte == 0x09 or byte == 0x0D
-
-
 def _text(bytes: List[UInt8], start: Int, end: Int) -> String:
     """Return the bytes from `start` to `end` as text, one byte a
     character."""
@@ -76,7 +73,7 @@ def _words(line: String) -> List[String]:
     var out = List[String]()
     var word = String()
     for byte in line.as_bytes():
-        if _is_space(byte):
+        if space_tab_return(byte):
             if word.byte_length() > 0:
                 out.append(word)
                 word = String()
@@ -122,7 +119,7 @@ def _is_magic(bytes: List[UInt8], start: Int, end: Int) -> Bool:
         end - start >= 3
         and bytes[start] == 0x23
         and bytes[start + 1] == 0x3F
-        and not _is_space(bytes[start + 2])
+        and not space_tab_return(bytes[start + 2])
     )
 
 
@@ -219,6 +216,38 @@ def _is_scanline_start(bytes: List[UInt8], at: Int, width: Int) -> Bool:
     )
 
 
+def require_rgbe_span(at: Int, length: Int, count: Int) raises:
+    """Refuse an RGBE read that needs more bytes than the file still holds.
+
+    Nothing. The call returns when at least `count` bytes remain.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the file has.
+        count: How many bytes the read needs.
+
+    Raises:
+        Error: If fewer than `count` bytes remain.
+    """
+    if length - at < count:
+        raise Error("RGBE: a scanline is cut short")
+
+
+def require_rgbe_byte(at: Int, length: Int) raises:
+    """Refuse an RGBE read past the file.
+
+    Nothing. The call returns when a byte remains.
+
+    Args:
+        at: The next byte to read.
+        length: How many bytes the file has.
+
+    Raises:
+        Error: If the read is past the file.
+    """
+    require_rgbe_span(at, length, 1)
+
+
 def read_pixels(
     bytes: List[UInt8], start: Int, width: Int, height: Int
 ) raises -> List[UInt8]:
@@ -248,22 +277,20 @@ def read_pixels(
     if _is_flat(bytes, start, width):
         if len(bytes) - start < count:
             raise Error("RGBE: the pixels are cut short")
-        return List[UInt8](bytes[start : start + count])
+        return copy_bytes(bytes, start, count)
     var out = List[UInt8](capacity=count)
     var line = width * 4
     var scan = List[UInt8](length=line, fill=0)
     var at = start
     # The image is at least one row tall: the loop always runs.
     for _ in range(height):  # pragma: no branch
-        if len(bytes) - at < 4:
-            raise Error("RGBE: a scanline is cut short")
+        require_rgbe_span(at, len(bytes), 4)
         if not _is_scanline_start(bytes, at, width):
             raise Error("RGBE: a scanline must begin 2, 2 and its width")
         at += 4
         var filled = 0
         while filled < line:
-            if at >= len(bytes):
-                raise Error("RGBE: a scanline is cut short")
+            require_rgbe_byte(at, len(bytes))
             var run = Int(bytes[at])
             at += 1
             var repeats = run > RUN_FLAG
@@ -272,15 +299,13 @@ def read_pixels(
             if run == 0 or filled + run > line:
                 raise Error("RGBE: a run is empty or overflows its scanline")
             if repeats:
-                if at >= len(bytes):
-                    raise Error("RGBE: a scanline is cut short")
+                require_rgbe_byte(at, len(bytes))
                 for _ in range(run):  # pragma: no branch
                     scan[filled] = bytes[at]
                     filled += 1
                 at += 1
                 continue
-            if len(bytes) - at < run:
-                raise Error("RGBE: a scanline is cut short")
+            require_rgbe_span(at, len(bytes), run)
             for step in range(run):  # pragma: no branch
                 scan[filled] = bytes[at + step]
                 filled += 1

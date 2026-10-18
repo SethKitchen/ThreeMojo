@@ -344,7 +344,12 @@ def historical_text(root, path, text, *, _operation=None, _inputs=None, _input_o
     else:
         import typed_boundary_contracts as typed
     if relative not in typed.EDGES:
-        return text
+        if __package__:
+            from . import pr760_arithmetic_stage as pr760
+        else:
+            import pr760_arithmetic_stage as pr760
+        if relative not in pr760.CARLA_REGISTRY_PATHS:
+            return text
     if __package__:
         from . import full_audit_cleanup_contracts as audit
     else:
@@ -363,7 +368,12 @@ def historical_bytes(root, path, raw, *, _operation=None, _inputs=None, _input_o
     else:
         import typed_boundary_contracts as typed
     if relative not in typed.EDGES:
-        return raw
+        if __package__:
+            from . import pr760_arithmetic_stage as pr760
+        else:
+            import pr760_arithmetic_stage as pr760
+        if relative not in pr760.CARLA_REGISTRY_PATHS:
+            return raw
     require(type(raw) is bytes, 'historical input is not physical bytes')
     return historical_text(root, relative, raw.decode('utf-8'), _operation=_operation,
                            _inputs=_inputs, _input_owner=_input_owner).encode('utf-8')

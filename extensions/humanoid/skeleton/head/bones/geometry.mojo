@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     head_dimensions,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 
 
 def head_bone(
@@ -69,5 +69,4 @@ def head_bone_from_dimensions(
     """
     var field = head_bone_field(dimensions, part)
     var label = head_bone_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

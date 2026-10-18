@@ -18,6 +18,12 @@ and moves the tensor to the center of mass, so each bone's mass, center
 and inertia come from one pass. The whole body is the sum of its bones.
 """
 
+from core.ordinal import (
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
@@ -44,10 +50,17 @@ from extensions.sdf.ids import (
     SurfacePart,
 )
 from extensions.sdf.vector import V3, dot
-from math.vector3 import Vector3
+from math.finite import (
+    require_finite,
+    require_finite_group,
+    require_positive_finite,
+)
+from math.utils import clamp, min3
+from math.vector3 import Vector3, vector3_from_float64
 from render.tasks import TaskGroup
 from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores
+from units.measure import length_meters
 from units.si import CUBIC_METER, METER, Length, Volume
 
 # Cells per block side. A block is culled and skipped as a whole.
@@ -55,6 +68,22 @@ comptime BLOCK = 8
 # The coat reaches at most this share of a solid's smallest radius into
 # it. A design choice: hair is short where a limb is thin.
 comptime COAT_SHARE = 0.3
+
+
+def require_sampled_rig(mass_count: Int, rig_count: Int) raises:
+    """Refuse a mass sample taken from another rig.
+
+    Nothing. The call returns when the counts match.
+
+    Args:
+        mass_count: How many bones the sample holds.
+        rig_count: How many bones the rig holds.
+
+    Raises:
+        Error: If the sample and the rig have different bone counts.
+    """
+    if mass_count != rig_count:
+        raise Error("The mass was sampled from another rig")
 
 
 struct BodyMass(Movable):
@@ -95,12 +124,12 @@ struct BodyMass(Movable):
         self.bones = bones^
         self.step = step
         self.volume = Volume(Float32(stats[VOLUME]), CUBIC_METER)
-        self.ground = Length(Float32(stats[GROUND]), METER)
-        self.withers = Length(Float32(stats[WITHERS]), METER)
+        self.ground = length_meters(stats[GROUND])
+        self.withers = length_meters(stats[WITHERS])
         var body = max(0.0, stats[BODY_HIGH] - stats[BODY_LOW])
-        self.body_length = Length(Float32(body), METER)
+        self.body_length = length_meters(body)
         var total = max(0.0, stats[TOTAL_HIGH] - stats[TOTAL_LOW])
-        self.total_length = Length(Float32(total), METER)
+        self.total_length = length_meters(total)
 
     def reference(self, kind: ReferenceKind) raises -> Length:
         """Return a reference length of the sampled sculpt.
@@ -117,20 +146,23 @@ struct BodyMass(Movable):
             Error: If the kind is not named, or the sculpt has no
                 withers to measure, or an extent is absent or under-resolved.
         """
-        if not kind.is_valid():
-            raise Error("A reference length must be named")
+        require_valid(kind.is_valid(), "A reference length must be named")
         if kind == SHOULDER_HEIGHT:
             if self.withers.value < self.ground.value:
                 raise Error("The sculpt has no withers")
             var height = self.withers - self.ground
-            if not (isfinite(height.value) and height.value > 0.0):
-                raise Error("The sampled withers are absent or under-resolved")
+            require_positive_finite(
+                Float64(height.value),
+                "The sampled withers are absent or under-resolved",
+            )
             return height
         var value = (
             self.body_length if kind == BODY_LENGTH else self.total_length
         )
-        if not (isfinite(value.value) and value.value > 0.0):
-            raise Error("The sampled reference is absent or under-resolved")
+        require_positive_finite(
+            Float64(value.value),
+            "The sampled reference is absent or under-resolved",
+        )
         return value
 
     def total(self) raises -> SegmentInertia:
@@ -160,8 +192,9 @@ struct BodyMass(Movable):
         Raises:
             Error: If there is no such bone or it holds no flesh.
         """
-        if index < 0 or index >= len(self.bones):
-            raise Error("The body has no such bone")
+        require_index_in_count(
+            index, len(self.bones), "The body has no such bone"
+        )
         return self.bones[index].result(length)
 
 
@@ -254,8 +287,9 @@ def _sample_distance(model: SdfModel, ids: List[Int], q: V3) -> Float64:
 
 def _require_finite_distance(value: Float64) raises:
     """Refuse a nonfinite already-evaluated sampling distance."""
-    if not isfinite(value):
-        raise Error("A sampled field must have finite valid distances")
+    require_finite(
+        Float64(value), "A sampled field must have finite valid distances"
+    )
 
 
 def _require_nonnegative_candidate(candidate: Int) raises:
@@ -264,8 +298,9 @@ def _require_nonnegative_candidate(candidate: Int) raises:
     The caller separately establishes the primitive-index upper bound.
     This validator does not read a model, pointer, or collection.
     """
-    if candidate < 0:
-        raise Error("A sampled field must have finite valid distances")
+    require_non_negative(
+        candidate, "A sampled field must have finite valid distances"
+    )
 
 
 @always_inline
@@ -284,7 +319,7 @@ def _sample_task_checked(
     var h = grid.h
     var rho = 0.5 * sqrt(3.0) * Float64(BLOCK) * h
     var kmax = model[].max_blend()
-    var widths = Vector3(Float32(h), Float32(h), Float32(h))
+    var widths = vector3_from_float64(h, h, h)
     var cell_volume = h * h * h
     var s = _fresh_stats()
     var lists = List[List[Int]]()
@@ -354,10 +389,10 @@ def _sample_task_checked(
             # At half a cell the share is zero: the cell holds no flesh.
             if solid < 0 or best >= 0.5 * h:
                 continue
-            var share = min(1.0, max(0.0, 0.5 - best / h))
+            var share = clamp(0.5 - best / h, 0.0, 1.0)
             var m = share * cell_volume * input[].density[solid]
             var bone = model[].prims[solid].bone.value
-            var spot = Vector3(Float32(q.x), Float32(q.y), Float32(q.z))
+            var spot = vector3_from_float64(q.x, q.y, q.z)
             tallies[unsafe_offset=task * bones + bone]._add_cell(
                 m, spot, widths
             )
@@ -449,16 +484,15 @@ def _check_sampling_model(model: SdfModel) raises:
     # Mutable models are checked before culling, integer grid conversion,
     # pointer-indexed worker writes or unchecked tally accumulation.
     for value in model.outline:
-        if not isfinite(value):
-            raise Error("A sampled outline must be finite")
+        require_finite(Float64(value), "A sampled outline must be finite")
     for p in model.prims:
         if not p.kind.is_valid() or not p.part.is_valid():
             raise Error("A sampled primitive kind and part must be named")
         for point in [p.c, p.b, p.ax, p.ay, p.az, p.r]:  # pragma: no branch
-            if not (
-                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
-            ):
-                raise Error("Sampled primitive geometry must be finite")
+            require_finite_group(
+                point.is_finite(),
+                "Sampled primitive geometry must be finite",
+            )
         if p.kind != CONE:
             for axis in [p.ax, p.ay, p.az]:  # pragma: no branch
                 if abs(dot(axis, axis) - 1.0) > 1e-8:
@@ -468,12 +502,13 @@ def _check_sampling_model(model: SdfModel) raises:
                 if abs(dot(pair[0], pair[1])) > 1e-8:
                     raise Error("A sampled primitive frame must be orthonormal")
         for value in [p.k, p.lo, p.hi]:  # pragma: no branch
-            if not isfinite(value):
-                raise Error("Sampled primitive geometry must be finite")
+            require_finite(
+                Float64(value), "Sampled primitive geometry must be finite"
+            )
         if p.k < 0.0:
             raise Error("A sampled blend radius must be nonnegative")
         if p.kind == ELLIPSOID:
-            if min(p.r.x, min(p.r.y, p.r.z)) <= 0.0:
+            if min3(p.r.x, p.r.y, p.r.z) <= 0.0:
                 raise Error("Sampled ellipsoid radii must be positive")
         elif p.kind == CONE:
             var span = (p.b - p.c).length()
@@ -546,7 +581,7 @@ def sample_mass(
     var posed = animal.model.moved(world)
     _check_sampling_model(posed)
     for p in posed.prims:  # pragma: no branch
-        var radius = min(p.r.x, min(p.r.y, p.r.z))
+        var radius = min3(p.r.x, p.r.y, p.r.z)
         if p.kind == CONE:
             # r.z is unused for a cone, not a zero physical radius.
             radius = min(p.r.x, p.r.y)
@@ -566,24 +601,15 @@ def sample_mass(
         if solids == 0:
             continue
         var box = part_box(posed, ids)
-        low = V3(
-            min(low.x, box[0].x), min(low.y, box[0].y), min(low.z, box[0].z)
-        )
-        high = V3(
-            max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
-        )
+        low = low.min(box[0])
+        high = high.max(box[1])
         input.erode.append(coat if _erodes(SurfacePart(part)) else 0.0)
         input.parts.append(ids^)
-    if len(input.parts) == 0:
-        raise Error("The sculpt has no flesh to weigh")
+    require_positive(len(input.parts), "The sculpt has no flesh to weigh")
     if len(input.coat) > 0:
         var box = part_box(posed, input.coat)
-        low = V3(
-            min(low.x, box[0].x), min(low.y, box[0].y), min(low.z, box[0].z)
-        )
-        high = V3(
-            max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
-        )
+        low = low.min(box[0])
+        high = high.max(box[1])
     var counts = V3(
         ceil((high.x - low.x) / h),
         ceil((high.y - low.y) / h),
@@ -604,7 +630,7 @@ def sample_mass(
     )
     var blocks = grid.bx * grid.by * grid.bz
     var threads = workers if workers > 0 else num_logical_cores()
-    var tasks = max(1, min(threads, blocks))
+    var tasks = clamp(threads, 1, blocks)
     var bones = len(animal.rig.bones)
     var tallies = List[InertiaTally](capacity=tasks * bones)
     for _ in range(tasks * bones):  # pragma: no branch

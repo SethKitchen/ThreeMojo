@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.arm.nerves.dimensions import (
     arm_nerve_field,
     arm_nerve_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -76,5 +76,4 @@ def arm_nerve_from_dimensions(
     var S = dimensions.arm.stature.value
     var field = arm_nerve_field(dimensions, part, side).widened(0.0015 * S)
     var label = arm_nerve_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

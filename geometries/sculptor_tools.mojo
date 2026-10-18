@@ -40,7 +40,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2, length3, reciprocal_normalized3
+from math.norm import length2, length3, reciprocal_normalized3, squared_length3
+from math.vector3 import append_float64_xyz
 from geometries.sculptor_mesh import SculptorMesh
 from geometries.sculptor_utils import (
     Point3,
@@ -193,7 +194,7 @@ def _sub_fill_triangles(
 def _unit_or_x(n: Point3) -> Point3:
     """Return a normal made unit; a zero normal becomes (1, 0, 0), as
     three.js's `halfEdgeSplit` has it."""
-    if n.x == 0 and n.y == 0 and n.z == 0:
+    if n == Point3(0, 0, 0):
         return Point3(1, n.y, n.z)
     var unit = reciprocal_normalized3(n.x, n.y, n.z)
     return Point3(unit[0], unit[1], unit[2])
@@ -236,28 +237,24 @@ def _half_edge_split(
     var p2 = point_of(mesh.vertices, v2)
     var n1 = mesh._normal_at(v1)
     var n2 = mesh._normal_at(v2)
-    var sum = Point3(n1.x + n2.x, n1.y + n2.y, n1.z + n2.z)
-    _set_point(mesh.normals, mid, Point3(sum.x * 0.5, sum.y * 0.5, sum.z * 0.5))
+    var sum = n1 + n2
+    _set_point(mesh.normals, mid, sum * 0.5)
     var u1 = _unit_or_x(n1)
     var u2 = _unit_or_x(n2)
-    var d = u1.x * u2.x + u1.y * u2.y + u1.z * u2.z
+    var d = u1.dot(u2)
     var angle = pi if d <= -1 else (0.0 if d >= 1 else acos(d))
     var ex = p1.x - p2.x
     var ey = p1.y - p2.y
     var ez = p1.z - p2.z
     var offset = angle * 0.12 * length3(ex, ey, ez)
-    var length = sum.x * sum.x + sum.y * sum.y + sum.z * sum.z
+    var length = squared_length3[DType.float64](sum.x, sum.y, sum.z)
     offset = offset / sqrt(length) if length > 0 else offset
     var turn = ex * (u1.x - u2.x) + ey * (u1.y - u2.y) + ez * (u1.z - u2.z)
     offset = -offset if turn < 0 else offset
     _set_point(
         mesh.vertices,
         mid,
-        Point3(
-            (p1.x + p2.x) * 0.5 + sum.x * offset,
-            (p1.y + p2.y) * 0.5 + sum.y * offset,
-            (p1.z + p2.z) * 0.5 + sum.z * offset,
-        ),
+        (p1 + p2) * 0.5 + sum * offset,
     )
     # The new vertex is the next one, so its rings are appended, as a
     # JavaScript array grows when written one past its end.
@@ -351,7 +348,7 @@ def _subdivide(
             _half_edge_split(mesh, sub, tri, c, a, b)
     var new_tris = mesh.expands_faces(_count_up(faces_before, mesh.nb_faces), 1)
     var all_tris = tris.copy()
-    all_tris.extend(new_tris.copy())
+    all_tris.extend(Span(new_tris))
     var tag = mesh.next_tag_flag()
     var result = List[Int]()
     for tri in all_tris:  # pragma: no branch
@@ -583,7 +580,7 @@ def _dec_edge_collapse(
     dec.verts_decimated.append(v2)
     var n1 = mesh._normal_at(v1)
     var n2 = mesh._normal_at(v2)
-    var n = _unit_or_x(Point3(n1.x + n2.x, n1.y + n2.y, n1.z + n2.z))
+    var n = _unit_or_x(n1 + n2)
     _set_point(mesh.normals, v1, n)
     remove_element(mesh.vert_ring_face[v1], tri1)
     remove_element(mesh.vert_ring_face[v1], tri2)
@@ -613,15 +610,11 @@ def _dec_edge_collapse(
     mean_y /= Float64(ring_count)
     mean_z /= Float64(ring_count)
     var p1 = point_of(mesh.vertices, v1)
-    var dot_n = (
-        n.x * (mean_x - p1.x) + n.y * (mean_y - p1.y) + n.z * (mean_z - p1.z)
-    )
+    var dot_n = n.dot(Point3(mean_x, mean_y, mean_z) - p1)
     _set_point(
         mesh.vertices,
         v1,
-        Point3(
-            mean_x - n.x * dot_n, mean_y - n.y * dot_n, mean_z - n.z * dot_n
-        ),
+        Point3(mean_x, mean_y, mean_z) - n * dot_n,
     )
     mesh.vert_tag_flags[v2] = -1
     mesh.faces_tag_flags[tri1] = -1
@@ -706,10 +699,10 @@ def _dec_try(
     var v1 = point_of(mesh.vertices, i1)
     var v2 = point_of(mesh.vertices, i2)
     var v3 = point_of(mesh.vertices, i3)
-    var dx = (v1.x + v2.x + v3.x) / 3.0 - center.x
-    var dy = (v1.y + v2.y + v3.y) / 3.0 - center.y
-    var dz = (v1.z + v2.z + v3.z) / 3.0 - center.z
-    var fall_off = dx * dx + dy * dy + dz * dz
+    var from_center = (v1 + v2 + v3) / 3.0 - center
+    var fall_off = squared_length3[DType.float64](
+        from_center.x, from_center.y, from_center.z
+    )
     if fall_off >= radius2 * 2.0:
         return
     if fall_off < radius2:
@@ -821,9 +814,7 @@ def laplacian_smooth(mesh: SculptorMesh, vertices: List[Int]) -> List[Float32]:
     var smooth = List[Float32](capacity=len(vertices) * 3)
     for vertex in vertices:
         var p = _smoothed(mesh, vertex)
-        smooth.append(Float32(p.x))
-        smooth.append(Float32(p.y))
-        smooth.append(Float32(p.z))
+        append_float64_xyz(smooth, p.x, p.y, p.z)
     return smooth^
 
 
@@ -838,19 +829,17 @@ def _smoothed(mesh: SculptorMesh, vertex: Int) -> Point3:
         for neighbor in mesh.vert_ring_vert[vertex]:  # pragma: no branch
             if mesh.vert_on_edge[neighbor] == 1:
                 var q = point_of(mesh.vertices, neighbor)
-                edge_sum = Point3(
-                    edge_sum.x + q.x, edge_sum.y + q.y, edge_sum.z + q.z
-                )
+                edge_sum = edge_sum + q
                 edge_count += 1
         if edge_count >= 2:
             var n = Float64(edge_count)
-            return Point3(edge_sum.x / n, edge_sum.y / n, edge_sum.z / n)
+            return edge_sum / n
     var sum = Point3(0, 0, 0)
     for neighbor in mesh.vert_ring_vert[vertex]:  # pragma: no branch
         var q = point_of(mesh.vertices, neighbor)
-        sum = Point3(sum.x + q.x, sum.y + q.y, sum.z + q.z)
+        sum = sum + q
     var n = Float64(count)
-    return Point3(sum.x / n, sum.y / n, sum.z / n)
+    return sum / n
 
 
 def smooth_tangent_verts(
@@ -870,21 +859,13 @@ def smooth_tangent_verts(
         var vertex = vertices[i]
         var v = point_of(mesh.vertices, vertex)
         var n = mesh._normal_at(vertex)
-        if n.x == 0 and n.y == 0 and n.z == 0:
+        if n == Point3(0, 0, 0):
             continue
         var unit = reciprocal_normalized3(n.x, n.y, n.z)
         n = Point3(unit[0], unit[1], unit[2])
         var s = point_of(smooth, i)
-        var d = n.x * (s.x - v.x) + n.y * (s.y - v.y) + n.z * (s.z - v.z)
-        _set_point(
-            mesh.vertices,
-            vertex,
-            Point3(
-                v.x + (s.x - n.x * d - v.x) * intensity,
-                v.y + (s.y - n.y * d - v.y) * intensity,
-                v.z + (s.z - n.z * d - v.z) * intensity,
-            ),
-        )
+        var d = n.dot(s - v)
+        _set_point(mesh.vertices, vertex, v + (s - n * d - v) * intensity)
 
 
 def get_front_vertices(
@@ -904,7 +885,7 @@ def get_front_vertices(
     var front = List[Int]()
     for vertex in vertices:  # pragma: no branch
         var n = mesh._normal_at(vertex)
-        if n.x * eye_dir.x + n.y * eye_dir.y + n.z * eye_dir.z <= 0:
+        if n.dot(eye_dir) <= 0:
             front.append(vertex)
     return front^
 
@@ -923,8 +904,8 @@ def area_normal(mesh: SculptorMesh, vertices: List[Int]) -> Optional[Point3]:
     var sum = Point3(0, 0, 0)
     for vertex in vertices:
         var n = mesh._normal_at(vertex)
-        sum = Point3(sum.x + n.x, sum.y + n.y, sum.z + n.z)
-    if sum.x == 0 and sum.y == 0 and sum.z == 0:
+        sum = sum + n
+    if sum == Point3(0, 0, 0):
         return None
     var unit = reciprocal_normalized3(sum.x, sum.y, sum.z)
     return Point3(unit[0], unit[1], unit[2])
@@ -943,9 +924,9 @@ def area_center(mesh: SculptorMesh, vertices: List[Int]) -> Point3:
     var sum = Point3(0, 0, 0)
     for vertex in vertices:  # pragma: no branch
         var p = point_of(mesh.vertices, vertex)
-        sum = Point3(sum.x + p.x, sum.y + p.y, sum.z + p.z)
+        sum = sum + p
     var n = Float64(len(vertices))
-    return Point3(sum.x / n, sum.y / n, sum.z / n)
+    return sum / n
 
 
 def _reach(
@@ -954,10 +935,33 @@ def _reach(
     """Return how far a vertex is from the center, as a share of the
     radius: the vertex minus the center, as three.js measures it."""
     var p = point_of(mesh.vertices, vertex)
-    var dx = p.x - center.x
-    var dy = p.y - center.y
-    var dz = p.z - center.z
-    return length3(dx, dy, dz) / radius
+    var offset = p - center
+    return length3(offset.x, offset.y, offset.z) / radius
+
+
+def _tenth_deform(
+    radius_sq: Float64, strength: Float64, negative: Bool
+) -> Tuple[Float64, Float64]:
+    """Return the brush radius and a signed tenth of that radius."""
+    var radius = sqrt(radius_sq)
+    var deform = strength * radius * 0.1
+    deform = -deform if negative else deform
+    return radius, deform
+
+
+def _brush_shift(
+    mesh: SculptorMesh,
+    vertex: Int,
+    center: Point3,
+    radius: Float64,
+    deform: Float64,
+) -> Tuple[Bool, Float64]:
+    """Return whether a vertex is inside the brush, and its falloff times
+    the deform. A vertex on the rim is outside."""
+    var dist = _reach(mesh, vertex, center, radius)
+    if dist >= 1.0:
+        return False, 0.0
+    return True, falloff(dist) * deform
 
 
 # --- tools -----------------------------------------------------------------
@@ -983,24 +987,15 @@ def tool_brush(
         strength: How far, from zero to one: a tenth of the radius at one.
         negative: Whether to lower instead.
     """
-    var radius = sqrt(radius_sq)
-    var deform = strength * radius * 0.1
-    deform = -deform if negative else deform
+    var radius, deform = _tenth_deform(radius_sq, strength, negative)
     for vertex in vertices:  # pragma: no branch
-        var dist = _reach(mesh, vertex, center, radius)
-        if dist >= 1.0:
-            continue
-        var fall_off = falloff(dist) * deform
-        var p = point_of(mesh.vertices, vertex)
-        _set_point(
-            mesh.vertices,
-            vertex,
-            Point3(
-                p.x + normal.x * fall_off,
-                p.y + normal.y * fall_off,
-                p.z + normal.z * fall_off,
-            ),
+        var inside, fall_off = _brush_shift(
+            mesh, vertex, center, radius, deform
         )
+        if not inside:
+            continue
+        var p = point_of(mesh.vertices, vertex)
+        _set_point(mesh.vertices, vertex, p + normal * fall_off)
 
 
 def tool_flatten(
@@ -1030,25 +1025,18 @@ def tool_flatten(
     var comp = -1.0 if negative else 1.0
     for vertex in vertices:  # pragma: no branch
         var p = point_of(mesh.vertices, vertex)
-        var dist_to_plane = (
-            (p.x - plane_point.x) * normal.x
-            + (p.y - plane_point.y) * normal.y
-            + (p.z - plane_point.z) * normal.z
-        )
+        var dist_to_plane = (p - plane_point).dot(normal)
         if dist_to_plane * comp > 0:
             continue
-        var dist = _reach(mesh, vertex, center, radius)
-        if dist >= 1.0:
+        var inside, fall_off = _brush_shift(
+            mesh, vertex, center, radius, dist_to_plane * strength
+        )
+        if not inside:
             continue
-        var fall_off = falloff(dist) * dist_to_plane * strength
         _set_point(
             mesh.vertices,
             vertex,
-            Point3(
-                p.x - normal.x * fall_off,
-                p.y - normal.y * fall_off,
-                p.z - normal.z * fall_off,
-            ),
+            p - normal * fall_off,
         )
 
 
@@ -1070,14 +1058,13 @@ def tool_inflate(
         strength: How far, from zero to one: a tenth of the radius at one.
         negative: Whether to deflate instead.
     """
-    var radius = sqrt(radius_sq)
-    var deform = strength * radius * 0.1
-    deform = -deform if negative else deform
+    var radius, deform = _tenth_deform(radius_sq, strength, negative)
     for vertex in vertices:  # pragma: no branch
-        var dist = _reach(mesh, vertex, center, radius)
-        if dist >= 1.0:
+        var inside, fall_off = _brush_shift(
+            mesh, vertex, center, radius, deform
+        )
+        if not inside:
             continue
-        var fall_off = falloff(dist) * deform
         var n = mesh._normal_at(vertex)
         var n_len = length3(n.x, n.y, n.z)
         fall_off = fall_off / n_len if n_len > 0 else fall_off
@@ -1085,9 +1072,7 @@ def tool_inflate(
         _set_point(
             mesh.vertices,
             vertex,
-            Point3(
-                p.x + n.x * fall_off, p.y + n.y * fall_off, p.z + n.z * fall_off
-            ),
+            p + n * fall_off,
         )
 
 
@@ -1109,11 +1094,7 @@ def tool_smooth(mut mesh: SculptorMesh, vertices: List[Int], strength: Float64):
         _set_point(
             mesh.vertices,
             vertices[i],
-            Point3(
-                p.x * keep + s.x * intensity,
-                p.y * keep + s.y * intensity,
-                p.z * keep + s.z * intensity,
-            ),
+            p * keep + s * intensity,
         )
 
 
@@ -1140,18 +1121,10 @@ def tool_pinch(
     deform = -deform if negative else deform
     for vertex in vertices:  # pragma: no branch
         var p = point_of(mesh.vertices, vertex)
-        var dx = center.x - p.x
-        var dy = center.y - p.y
-        var dz = center.z - p.z
-        var dist = length3(dx, dy, dz) / radius
+        var offset = center - p
+        var dist = length3(offset.x, offset.y, offset.z) / radius
         var fall_off = falloff(dist) * deform
-        _set_point(
-            mesh.vertices,
-            vertex,
-            Point3(
-                p.x + dx * fall_off, p.y + dy * fall_off, p.z + dz * fall_off
-            ),
-        )
+        _set_point(mesh.vertices, vertex, p + offset * fall_off)
 
 
 def tool_crease(
@@ -1181,10 +1154,8 @@ def tool_crease(
     brush_factor = -brush_factor if negative else brush_factor
     for vertex in vertices:  # pragma: no branch
         var p = point_of(mesh.vertices, vertex)
-        var dx = center.x - p.x
-        var dy = center.y - p.y
-        var dz = center.z - p.z
-        var dist = length3(dx, dy, dz) / radius
+        var offset = center - p
+        var dist = length3(offset.x, offset.y, offset.z) / radius
         if dist >= 1.0:
             continue
         var fall_off = falloff(dist)
@@ -1193,11 +1164,7 @@ def tool_crease(
         _set_point(
             mesh.vertices,
             vertex,
-            Point3(
-                p.x + dx * pinch + normal.x * brush_mod,
-                p.y + dy * pinch + normal.y * brush_mod,
-                p.z + dz * pinch + normal.z * brush_mod,
-            ),
+            p + offset * pinch + normal * brush_mod,
         )
 
 
@@ -1225,11 +1192,7 @@ def tool_drag(
         _set_point(
             mesh.vertices,
             vertex,
-            Point3(
-                p.x + drag_dir.x * fall_off,
-                p.y + drag_dir.y * fall_off,
-                p.z + drag_dir.z * fall_off,
-            ),
+            p + drag_dir * fall_off,
         )
 
 
@@ -1255,14 +1218,8 @@ def tool_scale(
     var scale = delta_scale * 0.01
     for vertex in vertices:  # pragma: no branch
         var p = point_of(mesh.vertices, vertex)
-        var dx = p.x - center.x
-        var dy = p.y - center.y
-        var dz = p.z - center.z
-        var fall_off = falloff(length3(dx, dy, dz) / radius) * scale
-        _set_point(
-            mesh.vertices,
-            vertex,
-            Point3(
-                p.x + dx * fall_off, p.y + dy * fall_off, p.z + dz * fall_off
-            ),
+        var offset = p - center
+        var fall_off = (
+            falloff(length3(offset.x, offset.y, offset.z) / radius) * scale
         )
+        _set_point(mesh.vertices, vertex, p + offset * fall_off)

@@ -33,6 +33,7 @@ the supersampled frame is averaged, a pixel's coverage follows its alpha.
 
 from materials.nodes import AT_HERE, AT_RIGHT, AT_UP, NodeSource
 from materials.nodes import node_attributes
+from math.sine import fraction
 from math.vector3 import Vector3
 from std.memory import bitcast
 from render.framebuffer import FloatColor
@@ -45,12 +46,6 @@ comptime ALPHA_HASH_SCALE = Float32(0.05)
 comptime MIN_HASH_THRESHOLD = Float32(1.0e-6)
 # A quarter of one byte of the encoded color: three.js's dither step.
 comptime DITHER_STEP = Float32(0.25 / 255.0)
-
-
-@always_inline
-def _fract(value: Float32) -> Float32:
-    """Return the fractional part of `value`, GLSL's `fract`."""
-    return value - floor(value)
 
 
 @always_inline
@@ -70,7 +65,7 @@ def fragment_rand(x: Float32, y: Float32) -> Float32:
     var dt = x * Float32(12.9898) + y * Float32(78.233)
     var turn = Float32(pi)
     var sn = dt - turn * floor(dt / turn)
-    return _fract(sin(sn) * Float32(43758.5453))
+    return fraction(sin(sn) * Float32(43758.5453))
 
 
 @always_inline
@@ -108,7 +103,7 @@ def dither(color: FloatColor, x: Int, y: Int, height: Int) -> FloatColor:
 @always_inline
 def _hash2d(x: Float32, y: Float32) -> Float32:
     """Return three.js's `hash2D`."""
-    return _fract(
+    return fraction(
         Float32(1.0e4)
         * sin(17 * x + Float32(0.1) * y)
         * (Float32(0.1) + abs(sin(13 * y + x)))
@@ -160,7 +155,7 @@ def alpha_hash_threshold(
             floor(high * position.z),
         )
     )
-    var lerp = _fract(level)
+    var lerp = fraction(level)
     var x = (1 - lerp) * first + lerp * second
     var a = min(lerp, 1 - lerp)
     var threshold: Float32

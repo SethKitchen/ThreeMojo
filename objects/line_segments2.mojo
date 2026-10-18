@@ -43,10 +43,11 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
+from core.ordinal import require_draw_ids, require_valid
 from materials.material import MaterialId
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from objects.line import SEGMENTS, segment_count
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, append_float_rgb
 from render.linerule import dash_covers
 from std.math import ceil, floor, max, min, pi, sqrt
 
@@ -78,6 +79,22 @@ struct LineCoverage(Equatable, ImplicitlyCopyable, Writable):
 
 comptime SOLID_LINE_COVERAGE = LineCoverage(0)
 comptime STRAND_LINE_COVERAGE = LineCoverage(1)
+
+
+def require_line_coverage(coverage: LineCoverage) raises:
+    """Refuse a wide-line coverage that is not named.
+
+    Nothing. The call returns when the rule is named.
+
+    Args:
+        coverage: The coverage rule.
+
+    Raises:
+        Error: If the coverage is not named.
+    """
+    require_valid(
+        coverage.is_valid(), "A wide line needs a named coverage rule"
+    )
 
 
 struct LineSegments2(ImplicitlyCopyable):
@@ -126,14 +143,10 @@ struct LineSegments2(ImplicitlyCopyable):
         Raises:
             Error: If an id is negative or the coverage is not named.
         """
-        if node.value < 0:
-            raise Error("A wide line must name a scene node")
-        if geometry.value < 0:
-            raise Error("A wide line must name a geometry")
-        if material.value < 0:
-            raise Error("A wide line must name a material")
-        if not coverage.is_valid():
-            raise Error("A wide line needs a named coverage rule")
+        require_draw_ids(
+            node.value, geometry.value, material.value, "A wide line"
+        )
+        require_line_coverage(coverage)
         self.geometry = geometry
         self.material = material
         self.node = node
@@ -145,6 +158,22 @@ struct LineSegments2(ImplicitlyCopyable):
 # three.js's `Line2` is a `LineSegments2` with a path for a geometry; see
 # the module docstring.
 comptime Line2 = LineSegments2
+
+
+def require_wide_colors(colors: Int, points: Int) raises:
+    """Refuse a wide line that has colors, but not one a point.
+
+    Nothing. The call returns when there are no colors, or one a point.
+
+    Args:
+        colors: How many colors the line holds.
+        points: How many points the line holds.
+
+    Raises:
+        Error: If there are colors, but not one per point.
+    """
+    if colors > 0 and colors != points:
+        raise Error("A wide line needs one color per point, or none")
 
 
 def _geometry_of(
@@ -163,22 +192,17 @@ def _geometry_of(
         Error: If there are colors, but not one per point.
     """
     var has_colors = len(colors) > 0
-    if has_colors and len(colors) != len(points):
-        raise Error("A wide line needs one color per point, or none")
+    require_wide_colors(len(colors), len(points))
     var numbers = List[Float32]()
     for index in range(len(points)):
-        numbers.append(points[index].x)
-        numbers.append(points[index].y)
-        numbers.append(points[index].z)
+        append_vector3(numbers, points[index])
     var shape = BufferGeometry()
     shape.set_attribute(String(POSITION), BufferAttribute(numbers^, 3))
     if has_colors:
         var channels = List[Float32]()
         # At least one: `has_colors` asked for a count above zero.
         for index in range(len(colors)):  # pragma: no branch
-            channels.append(colors[index].r)
-            channels.append(colors[index].g)
-            channels.append(colors[index].b)
+            append_float_rgb(channels, colors[index])
         shape.set_attribute(String(COLOR), BufferAttribute(channels^, 3))
     return shape^
 
@@ -227,8 +251,7 @@ def line_geometry(
     Raises:
         Error: If there are colors, but not one per point.
     """
-    if len(colors) > 0 and len(colors) != len(points):
-        raise Error("A wide line needs one color per point, or none")
+    require_wide_colors(len(colors), len(points))
     var pairs = List[Vector3]()
     var tints = List[FloatColor]()
     for index in range(len(points) - 1):
@@ -238,6 +261,24 @@ def line_geometry(
             tints.append(colors[index])
             tints.append(colors[index + 1])
     return _geometry_of(pairs, tints)
+
+
+def require_unindexed_wide_line(geometry: BufferGeometry) raises:
+    """Refuse an indexed wide-line geometry.
+
+    Nothing. The call returns when the geometry has no index.
+
+    Args:
+        geometry: The paired-point geometry.
+
+    Raises:
+        Error: If the geometry is indexed.
+    """
+    if geometry.is_indexed():
+        raise Error(
+            "A wide line geometry cannot be indexed: its points are paired"
+            " in the order they are given"
+        )
 
 
 def drawn_segments(geometry: BufferGeometry) raises -> Tuple[Int, Int]:
@@ -257,11 +298,7 @@ def drawn_segments(geometry: BufferGeometry) raises -> Tuple[Int, Int]:
         Error: If the geometry is indexed, has no positions, holds an odd
             number of points, or has an invalid draw range.
     """
-    if geometry.is_indexed():
-        raise Error(
-            "A wide line geometry cannot be indexed: its points are paired"
-            " in the order they are given"
-        )
+    require_unindexed_wide_line(geometry)
     _ = segment_count(SEGMENTS, geometry.vertex_count())
     var visible = geometry.drawn_vertices()
     return (visible[0], visible[1] // 2)

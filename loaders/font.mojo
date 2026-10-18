@@ -57,12 +57,19 @@ is skipped. three.js keeps it, and its `getPoints` then drops the repeated
 point, so the shape is the same.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 from loaders.js_number import js_string_to_number
+from loaders.js_text import split_fields
 from loaders.json import NO_NODE, OBJECT, STRING, JsonDocument, parse_json
 from math.path import Shape
 from math.shape_path import ShapePath
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from std.collections import Dict
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+)
 from std.math import isfinite, isnan
 from std.pathlib import Path
 from units.si import Length, METER
@@ -76,12 +83,7 @@ struct OutlineVerb(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four commands there are."""
-        return (
-            self == MOVE_TO
-            or self == LINE_TO
-            or self == QUADRATIC_TO
-            or self == CUBIC_TO
-        )
+        return ordinal_valid(self.value, CUBIC_TO.value)
 
     def point_count(self) -> Int:
         """Return how many points the command carries: its control points
@@ -127,8 +129,9 @@ struct OutlineStep(Copyable, Movable):
             Error: If the verb is not one of the four, or the count of
                 numbers does not match it.
         """
-        if not verb.is_valid():
-            raise Error("Font: an outline step has an unknown command")
+        require_valid(
+            verb.is_valid(), "Font: an outline step has an unknown command"
+        )
         if len(coordinates) != verb.point_count() * 2:
             raise Error("Font: an outline step has the wrong count of numbers")
         self.verb = verb
@@ -151,6 +154,21 @@ struct OutlineStep(Copyable, Movable):
         return Vector2(
             self.coordinates[index * 2], self.coordinates[index * 2 + 1]
         )
+
+
+def require_outline_drawn(drawn: Bool) raises:
+    """Refuse a move that draws nothing.
+
+    Nothing. The call returns when the outline drew.
+
+    Args:
+        drawn: Whether the outline drew since the previous move.
+
+    Raises:
+        Error: If the outline moved and drew nothing.
+    """
+    if not drawn:
+        raise Error("an outline moves and draws nothing")
 
 
 struct Glyph(Copyable, Movable):
@@ -176,20 +194,17 @@ struct Glyph(Copyable, Movable):
                 it moves, or a move draws nothing before the next move or
                 the end.
         """
-        if not isfinite(advance):
-            raise Error("its advance is not finite")
+        require_finite(Float64(advance), "its advance is not finite")
         var drawn = True
         for index in range(len(steps)):
             if steps[index].verb == MOVE_TO:
-                if not drawn:
-                    raise Error("an outline moves and draws nothing")
+                require_outline_drawn(drawn)
                 drawn = False
             elif index == 0:
                 raise Error("an outline draws before it moves")
             else:
                 drawn = True
-        if not drawn:
-            raise Error("an outline moves and draws nothing")
+        require_outline_drawn(drawn)
         self.advance = advance
         self.steps = steps^
 
@@ -236,9 +251,7 @@ def parse_outline(outline: String) raises -> List[OutlineStep]:
             `z`, which three.js's `TTFLoader` writes to close a contour,
             is stepped over, as three.js's `Font` steps over it.
     """
-    var tokens = List[String]()
-    for token in outline.split():
-        tokens.append(String(token))
+    var tokens = split_fields(outline)
     var steps = List[OutlineStep]()
     var at = 0
     while at < len(tokens):
@@ -342,12 +355,15 @@ struct Font(Movable):
             Error: If the resolution is not positive and finite, a metric
                 is not finite, or a key is not one character.
         """
-        if not isfinite(resolution) or resolution <= 0:
-            raise Error("Font: the resolution must be positive")
+        require_positive_finite(
+            Float64(resolution), "Font: the resolution must be positive"
+        )
         if not isfinite(y_min) or not isfinite(y_max):
             raise Error("Font: the bounding box must be finite")
-        if not isfinite(underline_thickness):
-            raise Error("Font: the underline thickness must be finite")
+        require_finite(
+            Float64(underline_thickness),
+            "Font: the underline thickness must be finite",
+        )
         for key in glyphs.keys():
             if not _one_character(key):
                 raise Error(
@@ -436,8 +452,7 @@ struct Font(Movable):
                 has no glyph and the font has no `?`.
         """
         var em = Float64(size.to(METER))
-        if not isfinite(em) or em <= 0:
-            raise Error("Font: a text size must be positive")
+        require_positive_finite(em, "Font: a text size must be positive")
         var scale = em / Float64(self.resolution)
         var line = (
             Float64(self.y_max)
@@ -483,11 +498,6 @@ struct Font(Movable):
         return shapes^
 
 
-def _same(first: Vector2, second: Vector2) -> Bool:
-    """Return True if two points are the same point."""
-    return first.x == second.x and first.y == second.y
-
-
 def _glyph_path(
     glyph: Glyph, scale: Float64, offset_x: Float64, offset_y: Float64
 ) raises -> ShapePath:
@@ -517,11 +527,11 @@ def _glyph_path(
         var still = True
         for which in range(step.verb.point_count()):  # pragma: no branch
             var raw = step.point(which)
-            var placed = Vector2(
-                Float32(Float64(raw.x) * scale + offset_x),
-                Float32(Float64(raw.y) * scale + offset_y),
+            var placed = vector2_from_float64(
+                Float64(raw.x) * scale + offset_x,
+                Float64(raw.y) * scale + offset_y,
             )
-            if not _same(placed, pen):
+            if placed != pen:
                 still = False
             points.append(placed)
         if step.verb == MOVE_TO:

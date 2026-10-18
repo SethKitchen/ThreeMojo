@@ -19,6 +19,7 @@ and moved to the origin.
 """
 
 from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_positive
 from helpers.segments import Segments
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -97,8 +98,7 @@ def arrow_helper(
     if direction.length() == 0:
         raise Error("An arrow helper needs a direction with some length")
     var reach = length.to(METER)
-    if reach <= 0:
-        raise Error("An arrow helper needs a positive length")
+    require_positive(reach, "An arrow helper needs a positive length")
     var head = reach * HEAD_LENGTH_RATIO
     if Bool(head_length):
         head = head_length.value().to(METER)

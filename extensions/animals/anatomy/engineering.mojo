@@ -24,6 +24,8 @@ mass correction. `matched` describes reference identity, not validated
 anatomy. Source excerpts and derived DESIGN templates are distinct.
 """
 
+from core.ordinal import require_index_in_count, require_valid
+from math.finite import positive_finite, require_positive_finite
 from extensions.anatomy.evidence import DESIGN, Evidence
 from extensions.anatomy.inertia import InertiaTally
 from extensions.animals.anatomy.body import species_body
@@ -40,6 +42,7 @@ from extensions.animals.options import (
 from extensions.animals.registry import SpeciesId, species_variants
 from std.math import isfinite
 from extensions.animals.warp import Warps, scale_warp
+from units.measure import length_meters
 from units.si import KILOGRAM, METER, Length, Mass
 
 # Canonical samples per reference length.
@@ -65,6 +68,20 @@ def _check_reference_support(
             "Unsupported reference: pass allow_estimates=True for a template"
             " estimate"
         )
+
+
+def require_calibration_variant(variant: Variant) raises:
+    """Refuse a calibration variant that is not named.
+
+    Nothing. The call returns when the variant is valid.
+
+    Args:
+        variant: The morph.
+
+    Raises:
+        Error: If the variant is not valid.
+    """
+    require_valid(variant.is_valid(), "A calibration variant must be named")
 
 
 @fieldwise_init
@@ -107,8 +124,7 @@ struct Calibration(ImplicitlyCopyable, Writable):
                 reference estimates were not explicitly requested.
         """
         var body = species_body(self.species)
-        if not self.variant.is_valid():
-            raise Error("A calibration variant must be named")
+        require_calibration_variant(self.variant)
         if self.variant.value >= len(species_variants(self.species)):
             raise Error("A calibration variant must belong to its species")
         if self.variant.value < 0 and body.variant >= 0:
@@ -125,12 +141,12 @@ struct Calibration(ImplicitlyCopyable, Writable):
             body.model_evidence(),
             self.allow_estimates,
         )
-        if not (isfinite(self.scale) and self.scale > 0.0 and self.scale < 1e3):
+        if not (positive_finite(Float64(self.scale)) and self.scale < 1e3):
             raise Error("A calibration scale must be positive and finite")
-        if not (isfinite(self.density_factor) and self.density_factor > 0.0):
-            raise Error(
-                "A calibration density factor must be positive and finite"
-            )
+        require_positive_finite(
+            Float64(self.density_factor),
+            "A calibration density factor must be positive and finite",
+        )
         var values = [
             self.measured.value,
             self.published.value,
@@ -138,11 +154,10 @@ struct Calibration(ImplicitlyCopyable, Writable):
             self.published_mass.value,
         ]
         for value in values:  # pragma: no branch
-            if not (isfinite(value) and value > 0.0):
-                raise Error(
-                    "Calibration reference quantities must be positive and"
-                    " finite"
-                )
+            require_positive_finite(
+                Float64(value),
+                "Calibration reference quantities must be positive and finite",
+            )
         if (
             self.published != body.reference_length
             or self.published_mass != body.male_mass
@@ -179,8 +194,11 @@ struct Calibration(ImplicitlyCopyable, Writable):
         if animal.species != self.species:
             raise Error("The calibration is for another species")
         var variant = animal.traits.variant
-        if variant < 0 or variant >= len(species_variants(animal.species)):
-            raise Error("The animal's resolved variant must be named")
+        require_index_in_count(
+            variant,
+            len(species_variants(animal.species)),
+            "The animal's resolved variant must be named",
+        )
         if self.variant.value >= 0 and variant != self.variant.value:
             raise Error("The calibration is for another morph")
         if animal.traits.get("anatomy_calibration_scale", 0.0) != 0.0:
@@ -208,8 +226,7 @@ def calibrate(
             unsupported estimates lack opt-in, or the sculpt cannot be measured.
     """
     var body = species_body(species)
-    if not variant.is_valid():
-        raise Error("A calibration variant must be named")
+    require_calibration_variant(variant)
     var morph = variant.value
     var matched = body.variant < 0 or morph == body.variant
     if morph < 0:
@@ -231,14 +248,14 @@ def calibrate(
     var published = Float64(body.reference_length.to(METER))
     # The reference landmark is analytic and independent of occupancy.
     # The fixed canonical grid only estimates mass.
-    var step = Length(Float32(published / CANON_CELLS), METER)
+    var step = length_meters(published / CANON_CELLS)
     var measured = Float64(reference_length(canon).to(METER))
     var scale = published / measured
     var target = Float64(body.male_mass.to(KILOGRAM))
     var cal = Calibration(
         scale,
         1.0,
-        Length(Float32(measured), METER),
+        length_meters(measured),
         body.reference_length,
         body.male_mass,
         body.male_mass,

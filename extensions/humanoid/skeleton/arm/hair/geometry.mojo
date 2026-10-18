@@ -24,7 +24,7 @@ from extensions.humanoid.skeleton.arm.hair.dimensions import (
     arm_hair_field,
     arm_hair_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.torso.sweep import Dome, Sweep, SweepField
 from extensions.humanoid.spec import HumanoidSpec
 from geometries.utils import merge_geometries
@@ -80,7 +80,6 @@ def arm_hair_from_dimensions(
             range, or if a shaft produces no surface.
     """
     var label = arm_hair_label(part)
-    check_detail(detail, label)
     var field = arm_hair_field(dimensions, part, side)
     return hair_mesh_from_field(
         field, DISPLAY_HAIR * dimensions.arm.stature.value, detail, label
@@ -114,5 +113,7 @@ def hair_mesh_from_field(
         var single = SweepField(
             one^, List[Dome](), side, field.k, field.epsilon, 0.002
         ).widened(display)
-        parts.append(mesh_field(single, single.low, single.high, detail, label))
+        parts.append(
+            mesh_checked(single, single.low, single.high, detail, label)
+        )
     return merge_geometries(parts)

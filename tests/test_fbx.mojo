@@ -16,6 +16,7 @@ surface is the same.
 """
 
 from core.assets import Assets
+from core.binary import append_little_endian
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
 from core.scene import Scene
@@ -237,16 +238,13 @@ comptime HERE = "assets/gltf/"
 def le(value: Int, width: Int) -> List[UInt8]:
     """Return a number as `width` little-endian bytes."""
     var out = List[UInt8]()
-    for index in range(width):
-        out.append(UInt8((value >> (8 * index)) & 0xFF))
+    append_little_endian(out, value, width)
     return out^
 
 
 def text_bytes(text: String) -> List[UInt8]:
     """Return a string's bytes."""
-    var out = List[UInt8]()
-    for byte in text.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](text.as_bytes())
     return out^
 
 
@@ -254,7 +252,7 @@ def joined(parts: List[List[UInt8]]) -> List[UInt8]:
     """Return byte lists one after another."""
     var out = List[UInt8]()
     for part in parts:
-        out.extend(part.copy())
+        out.extend(Span(part))
     return out^
 
 
@@ -296,7 +294,7 @@ def p_raw(bytes: List[UInt8]) -> List[UInt8]:
     """Return an `R` property."""
     var out = p_code("R")
     out.extend(le(len(bytes), 4))
-    out.extend(bytes.copy())
+    out.extend(Span(bytes))
     return out^
 
 
@@ -314,7 +312,7 @@ def p_array(
     else:
         out.extend(le(0, 4))
         out.extend(le(len(raw), 4))
-        out.extend(raw.copy())
+        out.extend(Span(raw))
     return out^
 
 

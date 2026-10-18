@@ -14,6 +14,7 @@ radii follow the warp's Jacobian there. The surface is then meshed from
 the warped field, so it stays a true distance field surface and its
 normals are exact.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from extensions.sdf.ids import (
     CONE,
@@ -32,6 +33,7 @@ from extensions.sdf.vector import (
     dot,
     frame_zy,
     length,
+    mix,
     smoothstep,
 )
 from std.math import cbrt
@@ -55,7 +57,7 @@ struct WarpKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to five.
         """
-        return self.value >= 0 and self.value < 6
+        return ordinal_valid(self.value, 6 - 1)
 
 
 comptime SCALE = WarpKind(0)
@@ -218,7 +220,7 @@ def apply_warp(w: Warp, p: V3) -> V3:
             1.0 - smoothstep(w.b - fade, w.b + fade, p.z)
         )
         var f = 1.0 + (w.k - 1.0) * band * smoothstep(cy * 0.35, cy * 0.7, p.y)
-        return V3(p.x * f, cy + (p.y - cy) * f, p.z)
+        return V3(p.x * f, mix(cy, p.y, f), p.z)
     # SHIFT: `c` to `d` is the ramp and `m` is the move.
     var ab = w.d - w.c
     var f = smoothstep(0.0, 1.0, dot(p - w.c, ab) / dot(ab, ab))
@@ -235,8 +237,7 @@ def check_warp(w: Warp) raises:
         Error: If the kind is not valid, a fade is empty or reversed, or
             a shift's segment is empty.
     """
-    if not w.kind.is_valid():
-        raise Error("Warp kind must be from 0 to 5")
+    require_valid(w.kind.is_valid(), "Warp kind must be from 0 to 5")
     if w.kind == SCALE_ABOUT and not w.b > w.a:
         raise Error("A scale-about warp must fade out over a positive width")
     if w.kind == LENGTH and not w.b > w.a:

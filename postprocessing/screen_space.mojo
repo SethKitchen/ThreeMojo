@@ -41,22 +41,33 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.extent import require_positive_extent, require_texel_count
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
+
+from math.finite import require_non_negative_finite, require_unit_range
 from postprocessing.sample_math import gaussian_pdf
-from math.norm import length2
+from math.norm import length2, squared_length2
 
 from core.layers import Layers
 from math.matrix4 import Matrix4
 from math.sine import fraction, noise_scale, sin_float32
-from math.utils import SeededRandom
+from math.utils import SeededRandom, edge_index
 from math.vector3 import Vector3
+from render.packing import packed_normal
 from postprocessing.sampling import sample, u_of, v_of
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.raster_state import (
     LOGARITHMIC_DEPTH,
     REVERSED_DEPTH,
     STANDARD_DEPTH,
     DepthMode,
     cleared_depth,
+    require_depth_mode,
     is_nearer,
     log_depth_factor,
 )
@@ -81,14 +92,7 @@ struct ScreenSpaceOutput(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six outputs there are."""
-        return (
-            self == DEFAULT_OUTPUT
-            or self == EFFECT_OUTPUT
-            or self == BLUR_OUTPUT
-            or self == BEAUTY_OUTPUT
-            or self == DEPTH_OUTPUT
-            or self == NORMAL_OUTPUT
-        )
+        return ordinal_valid(self.value, NORMAL_OUTPUT.value)
 
 
 # The effect over the frame: three.js's `OUTPUT.Default`.
@@ -196,10 +200,16 @@ struct DepthView(Movable):
                 of the far one, the projection cannot be inverted, or the
                 depth mode is none of the three.
         """
-        if width <= 0 or height <= 0:
-            raise Error("A depth view's size must be positive")
-        if len(ndc_depth) != width * height:
-            raise Error("A depth view needs one depth per pixel")
+        require_positive_extent(
+            width, height, "A depth view's size must be positive"
+        )
+        require_texel_count(
+            len(ndc_depth),
+            width,
+            height,
+            1,
+            "A depth view needs one depth per pixel",
+        )
         if len(normals) != 0 and len(normals) != width * height:
             raise Error("A depth view needs one normal per pixel or none")
         if not (
@@ -210,8 +220,7 @@ struct DepthView(Movable):
             raise Error("A depth view's near distance must be before its far")
         if projection.determinant() == 0:
             raise Error("A depth view's projection must be invertible")
-        if not mode.is_valid():
-            raise Error("A depth mode that is none of the three")
+        require_depth_mode(mode)
         self.width = width
         self.height = height
         self.projection = projection
@@ -436,10 +445,8 @@ def show_normals(mut frame: RenderTarget, normals: List[Vector3]):
         normals: One unit normal per pixel.
     """
     for slot in range(len(frame.colors)):  # pragma: no branch
-        var n = normals[slot]
-        frame.colors[slot] = FloatColor(
-            n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1
-        )
+        var n = packed_normal(normals[slot])
+        frame.colors[slot] = FloatColor(n.x, n.y, n.z, 1)
         frame.data[slot] = False
 
 
@@ -456,10 +463,58 @@ def multiply_light(mut frame: RenderTarget, values: List[Float32]):
         frame.colors[slot] = frame.colors[slot].scaled(values[slot])
 
 
-def _check_output(output: ScreenSpaceOutput) raises:
-    """Refuse an output that is none of the six."""
-    if not output.is_valid():
-        raise Error("A screen-space output must be one of the six named")
+def require_screen_output(output: ScreenSpaceOutput) raises:
+    """Refuse a screen-space output that is none of the six named outputs.
+
+    Nothing. The call returns when the output is named.
+
+    Args:
+        output: The output the pass writes.
+
+    Raises:
+        Error: If the output is none of the six.
+    """
+    require_valid(
+        output.is_valid(), "A screen-space output must be one of the six named"
+    )
+
+
+def _screen_shown(
+    mut frame: RenderTarget,
+    view: DepthView,
+    output: ScreenSpaceOutput,
+    mut normals: List[Vector3],
+    message: String,
+) raises -> Bool:
+    """Write beauty, depth, or normals, and report whether that finished
+    the pass.
+
+    Args:
+        frame: The frame. Depth and normal outputs replace it.
+        view: Its depth.
+        output: What the pass leaves.
+        normals: Set to the view normals when the pass continues.
+        message: The error when the frame and the depth differ in size.
+
+    Returns:
+        True when the frame is finished.
+
+    Raises:
+        Error: When the frame and the depth are not one size.
+    """
+    if frame.width != view.width or frame.height != view.height:
+        raise Error(message)
+    if output == BEAUTY_OUTPUT:
+        return True
+    if output == DEPTH_OUTPUT:
+        show_depth(frame, view)
+        return True
+    var found = view.normals()
+    if output == NORMAL_OUTPUT:
+        show_normals(frame, found)
+        return True
+    normals = found^
+    return False
 
 
 # --- SSAO -------------------------------------------------------------------
@@ -493,6 +548,20 @@ struct SsaoSettings(ImplicitlyCopyable):
         self.output = DEFAULT_OUTPUT
 
 
+def require_ssao_samples(size: Int) raises:
+    """Refuse an SSAO kernel that holds no sample.
+
+    Nothing. The call returns when the kernel holds at least one sample.
+
+    Args:
+        size: How many samples the kernel holds.
+
+    Raises:
+        Error: If `size` is below one.
+    """
+    require_positive(size, "An SSAO kernel holds at least one sample")
+
+
 def check_ssao(settings: SsaoSettings) raises:
     """Refuse SSAO settings no pass could run.
 
@@ -503,7 +572,7 @@ def check_ssao(settings: SsaoSettings) raises:
         Error: If the output is none of the six, the radius or a distance
             is negative or not finite, or the kernel is empty.
     """
-    _check_output(settings.output)
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.kernel_radius.value)
         and isfinite(settings.min_distance)
@@ -516,8 +585,7 @@ def check_ssao(settings: SsaoSettings) raises:
         or settings.max_distance < 0
     ):
         raise Error("An SSAO setting must not be negative")
-    if settings.kernel_size < 1:
-        raise Error("An SSAO kernel holds at least one sample")
+    require_ssao_samples(settings.kernel_size)
 
 
 def ssao_kernel(size: Int, seed: Int) raises -> List[Vector3]:
@@ -538,8 +606,7 @@ def ssao_kernel(size: Int, seed: Int) raises -> List[Vector3]:
     Raises:
         Error: If the size is not positive.
     """
-    if size < 1:
-        raise Error("An SSAO kernel holds at least one sample")
+    require_ssao_samples(size)
     var random = SeededRandom(seed)
     var kernel = List[Vector3](capacity=size)
     var index = 0
@@ -702,8 +769,8 @@ def ssao_blur(values: List[Float32], width: Int, height: Int) -> List[Float32]:
             while j <= SSAO_BLUR_REACH:
                 var i = -SSAO_BLUR_REACH
                 while i <= SSAO_BLUR_REACH:
-                    var column = max(0, min(width - 1, x + i))
-                    var row = max(0, min(height - 1, y + j))
+                    var column = edge_index(x + i, width)
+                    var row = edge_index(y + j, height)
                     sum += values[row * width + column]
                     i += 1
                 j += 1
@@ -732,18 +799,16 @@ def ssao_light(
             depth are not one size.
     """
     check_ssao(settings)
-    if frame.width != view.width or frame.height != view.height:
-        raise Error("An SSAO frame and its depth must be one size")
+    var normals = List[Vector3]()
+    if _screen_shown(
+        frame,
+        view,
+        settings.output,
+        normals,
+        "An SSAO frame and its depth must be one size",
+    ):
+        return
     var output = settings.output
-    if output == BEAUTY_OUTPUT:
-        return
-    if output == DEPTH_OUTPUT:
-        show_depth(frame, view)
-        return
-    var normals = view.normals()
-    if output == NORMAL_OUTPUT:
-        show_normals(frame, normals)
-        return
     var occlusion = ssao_occlusion(
         view,
         normals,
@@ -822,7 +887,7 @@ def check_sao(settings: SaoSettings) raises:
             is negative, or the scale, kernel radius or standard deviation
             is not positive.
     """
-    _check_output(settings.output)
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.bias)
         and isfinite(settings.intensity)
@@ -1100,18 +1165,16 @@ def sao_light(
             are not one size.
     """
     check_sao(settings)
-    if frame.width != view.width or frame.height != view.height:
-        raise Error("An SAO frame and its depth must be one size")
+    var normals = List[Vector3]()
+    if _screen_shown(
+        frame,
+        view,
+        settings.output,
+        normals,
+        "An SAO frame and its depth must be one size",
+    ):
+        return
     var output = settings.output
-    if output == BEAUTY_OUTPUT:
-        return
-    if output == DEPTH_OUTPUT:
-        show_depth(frame, view)
-        return
-    var normals = view.normals()
-    if output == NORMAL_OUTPUT:
-        show_normals(frame, normals)
-        return
     var occlusion = sao_occlusion(view, normals, settings, random_seed)
     if output == EFFECT_OUTPUT:
         show_values(frame, occlusion)
@@ -1191,17 +1254,17 @@ def check_ssr(settings: SsrSettings) raises:
             the opacity is outside zero to one, the thickness is negative,
             or the reach is not positive.
     """
-    _check_output(settings.output)
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.opacity)
         and isfinite(settings.max_distance.value)
         and isfinite(settings.thickness.value)
     ):
         raise Error("An SSR setting must be finite")
-    if settings.opacity < 0 or settings.opacity > 1:
-        raise Error("An SSR opacity runs from zero to one")
-    if settings.thickness.value < 0:
-        raise Error("An SSR thickness must not be negative")
+    require_unit_range(settings.opacity, "An SSR opacity runs from zero to one")
+    require_non_negative(
+        settings.thickness.value, "An SSR thickness must not be negative"
+    )
     if not settings.max_distance.value > 0:
         raise Error("An SSR reach must be positive")
 
@@ -1270,7 +1333,7 @@ def _ssr_pixel(
     y: Int,
 ) -> FloatColor:
     """Return one pixel of `ssr_reflections`."""
-    var none = FloatColor(0, 0, 0, 0)
+    var none = TRANSPARENT_BLACK
     var width = view.width
     var height = view.height
     var res_x = Float32(width)
@@ -1375,9 +1438,7 @@ def ssr_blur(
         The blurred reflections. Where no neighbor reflects anything, the
         light is black, which three.js leaves divided by zero.
     """
-    var out = List[FloatColor](
-        length=width * height, fill=FloatColor(0, 0, 0, 0)
-    )
+    var out = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     var y = 0
     while y < height:
         var x = 0
@@ -1454,24 +1515,22 @@ def ssr_light(
             are not one size.
     """
     check_ssr(settings)
-    if frame.width != view.width or frame.height != view.height:
-        raise Error("An SSR frame and its depth must be one size")
+    var normals = List[Vector3]()
+    if _screen_shown(
+        frame,
+        view,
+        settings.output,
+        normals,
+        "An SSR frame and its depth must be one size",
+    ):
+        return
     var output = settings.output
-    if output == BEAUTY_OUTPUT:
-        return
-    if output == DEPTH_OUTPUT:
-        show_depth(frame, view)
-        return
-    var normals = view.normals()
-    if output == NORMAL_OUTPUT:
-        show_normals(frame, normals)
-        return
     var source = frame.colors.copy()
     if settings.bouncing:
         source = bounced.copy()
         if len(source) != len(frame.colors):
             source = List[FloatColor](
-                length=len(frame.colors), fill=FloatColor(0, 0, 0, 0)
+                length=len(frame.colors), fill=TRANSPARENT_BLACK
             )
     var reflections = ssr_reflections(view, source, normals, settings)
     if settings.selective:
@@ -1480,10 +1539,10 @@ def ssr_light(
         for slot in range(len(reflections)):  # pragma: no branch
             var chosen = slot < len(selected) and selected[slot]
             if not chosen:
-                reflections[slot] = FloatColor(0, 0, 0, 0)
+                reflections[slot] = TRANSPARENT_BLACK
     for slot in range(len(ground)):
         if ground[slot]:
-            reflections[slot] = FloatColor(0, 0, 0, 0)
+            reflections[slot] = TRANSPARENT_BLACK
     if output == EFFECT_OUTPUT:
         _show_reflections(frame, reflections)
         return
@@ -1572,8 +1631,9 @@ def check_outline(settings: OutlineSettings) raises:
     ]
     for value in channels:  # pragma: no branch
         # The list is built above with ten entries.
-        if not (isfinite(value) and value >= 0):
-            raise Error("An outline setting must be finite and not negative")
+        require_non_negative_finite(
+            Float64(value), "An outline setting must be finite and not negative"
+        )
     if settings.use_pattern_texture and settings.pattern_texture == NO_TEXTURE:
         raise Error("An outline with a pattern must name its texture")
     if not settings.edge_thickness > 0:
@@ -1594,9 +1654,7 @@ def _outline_blur(
     image: `OutlinePass`'s separable blur, `max_radius` taps each side
     spread over `kernel_radius` texels of the output, with a sigma of half
     the radius."""
-    var out = List[FloatColor](
-        length=width * height, fill=FloatColor(0, 0, 0, 0)
-    )
+    var out = List[FloatColor](length=width * height, fill=TRANSPARENT_BLACK)
     var sigma = kernel_radius / 2
     var step = kernel_radius / Float32(max_radius)
     var du = Float32(0)
@@ -1674,8 +1732,7 @@ def outline_mask(
     """
     if len(all_depth) != len(selected_depth):
         raise Error("An outline's two depths must be one size")
-    if not mode.is_valid():
-        raise Error("A depth mode that is none of the three")
+    require_depth_mode(mode)
     var clear = cleared_depth(mode)
     var mask = List[FloatColor](capacity=len(all_depth))
     for slot in range(len(all_depth)):  # pragma: no branch
@@ -1728,8 +1785,13 @@ def outline_light(
     check_outline(settings)
     var width = frame.width
     var height = frame.height
-    if len(all_depth) != width * height:
-        raise Error("An outline's depth must be the frame's size")
+    require_texel_count(
+        len(all_depth),
+        width,
+        height,
+        1,
+        "An outline's depth must be the frame's size",
+    )
     var mask = outline_mask(all_depth, selected_depth, mode)
     var half_width = (width + 1) // OUTLINE_DOWNSAMPLE
     var half_height = (height + 1) // OUTLINE_DOWNSAMPLE
@@ -1770,7 +1832,7 @@ def outline_light(
             var c4 = sample(down, half_width, half_height, u, v - dv)
             var diff1 = (c1.r - c2.r) * 0.5
             var diff2 = (c3.r - c4.r) * 0.5
-            var d = sqrt(diff1 * diff1 + diff2 * diff2)
+            var d = sqrt(squared_length2[DType.float32](diff1, diff2))
             var seen = min(min(c1.g, c2.g), min(c3.g, c4.g))
             var color = hidden
             if 1 - seen > 0.001:

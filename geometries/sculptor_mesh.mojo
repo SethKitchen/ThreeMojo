@@ -39,7 +39,8 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.vector3 import Vector3
+from core.ordinal import require_index_in_count
+from math.vector3 import Vector3, vector3_from_float64
 
 from math.triangle_normal import (
     _triangle_cross_wide,
@@ -52,11 +53,14 @@ from math.norm import (
     length2,
     length3,
     reciprocal_normalized3,
+    squared_length3,
 )
+from math.finite import require_finite_group
 from core.buffer_geometry import BufferGeometry, POSITION
 from geometries.sculptor_utils import (
     MAX_FLAG,
     Point3,
+    point3_of,
     js_max,
     js_min,
     point_of,
@@ -328,11 +332,14 @@ struct SculptorMesh(Movable):
         var elements = List[Int](capacity=element_count)
         for i in range(element_count):  # pragma: no branch
             var source_index = geometry.index[i] if geometry.is_indexed() else i
-            if source_index < 0 or source_index >= source_count:
-                raise Error(
+            require_index_in_count(
+                source_index,
+                source_count,
+                (
                     "SculptorMesh: Triangle indices must reference valid"
                     " positions."
-                )
+                ),
+            )
             elements.append(source_index)
             referenced[source_index] = 1
         var source = List[Float32](length=source_count * 3, fill=0)
@@ -341,8 +348,10 @@ struct SculptorMesh(Movable):
             if referenced[i] == 0:
                 continue
             var p = position.vector3(i)
-            if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
-                raise Error("SculptorMesh: Position values must be finite.")
+            require_finite_group(
+                p.is_finite(),
+                "SculptorMesh: Position values must be finite.",
+            )
             source[i * 3] = p.x
             source[i * 3 + 1] = p.y
             source[i * 3 + 2] = p.z
@@ -459,21 +468,17 @@ struct SculptorMesh(Movable):
             var bx = v3.x - v1.x
             var by = v3.y - v1.y
             var bz = v3.z - v1.z
-            var raw = Vector3(
-                Float32(ay * bz - az * by),
-                Float32(az * bx - ax * bz),
-                Float32(ax * by - ay * bx),
+            var raw = vector3_from_float64(
+                ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
             )
-            var first = Vector3(Float32(v1.x), Float32(v1.y), Float32(v1.z))
-            var second = Vector3(Float32(v2.x), Float32(v2.y), Float32(v2.z))
-            var third = Vector3(Float32(v3.x), Float32(v3.y), Float32(v3.z))
+            var first = vector3_from_float64(v1.x, v1.y, v1.z)
+            var second = vector3_from_float64(v2.x, v2.y, v2.z)
+            var third = vector3_from_float64(v3.x, v3.y, v3.z)
             if not _ordinary_triangle_cross(
                 second - first, third - first, raw
             ) and _finite_triangle(first, second, third):
                 var wide = _triangle_cross_wide(first, second, third)
-                raw = Vector3(
-                    Float32(wide[0]), Float32(wide[1]), Float32(wide[2])
-                )
+                raw = vector3_from_float64(wide[0], wide[1], wide[2])
             self.face_normals[face * 3] = raw.x
             self.face_normals[face * 3 + 1] = raw.y
             self.face_normals[face * 3 + 2] = raw.z
@@ -522,9 +527,7 @@ struct SculptorMesh(Movable):
         if _ordinary_triangle_cross(
             b - a, c - a, cached
         ) or not _finite_triangle(a, b, c):
-            return Point3(
-                Float64(cached.x), Float64(cached.y), Float64(cached.z)
-            )
+            return point3_of(cached)
         var wide = _triangle_cross_wide(a, b, c)
         if (
             Float32(wide[0]) == cached.x
@@ -532,7 +535,7 @@ struct SculptorMesh(Movable):
             and Float32(wide[2]) == cached.z
         ):
             return Point3(wide[0], wide[1], wide[2])
-        return Point3(Float64(cached.x), Float64(cached.y), Float64(cached.z))
+        return point3_of(cached)
 
     def _vertex_area(self, vertex: Int) -> Point3:
         """Return the area-weighted vertex mean before Float32 storage."""
@@ -554,7 +557,7 @@ struct SculptorMesh(Movable):
         var x = self.normals[vertex * 3]
         var y = self.normals[vertex * 3 + 1]
         var z = self.normals[vertex * 3 + 2]
-        if _ordinary_squared(x * x + y * y + z * z):
+        if _ordinary_squared(squared_length3[DType.float32](x, y, z)):
             return normal
         var wide = self._vertex_area(vertex)
         if (
@@ -947,7 +950,7 @@ struct SculptorMesh(Movable):
             var dx = _outside(loose[0], loose[3], center.x)
             var dy = _outside(loose[1], loose[4], center.y)
             var dz = _outside(loose[2], loose[5], center.z)
-            if dx * dx + dy * dy + dz * dz > radius_sq:
+            if squared_length3[DType.float64](dx, dy, dz) > radius_sq:
                 continue
             if collect_leaves and len(self.cells[cell].children) != 8:
                 self._queue_leaf(cell)
@@ -1161,11 +1164,9 @@ def _weld_positions(
         if referenced[i] == 0:
             continue
         var p = point_of(source, i)
-        var grid = Point3(
-            (p.x - bounds[0]) * inverse_cell_size,
-            (p.y - bounds[1]) * inverse_cell_size,
-            (p.z - bounds[2]) * inverse_cell_size,
-        )
+        var grid = (
+            p - Point3(bounds[0], bounds[1], bounds[2])
+        ) * inverse_cell_size
         var cells: List[Int] = [
             Int(floor(grid.x)),
             Int(floor(grid.y)),
@@ -1247,7 +1248,7 @@ def _sqr_dist_to(merged: List[Float32], candidate: Int, p: Point3) -> Float64:
     var dx = q.x - p.x
     var dy = q.y - p.y
     var dz = q.z - p.z
-    return dx * dx + dy * dy + dz * dz
+    return squared_length3[DType.float64](dx, dy, dz)
 
 
 def _check_triangles(faces: List[Int], positions: List[Float32]) raises:

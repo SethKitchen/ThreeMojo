@@ -188,6 +188,7 @@ The type matters only in scene JSON. The exporter writes a group as `"Group"`, a
 | Member | Meaning |
 |---|---|
 | `set_number(key, x)`, `set_string(key, s)`, `set_boolean(key, b)`, `set_null(key)` | Set a key to one value. A number must be finite. |
+| `set_meters(key, length)`, `set_radians(key, angle)` | Set a key to a length in meters, or an angle in radians. The number must be finite. |
 | `set_json(key, text)` | Set a key to any one JSON value, such as an object or an array. |
 | `number(key)`, `string(key)`, `boolean(key)` | Read a value. Raises when the key is missing or the value is of another kind. |
 | `json(key)`, `kind(key)` | A value as JSON text, and its `JsonKind`. |

@@ -12,6 +12,8 @@ baked occlusion. SI units and source metadata do not validate anatomy,
 physical accuracy or engineering capability.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 
 @fieldwise_init
 struct AnatomyMode(Equatable, ImplicitlyCopyable, Writable):
@@ -25,7 +27,7 @@ struct AnatomyMode(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             True for game or engineering mode.
         """
-        return self == GAME_MODE or self == ENGINEERING_MODE
+        return ordinal_valid(self.value, ENGINEERING_MODE.value)
 
 
 # Visuals first: the coat, fur and baked shadows.
@@ -43,5 +45,6 @@ def require_mode(mode: AnatomyMode) raises:
     Raises:
         Error: If the mode is not game or engineering.
     """
-    if not mode.is_valid():
-        raise Error("An anatomy mode must be game or engineering")
+    require_valid(
+        mode.is_valid(), "An anatomy mode must be game or engineering"
+    )

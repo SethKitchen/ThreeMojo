@@ -36,6 +36,13 @@ interpolating the color, which is what this renderer used to do, puts a
 visible crease along every edge instead.
 """
 
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.clock import Clock
@@ -46,12 +53,9 @@ from lights.light import ambient_light, directional_light, point_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from renderers.renderer import Renderer
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/lamps.png"
 comptime WIDTH = 260
@@ -96,13 +100,9 @@ def frame_at(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(10, 11, 16))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(10, 11, 16))
 
     var assets = Assets()
     var ball = assets.geometries.add(
@@ -145,13 +145,15 @@ def main() raises:
     # Just enough fill that the unlit side is a shape rather than a hole.
     scene.add_light(ambient_light(Color(30, 34, 48), 3.14))
 
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.35, 3.4),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0.35, 3.4), Vector3(0, 0, 0))
 
     var frame_clock = Clock()
     frame_clock.start()
@@ -168,12 +170,4 @@ def main() raises:
             )
         )
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

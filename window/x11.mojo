@@ -22,6 +22,8 @@ or motion event holds its position at 64 and 68, its modifier state at
 visual on a little-endian machine takes; any other visual is refused.
 """
 
+from loaders.bytes import ascii_letter
+from core.binary import little_endian_i32, little_endian_uint
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
@@ -47,6 +49,11 @@ from std.ffi import OwnedDLHandle, c_int, external_call
 from std.os.path import exists
 from units.si import Duration
 from window.poll_timeout import poll_milliseconds
+from window.present import (
+    require_open,
+    require_presented_frame,
+    require_window_size,
+)
 
 # Linux finds Xlib by its soname.
 comptime LIBRARY = "libX11.so.6"
@@ -83,27 +90,6 @@ comptime ZPIXMAP = 2
 comptime POLLIN = 1
 
 
-def _int32(bytes: List[UInt8], offset: Int) -> Int:
-    """Return the little-endian signed 32-bit integer at an offset."""
-    var value = (
-        Int(bytes[offset])
-        | (Int(bytes[offset + 1]) << 8)
-        | (Int(bytes[offset + 2]) << 16)
-        | (Int(bytes[offset + 3]) << 24)
-    )
-    if value >= 1 << 31:
-        value -= 1 << 32
-    return value
-
-
-def _uint64(bytes: List[UInt8], offset: Int) -> Int:
-    """Return the little-endian 64-bit integer at an offset."""
-    var value = 0
-    for index in range(8):  # pragma: no branch
-        value |= Int(bytes[offset + index]) << (8 * index)
-    return value
-
-
 def key_of(symbol: Int, control: Bool) -> Key:
     """Return the key an X key symbol names, as the terminal decoder names
     it.
@@ -137,9 +123,8 @@ def key_of(symbol: Int, control: Bool) -> Key:
         return Key(8)
     if symbol < 0x20 or symbol > 0x7E:
         return Key(-1)
-    var lower = symbol | 0x20
-    if control and lower >= 0x61 and lower <= 0x7A:
-        return Key(lower - 0x60)
+    if control and ascii_letter(symbol):
+        return Key((symbol | 0x20) - 0x60)
     return Key(symbol)
 
 
@@ -155,9 +140,13 @@ def event_of(bytes: List[UInt8], symbol: Int) -> Optional[InputEvent]:
         port has no kind for: a button beyond the wheel, and every other
         type.
     """
-    var kind = _int32(bytes, 0)
+    var kind = little_endian_i32(bytes, 0)
     if kind == CONFIGURE_NOTIFY:
-        return InputEvent(RESIZE, x=_int32(bytes, 56), y=_int32(bytes, 60))
+        return InputEvent(
+            RESIZE,
+            x=little_endian_i32(bytes, 56),
+            y=little_endian_i32(bytes, 60),
+        )
     var pointer = (
         kind == KEY_PRESS
         or kind == KEY_RELEASE
@@ -167,10 +156,10 @@ def event_of(bytes: List[UInt8], symbol: Int) -> Optional[InputEvent]:
     )
     if not pointer:
         return None
-    var x = _int32(bytes, 64)
-    var y = _int32(bytes, 68)
-    var state = _int32(bytes, 80)
-    var detail = _int32(bytes, 84)
+    var x = little_endian_i32(bytes, 64)
+    var y = little_endian_i32(bytes, 68)
+    var state = little_endian_i32(bytes, 80)
+    var detail = little_endian_i32(bytes, 84)
     var shift = (state & SHIFT_MASK) != 0
     var control = (state & CONTROL_MASK) != 0
     var alt = (state & ALT_MASK) != 0
@@ -304,10 +293,7 @@ struct X11Window(Movable):
             Error: If the size is not positive, Xlib cannot be loaded, the display cannot be opened, or its visual is not
                 24-bit TrueColor.
         """
-        if width <= 0 or height <= 0:
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_window_size(width, height)
         self.width = width
         self.height = height
         self.is_open = False
@@ -402,19 +388,7 @@ struct X11Window(Movable):
         Raises:
             Error: If the window is closed or the frame is another size.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
-        if frame.width != self.width or frame.height != self.height:
-            raise Error(
-                "A frame of ",
-                frame.width,
-                "x",
-                frame.height,
-                " does not fit a window of ",
-                self.width,
-                "x",
-                self.height,
-            )
+        require_presented_frame(self.is_open, frame, self.width, self.height)
         # RGBA to the visual's order: blue, green, red, then a byte the
         # server ignores.
         for pixel in range(self.width * self.height):  # pragma: no branch
@@ -464,12 +438,8 @@ struct X11Window(Movable):
         Raises:
             Error: If the window is closed or the size is not positive.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
-        if width <= 0 or height <= 0:
-            raise Error(
-                "A window's size must be positive, got ", width, "x", height
-            )
+        require_open(self.is_open)
+        require_window_size(width, height)
         self.width = width
         self.height = height
         self._pixels = List[UInt8](length=width * height * 4, fill=0)
@@ -491,8 +461,7 @@ struct X11Window(Movable):
             Error: If the window is closed, or the timeout is negative,
                 nonfinite, or too large for native poll milliseconds.
         """
-        if not self.is_open:
-            raise Error("The window is closed")
+        require_open(self.is_open)
         var milliseconds = poll_milliseconds(timeout)
         var events = List[InputEvent]()
         if self._lib.call["XPending", c_int](self._display) == 0:
@@ -508,9 +477,9 @@ struct X11Window(Movable):
             _ = self._lib.call["XNextEvent", c_int](
                 self._display, Int(self._event.unsafe_ptr())
             )
-            var kind = _int32(self._event, 0)
+            var kind = little_endian_i32(self._event, 0)
             if kind == CLIENT_MESSAGE:
-                if _uint64(self._event, 56) == self._delete:
+                if little_endian_uint(self._event, 56, 8) == self._delete:
                     self.close_requested = True
                 continue
             var symbol = 0

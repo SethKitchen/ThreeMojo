@@ -49,6 +49,23 @@ from render.target import RenderTarget
 from render.rect import Rect
 from std.math import ceil, floor, max, min
 from units.si import Length, METER
+from core.ordinal import require_valid
+
+
+def require_splat_depth(depth_mode: DepthMode) raises:
+    """Refuse a Gaussian splat depth mode that is not named.
+
+    Nothing. The call returns when the mode is named.
+
+    Args:
+        depth_mode: How the target stores depth.
+
+    Raises:
+        Error: If the mode is not one of the named depth modes.
+    """
+    require_valid(
+        depth_mode.is_valid(), "A Gaussian splat needs a valid depth mode"
+    )
 
 
 def prepare_gaussian_splat[
@@ -83,11 +100,9 @@ def prepare_gaussian_splat[
         Error: If the depth mode is not valid, the node is not in the
             scene, the scene is stale, or a matrix cannot be inverted.
     """
-    if not depth_mode.is_valid():
-        raise Error("A Gaussian splat needs a valid depth mode")
+    require_splat_depth(depth_mode)
     var rect = viewport.value() if Bool(viewport) else Rect.whole(width, height)
-    if not rect.is_valid():
-        raise Error("A Gaussian splat needs a valid viewport")
+    require_valid(rect.is_valid(), "A Gaussian splat needs a valid viewport")
     var out = List[ProjectedSplat]()
     if not scene.shows(splat.node, camera.visible_layers()):
         return out^
@@ -158,8 +173,7 @@ def rasterize_splats(
     Raises:
         Error: If the target's depth mode is not valid.
     """
-    if not target.depth_mode.is_valid():
-        raise Error("A Gaussian splat needs a valid depth mode")
+    require_splat_depth(target.depth_mode)
     for index in range(len(splats)):
         rasterize_splat(target, splats[index], 0, target.height - 1)
 

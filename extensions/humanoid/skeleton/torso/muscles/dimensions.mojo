@@ -23,8 +23,9 @@ parameters. They are not a cited cross-section table.
     var d = torso_muscle_distance(dims, ERECTOR_SPINAE, RIGHT, p)
 """
 
+from core.ordinal import ordinal_valid, require_valid
 from extensions.humanoid.athleticism import Athleticism, radius_scale
-from extensions.humanoid.side import RIGHT, BodySide
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
     TorsoDimensions,
@@ -40,8 +41,8 @@ from extensions.humanoid.skeleton.torso.sweep import (
     SweepField,
     tube,
 )
+from math.finite import require_positive_finite
 from math.vector3 import Vector3
-from std.math import isfinite
 
 
 @fieldwise_init
@@ -57,9 +58,7 @@ struct TorsoMuscle(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named torso muscle."""
-        if self.value < 0:
-            return False
-        return self.value <= SUBCLAVIUS.value
+        return ordinal_valid(self.value, SUBCLAVIUS.value)
 
 
 comptime RECTUS_ABDOMINIS = TorsoMuscle(0)
@@ -80,6 +79,23 @@ comptime TRAPEZIUS = TorsoMuscle(11)
 comptime RHOMBOIDS = TorsoMuscle(12)
 comptime PECTORALIS_MINOR = TorsoMuscle(13)
 comptime SUBCLAVIUS = TorsoMuscle(14)
+
+
+def require_torso_athleticism(athleticism: Athleticism) raises:
+    """Refuse a torso muscle whose athleticism is not named.
+
+    Nothing. The call returns when the athleticism is named.
+
+    Args:
+        athleticism: `UNTONED` or `TONED`.
+
+    Raises:
+        Error: If the athleticism is not named.
+    """
+    require_valid(
+        athleticism.is_valid(),
+        "A torso muscle needs a toned or untoned athleticism",
+    )
 
 
 struct TorsoMuscleDimensions(Copyable, Movable):
@@ -113,10 +129,11 @@ struct TorsoMuscleDimensions(Copyable, Movable):
                 named, or if the scale is not positive.
         """
         self.torso.validate()
-        if not self.athleticism.is_valid():
-            raise Error("A torso muscle needs a toned or untoned athleticism")
-        if not isfinite(self.scale) or self.scale <= 0:
-            raise Error("A torso muscle radius scale must be positive")
+        require_torso_athleticism(self.athleticism)
+        require_positive_finite(
+            Float64(self.scale),
+            "A torso muscle radius scale must be positive",
+        )
 
 
 def torso_muscle_dimensions(spec: HumanoidSpec) raises -> TorsoMuscleDimensions:
@@ -131,8 +148,7 @@ def torso_muscle_dimensions(spec: HumanoidSpec) raises -> TorsoMuscleDimensions:
     Raises:
         Error: If `spec` is refused, or athleticism is not named.
     """
-    if not spec.athleticism.is_valid():
-        raise Error("A torso muscle needs a toned or untoned athleticism")
+    require_torso_athleticism(spec.athleticism)
     return TorsoMuscleDimensions(
         torso_dimensions(spec.stature, spec.sex, spec.genome), spec.athleticism
     )
@@ -150,8 +166,7 @@ def is_paired_muscle(part: TorsoMuscle) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso muscle must be a named muscle")
+    require_valid(part.is_valid(), "A torso muscle must be a named muscle")
     return part != DIAPHRAGM
 
 
@@ -173,8 +188,7 @@ def torso_muscle_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var placed = RIGHT
     if is_paired_muscle(part):
         placed = side

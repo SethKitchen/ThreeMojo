@@ -44,6 +44,8 @@ center gives the corner, at a depth of one half, as in three.js's example.
 from cameras.camera import Camera, unproject_point
 from controls.input import (
     InputEvent,
+    require_named,
+    require_view_size,
     POINTER_DOWN,
     POINTER_MOVE,
     POINTER_UP,
@@ -51,6 +53,7 @@ from controls.input import (
 )
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
+from core.ordinal import require_index_in_count
 from core.scene import Scene
 from math.bounds import Plane
 from math.frustum import Frustum
@@ -78,8 +81,11 @@ struct _NodeObjects(Movable):
 
     def link(mut self, index: Int, node: NodeId) raises:
         """Prepend an object while its source list is visited in reverse."""
-        if node.value < 0 or node.value >= len(self.heads):
-            raise Error("A selection object names a node that is not there")
+        require_index_in_count(
+            node.value,
+            len(self.heads),
+            "A selection object names a node that is not there",
+        )
         self.next[index] = self.heads[node.value]
         self.heads[node.value] = index
 
@@ -161,12 +167,11 @@ struct SelectionBox(Copyable, Movable):
             Error: If the event's kind or button is invalid, the view has
                 no size, or for anything `select` raises for.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if width <= 0 or height <= 0:
-            raise Error("A view must have a positive width and height")
+        require_named(event.kind.is_valid(), "input kind", event.kind.value)
+        require_named(
+            event.button.is_valid(), "pointer button", event.button.value
+        )
+        require_view_size(width, height)
         var corner = Vector3(
             (Float32(event.x) + 0.5) / Float32(width) * 2 - 1,
             1 - (Float32(event.y) + 0.5) / Float32(height) * 2,

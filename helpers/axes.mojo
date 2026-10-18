@@ -19,6 +19,7 @@ any other line is. See `objects.line`.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
+from core.ordinal import require_positive
 from units.si import Length, METER
 
 # three.js's default: one unit along each axis.
@@ -40,8 +41,7 @@ def axes_helper(size: Length = DEFAULT_AXES_SIZE) raises -> BufferGeometry:
         Error: If `size` is not positive.
     """
     var reach = size.to(METER)
-    if reach <= 0:
-        raise Error("An axes helper needs a positive size")
+    require_positive(reach, "An axes helper needs a positive size")
     var positions: List[Float32] = [
         0,
         0,

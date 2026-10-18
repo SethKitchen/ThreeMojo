@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.hand.bones.dimensions import (
     hand_bone_field,
     hand_bone_label,
 )
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.spec import HumanoidSpec
 
 
@@ -72,5 +72,4 @@ def hand_bone_from_dimensions(
     """
     var field = hand_bone_field(dimensions, part, side)
     var label = hand_bone_label(part)
-    check_detail(detail, label)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_checked(field, field.low, field.high, detail, label)

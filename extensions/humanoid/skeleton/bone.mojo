@@ -3,22 +3,21 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Visual look of bone: procedural albedo, roughness and a Phong stand-in.
+"""Visual look of bone: procedural albedo, roughness, and two materials.
 
 Tissue density, porosity and moduli live in `tissue.mojo`. This module
 does not consume those numbers. The maps are visual approximations.
 
-The look is a pair of procedural maps: an sRGB albedo and a linear
-roughness map. MeshStandardMaterial is not ported, so `bone_phong` is the
-surface the current renderer can draw. The roughness map is still built,
-because a later standard material will read it.
+`bone_phong` is a Phong material. `bone_physical` is a physical material
+with a constant roughness. `bone_roughness` is a linear map a caller can
+assign.
 
     var map = bone_albedo(64)
     var paint = bone_phong(store.add(map))
 """
 
 from materials.material import Material, phong_material, physical_material
-from render.framebuffer import Color
+from render.framebuffer import Color, rounded_byte
 from render.srgb import LINEAR, SRGB
 from render.texture import IGNORED, REPEAT, Texture
 from render.texture_store import NO_TEXTURE, TextureId
@@ -82,9 +81,9 @@ def bone_albedo(size: Int = 64) raises -> Texture:
                 - Float32(6) * end
                 - Float32(8) * aspera
             )
-            pixels.append(_byte(r))
-            pixels.append(_byte(g))
-            pixels.append(_byte(b))
+            pixels.append(rounded_byte(r))
+            pixels.append(rounded_byte(g))
+            pixels.append(rounded_byte(b))
             pixels.append(255)
     return Texture(size, size, pixels^, REPEAT, color_space=SRGB)
 
@@ -93,8 +92,8 @@ def bone_roughness(size: Int = 64) raises -> Texture:
     """Return a square linear roughness map of cortical bone.
 
     The shaft is smoother. The articular ends are rougher. Bytes are
-    linear coverage-ignored data, not sRGB color. The current Phong
-    path does not sample this map.
+    linear coverage-ignored data, not sRGB color. `bone_physical` uses a
+    constant roughness. A caller can assign this map.
 
     Args:
         size: Width and height in texels. Eight through 256, 64 by default.
@@ -118,7 +117,7 @@ def bone_roughness(size: Int = 64) raises -> Texture:
             var rough = (
                 Float32(0.38) + Float32(0.34) * end + Float32(0.10) * grain
             )
-            var tone = _byte(rough * Float32(255))
+            var tone = rounded_byte(rough * Float32(255))
             pixels.append(tone)
             pixels.append(tone)
             pixels.append(tone)
@@ -133,9 +132,15 @@ def bone_roughness(size: Int = 64) raises -> Texture:
     )
 
 
+def _cortical_color(map: TextureId) -> Color:
+    """Return ivory, or white when an albedo map supplies the color."""
+    if map != NO_TEXTURE:
+        return Color(255, 255, 255)
+    return Color(232, 214, 180)
+
+
 def bone_phong(map: TextureId = NO_TEXTURE) raises -> Material:
-    """Return a Phong material that stands in for bone until standard
-    PBR is ported.
+    """Return a Phong material for dry cortical bone.
 
     With no map the color is dry cortical ivory. With a map the color is
     white so the albedo arrives unshifted. Shininess is low: bone is not
@@ -150,9 +155,7 @@ def bone_phong(map: TextureId = NO_TEXTURE) raises -> Material:
     Raises:
         Error: If `map` is a negative other than `NO_TEXTURE`.
     """
-    var color = Color(232, 214, 180)
-    if map != NO_TEXTURE:
-        color = Color(255, 255, 255)
+    var color = _cortical_color(map)
     return phong_material(
         color,
         map=map,
@@ -176,10 +179,9 @@ def bone_physical(map: TextureId = NO_TEXTURE) raises -> Material:
     Raises:
         Error: If the physical constructor refuses the values.
     """
-    var color = Color(232, 214, 180)
-    if map != NO_TEXTURE:
-        color = Color(255, 255, 255)
-    return physical_material(color, map=map, roughness=0.62, ior=1.55)
+    return physical_material(
+        _cortical_color(map), map=map, roughness=0.62, ior=1.55
+    )
 
 
 def _check_look_size(size: Int) raises:
@@ -203,12 +205,3 @@ def _hash(x: Int, y: Int) -> Float32:
     n = (n ^ (n >> 13)) * 1274126177
     var bits = n & 65535
     return Float32(bits) / Float32(65535)
-
-
-def _byte(value: Float32) -> UInt8:
-    """Return `value` rounded into an 8-bit channel."""
-    if value < 0:
-        return 0
-    if value > 255:
-        return 255
-    return UInt8(Int(value + Float32(0.5)))

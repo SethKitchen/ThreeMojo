@@ -11,7 +11,25 @@ the largest entry first, so a vector of very large or very small finite
 entries keeps a finite, accurate length.
 """
 
-from std.math import isfinite, sqrt
+from core.ordinal import require_non_negative
+from math.finite import require_finite
+from std.math import sqrt
+
+
+def require_row_count(length: Int, rows: Int) raises:
+    """Refuse a right-hand side that does not match the row count.
+
+    Nothing. The call returns when the counts match.
+
+    Args:
+        length: How many entries the right-hand side has.
+        rows: How many rows the matrix has.
+
+    Raises:
+        Error: If the right-hand side does not have one entry per row.
+    """
+    if length != rows:
+        raise Error("The right-hand side must have one entry per row")
 
 
 def zeros(size: Int) raises -> List[Float64]:
@@ -26,8 +44,7 @@ def zeros(size: Int) raises -> List[Float64]:
     Raises:
         Error: If the size is negative.
     """
-    if size < 0:
-        raise Error("A vector size must be zero or more")
+    require_non_negative(size, "A vector size must be zero or more")
     var out = List[Float64](capacity=size)
     for _ in range(size):
         out.append(0.0)
@@ -58,8 +75,7 @@ def check_finite(v: List[Float64]) raises:
         Error: If an entry is infinite or not a number.
     """
     for i in range(len(v)):
-        if not isfinite(v[i]):
-            raise Error("A vector entry must be a finite number")
+        require_finite(Float64(v[i]), "A vector entry must be a finite number")
 
 
 def dot(a: List[Float64], b: List[Float64]) raises -> Float64:

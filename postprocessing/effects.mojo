@@ -38,16 +38,23 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite_group, require_unit_range
 from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
-from math.utils import SeededRandom
+from math.utils import (
+    SeededRandom,
+    clamp,
+    glsl_mod,
+    lerp,
+    mix_delta,
+)
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.screen_space import DepthView, glsl_rand
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, Color, FloatColor
 from render.raster_state import (
     EQUAL_STENCIL_FUNC,
     REPLACE_STENCIL_OP,
@@ -62,6 +69,7 @@ from render.texture import Texture
 from render.volume_texture import Data3DTexture, VolumeSampler
 from std.math import cos, floor, fma, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
+from core.ordinal import require_valid, require_non_negative, require_positive
 
 # --- bokeh ------------------------------------------------------------------
 
@@ -234,7 +242,7 @@ def bokeh_reach(
     var f = far.value
     var z = (n * f) / ((f - n) * depth - f)
     var factor = (focus.value + z) * aperture
-    return max(-max_blur, min(max_blur, factor))
+    return clamp(factor, -max_blur, max_blur)
 
 
 def bokeh_blur(
@@ -281,7 +289,7 @@ def bokeh_pixel(source: LightView, x: Int, y: Int, blur: Float32) -> FloatColor:
     var u = u_of(x, source.width)
     var v = v_of(y, source.height)
     var aspect = Float32(source.width) / Float32(source.height)
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var index = 0
     while index < BOKEH_TAPS:
         var tap = bokeh_tap(index)
@@ -394,10 +402,10 @@ def check_glitch(settings: GlitchSettings) raises:
         raise Error("A glitch map is one through 4096 texels a side")
     if settings.state < 0 or settings.state > GLITCH_STATE_MAX:
         raise Error("A glitch generator's state is 32 bits")
-    if settings.frame < 0:
-        raise Error("A glitch frame count must not be negative")
-    if settings.trigger < 1:
-        raise Error("A glitch trigger must be positive")
+    require_non_negative(
+        settings.frame, "A glitch frame count must not be negative"
+    )
+    require_positive(settings.trigger, "A glitch trigger must be positive")
 
 
 def glitch_heightmap(size: Int, seed: Int) -> List[Float32]:
@@ -539,8 +547,8 @@ def nearest_texel(
         The texel.
     """
     var top = Float32(size - 1)
-    var column = Int(max(Float32(0), min(top, floor(u * Float32(size)))))
-    var row = Int(max(Float32(0), min(top, floor(v * Float32(size)))))
+    var column = Int(clamp(floor(u * Float32(size)), Float32(0), top))
+    var row = Int(clamp(floor(v * Float32(size)), Float32(0), top))
     return values[unsafe_offset=row * size + column]
 
 
@@ -796,10 +804,14 @@ def check_halftone(settings: HalftoneSettings) raises:
             setting is not finite, the radius is not positive, the scatter
             is negative, or the blending is outside zero to one.
     """
-    if not settings.shape.is_valid():
-        raise Error("A halftone shape must be one of the four named")
-    if not settings.blending_mode.is_valid():
-        raise Error("A halftone blending mode must be one of the five named")
+    require_valid(
+        settings.shape.is_valid(),
+        "A halftone shape must be one of the four named",
+    )
+    require_valid(
+        settings.blending_mode.is_valid(),
+        "A halftone blending mode must be one of the five named",
+    )
     if not (
         isfinite(settings.radius)
         and isfinite(settings.rotate_r.value)
@@ -813,22 +825,13 @@ def check_halftone(settings: HalftoneSettings) raises:
         raise Error("A halftone setting must be finite")
     if settings.width < 0 or settings.height < 0:
         raise Error("A halftone size must not be negative")
-    if settings.radius <= 0:
-        raise Error("A halftone radius must be positive")
-    if settings.scatter < 0:
-        raise Error("A halftone scatter must not be negative")
-    if settings.blending < 0 or settings.blending > 1:
-        raise Error("A halftone blending runs from zero to one")
-
-
-def _hypot(x: Float32, y: Float32) -> Float32:
-    """Return the length of (x, y): the shader's `hypot`."""
-    return length2(x, y)
-
-
-def _glsl_mod(x: Float32, y: Float32) -> Float32:
-    """Return GLSL's `mod`: `x` less `y` times the floor of their ratio."""
-    return x - y * floor(x / y)
+    require_positive(settings.radius, "A halftone radius must be positive")
+    require_non_negative(
+        settings.scatter, "A halftone scatter must not be negative"
+    )
+    require_unit_range(
+        settings.blending, "A halftone blending runs from zero to one"
+    )
 
 
 def dot_radius_distance(
@@ -855,7 +858,7 @@ def dot_radius_distance(
     Returns:
         The dot's radius less the point's distance: positive inside.
     """
-    var dist = _hypot(coord.x - p.x, coord.y - p.y)
+    var dist = length2(coord.x - p.x, coord.y - p.y)
     var rad = channel
     if shape == HALFTONE_DOT:
         rad = (abs(rad) ** 1.125) * rad_max
@@ -872,7 +875,7 @@ def dot_radius_distance(
     elif shape == HALFTONE_LINE:
         rad = (abs(rad) ** 1.5) * rad_max
         var dot_p = (p.x - coord.x) * normal.x + (p.y - coord.y) * normal.y
-        dist = _hypot(normal.x * dot_p, normal.y * dot_p)
+        dist = length2(normal.x * dot_p, normal.y * dot_p)
     else:
         # `HALFTONE_SQUARE`, the only shape left once it is checked.
         var theta = atan2_float32(p.y - coord.y, p.x - coord.x) - angle
@@ -928,12 +931,12 @@ def reference_cell(
     var dot_normal = n.x * p.x + n.y * p.y
     var dot_line = -n.y * p.x + n.x * p.y
     var offset = Vector2(n.x * dot_normal, n.y * dot_normal)
-    var offset_normal = _glsl_mod(_hypot(offset.x, offset.y), step)
+    var offset_normal = glsl_mod(length2(offset.x, offset.y), step)
     var normal_dir = Float32(1) if dot_normal < 0 else Float32(-1)
     var normal_scale = (
         -offset_normal if offset_normal < threshold else step - offset_normal
     ) * normal_dir
-    var offset_line = _glsl_mod(_hypot(p.x - offset.x, p.y - offset.y), step)
+    var offset_line = glsl_mod(length2(p.x - offset.x, p.y - offset.y), step)
     var line_dir = Float32(1) if dot_line < 0 else Float32(-1)
     var line_scale = (
         -offset_line if offset_line < threshold else step - offset_line
@@ -1014,7 +1017,7 @@ def _dot_coverage(distance: Float32, aa: Float32) -> Float32:
     """Return how much of a pixel a dot covers: the shader's
     `dist > 0 ? clamp(dist / aa, 0, 1) : 0`, which is the clamp alone
     because `aa` is positive."""
-    return max(Float32(0), min(Float32(1), distance / aa))
+    return clamp(distance / aa, 0, 1)
 
 
 def _dot_color(
@@ -1140,7 +1143,7 @@ def halftone_blend(
     else:
         # `HALFTONE_DARKER`, the only mode left once it is checked.
         other = min(a, b)
-    return a * (1 - t) + other * t
+    return lerp(a, other, t)
 
 
 def halftone_pixel(
@@ -1492,12 +1495,8 @@ def lut_color[
         half_pixel_width + color.g * (1 - pixel_width),
         half_pixel_width + color.b * (1 - pixel_width),
     )
-    return FloatColor(
-        color.r + (looked.r - color.r) * intensity,
-        color.g + (looked.g - color.g) * intensity,
-        color.b + (looked.b - color.b) * intensity,
-        color.a,
-    )
+    var mixed = color.mix(looked, intensity)
+    return FloatColor(mixed.r, mixed.g, mixed.b, color.a)
 
 
 def lut_pixel[
@@ -1571,8 +1570,10 @@ def check_dof_mipmap(settings: DofMipMapSettings) raises:
     """
     if not (isfinite(settings.focus) and isfinite(settings.max_blur)):
         raise Error("A mip map depth of field's settings must be finite")
-    if settings.max_blur < 0:
-        raise Error("A mip map depth of field's blur must not be negative")
+    require_non_negative(
+        settings.max_blur,
+        "A mip map depth of field's blur must not be negative",
+    )
 
 
 def frame_mips(
@@ -1657,12 +1658,7 @@ def mip_sample(
     var high_h = max(height >> high, 1)
     var a = LightView(levels[low], low_w, low_h).sample(u, v)
     var b = LightView(levels[high], high_w, high_h).sample(u, v)
-    return FloatColor(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
-    )
+    return a.mix(b, t)
 
 
 def dof_mipmap_light(
@@ -1775,6 +1771,12 @@ struct Bokeh2Settings(ImplicitlyCopyable):
         self.samples = 4
 
 
+def _smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return GLSL's `smoothstep`, its edges in either order."""
+    var t = min(max((x - edge0) / (edge1 - edge0), Float32(0)), Float32(1))
+    return t * t * (3 - 2 * t)
+
+
 def check_bokeh2(settings: Bokeh2Settings) raises:
     """Refuse settings the shader could not run.
 
@@ -1803,20 +1805,13 @@ def check_bokeh2(settings: Bokeh2Settings) raises:
         and isfinite(settings.focus_u)
         and isfinite(settings.focus_v)
     )
-    if not finite:
-        raise Error("A bokeh 2 setting must be finite")
+    require_finite_group(finite, "A bokeh 2 setting must be finite")
     if settings.texture_width < 0 or settings.texture_height < 0:
         raise Error("A bokeh 2 texture size must not be negative")
     if not (settings.znear > 0 and settings.zfar > settings.znear):
         raise Error("A bokeh 2 near plane must lie in front of its far plane")
     if settings.rings < 1 or settings.samples < 1:
         raise Error("A bokeh 2 needs a ring and a sample at least")
-
-
-def _smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return GLSL's `smoothstep`, its edges in either order."""
-    var t = min(max((x - edge0) / (edge1 - edge0), Float32(0)), Float32(1))
-    return t * t * (3 - 2 * t)
 
 
 def bokeh2_penta(pw: Float32, ph: Float32, rings: Int) -> Float32:
@@ -1975,19 +1970,25 @@ def bokeh2_pixel(
         col = col * (1 / s)
     if settings.show_focus:
         var edge = 0.002 * z
-        var m = min(max(_smoothstep(0, edge, blur), Float32(0)), Float32(1))
-        var e = min(max(_smoothstep(1 - edge, 1, blur), Float32(0)), Float32(1))
+        var m = min(
+            max(_smoothstep(0, edge, blur), Float32(0)),
+            Float32(1),
+        )
+        var e = min(
+            max(_smoothstep(1 - edge, 1, blur), Float32(0)),
+            Float32(1),
+        )
         var warm = (1 - m) * 0.6
         col = Vector3(
-            col.x + (1 - col.x) * warm,
+            mix_delta(col.x, Float32(1), warm),
             col.y + (0.5 - col.y) * warm,
-            col.z + (0 - col.z) * warm,
+            mix_delta(col.z, Float32(0), warm),
         )
         var cool = ((1 - e) - (1 - m)) * 0.2
         col = Vector3(
-            col.x + (0 - col.x) * cool,
+            mix_delta(col.x, Float32(0), cool),
             col.y + (0.5 - col.y) * cool,
-            col.z + (1 - col.z) * cool,
+            mix_delta(col.z, Float32(1), cool),
         )
     if settings.vignetting:
         var du = u - 0.5

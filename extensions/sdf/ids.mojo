@@ -8,6 +8,7 @@
 Each is a type, so a bare integer cannot stand in for one. A value the
 type can hold but the code does not accept is refused where it is read.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 # How many surface parts there are.
 comptime SURFACE_PART_COUNT = 12
@@ -30,7 +31,7 @@ struct PrimitiveKind(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to three.
         """
-        return self.value >= 0 and self.value < 4
+        return ordinal_valid(self.value, 4 - 1)
 
 
 comptime ELLIPSOID = PrimitiveKind(0)
@@ -76,6 +77,22 @@ struct TagId(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= 0
 
 
+def require_tag(id: TagId, count: Int) raises:
+    """Refuse a tag id this sculpt does not have.
+
+    Nothing. The call returns when the id names a tag.
+
+    Args:
+        id: The tag.
+        count: How many tags the sculpt has.
+
+    Raises:
+        Error: If the id is negative or past the last tag.
+    """
+    if not id.is_valid() or id.value >= count:
+        raise Error("Tag id names no tag of this sculpt")
+
+
 @fieldwise_init
 struct SurfacePart(Equatable, ImplicitlyCopyable, Writable):
     """Which separate surface a primitive belongs to.
@@ -93,7 +110,7 @@ struct SurfacePart(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value is from zero to `SURFACE_PART_COUNT - 1`.
         """
-        return self.value >= 0 and self.value < SURFACE_PART_COUNT
+        return ordinal_valid(self.value, SURFACE_PART_COUNT - 1)
 
 
 def require_part(part: SurfacePart) raises:
@@ -105,8 +122,7 @@ def require_part(part: SurfacePart) raises:
     Raises:
         Error: If `part` is not valid.
     """
-    if not part.is_valid():
-        raise Error("Surface part must be from 0 to 11")
+    require_valid(part.is_valid(), "Surface part must be from 0 to 11")
 
 
 def require_kind(kind: PrimitiveKind) raises:
@@ -118,5 +134,4 @@ def require_kind(kind: PrimitiveKind) raises:
     Raises:
         Error: If `kind` is not valid.
     """
-    if not kind.is_valid():
-        raise Error("Primitive kind must be from 0 to 3")
+    require_valid(kind.is_valid(), "Primitive kind must be from 0 to 3")

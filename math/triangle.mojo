@@ -20,6 +20,7 @@ Raw normals and areas retain their Float32 arithmetic and output limits.
 """
 
 from math.bounds import Box3, Plane
+from math.cross import cross_vectors, wide_cross, widen_vector
 from math.matrix4 import Matrix4
 from math.norm import length3
 from math.triangle_normal import (
@@ -27,42 +28,13 @@ from math.triangle_normal import (
     _ordinary_triangle_cross,
     _triangle_cross_wide,
 )
-from math.vector3 import Vector3
+from math.utils import clamp, max3, min3, saturate
+from math.vector3 import Vector3, centroid, vector3_from_float64
 from std.math import sqrt
 
 # A segment whose squared length is at most this is a point to
 # `Line3.closest_points_to_line`. three.js: `1e-8 * 1e-8`.
 comptime POINT_EPSILON = Float32(1e-16)
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product of two vectors."""
-    var out = a
-    out.cross(b)
-    return out
-
-
-comptime _WideVector = SIMD[DType.float64, 4]
-
-
-def _wide(point: Vector3) -> _WideVector:
-    """Widen coordinates before subtracting or multiplying them."""
-    return _WideVector(Float64(point.x), Float64(point.y), Float64(point.z), 0)
-
-
-def _wide_cross(a: _WideVector, b: _WideVector) -> _WideVector:
-    """Return a cross product without narrowing its components."""
-    return _WideVector(
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-        0,
-    )
-
-
-def _wide_unit(value: Float64) -> Float64:
-    """Limit a segment parameter to its closed interval."""
-    return max(Float64(0), min(Float64(1), value))
 
 
 def _segment_closest_points(
@@ -78,10 +50,10 @@ def _segment_closest_points(
     Recompute the other parameter when an endpoint constrains the minimum.
     The caller chooses when a short segment counts as a point.
     """
-    var first = _wide(start1)
-    var second = _wide(start2)
-    var d1 = _wide(end1) - first
-    var d2 = _wide(end2) - second
+    var first = widen_vector(start1)
+    var second = widen_vector(start2)
+    var d1 = widen_vector(end1) - first
+    var d2 = widen_vector(end2) - second
     var r = first - second
     var a = (d1 * d1).reduce_add()
     var e = (d2 * d2).reduce_add()
@@ -91,18 +63,20 @@ def _segment_closest_points(
     if a <= point_epsilon and e <= point_epsilon:
         pass
     elif a <= point_epsilon:
-        t = _wide_unit(f / e)
+        t = clamp(f / e, 0.0, 1.0)
     else:
         var c = (d1 * r).reduce_add()
         if e <= point_epsilon:
-            s = _wide_unit(-c / a)
+            s = clamp(-c / a, 0.0, 1.0)
         else:
             var b = (d1 * d2).reduce_add()
-            var normal = _wide_cross(d1, d2)
+            var normal = wide_cross(d1, d2)
             var denom = (normal * normal).reduce_add()
             if denom != 0:
-                s = _wide_unit(
-                    (_wide_cross(d2, r) * normal).reduce_add() / denom
+                s = clamp(
+                    (wide_cross(d2, r) * normal).reduce_add() / denom,
+                    0.0,
+                    1.0,
                 )
             else:
                 # Preserve Octree's tie choice for parallel overlapping lines.
@@ -113,19 +87,15 @@ def _segment_closest_points(
             t = (b * s + f) / e
             if t < 0:
                 t = 0
-                s = _wide_unit(-c / a)
+                s = clamp(-c / a, 0.0, 1.0)
             elif t > 1:
                 t = 1
-                s = _wide_unit((b - c) / a)
+                s = clamp((b - c) / a, 0.0, 1.0)
     var on_first = first + d1 * s
     var on_second = second + d2 * t
     return (
-        Vector3(
-            Float32(on_first[0]), Float32(on_first[1]), Float32(on_first[2])
-        ),
-        Vector3(
-            Float32(on_second[0]), Float32(on_second[1]), Float32(on_second[2])
-        ),
+        vector3_from_float64(on_first[0], on_first[1], on_first[2]),
+        vector3_from_float64(on_second[0], on_second[1], on_second[2]),
     )
 
 
@@ -143,7 +113,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Returns:
             `(c - b) x (a - b)`, three.js's order.
         """
-        return _cross(self.c - self.b, self.a - self.b)
+        return cross_vectors(self.c - self.b, self.a - self.b)
 
     def area(self) -> Float32:
         """Return the triangle's area.
@@ -162,7 +132,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         """
         var cb = self.c - self.b
         var ab = self.a - self.b
-        var normal = _cross(cb, ab)
+        var normal = cross_vectors(cb, ab)
         if _ordinary_triangle_cross(cb, ab, normal):
             return False
         if _finite_triangle(self.a, self.b, self.c):
@@ -181,17 +151,17 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         """
         var cb = self.c - self.b
         var ab = self.a - self.b
-        var out = _cross(cb, ab)
+        var out = cross_vectors(cb, ab)
         if not _ordinary_triangle_cross(cb, ab, out):
             if _finite_triangle(self.a, self.b, self.c):
                 var wide = _triangle_cross_wide(self.a, self.b, self.c)
                 var magnitude = length3(wide[0], wide[1], wide[2])
                 if magnitude == 0:
                     raise Error("A degenerate triangle has no normal")
-                return Vector3(
-                    Float32(wide[0] / magnitude),
-                    Float32(wide[1] / magnitude),
-                    Float32(wide[2] / magnitude),
+                return vector3_from_float64(
+                    wide[0] / magnitude,
+                    wide[1] / magnitude,
+                    wide[2] / magnitude,
                 )
         out.normalize()
         return out
@@ -202,7 +172,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Returns:
             The centroid.
         """
-        return (self.a + self.b + self.c) * (Float32(1) / 3)
+        return centroid(self.a, self.b, self.c)
 
     def plane(self) raises -> Plane:
         """Return the plane the triangle lies in. three.js: `getPlane`.
@@ -248,16 +218,16 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Widen before subtracting: the small cross product remains nonzero
         even when Float32 dot products round two thin edges to parallel.
         """
-        var origin = _wide(self.a)
-        var b = _wide(self.b) - origin
-        var c = _wide(self.c) - origin
-        var offset = _wide(point) - origin
-        var normal = _wide_cross(b, c)
+        var origin = widen_vector(self.a)
+        var b = widen_vector(self.b) - origin
+        var c = widen_vector(self.c) - origin
+        var offset = widen_vector(point) - origin
+        var normal = wide_cross(b, c)
         var denom = (normal * normal).reduce_add()
         if denom == 0:
             return None
-        var at_b = (_wide_cross(offset, c) * normal).reduce_add() / denom
-        var at_c = (_wide_cross(b, offset) * normal).reduce_add() / denom
+        var at_b = (wide_cross(offset, c) * normal).reduce_add() / denom
+        var at_c = (wide_cross(b, offset) * normal).reduce_add() / denom
         return Vector3(Float32(1 - at_b - at_c), Float32(at_b), Float32(at_c))
 
     def contains_point(self, point: Vector3) raises -> Bool:
@@ -358,7 +328,7 @@ struct Triangle(Equatable, ImplicitlyCopyable):
                 `undefined` there and fails later.
         """
         var count = len(points)
-        if min(a, min(b, c)) < 0 or max(a, max(b, c)) >= count:
+        if min3(a, b, c) < 0 or max3(a, b, c) >= count:
             raise Error("A triangle corner index is outside the point list")
         return Triangle(points[a], points[b], points[c])
 
@@ -414,7 +384,7 @@ def _nearest_on_segment(
     if length_sq == 0:
         return start
     var t = (point - start).dot(line) / length_sq
-    return start + line * _unit(t)
+    return start + line * saturate(t)
 
 
 @fieldwise_init
@@ -482,7 +452,7 @@ struct Line3(Equatable, ImplicitlyCopyable):
             raise Error("A segment of no length has no direction")
         var t = (point - self.start).dot(line) / length_sq
         if clamp:
-            t = max(Float32(0), min(Float32(1), t))
+            t = saturate(t)
         return t
 
     def closest_point(self, point: Vector3, clamp: Bool) raises -> Vector3:
@@ -579,8 +549,3 @@ struct Line3(Equatable, ImplicitlyCopyable):
             Whether the two differ.
         """
         return not self == other
-
-
-def _unit(value: Float32) -> Float32:
-    """Return `value` limited to the range from zero to one."""
-    return max(Float32(0), min(Float32(1), value))

@@ -30,15 +30,20 @@ from extensions.animals.coat import (
 from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     head_local,
-    is_limb,
+    reference_to_head_local,
+    coat_place,
     is_front_limb,
     hashed_stream,
     mirrored_ell_bottom,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -289,8 +294,8 @@ def fox_rig(t: Traits) raises -> Rig:
 
 def _tail_radius(t: Float64, tb: Float64) -> Float64:
     # The brush: a huge round cylinder, thick almost to the end.
-    var root = 0.021 + (0.027 - 0.021) * (t / 0.15)
-    var mid = 0.027 + (0.033 - 0.027) * ((t - 0.15) / 0.4)
+    var root = mix(0.021, 0.027, t / 0.15)
+    var mid = mix(0.027, 0.033, (t - 0.15) / 0.4)
     var tip = 0.033 - 0.017 * pow(max(t - 0.55, 0.0) / 0.45, 1.8)
     return tb * (root if t < 0.15 else (mid if t < 0.55 else tip))
 
@@ -658,10 +663,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: big, erect, triangular, deeply cupped in front.
     var ek = t.get("ear")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var up = normalize(tip - base)
+        var s, base, tip, up = ear_ends(rig, side)
         var facing = normalize(V3(0.45 * s, 0.1, 1))
         var lat = normalize(cross(up, facing))
         var eb = rig.bone("ear" + side)
@@ -728,7 +730,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var bk = t.get("boneK")
     var pk = t.get("pawK")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _fore_leg(m, rig, side, s, bk, pk)
         _hind_leg(m, rig, side, s, bk, pk)
 
@@ -764,18 +766,9 @@ def _fore_leg(
     bk: Float64,
     pk: Float64,
 ) raises:
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
-    var toe = rig.j("ftoe" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
-    var fpaw = rig.bone("fpaw" + side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     _ = ell_y(
         m,
         "scapmuscle",
@@ -867,15 +860,7 @@ def _hind_leg(
     pk: Float64,
 ) raises:
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
-    var tt = rig.j("htoe" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
-    var hpaw = rig.bone("hpaw" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     # A muscular thigh: the fox's jumping engine.
     _ = ell_y(
         m,
@@ -1205,11 +1190,9 @@ def fox_palette(t: Traits) raises -> Palette:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    var x = (p.x - HEAD_O.x) / t.get("headW") / HS
-    var y = (p.y - HEAD_O.y) / HS
-    var z = (p.z - HEAD_O.z) / HS
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    return reference_to_head_local(
+        HEAD_O, HS, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def _mouth_line(t: Traits, h: V3) -> Float64:
@@ -1235,7 +1218,7 @@ def _seg_d(h: V3, a: V3, b: V3) -> V3:
     # segment, and how far along it the nearest point is.
     var q = V3(abs(h.x), h.y, h.z)
     var u = segment_param(q, a, b)
-    return V3(length(q - (a + (b - a) * u)), u, 0.0)
+    return V3(length(q - lerp(a, b, u)), u, 0.0)
 
 
 def _tail_at(t: Traits, bone: String, p: V3) -> V3:
@@ -1328,23 +1311,13 @@ def fox_paint(
     var ag = pal.get("agouti")
     var ag2 = pal.get("agouti2")
     var n_off = Float64(Int(t.get("coatSeed", 0.0)) % 997)
-    var nz = fbm3(V3(p.x * 12.0 + n_off, p.y * 12.0, p.z * 12.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 70.0 + n_off, p.y * 70.0, p.z * 70.0)) - 0.5
+    var nz = centered_fbm(p, 12.0, 3, n_off)
+    var nz2 = centered_value(p, 70.0, n_off)
     var c: V3
     var agouti: Float64
-    var region = 0
+    var region, limb = coat_place(bone)
     var leg = 0.0
-    if bone == "head":
-        region = 2
-    elif bone == "jaw":
-        region = 6
-    elif bone.startswith("ear"):
-        region = 5
-    elif bone.startswith("tail"):
-        region = 4
-    elif bone == "neck1" or bone == "neck2":
-        region = 1
-    elif is_limb(bone):
+    if limb:
         leg = smoothstep(0.29, 0.17, p.y)
     if region <= 1:
         c = _body(pal, t, p, n, nz, region, leg, bone)
@@ -1415,7 +1388,7 @@ def fox_paint(
         agouti = ag.z * (1.0 - _white_face(t, p, n, nz, region))
     if juv > 0.0:
         agouti *= 1.0 - 0.8 * juv
-    var cvh = fbm3(V3(p.x * 6.0 + 5.0 + n_off, p.y * 6.0, p.z * 6.0), 2) - 0.5
+    var cvh = centered_fbm(p, 6.0, 2, 5.0 + n_off)
     c = V3(
         c.x * (1.0 + 0.14 * nz + 0.1 * cvh + 0.06 * nz2),
         c.y * (1.0 + 0.12 * nz + 0.06 * nz2),
@@ -1442,9 +1415,7 @@ def _body(
         vent = smoothstep(-0.45, -0.85, n.y)
         var y_bib = Y_ELBOW + 0.13 * t.get("bib")
         if p.z > Z_SHOULDER - 0.05:
-            var wob = 0.012 * (
-                fbm3(V3(p.x * 40.0, p.y * 40.0, p.z * 40.0), 2) - 0.5
-            )
+            var wob = 0.012 * (centered_fbm(p, 40.0, 2))
             vent = max(
                 vent,
                 smoothstep(y_bib, y_bib - 0.035, p.y + wob)

@@ -19,11 +19,12 @@ together.
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.object3d import NodeId, Object3D
+from core.object3d import NodeId
 from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.look import (
+    UNSET_PAINT,
     artery_phong,
     lymph_phong,
     nerve_phong,
@@ -37,7 +38,11 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
 from extensions.humanoid.skeleton.pelvis.bones.geometry import (
     pelvis_bone_from_dimensions,
 )
-from extensions.humanoid.skeleton.pelvis.contents import BOTH, PelvisContents
+from extensions.humanoid.skeleton.pelvis.contents import (
+    BOTH,
+    PelvisContents,
+    require_pelvis_contents,
+)
 from extensions.humanoid.skeleton.pelvis.ligaments.dimensions import (
     ACETABULAR_CARTILAGE,
     ACETABULAR_LABRUM,
@@ -81,11 +86,7 @@ from extensions.humanoid.skeleton.pelvis.vessels.geometry import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from extensions.humanoid.skeleton.place import place_mesh
-
-# Optional `add_pelvis` paint. A negative id asks the assembler to create
-# the default look for that layer.
-comptime UNSET_PAINT = MaterialId(-1)
+from extensions.humanoid.skeleton.place import place_mesh_node, place_root
 
 
 @fieldwise_init
@@ -187,19 +188,16 @@ def add_pelvis(
     Raises:
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
-    if not contents.is_valid():
-        raise Error("Pelvis contents must be a named layer set")
+    require_pelvis_contents(contents)
     var pose = assemble_pelvis(spec)
-    var root = Object3D()
-    root.set_position(origin.x, origin.y, origin.z)
-    var root_id = scene.attach(root^, parent)
+    var root_id = place_root(scene, parent, origin)
     var sides = List[BodySide]()
     sides.append(RIGHT)
     sides.append(LEFT)
     if contents.includes_bones():
         var bones = named_pelvis_bones()
         for index in range(len(bones)):  # pragma: no branch
-            place_mesh(
+            _ = place_mesh_node(
                 scene,
                 assets,
                 root_id,
@@ -220,7 +218,7 @@ def add_pelvis(
             for s in range(2):  # pragma: no branch
                 if s == 1 and is_midline(band):
                     continue
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -233,7 +231,7 @@ def add_pelvis(
         var parts = named_pelvis_muscles()
         for index in range(len(parts)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -254,7 +252,7 @@ def add_pelvis(
             for s in range(2):  # pragma: no branch
                 if s == 1 and is_unpaired_vessel(vessel):
                     continue
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -268,7 +266,7 @@ def add_pelvis(
         var groups = named_pelvis_lymph()
         for index in range(len(groups)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -282,7 +280,7 @@ def add_pelvis(
         var trunks = named_pelvis_nerves()
         for index in range(len(trunks)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                place_mesh(
+                _ = place_mesh_node(
                     scene,
                     assets,
                     root_id,
@@ -295,7 +293,7 @@ def add_pelvis(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        place_mesh(
+        _ = place_mesh_node(
             scene,
             assets,
             root_id,

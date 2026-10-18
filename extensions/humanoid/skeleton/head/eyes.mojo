@@ -19,15 +19,15 @@ from the front pole, at 0, to the back, at 1, which is how
     var eye = eyeball_mesh(dims, RIGHT, 24)
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from core.buffer_geometry import BufferGeometry
+from geometries.surface import indexed_surface
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
 )
 from extensions.humanoid.skeleton.morph import EYE_X, EYE_Y, EYE_Z
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from std.math import cos, max, min, pi, sin, sqrt
 
 # The eyeball's radius on the template, in centimeters.
@@ -46,8 +46,7 @@ comptime MAX_EYE_DETAIL = 64
 
 def _side_sign(side: BodySide) raises -> Float32:
     """Return one for the right eye and minus one for the left."""
-    if not side.is_valid():
-        raise Error("An eye's side must be RIGHT or LEFT")
+    require_side(side, "An eye's")
     if side == LEFT:
         return -1
     return 1
@@ -161,12 +160,9 @@ def eyeball_mesh(
             var u = Float32(step) / Float32(around)
             var angle = u * 2 * pi
             var direction = Vector3(sz * cos(angle), sz * sin(angle), cz)
-            positions.append(center.x + direction.x * r)
-            positions.append(center.y + direction.y * r)
-            positions.append(center.z + direction.z * r)
-            normals.append(direction.x)
-            normals.append(direction.y)
-            normals.append(direction.z)
+            var placed = center + direction * r
+            append_vector3(positions, placed)
+            append_vector3(normals, direction)
             uvs.append(u)
             uvs.append(v)
     var indices = List[Int]()
@@ -185,8 +181,5 @@ def eyeball_mesh(
                 indices.append(b)
                 indices.append(b + 1)
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(indices^)
+    indexed_surface(geometry, positions^, normals^, uvs^, indices^)
     return geometry^

@@ -135,6 +135,25 @@ def pick_age(requested: Age) -> Age:
     return JUVENILE if requested == JUVENILE else ADULT
 
 
+def require_color_variant(requested: Int, count: Int) raises:
+    """Refuse a color variant the species does not have.
+
+    A negative request asks the caller to draw one. This refuses an index
+    at or past `count`.
+
+    Nothing. The call returns when the index is below `count`.
+
+    Args:
+        requested: The variant index.
+        count: How many variants the species has.
+
+    Raises:
+        Error: If the index is at or past `count`.
+    """
+    if requested >= count:
+        raise Error("The species has no such color variant")
+
+
 def pick_variant(
     requested: Int, weights: List[Float64], draw: Float64
 ) raises -> Int:
@@ -151,8 +170,7 @@ def pick_variant(
     Raises:
         Error: If `requested` is not -1 and names no morph.
     """
-    if requested >= len(weights):
-        raise Error("The species has no such color variant")
+    require_color_variant(requested, len(weights))
     if requested >= 0:
         return requested
     var x = draw

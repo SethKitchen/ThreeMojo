@@ -32,13 +32,18 @@ No composer pass reads this: three.js's SSR node reads it in its
 environment mode, which `postprocessing.ssr_node` does not port.
 """
 
+from core.extent import require_positive_extent, require_texel_count
+from lights.ggx import ggx_base, ggx_smith_root
 from math.matrix4 import Matrix4
+from math.utils import mix_bilinear, mix_delta, rec709_luminance
+from math.norm import squared_length2
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.display_nodes import luminance_of
+from postprocessing.sampling import clamped_texel
+from render.color_math import rgb_channels
 from render.framebuffer import FloatColor
 from std.math import asin, atan2, cos, floor, isfinite, max, min, pi, pow, sin
-from std.math import sqrt
 
 
 def half(value: Float32) -> Float32:
@@ -66,7 +71,7 @@ def color_to_luminance(r: Float32, g: Float32, b: Float32) -> Float32:
     Returns:
         The luminance.
     """
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return rec709_luminance(r, g, b)
 
 
 def closest_index(
@@ -136,10 +141,16 @@ struct EquirectEnvironment(Copyable, Movable):
             Error: If a size is not positive, or the texels are not one a
                 texel of the size.
         """
-        if width <= 0 or height <= 0:
-            raise Error("An environment's size must be positive")
-        if len(texels) != width * height:
-            raise Error("An environment needs one texel a texel")
+        require_positive_extent(
+            width, height, "An environment's size must be positive"
+        )
+        require_texel_count(
+            len(texels),
+            width,
+            height,
+            1,
+            "An environment needs one texel a texel",
+        )
         self.width = width
         self.height = height
         self.texels = List[FloatColor](capacity=width * height)
@@ -209,9 +220,7 @@ struct EquirectEnvironment(Copyable, Movable):
             The texel blend.
         """
         var px = u * Float32(self.width) - 0.5
-        var py = min(
-            max(v * Float32(self.height) - 0.5, 0), Float32(self.height - 1)
-        )
+        var py = clamped_texel(v, self.height)
         var fx0 = floor(px)
         var x0 = Int(fx0)
         var fx = px - fx0
@@ -222,12 +231,7 @@ struct EquirectEnvironment(Copyable, Movable):
         var b = self._at(x0 + 1, y0)
         var c = self._at(x0, y1)
         var d = self._at(x0 + 1, y1)
-        return FloatColor(
-            _lerp(_lerp(a.r, b.r, fx), _lerp(c.r, d.r, fx), fy),
-            _lerp(_lerp(a.g, b.g, fx), _lerp(c.g, d.g, fx), fy),
-            _lerp(_lerp(a.b, b.b, fx), _lerp(c.b, d.b, fx), fy),
-            _lerp(_lerp(a.a, b.a, fx), _lerp(c.a, d.a, fx), fy),
-        )
+        return a.mix(b, fx).mix(c.mix(d, fx), fy)
 
     def _at(self, x: Int, y: Int) -> FloatColor:
         """Return a texel, its column wrapped."""
@@ -246,16 +250,11 @@ struct EquirectEnvironment(Copyable, Movable):
         Returns:
             The blend of the two nearest entries.
         """
-        var p = min(max(at * Float32(count) - 0.5, 0), Float32(count - 1))
+        var p = clamped_texel(at, count)
         var i = Int(p)
         var f = p - Float32(i)
         var j = min(i + 1, count - 1)
-        return _lerp(values[i], values[j], f)
-
-
-def _lerp(a: Float32, b: Float32, t: Float32) -> Float32:
-    """Return GLSL's `mix` of two numbers."""
-    return a + (b - a) * t
+        return mix_delta(values[i], values[j], f)
 
 
 # --- SpecularHelpers ---------------------------------------------------------
@@ -320,7 +319,7 @@ def mis_power_heuristic(pdf_a: Float32, pdf_b: Float32) -> Float32:
     Returns:
         The weight.
     """
-    return pdf_a * pdf_a / (pdf_a * pdf_a + pdf_b * pdf_b)
+    return pdf_a * pdf_a / squared_length2[DType.float32](pdf_a, pdf_b)
 
 
 def d_gtr(roughness: Float32, n_dot_h: Float32, k: Float32) -> Float32:
@@ -336,7 +335,7 @@ def d_gtr(roughness: Float32, n_dot_h: Float32, k: Float32) -> Float32:
         `a^2 / (pi (n.h^2 (a^2 - 1) + 1)^k)`.
     """
     var a2 = roughness * roughness
-    var base = n_dot_h * n_dot_h * (a2 - 1) + 1
+    var base = ggx_base(n_dot_h, a2)
     return a2 / (Float32(pi) * pow(base, k))
 
 
@@ -351,7 +350,7 @@ def smith_g(n_dot_x: Float32, alpha: Float32) -> Float32:
         `2 n.x / (n.x + sqrt(a^2 + (1 - a^2) n.x^2))`.
     """
     var a2 = alpha * alpha
-    return 2 * n_dot_x / (n_dot_x + sqrt(a2 + (1 - a2) * n_dot_x * n_dot_x))
+    return 2 * n_dot_x / (n_dot_x + ggx_smith_root(n_dot_x, a2))
 
 
 def geometry_term(
@@ -397,11 +396,6 @@ def _to_world(direction: Vector3, camera_world: Matrix4) -> Vector3:
     return world
 
 
-def _rgb(color: FloatColor) -> Vector3:
-    """Return a color's red, green and blue."""
-    return Vector3(color.r, color.g, color.b)
-
-
 def sample_reflect(
     env: EquirectEnvironment,
     camera_world: Matrix4,
@@ -420,7 +414,7 @@ def sample_reflect(
         The light.
     """
     var uv = equirect_uv(_to_world(view_reflect_dir, camera_world))
-    return _rgb(env.sample(uv.x, uv.y)) * (env.intensity * weight)
+    return rgb_channels(env.sample(uv.x, uv.y)) * (env.intensity * weight)
 
 
 def sample_environment_brdf(
@@ -452,7 +446,7 @@ def sample_environment_brdf(
     var n_dot_v = max(Float32(0), n.dot(v))
     var l = _to_world(view_reflect_dir, camera_world)
     var uv = equirect_uv(l)
-    var color = _rgb(env.sample(uv.x, uv.y))
+    var color = rgb_channels(env.sample(uv.x, uv.y))
     var h = v + l
     h.normalize()
     var n_dot_l = max(Float32(0), n.dot(l))
@@ -461,9 +455,7 @@ def sample_environment_brdf(
         smith_g(n_dot_v, alpha), Float32(1e-4)
     )
     var fresnel = f_schlick(f0, v_dot_h)
-    return Vector3(
-        color.x * fresnel.x, color.y * fresnel.y, color.z * fresnel.z
-    ) * (scale * env.intensity)
+    return color * fresnel * (scale * env.intensity)
 
 
 def sample_environment_mis(
@@ -506,7 +498,7 @@ def sample_environment_mis(
     var n_dot_v = max(Float32(0), n.dot(v))
     var l1 = _to_world(view_reflect_dir, camera_world)
     var uv1 = equirect_uv(l1)
-    var color1 = _rgb(env.sample(uv1.x, uv1.y))
+    var color1 = rgb_channels(env.sample(uv1.x, uv1.y))
     var h1 = v + l1
     h1.normalize()
     var n_dot_l1 = max(Float32(0), n.dot(l1))
@@ -530,9 +522,7 @@ def sample_environment_mis(
         smith_g(n_dot_v, alpha), Float32(1e-4)
     )
     var fresnel1 = f_schlick(f0, v_dot_h1)
-    var result = Vector3(
-        color1.x * fresnel1.x, color1.y * fresnel1.y, color1.z * fresnel1.z
-    ) * (scale1 * w1)
+    var result = color1 * fresnel1 * (scale1 * w1)
     if alpha > 0.01:
         var v_cdf = env.table(env.marginal, env.height, xi_z)
         var u_cdf = conditional_at(env, xi_w, v_cdf)
@@ -544,7 +534,7 @@ def sample_environment_mis(
         var v_dot_h = max(Float32(0), v.dot(half_vector))
         if n_dot_l > 0.001:
             var d = d_gtr(alpha, n_dot_h, 2)
-            var color = _rgb(env.sample(u_cdf, v_cdf))
+            var color = rgb_channels(env.sample(u_cdf, v_cdf))
             var pdf_env2 = max(
                 w
                 * h
@@ -564,11 +554,7 @@ def sample_environment_mis(
             )
             var fresnel = f_schlick(f0, v_dot_h)
             var share = spec * n_dot_l / pdf_env2 * w2
-            result = result + Vector3(
-                color.x * fresnel.x * share,
-                color.y * fresnel.y * share,
-                color.z * fresnel.z * share,
-            )
+            result = result + color * fresnel * share
     return result * env.intensity
 
 
@@ -586,18 +572,19 @@ def conditional_at(env: EquirectEnvironment, u: Float32, v: Float32) -> Float32:
     """
     var w = env.width
     var h = env.height
-    var px = min(max(u * Float32(w) - 0.5, 0), Float32(w - 1))
-    var py = min(max(v * Float32(h) - 0.5, 0), Float32(h - 1))
+    var px = clamped_texel(u, w)
+    var py = clamped_texel(v, h)
     var x0 = Int(px)
     var y0 = Int(py)
     var fx = px - Float32(x0)
     var fy = py - Float32(y0)
     var x1 = min(x0 + 1, w - 1)
     var y1 = min(y0 + 1, h - 1)
-    var top = _lerp(
-        env.conditional[y0 * w + x0], env.conditional[y0 * w + x1], fx
+    return mix_bilinear(
+        env.conditional[y0 * w + x0],
+        env.conditional[y0 * w + x1],
+        env.conditional[y1 * w + x0],
+        env.conditional[y1 * w + x1],
+        fx,
+        fy,
     )
-    var bottom = _lerp(
-        env.conditional[y1 * w + x0], env.conditional[y1 * w + x1], fx
-    )
-    return _lerp(top, bottom, fy)

@@ -19,6 +19,7 @@ from render.framebuffer import (
     HSL,
     SrgbBytes,
     _encoded,
+    rgb_is_black,
 )
 from render.srgb import (
     LINEAR,
@@ -148,6 +149,19 @@ def test_writes_out_of_bounds_are_rejected() raises:
 def test_colors_are_opaque_unless_given_an_alpha() raises:
     assert_equal(Color(1, 2, 3).a, UInt8(255))
     assert_equal(Color(1, 2, 3, 128).a, UInt8(128))
+
+
+def test_a_color_moves_toward_another_by_the_difference() raises:
+    var blended = FloatColor(0, 0, 0, 0).mix(FloatColor(1, 0.5, 0.25, 1), 0.5)
+    assert_equal(blended.r, Float32(0.5))
+    assert_equal(blended.g, Float32(0.25))
+    assert_equal(blended.b, Float32(0.125))
+    assert_equal(blended.a, Float32(0.5))
+    var kept = FloatColor(1, 1, 1, 1).mix(FloatColor(0, 0, 0, 0), 0)
+    assert_equal(kept.r, Float32(1))
+    assert_equal(kept.g, Float32(1))
+    assert_equal(kept.b, Float32(1))
+    assert_equal(kept.a, Float32(1))
 
 
 def test_alpha_roundtrips_through_the_buffer() raises:
@@ -588,6 +602,25 @@ def test_encoding_with_the_table_matches_encoding() raises:
     # A linear output quantizes, and never reads the table.
     var linear_out = output_encoding(LINEAR_SRGB_COLOR_SPACE)
     _assert_same(linear_out.encode_with(light, table), linear_out.encode(light))
+
+
+def test_a_black_color_has_no_red_green_or_blue() raises:
+    assert_true(rgb_is_black(Color(0, 0, 0, 0)))
+    assert_true(rgb_is_black(Color(0, 0, 0, 255)))
+    assert_false(rgb_is_black(Color(1, 0, 0, 255)))
+    assert_false(rgb_is_black(Color(0, 1, 0, 255)))
+    assert_false(rgb_is_black(Color(0, 0, 1, 255)))
+
+
+def test_a_color_matches_when_every_channel_matches() raises:
+    var red = Color(255, 0, 0, 255)
+    assert_true(red == Color(255, 0, 0, 255))
+    assert_false(red != Color(255, 0, 0, 255))
+    assert_false(red == Color(0, 0, 0, 255))
+    assert_true(red != Color(0, 0, 0, 255))
+    assert_false(red == Color(255, 1, 0, 255))
+    assert_false(red == Color(255, 0, 1, 255))
+    assert_false(red == Color(255, 0, 0, 0))
 
 
 def _assert_same(left: Color, right: Color) raises:

@@ -35,13 +35,17 @@ side is a power of two, so that every level halves exactly. three.js keeps
 no chain on a 3D or an array target, and neither does this.
 """
 
+from core.extent import require_positive_extent
+from core.ordinal import ordinal_valid, require_index_in_count, require_valid
+
 from render.cube_texture import (
     FACE_COUNT,
     CubeTexture,
     equirect_uv,
     face_direction,
+    require_equirect_texels,
 )
-from render.framebuffer import Color
+from render.framebuffer import Color, unit_byte
 from render.rect import Rect
 from render.srgb import LINEAR
 from render.target import (
@@ -79,12 +83,7 @@ struct TargetKind(Equatable, ImplicitlyCopyable, Writable):
             True for `TARGET_2D`, `TARGET_3D`, `TARGET_ARRAY` and
             `TARGET_CUBE`.
         """
-        return (
-            self == TARGET_2D
-            or self == TARGET_3D
-            or self == TARGET_ARRAY
-            or self == TARGET_CUBE
-        )
+        return ordinal_valid(self.value, TARGET_CUBE.value)
 
 
 # One layer, and a mip chain: three.js's `WebGLRenderTarget` whose texture
@@ -131,9 +130,20 @@ def level_extent(extent: Int, level: Int) -> Int:
     return max(1, extent >> level)
 
 
-def _byte(value: Float32) -> UInt8:
-    """Return the byte a byte target's stored fraction stands for."""
-    return UInt8(Int(value * 255 + 0.5))
+def require_layered_kind(kind: TargetKind) raises:
+    """Refuse a layered target whose kind is not named.
+
+    Nothing. The call returns when the kind is one of the four.
+
+    Args:
+        kind: Which target.
+
+    Raises:
+        Error: If the kind is not valid.
+    """
+    require_valid(
+        kind.is_valid(), "A layered target's kind must be one of the four"
+    )
 
 
 struct LayeredRenderTarget(Movable):
@@ -190,10 +200,13 @@ struct LayeredRenderTarget(Movable):
                 chain, a chain is not square with a power of two side, or
                 `RenderTarget` refuses the type or the samples.
         """
-        if not kind.is_valid():
-            raise Error("A layered target's kind must be one of the four")
-        if width <= 0 or height <= 0 or depth <= 0:
-            raise Error("A layered target's dimensions must be positive")
+        require_layered_kind(kind)
+        require_positive_extent(
+            width,
+            height,
+            "A layered target's dimensions must be positive",
+            depth,
+        )
         if kind == TARGET_2D and depth != 1:
             raise Error("A 2D target has one layer")
         if kind == TARGET_CUBE and (depth != FACE_COUNT or width != height):
@@ -234,18 +247,19 @@ struct LayeredRenderTarget(Movable):
             Error: If the kind is none of the four, or the images do not
                 number one per layer and level.
         """
-        if not self.kind.is_valid():
-            raise Error("A layered target's kind must be one of the four")
+        require_layered_kind(self.kind)
         if len(self.images) != self.depth * self.levels:
             raise Error("A layered target holds one image per layer and level")
 
     def _index(self, layer: Int, level: Int) raises -> Int:
         """Return where the image of `(layer, level)` is, checking both."""
         self.validate()
-        if layer < 0 or layer >= self.depth:
-            raise Error("A layered target has no such layer")
-        if level < 0 or level >= self.levels:
-            raise Error("A layered target has no such level")
+        require_index_in_count(
+            layer, self.depth, "A layered target has no such layer"
+        )
+        require_index_in_count(
+            level, self.levels, "A layered target has no such level"
+        )
         return layer * self.levels + level
 
     def image(
@@ -358,8 +372,7 @@ struct LayeredRenderTarget(Movable):
         if self.kind != TARGET_CUBE:
             raise Error("Only a cube target is filled from a panorama")
         panorama.validate()
-        if panorama.is_blank():
-            raise Error("An equirectangular image must hold texels")
+        require_equirect_texels(panorama)
         for face in range(FACE_COUNT):  # pragma: no branch
             for level in range(self.levels):  # pragma: no branch
                 ref held = self.images[face * self.levels + level]
@@ -385,7 +398,7 @@ struct LayeredRenderTarget(Movable):
         if bytes:
             var pixels = List[UInt8](capacity=len(image.pixels))
             for at in range(len(image.pixels)):  # pragma: no branch
-                pixels.append(_byte(image.pixels[at]))
+                pixels.append(unit_byte(image.pixels[at]))
             texture = Texture(
                 base.width,
                 base.height,
@@ -404,7 +417,7 @@ struct LayeredRenderTarget(Movable):
             if bytes:
                 texture.offsets.append(len(texture.pixels))
                 for at in range(len(below.pixels)):  # pragma: no branch
-                    texture.pixels.append(_byte(below.pixels[at]))
+                    texture.pixels.append(unit_byte(below.pixels[at]))
             else:
                 texture.offsets.append(len(texture.data))
                 for at in range(len(below.pixels)):  # pragma: no branch
@@ -474,7 +487,7 @@ struct LayeredRenderTarget(Movable):
                     start, start + self.width * 4
                 ):  # pragma: no branch
                     if bytes:
-                        pixels.append(_byte(image.pixels[at]))
+                        pixels.append(unit_byte(image.pixels[at]))
                     else:
                         data.append(image.pixels[at])
         if bytes:

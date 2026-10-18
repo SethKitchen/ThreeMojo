@@ -38,7 +38,10 @@ from loaders.draco_mesh import (
     NONE,
     DracoCornerTable,
     DracoTraversalMethod,
+    CornerVisitor,
     attribute_connectivity,
+    depth_first_walk,
+    prediction_degree_walk,
 )
 from std.collections import Dict
 
@@ -417,7 +420,7 @@ def seam_table(
     return SeamTable(connectivity.table.copy(), on_edge^, no_interior_seams)
 
 
-struct EncodingData(Copyable, Movable):
+struct EncodingData(Copyable, CornerVisitor, Movable):
     """The order in which the values of an attribute are stored.
 
     Draco's `MeshAttributeIndicesEncodingData`, filled by `traverse`.
@@ -494,53 +497,8 @@ def _depth_first(
 ) raises:
     """Draco's `DepthFirstTraverser::TraverseFromCorner`, from each corner
     of the order."""
-    var face_done = List[Bool](length=table.faces(), fill=False)
-    var vertex_done = List[Bool](length=table.vertices(), fill=False)
-    var stack = List[Int]()
-    # A mesh past the check has a triangle: the loop runs.
-    for start in order:  # pragma: no branch
-        if face_done[start // 3]:
-            continue
-        stack.clear()
-        stack.append(start)
-        var ends: List[Int] = [table.next(start), table.previous(start)]
-        for corner in ends:  # pragma: no branch
-            var vertex = table.vertex(corner)
-            draco_require(vertex != NONE, "a corner has no vertex")
-            if not vertex_done[vertex]:
-                vertex_done[vertex] = True
-                data.visit(vertex, corner, faces)
-        while len(stack) > 0:
-            var corner = stack[len(stack) - 1]
-            if face_done[corner // 3]:
-                _ = stack.pop()
-                continue
-            while True:
-                face_done[corner // 3] = True
-                var vertex = table.vertex(corner)
-                draco_require(vertex != NONE, "a corner has no vertex")
-                if not vertex_done[vertex]:
-                    var on_boundary = table.is_on_boundary(vertex)
-                    vertex_done[vertex] = True
-                    data.visit(vertex, corner, faces)
-                    if not on_boundary:
-                        corner = table.right_corner(corner)
-                        continue
-                var right = table.right_corner(corner)
-                var left = table.left_corner(corner)
-                var right_done = right == NONE or face_done[right // 3]
-                var left_done = left == NONE or face_done[left // 3]
-                if right_done:
-                    if left_done:
-                        _ = stack.pop()
-                        break
-                    corner = left
-                elif left_done:
-                    corner = right
-                else:
-                    stack[len(stack) - 1] = left
-                    stack.append(right)
-                    break
+    # A mesh past the check has a triangle, so `order` is not empty.
+    depth_first_walk(table, faces, order, data)
 
 
 def _prediction_degree(
@@ -550,75 +508,13 @@ def _prediction_degree(
     mut data: EncodingData,
 ) raises:
     """Draco's `MaxPredictionDegreeTraverser::TraverseFromCorner`, from
-    each corner of the order."""
-    var face_done = List[Bool](length=table.faces(), fill=False)
-    var vertex_done = List[Bool](length=table.vertices(), fill=False)
-    var degree = List[Int](length=table.vertices(), fill=0)
-    var stacks: List[List[Int]] = [List[Int](), List[Int](), List[Int]()]
-    # A mesh past the check has a triangle: the loop runs.
-    for start in order:  # pragma: no branch
-        stacks[0].append(start)
-        var best = 0
-        var ends: List[Int] = [table.next(start), table.previous(start), start]
-        for corner in ends:  # pragma: no branch
-            var vertex = table.vertex(corner)
-            if not vertex_done[vertex]:
-                vertex_done[vertex] = True
-                data.visit(vertex, corner, faces)
-        while True:
-            var corner = NONE
-            # The best priority is 0, 1 or 2. The loop always runs.
-            for priority in range(best, 3):  # pragma: no branch
-                if len(stacks[priority]) > 0:
-                    corner = stacks[priority].pop()
-                    best = priority
-                    break
-            if corner == NONE:
-                break
-            if face_done[corner // 3]:
-                continue
-            while True:
-                face_done[corner // 3] = True
-                var vertex = table.vertex(corner)
-                if not vertex_done[vertex]:
-                    vertex_done[vertex] = True
-                    data.visit(vertex, corner, faces)
-                var right = table.right_corner(corner)
-                var left = table.left_corner(corner)
-                var right_done = right == NONE or face_done[right // 3]
-                var left_done = left == NONE or face_done[left // 3]
-                if not left_done:
-                    var priority = _priority(table, left, vertex_done, degree)
-                    if right_done and priority <= best:
-                        corner = left
-                        continue
-                    stacks[priority].append(left)
-                    best = min(best, priority)
-                if not right_done:
-                    var priority = _priority(table, right, vertex_done, degree)
-                    if priority <= best:
-                        corner = right
-                        continue
-                    stacks[priority].append(right)
-                    best = min(best, priority)
-                break
+    each corner of the order.
 
-
-def _priority(
-    table: DracoCornerTable,
-    corner: Int,
-    vertex_done: List[Bool],
-    mut degree: List[Int],
-) -> Int:
-    """Draco's `ComputePriority`: 0 for a reached tip, 1 for a tip that
-    two faces predict, 2 otherwise."""
-    var tip = table.vertex(corner)
-    if vertex_done[tip]:
-        return 0
-    degree[tip] += 1
-    if degree[tip] > 1:
-        return 1
-    return 2
+    Raises:
+        Error: If a start corner has no vertex.
+    """
+    # A mesh past the check has a triangle, so `order` is not empty.
+    prediction_degree_walk(table, faces, order, data)
 
 
 struct _Valence(Movable):

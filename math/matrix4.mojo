@@ -31,6 +31,13 @@ passed where radians are meant.
 """
 
 from math.euler import Euler
+from math.square_matrix import (
+    _elements_equal,
+    _post_multiply,
+    _scale_elements,
+    _transpose_square,
+    fill_elements,
+)
 from math.matrix3 import Matrix3
 from math.norm import length3, normalized3, _ordinary_squared
 from math.quaternion import Quaternion
@@ -40,6 +47,7 @@ from math.matrix_inverse import (
     _determinant_needs_wide,
     _inverse_wide,
 )
+from math.finite import require_finite_group
 from std.math import cos, fma, isfinite, sin, sqrt
 from units.si import Angle
 
@@ -51,11 +59,6 @@ comptime FRAME_TOLERANCE = Float32(1e-4)
 
 # The common look-at basis perturbs a parallel direction by this amount.
 comptime _LOOK_AT_NUDGE = Float32(0.0001)
-
-
-def _finite_direction(vector: Vector3) -> Bool:
-    """Return whether all three direction components are finite."""
-    return isfinite(vector.x) and isfinite(vector.y) and isfinite(vector.z)
 
 
 def _unit_direction(vector: Vector3) -> Vector3:
@@ -137,6 +140,22 @@ def _determinant4[dtype: DType](e: Array[SIMD[dtype, 1], 16]) -> SIMD[dtype, 1]:
     )
 
 
+def _require_matrix4(row: Int, column: Int) raises:
+    """Refuse a matrix index outside 0 to 3.
+
+    Nothing. The call returns when both indexes are inside 0 to 3.
+
+    Args:
+        row: The row.
+        column: The column.
+
+    Raises:
+        Error: If either index is outside 0 to 3.
+    """
+    if row < 0 or row > 3 or column < 0 or column > 3:
+        raise Error("Matrix4 index out of range")
+
+
 struct Matrix4(Equatable, ImplicitlyCopyable):
     """A 4x4 matrix in column-major order."""
 
@@ -156,14 +175,12 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
 
     def get(self, row: Int, column: Int) raises -> Float32:
         """Return the element at `row`, `column`, both zero-based."""
-        if row < 0 or row > 3 or column < 0 or column > 3:
-            raise Error("Matrix4 index out of range")
+        _require_matrix4(row, column)
         return self.elements[column * 4 + row]
 
     def put(mut self, row: Int, column: Int, value: Float32) raises:
         """Write `value` at `row`, `column`, both zero-based."""
-        if row < 0 or row > 3 or column < 0 or column > 3:
-            raise Error("Matrix4 index out of range")
+        _require_matrix4(row, column)
         self.elements[column * 4 + row] = value
 
     def set(
@@ -213,31 +230,14 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
 
     def transpose(mut self):
         """Swap this matrix's rows and columns in place."""
-        for row in range(4):  # pragma: no branch
-            for column in range(row + 1, 4):
-                var high = self.elements[column * 4 + row]
-                self.elements[column * 4 + row] = self.elements[
-                    row * 4 + column
-                ]
-                self.elements[row * 4 + column] = high
+        _transpose_square[4](self.elements)
 
     def multiply(mut self, other: Self):
         """Post-multiply by `other`, giving `self * other`.
 
         Order matters: the right-hand matrix is applied to a point first.
         """
-        var result = Array[Float32, 16](fill=0.0)
-        # Fixed 4x4, so none of these can run zero times.
-        for row in range(4):  # pragma: no branch
-            for column in range(4):  # pragma: no branch
-                var total = Float32(0)
-                for k in range(4):  # pragma: no branch
-                    total += (
-                        self.elements[k * 4 + row]
-                        * other.elements[column * 4 + k]
-                    )
-                result[column * 4 + row] = total
-        self.elements = result^
+        _post_multiply[4](self.elements, other.elements)
 
     def premultiply(mut self, other: Self):
         """Pre-multiply by `other`, giving `other * self`."""
@@ -579,11 +579,11 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         for axis in range(3):  # pragma: no branch
             var start = axis * 4
             var direction = Vector3(e[start], e[start + 1], e[start + 2])
-            if not _finite_direction(direction):
-                raise Error(
-                    "A transform axis must be finite to extract rotation"
-                )
-            if direction.x == 0 and direction.y == 0 and direction.z == 0:
+            require_finite_group(
+                direction.is_finite(),
+                "A transform axis must be finite to extract rotation",
+            )
+            if direction == Vector3(0, 0, 0):
                 raise Error(
                     "A transform with no extent along an axis has no rotation"
                     " to extract"
@@ -613,7 +613,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             True for a rotation, within `tolerance`. Translation is not
             looked at.
         """
-        var unit = abs(self._axis_length(0) - 1) <= tolerance
+        var unit = abs(self.column_length(0) - 1) <= tolerance
         return unit and self.is_scaled_rotation(tolerance)
 
     def is_scaled_rotation(self, tolerance: Float32 = FRAME_TOLERANCE) -> Bool:
@@ -688,9 +688,9 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             The largest axis length. Zero for a transform that flattens
             everything.
         """
-        var longest = self._axis_length(0)
+        var longest = self.column_length(0)
         for axis in range(1, 3):  # pragma: no branch
-            var length = self._axis_length(axis)
+            var length = self.column_length(axis)
             if length > longest:
                 longest = length
         return longest
@@ -770,10 +770,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         Returns:
             Whether the sixteen elements match.
         """
-        for index in range(16):  # pragma: no branch
-            if self.elements[index] != other.elements[index]:
-                return False
-        return True
+        return _elements_equal[4](self.elements, other.elements)
 
     def __ne__(self, other: Self) -> Bool:
         """Return True if any element differs.
@@ -805,8 +802,7 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         Args:
             factor: The number.
         """
-        for index in range(16):  # pragma: no branch
-            self.elements[index] *= factor
+        _scale_elements[4](self.elements, factor)
 
     def scale(mut self, factors: Vector3):
         """Scale the first three columns by the three factors, three.js's
@@ -885,21 +881,21 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             Error: If a position is not finite, or up is zero or not finite.
             The matrix stays unchanged on failure.
         """
-        if not (_finite_direction(eye) and _finite_direction(target)):
+        if not (eye.is_finite() and target.is_finite()):
             raise Error("Look-at positions must be finite")
-        if not _finite_direction(up) or (up.x == 0 and up.y == 0 and up.z == 0):
+        if not up.is_finite() or up == Vector3(0, 0, 0):
             raise Error("An up direction must be finite and not zero")
         var z = eye - target
-        if not _finite_direction(z):
+        if not z.is_finite():
             # Halve before subtraction when opposite finite coordinates
             # would overflow. The direction is unchanged.
             z = eye * 0.5 - target * 0.5
-        if z.x == 0 and z.y == 0 and z.z == 0:
+        if z == Vector3(0, 0, 0):
             z = Vector3(0, 0, 1)
         z = _unit_direction(z)
         var above = _unit_direction(up)
         var x = _cross_direction(above, z)
-        if x.x == 0 and x.y == 0 and x.z == 0:
+        if x == Vector3(0, 0, 0):
             # Nudge along an axis that is not the dominant direction.
             # This keeps the usual y/z-up choice and works at any scale.
             if abs(z.z) > max(abs(z.x), abs(z.y)):
@@ -942,16 +938,22 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
             Error: If an axis has zero length, an entry is nonfinite, or
                 an axis length cannot fit in Float32. Outputs stay unchanged.
         """
-        if not self.is_finite():
-            raise Error("A transform must be finite to decompose")
-        var sx = self._axis_length(0)
-        var sy = self._axis_length(1)
-        var sz = self._axis_length(2)
-        if sx == 0 or sy == 0 or sz == 0:
-            raise Error(
+        require_finite_group(
+            self.is_finite(),
+            "A transform must be finite to decompose",
+        )
+        var sx = self.column_length(0)
+        var sy = self.column_length(1)
+        var sz = self.column_length(2)
+        require_axis_extent(
+            sx,
+            sy,
+            sz,
+            (
                 "A transform with no extent along an axis has no rotation"
                 " to decompose"
-            )
+            ),
+        )
         if not isfinite(sx) or not isfinite(sy) or not isfinite(sz):
             raise Error("A decomposed axis scale must fit in Float32")
         var determinant = self.determinant()
@@ -992,8 +994,21 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         quaternion = result
         scale = Vector3(sx, sy, sz)
 
-    def _axis_length(self, axis: Int) -> Float32:
-        """Return the length of one axis column: the scale along that axis."""
+    def column_length(self, axis: Int) -> Float32:
+        """Return the length of one axis column.
+
+        That length is the scale along the axis. three.js reads it as
+        the length of `matrix[axis].xyz`.
+
+        Error: Never.
+
+        Args:
+            axis: Which column, zero for x through two for z.
+
+        Returns:
+            The length.
+
+        """
         ref e = self.elements
         var start = axis * 4
         return length3(e[start], e[start + 1], e[start + 2])
@@ -1004,6 +1019,59 @@ struct Matrix4(Equatable, ImplicitlyCopyable):
         var i = a * 4
         var j = b * 4
         return e[i] * e[j] + e[i + 1] * e[j + 1] + e[i + 2] * e[j + 2]
+
+
+def require_affine(matrix: Matrix4, message: String) raises:
+    """Refuse a matrix that is not affine.
+
+    Nothing. The call returns when the matrix is affine.
+
+    Args:
+        matrix: The transform.
+        message: The error text for this caller.
+
+    Raises:
+        Error: If the matrix is not affine.
+    """
+    if not matrix.is_affine():
+        raise Error(message)
+
+
+def require_axis_extent(
+    x: Float32, y: Float32, z: Float32, message: String
+) raises:
+    """Refuse an axis length of zero.
+
+    Nothing. The call returns when every length is nonzero.
+
+    Args:
+        x: The length of the first axis.
+        y: The length of the second axis.
+        z: The length of the third axis.
+        message: The error text for this caller.
+
+    Raises:
+        Error: If any length is zero.
+    """
+    if x == 0 or y == 0 or z == 0:
+        raise Error(message)
+
+
+def column_major_matrix(elements: List[Float32]) -> Matrix4:
+    """Return a matrix filled from sixteen column-major numbers.
+
+    Error: Never.
+
+    Args:
+        elements: Sixteen numbers. The first four are the first column.
+
+    Returns:
+        The matrix.
+
+    """
+    var matrix = Matrix4()
+    fill_elements(matrix.elements, elements)
+    return matrix^
 
 
 def translation(x: Float32, y: Float32, z: Float32) -> Matrix4:
@@ -1188,42 +1256,20 @@ def compose(
     Returns:
         The transform.
     """
-    var x = quaternion.x
-    var y = quaternion.y
-    var z = quaternion.z
-    var w = quaternion.w
-    var x2 = x + x
-    var y2 = y + y
-    var z2 = z + z
-    var xx = x * x2
-    var xy = x * y2
-    var xz = x * z2
-    var yy = y * y2
-    var yz = y * z2
-    var zz = z * z2
-    var wx = w * x2
-    var wy = w * y2
-    var wz = w * z2
+    var matrix = quaternion.to_matrix()
     var sx = scale.x
     var sy = scale.y
     var sz = scale.z
-    var matrix = Matrix4()
-    matrix.set(
-        (1 - (yy + zz)) * sx,
-        (xy - wz) * sy,
-        (xz + wy) * sz,
-        position.x,
-        (xy + wz) * sx,
-        (1 - (xx + zz)) * sy,
-        (yz - wx) * sz,
-        position.y,
-        (xz - wy) * sx,
-        (yz + wx) * sy,
-        (1 - (xx + yy)) * sz,
-        position.z,
-        0,
-        0,
-        0,
-        1,
-    )
+    matrix.elements[0] *= sx
+    matrix.elements[1] *= sx
+    matrix.elements[2] *= sx
+    matrix.elements[4] *= sy
+    matrix.elements[5] *= sy
+    matrix.elements[6] *= sy
+    matrix.elements[8] *= sz
+    matrix.elements[9] *= sz
+    matrix.elements[10] *= sz
+    matrix.elements[12] = position.x
+    matrix.elements[13] = position.y
+    matrix.elements[14] = position.z
     return matrix^

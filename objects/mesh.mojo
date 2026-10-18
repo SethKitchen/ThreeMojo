@@ -75,11 +75,30 @@ until there was a second property to put in it. Textures were that second
 property, and `side` a third; see `materials.material`.
 """
 
-from core.buffer_geometry import BufferGeometry, MaterialIndex
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    require_material_index,
+)
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
+from core.ordinal import require_non_negative, require_positive
 from materials.material import MaterialId
+
+
+def require_mesh_material(material: MaterialId) raises:
+    """Refuse a mesh material id that is negative.
+
+    Nothing. The call returns when the id is zero or more.
+
+    Args:
+        material: The material's id.
+
+    Raises:
+        Error: If the id is negative.
+    """
+    require_non_negative(material.value, "A mesh must name a material")
 
 
 struct Mesh(ImplicitlyCopyable):
@@ -147,12 +166,9 @@ struct Mesh(ImplicitlyCopyable):
         Raises:
             Error: If any id is negative.
         """
-        if node.value < 0:
-            raise Error("A mesh must name a scene node")
-        if geometry.value < 0:
-            raise Error("A mesh must name a geometry")
-        if material.value < 0:
-            raise Error("A mesh must name a material")
+        require_non_negative(node.value, "A mesh must name a scene node")
+        require_non_negative(geometry.value, "A mesh must name a geometry")
+        require_mesh_material(material)
         self.geometry = geometry
         self.material = material
         self.node = node
@@ -194,11 +210,11 @@ struct Mesh(ImplicitlyCopyable):
         Raises:
             Error: If the list is empty, or any id is negative.
         """
-        if len(materials) == 0:
-            raise Error("A mesh with a material list needs one material")
+        require_positive(
+            len(materials), "A mesh with a material list needs one material"
+        )
         for index in range(len(materials)):  # pragma: no branch
-            if materials[index].value < 0:
-                raise Error("A mesh must name a material")
+            require_mesh_material(materials[index])
         self = Mesh(
             geometry,
             materials[0],
@@ -255,8 +271,7 @@ struct Mesh(ImplicitlyCopyable):
         """
         if not self.is_multi_material():
             raise Error("A mesh with one material has no material list")
-        if not index.is_valid():
-            raise Error("A group's material index cannot be negative")
+        require_material_index(index)
         if index.value >= len(self.materials):
             return None
         return self.materials[index.value]

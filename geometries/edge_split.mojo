@@ -32,9 +32,16 @@ targets are dropped, as in three.js.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import (
+    BufferGeometry,
+    NORMAL,
+    POSITION,
+    require_vertex_index,
+)
+from core.ordinal import require_positive
 from geometries.utils import merge_vertices
-from std.math import cos, isfinite, sqrt
+from math.finite import require_finite
+from std.math import cos, sqrt
 from units.si import Angle
 
 
@@ -150,8 +157,10 @@ def edge_split(
             no positions of three numbers, a vertex is used by no
             triangle, or an index entry points past the last vertex.
     """
-    if not isfinite(cut_off_angle.value):
-        raise Error("An edge split needs a finite cut-off angle")
+    require_finite(
+        Float64(cut_off_angle.value),
+        "An edge split needs a finite cut-off angle",
+    )
     if geometry.instanced:
         raise Error("An instanced geometry is not split")
     var had_normals = geometry.has_attribute(String(NORMAL))
@@ -181,8 +190,7 @@ def edge_split(
         var p = List[SIMD[DType.float64, 4]]()
         for corner in range(3):  # pragma: no branch
             var vertex = indexes[first + corner]
-            if vertex >= count:
-                raise Error("An index entry points past the last vertex")
+            require_vertex_index(vertex, count)
             p.append(
                 SIMD[DType.float64, 4](
                     Float64(position.component(vertex, 0)),
@@ -213,8 +221,10 @@ def edge_split(
     var splits = List[_Split]()
     var cut_off = cos(Float64(cut_off_angle.value)) - 0.001
     for vertex in range(count):
-        if len(point_to_index[vertex]) == 0:
-            raise Error("An edge split needs every vertex in a triangle")
+        require_positive(
+            len(point_to_index[vertex]),
+            "An edge split needs every vertex in a triangle",
+        )
         _edge_split(normals, point_to_index[vertex], cut_off, None, splits)
 
     var result = BufferGeometry()

@@ -22,6 +22,7 @@ car's paint as per-instance data.
 Every car stands on its wheels at y equals zero, centered in x and z, and
 faces +z. The material is not ported.
 """
+from core.ordinal import ordinal_valid, require_valid
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -36,13 +37,15 @@ from generators.utils import (
     part,
 )
 from geometries.box import box
+from geometries.grid import append_cell
 from geometries.circle import circle
 from geometries.lathe import lathe
 from geometries.loft import loft
 from geometries.utils import merge_geometries
 from math.matrix4 import Matrix4
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector2 import Vector2, vector2_from_float64
+from math.utils import mix_delta
+from math.vector3 import Vector3, append_float64_xyz, vector3_from_float64
 from render.color_spaces import srgb_to_linear_three
 from std.math import cos, pi, sqrt
 
@@ -74,7 +77,7 @@ struct BodyType(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the body is the sedan, the SUV or the taxi.
         """
-        return self.value >= 0 and self.value < 3
+        return ordinal_valid(self.value, 3 - 1)
 
 
 comptime SEDAN = BodyType(0)
@@ -114,8 +117,9 @@ struct CarSpec(Copyable, Movable):
         Raises:
             Error: If the body is not one there is.
         """
-        if not body.is_valid():
-            raise Error("A car body must be the sedan, the SUV or the taxi")
+        require_valid(
+            body.is_valid(), "A car body must be the sedan, the SUV or the taxi"
+        )
         if body == SUV:
             self.body = [
                 2.30,
@@ -229,11 +233,6 @@ struct CarSpec(Copyable, Movable):
         return self.body[row * 4 + column]
 
 
-def _v(x: Float64, y: Float64, z: Float64) -> Vector3:
-    """Return a point rounded to `Float32`."""
-    return Vector3(Float32(x), Float32(y), Float32(z))
-
-
 def body_stations(spec: CarSpec) -> List[Float64]:
     """Return the z of every section of the body, from the front: the
     profile's own, and seven round each axle that shape the arch.
@@ -283,13 +282,9 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     var t = (z - spec.at(index, 0)) / (
         spec.at(index + 1, 0) - spec.at(index, 0)
     )
-    var w = spec.at(index, 1) + (spec.at(index + 1, 1) - spec.at(index, 1)) * t
-    var shoulder = (
-        spec.at(index, 2) + (spec.at(index + 1, 2) - spec.at(index, 2)) * t
-    )
-    var deck = (
-        spec.at(index, 3) + (spec.at(index + 1, 3) - spec.at(index, 3)) * t
-    )
+    var w = mix_delta(spec.at(index, 1), spec.at(index + 1, 1), t)
+    var shoulder = mix_delta(spec.at(index, 2), spec.at(index + 1, 2), t)
+    var deck = mix_delta(spec.at(index, 3), spec.at(index + 1, 3), t)
     var distance = abs(abs(z) - spec.wheel_z)
     var sill = (
         spec.wheel_radius
@@ -298,7 +293,7 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     )
     var right: List[Vec3d] = [
         Vec3d(w * 0.82, sill, z),
-        Vec3d(w * 0.97, sill + (shoulder - sill) * 0.12, z),
+        Vec3d(w * 0.97, mix_delta(sill, shoulder, 0.12), z),
         Vec3d(w, shoulder, z),
         Vec3d(w * 0.91, deck - 0.025, z),
         Vec3d(w * 0.52, deck, z),
@@ -307,10 +302,10 @@ def body_section(spec: CarSpec, z: Float64) -> List[Vector3]:
     var section = List[Vector3]()
     for i in range(5):  # pragma: no branch
         var p = right[i]
-        section.append(_v(-p.x, p.y, p.z))
+        section.append(vector3_from_float64(-p.x, p.y, p.z))
     for i in range(5):  # pragma: no branch
         var p = right[4 - i]
-        section.append(_v(p.x, p.y, p.z))
+        section.append(vector3_from_float64(p.x, p.y, p.z))
     return section^
 
 
@@ -382,9 +377,7 @@ def panel(
             var lift = arch * v * 0.035 if curved else 0.0
             var bow = arch * 4 * v * (1 - v) * 0.025 if curved else 0.0
             p = Vec3d(p.x, p.y + lift, p.z) + normal * bow
-            positions.append(Float32(p.x))
-            positions.append(Float32(p.y))
-            positions.append(Float32(p.z))
+            append_float64_xyz(positions, p.x, p.y, p.z)
             uvs.append(Float32(u))
             uvs.append(Float32(v))
             if x < columns and y < rows:
@@ -392,12 +385,7 @@ def panel(
                 var b = a + 1
                 var d = a + columns + 1
                 var c = d + 1
-                index.append(a)
-                index.append(b)
-                index.append(d)
-                index.append(b)
-                index.append(c)
-                index.append(d)
+                append_cell(index, a, b, c, d)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
@@ -419,7 +407,7 @@ def _roof(spec: CarSpec) raises -> BufferGeometry:
         for i in range(5):  # pragma: no branch
             var u = Float64(i) / 4
             row.append(
-                _v(
+                vector3_from_float64(
                     (u * 2 - 1) * edge.x,
                     edge.y + 4 * u * (1 - u) * 0.035,
                     edge.z,
@@ -439,17 +427,17 @@ def _wheel(
     var width = r * 0.68
     var x = side * spec.wheel_x
     var profile: List[Vector2] = [
-        Vector2(Float32(r * 0.93), Float32(-width * 0.44)),
-        Vector2(Float32(r), Float32(-width * 0.12)),
-        Vector2(Float32(r * 0.98), Float32(width * 0.27)),
-        Vector2(Float32(rim + 0.014), Float32(width * 0.44)),
+        vector2_from_float64(r * 0.93, -width * 0.44),
+        vector2_from_float64(r, -width * 0.12),
+        vector2_from_float64(r * 0.98, width * 0.27),
+        vector2_from_float64(rim + 0.014, width * 0.44),
     ]
     var tyre = lathe(profile, 24)
     tyre.rotate_z(_a(-side * pi / 2))
     tyre.translate(_l(x), _l(r), _l(z))
     var lip_profile: List[Vector2] = [
-        Vector2(Float32(rim + 0.014), Float32(width * 0.44)),
-        Vector2(Float32(rim), Float32(width * 0.29)),
+        vector2_from_float64(rim + 0.014, width * 0.44),
+        vector2_from_float64(rim, width * 0.29),
     ]
     var lip = lathe(lip_profile, 24)
     lip.rotate_z(_a(-side * pi / 2))
@@ -479,17 +467,17 @@ def _rails(spec: CarSpec, side: Float64) raises -> BufferGeometry:
     var stops: List[Float64] = [0.06, 0.13, 0.87, 0.94]
     for i in range(4):  # pragma: no branch
         var t = stops[i]
-        var z = tfr.z + (trr.z - tfr.z) * t
-        var roof_width = tfr.x + (trr.x - tfr.x) * t
+        var z = mix_delta(tfr.z, trr.z, t)
+        var roof_width = mix_delta(tfr.x, trr.x, t)
         var bow = 1 - (0.63 / roof_width) * (0.63 / roof_width)
         var rise = 0.005 if i == 0 or i == 3 else 0.05
-        var y = tfr.y + (trr.y - tfr.y) * t + bow * 0.035 + rise
+        var y = mix_delta(tfr.y, trr.y, t) + bow * 0.035 + rise
         var x = side * 0.63
         var row: List[Vector3] = [
-            _v(x - 0.022, y + 0.018, z),
-            _v(x + 0.022, y + 0.018, z),
-            _v(x + 0.022, y - 0.018, z),
-            _v(x - 0.022, y - 0.018, z),
+            vector3_from_float64(x - 0.022, y + 0.018, z),
+            vector3_from_float64(x + 0.022, y + 0.018, z),
+            vector3_from_float64(x + 0.022, y - 0.018, z),
+            vector3_from_float64(x - 0.022, y - 0.018, z),
         ]
         sections.append(row^)
     return part(loft(sections, True, True, True), CAR_TRIM)
@@ -507,10 +495,10 @@ def _sign(spec: CarSpec) raises -> BufferGeometry:
         var d = depths[i]
         var y = heights[i]
         var row: List[Vector3] = [
-            _v(w, y, d - 0.2),
-            _v(-w, y, d - 0.2),
-            _v(-w, y, -d - 0.2),
-            _v(w, y, -d - 0.2),
+            vector3_from_float64(w, y, d - 0.2),
+            vector3_from_float64(-w, y, d - 0.2),
+            vector3_from_float64(-w, y, -d - 0.2),
+            vector3_from_float64(w, y, -d - 0.2),
         ]
         sections.append(row^)
     return part(loft(sections, True, True, True), CAR_SIGN)

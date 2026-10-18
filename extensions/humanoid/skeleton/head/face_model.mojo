@@ -37,10 +37,13 @@ This is not a three.js port. See Extensions.
 """
 
 from core.binary import little_endian_u32
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
-from math.vector3 import Vector3
-from std.math import isfinite, min
+from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_positive
+from geometries.surface import indexed_surface
+from math.cross import cross_vectors
+from math.vector3 import Vector3, append_vector3
+from math.finite import require_finite
+from std.math import min
 
 # Where the converted model is kept, from the repository's root.
 comptime FACE_MODEL_PATH = "assets/face/ict_face.bin"
@@ -206,8 +209,7 @@ def _scale(bytes: List[UInt8], at: Int) raises -> Float32:
     var value = bytes.unsafe_ptr().unsafe_bitcast[Float32]()[
         unsafe_offset=at // 4
     ]
-    if not isfinite(value):
-        raise Error("A face model scale must be finite")
+    require_finite(Float64(value), "A face model scale must be finite")
     if value < 0 or value > Float32(1e30):
         raise Error("A face model scale is out of range")
     return value
@@ -810,14 +812,11 @@ struct FaceModel(Movable):
                     remap[d] = len(owners)
                     var p = Int(words[unsafe_offset=owners_at + d])
                     owners.append(p)
-                    positions.append(points[p].x)
-                    positions.append(points[p].y)
-                    positions.append(points[p].z)
+                    append_vector3(positions, points[p])
                     uvs.append(floats[unsafe_offset=uvs_at + d * 2])
                     uvs.append(floats[unsafe_offset=uvs_at + d * 2 + 1])
                 indices.append(remap[d])
-        if len(indices) == 0:
-            raise Error("That face part has no triangles")
+        require_positive(len(indices), "That face part has no triangles")
         # Smooth normals, summed per position so a seam does not show.
         var sums = List[Vector3](
             length=self.vertex_count(), fill=Vector3(0, 0, 0)
@@ -828,11 +827,7 @@ struct FaceModel(Movable):
             var c = points[owners[indices[t + 2]]]
             var e1 = b - a
             var e2 = c - a
-            var n = Vector3(
-                e1.y * e2.z - e1.z * e2.y,
-                e1.z * e2.x - e1.x * e2.z,
-                e1.x * e2.y - e1.y * e2.x,
-            )
+            var n = cross_vectors(e1, e2)
             for c in range(3):  # pragma: no branch
                 var p = owners[indices[t + c]]
                 sums[p] = sums[p] + n
@@ -840,14 +835,9 @@ struct FaceModel(Movable):
         for i in range(len(owners)):  # pragma: no branch
             var n = sums[owners[i]]
             n.normalize()
-            normals.append(n.x)
-            normals.append(n.y)
-            normals.append(n.z)
+            append_vector3(normals, n)
         var geometry = BufferGeometry()
-        geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-        geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-        geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-        geometry.set_index(indices^)
+        indexed_surface(geometry, positions^, normals^, uvs^, indices^)
         return geometry^
 
 

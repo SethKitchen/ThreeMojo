@@ -23,15 +23,13 @@ from std.testing import (
 
 def text(line: String) -> List[UInt8]:
     """Return a string's bytes."""
-    var out = List[UInt8]()
-    for byte in line.as_bytes():
-        out.append(byte)
+    var out = List[UInt8](line.as_bytes())
     return out^
 
 
 def plus(var bytes: List[UInt8], more: List[UInt8]) -> List[UInt8]:
     """Return `bytes` with `more` after them."""
-    bytes.extend(more.copy())
+    bytes.extend(Span(more))
     return bytes^
 
 
@@ -182,7 +180,7 @@ def test_a_scanline_that_does_not_begin_two_two_is_flat() raises:
     for first in firsts:
         var pixels = List[UInt8]()
         for _ in range(8):
-            pixels.extend(first.copy())
+            pixels.extend(Span(first))
         var image = decode(plus(header(8, 1), pixels))
         assert_equal(image.width, 8)
     refused(plus(header(8, 1), [2, 2, 0]), "cut short")

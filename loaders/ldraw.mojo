@@ -40,12 +40,14 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.cross import wide_cross, wide_dot
 from math.norm import _ordinary_squared, length3, normalized3, normalized_cross3
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry, MaterialIndex
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
 from loaders.ldraw_parse import (
     LDrawFace,
     LDrawInfo,
@@ -66,11 +68,12 @@ from materials.material import (
     MaterialId,
     STANDARD,
 )
-from math.quaternion import Quaternion
+from math.matrix4 import _determinant4
+from math.quaternion import quaternion_from_float64
+from math.vector3 import vector3_from_float64
 from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS
 from objects.mesh import Mesh
-from render.framebuffer import Color, FloatColor
-from render.srgb import linear_to_srgb
+from render.framebuffer import opaque_from_linear
 from std.math import isfinite, sqrt
 from std.pathlib import Path
 
@@ -224,71 +227,18 @@ def _apply(matrix: List[Float64], v: Vec) -> Vec:
 
 def _determinant(te: List[Float64]) -> Float64:
     """Return three.js's `Matrix4.determinant`."""
-    var n11 = te[0]
-    var n12 = te[4]
-    var n13 = te[8]
-    var n14 = te[12]
-    var n21 = te[1]
-    var n22 = te[5]
-    var n23 = te[9]
-    var n24 = te[13]
-    var n31 = te[2]
-    var n32 = te[6]
-    var n33 = te[10]
-    var n34 = te[14]
-    var n41 = te[3]
-    var n42 = te[7]
-    var n43 = te[11]
-    var n44 = te[15]
-    return (
-        n41
-        * (
-            +n14 * n23 * n32
-            - n13 * n24 * n32
-            - n14 * n22 * n33
-            + n12 * n24 * n33
-            + n13 * n22 * n34
-            - n12 * n23 * n34
-        )
-        + n42
-        * (
-            +n11 * n23 * n34
-            - n11 * n24 * n33
-            + n14 * n21 * n33
-            - n13 * n21 * n34
-            + n13 * n24 * n31
-            - n14 * n23 * n31
-        )
-        + n43
-        * (
-            +n11 * n24 * n32
-            - n11 * n22 * n34
-            - n14 * n21 * n32
-            + n12 * n21 * n34
-            + n14 * n22 * n31
-            - n12 * n24 * n31
-        )
-        + n44
-        * (
-            -n13 * n22 * n31
-            - n11 * n23 * n32
-            + n11 * n22 * n33
-            + n13 * n21 * n32
-            - n12 * n21 * n33
-            + n12 * n23 * n31
-        )
-    )
-
-
-def _length(x: Float64, y: Float64, z: Float64) -> Float64:
-    return length3(x, y, z)
+    var entries = Array[Float64, 16](fill=0)
+    # A placement matrix holds sixteen entries.
+    for index in range(16):  # pragma: no branch
+        entries[index] = te[index]
+    return _determinant4(entries)
 
 
 def _decompose(te: List[Float64], mut node: LDrawNode):
     """Set a node's place from a matrix, three.js's `Matrix4.decompose`."""
-    var sx = _length(te[0], te[1], te[2])
-    var sy = _length(te[4], te[5], te[6])
-    var sz = _length(te[8], te[9], te[10])
+    var sx = length3(te[0], te[1], te[2])
+    var sy = length3(te[4], te[5], te[6])
+    var sz = length3(te[8], te[9], te[10])
     var first = normalized3(te[0], te[1], te[2])
     var second = normalized3(te[4], te[5], te[6])
     var third = normalized3(te[8], te[9], te[10])
@@ -338,19 +288,6 @@ def _unit(v: Vec) -> Vec:
     return Vec(unit[0], unit[1], unit[2], 0)
 
 
-def _cross(a: Vec, b: Vec) -> Vec:
-    return Vec(
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-        0,
-    )
-
-
-def _dot(a: Vec, b: Vec) -> Float64:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
 def _stored_face_normal(vertices: List[Vec]) -> Vec:
     """Preserve the normal rule for corners stored in Float32 geometry."""
     # The loader deliberately retains malformed and unrepresentable corners.
@@ -361,10 +298,10 @@ def _stored_face_normal(vertices: List[Vec]) -> Vec:
         # Every stored position has three spatial components.
         for lane in range(3):  # pragma: no branch
             if not isfinite(Float32(vertex[lane])):
-                var cross = _cross(
+                var cross = wide_cross(
                     vertices[1] - vertices[0], vertices[2] - vertices[1]
                 )
-                var magnitude = sqrt(_dot(cross, cross))
+                var magnitude = sqrt(wide_dot(cross, cross))
                 var divisor = (
                     magnitude if magnitude != 0
                     and magnitude == magnitude else Float64(1)
@@ -419,7 +356,7 @@ def _ray(a: Vec, b: Vec) -> Tuple[Vec, Vec]:
     """Return three.js's `toNormalizedRay`: the line's direction, and its
     point nearest the origin."""
     var direction = _unit(b - a)
-    var scalar = _dot(a, direction)
+    var scalar = wide_dot(a, direction)
     return (a + direction * (-scalar), direction)
 
 
@@ -515,8 +452,8 @@ def smooth_normals(
                 ray_distances.append(List[Float64]())
             var at = ray_index.get(rh1, 0)
             var direction = ray_lines[at][1]
-            var d0 = _dot(direction, v0)
-            var d1 = _dot(direction, v1)
+            var d0 = wide_dot(direction, v0)
+            var d1 = wide_dot(direction, v1)
             if d0 > d1:
                 var t = d0
                 d0 = d1
@@ -541,8 +478,8 @@ def smooth_normals(
                 if key in ray_index:
                     var at = ray_index.get(key, 0)
                     var direction = ray_lines[at][1]
-                    var d0 = _dot(direction, v0)
-                    var d1 = _dot(direction, v1)
+                    var d0 = wide_dot(direction, v0)
+                    var d1 = wide_dot(direction, v1)
                     if d0 > d1:
                         var t = d0
                         d0 = d1
@@ -585,7 +522,7 @@ def smooth_normals(
                 var other_index = half_corners[other]
                 var other_count = len(faces[g].normals)
                 var other_normal = faces[g].face_normal
-                if abs(_dot(other_normal, face_normal)) < 0.25:
+                if abs(wide_dot(other_normal, face_normal)) < 0.25:
                     continue
                 queue.append(other)
                 half.delete(reverse)
@@ -689,17 +626,10 @@ def _from_code(
 
 
 def _find(codes: List[String], ids: List[Int], code: String) -> Int:
-    for k in range(len(codes)):  # pragma: no branch
-        if codes[k] == code:
-            return ids[k]
-    return -1
-
-
-def _has(codes: List[String], code: String) -> Bool:
-    for c in codes:
-        if c == code:
-            return True
-    return False
+    var at = first_match(codes, code)
+    if at < 0:
+        return -1
+    return ids[at]
 
 
 struct LDrawBuilder(Movable):
@@ -809,7 +739,7 @@ struct LDrawBuilder(Movable):
                 var code = self.model.nodes[n].codes[k]
                 if (
                     parent == MAIN_COLOUR_CODE
-                    and not _has(codes, code)
+                    and first_match(codes, code) < 0
                     and not final
                 ):
                     continue
@@ -953,7 +883,7 @@ struct LDrawBuilder(Movable):
                     face.material = _from_code(
                         face.color_code, color, info, False
                     )
-                if not _has(face_codes, face.color_code):
+                if first_match(face_codes, face.color_code) < 0:
                     face_codes.append(face.color_code)
                 if inverted != sub.inverted:
                     face.vertices.reverse()
@@ -1236,26 +1166,18 @@ def read_ldraw(path: String, var loader: LDrawLoader) raises -> LDrawModel:
 # --- into a scene ------------------------------------------------------------
 
 
-def _authored(color: Vec) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(Float32(color[0])),
-        linear_to_srgb(Float32(color[1])),
-        linear_to_srgb(Float32(color[2])),
-        1,
-    ).quantize()
-
-
 def _material(m: LDrawMaterial) raises -> Material:
     """Return the `Material` of an LDraw material: a standard surface, or a
     basic line."""
     if m.type == "MeshStandardMaterial":
         var out = Material(
-            _authored(m.color),
+            opaque_from_linear(m.color[0], m.color[1], m.color[2]),
             kind=STANDARD,
             opacity=Float32(m.opacity),
             transparent=m.transparent,
-            emissive=_authored(m.emissive),
+            emissive=opaque_from_linear(
+                m.emissive[0], m.emissive[1], m.emissive[2]
+            ),
             roughness=Float32(m.roughness),
             metalness=Float32(m.metalness),
         )
@@ -1265,7 +1187,7 @@ def _material(m: LDrawMaterial) raises -> Material:
         out.polygon_offset_factor = Float32(m.polygon_offset_factor)
         return out^
     var out = Material(
-        _authored(m.color),
+        opaque_from_linear(m.color[0], m.color[1], m.color[2]),
         kind=BASIC,
         opacity=Float32(m.opacity),
         transparent=m.transparent,
@@ -1315,24 +1237,22 @@ def load_ldraw(
         ref node = model.nodes[n]
         var holder = Object3D()
         holder.name = node.name
-        holder.set_position(
-            Float32(node.position[0]),
-            Float32(node.position[1]),
-            Float32(node.position[2]),
+        var place = vector3_from_float64(
+            node.position[0], node.position[1], node.position[2]
         )
+        holder.set_position(place.x, place.y, place.z)
         holder.set_quaternion(
-            Quaternion(
-                Float32(node.quaternion[0]),
-                Float32(node.quaternion[1]),
-                Float32(node.quaternion[2]),
-                Float32(node.quaternion[3]),
+            quaternion_from_float64(
+                node.quaternion[0],
+                node.quaternion[1],
+                node.quaternion[2],
+                node.quaternion[3],
             )
         )
-        holder.set_scale(
-            Float32(node.scale[0]),
-            Float32(node.scale[1]),
-            Float32(node.scale[2]),
+        var wide = vector3_from_float64(
+            node.scale[0], node.scale[1], node.scale[2]
         )
+        holder.set_scale(wide.x, wide.y, wide.z)
         var id: NodeId
         if up == NO_PARENT:
             id = scene.add(holder^)

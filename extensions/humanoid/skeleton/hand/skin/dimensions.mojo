@@ -25,7 +25,7 @@ shell represents the dermis for occupancy and mass.
     var d = HandSkinField(dims, RIGHT).distance(p)
 """
 
-from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.side import require_side, LEFT, RIGHT, BodySide
 from extensions.humanoid.skeleton.arm.bones.dimensions import (
     RADIUS,
     ULNA,
@@ -42,7 +42,9 @@ from extensions.humanoid.skeleton.arm.skin.dimensions import (
     ArmSkinField,
     append_stations,
 )
+from extensions.humanoid.skeleton.dermis import dermal_shell_distance
 from extensions.humanoid.skeleton.field import (
+    Bounds,
     DistanceField,
     field_gradient,
     flip_x,
@@ -71,7 +73,8 @@ from extensions.humanoid.skeleton.loft import (
     fit_loft,
     loft_distance,
 )
-from extensions.humanoid.skeleton.morph import smoothstep
+from math.smoothstep import clamped_smoothstep
+from math.bounds import enclose_point
 from math.vector3 import Vector3
 from std.math import max, min
 
@@ -133,8 +136,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
                 field refuses its inputs.
         """
         dimensions.validate()
-        if not side.is_valid():
-            raise Error("A hand side must be RIGHT or LEFT")
+        require_side(side, "A hand")
         var arm = dimensions.arm.copy()
         var f = arm.frame
         self.mirror = side == LEFT
@@ -221,22 +223,15 @@ struct HandSkinField(Copyable, DistanceField, Movable):
         var low = self.lofts[0].low
         var high = self.lofts[0].high
         for index in range(1, len(self.lofts)):  # pragma: no branch
-            low = Vector3(
-                min(low.x, self.lofts[index].low.x),
-                min(low.y, self.lofts[index].low.y),
-                min(low.z, self.lofts[index].low.z),
-            )
-            high = Vector3(
-                max(high.x, self.lofts[index].high.x),
-                max(high.y, self.lofts[index].high.y),
-                max(high.z, self.lofts[index].high.z),
-            )
+            enclose_point(low, high, self.lofts[index].low)
+            enclose_point(low, high, self.lofts[index].high)
         high.y = min(high.y, self.top + f.cm(JOIN_CLOSE))
         self.low = low
         self.high = high
         if self.mirror:
-            self.low = Vector3(-high.x, low.y, low.z)
-            self.high = Vector3(-low.x, high.y, high.z)
+            var mirrored = Bounds(self.low, self.high).mirrored_on_x()
+            self.low = mirrored.low
+            self.high = mirrored.high
 
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the anatomy-derived outer surface.
@@ -253,7 +248,7 @@ struct HandSkinField(Copyable, DistanceField, Movable):
             return d
         # Across the wrist the hand's skin becomes the arm's, so the two
         # meshes lie on one surface where they overlap.
-        var w = smoothstep(self.join_from, self.join_to, point.y)
+        var w = clamped_smoothstep(self.join_from, self.join_to, point.y)
         d = d + (self.arm.distance(point) - d) * w
         # Past its top it sinks under the arm's skin, and closes there,
         # with no rim to stand out of it.
@@ -295,8 +290,7 @@ struct HandSkinLayerField(Copyable, DistanceField, Movable):
         Negative is inside the dermis. Deep anatomy and exterior space
         are both outside this shell.
         """
-        var d = self.outer.distance(point)
-        return max(d, -d - self.thickness)
+        return dermal_shell_distance(self.outer.distance(point), self.thickness)
 
 
 def _palm_covers(cover: Float32, dermis: Float32) -> List[Float32]:

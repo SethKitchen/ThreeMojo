@@ -38,13 +38,19 @@ the camera takes the denoise's second tangent, as three.js means it to.
 The specular mode, which reprojects the hit point along the ray length an
 SSR pass leaves in alpha, is not ported.
 """
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
 
 from render.color_math import floor_channels
+from math.finite import require_finite_group
 from math.matrix4 import Matrix4
+from math.norm import squared_length2
+from math.sine import fraction
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.utils import clamped_texel, edge_index, mix_delta
+from math.vector3 import Vector3, mix_delta3
 from postprocessing.display_nodes import exp_f, luminance_of
+from postprocessing.traa import variance_gamma
 from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
@@ -87,7 +93,7 @@ struct AlphaSource(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Whether the value names a source.
         """
-        return self.value >= 0 and self.value <= 2
+        return ordinal_valid(self.value, 2)
 
 
 # `'raylength'`: the distance to what a ray hit, three.js's default.
@@ -185,8 +191,10 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
             finite, the velocity length or the frame limit is not
             positive, or the frame count is negative.
     """
-    if not settings.alpha_source.is_valid():
-        raise Error("A denoiser's alpha source must be one of the three")
+    require_valid(
+        settings.alpha_source.is_valid(),
+        "A denoiser's alpha source must be one of the three",
+    )
     var finite = (
         isfinite(settings.clamp_intensity)
         and isfinite(settings.flicker_suppression)
@@ -200,8 +208,7 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
         and isfinite(settings.denoise_flicker_suppression)
         and isfinite(settings.adaptive_trust)
     )
-    if not finite:
-        raise Error("A denoiser setting must be finite")
+    require_finite_group(finite, "A denoiser setting must be finite")
     if not (
         settings.max_velocity_length > 0
         and isfinite(settings.max_velocity_length)
@@ -209,8 +216,9 @@ def check_temporal_denoise(settings: TemporalDenoiseSettings) raises:
         and isfinite(settings.max_frames)
     ):
         raise Error("A denoiser's velocity length and frame limit are positive")
-    if settings.frame_id < 0:
-        raise Error("A denoiser's frame count must not be negative")
+    require_non_negative(
+        settings.frame_id, "A denoiser's frame count must not be negative"
+    )
 
 
 # --- shared arithmetic -------------------------------------------------------
@@ -324,13 +332,6 @@ def clip_to_aabb(history: Vector3, low: Vector3, high: Vector3) -> Vector3:
     return history
 
 
-def _load(colors: LightView, x: Int, y: Int) -> FloatColor:
-    """Return a texel, the edge texel's past the edge: `textureLoad`."""
-    return colors.at(
-        min(max(x, 0), colors.width - 1), min(max(y, 0), colors.height - 1)
-    )
-
-
 # --- TemporalReprojectNode ---------------------------------------------------
 
 
@@ -408,9 +409,7 @@ struct ReprojectInputs(Movable):
         Returns:
             The slot.
         """
-        return min(max(y, 0), self.height - 1) * self.width + min(
-            max(x, 0), self.width - 1
-        )
+        return clamped_texel(x, y, self.width, self.height)
 
 
 struct ReprojectCamera(ImplicitlyCopyable):
@@ -453,10 +452,8 @@ def _history_tap(
     var slot = inputs.slot(x, y)
     var color = floor_channels(inputs.history[slot])
     var depth = inputs.previous_depth[slot]
-    var u = (Float32(min(max(x, 0), inputs.width - 1)) + 0.5) / Float32(
-        inputs.width
-    )
-    var v = (Float32(min(max(y, 0), inputs.height - 1)) + 0.5) / Float32(
+    var u = (Float32(edge_index(x, inputs.width)) + 0.5) / Float32(inputs.width)
+    var v = (Float32(edge_index(y, inputs.height)) + 0.5) / Float32(
         inputs.height
     )
     var seen = view_position(u, v, depth, camera.previous_projection_inverse)
@@ -628,18 +625,18 @@ def temporal_reproject_pixel(
     var flicker = settings.flicker_suppression
     # `collectNeighborhood`: the pixel and its eight neighbors.
     var m1 = _dampened(input, flicker)
-    var m2 = Vector3(m1.x * m1.x, m1.y * m1.y, m1.z * m1.z)
+    var m2 = m1 * m1
     var offsets = SIMD[DType.int32, 16](
         -1, -1, -1, 1, 1, -1, 1, 1, 1, 0, 0, -1, 0, 1, -1, 0
     )
     var view = LightView(inputs.signal, w, h)
     for at in range(8):  # pragma: no branch
         var near = floor_channels(
-            _load(view, x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
+            view.load(x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
         )
         var c = _dampened(near, flicker)
         m1 = m1 + c
-        m2 = m2 + Vector3(c.x * c.x, c.y * c.y, c.z * c.z)
+        m2 = m2 + c * c
     var mean = m1 * (1.0 / 9.0)
     var deviation = Vector3(
         sqrt(max(m2.x / 9 - mean.x * mean.x, 0)),
@@ -656,7 +653,8 @@ def temporal_reproject_pixel(
     var off_y = -moved.y * 0.5 * Float32(h)
     var motion = min(
         max(
-            sqrt(off_x * off_x + off_y * off_y) / settings.max_velocity_length,
+            sqrt(squared_length2[DType.float32](off_x, off_y))
+            / settings.max_velocity_length,
             0,
         ),
         1,
@@ -670,7 +668,7 @@ def temporal_reproject_pixel(
     var a = max(history.a, TSL_EPSILON)
     var stretch = stretch_confidence(inputs, x, y)
     confidence *= stretch * stretch
-    var gamma = 0.5 + 0.5 * (1 - motion) * (1 - motion)
+    var gamma = variance_gamma(motion)
     # `applyVarianceClipping`.
     var low = mean - deviation * gamma
     var high = mean + deviation * gamma
@@ -698,7 +696,7 @@ def temporal_reproject_pixel(
         * (1 + min(max((1 - stretch) + (1 - trust), 0), 1))
     )
     var original = Vector3(history.r, history.g, history.b)
-    var mixed = original + (clipped - original) * clamp_intensity
+    var mixed = mix_delta3(original, clipped, clamp_intensity)
     confidence *= exp_f(-(original - clipped).length() * clamp_intensity * 30)
     confidence *= 1 + (trust * 0.05 + 0.95 - 1) * min(max(motion * 100, 0), 1)
     if confidence < TSL_EPSILON:
@@ -726,8 +724,8 @@ def analytic_noise(x: Int, y: Int, index: Int) -> Float32:
     var at = Float32(index + NOISE_ROTATION_SEED)
     var ox = at * Float32(0.7548776662)
     var oy = at * Float32(0.5698402910)
-    var shift_x = floor((ox - floor(ox)) * 32)
-    var shift_y = floor((oy - floor(oy)) * 32)
+    var shift_x = floor(fraction(ox) * 32)
+    var shift_y = floor(fraction(oy) * 32)
     var cx = Float32(x) + shift_x
     var cy = Float32(y) + shift_y
     cx = cx - floor(cx / 32) * 32
@@ -739,7 +737,7 @@ def analytic_noise(x: Int, y: Int, index: Int) -> Float32:
         + Float32(NOISE_ROTATION_SEED)
     )
     var r = t * Float32(P) * Float32(1 / P)
-    return r - floor(r)
+    return fraction(r)
 
 
 def vogel_disk(index: Int, radius: Float32) -> Vector2:
@@ -939,10 +937,8 @@ struct DenoiseInputs(Movable):
         Returns:
             The depth.
         """
-        var x = min(max(Int(floor(u * Float32(self.width))), 0), self.width - 1)
-        var y = min(
-            max(Int(floor(v * Float32(self.height))), 0), self.height - 1
-        )
+        var x = edge_index(Int(floor(u * Float32(self.width))), self.width)
+        var y = edge_index(Int(floor(v * Float32(self.height))), self.height)
         return self.depth[y * self.width + x]
 
     def normal(self, u: Float32, v: Float32) -> Vector3:
@@ -1140,7 +1136,7 @@ def recurrent_denoise_pixel(
         var w = (
             exp_f(-(diff * aggressivity + plane * depth_scale)) * normal_weight
         )
-        shrink = shrink + (w - shrink) * settings.adapt
+        shrink = mix_delta(shrink, w, settings.adapt)
         bias = bias + (dir * (w - 0.5) - bias) * 0.5
         var neighbor_luma = luminance_of(
             raw_neighbor.r, raw_neighbor.g, raw_neighbor.b

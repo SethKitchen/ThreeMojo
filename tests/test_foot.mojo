@@ -245,7 +245,7 @@ from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaField,
     tibia_dimensions,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import inf, max, min, nan
 from std.testing import (
     TestSuite,
@@ -522,13 +522,13 @@ def test_bone_occupancy_is_shell_then_trabecular() raises:
     var high = center + Vector3(0, 0.04, 0)
     var step = 0
     while step < 16:
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if bone_distance(dims, HALLUX_PROXIMAL, middle) < -field.shell:
             low = middle
         else:
             high = middle
         step += 1
-    var shell = (low + high) * Float32(0.5)
+    var shell = midpoint(low, high)
     assert_equal(
         foot_bone_occupancy(dims, HALLUX_PROXIMAL, shell), CORTICAL_FILL
     )
@@ -937,7 +937,7 @@ def test_skin_wraps_physical_stations() raises:
     var outside = inside + Vector3(0, 0.25, 0)
     var step = 0
     while step < 18:
-        var middle = (inside + outside) * Float32(0.5)
+        var middle = midpoint(inside, outside)
         if layer.outer.distance(middle) < 0:
             inside = middle
         else:
@@ -980,7 +980,7 @@ def test_hair_roots_sit_on_the_skin() raises:
     assert_equal(foot_hair_part_label(DIGITAL_HAIR), "digital hair")
     assert_equal(foot_hair_part_label(FootHair(5)), "foot hair")
     assert_false(FootHair(-1).is_valid())
-    var mid = (dorsal.a0 + dorsal.b0) * Float32(0.5)
+    var mid = midpoint(dorsal.a0, dorsal.b0)
     assert_true(foot_hair_distance(dims, DORSAL_HAIR, mid) < 0)
     assert_equal(foot_hair_occupancy(dims, DORSAL_HAIR, mid), SOFT_FILL)
     assert_equal(

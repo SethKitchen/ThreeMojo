@@ -42,7 +42,9 @@ from geometries.polyhedron import icosahedron
 from geometries.sphere import sphere
 from geometries.utils import merge_geometries, merge_vertices
 from math.matrix4 import Matrix4
-from std.math import floor, pi, sin, sqrt
+from math.vector3 import append_float64_xyz
+from math.sine import fraction
+from std.math import pi, sin, sqrt
 from units.si import Length, METER
 
 # A streetlight's parts.
@@ -670,7 +672,7 @@ def clump_hash(x: Float32, y: Float32, z: Float32) -> Float64:
         sin(Float64(x) * 127.1 + Float64(y) * 311.7 + Float64(z) * 74.7)
         * 43758.5453
     )
-    return s - floor(s)
+    return fraction(s)
 
 
 def leaf_clump(
@@ -700,9 +702,9 @@ def leaf_clump(
     for i in range(count):  # pragma: no branch
         var v = g.attribute_view(String(POSITION)).vector3(i)
         var k = 0.86 + clump_hash(v.x, v.y, v.z) * 0.3
-        jittered.append(Float32(Float64(v.x) * k))
-        jittered.append(Float32(Float64(v.y) * k))
-        jittered.append(Float32(Float64(v.z) * k))
+        append_float64_xyz(
+            jittered, Float64(v.x) * k, Float64(v.y) * k, Float64(v.z) * k
+        )
     g.set_attribute(String(POSITION), BufferAttribute(jittered^, 3))
     g = _moved(g^, x, y, z)
     g.compute_vertex_normals()
@@ -714,9 +716,12 @@ def leaf_clump(
         var out = (
             Vec3d(Float64(p.x), Float64(p.y), Float64(p.z)) - center
         ).normalized()
-        blended.append(Float32(Float64(n.x) * 0.45 + out.x * 0.55))
-        blended.append(Float32(Float64(n.y) * 0.45 + out.y * 0.55))
-        blended.append(Float32(Float64(n.z) * 0.45 + out.z * 0.55))
+        append_float64_xyz(
+            blended,
+            Float64(n.x) * 0.45 + out.x * 0.55,
+            Float64(n.y) * 0.45 + out.y * 0.55,
+            Float64(n.z) * 0.45 + out.z * 0.55,
+        )
     g.set_attribute(String(NORMAL), BufferAttribute(blended^, 3))
     g.normalize_normals()
     return g^

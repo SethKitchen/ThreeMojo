@@ -42,6 +42,9 @@ decoded without that dictionary. A KTX 2.0 file carries no dictionary,
 and three.js's Basis Universal transcoder refuses such a frame too.
 """
 
+from core.binary import copy_byte_range, copy_bytes, little_endian_uint
+from core.ordinal import require_positive
+
 # A decoder that knows the size it expects passes it as the limit.
 comptime NO_LIMIT = 0x7FFFFFFFFFFFFFF
 # The magic numbers of a frame and of a skippable frame.
@@ -88,14 +91,6 @@ def _room(produced: Int, more: Int, limit: Int) raises:
     """Raise if `more` bytes would take the output past `limit`."""
     if more > limit - produced:
         raise Error("zstd: the stream expands to more than was expected")
-
-
-def _le(bytes: List[UInt8], at: Int, count: Int) -> Int:
-    """Return the little-endian number of `count` bytes at `at`."""
-    var value = 0
-    for index in range(count):
-        value |= Int(bytes[at + index]) << (index * 8)
-    return value
 
 
 def _byte_or_zero(data: List[UInt8], at: Int) -> Int:
@@ -151,7 +146,7 @@ struct _Backward(Movable):
             raise Error(
                 "zstd: a bitstream is empty or does not end with its marker bit"
             )
-        self.data = List[UInt8](bytes[start:end])
+        self.data = copy_byte_range(bytes, start, end)
         self.pos = (end - start - 1) * 8 + _highbit(Int(bytes[end - 1]))
 
     def peek(self, count: Int) -> Int:
@@ -309,7 +304,7 @@ def _read_fse(
         Error: If the accuracy is too high, the counts do not fill the
             table, it names too many symbols, or it runs past `end`.
     """
-    var reader = _Forward(List[UInt8](bytes[at:end]))
+    var reader = _Forward(copy_byte_range(bytes, at, end))
     var log = reader.read(4) + 5
     if log > max_log:
         raise Error("zstd: an FSE table's accuracy is too high")
@@ -537,10 +532,12 @@ def _literals(
         # Raw or RLE: a header of one, two or three bytes.
         var header = 1 + (format & 1) * (1 + (format >> 1))
         _need(0, header, len(bytes))
-        var size = _le(bytes, 0, header) >> (3 + min(header - 1, 1))
+        var size = little_endian_uint(bytes, 0, header) >> (
+            3 + min(header - 1, 1)
+        )
         if kind == 0:
             _need(header, size, len(bytes))
-            return (List[UInt8](bytes[header : header + size]), header + size)
+            return (copy_bytes(bytes, header, size), header + size)
         _need(header, 1, len(bytes))
         return (List[UInt8](length=size, fill=bytes[header]), header + 1)
     # Compressed or treeless: one stream with a three-byte header, or four
@@ -548,7 +545,7 @@ def _literals(
     var header = max(3, format + 2)
     _need(0, header, len(bytes))
     var width = max(10, format * 4 + 6)
-    var sizes = _le(bytes, 0, header) >> 4
+    var sizes = little_endian_uint(bytes, 0, header) >> 4
     var regenerated = sizes & ((1 << width) - 1)
     var end = header + (sizes >> width)
     _need(0, end, len(bytes))
@@ -575,7 +572,7 @@ def _literals(
             var size = end - from_at
             var count = regenerated - 3 * quarter
             if index < 3:
-                size = _le(bytes, at + index * 2, 2)
+                size = little_endian_uint(bytes, at + index * 2, 2)
                 count = quarter
             _huffman_stream(
                 bytes,
@@ -713,7 +710,7 @@ def _sequences(
     var next = at + 1
     if first == 255:
         _need(at, 3, end)
-        count = _le(bytes, at + 1, 2) + 0x7F00
+        count = little_endian_uint(bytes, at + 1, 2) + 0x7F00
         next = at + 3
     elif first >= 128:
         _need(at, 2, end)
@@ -868,7 +865,7 @@ def xxh64(bytes: List[UInt8], start: Int, end: Int) -> UInt64:
         hash = _rotl(hash, 27) * P1 + P4
         at += 8
     if end - at >= 4:
-        hash ^= UInt64(_le(bytes, at, 4)) * P1
+        hash ^= UInt64(little_endian_uint(bytes, at, 4)) * P1
         hash = _rotl(hash, 23) * P2 + P3
         at += 4
     while at < end:
@@ -912,13 +909,15 @@ def _frame(
     var id_sizes: List[Int] = [0, 1, 2, 4]
     var id_bytes = id_sizes[descriptor & 3]
     _need(at, id_bytes, end)
-    if _le(bytes, at, id_bytes) != 0:
+    if little_endian_uint(bytes, at, id_bytes) != 0:
         raise Error("zstd: a frame that needs a dictionary cannot be read")
     at += id_bytes
     var size_sizes: List[Int] = [single, 2, 4, 8]
     var size_bytes = size_sizes[descriptor >> 6]
     _need(at, size_bytes, end)
-    var content = _le(bytes, at, size_bytes) + (256 if size_bytes == 2 else 0)
+    var content = little_endian_uint(bytes, at, size_bytes) + (
+        256 if size_bytes == 2 else 0
+    )
     at += size_bytes
     if size_bytes > 0:
         # A content size with its top bit set is negative here.
@@ -928,7 +927,7 @@ def _frame(
     var last = 0
     while last == 0:
         _need(at, 3, end)
-        var header = _le(bytes, at, 3)
+        var header = little_endian_uint(bytes, at, 3)
         last = header & 1
         var kind = (header >> 1) & 3
         var size = header >> 3
@@ -948,7 +947,7 @@ def _frame(
             at += 1
         elif kind == 2:
             _need(at, size, end)
-            var block = List[UInt8](bytes[at : at + size])
+            var block = copy_bytes(bytes, at, size)
             var read = _literals(block, state)
             _sequences(block, read[1], read[0], out, first, state, limit)
             at += size
@@ -959,7 +958,7 @@ def _frame(
     if (descriptor >> 2) & 1 == 1:
         _need(at, 4, end)
         var hash = Int(xxh64(out, first, len(out)) & 0xFFFFFFFF)
-        if _le(bytes, at, 4) != hash:
+        if little_endian_uint(bytes, at, 4) != hash:
             raise Error("zstd: a frame's checksum does not match its content")
         at += 4
     return at
@@ -983,18 +982,17 @@ def zstd_decompress(
             with a magic number, needs a dictionary or is malformed, or the
             stream expands past `limit`.
     """
-    if len(bytes) == 0:
-        raise Error("zstd: the stream is empty")
+    require_positive(len(bytes), "zstd: the stream is empty")
     var out = List[UInt8]()
     var at = 0
     while at < len(bytes):
         _need(at, 4, len(bytes))
-        var magic = _le(bytes, at, 4)
+        var magic = little_endian_uint(bytes, at, 4)
         if magic == FRAME_MAGIC:
             at = _frame(bytes, at + 4, out, limit)
         elif (magic & 0xFFFFFFF0) == SKIPPABLE_MAGIC:
             _need(at + 4, 4, len(bytes))
-            var size = _le(bytes, at + 4, 4)
+            var size = little_endian_uint(bytes, at + 4, 4)
             _need(at + 8, size, len(bytes))
             at += 8 + size
         else:

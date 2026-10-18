@@ -23,14 +23,16 @@ function of its own.
 """
 
 from cameras.camera import Camera
+from core.ordinal import require_positive
 from core.scene import Scene
 from math.smoothstep import smoothstep
+from math.utils import edge_index
 from math.vector3 import Vector3
-from postprocessing.sampling import u_of, v_of
+from postprocessing.sampling import mix, u_of, v_of
 from postprocessing.effects import texture_pixel
 from postprocessing.screen_space import DepthView
 from render.cube_texture import CubeTexture
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from render.texture import Texture
 from std.math import floor, isfinite
@@ -69,8 +71,7 @@ def check_pixelated(settings: PixelatedSettings) raises:
         Error: If the pixel size is below one, or a strength is negative or
             not finite.
     """
-    if settings.pixel_size < 1:
-        raise Error("A pixel size is at least one")
+    require_positive(settings.pixel_size, "A pixel size is at least one")
     if not (
         isfinite(settings.normal_edge_strength)
         and isfinite(settings.depth_edge_strength)
@@ -131,8 +132,8 @@ struct PixelatedTexels(Movable):
 
     def _slot(self, x: Int, y: Int) -> Int:
         """Return a texel's index, held at the edges; `y` counts up."""
-        var cx = min(max(x, 0), self.width - 1)
-        var cy = min(max(y, 0), self.height - 1)
+        var cx = edge_index(x, self.width)
+        var cy = edge_index(y, self.height)
         return (self.height - 1 - cy) * self.width + cx
 
     def depth_at(self, x: Int, y: Int) -> Float32:
@@ -320,17 +321,8 @@ def check_transition(settings: TransitionSettings) raises:
     """
     if not (isfinite(settings.mix_ratio) and isfinite(settings.threshold)):
         raise Error("A transition setting must be finite")
-    if settings.threshold <= 0:
-        raise Error("A transition threshold must be positive")
-
-
-def _mixed(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
-    """Return GLSL's `mix` of two colors."""
-    return FloatColor(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
+    require_positive(
+        settings.threshold, "A transition threshold must be positive"
     )
 
 
@@ -365,8 +357,8 @@ def transition_pixel(
             max((texel.r - r) * (1 / settings.threshold), Float32(0)),
             Float32(1),
         )
-        return _mixed(first, second, t)
-    return _mixed(second, first, settings.mix_ratio)
+        return mix(first, second, t)
+    return mix(second, first, settings.mix_ratio)
 
 
 def transition_light(
@@ -388,7 +380,7 @@ def transition_light(
         settings: The ratio, the threshold and the switch.
     """
     for slot in range(len(frame.colors)):  # pragma: no branch
-        var texel = FloatColor(0, 0, 0, 0)
+        var texel = TRANSPARENT_BLACK
         if settings.use_texture:
             texel = texels[slot]
         frame.colors[slot] = transition_pixel(

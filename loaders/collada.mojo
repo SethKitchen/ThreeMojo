@@ -66,6 +66,14 @@ coordinates, and the specular and ambient maps. `<polygons>` is read,
 which three.js does not read.
 """
 
+from core.ordinal import index_in_count
+
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+)
+
 from animation.animation_clip import AnimationClip
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -82,6 +90,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.search import first_match
 from lights.light import (
     ambient_light,
     directional_light,
@@ -89,9 +98,14 @@ from lights.light import (
     spot_light,
 )
 from loaders.collada_animation import read_collada_animations
+from loaders.file_path import path_directory
+from loaders.collada_id import collada_reference
+from loaders.collada_numbers import collada_floats, require_positive_stride
+from loaders.js_text import split_fields
 from loaders.model_nodes import (
     authored_color,
     decompose_onto,
+    remember_material,
     texture_from_bytes,
 )
 from loaders.three_mf import js_key_order
@@ -111,8 +125,8 @@ from materials.material import (
 )
 from math.matrix4 import Matrix4, rotation_axis, scaling, translation
 from math.quaternion import Quaternion
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector2 import Vector2, vector2_from_float64
+from math.vector3 import Vector3, vector3_from_float64
 from objects.line import SEGMENTS, Line
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
@@ -126,8 +140,9 @@ from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha, Wrap
 from render.texture_store import TextureId
-from std.math import isfinite, sqrt
+from std.math import sqrt
 from std.pathlib import Path
+from units.measure import angle_degrees, length_meters
 from units.si import DEGREE, METER, Angle, Length
 
 # How deep `<instance_node>` can nest. A file that instances a node inside
@@ -157,7 +172,7 @@ struct UpAxis(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three axes there are."""
-        return self == X_UP or self == Y_UP or self == Z_UP
+        return ordinal_valid(self.value, Z_UP.value)
 
 
 # `<up_axis>X_UP</up_axis>`. three.js reads it and does not turn the scene.
@@ -184,8 +199,9 @@ def up_axis_rotation(axis: UpAxis) raises -> Quaternion:
     Raises:
         Error: If `axis` is none of `X_UP`, `Y_UP` and `Z_UP`.
     """
-    if not axis.is_valid():
-        raise Error("Collada: an up axis that is not X_UP, Y_UP or Z_UP")
+    require_valid(
+        axis.is_valid(), "Collada: an up axis that is not X_UP, Y_UP or Z_UP"
+    )
     if axis == Z_UP:
         return Quaternion.from_axis_angle(Vector3(1, 0, 0), Angle(-90, DEGREE))
     return Quaternion.identity()
@@ -291,7 +307,7 @@ def read_collada(
         Error: If the file cannot be read, or everything `load_collada`
             raises.
     """
-    var directory = String(path[byte = 0 : path.rfind("/") + 1])
+    var directory = path_directory(path)
     return load_collada(Path(path).read_text(), directory, scene, assets)
 
 
@@ -349,51 +365,6 @@ def load_collada(
     return loader.model.copy()
 
 
-def _reference(url: String) raises -> String:
-    """Return the id a `#id` reference names.
-
-    Args:
-        url: The reference.
-
-    Returns:
-        The id, without `#`.
-
-    Raises:
-        Error: If the reference does not begin with `#`, which is the one
-            form three.js's `parseId` reads.
-    """
-    if not url.startswith("#"):
-        raise Error("Collada: a reference must be #id, not '" + url + "'")
-    return String(url[byte=1:])
-
-
-def _floats(text: String) raises -> List[Float64]:
-    """Return the numbers a white-space separated list holds.
-
-    Args:
-        text: The list.
-
-    Returns:
-        The numbers.
-
-    Raises:
-        Error: If one is not a number, or is not finite once it is a
-            `Float32`.
-    """
-    var out = List[Float64]()
-    for piece in text.split():
-        var field = String(piece)
-        var value: Float64
-        try:
-            value = Float64(field)
-        except:
-            raise Error("Collada: not a number: " + field)
-        if not isfinite(Float32(value)):
-            raise Error("Collada: a number must be finite: " + field)
-        out.append(value)
-    return out^
-
-
 def _ints(text: String) raises -> List[Int]:
     """Return the whole numbers a white-space separated list holds.
 
@@ -407,8 +378,7 @@ def _ints(text: String) raises -> List[Int]:
         Error: If one is not a whole number.
     """
     var out = List[Int]()
-    for piece in text.split():
-        var field = String(piece)
+    for field in split_fields(text):
         try:
             out.append(Int(field))
         except:
@@ -550,9 +520,20 @@ def _require(
         raise Error("Collada: " + what + " needs " + semantic)
 
 
-def _within(index: Int, count: Int) -> Bool:
-    """Return True if an index is from zero to below a count."""
-    return index >= 0 and index < count
+def require_collada_positions(held: Int, expected: Int) raises:
+    """Refuse a Collada primitive whose positions do not match its corners.
+
+    Nothing. The call returns when the two counts are equal.
+
+    Args:
+        held: How many position numbers were written.
+        expected: How many position numbers the corners require.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("Collada: a primitive's positions do not match its corners")
 
 
 def _sorted_place(amounts: List[Float64], amount: Float64) -> Int:
@@ -689,7 +670,7 @@ struct _Loader(Movable):
         Raises:
             Error: If the text is not `count` numbers.
         """
-        var values = _floats(self.document.text(element))
+        var values = collada_floats(self.document.text(element))
         if len(values) != count:
             raise Error(
                 "Collada: "
@@ -736,7 +717,7 @@ struct _Loader(Movable):
         Raises:
             Error: If there are too few, or one is not a number.
         """
-        var values = _floats(self.document.text(element))
+        var values = collada_floats(self.document.text(element))
         var need = 3
         if alpha:
             need = 4
@@ -753,10 +734,10 @@ struct _Loader(Movable):
             return
         var unit = self.document.child(asset, "unit")
         if unit != NO_ELEMENT and self.document.has_attribute(unit, "meter"):
-            var meter = _floats(self.document.attribute(unit, "meter"))
+            var meter = collada_floats(self.document.attribute(unit, "meter"))
             if len(meter) != 1 or meter[0] <= 0:
                 raise Error("Collada: <unit meter> must be one positive number")
-            self.model.unit = Length(Float32(meter[0]), METER)
+            self.model.unit = length_meters(meter[0])
         var up = self.document.child(asset, "up_axis")
         if up == NO_ELEMENT:
             return
@@ -809,7 +790,7 @@ struct _Loader(Movable):
         var instance = self.document.child(element, "instance_effect")
         if instance == NO_ELEMENT:
             raise Error("Collada: a material instances no effect")
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.effects:
             raise Error("Collada: a material instances no effect: " + url)
         var profile = self.document.child(self.effects[url], "profile_COMMON")
@@ -927,7 +908,7 @@ struct _Loader(Movable):
     def side(self, element: Int) raises -> Side:
         """Return the side a `<double_sided>` asks for: both for one,
         the front for anything else, as three.js reads it."""
-        var values = _floats(self.document.text(element))
+        var values = collada_floats(self.document.text(element))
         if len(values) == 1 and values[0] == 1:
             return DOUBLE_SIDE
         return FRONT_SIDE
@@ -1055,13 +1036,12 @@ struct _Loader(Movable):
             wrap = CLAMP
             if settings.get("wrapU", 0) != 0:
                 wrap = REPEAT
-            repeat = Vector2(
-                Float32(self.or_default(settings, "repeatU", 1)),
-                Float32(self.or_default(settings, "repeatV", 1)),
+            repeat = vector2_from_float64(
+                self.or_default(settings, "repeatU", 1),
+                self.or_default(settings, "repeatV", 1),
             )
-            offset = Vector2(
-                Float32(settings.get("offsetU", 0)),
-                Float32(settings.get("offsetV", 0)),
+            offset = vector2_from_float64(
+                settings.get("offsetU", 0), settings.get("offsetV", 0)
             )
         var built = texture_from_bytes(
             self.image_bytes(path), space, wrap, alpha
@@ -1159,7 +1139,7 @@ struct _Loader(Movable):
         var instance = self.document.child(top, "instance_visual_scene")
         if instance == NO_ELEMENT:
             raise Error("Collada: <scene> instances no visual scene")
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.visual_scenes:
             raise Error("Collada: <scene> names no visual scene: " + url)
         var visual = self.visual_scenes[url]
@@ -1210,22 +1190,20 @@ struct _Loader(Movable):
                 matrix.multiply(m)
             elif name == "translate":
                 var v = self.numbers(step, 3, "<translate>")
-                matrix.multiply(
-                    translation(Float32(v[0]), Float32(v[1]), Float32(v[2]))
-                )
+                var offset = vector3_from_float64(v[0], v[1], v[2])
+                matrix.multiply(translation(offset.x, offset.y, offset.z))
             elif name == "rotate":
                 var v = self.numbers(step, 4, "<rotate>")
                 matrix.multiply(
                     rotation_axis(
-                        Vector3(Float32(v[0]), Float32(v[1]), Float32(v[2])),
-                        Angle(Float32(v[3]), DEGREE),
+                        vector3_from_float64(v[0], v[1], v[2]),
+                        angle_degrees(v[3]),
                     )
                 )
             elif name == "scale":
                 var v = self.numbers(step, 3, "<scale>")
-                matrix.multiply(
-                    scaling(Float32(v[0]), Float32(v[1]), Float32(v[2]))
-                )
+                var wide = vector3_from_float64(v[0], v[1], v[2])
+                matrix.multiply(scaling(wide.x, wide.y, wide.z))
         return matrix^
 
     def object_count(mut self, element: Int, mut assets: Assets) raises -> Int:
@@ -1243,7 +1221,9 @@ struct _Loader(Movable):
                 if self.known(child, self.lights):
                     count += 1
             elif name == "instance_geometry":
-                var id = _reference(self.document.attribute(child, "url"))
+                var id = collada_reference(
+                    self.document.attribute(child, "url")
+                )
                 self.build_geometry(id, assets)
                 var kinds = List[String]()
                 for slot in range(self.built_count[id]):
@@ -1258,7 +1238,10 @@ struct _Loader(Movable):
     def known(self, element: Int, library: Dict[String, Int]) raises -> Bool:
         """Return True if an instance's `url` names an entry of a
         library."""
-        return _reference(self.document.attribute(element, "url")) in library
+        return (
+            collada_reference(self.document.attribute(element, "url"))
+            in library
+        )
 
     def place_node(
         mut self,
@@ -1321,7 +1304,9 @@ struct _Loader(Movable):
                 # Placed once every bone is.
                 self.rig.waiting.append(_Controlled(instance, id))
             elif name == "instance_node":
-                var url = _reference(self.document.attribute(instance, "url"))
+                var url = collada_reference(
+                    self.document.attribute(instance, "url")
+                )
                 if url not in self.nodes:
                     raise Error(
                         "Collada: <instance_node> names no node: " + url
@@ -1341,7 +1326,7 @@ struct _Loader(Movable):
         """Add the camera an `<instance_camera>` names, riding its node,
         as three.js's `buildCamera` builds it. A camera the file does not
         have is skipped, as three.js skips it."""
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.cameras:
             return
         var technique = NO_ELEMENT
@@ -1387,12 +1372,12 @@ struct _Loader(Movable):
                 xmag = self.number(projection, "xmag", 0)
                 ymag = self.number(projection, "ymag", 0)
             var camera = OrthographicCamera(
-                Length(Float32(-xmag / 2), METER),
-                Length(Float32(xmag / 2), METER),
-                Length(Float32(ymag / 2), METER),
-                Length(Float32(-ymag / 2), METER),
-                Length(Float32(near), METER),
-                Length(Float32(far), METER),
+                length_meters(-xmag / 2),
+                length_meters(xmag / 2),
+                length_meters(ymag / 2),
+                length_meters(-ymag / 2),
+                length_meters(near),
+                length_meters(far),
             )
             camera.attach(node)
             self.model.orthographic_cameras.append(camera^)
@@ -1401,12 +1386,12 @@ struct _Loader(Movable):
         if projection != NO_ELEMENT:
             aspect = self.number(projection, "aspect_ratio", 1)
             if self.document.child(projection, "yfov") != NO_ELEMENT:
-                fov = Angle(Float32(self.number(projection, "yfov", 0)), DEGREE)
+                fov = angle_degrees(self.number(projection, "yfov", 0))
         var camera = PerspectiveCamera(
             fov,
             Float32(aspect),
-            Length(Float32(near), METER),
-            Length(Float32(far), METER),
+            length_meters(near),
+            length_meters(far),
         )
         camera.attach(node)
         self.model.perspective_cameras.append(camera)
@@ -1417,7 +1402,7 @@ struct _Loader(Movable):
         """Add the light an `<instance_light>` names, at its node, as
         three.js's `buildLight` builds it. A light the file does not have
         is skipped, as three.js skips it."""
-        var url = _reference(self.document.attribute(instance, "url"))
+        var url = collada_reference(self.document.attribute(instance, "url"))
         if url not in self.lights:
             return
         var technique = self.document.child(
@@ -1479,7 +1464,7 @@ struct _Loader(Movable):
         """Add a mesh or a line per primitive of the geometry an
         `<instance_geometry>` names, each with the material its symbol is
         bound to."""
-        var id = _reference(self.document.attribute(instance, "url"))
+        var id = collada_reference(self.document.attribute(instance, "url"))
         self.build_geometry(id, assets)
         var bindings = Dict[String, String]()
         for bind in self.document.children_named(instance, "bind_material"):
@@ -1528,9 +1513,9 @@ struct _Loader(Movable):
         depth, as three.js's `getElementsByTagName` gathers them."""
         for child in self.document.children(element):
             if self.document.name(child) == "instance_material":
-                bindings[self.document.attribute(child, "symbol")] = _reference(
-                    self.document.attribute(child, "target")
-                )
+                bindings[
+                    self.document.attribute(child, "symbol")
+                ] = collada_reference(self.document.attribute(child, "target"))
             else:
                 self.collect_bindings(child, bindings)
 
@@ -1539,9 +1524,7 @@ struct _Loader(Movable):
     ) -> MaterialId:
         """Return one of the materials three.js makes when a file names
         none, making it the first time."""
-        if key not in self.defaults:
-            self.defaults[key] = assets.materials.add(material)
-        return self.defaults.get(key, MaterialId(0))
+        return remember_material(self.defaults, key, material, assets)
 
     def material_for(
         mut self,
@@ -1628,7 +1611,7 @@ struct _Loader(Movable):
             var values = List[Float64]()
             var array = self.document.child(source, "float_array")
             if array != NO_ELEMENT:
-                values = _floats(self.document.text(array))
+                values = collada_floats(self.document.text(array))
             var stride = 1
             var common = self.document.child(source, "technique_common")
             if common != NO_ELEMENT:
@@ -1637,8 +1620,7 @@ struct _Loader(Movable):
                     stride = _ints(
                         self.document.attribute(accessor, "stride", "1")
                     )[0]
-            if stride < 1:
-                raise Error("Collada: a source's stride must be positive")
+            require_positive_stride(stride)
             sources[self.document.attribute(source, "id")] = _Source(
                 values^, stride
             )
@@ -1649,7 +1631,9 @@ struct _Loader(Movable):
                 vertices.append(
                     _Input(
                         self.document.attribute(input, "semantic"),
-                        _reference(self.document.attribute(input, "source")),
+                        collada_reference(
+                            self.document.attribute(input, "source")
+                        ),
                         0,
                     )
                 )
@@ -1668,10 +1652,7 @@ struct _Loader(Movable):
                 or kind == "lines"
                 or kind == "linestrips"
             ):
-                var at = -1
-                for index in range(len(kinds)):
-                    if kinds[index] == kind:
-                        at = index
+                var at = first_match(kinds, kind)
                 if at < 0:
                     at = len(kinds)
                     kinds.append(kind)
@@ -1688,7 +1669,7 @@ struct _Loader(Movable):
                 )
         for index in range(len(kinds)):
             if len(line_built[index]) > 0:
-                self.built.extend(line_built[index].copy())
+                self.built.extend(Span(line_built[index]))
             elif surfaces[index].count() > 0:
                 self.built.append(
                     self.surface_geometry(surfaces[index], kinds[index], assets)
@@ -1770,7 +1751,7 @@ struct _Loader(Movable):
             inputs.append(
                 _Input(
                     semantic,
-                    _reference(self.document.attribute(input, "source")),
+                    collada_reference(self.document.attribute(input, "source")),
                     offset[0],
                 )
             )
@@ -1836,10 +1817,9 @@ struct _Loader(Movable):
                     vertices,
                     surface.corners,
                 )
-            if len(surface.corners.positions) - before != len(order) * 3:
-                raise Error(
-                    "Collada: a primitive's positions do not match its corners"
-                )
+            require_collada_positions(
+                len(surface.corners.positions) - before, len(order) * 3
+            )
             surface.counts.append(len(order))
             if symbol != "":
                 surface.symbols.append(symbol)
@@ -1852,10 +1832,7 @@ struct _Loader(Movable):
         var count = len(order)
         if count == 0:
             return
-        if len(corners.positions) != count * 3:
-            raise Error(
-                "Collada: a primitive's positions do not match its corners"
-            )
+        require_collada_positions(len(corners.positions), count * 3)
         var geometry = BufferGeometry()
         geometry.set_attribute(
             String(POSITION), BufferAttribute(corners.positions.copy(), 3)
@@ -1973,7 +1950,7 @@ struct _Loader(Movable):
                     self.rig.controllers[id] = index
         # The list is not empty, or the function returned above.
         for waiting in self.rig.waiting.copy():  # pragma: no branch
-            var url = _reference(
+            var url = collada_reference(
                 self.document.attribute(waiting.instance, "url")
             )
             if url not in self.rig.controllers:
@@ -1989,7 +1966,9 @@ struct _Loader(Movable):
                         " does not read one"
                     )
                 raise Error("Collada: a controller has no <skin>")
-            var geometry = _reference(self.document.attribute(skin, "source"))
+            var geometry = collada_reference(
+                self.document.attribute(skin, "source")
+            )
             self.build_geometry(geometry, assets)
             var data = self.read_skin(skin)
             var skeleton = self.skeleton_for(waiting.instance, data, assets)
@@ -2080,7 +2059,7 @@ struct _Loader(Movable):
             if len(offset) != 1:
                 raise Error("Collada: an input needs one offset")
             inputs[self.document.attribute(input, "semantic")] = (
-                _reference(self.document.attribute(input, "source")),
+                collada_reference(self.document.attribute(input, "source")),
                 offset[0],
             )
         return inputs^
@@ -2122,8 +2101,8 @@ struct _Loader(Movable):
         )
         if names == NO_ELEMENT:
             raise Error("Collada: a skin's joints must be a Name_array")
-        for piece in self.document.text(names).split():
-            data.names.append(String(piece))
+        for name in split_fields(self.document.text(names)):
+            data.names.append(name)
         var inverses = self.source_of(
             self.skin_source(sources, joint_inputs["INV_BIND_MATRIX"][0])
         )
@@ -2156,13 +2135,16 @@ struct _Loader(Movable):
                     raise Error("Collada: <v> is shorter than <vcount> needs")
                 var bone = pairs[stride + joint_at]
                 var share = pairs[stride + weight_at]
-                if not _within(bone, len(data.names)):
+                if not index_in_count(bone, len(data.names)):
                     raise Error(
                         "Collada: a joint index outside the joints: "
                         + String(bone)
                     )
-                if not _within(share, len(shares)):
-                    raise Error("Collada: a weight index outside the weights")
+                require_index_in_count(
+                    share,
+                    len(shares),
+                    "Collada: a weight index outside the weights",
+                )
                 # Largest first, equal weights keeping their order, as
                 # three.js's stable sort keeps them.
                 var at = _sorted_place(amounts, shares[share])
@@ -2187,7 +2169,7 @@ struct _Loader(Movable):
         var values = List[Float64]()
         var array = self.document.child(element, "float_array")
         if array != NO_ELEMENT:
-            values = _floats(self.document.text(array))
+            values = collada_floats(self.document.text(array))
         var stride = 3
         var common = self.document.child(element, "technique_common")
         if common != NO_ELEMENT:
@@ -2196,8 +2178,7 @@ struct _Loader(Movable):
                 stride = _ints(
                     self.document.attribute(accessor, "stride", "3")
                 )[0]
-        if stride < 1:
-            raise Error("Collada: a source's stride must be positive")
+        require_positive_stride(stride)
         return _Source(values^, stride)
 
     def is_bone(mut self, element: Int, mut assets: Assets) raises -> Bool:
@@ -2233,7 +2214,7 @@ struct _Loader(Movable):
         """
         var found = List[Int]()
         for root in self.document.children_named(instance, "skeleton"):
-            var id = _reference(String(self.document.text(root).strip()))
+            var id = collada_reference(String(self.document.text(root).strip()))
             if id in self.nodes:
                 self.collect_bones(self.nodes[id], found, assets)
             elif id in self.visual_scenes:

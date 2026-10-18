@@ -11,7 +11,9 @@ Coordinates are meters.
 """
 
 from generators.utils import Vec3d
-from std.math import cos, isfinite, sin, sqrt
+from math.smoothstep import hermite_fade
+from math.utils import mix_delta
+from std.math import cos, sin
 
 # A point or a direction, in meters.
 comptime V3 = Vec3d
@@ -54,9 +56,7 @@ def cross(a: V3, b: V3) -> V3:
     Returns:
         `a` cross `b`.
     """
-    return V3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
+    return a.cross(b)
 
 
 def length(a: V3) -> Float64:
@@ -110,6 +110,59 @@ def lerp(a: V3, b: V3, t: Float64) -> V3:
     return a.lerp(b, t)
 
 
+def cubic_bezier(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
+    """Return the point on a cubic Bezier at `t`.
+
+    The weights are `(1 - t)^3`, `3 (1 - t)^2 t`, `3 (1 - t) t^2` and
+    `t^3`. Each weight is one product, then the four scaled points are
+    added from the start to the end.
+
+    Args:
+        p0: The start.
+        p1: The control point that pulls the start.
+        p2: The control point that pulls the end.
+        p3: The end.
+        t: The fraction from the start to the end.
+
+    Returns:
+        The point.
+    """
+    var u = 1.0 - t
+    return (
+        p0 * (u * u * u)
+        + p1 * (3.0 * u * u * t)
+        + p2 * (3.0 * u * t * t)
+        + p3 * (t * t * t)
+    )
+
+
+def catmull_rom(p0: V3, p1: V3, p2: V3, p3: V3, t: Float64) -> V3:
+    """Return the point on a uniform Catmull-Rom span at `t`.
+
+    The span runs from `p1` to `p2`. `p0` and `p3` set the tangents.
+    The powers of `t` are formed first. Each term is added from the
+    linear term through the cubic term, and the sum is then halved.
+
+    Args:
+        p0: The point before the span.
+        p1: The start of the span.
+        p2: The end of the span.
+        p3: The point after the span.
+        t: The fraction from `p1` to `p2`.
+
+    Returns:
+        The point.
+    """
+    var t2 = t * t
+    var t3 = t2 * t
+    return (
+        p1 * 2.0
+        + (p2 - p0) * t
+        + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * t2
+        + (p1 * 3.0 - p0 - p2 * 3.0 + p3) * t3
+    ) * 0.5
+
+
 def mirror(a: V3) -> V3:
     """Return the point mirrored to the animal's other side.
 
@@ -161,7 +214,7 @@ def smoothstep(e0: Float64, e1: Float64, x: Float64) -> Float64:
         Zero at or below `e0`, one at or above `e1`, smooth between.
     """
     var t = clamp((x - e0) / (e1 - e0), 0.0, 1.0)
-    return t * t * (3.0 - 2.0 * t)
+    return hermite_fade(t)
 
 
 def mix(a: Float64, b: Float64, t: Float64) -> Float64:
@@ -175,7 +228,7 @@ def mix(a: Float64, b: Float64, t: Float64) -> Float64:
     Returns:
         `a + (b - a) t`.
     """
-    return a + (b - a) * t
+    return mix_delta(a, b, t)
 
 
 @fieldwise_init
@@ -207,13 +260,13 @@ def frame_zy(z_dir: V3, up_hint: V3) -> Frame:
     var x_axis = V3(1.0, 0.0, 0.0)
     var y_axis = V3(0.0, 1.0, 0.0)
     var z_axis = V3(0.0, 0.0, 1.0)
-    if not (isfinite(z_dir.x) and isfinite(z_dir.y) and isfinite(z_dir.z)):
+    if not z_dir.is_finite():
         return Frame(x_axis, y_axis, z_axis)
     if max(abs(z_dir.x), max(abs(z_dir.y), abs(z_dir.z))) == 0.0:
         return Frame(x_axis, y_axis, z_axis)
     var z = normalize(z_dir)
     var up = V3(0.0, 0.0, 0.0)
-    if isfinite(up_hint.x) and isfinite(up_hint.y) and isfinite(up_hint.z):
+    if up_hint.is_finite():
         var scale = max(abs(up_hint.x), max(abs(up_hint.y), abs(up_hint.z)))
         if scale > 0.0:
             up = V3(up_hint.x / scale, up_hint.y / scale, up_hint.z / scale)

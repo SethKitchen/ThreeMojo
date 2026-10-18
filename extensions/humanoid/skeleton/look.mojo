@@ -45,6 +45,7 @@ from materials.nodes import (
     THICKNESS_POWER_NODE,
     THICKNESS_SCALE_NODE,
 )
+from math.finite import require_unit_range
 from math.vector2 import Vector2
 from render.framebuffer import Color
 from render.srgb import SRGB
@@ -371,8 +372,7 @@ def hair_physical(
         Error: If the physical constructor refuses the values, or if
             `genome` is not valid, or `depth` is out of range.
     """
-    if depth < 0 or depth > 1:
-        raise Error("A hair's depth runs zero through one")
+    require_unit_range(depth, "A hair's depth runs zero through one")
     var tone = hair_tone(genome)
     var color = tone
     if map != NO_TEXTURE:
@@ -731,6 +731,10 @@ def add_complexion(
         eye_physical(assets.textures.add(iris_albedo(64, genome)))
     )
     return Complexion(skin, hair, eyes)
+
+
+# A negative id asks an assembler to create the default look for that layer.
+comptime UNSET_PAINT = MaterialId(-1)
 
 
 def resolved_paint(

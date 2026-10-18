@@ -15,8 +15,14 @@ reflects that one, so the boxes go round in its surface as they go round
 the scene. The floor reflects the sky a little, mixed into its own gray.
 """
 
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
+
 from cameras.cube_camera import CubeCamera
-from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import cube_background
 from core.clock import Clock
@@ -25,7 +31,6 @@ from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from materials.material import (
     BASIC,
     MIX_OPERATION,
@@ -45,9 +50,7 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/mirror.png"
 comptime WIDTH = 240
@@ -92,11 +95,8 @@ def sky_face(face: Int) raises -> Texture:
             var tint = ground
             if direction.y >= 0:
                 var lean = direction.y
-                tint = FloatColor(
-                    horizon.r + (zenith.r - horizon.r) * lean,
-                    horizon.g + (zenith.g - horizon.g) * lean,
-                    horizon.b + (zenith.b - horizon.b) * lean,
-                )
+                var mixed = horizon.mix(zenith, lean)
+                tint = FloatColor(mixed.r, mixed.g, mixed.b)
             var shown = tint.encode()
             pixels.append(shown.r)
             pixels.append(shown.g)
@@ -106,10 +106,7 @@ def sky_face(face: Int) raises -> Texture:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     var assets = Assets()
@@ -160,20 +157,27 @@ def main() raises:
     )
     var second_node = scene.attach(second^, pivot_node)
     scene.add_mesh(Mesh(box, teal, second_node))
-    var lamp = Object3D()
-    lamp.set_position(2, 3, 2)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.7))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.2))
+    fill_and_key(
+        scene,
+        2,
+        3,
+        2,
+        Color(255, 255, 255),
+        0.7,
+        Color(255, 255, 255),
+        2.2,
+    )
     scene.update()
 
-    var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 1.0, 4.2),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(45.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    camera.place(Vector3(0, 1.0, 4.2), Vector3(0, 0, 0))
     camera.layers.enable(1)
     var eye = CubeCamera(Length(0.1, METER), Length(50.0, METER), MIRROR_SIZE)
     eye.attach(center_node)
@@ -201,12 +205,4 @@ def main() raises:
         scene.add_mesh(Mesh(ball, chrome, center_node))
         frames.append(renderer.render(scene, assets, camera))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

@@ -30,6 +30,9 @@ extension's specification forbids is refused as well. meshoptimizer does
 not check those, and what it makes of them is unspecified.
 """
 
+from core.binary import little_endian_u32
+from core.ordinal import ordinal_valid, require_valid, require_non_negative
+
 from std.math import sqrt
 from std.memory import bitcast
 
@@ -51,11 +54,7 @@ struct MeshoptMode(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `MESHOPT_ATTRIBUTES`, `MESHOPT_TRIANGLES` or
             `MESHOPT_INDICES`.
         """
-        return (
-            self == MESHOPT_ATTRIBUTES
-            or self == MESHOPT_TRIANGLES
-            or self == MESHOPT_INDICES
-        )
+        return ordinal_valid(self.value, MESHOPT_INDICES.value)
 
 
 # Elements of any size, as byte deltas: the extension's `ATTRIBUTES`.
@@ -83,12 +82,7 @@ struct MeshoptFilter(Equatable, ImplicitlyCopyable, Writable):
             Whether it is `FILTER_NONE`, `FILTER_OCTAHEDRAL`,
             `FILTER_QUATERNION` or `FILTER_EXPONENTIAL`.
         """
-        return (
-            self == FILTER_NONE
-            or self == FILTER_OCTAHEDRAL
-            or self == FILTER_QUATERNION
-            or self == FILTER_EXPONENTIAL
-        )
+        return ordinal_valid(self.value, FILTER_EXPONENTIAL.value)
 
 
 # No filter: the elements are used as they are decoded.
@@ -226,6 +220,50 @@ def _decode_bytes(
     return next
 
 
+def require_meshopt_count(count: Int) raises:
+    """Refuse a meshopt count that is negative.
+
+    Nothing. The call returns when the count is zero or more.
+
+    Args:
+        count: How many items the buffer names.
+
+    Raises:
+        Error: If the count is negative.
+    """
+    require_non_negative(count, "meshopt: a count must not be negative")
+
+
+def require_meshopt_index_size(size: Int) raises:
+    """Refuse a meshopt index that is not two or four bytes.
+
+    Nothing. The call returns when the size is two or four.
+
+    Args:
+        size: How many bytes one index holds.
+
+    Raises:
+        Error: If the size is neither two nor four.
+    """
+    if size != 2 and size != 4:
+        raise Error("meshopt: an index's size must be 2 or 4")
+
+
+def require_meshopt_filter(filter: MeshoptFilter) raises:
+    """Refuse a meshopt filter on a buffer that is not attributes.
+
+    Nothing. The call returns when the filter is none.
+
+    Args:
+        filter: The filter the buffer names.
+
+    Raises:
+        Error: If the filter is not none.
+    """
+    if filter != FILTER_NONE:
+        raise Error("meshopt: only ATTRIBUTES can have a filter")
+
+
 def decode_vertex_buffer(
     count: Int, size: Int, source: List[UInt8]
 ) raises -> List[UInt8]:
@@ -248,8 +286,7 @@ def decode_vertex_buffer(
         raise Error(
             "meshopt: an element's size must be a multiple of 4 from 4 to 256"
         )
-    if count < 0:
-        raise Error("meshopt: a count must not be negative")
+    require_meshopt_count(count)
     var end = len(source)
     if end < 1 + size:
         raise _malformed(-2)
@@ -370,8 +407,7 @@ def decode_index_buffer(
         If the size or the count is not allowed, or the stream is
         malformed.
     """
-    if size != 2 and size != 4:
-        raise Error("meshopt: an index's size must be 2 or 4")
+    require_meshopt_index_size(size)
     if count < 0 or count % 3 != 0:
         raise Error("meshopt: a triangle list's count must be a multiple of 3")
     var length = len(source)
@@ -498,10 +534,8 @@ def decode_index_sequence(
         If the size or the count is not allowed, or the stream is
         malformed.
     """
-    if size != 2 and size != 4:
-        raise Error("meshopt: an index's size must be 2 or 4")
-    if count < 0:
-        raise Error("meshopt: a count must not be negative")
+    require_meshopt_index_size(size)
+    require_meshopt_count(count)
     var length = len(source)
     if length < 1 + count + 4:
         raise _malformed(-2)
@@ -530,16 +564,6 @@ def decode_index_sequence(
 def _i16(data: List[UInt8], at: Int) -> Int32:
     """Read a little-endian 16-bit signed integer."""
     return Int32(Int16(UInt16(data[at]) | (UInt16(data[at + 1]) << 8)))
-
-
-def _u32(data: List[UInt8], at: Int) -> UInt32:
-    """Read a little-endian 32-bit word."""
-    return (
-        UInt32(data[at])
-        | (UInt32(data[at + 1]) << 8)
-        | (UInt32(data[at + 2]) << 16)
-        | (UInt32(data[at + 3]) << 24)
-    )
 
 
 def _put_u32(mut data: List[UInt8], at: Int, value: UInt32):
@@ -701,7 +725,7 @@ def decode_filter_exp(mut data: List[UInt8], count: Int, stride: Int) raises:
             " multiple of 4"
         )
     for i in range(count * (stride // 4)):
-        var v = _u32(data, i * 4)
+        var v = UInt32(little_endian_u32(data, i * 4))
         var e = Int(bitcast[DType.int32](v) >> 24)
         var power = bitcast[DType.float32](
             UInt32(((e + 127) << 23) & 0xFFFFFFFF)
@@ -735,17 +759,13 @@ def decode_gltf_buffer(
         indices, the stride or the count does not fit the mode or the
         filter, or the stream is malformed.
     """
-    if not mode.is_valid():
-        raise Error("meshopt: a mode that is not known")
-    if not filter.is_valid():
-        raise Error("meshopt: a filter that is not known")
+    require_valid(mode.is_valid(), "meshopt: a mode that is not known")
+    require_valid(filter.is_valid(), "meshopt: a filter that is not known")
     if mode == MESHOPT_TRIANGLES:
-        if filter != FILTER_NONE:
-            raise Error("meshopt: only ATTRIBUTES can have a filter")
+        require_meshopt_filter(filter)
         return decode_index_buffer(count, stride, source)
     if mode == MESHOPT_INDICES:
-        if filter != FILTER_NONE:
-            raise Error("meshopt: only ATTRIBUTES can have a filter")
+        require_meshopt_filter(filter)
         return decode_index_sequence(count, stride, source)
     var out = decode_vertex_buffer(count, stride, source)
     if filter == FILTER_OCTAHEDRAL:

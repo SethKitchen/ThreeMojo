@@ -53,11 +53,13 @@ so the wireframe and its width stay in `TdsMaterial`.
 """
 
 from core.assets import Assets
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, UV, BufferGeometry, MaterialIndex
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from loaders.file_path import path_directory
 from loaders.gltf import decode_image
 from loaders.model_nodes import decompose_onto
 from materials.material import (
@@ -73,7 +75,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, linear_to_srgb, srgb_to_linear
+from render.srgb import LINEAR, srgb_to_linear
 from render.texture import BILINEAR, CLAMP, COVERAGE, texture_from
 from render.texture_store import NO_TEXTURE, TextureId
 from std.memory import bitcast
@@ -133,14 +135,17 @@ struct _Chunk(Copyable, Movable):
         return self.position >= self.end
 
 
-struct _Reader:
-    """Reads chunks and values from the bytes of a file."""
+struct _Reader[origin: Origin[mut=False]]:
+    """Reads chunks and values from the bytes of a file.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
-        """Hold the file."""
-        self.bytes = bytes^
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        """Hold the file. The caller keeps it."""
+        self.bytes = bytes
 
     def need(self, at: Int, size: Int) raises:
         """Refuse a read that runs past the end of the file."""
@@ -159,9 +164,7 @@ struct _Reader:
         """
         self.need(at, 6)
         var id = Int(self.bytes[at]) | (Int(self.bytes[at + 1]) << 8)
-        var size = 0
-        for k in range(4):  # pragma: no branch
-            size |= Int(self.bytes[at + 2 + k]) << (8 * k)
+        var size = little_endian_u32(self.bytes, at + 2)
         if size < 6:
             raise Error(
                 "3DS: a chunk shorter than its header, at " + String(at)
@@ -300,14 +303,14 @@ struct TdsMaterial(Copyable, Movable):
                 zero.
         """
         return Material(
-            _authored(self.color),
+            self.color.encode_opaque(),
             map=_texture(self.map),
             side=DOUBLE_SIDE if self.double_sided else FRONT_SIDE,
             opacity=self.opacity,
             blending=Optional(ADDITIVE) if self.additive else None,
             kind=PHONG,
             alpha_map=_texture(self.alpha_map),
-            specular=_authored(self.specular),
+            specular=self.specular.encode_opaque(),
             shininess=self.shininess,
             transparent=self.transparent,
             bump_map=_texture(self.bump_map),
@@ -320,16 +323,6 @@ def _texture(map: Optional[TdsMap]) -> TextureId:
     if Bool(map):
         return map.value().texture
     return NO_TEXTURE
-
-
-def _authored(color: FloatColor) -> Color:
-    """Return linear light as the sRGB bytes a material holds."""
-    return FloatColor(
-        linear_to_srgb(color.r),
-        linear_to_srgb(color.g),
-        linear_to_srgb(color.b),
-        1,
-    ).quantize()
 
 
 struct TdsModel(Movable):
@@ -369,16 +362,21 @@ struct TdsModel(Movable):
         self.mesh_count = 0
 
 
-struct _Loader:
-    """Walks the chunks, three.js's `TDSLoader` methods."""
+struct _Loader[origin: Origin[mut=False]]:
+    """Walks the chunks, three.js's `TDSLoader` methods.
 
-    var r: _Reader
+    The caller keeps the bytes for the read.
+    """
+
+    var r: _Reader[Self.origin]
     var model: TdsModel
     var resource_path: String
 
-    def __init__(out self, var bytes: List[UInt8], resource_path: String):
-        """Start reading a file."""
-        self.r = _Reader(bytes^)
+    def __init__(
+        out self, bytes: Span[UInt8, Self.origin], resource_path: String
+    ):
+        """Start reading a file. The caller keeps the bytes."""
+        self.r = _Reader(bytes)
         self.model = TdsModel()
         self.resource_path = resource_path
 
@@ -714,7 +712,7 @@ def parse_3ds(
             before its file, or a map's file is not an image
             `decode_image` reads.
     """
-    var loader = _Loader(bytes.copy(), resource_path)
+    var loader = _Loader(Span(bytes), resource_path)
     var group = Object3D()
     group.parent = parent
     loader.model.root = scene.add(group^)
@@ -758,6 +756,6 @@ def read_3ds(
         Error: If the file cannot be read, or for anything `parse_3ds`
             refuses.
     """
-    var slash = path.rfind("/")
-    var directory = String(path[byte = : slash + 1])
-    return parse_3ds(Path(path).read_bytes(), scene, assets, directory, parent)
+    return parse_3ds(
+        Path(path).read_bytes(), scene, assets, path_directory(path), parent
+    )

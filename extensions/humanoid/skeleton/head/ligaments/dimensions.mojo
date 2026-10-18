@@ -16,7 +16,8 @@ authored in template centimeters. They are not a cited width table.
     var d = head_ligament_distance(dims, LARYNX, RIGHT, p)
 """
 
-from extensions.humanoid.side import RIGHT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import CERVICAL, HeadDimensions
 from extensions.anatomy.soft_tissue import (
     SoftTissue,
@@ -48,9 +49,7 @@ struct HeadLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= TRACHEA.value
+        return ordinal_valid(self.value, TRACHEA.value)
 
 
 comptime CERVICAL_DISCS = HeadLigament(0)
@@ -60,6 +59,20 @@ comptime ATLANTO_OCCIPITAL_JOINTS = HeadLigament(2)
 comptime TEMPOROMANDIBULAR_JOINT = HeadLigament(3)
 comptime LARYNX = HeadLigament(4)
 comptime TRACHEA = HeadLigament(5)
+
+
+def require_head_ligament(part: HeadLigament) raises:
+    """Refuse a head ligament that is not a named part.
+
+    Nothing. The call returns when the part is named.
+
+    Args:
+        part: The part.
+
+    Raises:
+        Error: If the part is not named.
+    """
+    require_valid(part.is_valid(), "A head ligament must be a named part")
 
 
 def head_ligament_field(
@@ -80,10 +93,8 @@ def head_ligament_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A head side must be RIGHT or LEFT")
-    if not part.is_valid():
-        raise Error("A head ligament must be a named part")
+    require_side(side, "A head")
+    require_head_ligament(part)
     var h = dimensions.copy()
     var sweeps = List[Sweep]()
     var placed = RIGHT
@@ -209,8 +220,7 @@ def is_paired_head_ligament(part: HeadLigament) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head ligament must be a named part")
+    require_head_ligament(part)
     return part == TEMPOROMANDIBULAR_JOINT
 
 
@@ -226,8 +236,7 @@ def is_head_cartilage(part: HeadLigament) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head ligament must be a named part")
+    require_head_ligament(part)
     return not (part == NUCHAL_LIGAMENT or part == ATLANTO_OCCIPITAL_JOINTS)
 
 
@@ -245,8 +254,7 @@ def head_ligament_tissue(part: HeadLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A head ligament must be a named part")
+    require_head_ligament(part)
     if part == CERVICAL_DISCS or part == TEMPOROMANDIBULAR_JOINT:
         return meniscus_tissue()
     if part == LARYNX or part == TRACHEA:

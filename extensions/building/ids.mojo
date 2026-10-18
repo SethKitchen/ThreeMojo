@@ -101,6 +101,22 @@ struct ConstructionId(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= 0
 
 
+def require_construction(id: ConstructionId, count: Int) raises:
+    """Refuse a construction id that is not in range.
+
+    Nothing. The call returns when the id names a construction.
+
+    Args:
+        id: The construction.
+        count: How many constructions there are.
+
+    Raises:
+        Error: If the id is negative or past the last construction.
+    """
+    if not id.is_valid() or id.value >= count:
+        raise Error("A construction id is out of range")
+
+
 @fieldwise_init
 struct FurnishingId(Equatable, ImplicitlyCopyable, Writable):
     """The index of a furnishing in a `Building`."""

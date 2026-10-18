@@ -49,6 +49,8 @@ in any order: without it, correctness depends on the draw order or on the
 scene happening to be convex.
 """
 
+from core.extent import require_positive_extent, require_texel_count
+from core.ordinal import require_positive
 from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
@@ -57,11 +59,13 @@ from render.srgb import (
     linear_to_srgb,
     srgb_to_linear,
 )
-from std.math import floor, inf
+from math.sine import fraction
+from math.utils import clamp, max3, min3, mix_delta
+from std.math import inf
 from std.memory import bitcast
 
 
-struct Color(ImplicitlyCopyable):
+struct Color(Equatable, ImplicitlyCopyable):
     """An 8-bit-per-channel RGBA color."""
 
     var r: UInt8
@@ -98,6 +102,81 @@ struct Color(ImplicitlyCopyable):
         """Return this color as a 24-bit value, three.js's `getHex`. Alpha
         is left out, as there."""
         return (Int(self.r) << 16) | (Int(self.g) << 8) | Int(self.b)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every channel is the same.
+
+        Args:
+            other: The color to compare with.
+
+        Returns:
+            Whether red, green, blue, and alpha match.
+        """
+        return (
+            self.r == other.r
+            and self.g == other.g
+            and self.b == other.b
+            and self.a == other.a
+        )
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any channel differs.
+
+        Args:
+            other: The color to compare with.
+
+        Returns:
+            Whether the two colors differ.
+        """
+        return not self == other
+
+
+def rgb_is_white(color: Color) -> Bool:
+    """Return True when red, green, and blue are all 255.
+
+    Error: Never.
+
+    Args:
+        color: The color. Alpha is not read.
+
+    Returns:
+        Whether every color channel is white.
+
+    """
+    return color.r == 255 and color.g == 255 and color.b == 255
+
+
+def rgb_is_black(color: Color) -> Bool:
+    """Return True when red, green, and blue are all zero.
+
+    Error: Never.
+
+    Args:
+        color: The color. Alpha is not read.
+
+    Returns:
+        Whether every color channel is black.
+
+    """
+    return color.r == 0 and color.g == 0 and color.b == 0
+
+
+def append_color(mut values: List[UInt8], color: Color):
+    """Append `color`'s four channels.
+
+    Nothing. Four bytes are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives red, green, blue, and alpha.
+        color: The eight-bit color.
+
+    """
+    values.append(color.r)
+    values.append(color.g)
+    values.append(color.b)
+    values.append(color.a)
 
 
 @fieldwise_init
@@ -304,7 +383,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
     ) -> FloatColor:
         """Return the color three numbers describe, in whatever space they
         are in: three.js's `setHSL` before its color conversion. Opaque."""
-        var h = hue - floor(hue)
+        var h = fraction(hue)
         var s = min(max(saturation, Float32(0)), Float32(1))
         var l = min(max(lightness, Float32(0)), Float32(1))
         var r = l
@@ -359,8 +438,8 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         var r = self.r
         var g = self.g
         var b = self.b
-        var high = max(r, max(g, b))
-        var low = min(r, min(g, b))
+        var high = max3(r, g, b)
+        var low = min3(r, g, b)
         var lightness = (low + high) / 2
         var hue = Float32(0)
         var saturation = Float32(0)
@@ -410,9 +489,9 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         var here = self._to_hsl()
         var there = other._to_hsl()
         var mixed = FloatColor._from_hsl(
-            here.hue + (there.hue - here.hue) * alpha,
-            here.saturation + (there.saturation - here.saturation) * alpha,
-            here.lightness + (there.lightness - here.lightness) * alpha,
+            mix_delta(here.hue, there.hue, alpha),
+            mix_delta(here.saturation, there.saturation, alpha),
+            mix_delta(here.lightness, there.lightness, alpha),
         )
         self.r = mixed.r
         self.g = mixed.g
@@ -504,10 +583,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             end: The color at an `alpha` of one.
             alpha: How far along.
         """
-        self.r = start.r + (end.r - start.r) * alpha
-        self.g = start.g + (end.g - start.g) * alpha
-        self.b = start.b + (end.b - start.b) * alpha
-        self.a = start.a + (end.a - start.a) * alpha
+        self = start.mix(end, alpha)
 
     def set_rgb(
         mut self, r: Float32, g: Float32, b: Float32, space: ColorSpace = LINEAR
@@ -578,6 +654,37 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         """Return True if any channel differs."""
         return not self == other
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum of every channel, alpha included.
+
+        `add` keeps alpha and changes this color.
+
+        Args:
+            other: The color to add.
+
+        Returns:
+            The sum.
+        """
+        return FloatColor(
+            self.r + other.r,
+            self.g + other.g,
+            self.b + other.b,
+            self.a + other.a,
+        )
+
+    def __mul__(self, factor: Float32) -> Self:
+        """Return every channel scaled by `factor`, alpha included.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            The scaled color.
+        """
+        return FloatColor(
+            self.r * factor, self.g * factor, self.b * factor, self.a * factor
+        )
+
     def premultiplied(self) -> Self:
         """Return this color with its channels scaled by its own alpha.
 
@@ -599,7 +706,7 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         zero alpha gives transparent black, which is what PNG wants written.
         """
         if self.a <= 0:
-            return FloatColor(0.0, 0.0, 0.0, 0.0)
+            return TRANSPARENT_BLACK
         return FloatColor(
             self.r / self.a, self.g / self.a, self.b / self.a, self.a
         )
@@ -608,6 +715,25 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         """Return this color with its three channels scaled, alpha kept."""
         return FloatColor(
             self.r * factor, self.g * factor, self.b * factor, self.a
+        )
+
+    def mix(self, other: Self, t: Float32) -> Self:
+        """Return this color moved toward `other` by `t`, every channel.
+
+        The difference is formed first, then scaled, then added.
+
+        Args:
+            other: The color at one.
+            t: The fraction.
+
+        Returns:
+            The blend. Alpha is included.
+        """
+        return FloatColor(
+            mix_delta(self.r, other.r, t),
+            mix_delta(self.g, other.g, t),
+            mix_delta(self.b, other.b, t),
+            mix_delta(self.a, other.a, t),
         )
 
     def encode(self) -> Color:
@@ -624,6 +750,17 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             _to_byte(linear_to_srgb(self.b)),
             _to_byte(self.a),
         )
+
+    def encode_opaque(self) -> Color:
+        """Return the display bytes of this light, with alpha forced opaque.
+
+        `encode` keeps this color's alpha. A material color is the sRGB
+        bytes of the light and is always opaque.
+
+        Returns:
+            The eight-bit color. Alpha is 255.
+        """
+        return FloatColor(self.r, self.g, self.b, 1).encode()
 
     def encode_with(self, bytes: SrgbBytes) -> Color:
         """Return what `encode` returns, read from a table of thresholds
@@ -658,6 +795,118 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             _to_byte(self.b),
             _to_byte(self.a),
         )
+
+
+# What a missing texture reads, and what a source with no map reads.
+comptime OPAQUE_WHITE = FloatColor(1.0, 1.0, 1.0, 1.0)
+# What an invalid sample, an uncovered pixel, and an empty sum read.
+comptime TRANSPARENT_BLACK = FloatColor(0.0, 0.0, 0.0, 0.0)
+
+
+def append_float_rgb(mut values: List[Float32], color: FloatColor):
+    """Append the red, green, and blue of a linear color.
+
+    Nothing. Three numbers are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives the three channels.
+        color: The linear color. Alpha is not written.
+
+    """
+    values.append(color.r)
+    values.append(color.g)
+    values.append(color.b)
+
+
+def append_float_color(mut values: List[Float32], color: FloatColor):
+    """Append `color`'s four channels.
+
+    Nothing. Four numbers are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives red, green, blue, and alpha.
+        color: The linear color.
+
+    """
+    values.append(color.r)
+    values.append(color.g)
+    values.append(color.b)
+    values.append(color.a)
+
+
+def opaque_from_linear(red: Float64, green: Float64, blue: Float64) -> Color:
+    """Return linear light as the opaque sRGB bytes a material holds.
+
+    Error: Never.
+
+    Args:
+        red: Linear red.
+        green: Linear green.
+        blue: Linear blue.
+
+    Returns:
+        The display bytes. Alpha is 255.
+
+    """
+    return FloatColor(
+        Float32(red), Float32(green), Float32(blue)
+    ).encode_opaque()
+
+
+def unit_byte(value: Float32) -> UInt8:
+    """Return a unit fraction as a byte.
+
+    The fraction is multiplied by 255, one half is added, and the whole
+    number is kept.
+
+    Error: Never.
+
+    Args:
+        value: The fraction.
+
+    Returns:
+        The byte.
+
+    """
+    return UInt8(Int(value * 255 + 0.5))
+
+
+def rounded_byte(value: Float64) -> UInt8:
+    """Return a number held from 0 to 255 and rounded to a byte.
+
+    A half rounds up.
+
+    Error: Never.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The byte.
+
+    """
+    return UInt8(Int(clamp(value, 0.0, 255.0) + 0.5))
+
+
+def rounded_byte(value: Float32) -> UInt8:
+    """Return a number held from 0 to 255 and rounded to a byte.
+
+    A half rounds up.
+
+    Error: Never.
+
+    Args:
+        value: The number.
+
+    Returns:
+        The byte.
+
+    """
+    return UInt8(Int(clamp(value, 0, 255) + Float32(0.5)))
 
 
 def _to_byte(value: Float32) -> UInt8:
@@ -755,6 +1004,108 @@ def _encoded(bits: Int) -> UInt8:
     return _to_byte(linear_to_srgb(bitcast[DType.float32](UInt32(bits))))
 
 
+def require_framebuffer_size(width: Int, height: Int) raises:
+    """Refuse an image whose size is not positive.
+
+    Nothing. The call returns when both sizes are positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    require_positive_extent(
+        width, height, "Framebuffer dimensions must be positive"
+    )
+
+
+def require_depth_length(length: Int, width: Int, height: Int) raises:
+    """Refuse a depth buffer whose length is not one entry a pixel.
+
+    Nothing. The call returns when the buffer holds one depth a pixel.
+
+    Args:
+        length: How many depth values the buffer holds.
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+
+    Raises:
+        Error: If the length is not the width times the height.
+    """
+    require_texel_count(
+        length,
+        width,
+        height,
+        1,
+        "Depth buffer length does not match the dimensions",
+    )
+
+
+def require_pixel_length(
+    length: Int, width: Int, height: Int, channels: Int
+) raises:
+    """Refuse a pixel buffer whose length disagrees with the image.
+
+    Nothing. The call returns when the buffer holds one pixel's bytes
+    for every pixel.
+
+    Args:
+        length: How many bytes the buffer holds.
+        width: The image width, in pixels.
+        height: The image height, in pixels.
+        channels: How many bytes one pixel holds.
+
+    Raises:
+        Error: If the length is not the width times the height times the
+            channels.
+    """
+    require_texel_count(
+        length,
+        width,
+        height,
+        channels,
+        "Pixel buffer length does not match the dimensions",
+    )
+
+
+def require_downsample_factor(factor: Int) raises:
+    """Refuse a downsample factor below one.
+
+    Nothing. The call returns when the factor is at least one.
+
+    Args:
+        factor: How many pixels across and down become one.
+
+    Raises:
+        Error: If the factor is less than one.
+    """
+    require_positive(factor, "A downsample factor is at least one")
+
+
+def pixel_slot(x: Int, y: Int, width: Int, height: Int) raises -> Int:
+    """Return the index of pixel `(x, y)` in a row-major image.
+
+    Rows run from the top. The index is `y * width + x`.
+
+    Args:
+        x: Column.
+        y: Row from the top.
+        width: The image width in pixels.
+        height: The image height in pixels.
+
+    Returns:
+        The pixel's index, from zero.
+
+    Raises:
+        Error: If the coordinate is outside the image.
+    """
+    if x < 0 or x >= width or y < 0 or y >= height:
+        raise Error("Pixel coordinate out of bounds")
+    return y * width + x
+
+
 struct Framebuffer(Movable):
     """A width x height buffer of RGBA pixels, stored row-major from the top."""
 
@@ -768,8 +1119,7 @@ struct Framebuffer(Movable):
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a buffer of the given size, filled with `clear`."""
-        if width <= 0 or height <= 0:
-            raise Error("Framebuffer dimensions must be positive")
+        require_framebuffer_size(width, height)
         self.width = width
         self.height = height
         self.pixels = List[UInt8](length=width * height * Self.CHANNELS, fill=0)
@@ -802,10 +1152,8 @@ struct Framebuffer(Movable):
             Error: If the dimensions are not positive, or the buffer length
                 disagrees with them.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Framebuffer dimensions must be positive")
-        if len(pixels) != width * height * Self.CHANNELS:
-            raise Error("Pixel buffer length does not match the dimensions")
+        require_framebuffer_size(width, height)
+        require_pixel_length(len(pixels), width, height, Self.CHANNELS)
         self.width = width
         self.height = height
         self.pixels = pixels^
@@ -839,12 +1187,9 @@ struct Framebuffer(Movable):
             Error: If the dimensions are not positive, or either buffer's
                 length disagrees with them.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Framebuffer dimensions must be positive")
-        if len(pixels) != width * height * Self.CHANNELS:
-            raise Error("Pixel buffer length does not match the dimensions")
-        if len(depth) != width * height:
-            raise Error("Depth buffer length does not match the dimensions")
+        require_framebuffer_size(width, height)
+        require_pixel_length(len(pixels), width, height, Self.CHANNELS)
+        require_depth_length(len(depth), width, height)
         self.width = width
         self.height = height
         self.pixels = pixels^
@@ -852,9 +1197,7 @@ struct Framebuffer(Movable):
 
     def _offset(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y)'s red channel."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return (y * self.width + x) * Self.CHANNELS
+        return pixel_slot(x, y, self.width, self.height) * Self.CHANNELS
 
     def set_pixel(mut self, x: Int, y: Int, color: Color) raises:
         """Write `color` to pixel (x, y)."""
@@ -866,9 +1209,7 @@ struct Framebuffer(Movable):
 
     def depth_at(self, x: Int, y: Int) raises -> Float32:
         """Return the depth recorded at pixel (x, y)."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return self.depth[y * self.width + x]
+        return self.depth[pixel_slot(x, y, self.width, self.height)]
 
     def test_depth(mut self, x: Int, y: Int, z: Float32) raises -> Bool:
         """Return True if `z` is nearer than what is stored, and claim it.
@@ -877,9 +1218,7 @@ struct Framebuffer(Movable):
         invites the caller to do one without the other, which is how a depth
         buffer quietly stops working.
         """
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        var slot = y * self.width + x
+        var slot = pixel_slot(x, y, self.width, self.height)
         if z >= self.depth[slot]:
             return False
         self.depth[slot] = z

@@ -3,7 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Shared wide fallback for small column-major Float32 matrix inverses."""
+"""Shared inverse arithmetic for small matrices.
+
+The wide fallback keeps a Float32 inverse in range. `adjugate3` is the
+ordinary cofactor expansion, in the caller's precision.
+"""
 
 from std.math import isfinite
 from std.memory import bitcast
@@ -309,3 +313,63 @@ def _inverse_exact_cofactors[
                 sign * _determinant_f32[size - 1](minor) / determinant
             )
     return True, result^
+
+
+def adjugate3[
+    dtype: DType
+](
+    n11: SIMD[dtype, 1],
+    n21: SIMD[dtype, 1],
+    n31: SIMD[dtype, 1],
+    n12: SIMD[dtype, 1],
+    n22: SIMD[dtype, 1],
+    n32: SIMD[dtype, 1],
+    n13: SIMD[dtype, 1],
+    n23: SIMD[dtype, 1],
+    n33: SIMD[dtype, 1],
+) -> Tuple[
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+    SIMD[dtype, 1],
+]:
+    """Return the cofactors of a 3 by 3 matrix and its determinant.
+
+    The nine cofactors are column-major, the order `Matrix3` stores an
+    inverse before scaling by `1 / det`.
+
+    Args:
+        n11: Row 1, column 1.
+        n21: Row 2, column 1.
+        n31: Row 3, column 1.
+        n12: Row 1, column 2.
+        n22: Row 2, column 2.
+        n32: Row 3, column 2.
+        n13: Row 1, column 3.
+        n23: Row 2, column 3.
+        n33: Row 3, column 3.
+
+    Returns:
+        Nine cofactors, then the determinant.
+    """
+    var t11 = n33 * n22 - n32 * n23
+    var t12 = n32 * n13 - n33 * n12
+    var t13 = n23 * n12 - n22 * n13
+    return (
+        t11,
+        n31 * n23 - n33 * n21,
+        n32 * n21 - n31 * n22,
+        t12,
+        n33 * n11 - n31 * n13,
+        n31 * n12 - n32 * n11,
+        t13,
+        n21 * n13 - n23 * n11,
+        n22 * n11 - n21 * n12,
+        n11 * t11 + n21 * t12 + n31 * t13,
+    )

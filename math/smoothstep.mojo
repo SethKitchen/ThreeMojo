@@ -5,12 +5,46 @@
 
 """A smooth rise from zero to one between two edges, GLSL's `smoothstep`.
 
-Shared by the spot light's cone and the linear fog, and by both rasterizers:
-the CPU calls it on the host and the GPU calls it inside the kernel, and the
-parity tests hold the two to the same numbers. It lives in `math` rather than
-beside either caller so that `core.fog` and `lights.lighting` can both import
-it without importing each other.
+`smoothstep` is a hard step when the edges are equal, so a spot with no
+penumbra stays crisp. `clamped_smoothstep` holds the fraction from zero to
+one, so the edges may come in either order.
+
+The spot light's cone, the linear fog, and both rasterizers share
+`smoothstep`. The CPU calls it on the host and the GPU calls it inside the
+kernel, and the parity tests hold the two to the same numbers. It lives in
+`math` rather than beside either caller so that `core.fog` and
+`lights.lighting` can both import it without importing each other.
+
+`hermite_fade` is the cubic `t * t * (3 - 2 * t)`. A waist blend, a
+complexion lattice, a jump clip, water noise, the SDF step, animal
+noise, and the species fades call it.
 """
+
+
+@always_inline
+def hermite_fade(t: Float32) -> Float32:
+    """Return the cubic fade `t * t * (3 - 2 * t)`.
+
+    Args:
+        t: The fraction, usually from zero to one.
+
+    Returns:
+        The faded fraction.
+    """
+    return t * t * (3 - 2 * t)
+
+
+@always_inline
+def hermite_fade(t: Float64) -> Float64:
+    """Return the cubic fade `t * t * (3 - 2 * t)`.
+
+    Args:
+        t: The fraction, usually from zero to one.
+
+    Returns:
+        The faded fraction.
+    """
+    return t * t * (3 - 2 * t)
 
 
 def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
@@ -35,4 +69,42 @@ def smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
     if x >= edge1:
         return 1
     var t = (x - edge0) / (edge1 - edge0)
-    return t * t * (3 - 2 * t)
+    return hermite_fade(t)
+
+
+def clamped_smoothstep(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return the Hermite step, with the fraction held from zero to one.
+
+    The edges may come in either order. The fraction is `clamp` of
+    `(x - edge0) / (edge1 - edge0)`.
+
+    Args:
+        edge0: The edge that gives zero.
+        edge1: The edge that gives one.
+        x: The value.
+
+    Returns:
+        A number from zero to one.
+    """
+    var fraction = (x - edge0) / (edge1 - edge0)
+    var t = max(Float32(0), min(Float32(1), fraction))
+    return hermite_fade(t)
+
+
+def clamped_smoothstep(edge0: Float64, edge1: Float64, x: Float64) -> Float64:
+    """Return the Hermite step, with the fraction held from zero to one.
+
+    The edges may come in either order. The fraction is `clamp` of
+    `(x - edge0) / (edge1 - edge0)`.
+
+    Args:
+        edge0: The edge that gives zero.
+        edge1: The edge that gives one.
+        x: The value.
+
+    Returns:
+        A number from zero to one.
+    """
+    var fraction = (x - edge0) / (edge1 - edge0)
+    var t = max(Float64(0), min(Float64(1), fraction))
+    return hermite_fade(t)

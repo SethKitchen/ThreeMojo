@@ -28,6 +28,7 @@ from std.testing import (
     assert_true,
 )
 
+from core.binary import little_endian_u32
 from core.assets import Assets
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, UV1
 from core.scene import Scene
@@ -138,13 +139,7 @@ struct _Reference(Movable):
         var count = self.doc.integer(self.doc.at(node, 1))
         var out = List[Int](capacity=count)
         for i in range(start, start + count):
-            var at = 4 * i
-            out.append(
-                Int(self.words[at])
-                | (Int(self.words[at + 1]) << 8)
-                | (Int(self.words[at + 2]) << 16)
-                | (Int(self.words[at + 3]) << 24)
-            )
+            out.append(little_endian_u32(self.words, 4 * i))
         return out^
 
     def attribute_bits(self, name: String, attribute: Int) raises -> List[Int]:
@@ -166,9 +161,9 @@ def _check_file(ref_: _Reference, name: String) raises:
     var bytes = Path("assets/draco/" + name).read_bytes()
     if doc.has(expected, "error"):
         with assert_raises():
-            _ = decode_draco(bytes)
+            _ = decode_draco(bytes^)
         return
-    var geometry = decode_draco(bytes)
+    var geometry = decode_draco(bytes.copy())
     assert_equal(
         geometry.geometry_type.value, doc.integer(doc.get(expected, "type"))
     )
@@ -199,7 +194,7 @@ def _check_file(ref_: _Reference, name: String) raises:
             ref_.array(doc.get(want, "bits")), geometry.float32_values(a)
         )
     var three = doc.get(expected, "three")
-    var built = parse_draco(bytes)
+    var built = parse_draco(bytes^)
     var names: List[String] = [
         String(POSITION),
         String(NORMAL),
@@ -247,15 +242,15 @@ def test_header_refusals() raises:
     var bad = cube.copy()
     bad[6] = 3
     with assert_raises(contains="bitstream 2.3 is not supported"):
-        _ = decode_draco(bad)
+        _ = decode_draco(bad^)
     bad = cube.copy()
     bad[7] = 7
     with assert_raises(contains="a geometry type is not known"):
-        _ = decode_draco(bad)
+        _ = decode_draco(bad^)
     bad = cube.copy()
     bad[8] = 2
     with assert_raises(contains="an encoding is not known"):
-        _ = decode_draco(bad)
+        _ = decode_draco(bad^)
 
 
 def test_geometry_lookups() raises:

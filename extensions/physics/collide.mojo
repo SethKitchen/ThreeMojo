@@ -37,6 +37,7 @@ from math.bounds import Sphere
 from math.capsule import Capsule
 from math.octree import triangle_capsule_intersect, triangle_sphere_intersect
 from math.triangle import Line3, Triangle
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import inf, sqrt
 
@@ -294,8 +295,8 @@ def round_polyhedron(
     var high = Float32(1)
     var axis = round.end - round.start
     for _ in range(24):  # pragma: no branch
-        var m1 = high - (high - low) * _GOLDEN
-        var m2 = low + (high - low) * _GOLDEN
+        var m1 = mix_delta(high, low, _GOLDEN)
+        var m2 = mix_delta(low, high, _GOLDEN)
         var d1 = signed_distance(poly, round.start + axis * m1).distance
         var d2 = signed_distance(poly, round.start + axis * m2).distance
         if d1 < d2:

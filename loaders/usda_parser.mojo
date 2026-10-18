@@ -46,8 +46,16 @@ quaternion array whose length is not a multiple of four, which three.js
 pads with `undefined`.
 """
 
+from core.ordinal import require_non_negative
+from loaders.bytes import ascii_digit, ascii_space
 from loaders.js_number import js_parse_float
-from loaders.js_text import is_js_space, js_string, js_trim, js_units
+from loaders.js_text import (
+    is_js_space,
+    is_js_word,
+    js_string,
+    js_trim,
+    js_units,
+)
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -89,36 +97,6 @@ comptime _UNDEFINED = -1
 comptime _OBJECT_TEXT = "[object Object]"
 
 
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII byte that JavaScript's `\\s` matches.
-
-    Args:
-        byte: The byte.
-
-    Returns:
-        Whether it is a space, a tab, a line feed, a vertical tab, a form
-        feed or a carriage return.
-    """
-    return byte == 0x20 or (byte >= 0x09 and byte <= 0x0D)
-
-
-def _is_word(byte: UInt8) -> Bool:
-    """Return True for a byte that JavaScript's `\\w` matches.
-
-    Args:
-        byte: The byte.
-
-    Returns:
-        Whether it is a letter, a digit or `_`.
-    """
-    return (
-        (byte >= 0x30 and byte <= 0x39)
-        or (byte >= 0x41 and byte <= 0x5A)
-        or (byte >= 0x61 and byte <= 0x7A)
-        or byte == 0x5F
-    )
-
-
 def _trim(text: String) -> String:
     """Return JavaScript's `text.trim()`.
 
@@ -131,9 +109,9 @@ def _trim(text: String) -> String:
     var bytes = text.as_bytes()
     var start = 0
     var end = len(bytes)
-    while start < end and _is_space(bytes[start]):
+    while start < end and ascii_space(bytes[start]):
         start += 1
-    while end > start and _is_space(bytes[end - 1]):
+    while end > start and ascii_space(bytes[end - 1]):
         end -= 1
     var ascii = (start == end) or (
         bytes[start] < 0x80 and bytes[end - 1] < 0x80
@@ -173,7 +151,7 @@ def _run(bytes: Span[UInt8, _], start: Int, space: Bool) -> Int:
     """
     var end = start
     while end < len(bytes) and (
-        _is_space(bytes[end]) if space else _is_word(bytes[end])
+        ascii_space(bytes[end]) if space else is_js_word(bytes[end])
     ):
         end += 1
     return end - start
@@ -307,7 +285,7 @@ def _is_frame(key: String) -> Bool:
     """
     var bytes = key.as_bytes()
     for byte in bytes:
-        if not ((byte >= 0x30 and byte <= 0x39) or byte == 0x2E):
+        if not (ascii_digit(Int(byte)) or byte == 0x2E):
             return False
     return len(bytes) > 0
 
@@ -692,8 +670,9 @@ def _write(target: Int) raises:
         Error: If it is a string or nothing, as three.js throws in strict
             mode.
     """
-    if target < 0:
-        raise Error("USDA: a line writes into a string or into nothing")
+    require_non_negative(
+        target, "USDA: a line writes into a string or into nothing"
+    )
 
 
 def usda_tree(text: String) raises -> UsdaTree:

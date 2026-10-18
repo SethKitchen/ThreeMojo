@@ -20,7 +20,9 @@ are decoded to linear light on the way in; see `Why color is linear`.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
-from render.framebuffer import Color, FloatColor
+from core.ordinal import require_positive
+from math.curve_checks import require_at_least_one
+from render.framebuffer import Color, FloatColor, append_float_rgb
 from units.si import Length, METER
 
 # three.js's defaults: ten meters, ten cells, and two grays.
@@ -28,13 +30,6 @@ comptime DEFAULT_GRID_SIZE = Length(10.0, METER)
 comptime DEFAULT_GRID_DIVISIONS = 10
 comptime DEFAULT_CENTER_COLOR = Color(0x44, 0x44, 0x44)
 comptime DEFAULT_GRID_COLOR = Color(0x88, 0x88, 0x88)
-
-
-def _push_color(mut colors: List[Float32], color: FloatColor):
-    """Append one linear color, three floats, to a color attribute."""
-    colors.append(color.r)
-    colors.append(color.g)
-    colors.append(color.b)
 
 
 def grid_helper(
@@ -61,10 +56,8 @@ def grid_helper(
         Error: If `size` is not positive or `divisions` is below one.
     """
     var side = size.to(METER)
-    if side <= 0:
-        raise Error("A grid helper needs a positive size")
-    if divisions < 1:
-        raise Error("A grid helper needs at least one division")
+    require_positive(side, "A grid helper needs a positive size")
+    require_at_least_one(divisions, "A grid helper needs at least one division")
     var half = side / 2
     var step = side / Float32(divisions)
     var middle = FloatColor(srgb=center_color)
@@ -95,7 +88,7 @@ def grid_helper(
         if divisions % 2 == 0 and index == divisions // 2:
             color = middle
         for _ in range(4):  # pragma: no branch
-            _push_color(colors, color)
+            append_float_rgb(colors, color)
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
     geometry.set_attribute(String(COLOR), BufferAttribute(colors^, 3))

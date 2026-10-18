@@ -112,6 +112,8 @@ from extensions.sdf.vector import (
     clamp,
     on_side,
     cross,
+    catmull_rom,
+    cubic_bezier,
     distance,
     dot,
     frame_zy,
@@ -176,6 +178,22 @@ def test_vector_arithmetic() raises:
     # A zero vector stays zero rather than dividing by zero.
     _near(normalize(V3(0, 0, 0)), V3(0, 0, 0))
     _near(lerp(a, b, 0.5), V3(2.5, 3.5, 4.5))
+    # A cubic Bezier starts and ends on its ends. At one half the weights
+    # are 1/8, 3/8, 3/8 and 1/8.
+    var start = V3(0, 0, 0)
+    var first = V3(0, 1, 0)
+    var second = V3(1, 1, 0)
+    var end = V3(1, 0, 0)
+    _near(cubic_bezier(start, first, second, end, 0.0), start)
+    _near(cubic_bezier(start, first, second, end, 1.0), end)
+    _near(cubic_bezier(start, first, second, end, 0.5), V3(0.5, 0.75, 0))
+    # A uniform Catmull-Rom span starts on its second point and ends on
+    # its third. Halfway from the origin to one on x, with matching
+    # neighbors, is the midpoint.
+    var after = V3(1, 0, 0)
+    _near(catmull_rom(start, start, after, after, 0.0), start)
+    _near(catmull_rom(start, start, after, after, 1.0), after)
+    _near(catmull_rom(start, start, after, after, 0.5), V3(0.5, 0, 0))
     _near(mirror(a), V3(-1, 2, 3))
 
 

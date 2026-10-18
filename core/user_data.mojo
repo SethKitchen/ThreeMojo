@@ -25,11 +25,15 @@ point or an exponent. Any other number is written as Mojo writes a
 `1e-07` where JavaScript writes `1e-7`. Both are JSON. A number that is
 not finite is refused, as JSON has no text for one.
 
+`set_meters` stores a length in meters. `set_radians` stores an angle in
+radians. Each writes that number with the rule above.
+
 **Keys that look like array indices keep their place.** A JavaScript object
 lists such keys first, in numeric order. This keeps every key where it was
 first set.
 """
 
+from core.ordinal import index_in_count
 from loaders.json import (
     ARRAY,
     BOOLEAN,
@@ -42,6 +46,7 @@ from loaders.json import (
     quote_json,
 )
 from std.math import isfinite
+from units.si import RADIAN, Angle, Length, METER
 
 # The largest number every whole `Float64` below it is exactly, two to the
 # fifty-three. Whole numbers below it are written as integers.
@@ -151,7 +156,7 @@ struct UserData(Copyable, Movable):
         Raises:
             Error: If no key has that position.
         """
-        if index < 0 or index >= len(self._keys):
+        if not index_in_count(index, len(self._keys)):
             raise Error("User data: no key at position " + String(index))
         return self._keys[index]
 
@@ -285,6 +290,36 @@ struct UserData(Copyable, Movable):
             Error: If the number is not finite. The map is left as it was.
         """
         self._put(key, json_number_text(value))
+
+    def set_meters(mut self, key: String, length: Length) raises:
+        """Set a key to a length in meters.
+
+        Nothing. The key holds the length in meters.
+
+        Args:
+            key: The key.
+            length: The length.
+
+        Raises:
+            Error: If the length in meters is not finite. The map is left
+                as it was.
+        """
+        self.set_number(key, Float64(length.to(METER)))
+
+    def set_radians(mut self, key: String, angle: Angle) raises:
+        """Set a key to an angle in radians.
+
+        Nothing. The key holds the angle in radians.
+
+        Args:
+            key: The key.
+            angle: The angle.
+
+        Raises:
+            Error: If the angle in radians is not finite. The map is left
+                as it was.
+        """
+        self.set_number(key, Float64(angle.to(RADIAN)))
 
     def set_string(mut self, key: String, value: String):
         """Set a key to a string.

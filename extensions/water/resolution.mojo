@@ -5,6 +5,8 @@
 
 """Power-of-two grid sizes for the ocean spectrum and the glare FFT."""
 
+from core.ordinal import require_valid
+
 
 @fieldwise_init
 struct SpectrumResolution(Equatable, ImplicitlyCopyable, Writable):
@@ -34,8 +36,10 @@ def require_resolution(resolution: SpectrumResolution) raises:
     Raises:
         Error: If `resolution` is not valid.
     """
-    if not resolution.is_valid():
-        raise Error("Spectrum resolution must be a power of two from 4 to 256")
+    require_valid(
+        resolution.is_valid(),
+        "Spectrum resolution must be a power of two from 4 to 256",
+    )
 
 
 def log2_resolution(resolution: SpectrumResolution) raises -> Int:

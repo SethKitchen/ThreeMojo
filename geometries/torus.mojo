@@ -34,21 +34,22 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized_cross3, _ordinary_squared
 
-from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    NORMAL,
-    POSITION,
     TORUS_GEOMETRY,
     TORUS_KNOT_GEOMETRY,
-    UV,
 )
-from core.user_data import UserData
+from geometries.surface import (
+    indexed_surface,
+    record_kind,
+    record_tube,
+    require_three_segments,
+)
 from geometries.circle import FULL_TURN, check_sweep
 from geometries.grid import grid_index
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from std.math import cos, pi, sin
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, Length
 
 # How far along the knot's parameter the second point is taken, to give the
 # frame a tangent. three.js's step, so the frames and therefore the vertices
@@ -66,16 +67,31 @@ def _append_tube_vertex(
     v: Float32,
 ):
     """Append a vertex on a tube, its normal pointing away from `center`."""
-    data.append(vertex.x)
-    data.append(vertex.y)
-    data.append(vertex.z)
+    append_vector3(data, vertex)
     var normal = vertex - center
     normal.normalize()
-    normals.append(normal.x)
-    normals.append(normal.y)
-    normals.append(normal.z)
+    append_vector3(normals, normal)
     uvs.append(u)
     uvs.append(v)
+
+
+def _require_tube_radii(radius: Float32, tube: Float32, name: String) raises:
+    """Refuse a tube whose path radius or tube radius is not positive.
+
+    Nothing. The call returns when both radii are positive.
+
+    Args:
+        radius: The path radius.
+        tube: The tube radius.
+        name: `torus` or `torus knot`.
+
+    Raises:
+        Error: If either radius is not positive.
+    """
+    if radius <= 0 or tube <= 0:
+        raise Error(
+            "A " + name + " needs a positive radius and a positive tube"
+        )
 
 
 def torus(
@@ -106,12 +122,13 @@ def torus(
             less than three, or the arc is not positive or is more than a
             turn.
     """
-    if radius.value <= 0 or tube.value <= 0:
-        raise Error("A torus needs a positive radius and a positive tube")
-    if radial_segments < 3:
-        raise Error("A torus needs at least three segments around its tube")
-    if tubular_segments < 3:
-        raise Error("A torus needs at least three segments along its tube")
+    _require_tube_radii(radius.value, tube.value, "torus")
+    require_three_segments(
+        radial_segments, "A torus needs at least three segments around its tube"
+    )
+    require_three_segments(
+        tubular_segments, "A torus needs at least three segments along its tube"
+    )
     check_sweep(arc)
 
     var big = radius.value
@@ -141,17 +158,18 @@ def torus(
             )
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(grid_index(radial_segments, tubular_segments, True))
-    geometry.kind = TORUS_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("tube", Float64(tube.to(METER)))
+    indexed_surface(
+        geometry,
+        data^,
+        normals^,
+        uvs^,
+        grid_index(radial_segments, tubular_segments, True),
+    )
+    record_kind(geometry, TORUS_GEOMETRY)
+    record_tube(geometry, radius, tube)
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
-    geometry.parameters.set_number("arc", Float64(arc.to(RADIAN)))
+    geometry.parameters.set_radians("arc", arc)
     return geometry^
 
 
@@ -197,12 +215,13 @@ def torus_knot(
         Error: If either radius is not positive, either segment count is
             less than three, or `p` or `q` is less than one.
     """
-    if radius.value <= 0 or tube.value <= 0:
-        raise Error("A torus knot needs a positive radius and a positive tube")
-    if tubular_segments < 3:
-        raise Error("A torus knot needs at least three segments along it")
-    if radial_segments < 3:
-        raise Error("A torus knot needs at least three segments around it")
+    _require_tube_radii(radius.value, tube.value, "torus knot")
+    require_three_segments(
+        tubular_segments, "A torus knot needs at least three segments along it"
+    )
+    require_three_segments(
+        radial_segments, "A torus knot needs at least three segments around it"
+    )
     if p < 1 or q < 1:
         raise Error("A torus knot's p and q must be at least one")
 
@@ -244,8 +263,8 @@ def torus_knot(
                 Float64(ahead.z) + Float64(here.z),
             )
             var nx = normalized_cross3(bx[0], bx[1], bx[2], tx, ty, tz)
-            binormal = Vector3(Float32(bx[0]), Float32(bx[1]), Float32(bx[2]))
-            normal = Vector3(Float32(nx[0]), Float32(nx[1]), Float32(nx[2]))
+            binormal = vector3_from_float64(bx[0], bx[1], bx[2])
+            normal = vector3_from_float64(nx[0], nx[1], nx[2])
         for step in range(radial_segments + 1):  # pragma: no branch
             var v = Float32(step) / Float32(radial_segments)
             var around = v * 2 * Float32(pi)
@@ -262,14 +281,15 @@ def torus_knot(
             )
 
     var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(grid_index(tubular_segments, radial_segments, False))
-    geometry.kind = TORUS_KNOT_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("radius", Float64(radius.to(METER)))
-    geometry.parameters.set_number("tube", Float64(tube.to(METER)))
+    indexed_surface(
+        geometry,
+        data^,
+        normals^,
+        uvs^,
+        grid_index(tubular_segments, radial_segments, False),
+    )
+    record_kind(geometry, TORUS_KNOT_GEOMETRY)
+    record_tube(geometry, radius, tube)
     geometry.parameters.set_number("tubularSegments", Float64(tubular_segments))
     geometry.parameters.set_number("radialSegments", Float64(radial_segments))
     geometry.parameters.set_number("p", Float64(p))

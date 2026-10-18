@@ -6,6 +6,7 @@
 """Tests for `render.dds`: hand-built DDS files read into their levels,
 and every file this reader refuses."""
 
+from core.binary import store_little_endian
 from render.compressed_texture import (
     RED_GREEN_RGTC2_FORMAT,
     RED_RGTC1_FORMAT,
@@ -36,8 +37,7 @@ def red_block() -> List[UInt8]:
 
 def put(mut bytes: List[UInt8], at: Int, value: Int):
     """Write a little-endian word."""
-    for byte in range(4):
-        bytes[at + byte] = UInt8((value >> (byte * 8)) & 0xFF)
+    store_little_endian(bytes, at, value, 4)
 
 
 def dds(

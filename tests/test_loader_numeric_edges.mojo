@@ -21,6 +21,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -209,6 +210,16 @@ def test_amf_scaled_normal_retains_each_nonfinite_lane_policy() raises:
     assert_almost_equal(ordinary[0], Float64(0.6), atol=1e-14)
     assert_almost_equal(ordinary[1], Float64(0.8), atol=1e-14)
     assert_equal(ordinary[2], Float64(0))
+
+
+def test_a_vrml_vector_matches_when_every_component_matches() raises:
+    var origin = _Vector(0, 0, 0)
+    assert_true(origin == _Vector(0, 0, 0))
+    assert_false(origin != _Vector(0, 0, 0))
+    assert_false(origin == _Vector(1, 0, 0))
+    assert_true(origin != _Vector(1, 0, 0))
+    assert_false(_Vector(0, 1, 0) == origin)
+    assert_false(_Vector(0, 0, 1) == origin)
 
 
 def main() raises:

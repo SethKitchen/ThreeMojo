@@ -16,6 +16,7 @@ from math.vector3 import Vector3
 from std.time import perf_counter_ns
 from tests.test_carla_road_fixed_s import _lane, _road
 from units.si import Length, Length64, METER
+from core.ordinal import require_valid
 
 comptime _DOUBLE_MAX = 1.7976931348623157e308
 
@@ -42,8 +43,7 @@ def _base_nearest_lane(
         Error: If the mask is not valid, or a lane at s has no width
             record there.
     """
-    if not lane_type.is_valid():
-        raise Error("Lane type is not valid")
+    require_valid(lane_type.is_valid(), "Lane type is not valid")
     var lanes = road.lanes_at(Length64(s))
     var zero = road.directed_point(Length64(s))
     var best: Optional[LaneKey] = None

@@ -24,6 +24,7 @@ from loaders.json import (
     STRING,
     parse_json,
 )
+from units.si import RADIAN, TURN, Angle, KILOMETER, Length, METER
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -125,6 +126,19 @@ def test_a_copy_is_its_own() raises:
     copy.set_number("a", 2)
     assert_equal(data.number("a"), 1)
     assert_equal(copy.number("a"), 2)
+
+
+def test_a_length_and_an_angle_are_stored_in_canonical_units() raises:
+    var data = UserData()
+    data.set_meters("span", Length(2.0, KILOMETER))
+    data.set_radians("sweep", Angle(1.0, TURN))
+    assert_equal(data.number("span"), 2000.0)
+    assert_equal(data.number("sweep"), Float64(TURN.scale))
+    with assert_raises(contains="finite"):
+        data.set_meters("bad", Length(nan[DType.float32](), METER))
+    with assert_raises(contains="finite"):
+        data.set_radians("bad", Angle(nan[DType.float32](), RADIAN))
+    assert_false(data.has("bad"))
 
 
 def test_what_is_not_there_or_not_json_is_refused() raises:

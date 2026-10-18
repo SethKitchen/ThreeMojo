@@ -48,7 +48,14 @@ elasticity.
     var mass = tissue.wet_density * volume
 """
 
-from std.math import isfinite
+from core.ordinal import (
+    ordinal_valid,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
+
+from math.finite import require_finite
 from units.si import (
     STANDARD_GRAVITY,
     Acceleration,
@@ -77,29 +84,7 @@ struct SoftTissueKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named hydrated tissue."""
-        if self == CARTILAGE:
-            return True
-        if self == LIGAMENT:
-            return True
-        if self == MENISCUS:
-            return True
-        if self == MUSCLE:
-            return True
-        if self == TENDON:
-            return True
-        if self == ARTERIAL:
-            return True
-        if self == VENOUS:
-            return True
-        if self == LYMPH:
-            return True
-        if self == NERVE:
-            return True
-        if self == SKIN:
-            return True
-        if self == HAIR:
-            return True
-        return self == ADIPOSE
+        return ordinal_valid(self.value, ADIPOSE.value)
 
 
 # Hyaline articular cartilage of the knee.
@@ -153,26 +138,41 @@ struct SoftTissue(ImplicitlyCopyable):
                 or not positive, if water fraction is outside 0 through
                 1, or if Poisson's ratio is outside 0 through 1.
         """
-        if not self.kind.is_valid():
-            raise Error("Soft tissue must be a named hydrated tissue")
-        if not isfinite(self.wet_density.value):
-            raise Error("A soft tissue density must be finite")
-        if self.wet_density.value <= 0:
-            raise Error("A soft tissue density must be positive")
-        if not isfinite(self.water_fraction):
-            raise Error("A soft tissue water fraction must be finite")
-        if self.water_fraction < 0:
-            raise Error("A soft tissue water fraction cannot be negative")
+        require_valid(
+            self.kind.is_valid(), "Soft tissue must be a named hydrated tissue"
+        )
+        require_finite(
+            Float64(self.wet_density.value),
+            "A soft tissue density must be finite",
+        )
+        require_positive(
+            self.wet_density.value, "A soft tissue density must be positive"
+        )
+        require_finite(
+            Float64(self.water_fraction),
+            "A soft tissue water fraction must be finite",
+        )
+        require_non_negative(
+            self.water_fraction,
+            "A soft tissue water fraction cannot be negative",
+        )
         if self.water_fraction > 1:
             raise Error("A soft tissue water fraction cannot exceed one")
-        if not isfinite(self.elastic_modulus.value):
-            raise Error("A soft tissue elastic modulus must be finite")
-        if self.elastic_modulus.value <= 0:
-            raise Error("A soft tissue elastic modulus must be positive")
-        if not isfinite(self.poisson_ratio):
-            raise Error("A soft tissue Poisson ratio must be finite")
-        if self.poisson_ratio < 0:
-            raise Error("A soft tissue Poisson ratio cannot be negative")
+        require_finite(
+            Float64(self.elastic_modulus.value),
+            "A soft tissue elastic modulus must be finite",
+        )
+        require_positive(
+            self.elastic_modulus.value,
+            "A soft tissue elastic modulus must be positive",
+        )
+        require_finite(
+            Float64(self.poisson_ratio),
+            "A soft tissue Poisson ratio must be finite",
+        )
+        require_non_negative(
+            self.poisson_ratio, "A soft tissue Poisson ratio cannot be negative"
+        )
         if self.poisson_ratio > 1:
             raise Error("A soft tissue Poisson ratio cannot exceed one")
 

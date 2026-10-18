@@ -72,8 +72,8 @@ void main() {
 }
 """
 
-# `ToonShader2`'s fragment shader.
-comptime TOON_SHADER_2_FRAGMENT = """
+# Uniforms `ToonShader2`, `ToonShaderHatching`, and `ToonShaderDotted` share.
+comptime _TOON_BAND_UNIFORMS = """
 uniform vec3 uBaseColor;
 uniform vec3 uLineColor1;
 uniform vec3 uLineColor2;
@@ -83,7 +83,18 @@ uniform vec3 uDirLightPos;
 uniform vec3 uDirLightColor;
 uniform vec3 uAmbientLightColor;
 varying vec3 vNormal;
-void main() {
+"""
+
+# The light weight and the base color `ToonShaderHatching` and
+# `ToonShaderDotted` share before their patterns.
+comptime _TOON_WEIGHTED_COLOR = _TOON_BAND_UNIFORMS + """void main() {
+    float directionalLightWeighting = max( dot( normalize(vNormal), uDirLightPos ), 0.0);
+    vec3 lightWeighting = uAmbientLightColor + uDirLightColor * directionalLightWeighting;
+    gl_FragColor = vec4( uBaseColor, 1.0 );
+"""
+
+# `ToonShader2`'s fragment shader.
+comptime TOON_SHADER_2_FRAGMENT = _TOON_BAND_UNIFORMS + """void main() {
     float camera = max( dot( normalize( vNormal ), vec3( 0.0, 0.0, 1.0 ) ), 0.4);
     float light = max( dot( normalize( vNormal ), uDirLightPos ), 0.0);
     gl_FragColor = vec4( uBaseColor, 1.0 );
@@ -97,21 +108,7 @@ void main() {
 """
 
 # `ToonShaderHatching`'s fragment shader.
-comptime TOON_SHADER_HATCHING_FRAGMENT = """
-uniform vec3 uBaseColor;
-uniform vec3 uLineColor1;
-uniform vec3 uLineColor2;
-uniform vec3 uLineColor3;
-uniform vec3 uLineColor4;
-uniform vec3 uDirLightPos;
-uniform vec3 uDirLightColor;
-uniform vec3 uAmbientLightColor;
-varying vec3 vNormal;
-void main() {
-    float directionalLightWeighting = max( dot( normalize(vNormal), uDirLightPos ), 0.0);
-    vec3 lightWeighting = uAmbientLightColor + uDirLightColor * directionalLightWeighting;
-    gl_FragColor = vec4( uBaseColor, 1.0 );
-    if ( length(lightWeighting) < 1.00 ) {
+comptime TOON_SHADER_HATCHING_FRAGMENT = _TOON_WEIGHTED_COLOR + """    if ( length(lightWeighting) < 1.00 ) {
         if ( mod(gl_FragCoord.x + gl_FragCoord.y, 10.0) == 0.0) {
             gl_FragColor = vec4( uLineColor1, 1.0 );
         }
@@ -135,21 +132,7 @@ void main() {
 """
 
 # `ToonShaderDotted`'s fragment shader.
-comptime TOON_SHADER_DOTTED_FRAGMENT = """
-uniform vec3 uBaseColor;
-uniform vec3 uLineColor1;
-uniform vec3 uLineColor2;
-uniform vec3 uLineColor3;
-uniform vec3 uLineColor4;
-uniform vec3 uDirLightPos;
-uniform vec3 uDirLightColor;
-uniform vec3 uAmbientLightColor;
-varying vec3 vNormal;
-void main() {
-    float directionalLightWeighting = max( dot( normalize(vNormal), uDirLightPos ), 0.0);
-    vec3 lightWeighting = uAmbientLightColor + uDirLightColor * directionalLightWeighting;
-    gl_FragColor = vec4( uBaseColor, 1.0 );
-    if ( length(lightWeighting) < 1.00 ) {
+comptime TOON_SHADER_DOTTED_FRAGMENT = _TOON_WEIGHTED_COLOR + """    if ( length(lightWeighting) < 1.00 ) {
         if ( ( mod(gl_FragCoord.x, 4.001) + mod(gl_FragCoord.y, 4.0) ) > 6.00 ) {
             gl_FragColor = vec4( uLineColor1, 1.0 );
         }

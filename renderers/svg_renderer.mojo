@@ -53,7 +53,13 @@ limits, and explicit zero and nonfinite rules.
 
 from math.norm import normalized_difference2
 
-from math.norm import length3, normalized2, normalized3, _ordinary_squared
+from math.norm import (
+    length3,
+    normalized2,
+    normalized3,
+    _ordinary_squared,
+    squared_length2,
+)
 from cameras.camera import Camera
 from core.assets import Assets
 from core.background import COLOR_BACKGROUND
@@ -69,6 +75,7 @@ from materials.material import (
     PHYSICAL,
     STANDARD,
 )
+from math.cross import wide_dot
 from render.framebuffer import Color
 from renderers.projector import (
     Matrix,
@@ -81,6 +88,7 @@ from renderers.projector import (
     project_scene,
 )
 from std.math import floor, pow, sqrt
+from core.ordinal import require_valid
 
 
 struct SvgQuality(Equatable, ImplicitlyCopyable, Writable):
@@ -258,7 +266,7 @@ def _expand(mut a: Vec, mut b: Vec, pixels: Float64):
     """Push two corners apart along their edge, three.js's `expand`."""
     var x = b[0] - a[0]
     var y = b[1] - a[1]
-    var det = x * x + y * y
+    var det = squared_length2[DType.float64](x, y)
     if _ordinary_squared(det):
         var idet = pixels / sqrt(det)
         x *= idet
@@ -385,8 +393,10 @@ struct SVGRenderer(Movable):
         Raises:
             Error: If the quality is neither.
         """
-        if not quality.is_valid():
-            raise Error("An SVG quality must be LOW_QUALITY or HIGH_QUALITY")
+        require_valid(
+            quality.is_valid(),
+            "An SVG quality must be LOW_QUALITY or HIGH_QUALITY",
+        )
         self.quality = quality
 
     def set_clear_color(mut self, color: Color):
@@ -722,14 +732,9 @@ struct SVGRenderer(Movable):
         self._add(look, outline, path, style)
 
 
-def _dot(a: Vec, b: Vec) -> Float64:
-    """Return the dot product of two directions, as three.js adds it."""
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
 def _unit(v: Vec) -> Vec:
     """Return a direction scaled to length one, three.js's `normalize`."""
-    var squared = _dot(v, v)
+    var squared = wide_dot(v, v)
     if _ordinary_squared(squared):
         return v * (1 / sqrt(squared))
     var unit = normalized3(v[0], v[1], v[2])
@@ -749,14 +754,14 @@ def _light(scene: Scene, light: Light, center: Vec, normal: Vec) raises -> Vec:
     )
     var amount: Float64
     if light.kind == DIRECTIONAL:
-        amount = _dot(normal, _unit(place))
+        amount = wide_dot(normal, _unit(place))
         if amount <= 0:
             return Vec(0)
     else:
         # three.js's `lightPosition` is `_vector3`, which the direction
         # overwrites, so the distance is measured to the direction.
         var toward = _unit(place - center)
-        amount = _dot(normal, toward)
+        amount = wide_dot(normal, toward)
         if amount <= 0:
             return Vec(0)
         if light.distance != 0:

@@ -23,9 +23,31 @@ coordinate system. three.js also supports WebGPU's convention, where z runs
 0 to 1 rather than -1 to +1; only the WebGL form is ported here.
 """
 
+from core.extent import require_positive_extent
+from core.ordinal import require_positive
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from math.finite import require_finite_group
 from std.math import isfinite
+
+
+def require_far_beyond_near(near: Float32, far: Float32) raises:
+    """Refuse a far plane that is not beyond the near plane.
+
+    A NaN comparison is false, so a caller that must refuse a nonfinite
+    distance checks that before it calls this.
+
+    Nothing. The call returns when `far` is beyond `near`.
+
+    Args:
+        near: The near distance.
+        far: The far distance.
+
+    Raises:
+        Error: If `far` is not beyond `near`.
+    """
+    if far <= near:
+        raise Error("The far plane must be beyond the near plane")
 
 
 def _check_finite_bounds(
@@ -93,10 +115,8 @@ def perspective(
             screen winding, which is the one thing backface culling reads.
     """
     _check_finite_bounds(left, right, top, bottom, near, far)
-    if near <= 0:
-        raise Error("The near plane must be in front of the camera")
-    if far <= near:
-        raise Error("The far plane must be beyond the near plane")
+    require_positive(near, "The near plane must be in front of the camera")
+    require_far_beyond_near(near, far)
     if right <= left or top <= bottom:
         raise Error("The frustum must have positive width and height")
 
@@ -182,8 +202,7 @@ def orthographic(
             are not ordered.
     """
     _check_finite_bounds(left, right, top, bottom, near, far)
-    if far <= near:
-        raise Error("The far plane must be beyond the near plane")
+    require_far_beyond_near(near, far)
     if right <= left or top <= bottom:
         raise Error("The view volume must have positive width and height")
 
@@ -242,8 +261,10 @@ def orthographic(
     # path likewise has 1 / finite_extent >= 1 / FLT_MAX; overflowing
     # extents take the wide path above. Only overflow, not a zero diagonal,
     # can make the resulting orthographic projection unrepresentable.
-    if not matrix.is_finite():
-        raise Error("The projection is not representable in Float32")
+    require_finite_group(
+        matrix.is_finite(),
+        "The projection is not representable in Float32",
+    )
     return matrix^
 
 
@@ -294,9 +315,32 @@ def look_at(eye: Vector3, target: Vector3, up: Vector3) raises -> Matrix4:
         0,
         1,
     )
-    if not matrix.is_finite():
-        raise Error("The view offset is not representable in Float32")
+    require_finite_group(
+        matrix.is_finite(),
+        "The view offset is not representable in Float32",
+    )
     return matrix^
+
+
+def view_to_screen(
+    projection: Matrix4, width: Int, height: Int
+) raises -> Matrix4:
+    """Return the transform from camera space to pixels.
+
+    Args:
+        projection: The camera-to-clip matrix.
+        width: Image width in pixels.
+        height: Image height in pixels.
+
+    Returns:
+        The product viewport * projection.
+
+    Raises:
+        Error: If either dimension is not positive.
+    """
+    var combined = viewport(width, height)
+    combined.multiply(projection)
+    return combined^
 
 
 def viewport(width: Int, height: Int) raises -> Matrix4:
@@ -316,8 +360,9 @@ def viewport(width: Int, height: Int) raises -> Matrix4:
     Raises:
         Error: If either dimension is not positive.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Viewport dimensions must be positive")
+    require_positive_extent(
+        width, height, "Viewport dimensions must be positive"
+    )
 
     var half_width = Float32(width) / 2
     var half_height = Float32(height) / 2

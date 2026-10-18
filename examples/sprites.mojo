@@ -17,34 +17,36 @@ of sight by its material. The small blue sprite keeps its size on the
 image as it orbits, because its attenuation is off.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    gallery_renderer,
+    spin_clip,
+)
+
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from core.clock import Clock
-from core.object3d import NodeId, Object3D
+from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from materials.material import (
     Material,
     PointSize,
     points_material,
     sprite_material,
 )
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from objects.points import Points
 from objects.sprite import Sprite
-from render.apng import encode
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color
 from render.srgb import LINEAR
 from render.texture import BILINEAR, CLAMP, IGNORED, Texture, checkerboard
-from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin, sqrt
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/sprites.png"
 comptime WIDTH = 240
@@ -99,7 +101,7 @@ def a_disc(size: Int) raises -> Texture:
         for x in range(size):
             var dx = (Float32(x) + 0.5) / Float32(size) - 0.5
             var dy = (Float32(y) + 0.5) / Float32(size) - 0.5
-            var reach = sqrt(dx * dx + dy * dy) * 2
+            var reach = sqrt(squared_length2[DType.float32](dx, dy)) * 2
             var inside = 1 - reach * reach * reach
             if inside < 0:
                 inside = 0
@@ -111,43 +113,10 @@ def a_disc(size: Int) raises -> Texture:
     return Texture(size, size, pixels^, CLAMP, BILINEAR, LINEAR, True, IGNORED)
 
 
-def frame_at(
-    renderer: Renderer,
-    camera: PerspectiveCamera,
-    assets: Assets,
-    mut scene: Scene,
-    node: NodeId,
-    step: Angle,
-) raises -> Framebuffer:
-    """Turn the group by `step` and render one frame.
-
-    Args:
-        renderer: The renderer to draw with.
-        camera: The camera to view through.
-        assets: The geometries, materials and textures.
-        scene: The persistent scene, edited in place.
-        node: The node everything hangs from.
-        step: How much further to turn this frame.
-
-    Returns:
-        The rendered frame.
-
-    Raises:
-        Error: If the scene or the render is invalid.
-    """
-    scene.node(node).rotate_y(step)
-    scene.update()
-    return renderer.render(scene, assets, camera)
-
-
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
 
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METER)))
@@ -194,33 +163,27 @@ def main() raises:
     var beside_node = scene.add(beside^)
     scene.add_sprite(Sprite(pin, beside_node))
 
-    var lamp = Object3D()
-    lamp.set_position(0.5, 0.9, 0.8)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.51))
-
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(100.0, METER),
+    fill_and_key(
+        scene,
+        0.5,
+        0.9,
+        0.8,
+        Color(255, 255, 255),
+        0.79,
+        Color(255, 255, 255),
+        2.51,
     )
-    camera.place(Vector3(0, 0.9, 4.0), Vector3(0, 0.1, 0))
 
-    var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
-    var frame_clock = Clock()
-    frame_clock.start()
-    var frames = List[Framebuffer]()
-    for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, node, step))
-
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0, 0.9, 4.0),
+        Vector3(0, 0.1, 0),
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(100.0, METER),
     )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+
+    spin_clip(
+        renderer, camera, assets, scene, node, FRAMES, DELAY_MS, destination
+    )

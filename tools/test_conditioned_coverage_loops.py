@@ -165,20 +165,33 @@ class ConditionedCurrentLoopAdmission(unittest.TestCase):
         name = 'tools/carla_lane_oracle/full_audit_cleanup_contracts.py'
         target = self.root/name
         physical = target.read_bytes()
-        original = audit._InvariantInputs.finish
+        original = audit._CacheInputs.checkpoint
+        finish = audit._InvariantInputs.finish
         fired = []
         @wraps(original)
-        def finish(operation, root):
+        def checkpoint(operation, owner, root):
+            result = original(operation, owner, root)
+            frame = audit.sys._getframe(1)
+            if frame.f_code is not finish.__code__:
+                return result
+            self.assertIs(frame.f_globals, vars(audit))
+            self.assertIs(frame.f_locals['self'], operation)
+            self.assertIs(owner, operation._owner)
+            self.assertEqual(root, self.root)
+            self.assertEqual(operation._state, 'active')
             self.assertEqual(operation._kind, 'map_loops')
             self.assertTrue(operation._checker_receipt)
             self.assertIn(name, operation._executing)
-            self.assertNotIn(name, operation._raw)
+            self.assertEqual(operation._raw[name], physical)
             self.assertEqual(fired, [])
             fired.append(operation)
+            # PR760 also observes checker copies as data. Mutate after the real
+            # data checkpoint so the unchanged later checker-receipt comparison
+            # retains its distinct finalization obligation.
             target.write_bytes(physical + b'\n# changed consumed checker copy\n')
-            return original(operation, root)
+            return result
         try:
-            with patch.object(audit._InvariantInputs, 'finish', finish):
+            with patch.object(audit._CacheInputs, 'checkpoint', checkpoint):
                 self.assertEqual(loops.reviewed_nonempty_loops(
                     self.root, 'extensions/carla/map'), {})
         finally:

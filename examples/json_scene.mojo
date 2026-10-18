@@ -12,24 +12,26 @@ with `write_object_json` and read with `load_object_json`. The picture
 is the scene that came back, not the one that was written.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    framed_camera,
+    gallery_renderer,
+    write_example,
+)
+
 from core.assets import Assets
 from core.clock import Clock
 from core.object3d import Object3D
 from core.scene import Scene
 from exporters.object_json import write_object_json
 from geometries.box import cube
-from lights.light import ambient_light, directional_light
 from loaders.object_loader import ObjectCameras, load_object_json
 from materials.material import Material
 from objects.mesh import Mesh
-from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
 from std.os import remove
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import Angle, DEGREE, Length, METER, MILLISECOND
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/scenejson.png"
 comptime WIDTH = 240
@@ -39,10 +41,7 @@ comptime DELAY_MS = 55
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var document = String(destination.removesuffix(".png")) + ".json"
 
     var assets = Assets()
@@ -51,21 +50,27 @@ def main() raises:
     var scene = Scene()
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(block, paint, node))
-    var lamp = Object3D()
-    lamp.set_position(0.9, 1.4, 1.2)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.45))
-    scene.add_light(directional_light(Color(255, 248, 236), lamp_node, 2.6))
+    fill_and_key(
+        scene,
+        0.9,
+        1.4,
+        1.2,
+        Color(255, 255, 255),
+        0.45,
+        Color(255, 248, 236),
+        2.6,
+    )
 
     var pivot = scene.add(Object3D())
     var eye = Object3D()
     eye.set_position(0.5, 0.15, 3.4)
     var eye_node = scene.attach(eye^, pivot)
-    var camera = PerspectiveCamera(
-        Angle(40.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = framed_camera(
+        WIDTH,
+        HEIGHT,
+        field_of_view=Angle(40.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
     camera.attach(eye_node)
     scene.update()
@@ -81,8 +86,7 @@ def main() raises:
     var subject = loaded.meshes[0].node
     remove(document)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(16, 18, 26))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(16, 18, 26))
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
     frame_clock.start()
@@ -92,12 +96,4 @@ def main() raises:
         loaded.update()
         frames.append(renderer.render(loaded, loaded_assets, camera_again))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

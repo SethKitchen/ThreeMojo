@@ -27,6 +27,7 @@ from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from core.geometry_store import GeometryId
 from core.interleaved_buffer import InterleavedBuffer
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_positive
 from core.scene import Scene
 from extensions.humanoid.skeleton.complexion import hair_tone
 from extensions.humanoid.skeleton.head.frame import head_muscle_dimensions
@@ -37,10 +38,14 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     groom_lines,
 )
 from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
-from extensions.humanoid.skeleton.head.hair.density import HairDensity
+from extensions.humanoid.skeleton.head.hair.density import (
+    HairDensity,
+    require_hair_direction,
+)
 from extensions.humanoid.skeleton.head.hair.shading import (
     HairLight,
     HairLook,
+    require_groom_fields,
     shade_groom_into,
 )
 from extensions.humanoid.spec import HumanoidSpec
@@ -50,6 +55,7 @@ from materials.material import (
     MaterialId,
     OPAQUE,
     line_material,
+    require_strand_opacity,
 )
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
@@ -103,8 +109,7 @@ struct HairStrands(Movable):
             segments += max(
                 0, groom.starts[strand + 1] - groom.starts[strand] - 1
             )
-        if segments <= 0:
-            raise Error("Hair strands need at least one segment")
+        require_positive(segments, "Hair strands need at least one segment")
         self._buffer = InterleavedBuffer(
             List[Float32](length=segments * 12, fill=0), 6
         )
@@ -189,8 +194,7 @@ struct HairStrands(Movable):
             self._optical_depths = List[Float32](length=depth_count, fill=0)
         for light in range(len(lights)):
             var d = lights[light].direction
-            if not isfinite(d.x) or not isfinite(d.y) or not isfinite(d.z):
-                raise Error("Hair optical depth needs a finite light direction")
+            require_hair_direction(d)
             if light == 0:
                 self.density.validate()
         if depth_count == 0:
@@ -314,15 +318,9 @@ def add_strands(
     Raises:
         Error: If the parent, groom, width or opacity is invalid.
     """
-    if not isfinite(opacity) or opacity < 0 or opacity > 1:
-        raise Error("Strand opacity must be finite and between zero and one")
+    require_strand_opacity(opacity)
     var parent_object = scene.get(parent)
-    if (
-        len(groom.normals) != len(groom.points)
-        or len(groom.depths) != len(groom.points)
-        or len(groom.shades) != len(groom)
-    ):
-        raise Error("Hair shading fields must match the groom")
+    require_groom_fields(groom)
     var shape = groom_lines(groom)
     if shape.attribute_view(String(POSITION)).count() == 0:
         raise Error("Hair strands need at least one segment")

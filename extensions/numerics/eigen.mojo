@@ -26,6 +26,8 @@ See Bathe and Wilson, "Large eigenvalue problems in dynamic analysis"
 section 11.6.
 """
 
+from core.ordinal import require_positive
+from math.finite import require_finite, require_positive_tolerance
 from std.math import isfinite, sqrt
 from extensions.numerics.dense import (
     DenseMatrix,
@@ -93,8 +95,7 @@ def _swap_symmetric(mut a: DenseMatrix, first: Int, second: Int):
 
 def _checked_schur_value(value: Float64) raises -> Float64:
     """Refuse a nonfinite Schur update before it enters the working matrix."""
-    if not isfinite(value):
-        raise Error("An inertia count needs finite arithmetic")
+    require_finite(Float64(value), "An inertia count needs finite arithmetic")
     return value
 
 
@@ -133,8 +134,9 @@ def _pivoted_inertia(a: CsrMatrix) raises -> Int:
             var j = a.columns[e]
             if j >= i:
                 var value = a.values[e]
-                if not isfinite(value):
-                    raise Error("An inertia count needs finite entries")
+                require_finite(
+                    Float64(value), "An inertia count needs finite entries"
+                )
                 work.set(i, j, value)
                 work.set(j, i, value)
                 scale = max(scale, abs(value))
@@ -232,6 +234,22 @@ def _pivoted_inertia(a: CsrMatrix) raises -> Int:
     return negative
 
 
+def require_pair_size(first: Int, second: Int) raises:
+    """Refuse a stiffness and a mass of different sizes.
+
+    Nothing. The call returns when the two sizes are equal.
+
+    Args:
+        first: The size of one matrix.
+        second: The size of the other matrix.
+
+    Raises:
+        Error: If the sizes differ.
+    """
+    if first != second:
+        raise Error("The stiffness and mass must have one size")
+
+
 def count_eigenvalues_below(
     k: CsrMatrix, m: CsrMatrix, shift: Float64
 ) raises -> Int:
@@ -253,10 +271,8 @@ def count_eigenvalues_below(
         Error: If the sizes differ, the shift or arithmetic is not finite,
             or the shift is an eigenvalue to working precision.
     """
-    if k.size != m.size:
-        raise Error("The stiffness and mass must have one size")
-    if not isfinite(shift):
-        raise Error("An eigenvalue shift must be finite")
+    require_pair_size(k.size, m.size)
+    require_finite(Float64(shift), "An eigenvalue shift must be finite")
     var shifted = _shifted(k, m, shift)
     try:
         var factor = SkylineFactor(shifted, reverse_cuthill_mckee(shifted))
@@ -344,14 +360,11 @@ def lowest_modes(
             missed eigenvalue.
     """
     var n = k.size
-    if m.size != n:
-        raise Error("The stiffness and mass must have one size")
+    require_pair_size(m.size, n)
     if count < 1 or count > n:
         raise Error("The mode count must be from one to the matrix size")
-    if not (tolerance > 0 and isfinite(tolerance)):
-        raise Error("A tolerance must be positive and finite")
-    if max_iterations < 1:
-        raise Error("An iteration budget must be one or more")
+    require_positive_tolerance(tolerance)
+    require_positive(max_iterations, "An iteration budget must be one or more")
     var factor = SkylineFactor(k, reverse_cuthill_mckee(k))
     if not factor.is_positive_definite():
         raise Error("The stiffness must be positive definite")

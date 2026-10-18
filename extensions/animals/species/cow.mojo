@@ -23,8 +23,10 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     grizzle,
     mix3,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -37,6 +39,9 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
@@ -45,7 +50,7 @@ from extensions.animals.kit import (
     is_limb,
     pick_weighted,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import centered_fbm, fbm3, offset_fbm, vnoise3
 from extensions.animals.options import (
     FEMALE,
     MALE,
@@ -81,6 +86,7 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from math.utils import clamp_unit
 from std.math import cos, pi, sin
 from extensions.sdf.distance import oriented_ellipsoid_estimate
 
@@ -235,7 +241,7 @@ def cow_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var udder = 0.0
     var no_udder = male or calf
     if not no_udder:
-        udder = b[3] + (b[4] - b[3]) * r.next()
+        udder = mix(b[3], b[4], r.next())
     t.set("udder", udder)
     t.set("dewlap", b[5] * (1.4 if male else 1.0) * (0.8 + 0.4 * r.next()))
     var peak = 0.0
@@ -483,7 +489,7 @@ def _horn_points(t: Traits, s: Float64) -> List[V3]:
     pts.append(p)
     for i in range(1, n + 1):  # pragma: no branch
         var u = (Float64(i) - 0.5) / Float64(n)
-        var a = a0 + (a1 - a0) * u**curl
+        var a = mix(a0, a1, u**curl)
         var d = normalize(out_dir * cos(a) + tw * sin(a))
         p = p + d * ((ln + 0.03) / Float64(n))
         pts.append(p)
@@ -803,7 +809,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     var eye = _eye()
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         # The masseter, and the mandible's lower border to the chin.
         _ = head_ell(
             m,
@@ -1186,17 +1192,10 @@ def _udder(mut m: SdfModel, rig: Rig, k: Float64) raises:
 def _foreleg(
     mut m: SdfModel, rig: Rig, side: String, leg_k: Float64, bull: Float64
 ) raises:
-    var s = 1.0 if side == "L" else -1.0
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
+    var s = side_sign(side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     _ = ell_y(
         m,
         "scapmuscle",
@@ -1297,11 +1296,11 @@ def _foreleg(
     )
     _digits(
         m,
-        rig.bone("fpaw" + side),
+        fpaw,
         rig.bone("fhoof" + side),
         mc,
         rig.j("fcoffin" + side),
-        rig.j("ftoe" + side),
+        toe,
         leg_k,
     )
 
@@ -1309,15 +1308,9 @@ def _foreleg(
 def _hind_leg(
     mut m: SdfModel, rig: Rig, side: String, leg_k: Float64, beef: Float64
 ) raises:
-    var s = 1.0 if side == "L" else -1.0
+    var s = side_sign(side)
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     # The thigh: flat and lean in dairy cows, full and round in beef.
     _ = ell_y(
         m,
@@ -1423,11 +1416,11 @@ def _hind_leg(
     )
     _digits(
         m,
-        rig.bone("hpaw" + side),
+        hpaw,
         rig.bone("hhoof" + side),
         mt,
         rig.j("hcoffin" + side),
-        rig.j("htoe" + side),
+        tt,
         0.97 * leg_k,
     )
 
@@ -1586,8 +1579,8 @@ def cow_palette(t: Traits) -> Palette:
     var pal = Palette()
     var tinted: List[String] = [String("body"), "dorsal", "belly", "head"]
     for i in range(4):  # pragma: no branch
-        pal.set(tinted[i], _tint(srgb(hex[i]), k, l))
-    pal.set("dark", _tint(srgb(hex[6]), k, l))
+        pal.set(tinted[i], shade_swatch(srgb(hex[i]), k, l, 0.08, 0.0, -0.08))
+    pal.set("dark", shade_swatch(srgb(hex[6]), k, l, 0.08, 0.0, -0.08))
     pal.set("white", srgb(hex[4]))
     pal.set("muzzleDark", srgb(hex[5]))
     pal.set("pink", srgb(0xD99A8E))
@@ -1614,14 +1607,6 @@ def cow_palette(t: Traits) -> Palette:
     pal.set("eyeY", ef.y)
     pal.set("eyeZ", ef.z)
     return pal^
-
-
-def _tint(c: V3, k: Float64, l: Float64) -> V3:
-    return V3(
-        c.x * (1.0 + 0.08 * k + l),
-        c.y * (1.0 + l),
-        c.z * (1.0 - 0.08 * k + l),
-    )
 
 
 def _pied(pal: Palette, t: Traits, p: V3) -> Float64:
@@ -1706,9 +1691,7 @@ def _white(
         return f
     if breed == HEREFORD:
         var off = pal.get("piedOff")
-        var jag = (
-            fbm3(V3(p.x * 40.0 + off.x, p.y * 40.0, p.z * 40.0), 2) - 0.5
-        ) * 0.03
+        var jag = (centered_fbm(p, 40.0, 2, off.x)) * 0.03
         if region == R_HEAD:
             # A white face; the white runs over the poll. Some have red
             # rings round the eyes, the spectacles.
@@ -1747,7 +1730,7 @@ def _white(
             d = min(d, (p.y - line_y) + 0.25 * wide)
         if leg > 0.3:
             var wob = (
-                fbm3(V3(p.x * 18.0 + off.y, p.y * 9.0, p.z * 18.0), 2) - 0.5
+                offset_fbm(V3(p.x * 18.0 + off.y, p.y * 9.0, p.z * 18.0), 2)
             ) * 0.12
             d = min(d, p.y - (0.3 if is_front_limb(bone) else 0.36) + wob)
         return -(d + jag)
@@ -1893,7 +1876,7 @@ def _paint_coat(
 ) -> V3:
     # The torso, neck and legs: countershaded, the Jersey's darker
     # shoulders, hips and lower legs.
-    var up = clamp(n.y, -1.0, 1.0)
+    var up = clamp_unit(n.y)
     var side = 1.0 if p.x >= 0.0 else -1.0
     var ventral = smoothstep(
         0.0, -0.7, n.y
@@ -2011,10 +1994,8 @@ def _nostril_dist(hm: V3) -> Float64:
 
 def _fur(c: V3, p: V3) -> V3:
     # Low-frequency color variation and a fine hair grain.
-    var cv = fbm3(p * 5.0, 3) - 0.5
-    var v = V3(
-        c.x * (1.0 + 0.14 * cv), c.y * (1.0 + 0.12 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    var cv = centered_fbm(p, 5.0, 3)
+    var v = channel_gain(c, cv, 0.14, 0.12, 0.1)
     return grizzle(v, p, 150.0, 0.06)
 
 

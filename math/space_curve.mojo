@@ -46,16 +46,23 @@ reads the points of the `Curve3` and takes the tangent by the base rule,
 as three.js does for its `CatmullRomCurve3` and the two Bezier curves.
 """
 
-from math.curve_checks import check_curve_parameter, curve_sample_count
+from math.cross import wide_cross, wide_dot
+from math.curve_checks import (
+    check_curve_parameter,
+    curve_sample_count,
+    require_length_table,
+)
+from math.utils import clamp_unit
 from math.curve3 import Curve3, FrenetFrames
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from math.norm import (
     length3 as scalar_length3,
     normalized3 as scalar_normalized3,
     _ordinary_squared,
 )
 from std.math import acos, cos, isfinite, sin, sqrt
-from units.si import Length, METER
+from units.measure import length_meters
+from units.si import Length
 
 # Four doubles: a point or a direction in space, and a fourth number that
 # is not used.
@@ -96,7 +103,7 @@ def to_vector3(p: Point3) -> Vector3:
     Returns:
         The vector.
     """
-    return Vector3(Float32(p[0]), Float32(p[1]), Float32(p[2]))
+    return vector3_from_float64(p[0], p[1], p[2])
 
 
 def dot3(a: Point3, b: Point3) -> Float64:
@@ -109,7 +116,7 @@ def dot3(a: Point3, b: Point3) -> Float64:
     Returns:
         `a.x * b.x + a.y * b.y + a.z * b.z`.
     """
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    return wide_dot(a, b)
 
 
 def cross3(a: Point3, b: Point3) -> Point3:
@@ -123,11 +130,7 @@ def cross3(a: Point3, b: Point3) -> Point3:
     Returns:
         `a` crossed with `b`.
     """
-    return point3(
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
+    return wide_cross(a, b)
 
 
 def length3(a: Point3) -> Float64:
@@ -281,7 +284,7 @@ def length_of[
             fit in Int, or the curve refuses a point.
     """
     var table = lengths_of(curve, divisions)
-    return Length(Float32(table[len(table) - 1]), METER)
+    return length_meters(table[len(table) - 1])
 
 
 def u_to_t(lengths: List[Float64], u: Float64) raises -> Float64:
@@ -300,8 +303,7 @@ def u_to_t(lengths: List[Float64], u: Float64) raises -> Float64:
             fewer than two entries.
     """
     check_curve_parameter(u)
-    if len(lengths) < 2:
-        raise Error("A curve length table needs at least two entries")
+    require_length_table(len(lengths))
     var count = len(lengths)
     var target = u * lengths[count - 1]
     var low = 0
@@ -536,11 +538,6 @@ def _rotated(v: Point3, axis: Point3, angle: Float64) -> Point3:
     )
 
 
-def _clamp_unit(value: Float64) -> Float64:
-    """Return `value` held to minus one through one, for `acos`."""
-    return max(-1.0, min(1.0, value))
-
-
 def frames3_of[
     C: SpaceCurve
 ](
@@ -604,7 +601,7 @@ def frames3_of[
         if length3(turn) > NUMBER_EPSILON:
             turn = normalized3(turn)
             var theta = acos(
-                _clamp_unit(
+                clamp_unit(
                     dot3(frames.tangents[step - 1], frames.tangents[step])
                 )
             )
@@ -613,7 +610,7 @@ def frames3_of[
         frames.binormals.append(cross3(frames.tangents[step], next_normal))
     if closed:
         var theta = acos(
-            _clamp_unit(dot3(frames.normals[0], frames.normals[segments]))
+            clamp_unit(dot3(frames.normals[0], frames.normals[segments]))
         )
         theta /= Float64(segments)
         var twist = cross3(frames.normals[0], frames.normals[segments])

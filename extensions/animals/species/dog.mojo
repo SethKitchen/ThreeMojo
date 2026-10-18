@@ -25,6 +25,7 @@ from extensions.animals.coat import (
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
 from extensions.sdf.ids import BoneId
@@ -34,16 +35,21 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    ear_ends,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     head_local,
-    is_limb,
+    reference_to_head_local,
+    coat_place,
     mirrored_blob,
     hashed_stream,
     pick_cumulative,
     mirrored_ell_bottom,
 )
-from extensions.animals.noise import fbm3, vnoise3
+from extensions.animals.noise import centered_fbm, centered_value
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -66,6 +72,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.utils import min3
 from std.math import cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 8
@@ -920,10 +927,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS by type.
     var ear_type = Int(t.get("earType", 0.0))
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var base = rig.j("earBase" + side)
-        var tip = rig.j("earTip" + side)
-        var dir = normalize(tip - base)
+        var s, base, tip, dir = ear_ends(rig, side)
         var ln = length(tip - base)
         var eb = rig.bone("ear" + side)
         if ear_type == PRICK:
@@ -1008,7 +1012,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var leg_k = t.get("boneK")
     var pk = t.get("pawK")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         _fore_leg(m, rig, side, s, leg_k, pk, ruff)
         _hind_leg(m, rig, side, s, leg_k, pk, ruff)
 
@@ -1121,18 +1125,9 @@ def _fore_leg(
     pk: Float64,
     ruff: Float64,
 ) raises:
-    var lat = V3(s, 0, 0)
-    var sc = rig.j("scapTop" + side)
-    var sh = rig.j("shoulder" + side)
-    var e = rig.j("elbow" + side)
-    var w = rig.j("wrist" + side)
-    var mc = rig.j("mcp" + side)
-    var toe = rig.j("ftoe" + side)
-    var scap = rig.bone("scapula" + side)
-    var hum = rig.bone("humerus" + side)
-    var rad = rig.bone("radius" + side)
-    var meta = rig.bone("metacarpus" + side)
-    var fpaw = rig.bone("fpaw" + side)
+    var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+        digitigrade_fore(rig, side, s)
+    )
     _ = ell_y(
         m,
         "scapmuscle",
@@ -1235,15 +1230,7 @@ def _hind_leg(
     ruff: Float64,
 ) raises:
     var lat = V3(s, 0, 0)
-    var hp = rig.j("hip" + side)
-    var kn = rig.j("knee" + side)
-    var hk = rig.j("hock" + side)
-    var mt = rig.j("mtp" + side)
-    var tt = rig.j("htoe" + side)
-    var fem = rig.bone("femur" + side)
-    var tib = rig.bone("tibia" + side)
-    var mtar = rig.bone("metatarsus" + side)
-    var hpaw = rig.bone("hpaw" + side)
+    var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(rig, side)
     _ = ell_y(
         m,
         "thigh",
@@ -1616,11 +1603,7 @@ def dog_palette(t: Traits) raises -> Palette:
         var kk = 2.2 * k if key == KEY_YELLOW else (
             0.15 * k if key == KEY_TERRIER and not patch else k
         )
-        c = V3(
-            c.x * (1.0 + 0.1 * kk + l),
-            c.y * (1.0 + 0.01 * kk + l),
-            c.z * (1.0 - 0.14 * kk + l),
-        )
+        c = shade_swatch(c, kk, l, 0.1, 0.01, -0.14)
         var sooty = (
             juv > 0.0
             and key == KEY_BLACK_TAN
@@ -1686,11 +1669,9 @@ def _terrier_patches(t: Traits) -> List[_Patch]:
 
 
 def _head_local(t: Traits, p: V3) -> V3:
-    var x = (p.x - HEAD_O.x) / t.get("headW") / HS
-    var y = (p.y - HEAD_O.y) / HS
-    var z = (p.z - HEAD_O.z) / HS
-    var mz = t.get("muzzle")
-    return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
+    return reference_to_head_local(
+        HEAD_O, HS, MUZZLE_Z0, t.get("muzzle"), t.get("headW"), p
+    )
 
 
 def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:
@@ -1698,12 +1679,12 @@ def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:
     # a black patch keeps a thin tan rim.
     var d = 1.0
     var db = 1.0
-    var nz = fbm3(V3(p.x * 18.0 + n_off, p.y * 18.0, p.z * 18.0), 2) - 0.5
+    var nz = centered_fbm(p, 18.0, 2, n_off)
     for q in _terrier_patches(t):
         var c = q.c
         var r = q.r
         var u = V3((p.x - c.x) / r.x, (p.y - c.y) / r.y, (p.z - c.z) / r.z)
-        var di = (length(u) - 1.0 + 0.5 * nz) * min(r.x, min(r.y, r.z)) * 0.8
+        var di = (length(u) - 1.0 + 0.5 * nz) * min3(r.x, r.y, r.z) * 0.8
         d = min(d, di)
         if q.black:
             db = min(db, di)
@@ -1844,23 +1825,13 @@ def dog_paint(
             return Paint(srgb(0x5A3A30) if liver else srgb(0x231D1A), SKIN)
     var ag = pal.get("agouti")
     var n_off = Float64(Int(t.get("coatSeed", 0.0)) % 997)
-    var nz = fbm3(V3(p.x * 7.0 + n_off, p.y * 7.0, p.z * 7.0), 3) - 0.5
-    var nz2 = vnoise3(V3(p.x * 38.0 + n_off, p.y * 38.0, p.z * 38.0)) - 0.5
+    var nz = centered_fbm(p, 7.0, 3, n_off)
+    var nz2 = centered_value(p, 38.0, n_off)
     var c: V3
     var agouti: Float64
-    var region = 0
+    var region, limb = coat_place(bone)
     var leg = 0.0
-    if bone == "head":
-        region = 2
-    elif bone == "jaw":
-        region = 6
-    elif bone.startswith("ear"):
-        region = 5
-    elif bone.startswith("tail"):
-        region = 4
-    elif bone == "neck1" or bone == "neck2":
-        region = 1
-    elif is_limb(bone):
+    if limb:
         # The limb's own colors take over below the body line.
         leg = smoothstep(0.42, 0.24, p.y)
     if region <= 1:
@@ -2042,7 +2013,7 @@ def dog_paint(
         c = _terrier(pal, t, c, p, region, n_off)
     if juv > 0.0:
         agouti *= 1.0 - 0.6 * juv
-    var cvh = fbm3(V3(p.x * 4.0 + 5.0 + n_off, p.y * 4.0, p.z * 4.0), 2) - 0.5
+    var cvh = centered_fbm(p, 4.0, 2, 5.0 + n_off)
     var a = 0.25 if key == KEY_TERRIER else 1.0
     c = V3(
         c.x * (1.0 + a * (0.12 * nz + 0.08 * cvh + 0.06 * nz2)),
@@ -2070,9 +2041,7 @@ def _terrier(
         var h = _head_local(t, p)
         var side = 1.0 if h.x >= 0.0 else -1.0
         var ext = 1.0 + 0.35 * t.get("maskSide", 0.0) * side
-        var wob = 0.005 * (
-            fbm3(V3(p.x * 30.0 + n_off, p.y * 30.0, p.z * 30.0), 2) - 0.5
-        )
+        var wob = 0.005 * (centered_fbm(p, 30.0, 2, n_off))
         var white = Int(t.get("color", 0.0)) == WHITE
         var z_front = (0.03 if white else 0.068) * ext
         var y_low = 0.0 if white else -0.022 - 0.006 * ext

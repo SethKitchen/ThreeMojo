@@ -243,7 +243,7 @@ class ProofBindingTests(unittest.TestCase):
         self.build = stage
         self.hits = stage/'hits'
         self.receipt = stage/'loop-proofs.json'
-        repo = Path(__file__).resolve().parents[1]
+        repo = historical_boundary_root(self)
         name = loops.DENSITY_SOURCE
         module = name.removesuffix('.mojo')
         original = self.root/name
@@ -264,8 +264,9 @@ class ProofBindingTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'unreviewed package or alternate source')
             self.assertNotIn(Path(relative), set(cache_key.input_paths(self.build)))
-            # The generated receipt's owner can refuse first, at its exit census.
-            with self.assertRaisesRegex(ValueError, 'pending generated resolver surface changed'):
+            # Historical density now forwards its real owner, so this physical
+            # shadow is refused before the separate terminal resolver census.
+            with self.assertRaisesRegex(ValueError, 'Shadowed coverage std resolver'):
                 self.verify()
             path.unlink()
             self.assertEqual(self.verify()['sha256'], envelope['sha256'])
@@ -320,7 +321,7 @@ class ProofBindingTests(unittest.TestCase):
         self.assertEqual(self.verify()['sha256'], self.envelope['sha256'])
 
     def test_missing_authority_cannot_withhold_a_reviewed_module(self):
-        repo = Path(__file__).resolve().parents[1]
+        repo = historical_boundary_root(self)
         self._replace_measured_module(loops.DENSITY_SOURCE,
             loops.reviewed_density_source(repo, successor=True), 149)
         prior = self.receipt.read_bytes()
@@ -382,7 +383,7 @@ class ProofBindingTests(unittest.TestCase):
         self.assertEqual(self.receipt.read_bytes(), prior)
 
     def test_present_but_missing_pending_prerequisite_is_not_inapplicable(self):
-        repo = Path(__file__).resolve().parents[1]
+        repo = historical_boundary_root(self)
         name = 'extensions/humanoid/skeleton/head/hair/groom.mojo'
         path = self.root/name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -533,6 +534,35 @@ class ProofBindingTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Stale or modified'):
                 self.verify()
             path.write_bytes(original)
+
+    def test_native_tool_dependencies_bind_generation_receipt_and_capture(self):
+        native_check.copy_native_tool_dependencies(native_check.ROOT, self.root)
+        self.regenerate()
+        self.envelope = loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.verify()
+        loops.check_capture_inputs(self.envelope, self.root, self.build)
+        checkpoint = json.loads((self.build/'generation-inputs.json').read_text())
+        for name in native_check.NATIVE_TOOL_DEPENDENCIES:
+            path = self.root/name
+            original = path.read_bytes()
+            self.assertEqual(checkpoint['root_inputs'][name], loops.sha256(original))
+            self.assertEqual(self.envelope['receipt']['root_inputs'][name],
+                             loops.sha256(original))
+            for mutation in ('changed', 'missing'):
+                with self.subTest(name=name, mutation=mutation):
+                    if mutation == 'changed':
+                        path.write_bytes(original + b'\n# changed dependency\n')
+                    else:
+                        path.unlink()
+                    try:
+                        with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+                            self.verify()
+                        with self.assertRaisesRegex(ValueError, 'Stale or modified capture input'):
+                            loops.check_capture_inputs(self.envelope, self.root, self.build)
+                    finally:
+                        path.write_bytes(original)
+        self.verify()
+        loops.check_capture_inputs(self.envelope, self.root, self.build)
 
     def test_changed_manifest_or_compiler_binding_is_rejected(self):
         for compiler, flags in [('other compiler', '-Werror'), ('Mojo fixture', '-O0')]:
@@ -1711,6 +1741,32 @@ class GuardedLoopTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX runtime alarm and capture groups')
 class NativeCheckerBoundaryTests(unittest.TestCase):
+    def test_native_tool_leaf_closure_is_exact_and_inventoried(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            native_check.copy_native_tool_dependencies(native_check.ROOT, root)
+            expected = {'core/__init__.mojo', 'core/search.mojo', 'core/binary.mojo'}
+            self.assertEqual({path.relative_to(root).as_posix()
+                              for path in root.rglob('*') if path.is_file()}, expected)
+            for name in expected:
+                self.assertEqual((root/name).read_bytes(),
+                                 (native_check.ROOT/name).read_bytes())
+            inputs = loops.maintained_inputs(root)
+            self.assertEqual(set(inputs), expected)
+            leaf = root/'core/search.mojo'
+            leaf.write_bytes(leaf.read_bytes() + b'\n# changed dependency\n')
+            self.assertNotEqual(loops.maintained_inputs(root)['core/search.mojo'],
+                                inputs['core/search.mojo'])
+
+    def test_native_tool_leaf_closure_requires_every_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, target = root/'source', root/'target'
+            native_check.copy_native_tool_dependencies(native_check.ROOT, source)
+            (source/'core/binary.mojo').unlink()
+            with self.assertRaises(FileNotFoundError):
+                native_check.copy_native_tool_dependencies(source, target)
+
     def test_runtime_alarm_is_first_and_stays_armed(self):
         body = native_check.PRODUCTION_DRIVER.split('def main() raises:\n', 1)[1]
         self.assertTrue(body.startswith('    assert_equal(external_call["alarm", UInt32](UInt32(5)), UInt32(0))\n'))

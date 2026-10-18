@@ -65,8 +65,10 @@ from extensions.humanoid.rig.joints import (
     HumanoidRig,
     Joint,
 )
-from math.quaternion import Quaternion
-from math.vector3 import Vector3
+from math.quaternion import Quaternion, append_quaternion
+from math.smoothstep import hermite_fade
+from math.utils import clamp
+from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import cos, exp, pi, sin
 from units.si import DEGREE, SECOND, Angle, Duration
 
@@ -117,10 +119,8 @@ struct Pose(Copyable, Movable):
         """
         var out = Pose()
         for j in range(JOINT_COUNT):  # pragma: no branch
-            out.angles[j] = (
-                self.angles[j] + (other.angles[j] - self.angles[j]) * t
-            )
-        out.lift = self.lift + (other.lift - self.lift) * t
+            out.angles[j] = mix_delta3(self.angles[j], other.angles[j], t)
+        out.lift = mix_delta3(self.lift, other.lift, t)
         return out^
 
 
@@ -183,18 +183,13 @@ def clip_from_poses(
         var values = List[Float32](capacity=4 * len(poses))
         for k in range(len(poses)):  # pragma: no branch
             var q = joint_rotation(poses[k].angles[j])
-            values.append(q.x)
-            values.append(q.y)
-            values.append(q.z)
-            values.append(q.w)
+            append_quaternion(values, q)
         tracks.append(KeyframeTrack(bones[j], QUATERNION, times, values^))
     var rest = rig.local(HIPS)
     var places = List[Float32](capacity=3 * len(poses))
     for k in range(len(poses)):  # pragma: no branch
         var p = rest + poses[k].lift
-        places.append(p.x)
-        places.append(p.y)
-        places.append(p.z)
+        append_vector3(places, p)
     tracks.append(KeyframeTrack(bones[HIPS.value], POSITION, times, places^))
     return AnimationClip(name, tracks^)
 
@@ -477,9 +472,9 @@ def jump_clip(bones: List[NodeId], rig: HumanoidRig) raises -> AnimationClip:
         while span < len(at) - 2 and t > at[span + 1]:
             span += 1
         var u = (t - at[span]) / (at[span + 1] - at[span])
-        u = min(Float32(1), max(Float32(0), u))
+        u = clamp(u, 0, 1)
         # Eased, so each key pose is held for a moment.
-        u = u * u * (3 - 2 * u)
+        u = hermite_fade(u)
         poses.append(keys[span].blend(keys[span + 1], u))
     return clip_from_poses("jump", bones, rig, poses, seconds)
 

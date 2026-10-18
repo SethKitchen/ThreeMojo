@@ -12,7 +12,13 @@ writer stores that cube as the scene's environment, and the reader
 builds its PMREM again. The picture is the ball that came back.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
+from tools._example_output import (
+    example_destination,
+    fill_and_key,
+    gallery_camera,
+    write_example,
+)
+
 from core.assets import Assets
 from core.background import cube_background
 from core.clock import Clock
@@ -20,7 +26,6 @@ from core.object3d import Object3D
 from core.scene import Scene
 from exporters.object_json import write_object_json
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
 from loaders.object_loader import load_object_json
 from materials.material import physical_material
 from math.vector3 import Vector3
@@ -33,9 +38,7 @@ from render.srgb import SRGB
 from render.texture import BILINEAR, CLAMP, Texture
 from renderers.renderer import Renderer, available_workers
 from std.os import remove
-from std.pathlib import Path
-from std.sys import argv, stderr
-from units.si import DEGREE, METER, Angle, Length, MILLISECOND
+from units.si import DEGREE, METER, Angle, Length
 
 comptime DEFAULT_OUTPUT = "out/environment.png"
 comptime WIDTH = 240
@@ -68,10 +71,7 @@ def solid_face(color: Color) raises -> Texture:
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
     var document = String(destination.removesuffix(".png")) + ".json"
 
     var assets = Assets()
@@ -101,11 +101,16 @@ def main() raises:
     scene.environment = sky
     var node = scene.add(Object3D())
     scene.add_mesh(Mesh(ball, metal, node))
-    var lamp = Object3D()
-    lamp.set_position(1.0, 1.4, 1.6)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
-    scene.add_light(directional_light(Color(255, 250, 240), lamp_node, 1.4))
+    fill_and_key(
+        scene,
+        1.0,
+        1.4,
+        1.6,
+        Color(255, 255, 255),
+        0.15,
+        Color(255, 250, 240),
+        1.4,
+    )
     scene.update()
     write_object_json(document, scene, assets)
 
@@ -115,13 +120,15 @@ def main() raises:
     remove(document)
     var subject = loaded.meshes[0].node
 
-    var camera = PerspectiveCamera(
-        Angle(38.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METER),
-        Length(40.0, METER),
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.3, 0.35, 2.8),
+        Vector3(0, 0, 0),
+        field_of_view=Angle(38.0, DEGREE),
+        near=Length(0.1, METER),
+        far=Length(40.0, METER),
     )
-    camera.place(Vector3(0.3, 0.35, 2.8), Vector3(0, 0, 0))
     var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frame_clock = Clock()
@@ -132,12 +139,4 @@ def main() raises:
         loaded.update()
         frames.append(renderer.render(loaded, loaded_assets, camera))
 
-    print(
-        '{"frames_ms": ',
-        frame_clock.elapsed().to(MILLISECOND),
-        "}",
-        sep="",
-        file=stderr,
-    )
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
-    print("Wrote", destination, "-", FRAMES, "frames")
+    write_example(frames, destination, DELAY_MS, FRAMES, frame_clock)

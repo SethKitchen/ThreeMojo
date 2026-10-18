@@ -11,6 +11,13 @@ The page is Muscles. A six-foot male right leg is drawn three times:
 bones only, untoned muscles, and toned muscles.
 """
 
+from tools._example_output import (
+    example_destination,
+    gallery_camera,
+    gallery_renderer,
+    warm_lamp,
+)
+
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import NodeId, Object3D
@@ -34,14 +41,12 @@ from extensions.humanoid.skeleton.look import (
     muscle_phong,
     tendon_phong,
 )
-from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
 from materials.material import MaterialId
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer, available_workers
+from renderers.renderer import Renderer
 from std.pathlib import Path
-from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/muscles.png"
@@ -146,17 +151,13 @@ def _add(
 
 
 def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
+    var destination = example_destination(String(DEFAULT_OUTPUT))
 
     var bones = HumanoidSpec(Length(6.0, FOOT), MALE, UNTONED)
     var untoned = HumanoidSpec(Length(6.0, FOOT), MALE, UNTONED)
     var toned = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
 
-    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
-    renderer.set_background(Color(18, 16, 14))
+    var renderer = gallery_renderer(WIDTH, HEIGHT, Color(18, 16, 14))
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))
@@ -213,19 +214,15 @@ def main() raises:
         tendon_paint,
     )
 
-    var lamp = Object3D()
-    lamp.set_position(0.55, 0.65, 1.1)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
-
-    var camera = PerspectiveCamera(
-        Angle(36.0, DEGREE),
-        Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(20.0, METER),
+    warm_lamp(scene, 0.55, 0.65, 1.1)
+    var camera = gallery_camera(
+        WIDTH,
+        HEIGHT,
+        Vector3(0.06, 0.06, 2.60),
+        Vector3(0.0, 0.02, 0.0),
+        field_of_view=Angle(36.0, DEGREE),
+        far=Length(20.0, METER),
     )
-    camera.place(Vector3(0.06, 0.06, 2.60), Vector3(0.0, 0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()

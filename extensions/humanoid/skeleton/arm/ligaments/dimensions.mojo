@@ -22,7 +22,8 @@ authored in template centimeters. They are not a cited width table.
     var d = arm_ligament_distance(dims, ANNULAR_LIGAMENT, RIGHT, p)
 """
 
-from extensions.humanoid.side import BodySide
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from extensions.humanoid.side import require_side, BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.field import reject
 from extensions.anatomy.soft_tissue import (
@@ -57,9 +58,7 @@ struct ArmLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= INTEROSSEOUS_MEMBRANE.value
+        return ordinal_valid(self.value, INTEROSSEOUS_MEMBRANE.value)
 
 
 comptime GLENOID_LABRUM = ArmLigament(0)
@@ -83,8 +82,6 @@ def arm_ligament_label(part: ArmLigament) -> String:
         A short American English label, or `"arm ligament"` when `part`
         is not named.
     """
-    if not part.is_valid():
-        return "arm ligament"
     var names = List[String]()
     names.append("glenoid labrum")
     names.append("articular cartilage")
@@ -94,7 +91,7 @@ def arm_ligament_label(part: ArmLigament) -> String:
     names.append("radial collateral ligament")
     names.append("annular ligament")
     names.append("interosseous membrane")
-    return names[part.value]
+    return ordinal_label(part.is_valid(), part.value, names, "arm ligament")
 
 
 def named_arm_ligaments() -> List[ArmLigament]:
@@ -122,8 +119,7 @@ def arm_ligament_tissue(part: ArmLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("An arm ligament must be a named part")
+    require_valid(part.is_valid(), "An arm ligament must be a named part")
     if part == GLENOID_LABRUM:
         return meniscus_tissue()
     if part == ARTICULAR_CARTILAGE:
@@ -150,8 +146,7 @@ def arm_ligament_field(
     """
     dimensions.validate()
     _ = arm_ligament_tissue(part)
-    if not side.is_valid():
-        raise Error("An arm side must be RIGHT or LEFT")
+    require_side(side, "An arm")
     var f = dimensions.frame
     var t = dimensions.torso.frame
     var g = shoulder_girdle(dimensions.torso)

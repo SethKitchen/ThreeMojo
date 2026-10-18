@@ -28,14 +28,23 @@ Loads and Associated Criteria for Buildings and Other Structures", table
 code and occupancy.
 """
 
-from std.math import isfinite
+from math.finite import require_positive_tolerance
+from math.norm import squared_length2
+from math.polygon_hit import ray_crosses
+from math.utils import clamp
 from extensions.building.ids import ElementId
-from extensions.building.kinds import BEAM, COLUMN, SpaceUse, WALL
+from extensions.building.kinds import (
+    BEAM,
+    COLUMN,
+    SpaceUse,
+    WALL,
+    require_space_use,
+)
 from extensions.building.material import BuildingMaterial
 from extensions.building.model import Building
 from extensions.structure.ids import LoadCaseId, MemberId, NodeId, ShellId
 from extensions.structure.kinds import UZ
-from extensions.structure.model import StructuralModel
+from extensions.structure.model import StructuralModel, require_gravity
 from extensions.topology.ids import FaceId
 from geometries.earcut import earcut
 from generators.utils import Vec3d
@@ -76,8 +85,7 @@ def live_load(use: SpaceUse) raises -> Pressure64:
     Raises:
         Error: If the use is not valid.
     """
-    if not use.is_valid():
-        raise Error("A space use is not valid")
+    require_space_use(use)
     var kpa: List[Float64] = [
         2.40,
         4.79,
@@ -125,14 +133,11 @@ struct StructuralViewOptions(ImplicitlyCopyable):
                 divisions are outside 0 to 16, or the gravity is negative
                 or not finite.
         """
-        var t = self.tolerance.to(METER)
-        if not (t > 0 and isfinite(t)):
-            raise Error("A tolerance must be positive and finite")
+        require_positive_tolerance(self.tolerance.to(METER))
         if self.shell_divisions < 0 or self.shell_divisions > _MAX_DIVISIONS:
             raise Error("The shell divisions must be from 0 to 16")
         var g = self.gravity.to(METER_PER_SECOND_SQUARED)
-        if not (g >= 0 and isfinite(g)):
-            raise Error("A gravity must be zero or more and finite")
+        require_gravity(g)
 
 
 def default_options() -> StructuralViewOptions:
@@ -202,11 +207,13 @@ def _plan_distance(p: Vec3d, a: Vec3d, b: Vec3d) -> Float64:
     """Return the plan distance from a point to a segment."""
     var dx = b.x - a.x
     var dy = b.y - a.y
-    var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)
-    t = max(0.0, min(1.0, t))
+    var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / squared_length2[
+        DType.float64
+    ](dx, dy)
+    t = clamp(t, 0.0, 1.0)
     var ex = a.x + t * dx - p.x
     var ey = a.y + t * dy - p.y
-    return (ex * ex + ey * ey) ** 0.5
+    return squared_length2[DType.float64](ex, ey) ** 0.5
 
 
 def _inside(polygon: List[Vec3d], p: Vec3d) -> Bool:
@@ -216,10 +223,8 @@ def _inside(polygon: List[Vec3d], p: Vec3d) -> Bool:
     for i in range(len(polygon)):  # pragma: no branch
         var a = polygon[i]
         var b = polygon[j]
-        if (a.y > p.y) != (b.y > p.y):
-            var x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
-            if p.x < x:
-                inside = not inside
+        if ray_crosses(a.x, a.y, b.x, b.y, p.x, p.y):
+            inside = not inside
         j = i
     return inside
 

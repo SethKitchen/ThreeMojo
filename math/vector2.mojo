@@ -6,26 +6,35 @@
 """A 2D vector, ported from three.js `src/math/Vector2.js`."""
 
 from math.matrix3 import Matrix3
-from math.utils import SeededRandom
-from math.vector3 import _js_round
-from math.norm import length2, normalized2, _ordinary_squared
+from math.polyline import (
+    PolylineVertex,
+    add_scaled,
+    angle_between,
+    clamp_to_length,
+    distance_between,
+    distance_between_squared,
+    lerp_between,
+    lerp_in_place,
+    scale_to_length,
+)
+from math.utils import SeededRandom, clamp, js_round
+from math.norm import dot2, length2, normalized2
 from std.math import (
-    acos,
     atan2,
     ceil,
     copysign,
     cos,
     floor,
+    isfinite,
     pi,
     sin,
-    sqrt,
     trunc,
 )
 from units.si import Angle, RADIAN
 
 
 @fieldwise_init
-struct Vector2(Equatable, ImplicitlyCopyable):
+struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
     """A point or direction in 2D space.
 
     The members are `Vector3`'s members, in two dimensions and for the same
@@ -42,7 +51,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
 
     def dot(self, other: Self) -> Float32:
         """Return the dot product of `self` and `other`."""
-        return self.x * other.x + self.y * other.y
+        return dot2[DType.float32](self.x, self.y, other.x, other.y)
 
     def cross(self, other: Self) -> Float32:
         """Return the z component of the cross product, which is the only
@@ -53,6 +62,14 @@ struct Vector2(Equatable, ImplicitlyCopyable):
     def length(self) -> Float32:
         """Return the Euclidean length of the vector."""
         return length2(self.x, self.y)
+
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x` and `y` are both finite.
+        """
+        return isfinite(self.x) and isfinite(self.y)
 
     def add(mut self, other: Self):
         """Add `other` into `self`, component-wise."""
@@ -168,7 +185,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             other: The vector to add.
             factor: What to scale it by first.
         """
-        self = self + other * factor
+        add_scaled(self, other, factor)
 
     def add_scalar(mut self, value: Float32):
         """Add one number to both components, three.js's `addScalar`.
@@ -211,8 +228,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Args:
             length: The new length.
         """
-        self.normalize()
-        self = self * length
+        scale_to_length(self, length)
 
     def angle(self) -> Angle:
         """Return the angle this vector makes with +x, three.js's `angle`.
@@ -241,27 +257,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             From zero to a half turn. A right angle if either vector is
             zero, as in three.js.
         """
-        var first_squared = self.length_sq()
-        var second_squared = other.length_sq()
-        var product = first_squared * second_squared
-        var theta: Float32
-        if (
-            _ordinary_squared(first_squared)
-            and _ordinary_squared(second_squared)
-            and _ordinary_squared(product)
-        ):
-            theta = self.dot(other) / sqrt(product)
-        else:
-            var first = self
-            var second = other
-            first.normalize()
-            second.normalize()
-            if (first.x == 0 and first.y == 0) or (
-                second.x == 0 and second.y == 0
-            ):
-                return Angle(Float32(pi / 2), RADIAN)
-            theta = first.dot(second)
-        return Angle(acos(max(Float32(-1), min(Float32(1), theta))), RADIAN)
+        return angle_between(self, other)
 
     def distance_to(self, other: Self) -> Float32:
         """Return the distance between two points, three.js's `distanceTo`.
@@ -272,7 +268,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Returns:
             The Euclidean distance.
         """
-        return (self - other).length()
+        return distance_between(self, other)
 
     def distance_to_squared(self, other: Self) -> Float32:
         """Return the squared distance between two points, three.js's
@@ -284,7 +280,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Returns:
             The squared Euclidean distance.
         """
-        return (self - other).length_sq()
+        return distance_between_squared(self, other)
 
     def manhattan_distance_to(self, other: Self) -> Float32:
         """Return the distance between two points along the axes,
@@ -305,8 +301,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             other: The vector to move toward.
             alpha: Zero stays, one arrives.
         """
-        self.x += (other.x - self.x) * alpha
-        self.y += (other.y - self.y) * alpha
+        lerp_in_place(self, other, alpha)
 
     def lerp_vectors(mut self, start: Self, end: Self, alpha: Float32):
         """Set this vector a fraction of the way from `start` to `end`,
@@ -317,10 +312,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             end: The vector at an `alpha` of one.
             alpha: How far along.
         """
-        self = Vector2(
-            start.x + (end.x - start.x) * alpha,
-            start.y + (end.y - start.y) * alpha,
-        )
+        lerp_between(self, start, end, alpha)
 
     def apply_matrix3(mut self, matrix: Matrix3):
         """Transform this point by a 2D affine matrix, three.js's
@@ -337,7 +329,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Args:
             other: The other vector.
         """
-        self = Vector2(min(self.x, other.x), min(self.y, other.y))
+        self = component_min(self, other)
 
     def max(mut self, other: Self):
         """Keep the larger of each pair of components, three.js's `max`.
@@ -345,7 +337,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         Args:
             other: The other vector.
         """
-        self = Vector2(max(self.x, other.x), max(self.y, other.y))
+        self = component_max(self, other)
 
     def clamp(mut self, low: Self, high: Self):
         """Hold each component between the two vectors' components,
@@ -356,7 +348,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             high: The largest. Where it is below `low`, `low` wins.
         """
         self = Vector2(
-            max(low.x, min(high.x, self.x)), max(low.y, min(high.y, self.y))
+            clamp(self.x, low.x, high.x), clamp(self.y, low.y, high.y)
         )
 
     def clamp_scalar(mut self, low: Float32, high: Float32):
@@ -377,12 +369,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
             low: The shortest length.
             high: The longest.
         """
-        var length = self.length()
-        if _ordinary_squared(self.length_sq()):
-            self = self / length * max(low, min(high, length))
-        else:
-            self.normalize()
-            self = self * max(low, min(high, length))
+        clamp_to_length(self, low, high)
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.
@@ -411,7 +398,7 @@ struct Vector2(Equatable, ImplicitlyCopyable):
     def round(mut self):
         """Round each component to the nearest whole number, a half up,
         three.js's `round`."""
-        self = Vector2(_js_round(self.x), _js_round(self.y))
+        self = Vector2(js_round(self.x), js_round(self.y))
 
     def round_to_zero(mut self):
         """Drop each component's fraction, three.js's `roundToZero`."""
@@ -444,3 +431,89 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         var x = generator.float_in(0, 1)
         var y = generator.float_in(0, 1)
         return Vector2(x, y)
+
+
+def component_min(a: Vector2, b: Vector2) -> Vector2:
+    """Return the smaller of each component, three.js's `min`.
+
+    Args:
+        a: One vector.
+        b: The other vector.
+
+    Returns:
+        The smaller components.
+    """
+    return Vector2(min(a.x, b.x), min(a.y, b.y))
+
+
+def component_max(a: Vector2, b: Vector2) -> Vector2:
+    """Return the larger of each component, three.js's `max`.
+
+    Args:
+        a: One vector.
+        b: The other vector.
+
+    Returns:
+        The larger components.
+    """
+    return Vector2(max(a.x, b.x), max(a.y, b.y))
+
+
+def weighted_sum2(
+    a: Vector2,
+    b: Vector2,
+    c: Vector2,
+    weight_a: Float32,
+    weight_b: Float32,
+    weight_c: Float32,
+) -> Vector2:
+    """Return three pairs mixed by their weights.
+
+    Each product is formed, then added, in `a`, `b`, `c` order.
+
+    Args:
+        a: The first pair.
+        b: The second pair.
+        c: The third pair.
+        weight_a: The first weight.
+        weight_b: The second weight.
+        weight_c: The third weight.
+
+    Returns:
+        `a * weight_a + b * weight_b + c * weight_c`.
+    """
+    return a * weight_a + b * weight_b + c * weight_c
+
+
+def vector2_from_float64(x: Float64, y: Float64) -> Vector2:
+    """Return a `Vector2` from two `Float64` components.
+
+    Each component is rounded to `Float32`.
+
+    Error: Never.
+
+    Args:
+        x: The first component.
+        y: The second component.
+
+    Returns:
+        The rounded vector.
+
+    """
+    return Vector2(Float32(x), Float32(y))
+
+
+def append_vector2(mut values: List[Float32], point: Vector2):
+    """Append `point`'s two components.
+
+    Nothing. Two numbers are appended.
+
+    Error: Never.
+
+    Args:
+        values: The list that receives x and y.
+        point: The vector.
+
+    """
+    values.append(point.x)
+    values.append(point.y)

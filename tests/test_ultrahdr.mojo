@@ -23,6 +23,7 @@ from std.testing import (
     assert_true,
 )
 
+from core.binary import copy_byte_range, copy_bytes, store_big_endian
 from loaders.json import parse_json
 from loaders.ultrahdr import (
     XMP_NAMESPACE,
@@ -112,9 +113,9 @@ def test_refusals() raises:
         _ = apply_gain_map(_image(2, 2, 0), _image(2, 2, 0), metadata)
     var good = Path("assets/ultrahdr/same.jpg").read_bytes()
     with assert_raises(contains="SOI"):
-        _ = parse_ultrahdr(List[UInt8](good[2:]))
+        _ = parse_ultrahdr(copy_byte_range(good, 2, len(good)))
     # A plain JPEG file: no version and no MPF index.
-    var plain = List[UInt8](good[0:2])
+    var plain = copy_bytes(good, 0, 2)
     plain.extend([UInt8(0xFF), 0xD9, 0, 0])
     with assert_raises(contains="no hdrgm:Version"):
         _ = parse_ultrahdr(plain)
@@ -126,7 +127,7 @@ def _segment(marker: Int, payload: List[UInt8]) -> List[UInt8]:
     var length = len(payload) + 2
     out.append(UInt8(length >> 8))
     out.append(UInt8(length & 255))
-    out.extend(payload.copy())
+    out.extend(Span(payload))
     return out^
 
 
@@ -157,8 +158,7 @@ def _mpf(primary_size: Int, gain_size: Int, gain_offset: Int) -> List[UInt8]:
     for i in range(len(head)):
         payload[i] = head[i]
     for pair in [(58, primary_size), (74, gain_size), (78, gain_offset)]:
-        for k in range(4):
-            payload[pair[0] + k] = UInt8((pair[1] >> (24 - 8 * k)) & 255)
+        store_big_endian(payload, pair[0], pair[1], 4)
     return _segment(0xE2, payload)
 
 

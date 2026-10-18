@@ -15,8 +15,24 @@ real-valued height.
 from extensions.water.field import ComplexField, complex_mul
 from extensions.water.random import Mulberry32
 from extensions.water.resolution import require_resolution, SpectrumResolution
+from math.norm import squared_length2
 from std.math import cos, exp, floor, hypot, log, sin, sqrt
 from units.si import SECOND, Duration, Length
+
+
+def require_ocean_patch(length: Float32) raises:
+    """Refuse an ocean patch whose length is not positive.
+
+    Nothing. The call returns when the length is positive.
+
+    Args:
+        length: The patch length, in meters.
+
+    Raises:
+        Error: If the length is not positive.
+    """
+    if length <= 0.0:
+        raise Error("Ocean patch length must be positive")
 
 
 def clearwater_patch() -> Length:
@@ -120,8 +136,7 @@ def build_spectrum(
     Raises:
         Error: If the resolution, the patch or the slope is not valid.
     """
-    if patch.value <= 0.0:
-        raise Error("Ocean patch length must be positive")
+    require_ocean_patch(patch.value)
     if target_slope <= 0.0:
         raise Error("Ocean target slope must be positive")
     require_resolution(resolution)
@@ -142,7 +157,7 @@ def build_spectrum(
             var i = y * n + x
             re[i] = draw_re
             im[i] = draw_im
-            s2 += 2.0 * k * k * (draw_re * draw_re + draw_im * draw_im)
+            s2 += 2.0 * k * k * squared_length2[DType.float32](draw_re, draw_im)
     var scale = target_slope / sqrt(s2)
     var field = ComplexField(resolution)
     for y in range(n):  # pragma: no branch
@@ -181,8 +196,7 @@ def evolve_spectrum(
     Raises:
         Error: If `patch` is not positive, or the grid size is not valid.
     """
-    if patch.value <= 0.0:
-        raise Error("Ocean patch length must be positive")
+    require_ocean_patch(patch.value)
     var resolution = SpectrumResolution(spectrum.n)
     var out = ComplexField(resolution)
     var length = patch.value

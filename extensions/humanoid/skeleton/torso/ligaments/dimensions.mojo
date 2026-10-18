@@ -18,7 +18,8 @@ cited width table.
     var d = torso_ligament_distance(dims, INTERVERTEBRAL_DISCS, RIGHT, p)
 """
 
-from extensions.humanoid.side import RIGHT, BodySide
+from core.ordinal import ordinal_valid, require_valid
+from extensions.humanoid.side import require_side, RIGHT, BodySide
 from extensions.humanoid.skeleton.field import mix_point
 from extensions.anatomy.soft_tissue import (
     SoftTissue,
@@ -57,9 +58,7 @@ struct TorsoLigament(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named part."""
-        if self.value < 0:
-            return False
-        return self.value <= CORACOCLAVICULAR_LIGAMENT.value
+        return ordinal_valid(self.value, CORACOCLAVICULAR_LIGAMENT.value)
 
 
 comptime INTERVERTEBRAL_DISCS = TorsoLigament(0)
@@ -73,6 +72,20 @@ comptime ACROMIOCLAVICULAR_JOINT = TorsoLigament(5)
 # The conoid and trapezoid ligaments, from the coracoid up to the
 # clavicle.
 comptime CORACOCLAVICULAR_LIGAMENT = TorsoLigament(6)
+
+
+def require_torso_ligament(part: TorsoLigament) raises:
+    """Refuse a torso ligament that is not named.
+
+    Nothing. The call returns when the part is named.
+
+    Args:
+        part: The part.
+
+    Raises:
+        Error: If the part is not named.
+    """
+    require_valid(part.is_valid(), "A torso ligament must be a named part")
 
 
 def torso_ligament_field(
@@ -93,8 +106,7 @@ def torso_ligament_field(
             not named, or if `side` is not valid.
     """
     dimensions.validate()
-    if not side.is_valid():
-        raise Error("A torso side must be RIGHT or LEFT")
+    require_side(side, "A torso")
     var paired = is_paired_ligament(part)
     var f = dimensions.frame
     var sweeps = List[Sweep]()
@@ -235,8 +247,7 @@ def is_paired_ligament(part: TorsoLigament) raises -> Bool:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso ligament must be a named part")
+    require_torso_ligament(part)
     return (
         part == COSTAL_CARTILAGES or part.value >= STERNOCLAVICULAR_JOINT.value
     )
@@ -256,8 +267,7 @@ def torso_ligament_tissue(part: TorsoLigament) raises -> SoftTissue:
     Raises:
         Error: If `part` is not named.
     """
-    if not part.is_valid():
-        raise Error("A torso ligament must be a named part")
+    require_torso_ligament(part)
     if part == INTERVERTEBRAL_DISCS or part == STERNOCLAVICULAR_JOINT:
         return meniscus_tissue()
     if part == COSTAL_CARTILAGES:

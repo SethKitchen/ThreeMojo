@@ -71,6 +71,10 @@ one launch a step. Both backends call `run_statements` on a
 `ComputeSource`, so the two agree to the float.
 """
 
+from core.ordinal import index_in_count
+
+from core.extent import require_positive_extent, require_texel_count
+from core.ordinal import require_valid, require_positive
 from materials.compute_ids import (
     ATOMIC_ADD,
     ATOMIC_AND,
@@ -110,7 +114,7 @@ from materials.nodes import (
 )
 from math.vector3 import Vector3
 from postprocessing.sampling import Untracked
-from render.framebuffer import FloatColor
+from render.framebuffer import FloatColor, OPAQUE_WHITE
 from render.texture import NEAREST, Texture, float_texture
 from std.memory import bitcast
 
@@ -181,8 +185,7 @@ struct StorageBuffer(Copyable, Movable):
             Error: If `count` is not positive or `type` is not a `float` or
                 a vector.
         """
-        if count <= 0:
-            raise Error("A storage buffer needs one element or more")
+        require_positive(count, "A storage buffer needs one element or more")
         self.type = type
         self.count = count
         self.array = List[Float32](length=count * _width(type), fill=0)
@@ -331,8 +334,7 @@ struct StorageBufferStore(Movable):
         Raises:
             Error: If a size is not positive.
         """
-        if width <= 0 or height <= 0:
-            raise Error("A storage texture needs a size")
+        require_positive_extent(width, height, "A storage texture needs a size")
         var texels = self.instanced_array(width * height, NODE_VEC4)
         return StorageTexture(texels, width, height)
 
@@ -340,7 +342,7 @@ struct StorageBufferStore(Movable):
         """Refuse a node that names no buffer of this store, or names one as
         another type."""
         var id = node.buffer.value
-        if id < 0 or id >= len(self.buffers):
+        if not index_in_count(id, len(self.buffers)):
             raise Error("A storage buffer store has no buffer " + String(id))
         if self.buffers[id].type != node.type:
             raise Error(
@@ -400,8 +402,13 @@ struct StorageBufferStore(Movable):
                 texture's size.
         """
         var texels = self.array(texture.texels)
-        if len(texels) != texture.width * texture.height * 4:
-            raise Error("A storage texture's buffer is not its size")
+        require_texel_count(
+            len(texels),
+            texture.width,
+            texture.height,
+            4,
+            "A storage texture's buffer is not its size",
+        )
         return float_texture(
             texture.width, texture.height, texels^, filter=NEAREST
         )
@@ -430,6 +437,20 @@ def _zero_of(mut graph: NodeGraph, type: ValueType, x: Float32) -> NodeRef:
     if type == NODE_VEC4:
         return graph.vec4(x, x, x, x)
     return graph.float(x)
+
+
+def require_invocation_count(count: Int) raises:
+    """Refuse a compute run of no invocations.
+
+    Nothing. The call returns when the count is one or more.
+
+    Args:
+        count: How many invocations run.
+
+    Raises:
+        Error: If the count is not positive.
+    """
+    require_positive(count, "A compute node runs one invocation or more")
 
 
 struct ComputeKernel(Movable):
@@ -619,8 +640,7 @@ struct ComputeKernel(Movable):
                 a vector.
         """
         _ = _width(type)
-        if count <= 0:
-            raise Error("A workgroup array needs one element or more")
+        require_positive(count, "A workgroup array needs one element or more")
         self._array_types.append(type)
         self._array_counts.append(count)
         return WorkgroupArrayNode(
@@ -634,8 +654,10 @@ struct ComputeKernel(Movable):
             Error: If the node names a buffer there cannot be, or names a
                 buffer the kernel names as another type.
         """
-        if not buffer.buffer.is_valid():
-            raise Error("A storage node names no buffer there can be")
+        require_valid(
+            buffer.buffer.is_valid(),
+            "A storage node names no buffer there can be",
+        )
         _ = _width(buffer.type)
         for index in range(len(self._buffers)):
             if self._buffers[index].buffer == buffer.buffer:
@@ -926,8 +948,9 @@ struct ComputeKernel(Movable):
                 `float`s, a node is not a `float` of the graph, or a
                 `graph.Loop` is open.
         """
-        if not op.is_valid():
-            raise Error("An atomic function names no function there is")
+        require_valid(
+            op.is_valid(), "An atomic function names no function there is"
+        )
         self._note(buffer)
         if buffer.type != NODE_FLOAT:
             raise Error("An atomic function reads a buffer of floats")
@@ -1513,16 +1536,16 @@ struct ComputeKernel(Movable):
             Error: If a count is out of range, the kernel has no statement,
                 or the graph is refused (see `NodeGraph.compile_roots`).
         """
-        if count <= 0:
-            raise Error("A compute node runs one invocation or more")
+        require_invocation_count(count)
         if workgroup_size <= 0 or workgroup_size > MAX_WORKGROUP_SIZE:
             raise Error(
                 "A workgroup has one to "
                 + String(MAX_WORKGROUP_SIZE)
                 + " invocations"
             )
-        if len(self._statements) == 0:
-            raise Error("A compute kernel needs a statement")
+        require_positive(
+            len(self._statements), "A compute kernel needs a statement"
+        )
         var roots = List[NodeRef]()
         for at in range(len(self._statements)):  # pragma: no branch
             ref statement = self._statements[at]
@@ -1648,8 +1671,7 @@ struct ComputeNode(Copyable, Movable):
         Raises:
             Error: If `count` is not positive.
         """
-        if count <= 0:
-            raise Error("A compute node runs one invocation or more")
+        require_invocation_count(count)
         self.count = count
 
     def workgroups(self) -> Int:
@@ -1748,7 +1770,7 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         Returns:
             White.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
@@ -1764,7 +1786,7 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         Returns:
             White.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: a compute program reads no texture.
@@ -1778,7 +1800,7 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
         Returns:
             White.
         """
-        return FloatColor(1.0, 1.0, 1.0, 1.0)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> Lanes:
         """Return ones: a compute program reads no texture.
@@ -2135,7 +2157,7 @@ def pack_storage(
         regions.append(Int32(len(memory)))
         regions.append(Int32(buffer.count))
         regions.append(Int32(buffer.type.value))
-        memory.extend(buffer.array.copy())
+        memory.extend(Span(buffer.array))
     for at in range(len(node.array_types)):
         var width = node.array_types[at].value
         regions.append(Int32(len(memory)))

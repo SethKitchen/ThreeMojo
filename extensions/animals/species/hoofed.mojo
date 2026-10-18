@@ -4,11 +4,12 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Helpers the hoofed species share: the horse, the cow, the deer, the
-goat, the sheep and the pig.
+goat, the sheep, the pig and the boar.
 
 Their heads are modeled along their own axis, pitched nose down in the
 bind pose. `HeadFrame` is their `hl` and `hdir`. Their skeleton is the
-standard quadruped with a hoof bone below each pastern.
+standard quadruped with a hoof bone below each pastern. `add_cloven_hoof`
+builds the two-claw hoof the goat, the sheep and the boar share.
 """
 
 from extensions.sdf.ids import (
@@ -17,14 +18,55 @@ from extensions.sdf.ids import (
 )
 from extensions.animals.parts import BODY
 from extensions.animals.kit import EyeSpec
-from extensions.animals.rig import Rig, add_sided
+from extensions.animals.rig import (
+    Rig,
+    add_axial_bones,
+    add_digitigrade_limbs,
+    add_sided,
+    add_tail_bones,
+)
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
+    clamp,
     dot,
+    length,
     normalize,
 )
 from std.math import asin, atan2, cos, pi, sin
+
+
+@fieldwise_init
+struct HornPoint(ImplicitlyCopyable):
+    """One station of a horn's center line: where, how thick, how far."""
+
+    var p: V3
+    var r: Float64
+    var t: Float64
+
+
+def horn_parameter(path: List[HornPoint], point: V3) -> Float64:
+    """Return how far along the nearer horn a point lies.
+
+    Args:
+        path: Stations from the horn's base to its tip. `t` runs from 0
+            to 1.
+        point: The sample, in the same space as the stations.
+
+    Returns:
+        0 at the base and 1 at the tip. An empty path returns 0.
+    """
+    var best = 1e9
+    var at = 0.0
+    for i in range(len(path) - 1):
+        var a = path[i].p
+        var ab = path[i + 1].p - a
+        var u = clamp(dot(point - a, ab) / dot(ab, ab), 0.0, 1.0)
+        var dd = length(point - (a + ab * u))
+        if dd < best:
+            best = dd
+            at = path[i].t + (path[i + 1].t - path[i].t) * u
+    return at
 
 
 @fieldwise_init
@@ -242,33 +284,11 @@ def hoofed_bones(mut rig: Rig, tail_segs: Int, snout: Bool = False) raises:
     Raises:
         Error: If a joint is missing.
     """
-    _ = rig.add_bone("pelvis", "lumbosacral", "tailBase", "")
-    _ = rig.add_bone("spine1", "lumbosacral", "lumbarMid", "pelvis")
-    _ = rig.add_bone("spine2", "lumbarMid", "thoraxRear", "spine1")
-    _ = rig.add_bone("spine3", "thoraxRear", "chestMid", "spine2")
-    _ = rig.add_bone("chest", "chestMid", "neckBase", "spine3")
-    _ = rig.add_bone("neck1", "neckBase", "neckMid", "chest")
-    _ = rig.add_bone("neck2", "neckMid", "occiput", "neck1")
-    _ = rig.add_bone("head", "occiput", "nose", "neck2")
+    add_axial_bones(rig)
     _ = rig.add_bone("jaw", "jawHinge", "jawTip", "head")
     add_sided(rig, "ear{S}", "earBase{S}", "earTip{S}", "head")
-    add_sided(rig, "scapula{S}", "scapTop{S}", "shoulder{S}", "chest")
-    add_sided(rig, "humerus{S}", "shoulder{S}", "elbow{S}", "scapula{S}")
-    add_sided(rig, "radius{S}", "elbow{S}", "wrist{S}", "humerus{S}")
-    add_sided(rig, "metacarpus{S}", "wrist{S}", "mcp{S}", "radius{S}")
-    add_sided(rig, "fpaw{S}", "mcp{S}", "fcoffin{S}", "metacarpus{S}")
-    add_sided(rig, "femur{S}", "hip{S}", "knee{S}", "pelvis")
-    add_sided(rig, "tibia{S}", "knee{S}", "hock{S}", "femur{S}")
-    add_sided(rig, "metatarsus{S}", "hock{S}", "mtp{S}", "tibia{S}")
-    add_sided(rig, "hpaw{S}", "mtp{S}", "hcoffin{S}", "metatarsus{S}")
-    for i in range(tail_segs):
-        var parent = String("pelvis") if i == 0 else "tail" + String(i - 1)
-        _ = rig.add_bone(
-            "tail" + String(i),
-            "tail" + String(i),
-            "tail" + String(i + 1),
-            parent,
-        )
+    add_digitigrade_limbs(rig, "fcoffin{S}", "hcoffin{S}")
+    add_tail_bones(rig, tail_segs)
     if snout:
         _ = rig.add_bone("snout", "snoutBase", "nose", "head")
     add_sided(rig, "fhoof{S}", "fcoffin{S}", "ftoe{S}", "fpaw{S}")
@@ -328,3 +348,110 @@ def lens_distance(
     var a = (u * u + (v + d) * (v + d)) ** 0.5 - big_r
     var b = (u * u + (v - d) * (v - d)) ** 0.5 - big_r
     return max(a, b)
+
+
+@fieldwise_init
+struct ClovenHoof(ImplicitlyCopyable):
+    """Sizes of a two-claw hoof, in meters when the foot width is one.
+
+    The shape is fixed: two claws, heel bulbs, a coronet, a cleft and a
+    flat sole. A species fills in its own sizes.
+    """
+
+    var spread: Float64
+    var toe_inset: Float64
+    var toe_height: Float64
+    var toe_back: Float64
+    var wall_root: Float64
+    var wall_tip: Float64
+    var heel_back: Float64
+    var heel_root: Float64
+    var heel_tip: Float64
+    var heel_forward: Float64
+    var bulb_height: Float64
+    var bulb_back: Float64
+    var bulb_radius: Float64
+    var coronet_radius: Float64
+    var cleft_forward: Float64
+    var cleft_length: Float64
+
+
+def add_cloven_hoof(
+    mut m: SdfModel,
+    bone: BoneId,
+    coronet: V3,
+    toe: V3,
+    width: Float64,
+    hoof: ClovenHoof,
+) raises:
+    """Add a two-claw hoof, flat on the ground.
+
+    Args:
+        m: The sculpt.
+        bone: The hoof bone.
+        coronet: The top of the hoof, where it meets the pastern.
+        toe: The toe joint, ahead of `coronet`.
+        width: The foot's width scale.
+        hoof: The species' sizes.
+
+    Raises:
+        Error: If the sculpt refuses a primitive.
+    """
+    var zc = (coronet.z + toe.z) * 0.5
+    for k in [1.0, -1.0]:  # pragma: no branch
+        var x = coronet.x + hoof.spread * k * width
+        var top = V3(x, coronet.y + 0.008, coronet.z - 0.004)
+        var tip = V3(
+            x - hoof.toe_inset * k, hoof.toe_height, toe.z - hoof.toe_back
+        )
+        var heel = V3(x, 0.008, coronet.z - hoof.heel_back)
+        _ = m.cone(
+            "hoof",
+            bone,
+            top,
+            tip,
+            hoof.wall_root * width,
+            hoof.wall_tip * width,
+            k=0.006,
+        )
+        _ = m.cone(
+            "hoof",
+            bone,
+            heel,
+            V3(tip.x, 0.006, zc + hoof.heel_forward),
+            hoof.heel_root * width,
+            hoof.heel_tip * width,
+            k=0.008,
+        )
+        _ = m.sphere(
+            "heelbulb",
+            bone,
+            V3(x, hoof.bulb_height, coronet.z - hoof.bulb_back),
+            hoof.bulb_radius * width,
+            k=0.008,
+        )
+    _ = m.cone(
+        "coronet",
+        bone,
+        coronet + V3(0, 0.012, -0.01),
+        coronet + V3(0, 0.006, 0.008),
+        hoof.coronet_radius * width,
+        hoof.coronet_radius * width,
+        k=0.008,
+    )
+    _ = m.ell(
+        "cleft",
+        bone,
+        V3(coronet.x, 0.006, zc + hoof.cleft_forward),
+        V3(0.0022, 0.02, hoof.cleft_length),
+        k=0.002,
+        carve=True,
+    )
+    _ = m.ell(
+        "sole",
+        bone,
+        V3(coronet.x, -0.1 + 0.001, zc),
+        V3(0.1, 0.1, 0.1),
+        k=0.002,
+        carve=True,
+    )

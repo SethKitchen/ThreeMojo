@@ -25,7 +25,7 @@ off and leaves its matrix the identity. three.js draws it yellow.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from math.bounds import Box3
-from math.vector3 import Vector3
+from math.vector3 import Vector3, append_vector3
 from render.framebuffer import Color
 
 # three.js's default `BoxHelper` color, `0xffff00`.
@@ -108,6 +108,4 @@ def append_box_edges(mut positions: List[Float32], box: Box3):
     ]
     for index in range(len(edges)):  # pragma: no branch
         var corner = corners[edges[index]]
-        positions.append(corner.x)
-        positions.append(corner.y)
-        positions.append(corner.z)
+        append_vector3(positions, corner)

@@ -31,6 +31,7 @@ This is not a three.js port. See Extensions.
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
+from core.ordinal import require_positive
 from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.genome import (
     EAR_LOBE,
@@ -55,14 +56,15 @@ from extensions.humanoid.skeleton.head.face_model import (
 )
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from extensions.humanoid.skeleton.mesh_field import MeshField
-from extensions.humanoid.skeleton.morph import bump, smoothstep
+from extensions.humanoid.skeleton.morph import bump
+from math.smoothstep import clamped_smoothstep
 from extensions.humanoid.skeleton.sculpt import box_gap
 from extensions.humanoid.skeleton.surface_nets import (
     finish_surface,
     project_to_surface,
     surface_gradient,
 )
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3, append_vector3
 from std.math import cos, max, min, sin
 
 # Where the scan's frame lands on the template, in template cm: the
@@ -193,7 +195,7 @@ def ear_weight(point: Vector3) -> Float32:
         The weight, zero through one.
     """
     var side = Vector3(abs(point.x), point.y, point.z)
-    return smoothstep(EAR_ROOT_IN, EAR_ROOT_OUT, side.x) * bump(
+    return clamped_smoothstep(EAR_ROOT_IN, EAR_ROOT_OUT, side.x) * bump(
         side, EAR_MIDDLE, EAR_REACH
     )
 
@@ -225,7 +227,9 @@ def warp_ear(
         q.y,
         q.x * sin(turn) + q.z * cos(turn),
     )
-    q.y -= Float32(0.35) * lobe * w * (1 - smoothstep(66.5, 68.5, point.y))
+    q.y -= (
+        Float32(0.35) * lobe * w * (1 - clamped_smoothstep(66.5, 68.5, point.y))
+    )
     var p = q + EAR_ROOT
     return Vector3(side * p.x, p.y, p.z)
 
@@ -299,7 +303,7 @@ def fit_over[
         var limits = List[Float32](length=end, fill=3.0e38)
         var short = False
         for v in range(end):  # pragma: no branch
-            var up = smoothstep(sink_low, sink_high, points[v].y)
+            var up = clamped_smoothstep(sink_low, sink_high, points[v].y)
             var goal = margin * up - sink * (1 - up)
             var need = goal - hull.distance(points[v])
             # A vertex off its goal by more than the margin needs another
@@ -522,8 +526,8 @@ def place(
         var other = model.shape(identity, rest, count)
         for v in range(len(shape)):  # pragma: no branch
             var y = scan_to_template(shape[v]).y
-            var k = smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
-            shape[v] = shape[v] + (other[v] - shape[v]) * k
+            var k = clamped_smoothstep(IDENTITY_FROM, IDENTITY_TO, y)
+            shape[v] = mix_delta3(shape[v], other[v], k)
     var points = List[Vector3](capacity=len(shape))
     for p in shape:  # pragma: no branch
         var t = warp_ear(scan_to_template(p), size, protrusion, lobe)
@@ -759,12 +763,11 @@ def scan_skin_mesh[
                 remap[v] = len(points)
                 var p = placed[v]
                 points.append(p)
-                positions.append(p.x)
-                positions.append(p.y)
-                positions.append(p.z)
+                append_vector3(positions, p)
             indices.append(remap[v])
-    if len(indices) == 0:
-        raise Error("No part of the scanned head lies above the floor")
+    require_positive(
+        len(indices), "No part of the scanned head lies above the floor"
+    )
     var sums = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
     for t in range(0, len(indices), 3):  # pragma: no branch
         var a = points[indices[t]]
@@ -784,9 +787,7 @@ def scan_skin_mesh[
             var w = max(Float32(0), rise)
             n = n * w + g * (1 - w)
             n.normalize()
-        normals.append(n.x)
-        normals.append(n.y)
-        normals.append(n.z)
+        append_vector3(normals, n)
     var surface = finish_surface(
         positions^, normals^, indices.copy(), low.y, high.y - low.y
     )
@@ -851,7 +852,7 @@ def rig_expressions(
     var still = _area_normals(points, indices)
     var fade = List[Float32](capacity=len(points))
     for p in points:  # pragma: no branch
-        fade.append(smoothstep(floor, floor + h.cm(RIG_FADE), p.y))
+        fade.append(clamped_smoothstep(floor, floor + h.cm(RIG_FADE), p.y))
     surface.morph_relative = True
     for name in shapes:  # pragma: no branch
         var weights = rest_expression(model)

@@ -27,6 +27,8 @@ This is not a three.js port. See Extensions.
     face.add_viseme(OH, 1.0)
     face.apply(scene.meshes[skin])
 """
+from core.ordinal import ordinal_valid, ordinal_label, require_valid
+from math.utils import clamp
 
 from objects.mesh import Mesh
 
@@ -44,7 +46,7 @@ struct FacialExpression(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named expression."""
-        return self.value >= 0 and self.value <= FEAR.value
+        return ordinal_valid(self.value, FEAR.value)
 
 
 comptime NEUTRAL = FacialExpression(0)
@@ -70,7 +72,7 @@ struct Viseme(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named viseme."""
-        return self.value >= 0 and self.value <= OU.value
+        return ordinal_valid(self.value, OU.value)
 
 
 # Silence: the mouth at rest.
@@ -125,9 +127,9 @@ def facial_expression_label(expression: FacialExpression) -> String:
         "disgust",
         "fear",
     ]
-    if not expression.is_valid():
-        return "facial expression"
-    return names[expression.value]
+    return ordinal_label(
+        expression.is_valid(), expression.value, names, "facial expression"
+    )
 
 
 def named_facial_expressions() -> List[FacialExpression]:
@@ -169,9 +171,7 @@ def viseme_label(viseme: Viseme) -> String:
         "oh",
         "ou",
     ]
-    if not viseme.is_valid():
-        return "viseme"
-    return names[viseme.value]
+    return ordinal_label(viseme.is_valid(), viseme.value, names, "viseme")
 
 
 def named_visemes() -> List[Viseme]:
@@ -215,8 +215,9 @@ def expression_recipe(
     Raises:
         Error: If `expression` is not named.
     """
-    if not expression.is_valid():
-        raise Error("A facial expression must be a named expression")
+    require_valid(
+        expression.is_valid(), "A facial expression must be a named expression"
+    )
     var r = List[ShapeWeight]()
     if expression == SMILE:
         # Action units 6 and 12: the cheeks raised and the corners of
@@ -290,8 +291,7 @@ def viseme_recipe(viseme: Viseme) raises -> List[ShapeWeight]:
     Raises:
         Error: If `viseme` is not named.
     """
-    if not viseme.is_valid():
-        raise Error("A viseme must be a named viseme")
+    require_valid(viseme.is_valid(), "A viseme must be a named viseme")
     var r = List[ShapeWeight]()
     if viseme == PP:
         _both(r, "mouthPress", 0.7)
@@ -475,5 +475,5 @@ struct FaceWeights(Copyable, Movable):
         for k in range(len(self.shapes)):  # pragma: no branch
             mesh.set_morph_influence(
                 self.shapes[k],
-                min(Float32(1), max(Float32(0), self.weights[k])),
+                clamp(self.weights[k], 0, 1),
             )

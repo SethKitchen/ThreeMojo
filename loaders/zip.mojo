@@ -33,6 +33,16 @@ does not write ZIP64, so an archive must stay under 4 GiB. It checks all
 field lengths before it allocates or writes the archive.
 """
 
+from core.ordinal import index_in_count
+
+from core.binary import (
+    append_little_endian_u16,
+    append_little_endian_u32,
+    copy_bytes,
+    little_endian_u16,
+    little_endian_u32,
+)
+from core.ordinal import require_positive
 from render.checksum import crc32
 from render.inflate import inflate
 
@@ -81,16 +91,6 @@ struct ZipEntry(Copyable, Movable):
     var data: List[UInt8]
 
 
-def _u16(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian 16-bit value at `at`."""
-    return Int(bytes[at]) | (Int(bytes[at + 1]) << 8)
-
-
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian 32-bit value at `at`."""
-    return _u16(bytes, at) | (_u16(bytes, at + 2) << 16)
-
-
 def _need(end: Int, at: Int, length: Int, what: String) raises:
     """Refuse a record that runs past its containing region.
 
@@ -121,7 +121,10 @@ def _directory_shape(
     var path = List[Tuple[Int, Int]]()
     var at = start
     while at not in shapes:
-        if at + 4 > len(bytes) or _u32(bytes, at) != _CENTRAL_HEADER:
+        if (
+            at + 4 > len(bytes)
+            or little_endian_u32(bytes, at) != _CENTRAL_HEADER
+        ):
             shapes[at] = (at, 0, 0)
             break
         if at + _CENTRAL_LENGTH > len(bytes):
@@ -130,26 +133,26 @@ def _directory_shape(
         var next = (
             at
             + _CENTRAL_LENGTH
-            + _u16(bytes, at + 28)
-            + _u16(bytes, at + 30)
-            + _u16(bytes, at + 32)
+            + little_endian_u16(bytes, at + 28)
+            + little_endian_u16(bytes, at + 30)
+            + little_endian_u16(bytes, at + 32)
         )
         if next > len(bytes):
             shapes[at] = (-1, -1, 0)
             break
-        var local = _u32(bytes, at + 42)
+        var local = little_endian_u32(bytes, at + 42)
         if local + _LOCAL_LENGTH > len(bytes):
             shapes[at] = (-1, -1, 0)
             break
-        if _u32(bytes, local) != _LOCAL_HEADER:
+        if little_endian_u32(bytes, local) != _LOCAL_HEADER:
             shapes[at] = (-1, -1, 0)
             break
         var local_end = (
             local
             + _LOCAL_LENGTH
-            + _u16(bytes, local + 26)
-            + _u16(bytes, local + 28)
-            + _u32(bytes, at + 20)
+            + little_endian_u16(bytes, local + 26)
+            + little_endian_u16(bytes, local + 28)
+            + little_endian_u32(bytes, at + 20)
         )
         if local_end > len(bytes):
             shapes[at] = (-1, -1, 0)
@@ -168,13 +171,16 @@ def _directory_candidate(
     bytes: List[UInt8], end: Int, mut shapes: Dict[Int, Tuple[Int, Int, Int]]
 ) raises -> Bool:
     """Check a classic EOCD's central-record count and complete extent."""
-    var count = _u16(bytes, end + 10)
-    if _u16(bytes, end + 4) != 0 or _u16(bytes, end + 6) != 0:
+    var count = little_endian_u16(bytes, end + 10)
+    if (
+        little_endian_u16(bytes, end + 4) != 0
+        or little_endian_u16(bytes, end + 6) != 0
+    ):
         return False
-    if count == 0xFFFF or _u16(bytes, end + 8) != count:
+    if count == 0xFFFF or little_endian_u16(bytes, end + 8) != count:
         return False
-    var start = _u32(bytes, end + 16)
-    var size = _u32(bytes, end + 12)
+    var start = little_endian_u32(bytes, end + 16)
+    var size = little_endian_u32(bytes, end + 12)
     if start == 0xFFFFFFFF or size == 0xFFFFFFFF:
         return False
     if start + size != end:
@@ -191,9 +197,9 @@ def _directory_candidate(
         return True
     if at + _DIGITAL_LENGTH > end:
         return False
-    if _u32(bytes, at) != _DIGITAL_SIGNATURE:
+    if little_endian_u32(bytes, at) != _DIGITAL_SIGNATURE:
         return False
-    return at + _DIGITAL_LENGTH + _u16(bytes, at + 4) == end
+    return at + _DIGITAL_LENGTH + little_endian_u16(bytes, at + 4) == end
 
 
 def _end_of_directory(bytes: List[UInt8]) raises -> Int:
@@ -215,8 +221,10 @@ def _end_of_directory(bytes: List[UInt8]) raises -> Int:
     var candidate = -1
     var shapes = Dict[Int, Tuple[Int, Int, Int]]()
     while at >= stop:
-        if _u32(bytes, at) == _END_OF_DIRECTORY:
-            if at + _END_LENGTH + _u16(bytes, at + 20) == len(bytes):
+        if little_endian_u32(bytes, at) == _END_OF_DIRECTORY:
+            if at + _END_LENGTH + little_endian_u16(bytes, at + 20) == len(
+                bytes
+            ):
                 # Keep malformed or unsupported records for unzip's precise
                 # error, but prefer a complete structural directory layout.
                 if candidate < 0:
@@ -245,14 +253,14 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
             not expand to its declared size and CRC-32.
     """
     var end = _end_of_directory(bytes)
-    var disk = _u16(bytes, end + 4)
-    var directory_disk = _u16(bytes, end + 6)
+    var disk = little_endian_u16(bytes, end + 4)
+    var directory_disk = little_endian_u16(bytes, end + 6)
     if disk != 0 or directory_disk != 0:
         raise Error("ZIP: an archive split across disks is not read")
-    var disk_count = _u16(bytes, end + 8)
-    var count = _u16(bytes, end + 10)
-    var directory_size = _u32(bytes, end + 12)
-    var at = _u32(bytes, end + 16)
+    var disk_count = little_endian_u16(bytes, end + 8)
+    var count = little_endian_u16(bytes, end + 10)
+    var directory_size = little_endian_u32(bytes, end + 12)
+    var at = little_endian_u32(bytes, end + 16)
     if disk_count == 0xFFFF or count == 0xFFFF:
         raise Error("ZIP: a ZIP64 archive is not read")
     if directory_size == 0xFFFFFFFF or at == 0xFFFFFFFF:
@@ -270,18 +278,18 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
     for index in range(count):
         var what = "central directory entry " + String(index)
         _need(directory_end, at, _CENTRAL_LENGTH, what)
-        if _u32(bytes, at) != _CENTRAL_HEADER:
+        if little_endian_u32(bytes, at) != _CENTRAL_HEADER:
             raise Error("ZIP: a " + what + " has the wrong signature")
-        var flags = _u16(bytes, at + 8)
-        var method = ZipMethod(_u16(bytes, at + 10))
-        var crc = _u32(bytes, at + 16)
-        var packed = _u32(bytes, at + 20)
-        var size = _u32(bytes, at + 24)
-        var name_length = _u16(bytes, at + 28)
-        var extra_length = _u16(bytes, at + 30)
-        var comment_length = _u16(bytes, at + 32)
-        var entry_disk = _u16(bytes, at + 34)
-        var local = _u32(bytes, at + 42)
+        var flags = little_endian_u16(bytes, at + 8)
+        var method = ZipMethod(little_endian_u16(bytes, at + 10))
+        var crc = little_endian_u32(bytes, at + 16)
+        var packed = little_endian_u32(bytes, at + 20)
+        var size = little_endian_u32(bytes, at + 24)
+        var name_length = little_endian_u16(bytes, at + 28)
+        var extra_length = little_endian_u16(bytes, at + 30)
+        var comment_length = little_endian_u16(bytes, at + 32)
+        var entry_disk = little_endian_u16(bytes, at + 34)
+        var local = little_endian_u32(bytes, at + 42)
         _need(
             directory_end,
             at + _CENTRAL_LENGTH,
@@ -290,14 +298,7 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
         )
         var name = String(
             from_utf8_lossy=Span(
-                List[UInt8](
-                    bytes[
-                        at
-                        + _CENTRAL_LENGTH : at
-                        + _CENTRAL_LENGTH
-                        + name_length
-                    ]
-                )
+                copy_bytes(bytes, at + _CENTRAL_LENGTH, name_length)
             )
         )
         what = "entry `" + name + "`"
@@ -318,20 +319,20 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
                 + ", and only stored and deflated are read"
             )
         _need(directory_start, local, _LOCAL_LENGTH, what)
-        if _u32(bytes, local) != _LOCAL_HEADER:
+        if little_endian_u32(bytes, local) != _LOCAL_HEADER:
             raise Error("ZIP: the local header of " + what + " is not one")
         var start = (
             local
             + _LOCAL_LENGTH
-            + _u16(bytes, local + 26)
-            + _u16(bytes, local + 28)
+            + little_endian_u16(bytes, local + 26)
+            + little_endian_u16(bytes, local + 28)
         )
         _need(directory_start, start, packed, what)
         var data: List[UInt8]
         if method == ZIP_STORED:
-            data = List[UInt8](bytes[start : start + packed])
+            data = copy_bytes(bytes, start, packed)
         else:
-            data = inflate(List[UInt8](bytes[start : start + packed]), 0, size)
+            data = inflate(copy_bytes(bytes, start, packed), 0, size)
         if len(data) != size:
             raise Error(
                 "ZIP: "
@@ -354,11 +355,11 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
             _DIGITAL_LENGTH,
             "central directory digital signature",
         )
-        if _u32(bytes, at) != _DIGITAL_SIGNATURE:
+        if little_endian_u32(bytes, at) != _DIGITAL_SIGNATURE:
             raise Error(
                 "ZIP: the central directory size does not match its entry count"
             )
-        at += _DIGITAL_LENGTH + _u16(bytes, at + 4)
+        at += _DIGITAL_LENGTH + little_endian_u16(bytes, at + 4)
         _need(directory_end, at, 0, "central directory digital signature")
         if at != directory_end:
             raise Error(
@@ -367,21 +368,9 @@ def unzip(bytes: List[UInt8]) raises -> List[ZipEntry]:
     return entries^
 
 
-def _put16(mut out: List[UInt8], value: Int):
-    """Append a little-endian 16-bit value."""
-    out.append(UInt8(value & 0xFF))
-    out.append(UInt8((value >> 8) & 0xFF))
-
-
-def _put32(mut out: List[UInt8], value: Int):
-    """Append a little-endian 32-bit value."""
-    _put16(out, value & 0xFFFF)
-    _put16(out, (value >> 16) & 0xFFFF)
-
-
 def _write_length(value: Int, limit: Int, what: String) raises:
     """Refuse a negative or unrepresentable writer length before arithmetic."""
-    if value < 0 or value >= limit:
+    if not index_in_count(value, limit):
         raise Error(
             "ZIP: " + what + " is too long or needs ZIP64: " + String(value)
         )
@@ -442,8 +431,7 @@ def zip_archive(entries: List[ZipEntry], align: Int = 1) raises -> List[UInt8]:
             does not fit its non-ZIP64 representation, or the complete
             archive is 4 GiB or larger.
     """
-    if align < 1:
-        raise Error("ZIP: an alignment must be one or more")
+    require_positive(align, "ZIP: an alignment must be one or more")
     _ = _archive_length(len(entries), 0, 0)
     var local_length = 0
     var directory_length = 0
@@ -469,42 +457,42 @@ def zip_archive(entries: List[ZipEntry], align: Int = 1) raises -> List[UInt8]:
         var pad = (align - (offset + _LOCAL_LENGTH + len(name)) % align) % align
         var crc = Int(crc32(entry.data))
         var size = len(entry.data)
-        _put32(out, _LOCAL_HEADER)
-        _put16(out, 20)
-        _put16(out, 0x0800)
-        _put16(out, ZIP_STORED.value)
-        _put32(out, 0)
-        _put32(out, crc)
-        _put32(out, size)
-        _put32(out, size)
-        _put16(out, len(name))
-        _put16(out, pad)
-        out.extend(List[UInt8](name))
+        append_little_endian_u32(out, _LOCAL_HEADER)
+        append_little_endian_u16(out, 20)
+        append_little_endian_u16(out, 0x0800)
+        append_little_endian_u16(out, ZIP_STORED.value)
+        append_little_endian_u32(out, 0)
+        append_little_endian_u32(out, crc)
+        append_little_endian_u32(out, size)
+        append_little_endian_u32(out, size)
+        append_little_endian_u16(out, len(name))
+        append_little_endian_u16(out, pad)
+        out.extend(name)
         for _ in range(pad):
             out.append(0)
-        out.extend(entry.data.copy())
-        _put32(directory, _CENTRAL_HEADER)
-        _put16(directory, 20)
-        _put16(directory, 20)
-        _put16(directory, 0x0800)
-        _put16(directory, ZIP_STORED.value)
-        _put32(directory, 0)
-        _put32(directory, crc)
-        _put32(directory, size)
-        _put32(directory, size)
-        _put16(directory, len(name))
-        _put32(directory, 0)
-        _put32(directory, 0)
-        _put32(directory, 0)
-        _put32(directory, offset)
-        directory.extend(List[UInt8](name))
+        out.extend(Span(entry.data))
+        append_little_endian_u32(directory, _CENTRAL_HEADER)
+        append_little_endian_u16(directory, 20)
+        append_little_endian_u16(directory, 20)
+        append_little_endian_u16(directory, 0x0800)
+        append_little_endian_u16(directory, ZIP_STORED.value)
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, crc)
+        append_little_endian_u32(directory, size)
+        append_little_endian_u32(directory, size)
+        append_little_endian_u16(directory, len(name))
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, 0)
+        append_little_endian_u32(directory, offset)
+        directory.extend(name)
     var start = len(out)
     out.extend(directory^)
-    _put32(out, _END_OF_DIRECTORY)
-    _put32(out, 0)
-    _put16(out, len(entries))
-    _put16(out, len(entries))
-    _put32(out, len(out) - start - 12)
-    _put32(out, start)
-    _put16(out, 0)
+    append_little_endian_u32(out, _END_OF_DIRECTORY)
+    append_little_endian_u32(out, 0)
+    append_little_endian_u16(out, len(entries))
+    append_little_endian_u16(out, len(entries))
+    append_little_endian_u32(out, len(out) - start - 12)
+    append_little_endian_u32(out, start)
+    append_little_endian_u16(out, 0)
     return out^

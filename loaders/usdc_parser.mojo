@@ -54,6 +54,10 @@ empty array when it is not. A file of a version before 0.4.0 has path
 headers that three.js reads one padding byte short, so its paths are
 the wrong ones; this port reads them as three.js does.
 """
+from math.finite import stored_float32
+from core.binary import copy_bytes, little_endian_uint
+from core.ordinal import ordinal_valid, require_non_negative
+from core.search import last_match
 
 from loaders.usd_specs import (
     NO_VALUE,
@@ -88,7 +92,7 @@ struct CrateType(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True for the sixty-one types, zero to sixty."""
-        return self.value >= 0 and self.value <= 60
+        return ordinal_valid(self.value, 60)
 
 
 comptime CRATE_INVALID = CrateType(0)
@@ -164,6 +168,21 @@ comptime _CHUNK = 65536
 comptime MAX_COUNT = 1 << 26
 # How deep time samples may nest before the reader refuses them.
 comptime _MAX_DEPTH = 64
+
+
+def require_usdc_count(count: Int) raises:
+    """Refuse a count past this reader's limit.
+
+    Nothing. The call returns when the count is inside the limit.
+
+    Args:
+        count: How many items.
+
+    Raises:
+        Error: If the count is negative or past `MAX_COUNT`.
+    """
+    if count < 0 or count > MAX_COUNT:
+        raise Error("USDC: a count past this reader's limit")
 
 
 def is_crate(bytes: Span[UInt8, _]) -> Bool:
@@ -307,7 +326,7 @@ def decompress_lz4(input: List[UInt8], size: Int) raises -> List[UInt8]:
     return output^
 
 
-def _int32(data: List[UInt8], at: Int, width: Int) -> Int:
+def _int32(data: Span[UInt8, _], at: Int, width: Int) -> Int:
     """Return a signed little-endian integer of one, two or four bytes.
 
     Args:
@@ -318,9 +337,7 @@ def _int32(data: List[UInt8], at: Int, width: Int) -> Int:
     Returns:
         The integer.
     """
-    var value = 0
-    for b in range(width):  # pragma: no branch
-        value |= Int(data[at + b]) << (8 * b)
+    var value = little_endian_uint(data, at, width)
     var top = 1 << (8 * width - 1)
     if value >= top:
         value -= top << 1
@@ -355,7 +372,7 @@ def decode_integers32(data: List[UInt8], count: Int) -> List[Int]:
     Returns:
         The integers, as an `Int32Array` holds them.
     """
-    var common = _int32(data, 0, 4)
+    var common = _int32(Span(data), 0, 4)
     var codes = 4
     var vints = 4 + ((count * 2 + 7) >> 3)
     var out = List[Int](capacity=count)
@@ -369,13 +386,13 @@ def decode_integers32(data: List[UInt8], count: Int) -> List[Int]:
             var code = (code_byte >> (j * 2)) & 3
             var delta = common
             if code == 1:
-                delta = _int32(data, vints, 1)
+                delta = _int32(Span(data), vints, 1)
                 vints += 1
             elif code == 2:
-                delta = _int32(data, vints, 2)
+                delta = _int32(Span(data), vints, 2)
                 vints += 2
             elif code == 3:
-                delta = _int32(data, vints, 4)
+                delta = _int32(Span(data), vints, 4)
                 vints += 4
             sum += delta
             out.append(_wrap32(sum))
@@ -401,8 +418,7 @@ def decompress_integers32(
         Error: If the count is past `MAX_COUNT`, or the LZ4 bytes are
             refused.
     """
-    if count < 0 or count > MAX_COUNT:
-        raise Error("USDC: a count past this reader's limit")
+    require_usdc_count(count)
     var size = count * 4 + ((count * 2 + 7) >> 3) + 4
     return decode_integers32(decompress_lz4(compressed, size), count)
 
@@ -459,9 +475,7 @@ def _decode(data: List[UInt8], start: Int, end: Int) -> String:
     Returns:
         The text.
     """
-    var part = List[UInt8](capacity=end - start)
-    for k in range(start, end):
-        part.append(data[k])
+    var part = copy_bytes(data, start, end - start)
     return String(from_utf8_lossy=Span(part))
 
 
@@ -513,10 +527,13 @@ struct _CrateSpec(ImplicitlyCopyable):
     var spec_type: Int
 
 
-struct _Crate(Movable):
-    """The counterpart of three.js's `USDCParser` as it reads one file."""
+struct _Crate[origin: Origin[mut=False]](Movable):
+    """The counterpart of three.js's `USDCParser` as it reads one file.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
+
+    var bytes: Span[UInt8, Self.origin]
     var at: Int
     var major: Int
     var minor: Int
@@ -535,13 +552,13 @@ struct _Crate(Movable):
     var specs: List[_CrateSpec]
     var layer: UsdLayer
 
-    def __init__(out self, var bytes: List[UInt8]):
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
         """Start reading a file.
 
         Args:
-            bytes: The file.
+            bytes: The file. The caller keeps it.
         """
-        self.bytes = bytes^
+        self.bytes = bytes
         self.at = 0
         self.major = 0
         self.minor = 0
@@ -581,8 +598,7 @@ struct _Crate(Movable):
             Error: If the count is negative or past `MAX_COUNT`, or the
                 items would pass the end of the file.
         """
-        if count < 0 or count > MAX_COUNT:
-            raise Error("USDC: a count past this reader's limit")
+        require_usdc_count(count)
         self.need(count * size)
 
     def unsigned(mut self, width: Int) raises -> Int:
@@ -598,9 +614,7 @@ struct _Crate(Movable):
             Error: If the bytes pass the end.
         """
         self.need(width)
-        var value = 0
-        for b in range(width):  # pragma: no branch
-            value |= Int(self.bytes[self.at + b]) << (8 * b)
+        var value = little_endian_uint(self.bytes, self.at, width)
         self.at += width
         return value
 
@@ -695,9 +709,7 @@ struct _Crate(Movable):
             Error: If they pass the end.
         """
         self.need(count)
-        var out = List[UInt8](capacity=count)
-        for k in range(count):
-            out.append(self.bytes[self.at + k])
+        var out = copy_bytes(self.bytes, self.at, count)
         self.at += count
         return out^
 
@@ -728,11 +740,7 @@ struct _Crate(Movable):
         Returns:
             The place of the last section of that name, or -1.
         """
-        var found = -1
-        for k in range(len(self.names)):
-            if self.names[k] == name:
-                found = k
-        return found
+        return last_match(self.names, name)
 
     def required(self, name: String) raises -> _Section:
         """Return a section that must be there.
@@ -765,8 +773,7 @@ struct _Crate(Movable):
             Error: If it passes the end or `MAX_COUNT`.
         """
         var value = self.unsigned(8)
-        if value < 0 or value > MAX_COUNT:
-            raise Error("USDC: a count past this reader's limit")
+        require_usdc_count(value)
         return value
 
     def integers(mut self, count: Int) raises -> List[Int]:
@@ -889,11 +896,8 @@ struct _Crate(Movable):
         var size = self.unsigned(8)
         var reps = decompress_lz4(self.take(size), count * 8)
         for k in range(count):
-            var lo = 0
-            var hi = 0
-            for b in range(4):  # pragma: no branch
-                lo |= Int(reps[k * 8 + b]) << (8 * b)
-                hi |= Int(reps[k * 8 + 4 + b]) << (8 * b)
+            var lo = little_endian_uint(reps, k * 8, 4)
+            var hi = little_endian_uint(reps, k * 8 + 4, 4)
             self.field_reps.append(_Rep(lo, hi))
 
     def read_field_sets(mut self) raises:
@@ -1027,8 +1031,7 @@ struct _Crate(Movable):
         var at = start
         while at < len(indices):
             budget -= 1
-            if budget < 0:
-                raise Error("USDC: a path tree that does not end")
+            require_non_negative(budget, "USDC: a path tree that does not end")
             var this = at
             at += 1
             var path: String
@@ -1511,7 +1514,7 @@ struct _Crate(Movable):
         var numbers = List[Float64](capacity=size)
         if code == _FLOAT_AS_INTS:
             for value in self.integers(size):  # pragma: no branch
-                numbers.append(Float64(Float32(Float64(value))))
+                numbers.append(stored_float32(Float64(value)))
         elif code == _FLOAT_TABLE:
             var entries = self.unsigned(4)
             self.fits(entries, 4)
@@ -1623,11 +1626,11 @@ def _child_path(parent: String, element: String, property: Bool) -> String:
     return parent + "/" + element
 
 
-def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
+def parse_usdc(bytes: Span[UInt8, _]) raises -> UsdLayer:
     """Read a USDC crate into a layer, three.js's `USDCParser.parseData`.
 
     Args:
-        bytes: The file.
+        bytes: The file. The caller keeps it.
 
     Returns:
         Each path's spec, in the order of the `SPECS` section. A spec
@@ -1636,7 +1639,7 @@ def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var crate = _Crate(bytes^)
+    var crate = _Crate(bytes)
     crate.bootstrap()
     crate.table()
     crate.read_tokens()
@@ -1655,3 +1658,19 @@ def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
     var layer = UsdLayer()
     swap(layer, crate.layer)
     return layer^
+
+
+def parse_usdc(var bytes: List[UInt8]) raises -> UsdLayer:
+    """Read a USDC crate into a layer, three.js's `USDCParser.parseData`.
+
+    Args:
+        bytes: The file.
+
+    Returns:
+        Each path's spec, in the order of the `SPECS` section. A spec
+        whose path is not set is left out, as in three.js.
+
+    Raises:
+        Error: For anything the module docstring lists.
+    """
+    return parse_usdc(Span(bytes))

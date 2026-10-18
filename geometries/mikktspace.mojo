@@ -52,6 +52,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import require_finite
 from std.math import atan2
 from math.triangle_normal import _triangle_cross_wide, _finite_triangle
 from math.vector3 import Vector3
@@ -62,6 +63,7 @@ from math.matrix_determinant import _sum_products as _exact_products
 from math.triangle_normal import _difference_product_wide
 
 from math.norm import length3, normalized3, _ordinary_squared
+from math.utils import clamp_unit
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
@@ -103,15 +105,10 @@ def _dot(a: Vec, b: Vec) -> Float32:
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-def _length(a: Vec) -> Float32:
-    """Return the length, the C's `Length`."""
-    return length3(a[0], a[1], a[2])
-
-
 def _normalize(a: Vec) -> Vec:
     """Return the vector over its length, the C's `Normalize`."""
     if _ordinary_squared(_dot(a, a)):
-        return a * (1 / _length(a))
+        return a * (1 / length3(a[0], a[1], a[2]))
     var unit = normalized3(a[0], a[1], a[2])
     return _v(unit[0], unit[1], unit[2])
 
@@ -541,8 +538,8 @@ def _init_tri_info(
         # The fast-path gate proves a nonzero finite area and ordinary
         # squared derivative lengths. Their square roots are positive.
         var area = abs(signed_area)
-        var len_os = _length(os)
-        var len_ot = _length(ot)
+        var len_os = length3(os[0], os[1], os[2])
+        var len_ot = length3(ot[0], ot[1], ot[2])
         var sign = Float32(1)
         if (infos[f].flag & ORIENT_PRESERVING) == 0:
             sign = -1
@@ -943,7 +940,7 @@ def _eval_space(
         var v1 = _projected_edge(p0, p1, n)
         var v2 = _projected_edge(p2, p1, n)
         var cosine = _dot(v1, v2)
-        cosine = max(Float32(-1), min(Float32(1), cosine))
+        cosine = clamp_unit(cosine)
         var wide_angle = _corner_angle(p0, p1, p2, n, cosine)
         var angle = Float32(wide_angle)
         if wide_angle > 0 and angle < FLT_MIN:
@@ -1105,8 +1102,10 @@ def generate_tangents(
         Error: If the three lists do not describe the same whole
             triangles, or the threshold is not finite.
     """
-    if not isfinite(angular_threshold.value):
-        raise Error("MikkTSpace needs a finite angular threshold")
+    require_finite(
+        Float64(angular_threshold.value),
+        "MikkTSpace needs a finite angular threshold",
+    )
     var corners = len(positions) // 3
     if len(positions) % 9 != 0:
         raise Error("MikkTSpace needs whole triangles")

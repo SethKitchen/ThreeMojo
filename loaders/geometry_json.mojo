@@ -69,13 +69,14 @@ from geometries.sphere import sphere
 from geometries.torus import torus, torus_knot
 from geometries.tube import tube
 from loaders.curve_json import read_curve3, read_curve_path3
-from loaders.json import ARRAY, JsonDocument, NO_NODE, OBJECT
+from loaders.json import ARRAY, JsonDocument, NO_NODE, OBJECT, present
 from math.curve3 import quadratic_bezier3
 from math.path import Shape
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from math.vector3 import Vector3
 from std.math import pi
-from units.si import Angle, Length, METER, RADIAN
+from units.measure import angle_radians, length_meters
+from units.si import Angle, Length
 
 
 def _number(
@@ -83,44 +84,35 @@ def _number(
 ) raises -> Float64:
     """Return a number under `key`, or `default`. `parse_json` refuses a
     number beyond a double, so it is finite."""
-    var found = doc.get(item, key)
-    if found == NO_NODE:
-        return default
-    return doc.number(found)
+    return doc.optional_number(item, key, default)
 
 
 def _meters(
     doc: JsonDocument, item: Int, key: String, default: Float64
 ) raises -> Length:
     """Return a length under `key`, or `default`, in meters."""
-    return Length(Float32(_number(doc, item, key, default)), METER)
+    return length_meters(_number(doc, item, key, default))
 
 
 def _radians(
     doc: JsonDocument, item: Int, key: String, default: Float64
 ) raises -> Angle:
     """Return an angle under `key`, or `default`, in radians."""
-    return Angle(Float32(_number(doc, item, key, default)), RADIAN)
+    return angle_radians(_number(doc, item, key, default))
 
 
 def _count(
     doc: JsonDocument, item: Int, key: String, default: Int
 ) raises -> Int:
     """Return a whole number under `key`, or `default`."""
-    var found = doc.get(item, key)
-    if found == NO_NODE:
-        return default
-    return doc.integer(found)
+    return doc.optional_integer(item, key, default)
 
 
 def _flag(
     doc: JsonDocument, item: Int, key: String, default: Bool
 ) raises -> Bool:
     """Return a boolean under `key`, or `default`."""
-    var found = doc.get(item, key)
-    if found == NO_NODE:
-        return default
-    return doc.boolean(found)
+    return doc.optional_boolean(item, key, default)
 
 
 def _list(doc: JsonDocument, item: Int, key: String) raises -> Int:
@@ -143,9 +135,9 @@ def _lathe_points(doc: JsonDocument, item: Int) raises -> List[Vector2]:
         if doc.kind(point) != OBJECT:
             raise Error("Geometry JSON: a lathe point must be {x, y}")
         out.append(
-            Vector2(
-                Float32(doc.number(doc.get(point, "x"))),
-                Float32(doc.number(doc.get(point, "y"))),
+            vector2_from_float64(
+                doc.number(doc.get(point, "x")),
+                doc.number(doc.get(point, "y")),
             )
         )
     return out^
@@ -155,9 +147,10 @@ def _shapes_of(
     doc: JsonDocument, item: Int, library: Dict[String, Shape]
 ) raises -> List[Shape]:
     """Return the shapes a geometry names, from the `shapes` library."""
-    var list = _list(doc, item, "shapes")
-    if list == NO_NODE:
-        raise Error("Geometry JSON: a shape geometry names no shapes")
+    var list = present(
+        _list(doc, item, "shapes"),
+        "Geometry JSON: a shape geometry names no shapes",
+    )
     var out = List[Shape]()
     for at in range(doc.length(list)):  # pragma: no branch
         var uuid = doc.string(doc.at(list, at))
@@ -172,9 +165,9 @@ def _extruded(
 ) raises -> BufferGeometry:
     """Return an `ExtrudeGeometry` from its shapes and options."""
     var shapes = _shapes_of(doc, item, library)
-    var options = doc.get(item, "options")
-    if options == NO_NODE or doc.kind(options) != OBJECT:
-        raise Error("Geometry JSON: an extrusion needs its options")
+    var options = doc.required_kind(
+        item, "options", OBJECT, "Geometry JSON: an extrusion needs its options"
+    )
     var steps = _count(doc, options, "steps", 1)
     var curve_segments = _count(doc, options, "curveSegments", 12)
     var path = doc.get(options, "extrudePath")
@@ -191,7 +184,7 @@ def _extruded(
         steps,
         curve_segments,
         _flag(doc, options, "bevelEnabled", True),
-        Length(Float32(thickness), METER),
+        length_meters(thickness),
         _meters(doc, options, "bevelSize", thickness - 0.1),
         _meters(doc, options, "bevelOffset", 0),
         _count(doc, options, "bevelSegments", 3),

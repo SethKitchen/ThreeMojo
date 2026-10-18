@@ -24,6 +24,8 @@ A time zone is the offset of local standard time from universal time,
 east positive.
 """
 
+from math.utils import clamp_unit
+from math.finite import require_positive_finite
 from std.math import acos, atan2, cos, isfinite, pi, sin
 from generators.utils import Vec3d
 from units.si import (
@@ -37,6 +39,53 @@ from units.si import (
     RADIAN,
     WATT_PER_SQUARE_METER,
 )
+
+
+def require_month(month: Int) raises:
+    """Refuse a month that is not 1 to 12.
+
+    Nothing. The call returns when the month is 1 to 12.
+
+    Args:
+        month: The month number.
+
+    Raises:
+        Error: If the month is outside 1 to 12.
+    """
+    if month < 1 or month > 12:
+        raise Error("A month must be 1 to 12")
+
+
+def require_latitude(degrees: Float64) raises:
+    """Refuse a latitude outside -90 to 90 degrees.
+
+    Nothing. The call returns when the latitude is in range. A value
+    that is not finite is outside the range.
+
+    Args:
+        degrees: The latitude, north positive.
+
+    Raises:
+        Error: If the latitude is outside -90 to 90 degrees.
+    """
+    if not (degrees >= -90 and degrees <= 90):
+        raise Error("A latitude must be from -90 to 90 degrees")
+
+
+def require_longitude(degrees: Float64) raises:
+    """Refuse a longitude outside -180 to 180 degrees.
+
+    Nothing. The call returns when the longitude is in range. A value
+    that is not finite is outside the range.
+
+    Args:
+        degrees: The longitude, east positive.
+
+    Raises:
+        Error: If the longitude is outside -180 to 180 degrees.
+    """
+    if not (degrees >= -180 and degrees <= 180):
+        raise Error("A longitude must be from -180 to 180 degrees")
 
 
 def day_of_year(month: Int, day: Int) raises -> Int:
@@ -54,8 +103,7 @@ def day_of_year(month: Int, day: Int) raises -> Int:
     Raises:
         Error: If the month or the day is not in the calendar.
     """
-    if month < 1 or month > 12:
-        raise Error("A month must be 1 to 12")
+    require_month(month)
     var days: List[Int] = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     if day < 1 or day > days[month - 1]:
         raise Error("A day is not in its month")
@@ -260,13 +308,13 @@ def sun_angles(
     var delta = declination.value
     var omega = hour_angle.value
     var cos_z = cos(phi) * cos(delta) * cos(omega) + sin(phi) * sin(delta)
-    cos_z = max(-1.0, min(1.0, cos_z))
+    cos_z = clamp_unit(cos_z)
     var zenith = acos(cos_z)
     var below = sin(zenith) * cos(phi)
     var azimuth = 0.0
     if below > 1e-9:
         var c = (cos_z * sin(phi) - sin(delta)) / below
-        azimuth = acos(max(-1.0, min(1.0, c)))
+        azimuth = acos(clamp_unit(c))
         if omega < 0:
             azimuth = -azimuth
     return SunPosition(Angle64(zenith), Angle64(azimuth))
@@ -329,13 +377,14 @@ def orientation(normal: Vec3d, north: Angle64) raises -> SurfaceOrientation:
         Error: If the normal is zero or not finite.
     """
     var length = normal.length()
-    if not (length > 0 and isfinite(length)):
-        raise Error("A surface normal must be nonzero and finite")
+    require_positive_finite(
+        length, "A surface normal must be nonzero and finite"
+    )
     var n = normal * (1.0 / length)
     var a = north.value
     var east = n.x * cos(a) + n.y * sin(a)
     var northward = -n.x * sin(a) + n.y * cos(a)
-    var slope = acos(max(-1.0, min(1.0, n.z)))
+    var slope = acos(clamp_unit(n.z))
     var azimuth = atan2(0.0 - east, 0.0 - northward)
     return SurfaceOrientation(Angle64(slope), Angle64(azimuth))
 

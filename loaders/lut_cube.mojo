@@ -43,6 +43,10 @@ Related loaders: `loaders.lut_3dl` reads `.3dl` files and
 `loaders.lut_image` reads image strips.
 """
 
+from std.math import isfinite
+
+from loaders.bytes import letter_or_underscore
+from loaders.js_text import split_fields
 from math.vector3 import Vector3
 from render.texture import (
     BILINEAR,
@@ -53,8 +57,9 @@ from render.texture import (
 )
 from render.srgb import LINEAR
 from render.volume_texture import Data3DTexture, VolumeImage
-from std.math import isfinite
+from loaders.text_number import file_line
 from std.pathlib import Path
+from core.ordinal import require_valid
 
 # The largest table Adobe's `.cube` specification allows.
 comptime LUT_MAX_SIZE = 256
@@ -100,7 +105,7 @@ struct LutCube(Movable):
 
 def _where(line: Int) -> String:
     """Return the prefix an error names its line with."""
-    return "LUT line " + String(line) + ": "
+    return file_line("LUT", line)
 
 
 def _number(field: String, line: Int) raises -> Float32:
@@ -198,17 +203,6 @@ def _title(text: String, line: Int) raises -> String:
     return String(text[byte = open + 1 : close])
 
 
-def _is_keyword(key: String) -> Bool:
-    """Return True if a field starts with a letter or an underscore, as a
-    keyword does and a number does not."""
-    var first = key.as_bytes()[0]
-    return (
-        (first >= 65 and first <= 90)
-        or (first >= 97 and first <= 122)
-        or first == 95
-    )
-
-
 def parse_lut_cube(
     text: String, texel_type: TexelType = UNSIGNED_BYTE_TYPE
 ) raises -> LutCube:
@@ -230,10 +224,10 @@ def parse_lut_cube(
             not `size` cubed; or, for bytes, a number is outside zero to
             one.
     """
-    if not texel_type.is_valid():
-        raise Error(
-            "A LUT's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE"
-        )
+    require_valid(
+        texel_type.is_valid(),
+        "A LUT's texel type must be UNSIGNED_BYTE_TYPE or FLOAT_TYPE",
+    )
     var title = Optional[String]()
     var size = 0
     var domain_min = Vector3(0, 0, 0)
@@ -246,9 +240,7 @@ def parse_lut_cube(
         var stripped = String(String(raw).strip())
         if stripped.byte_length() == 0 or stripped.startswith("#"):
             continue
-        var fields = List[String]()
-        for piece in stripped.split():  # pragma: no branch
-            fields.append(String(piece))
+        var fields = split_fields(stripped)
         var key = fields[0]
         if key == "TITLE":
             title = _title(stripped, line)
@@ -260,7 +252,7 @@ def parse_lut_cube(
             domain_min = _triple(fields, 1, line)
         elif key == "DOMAIN_MAX":
             domain_max = _triple(fields, 1, line)
-        elif _is_keyword(key):
+        elif letter_or_underscore(key.as_bytes()[0]):
             # Another keyword, such as `LUT_3D_INPUT_RANGE`: skipped, as
             # three.js skips any line its pattern does not match.
             continue

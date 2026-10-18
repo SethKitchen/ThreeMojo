@@ -35,6 +35,7 @@ It reports the median, the 95th percentile and the slowest frame of each
 stage. The numbers describe the machine that runs it.
 """
 
+from tools._bench_timing import _percentile, _sorted
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.object3d import Object3D
@@ -54,7 +55,8 @@ from extensions.humanoid.spec import HumanoidSpec
 from geometries.sphere import sphere
 from lights.light import ambient_light, directional_light
 from materials.material import Material
-from math.vector3 import Vector3
+from math.bounds import Box3
+from math.vector3 import Vector3, midpoint
 from objects.mesh import Mesh
 from lights.lighting import Lighting
 from render.framebuffer import Color
@@ -80,22 +82,6 @@ struct _Head(DistanceField, ImplicitlyCopyable):
 
     def distance(self, point: Vector3) -> Float32:
         return (point - self.center).length() - self.radius
-
-
-def _sorted(var times: List[Int]) -> List[Int]:
-    for i in range(1, len(times)):
-        var j = i
-        while j > 0 and times[j - 1] > times[j]:
-            times.swap_elements(j - 1, j)
-            j -= 1
-    return times^
-
-
-def _percentile(times: List[Int], fraction: Float64) -> Float64:
-    # Nearest rank on a sorted list.
-    var rank = Int(fraction * Float64(len(times)) + 0.999999) - 1
-    rank = max(0, min(rank, len(times) - 1))
-    return Float64(times[rank]) / 1e6
 
 
 def _report(label: String, var times: List[Int]) -> String:
@@ -127,12 +113,10 @@ def main() raises:
     var assets = Assets()
     var root = scene.add(Object3D())
     var hair = add_groom(scene, assets, root, person)
-    var low = Vector3(1e9, 1e9, 1e9)
-    var high = Vector3(-1e9, -1e9, -1e9)
-    for p in hair.groom.points:
-        low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
-        high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
-    var middle = (low + high) * 0.5
+    var box = Box3.from_points(hair.groom.points)
+    var low = box.min
+    var high = box.max
+    var middle = midpoint(low, high)
     # A head sphere under the hair, so strands behind it are hidden.
     var head = scene.add(Object3D())
     scene.node(head).set_position(middle.x, middle.y, middle.z)

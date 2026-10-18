@@ -14,7 +14,14 @@ index into the list is an index JavaScript's `slice`, `indexOf` and
 
 `is_js_space` is the white space that JavaScript's `\\s` and `trim` match:
 the ASCII spaces, the line terminators, and the Unicode spaces.
+`is_js_word` is a byte JavaScript's `\\w` matches: a letter, a digit or `_`.
+`split_fields` splits a line on white space. `text_lines` splits a text
+at a carriage return or a line feed and keeps an empty line. `latin1_units`
+reads each byte as one code unit.
 """
+
+
+from loaders.bytes import ascii_digit, ascii_letter, ascii_space
 
 
 def is_js_space(unit: Int) -> Bool:
@@ -26,12 +33,11 @@ def is_js_space(unit: Int) -> Bool:
     Returns:
         Whether it is white space or a line terminator.
     """
-    if unit >= 9 and unit <= 13:
+    if ascii_space(unit):
         return True
     if unit >= 0x2000 and unit <= 0x200A:
         return True
     var spaces: List[Int] = [
-        32,
         0xA0,
         0x1680,
         0x2028,
@@ -42,6 +48,18 @@ def is_js_space(unit: Int) -> Bool:
         0xFEFF,
     ]
     return unit in spaces
+
+
+def is_js_word(byte: UInt8) -> Bool:
+    """Return True for a byte that JavaScript's `\\w` matches.
+
+    Args:
+        byte: The byte.
+
+    Returns:
+        Whether it is a letter, a digit or `_`.
+    """
+    return ascii_digit(Int(byte)) or ascii_letter(Int(byte)) or byte == 0x5F
 
 
 def js_units(text: String) -> List[Int]:
@@ -123,3 +141,54 @@ def js_trim(units: List[Int]) -> List[Int]:
     while end > start and is_js_space(units[end - 1]):
         end -= 1
     return js_part(units, start, end)
+
+
+def latin1_units(bytes: Span[UInt8, _]) -> List[Int]:
+    """Return each byte as one code unit, as `String.fromCharCode` does.
+
+    Args:
+        bytes: The bytes.
+
+    Returns:
+        One code unit per byte.
+    """
+    var out = List[Int](capacity=len(bytes))
+    for b in bytes:
+        out.append(Int(b))
+    return out^
+
+
+def split_fields(line: String) -> List[String]:
+    """Return a line split on white space.
+
+    Args:
+        line: The line.
+
+    Returns:
+        The words, in order.
+    """
+    var fields = List[String]()
+    for piece in line.split():
+        fields.append(String(piece))
+    return fields^
+
+
+def text_lines(text: String) -> List[String]:
+    """Return the lines of a text.
+
+    A carriage return becomes a line feed, then the text is split at each
+    line feed. An empty line is kept.
+
+    Error: Never.
+
+    Args:
+        text: The text.
+
+    Returns:
+        The lines, in order.
+
+    """
+    var out = List[String]()
+    for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch
+        out.append(String(line))
+    return out^

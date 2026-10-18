@@ -53,6 +53,11 @@ comptime HAIR_F0 = (1 - HAIR_IOR) * (1 - HAIR_IOR) / (
 comptime _SQRT_TWO_PI = Float32(2.5066282746)
 
 
+def _saturate(x: Float32) -> Float32:
+    """Hold a fraction using the historical lower-first order."""
+    return min(max(x, Float32(0)), Float32(1))
+
+
 @fieldwise_init
 struct HairLight(ImplicitlyCopyable):
     """A distant light as the hair sees it."""
@@ -95,16 +100,6 @@ struct HairLook(ImplicitlyCopyable):
         self.roughness = Float32(0.3)
         self.attenuation = Float32(350.0)
         self.shadows = Float32(0.75)
-
-
-def _times(a: Vector3, b: Vector3) -> Vector3:
-    """Return `a` and `b` multiplied channel by channel."""
-    return Vector3(a.x * b.x, a.y * b.y, a.z * b.z)
-
-
-def _saturate(x: Float32) -> Float32:
-    """Return `x` held to zero through one."""
-    return min(max(x, Float32(0)), Float32(1))
 
 
 def _cos_half(cos_angle: Float32) -> Float32:
@@ -337,7 +332,7 @@ def _shade_strands(
             to_camera.normalize()
             # Light is lost on its way down into the hair.
             var buried = exp(-look.attenuation * groom.depths[index])
-            var sum = _times(ambient, base) * buried
+            var sum = ambient * base * buried
             for l in range(len(lights)):  # pragma: no branch
                 var light = lights[l]
                 # The head shades the hair on its far side; the hair
@@ -353,13 +348,13 @@ def _shade_strands(
                 # so its pigment tints it twice: pale hair stays golden
                 # and does not wash out to white.
                 var diffuse = kajiya_kay(
-                    _times(base, base), light.direction, t
+                    base * base, light.direction, t
                 ) + scattered(base, light.direction, to_camera, t)
                 var specular = marschner(
                     strand_look, light.direction, to_camera, t
                 )
                 var lit = diffuse * shadow + specular * shadow
-                sum = sum + _times(lit, light.radiance)
+                sum = sum + lit * light.radiance
             colors[unsafe_offset=index * 3] = sum.x
             colors[unsafe_offset=index * 3 + 1] = sum.y
             colors[unsafe_offset=index * 3 + 2] = sum.z
@@ -393,6 +388,26 @@ def shade_groom(
         groom, look, lights, camera, ambient, colors, List[Float32]()
     )
     return colors^
+
+
+def require_groom_fields(groom: HairGroom) raises:
+    """Refuse shading fields that do not match the groom.
+
+    Nothing. The call returns when the normals, the depths, and the
+    shades match the groom.
+
+    Args:
+        groom: The strands.
+
+    Raises:
+        Error: If a shading field does not match the groom.
+    """
+    if (
+        len(groom.normals) != len(groom.points)
+        or len(groom.depths) != len(groom.points)
+        or len(groom.shades) != len(groom)
+    ):
+        raise Error("Hair shading fields must match the groom")
 
 
 def shade_groom_into(
@@ -439,12 +454,7 @@ def shade_groom_into(
             raise Error("Hair strand starts must partition the points")
     if len(colors) != count * 3:
         raise Error("Hair color storage needs three floats per point")
-    if (
-        len(groom.normals) != count
-        or len(groom.depths) != count
-        or len(groom.shades) != len(groom)
-    ):
-        raise Error("Hair shading fields must match the groom")
+    require_groom_fields(groom)
     if len(optical_depths) != 0 and len(optical_depths) != count * len(lights):
         raise Error("Hair optical depths need one value per point and light")
     for index in range(len(optical_depths)):

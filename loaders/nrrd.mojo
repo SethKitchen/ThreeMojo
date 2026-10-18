@@ -47,9 +47,18 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.finite import stored_float32
+from core.ordinal import require_non_negative, require_positive
 from math.norm import length3
+from loaders.bytes import ascii_digit, hex_digit_value, is_sign_mark
 from loaders.js_number import js_parse_float, js_parse_int
-from loaders.js_text import is_js_space, js_part, js_string, js_trim
+from loaders.js_text import (
+    is_js_space,
+    js_part,
+    js_string,
+    js_trim,
+    latin1_units,
+)
 from math.matrix4 import Matrix4
 from objects.volume import Volume, volume_values
 from render.inflate import inflate
@@ -148,22 +157,6 @@ def _array_type(type: String) raises -> String:
     raise Error("Unsupported NRRD data type: " + type)
 
 
-def _latin1(bytes: Span[UInt8, _]) -> List[Int]:
-    """Return bytes as three.js's `_parseChars` reads each one: a code
-    unit each.
-
-    Args:
-        bytes: The bytes.
-
-    Returns:
-        The code units.
-    """
-    var out = List[Int](capacity=len(bytes))
-    for b in bytes:
-        out.append(Int(b))
-    return out^
-
-
 def _words(units: List[Int]) -> List[String]:
     """Return JavaScript's `text.split( /\\s+/ )` of trimmed text.
 
@@ -216,7 +209,7 @@ def _is_nrrd_line(units: List[Int]) -> Bool:
         Whether `NRRD` and a digit are in it.
     """
     for k in range(len(units) - 4):
-        var digit = units[k + 4] >= 48 and units[k + 4] <= 57
+        var digit = ascii_digit(units[k + 4])
         if digit and js_string(units, k, k + 4) == "NRRD":
             return True
     return False
@@ -316,8 +309,9 @@ def parse_nrrd_header(text: List[Int]) raises -> NrrdHeader:
                     vector.append(js_parse_float(String(word)))
                 vectors.append(vector^)
                 at = close + 1
-            if len(vectors) == 0:
-                raise Error("NRRD: the space directions have no ( )")
+            require_positive(
+                len(vectors), "NRRD: the space directions have no ( )"
+            )
             header.vectors = vectors^
         elif field == "spacings":
             var spacings = List[Float64]()
@@ -414,7 +408,7 @@ def _typed(value: Float64, array_type: String) -> Float64:
     if array_type == "Float64":
         return value
     if array_type == "Float32":
-        return Float64(Float32(value))
+        return stored_float32(value)
     if isnan(value) or isinf(value):
         return 0
     var bits = 8
@@ -447,7 +441,7 @@ def _parse_int_radix(word: List[Int], radix: Int) -> Float64:
     while k < len(word) and word[k] == 0xA0:
         k += 1
     var negative = False
-    if k < len(word) and (word[k] == 43 or word[k] == 45):
+    if k < len(word) and is_sign_mark(word[k]):
         negative = word[k] == 45
         k += 1
     var hex_prefix = (
@@ -461,12 +455,9 @@ def _parse_int_radix(word: List[Int], radix: Int) -> Float64:
     var value = Float64(0)
     var digits = 0
     while k < len(word):
-        var u = word[k]
-        var digit = -1
-        if u >= 48 and u <= 57:
-            digit = u - 48
-        elif radix == 16 and (u | 32) >= 97 and (u | 32) <= 102:
-            digit = (u | 32) - 87
+        var digit = hex_digit_value(word[k])
+        if radix != 16 and digit > 9:
+            digit = -1
         if digit < 0:
             break
         value = value * Float64(radix) + Float64(digit)
@@ -562,10 +553,9 @@ def parse_nrrd(bytes: List[UInt8]) raises -> Volume:
         if bytes[i - 1] == 10 and bytes[i] == 10:
             end = i
             break
-    if end < 0:
-        raise Error("NRRD: no blank line ends the header")
+    require_non_negative(end, "NRRD: no blank line ends the header")
     # three.js's `_parseChars( _bytes, 0, i - 2 )`: one character short.
-    var header = parse_nrrd_header(_latin1(Span(bytes)[: max(end - 2, 0)]))
+    var header = parse_nrrd_header(latin1_units(Span(bytes)[: max(end - 2, 0)]))
     var data = Span(bytes)[end + 1 :]
     if not Bool(header.encoding):
         raise Error("NRRD: the header has no encoding")

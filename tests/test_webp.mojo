@@ -15,6 +15,11 @@ Streams and containers that no encoder writes are built here, bit by bit,
 for the errors that libwebp checks.
 """
 
+from core.binary import (
+    append_little_endian,
+    append_little_endian_u32,
+    copy_byte_range,
+)
 from loaders.json import parse_json
 from render.png import decode as decode_png
 from render.webp import decode, decode_alpha, is_webp
@@ -241,16 +246,13 @@ def test_a_malformed_lossless_stream_is_refused() raises:
 
 def _le32(value: Int) -> List[UInt8]:
     var out = List[UInt8]()
-    for i in range(4):
-        out.append(UInt8((value >> (8 * i)) & 0xFF))
+    append_little_endian_u32(out, value)
     return out^
 
 
 def _chunk(tag: String, data: List[UInt8], size: Int = -1) -> List[UInt8]:
     """A chunk, padded to an even length; `size` overrides its size."""
-    var out = List[UInt8]()
-    for b in tag.as_bytes():
-        out.append(b)
+    var out = List[UInt8](tag.as_bytes())
     out += _le32(len(data) if size < 0 else size)
     out += data.copy()
     if len(data) % 2 == 1:
@@ -270,8 +272,7 @@ def _riff(body: List[UInt8], riff: Int = -1) -> List[UInt8]:
 def _vp8x(width: Int, height: Int) -> List[UInt8]:
     var data: List[UInt8] = [0x10, 0, 0, 0]
     for value in [width - 1, height - 1]:
-        for i in range(3):
-            data.append(UInt8((value >> (8 * i)) & 0xFF))
+        append_little_endian(data, value, 3)
     return _chunk("VP8X", data)
 
 
@@ -565,6 +566,17 @@ def test_each_byte_of_the_start_code_is_checked() raises:
     flat[8] = 0
     flat[9] = 0
     _container_refused(_frame(flat^), "frame with no size")
+
+
+def test_a_byte_range_copies_up_to_its_end() raises:
+    var bytes = List[UInt8]()
+    bytes.append(1)
+    bytes.append(2)
+    bytes.append(3)
+    var copied = copy_byte_range(bytes, 1, 3)
+    assert_equal(len(copied), 2)
+    assert_equal(Int(copied[0]), 2)
+    assert_equal(len(copy_byte_range(bytes, 2, 1)), 0)
 
 
 def test_canvas_height_must_match_when_width_matches() raises:

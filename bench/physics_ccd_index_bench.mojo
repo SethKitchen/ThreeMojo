@@ -57,7 +57,8 @@ from bench.physics_static_bench import _Meter
 from extensions.physics.body import BodyId, DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import SPHERE_MESH_CCD
 from extensions.physics.ccd_index import _CCDIndex, _CCDNode
-from extensions.physics.shape import Shape, PhysicsMaterial, _wide
+from extensions.physics.shape import Shape, PhysicsMaterial
+from math.cross import widen_vector
 from extensions.physics.world import (
     CollisionEvent,
     PhysicsWorld,
@@ -522,8 +523,9 @@ def _phases(
     if distribution == 2 and not brute:
         var candidates = List[Int]()
         _ = world._ccd_index.query(
-            _wide(world.bodies[1].position),
-            _wide(world.bodies[1].linear_velocity) * Float64(Float32(0.01)),
+            widen_vector(world.bodies[1].position),
+            widen_vector(world.bodies[1].linear_velocity)
+            * Float64(Float32(0.01)),
             Float64(world.bodies[1].shape.radius),
             candidates,
         )

@@ -93,7 +93,7 @@ from extensions.humanoid.skeleton.soft_tissue import (
     filled_density,
 )
 from materials.material import DOUBLE_SIDE, PHONG
-from math.vector3 import Vector3
+from math.vector3 import Vector3, midpoint
 from std.math import inf, max, min, nan
 from std.testing import (
     TestSuite,
@@ -337,7 +337,7 @@ def test_knee_subtraction_removes_buried_zero_sets() raises:
     assert_true(cartilage.lens_distance(low) < 0)
     assert_true(cartilage.lens_distance(high) > 0)
     for _ in range(40):
-        var middle = (low + high) * Float32(0.5)
+        var middle = midpoint(low, high)
         if cartilage.lens_distance(middle) < 0:
             low = middle
         else:
@@ -377,18 +377,10 @@ def test_menisci_and_collaterals_are_inside_at_landmarks() raises:
             knee_distance(dims, LATERAL_MENISCUS, p), lateral.distance(p)
         )
     var mcl = CollateralField(dims, MEDIAL_COLLATERAL)
-    var mid = Vector3(
-        0.5 * (mcl.a.x + mcl.b.x),
-        0.5 * (mcl.a.y + mcl.b.y),
-        0.5 * (mcl.a.z + mcl.b.z),
-    )
+    var mid = midpoint(mcl.a, mcl.b)
     assert_true(knee_distance(dims, MEDIAL_COLLATERAL, mid) < 0)
     var lcl = CollateralField(dims, LATERAL_COLLATERAL)
-    var lmid = Vector3(
-        0.5 * (lcl.a.x + lcl.b.x),
-        0.5 * (lcl.a.y + lcl.b.y),
-        0.5 * (lcl.a.z + lcl.b.z),
-    )
+    var lmid = midpoint(lcl.a, lcl.b)
     assert_true(knee_distance(dims, LATERAL_COLLATERAL, lmid) < 0)
 
 

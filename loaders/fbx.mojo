@@ -66,6 +66,14 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import (
+    index_in_count,
+    ordinal_valid,
+    require_index_in_count,
+    require_non_negative,
+    require_positive,
+)
+
 from math.triangle_normal import polygon_normal
 
 from animation.animation_clip import AnimationClip
@@ -94,6 +102,8 @@ from lights.light import (
     point_light,
     spot_light,
 )
+from loaders.bytes import space_tab_line
+from loaders.file_path import path_directory
 from loaders.fbx_tree import (
     FBX_BYTES,
     FBX_STRING,
@@ -101,14 +111,21 @@ from loaders.fbx_tree import (
     FbxDocument,
     FbxFormat,
     object_name,
+    require_fbx_format,
     parse_fbx,
 )
-from loaders.fbx_animation import FbxAnimatedModel, read_fbx_animations
+from loaders.fbx_animation import (
+    FbxAnimatedModel,
+    _Link,
+    _connections,
+    read_fbx_animations,
+)
 from loaders.gltf import decode_base64
 from loaders.model_nodes import (
     authored_color,
     compose,
     decompose_onto,
+    remember_material,
     texture_from_bytes,
     texture_from_file,
 )
@@ -122,8 +139,8 @@ from materials.material import (
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
-from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector2 import Vector2, append_vector2, vector2_from_float64
+from math.vector3 import Vector3, append_vector3, vector3_from_float64
 from objects.mesh import Mesh
 from objects.skeleton import Bone, Skeleton
 from objects.skinned_mesh import (
@@ -138,6 +155,7 @@ from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha
 from render.texture_store import TextureId
 from std.math import atan, pi
 from std.pathlib import Path
+from units.measure import angle_degrees, length_meters
 from units.si import CENTIMETER, DEGREE, METER, Angle, Length
 
 # How deep the model hierarchy can go. The models are placed by
@@ -163,12 +181,7 @@ struct FbxMapping(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four mappings there are."""
-        return (
-            self == BY_POLYGON_VERTEX
-            or self == BY_POLYGON
-            or self == BY_VERTEX
-            or self == ALL_SAME
-        )
+        return ordinal_valid(self.value, ALL_SAME.value)
 
 
 # One value per corner of every polygon: `ByPolygonVertex`.
@@ -191,7 +204,7 @@ struct FbxReference(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the two references there are."""
-        return self == DIRECT or self == INDEX_TO_DIRECT
+        return ordinal_valid(self.value, INDEX_TO_DIRECT.value)
 
 
 # The mapping picks a value: `Direct`.
@@ -268,8 +281,11 @@ struct FbxLayer(Copyable, Movable):
             if len(self.indices) > 0:
                 index = self.indices[0]
         if self.reference == INDEX_TO_DIRECT:
-            if index < 0 or index >= len(self.indices):
-                raise Error("FBX: a layer index outside its index array")
+            require_index_in_count(
+                index,
+                len(self.indices),
+                "FBX: a layer index outside its index array",
+            )
             index = self.indices[index]
         var begin = index * self.size
         if index < 0 or begin + self.size > len(self.values):
@@ -361,7 +377,7 @@ def sanitize_node_name(name: String) -> String:
     """
     var out = List[UInt8]()
     for byte in name.as_bytes():
-        if byte == 32 or byte == 9 or byte == 10 or byte == 13:
+        if space_tab_line(byte):
             out.append(95)
         elif (
             byte != 91
@@ -576,8 +592,7 @@ def _triangulate(points: List[Vector3]) raises -> List[Int]:
     var out = List[Int]()
     while len(ring) > 3:
         var ear = _find_ear(flat, ring)
-        if ear < 0:
-            raise Error("FBX: a polygon crosses itself")
+        require_non_negative(ear, "FBX: a polygon crosses itself")
         var size = len(ring)
         out.append(ring[(ear + size - 1) % size])
         out.append(ring[ear])
@@ -636,15 +651,6 @@ struct _Part(Movable):
         self.colors = List[Float32]()
         self.uvs = List[Float32]()
         self.vertices = List[Int]()
-
-
-@fieldwise_init
-struct _Link(Copyable, Movable):
-    """One end of a connection: the other object's id, and the
-    connection's name, such as `DiffuseColor`, or empty."""
-
-    var id: Int
-    var relation: String
 
 
 @fieldwise_init
@@ -712,9 +718,7 @@ struct _RigRows(Movable):
             var offsets = List[Float32]()
             for vertex in vertices:  # pragma: no branch
                 var moved = target[vertex]
-                offsets.append(moved.x)
-                offsets.append(moved.y)
-                offsets.append(moved.z)
+                append_vector3(offsets, moved)
             geometry.add_morph_target(BufferAttribute(offsets^, 3))
 
 
@@ -857,7 +861,7 @@ def read_fbx(
         Error: If the file cannot be read, `parse_fbx` refuses it, or
             everything `load_fbx` raises.
     """
-    var directory = String(path[byte = 0 : path.rfind("/") + 1])
+    var directory = path_directory(path)
     return load_fbx(
         parse_fbx(Path(path).read_bytes()), directory, scene, assets
     )
@@ -892,8 +896,7 @@ def load_fbx(
             blend shape or an animation stack is malformed or names what
             is not there.
     """
-    if not document.format.is_valid():
-        raise Error("FBX: a format that is neither ASCII nor binary")
+    require_fbx_format(document.format)
     var objects = document.child(document.root(), "Objects")
     if objects == NO_FBX_NODE:
         raise Error("FBX: the file has no Objects")
@@ -965,20 +968,7 @@ struct _Loader(Movable):
         for node in document.children(objects):
             if document.property_count(node) > 0:
                 self.objects[document.integer(node, 0)] = node
-        var connections = document.child(document.root(), "Connections")
-        if connections != NO_FBX_NODE:
-            for link in document.children_named(connections, "C"):
-                var child = document.integer(link, 1)
-                var parent = document.integer(link, 2)
-                var relation = String()
-                if document.property_count(link) > 3:
-                    relation = document.string(link, 3)
-                if child not in self.parents:
-                    self.parents[child] = List[_Link]()
-                self.parents[child].append(_Link(parent, relation))
-                if parent not in self.children:
-                    self.children[parent] = List[_Link]()
-                self.children[parent].append(_Link(child, relation))
+        _connections(document, self.parents, self.children)
         self.document = document^
 
     # --- small readers ------------------------------------------------------
@@ -1011,15 +1001,31 @@ struct _Loader(Movable):
             return List[_Link]()
         return table[id].copy()
 
+    def _required_child(self, node: Int, name: String) raises -> Int:
+        """Return a child node a parent must hold.
+
+        Args:
+            node: The parent.
+            name: The child's name.
+
+        Returns:
+            The child.
+
+        Raises:
+            Error: If the parent has no such child.
+        """
+        var found = self.document.child(node, name)
+        if found == NO_FBX_NODE:
+            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        return found
+
     def text_of(self, node: Int, name: String) raises -> String:
         """Return the string a required child node holds.
 
         Raises:
             Error: If the node has no such child.
         """
-        var found = self.document.child(node, name)
-        if found == NO_FBX_NODE:
-            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        var found = self._required_child(node, name)
         return self.document.string(found, 0)
 
     def entry(self, node: Int, name: String) raises -> Int:
@@ -1049,10 +1055,10 @@ struct _Loader(Movable):
         var entry = self.entry(node, name)
         if entry == NO_FBX_NODE:
             return default
-        return Vector3(
-            Float32(self.document.number(entry, 4)),
-            Float32(self.document.number(entry, 5)),
-            Float32(self.document.number(entry, 6)),
+        return vector3_from_float64(
+            self.document.number(entry, 4),
+            self.document.number(entry, 5),
+            self.document.number(entry, 6),
         )
 
     def entry_color(self, entry: Int) raises -> Color:
@@ -1456,20 +1462,20 @@ struct _Loader(Movable):
             face.vertices.append(vertex)
             face.points.append(
                 pre.transform_point(
-                    Vector3(
-                        Float32(positions[vertex * 3]),
-                        Float32(positions[vertex * 3 + 1]),
-                        Float32(positions[vertex * 3 + 2]),
+                    vector3_from_float64(
+                        positions[vertex * 3],
+                        positions[vertex * 3 + 1],
+                        positions[vertex * 3 + 2],
                     )
                 )
             )
             if has_normal:
                 var at = normals.start(corner, polygon, vertex)
                 var normal = turn.transform_direction(
-                    Vector3(
-                        Float32(normals.values[at]),
-                        Float32(normals.values[at + 1]),
-                        Float32(normals.values[at + 2]),
+                    vector3_from_float64(
+                        normals.values[at],
+                        normals.values[at + 1],
+                        normals.values[at + 2],
                     )
                 )
                 normal.normalize()
@@ -1477,17 +1483,15 @@ struct _Loader(Movable):
             if has_uv:
                 var at = uvs.start(corner, polygon, vertex)
                 face.uvs.append(
-                    Vector2(
-                        Float32(uvs.values[at]), Float32(uvs.values[at + 1])
-                    )
+                    vector2_from_float64(uvs.values[at], uvs.values[at + 1])
                 )
             if has_color:
                 var at = colors.start(corner, polygon, vertex)
                 face.colors.append(
-                    Vector3(
-                        Float32(colors.values[at]),
-                        Float32(colors.values[at + 1]),
-                        Float32(colors.values[at + 2]),
+                    vector3_from_float64(
+                        colors.values[at],
+                        colors.values[at + 1],
+                        colors.values[at + 2],
                     )
                 )
             if has_material:
@@ -1670,10 +1674,10 @@ struct _Loader(Movable):
             var focal = self.value(attribute, "FocalLength", 0)
             fov = 2 * atan(0.5 * film / focal) * 180 / pi
         var camera = PerspectiveCamera(
-            Angle(Float32(fov), DEGREE),
+            angle_degrees(fov),
             Float32(aspect),
-            Length(Float32(near), METER),
-            Length(Float32(far), METER),
+            length_meters(near),
+            length_meters(far),
         )
         camera.attach(node)
         self.model.cameras.append(camera)
@@ -1713,9 +1717,7 @@ struct _Loader(Movable):
                 node,
                 intensity,
                 distance=distance,
-                angle=Angle(
-                    Float32(self.value(attribute, "InnerAngle", 60)), DEGREE
-                ),
+                angle=angle_degrees(self.value(attribute, "InnerAngle", 60)),
                 penumbra=penumbra,
                 decay=1,
             )
@@ -1741,9 +1743,7 @@ struct _Loader(Movable):
     ) -> MaterialId:
         """Return a material three.js makes when a file names none, making
         it the first time."""
-        if key not in self.defaults:
-            self.defaults[key] = assets.materials.add(material)
-        return self.defaults.get(key, MaterialId(0))
+        return remember_material(self.defaults, key, material, assets)
 
     def place_meshes(
         mut self, id: Int, node: NodeId, mut scene: Scene, mut assets: Assets
@@ -1762,8 +1762,7 @@ struct _Loader(Movable):
                 materials.append(
                     self.model.materials[self.material_at[link.id]]
                 )
-        if geometry < 0:
-            raise Error("FBX: a mesh model has no mesh geometry")
+        require_non_negative(geometry, "FBX: a mesh model has no mesh geometry")
         self.build_geometry(geometry, assets)
         var colored = self.colored[geometry]
         if len(materials) == 0:
@@ -1824,9 +1823,7 @@ struct _Loader(Movable):
             Error: If the node has no such child, or it does not hold
                 sixteen numbers.
         """
-        var found = self.document.child(node, name)
-        if found == NO_FBX_NODE:
-            raise Error("FBX: " + self.document.name(node) + " has no " + name)
+        var found = self._required_child(node, name)
         var values = self.document.numbers(found)
         if len(values) != 16:
             raise Error("FBX: a " + name + " needs sixteen numbers")
@@ -1892,8 +1889,7 @@ struct _Loader(Movable):
                 if self.kind(bone.id) == "Model":
                     self.rig.bones[bone.id] = True
         var owners = self.links(self.parents, id)
-        if len(owners) == 0:
-            raise Error("FBX: a skin deforms no geometry")
+        require_positive(len(owners), "FBX: a skin deforms no geometry")
         self.rig.clusters[id] = clusters^
         # A geometry keeps the last skin connected to it, as three.js's
         # `parseMeshGeometry` keeps it. The skin is a child of its owner:
@@ -1923,8 +1919,9 @@ struct _Loader(Movable):
                 if below.relation == "":
                     shape = below.id
                     break
-            if shape < 0:
-                raise Error("FBX: a blend shape channel has no shape")
+            require_non_negative(
+                shape, "FBX: a blend shape channel has no shape"
+            )
             # three.js adds the channel only when its shape is a geometry.
             if self.kind(shape) == "Geometry":
                 self.rig.shapes[link.id] = self.objects[shape]
@@ -1932,7 +1929,7 @@ struct _Loader(Movable):
         for owner in self.links(self.parents, id):
             if owner.id not in self.rig.channels:
                 self.rig.channels[owner.id] = List[Int]()
-            self.rig.channels[owner.id].extend(channels.copy())
+            self.rig.channels[owner.id].extend(Span(channels))
 
     def is_channel(self, id: Int) raises -> Bool:
         """Return True if an object is a `BlendShapeChannel` deformer."""
@@ -1970,7 +1967,7 @@ struct _Loader(Movable):
                 for at in range(len(cluster.indices)):
                     var vertex = cluster.indices[at]
                     # three.js looks up only the positions a polygon names.
-                    if _within(vertex, count):
+                    if index_in_count(vertex, count):
                         bones[vertex].append(bone)
                         shares[vertex].append(cluster.weights[at])
             for vertex in range(count):
@@ -2005,14 +2002,13 @@ struct _Loader(Movable):
                 raise Error("FBX: a shape needs three numbers per index")
             for at in range(len(indices)):
                 var vertex = indices[at]
-                if not _within(vertex, count):
-                    raise Error(
-                        "FBX: a shape names a position that is not there"
-                    )
-                offsets[vertex] = Vector3(
-                    Float32(moved[at * 3]),
-                    Float32(moved[at * 3 + 1]),
-                    Float32(moved[at * 3 + 2]),
+                require_index_in_count(
+                    vertex,
+                    count,
+                    "FBX: a shape names a position that is not there",
+                )
+                offsets[vertex] = vector3_from_float64(
+                    moved[at * 3], moved[at * 3 + 1], moved[at * 3 + 2]
                 )
             for vertex in range(count):
                 offsets[vertex] = pre.transform_point(offsets[vertex])
@@ -2099,8 +2095,7 @@ struct _Loader(Movable):
                 for link in self.links(self.children, cluster.id):
                     if link.id in placed:
                         bone = link.id
-                if bone < 0:
-                    raise Error("FBX: a cluster has no bone")
+                require_non_negative(bone, "FBX: a cluster has no bone")
                 bones.append(Bone(placed[bone], _inverse(cluster.link)))
             var bind = Matrix4()
             if waiting.model in self.rig.poses:
@@ -2143,11 +2138,6 @@ struct _Loader(Movable):
         self.model.animations = read_fbx_animations(
             self.document, self.objects_node, models, self.rig.slots
         )
-
-
-def _within(index: Int, count: Int) -> Bool:
-    """Return True if an index is from zero to below a count."""
-    return index >= 0 and index < count
 
 
 def _four_largest(
@@ -2244,19 +2234,12 @@ struct _Face(Movable):
         for corner in order:  # pragma: no branch
             var p = self.points[corner]
             part.vertices.append(self.vertices[corner])
-            part.positions.append(p.x)
-            part.positions.append(p.y)
-            part.positions.append(p.z)
+            append_vector3(part.positions, p)
             if len(self.normals) > 0:
                 var n = self.normals[corner]
-                part.normals.append(n.x)
-                part.normals.append(n.y)
-                part.normals.append(n.z)
+                append_vector3(part.normals, n)
             if len(self.uvs) > 0:
-                part.uvs.append(self.uvs[corner].x)
-                part.uvs.append(self.uvs[corner].y)
+                append_vector2(part.uvs, self.uvs[corner])
             if len(self.colors) > 0:
                 var c = self.colors[corner]
-                part.colors.append(c.x)
-                part.colors.append(c.y)
-                part.colors.append(c.z)
+                append_vector3(part.colors, c)

@@ -34,22 +34,28 @@ its distance to its target.
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.camera_frame import CameraFrame
-from controls.held_keys import HOLD_TIMEOUT, HeldKeys
+from controls.held_keys import HOLD_TIMEOUT, HeldKeys, require_frame_time
 from controls.input import (
     ARROW_DOWN,
     ARROW_LEFT,
     ARROW_RIGHT,
     ARROW_UP,
     InputEvent,
+    KEY_A,
+    KEY_D,
     KEY_DOWN,
+    KEY_S,
     KEY_UP,
+    KEY_W,
     Key,
+    require_input,
     POINTER_DOWN,
     POINTER_MOVE,
 )
 from math.euler import Euler, YXZ
 from math.vector3 import Vector3
 from std.math import pi
+from units.measure import angle_radians
 from units.si import (
     Angle,
     Duration,
@@ -61,10 +67,6 @@ from units.si import (
     Velocity,
 )
 
-comptime KEY_W = Key(119)
-comptime KEY_S = Key(115)
-comptime KEY_A = Key(97)
-comptime KEY_D = Key(100)
 # Radians a pixel of movement turns. three.js: `_MOUSE_SENSITIVITY`.
 comptime MOUSE_SENSITIVITY = Float32(0.002)
 comptime QUARTER_TURN = Float32(pi / 2)
@@ -100,7 +102,7 @@ struct PointerLockControls(Copyable, Movable):
         self.enabled = True
         self.is_locked = False
         self.min_polar_angle = Angle(0.0, RADIAN)
-        self.max_polar_angle = Angle(Float32(pi), RADIAN)
+        self.max_polar_angle = angle_radians(pi)
         self.pointer_speed = 1.0
         self.movement_speed = Velocity(1.0, METER_PER_SECOND)
         self.key_timeout = HOLD_TIMEOUT
@@ -287,12 +289,7 @@ struct PointerLockControls(Copyable, Movable):
             Error: If the event's kind, button or key is invalid, or the
                 polar range is empty.
         """
-        if not event.kind.is_valid():
-            raise Error("Invalid input kind: ", event.kind.value)
-        if not event.button.is_valid():
-            raise Error("Invalid pointer button: ", event.button.value)
-        if not event.key.is_valid():
-            raise Error("Invalid key: ", event.key.value)
+        require_input(event)
         if not (self.max_polar_angle.value >= self.min_polar_angle.value):
             raise Error(
                 "A polar range must not have its maximum below its minimum"
@@ -391,8 +388,7 @@ struct PointerLockControls(Copyable, Movable):
         Raises:
             Error: If the time is negative.
         """
-        if delta.value < 0:
-            raise Error("A frame's time must not be negative")
+        require_frame_time(delta)
         var step = self.movement_speed.to(METER_PER_SECOND) * delta.to(SECOND)
         var forward = self._axis(KEY_W, ARROW_UP) - self._axis(
             KEY_S, ARROW_DOWN

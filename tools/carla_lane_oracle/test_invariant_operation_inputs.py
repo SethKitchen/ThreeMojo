@@ -94,6 +94,22 @@ def _seed_score_admission_predecessor(node):
     return node
 
 
+def _inventory_admission_entries_predecessor(entries):
+    """Invert only the exact two newly reviewed inventory entry pairs."""
+    expected = ast.parse("def _public_admission_entries():\n"
+        "    return {'cache_key_contracts.py': ('verify',),\n"
+        "            'rounded_line_selector_contracts.py': ('verify_premises',),\n"
+        "            'seed_count_contracts.py': ('verify_score',),\n"
+        "            'sum2_guard_contracts.py': ('verify',),\n"
+        "            'lane_order_contracts.py': ('verify',)}").body[0]
+    if ast_key(entries) != ast_key(expected):
+        raise AssertionError('unreviewed seed admission factory inventory entry transition')
+    prior = copy.deepcopy(entries)
+    prior.body[0].value.keys = prior.body[0].value.keys[:-2]
+    prior.body[0].value.values = prior.body[0].value.values[:-2]
+    return prior
+
+
 def _seed_admission_factory_predecessor(node, entries):
     """Authenticate the single seed entry and its exact existing-parent guard."""
     node = copy.deepcopy(node)
@@ -104,6 +120,7 @@ def _seed_admission_factory_predecessor(node, entries):
         "    return {'cache_key_contracts.py': ('verify',),\n"
         "            'rounded_line_selector_contracts.py': ('verify_premises',),\n"
         "            'seed_count_contracts.py': ('verify_score',)}").body[0]
+    entries = _inventory_admission_entries_predecessor(entries)
     checked(ast_key(entries) == ast_key(expected_entries), 'entry set')
     checked(node.name == 'typed_admission_scope' and len(node.body) == 8,
             'body shape')
@@ -547,6 +564,23 @@ class SeedScoreAdmissionAstControls(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'unreviewed seed score admission'):
                 _seed_score_admission_predecessor(node)
 
+    def test_inventory_entry_transition_is_exact_and_preserves_old_three(self):
+        entries = function_ast(cleanup, '_public_admission_entries')
+        prior = _inventory_admission_entries_predecessor(entries)
+        self.assertEqual([key.value for key in prior.body[0].value.keys],
+                         ['cache_key_contracts.py', 'rounded_line_selector_contracts.py',
+                          'seed_count_contracts.py'])
+        for fault in ('missing', 'renamed', 'different method', 'swapped', 'extra statement'):
+            altered = copy.deepcopy(entries)
+            pairs = altered.body[0].value
+            if fault == 'missing': pairs.keys.pop(); pairs.values.pop()
+            elif fault == 'renamed': pairs.keys[-1].value = 'other_contracts.py'
+            elif fault == 'different method': pairs.values[-1].elts[0].value = 'other'
+            elif fault == 'swapped': pairs.keys[-1], pairs.keys[-2] = pairs.keys[-2], pairs.keys[-1]
+            else: altered.body.append(ast.Pass())
+            with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'inventory entry transition'):
+                _inventory_admission_entries_predecessor(altered)
+
     def test_seed_scope_factory_preserves_owned_paths_and_authenticated_parent_reuse(self):
         node = function_ast(source, 'typed_admission_scope')
         entries = function_ast(cleanup, '_public_admission_entries')
@@ -576,7 +610,10 @@ class SeedScoreAdmissionAstControls(unittest.TestCase):
             elif fault == 'extra entry':
                 altered.body[0].value.keys.append(ast.Constant(value='sum2_guard_contracts.py'))
                 altered.body[0].value.values.append(ast.Tuple(elts=[ast.Constant(value='verify')], ctx=ast.Load()))
-            else: altered.body[0].value.values[-1].elts[0].value = 'verify'
+            else:
+                seed = next(index for index, key in enumerate(altered.body[0].value.keys)
+                            if key.value == 'seed_count_contracts.py')
+                altered.body[0].value.values[seed].elts[0].value = 'verify'
             with self.subTest(fault=fault), self.assertRaisesRegex(AssertionError, 'unreviewed seed admission factory'):
                 _seed_admission_factory_predecessor(changed, altered)
 
@@ -2400,6 +2437,15 @@ typed_current = typed.is_current(module_path, current)
 # Tuple: module, original owner, physical expression, expected count, selections.
 # Each selection is (index, stable site suffix, comparator mode, narrow binding kind).
 _OPERATION_REACHED_READ_SPECS = (
+    # PR760's complete physical-image branch precedes the preserved typed
+    # boundary branch. Trace the actual cohort and candidate reads too,
+    # including every call of the nested observer during its final reread.
+    ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', '_pr760_select',
+     '_regular(root, path).read_bytes()', 1,
+     ((0, 'pr760-cohort-physical', 'bytes', 'observe'),)),
+    ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', '_pr760_candidate_bindings',
+     '_regular(root, path).read_bytes()', 1,
+     ((0, 'pr760-candidate-physical', 'bytes', 'observe'),)),
     ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', '_scaled_float32_bindings',
      '_regular(root, path).read_bytes()', 1, ((0, 'scaled-source-and-witness-observation', 'bytes', 'observe'),)),
     ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', 'scaled_float32_proof_bindings',
@@ -2766,7 +2812,7 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
                                  ast_key(ast.Name(id='raw', ctx=ast.Load())))
         for index, suffix, mode, binding in selections:
             call = calls[index]
-            if suffix.startswith('typed-'):
+            if suffix.startswith(('typed-', 'pr760-')):
                 parents = {child: parent for parent in ast.walk(node)
                            for child in ast.iter_child_nodes(parent)}
                 observed = parents[call]
@@ -3313,6 +3359,17 @@ class OperationReachedBindingControls(unittest.TestCase):
     assert_one_owner = BoundedOwnerCurrentControls.assert_one_owner
 
     def test_current_cold_routes_preserve_consumed_value_bindings(self):
+        self._cold_routes_preserve_consumed_value_bindings(pr760=True)
+
+    def test_common758_cold_routes_preserve_consumed_value_bindings(self):
+        import _full_audit_test_fixtures as fixtures
+        self.root = fixtures.copy_common758_boundary_root(self, self.root)
+        self._cold_routes_preserve_consumed_value_bindings(pr760=False)
+
+    def _cold_routes_preserve_consumed_value_bindings(self, *, pr760):
+        examples = {path: (self.root/path).read_bytes()
+                    for path in cleanup.pr760_stage.EXAMPLE_PATHS}
+        self.assertIs(cleanup._pr760_image_selected(examples), pr760)
         import winner_sign_contracts as winner
         import check_runtime_support as runtime
         import check_sampled_values as sampled
@@ -3337,14 +3394,32 @@ class OperationReachedBindingControls(unittest.TestCase):
                     self.assertTrue(all(operation is not previous for previous in owners))
                     owners.append(operation)
                     report = summarize(operation, kind)
-                    for suffix in ('typed-marker-first', 'typed-source-first',
-                                   'typed-bound-input-first', 'typed-bound-input-final'):
-                        self.assertIn('tools/carla_lane_oracle/full_audit_cleanup_contracts.py:' + suffix,
-                                      report['reached_sites'])
-                    if kind in ('invariant', 'winner', 'runtime', 'sampled'):
+                    prefix = 'tools/carla_lane_oracle/full_audit_cleanup_contracts.py:'
+                    # Both fixed physical cohorts retain their own obligations.
+                    # A PR760 early return cannot claim the old sites were read.
+                    typed_sites = {prefix + suffix for suffix in (
+                        'typed-marker-first', 'typed-source-first',
+                        'typed-bound-input-first', 'typed-bound-input-final')}
+                    candidate_site = prefix + 'pr760-candidate-physical'
+                    reached, residual = (set(report['reached_sites']),
+                                         set(report['residual_unreached_sites']))
+                    self.assertIn(prefix + 'pr760-cohort-physical', reached)
+                    self.assertLessEqual(typed_sites, residual if pr760 else reached)
+                    self.assertIn(candidate_site, reached if pr760 else residual)
+                    if pr760:
+                        # The candidate's one observer serves both first and
+                        # terminal reads. Require both consumed map values to
+                        # join this cold owner's pending publication, rather
+                        # than treating one reached AST address as two reads.
+                        map_reads = [row
+                            for binding in report['site_bindings'][candidate_site]
+                            for row in binding['path_mode_phase_counts']
+                            if row[0] == 'extensions/carla/map.mojo']
+                        self.assertEqual(map_reads, [
+                            ['extensions/carla/map.mojo', 'bytes', 'pending', 2]])
+                    if pr760 or kind in ('invariant', 'winner', 'runtime', 'sampled'):
                         for suffix in ('typed-provenance-first', 'typed-provenance-final'):
-                            self.assertIn('tools/carla_lane_oracle/full_audit_cleanup_contracts.py:' + suffix,
-                                          report['reached_sites'])
+                            self.assertIn(prefix + suffix, reached)
                     if kind in ('runtime', 'sampled'):
                         self.assertTrue({kind, 'invariant'} <= events['frames'])
                         self.assertEqual(set(result['typed_boundary_successors']), set(cleanup.typed_boundary.SOURCE_PATHS))
@@ -3363,7 +3438,7 @@ class OperationReachedBindingControls(unittest.TestCase):
                     if kind == 'map_loops':
                         self.assertIn('tools/coverage_loop_proofs.py:typed-source-final', report['reached_sites'])
                     # These shared-helper theorem branches remain outside the
-                    # six owned routes. The typed/cleanup rereads are current. Never report them as exercised owner
+                    # six owned routes in either cohort. Never report them as exercised owner
                     # observations merely because their AST addresses exist.
                     self.assertLessEqual({
                         'tools/coverage_loop_proofs.py:' + suffix for suffix in (
@@ -3380,6 +3455,2925 @@ class OperationReachedBindingControls(unittest.TestCase):
 # are always original. See the separately frozen 8-method / 18-owner plan.
 
 
+# Exact test-only PR760 implementation successor. Historical inverse data and
+# whole-file predecessor digests below remain unchanged.
+_PR760_CHECKER_SOURCE_EDGES = {'coverage_loop_proofs.py': {'after_sha256': '21e3a9637a69c6abbf27e9c8dd193a1addf7ed8537dd8f2734c35ff1a468304d',
+ 'before_sha256': '28ff5cfe131ee2812d0a71a4a525ef3c962e5fa80442196dbb4b4cecfdb3d1ed',
+ 'edits': ((23, 24, (), ('import types\n',)),
+           (498,
+            508,
+            (),
+            ('# PR760 local literal successor. The retained-groom theorem below is unchanged.\n',
+             'HAIR_LITERAL_SUCCESSOR = ({\n',
+             "    'extensions/humanoid/skeleton/head/hair/strands.mojo':\n",
+             "        '058c0e6fbfce95ee97c79247622185de968c8de5e0ad23240d667da13776404f',\n",
+             '}, (\n',
+             "    (229, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),\n",
+             "    (235, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),\n",
+             '))\n',
+             '\n',
+             '\n')),
+           (805,
+            806,
+            ('def repaired_density_loops(root, *, include_roots=()):\n',),
+            ('def repaired_density_loops(root, *, include_roots=(), _operation=None):\n',)),
+           (807,
+            812,
+            (),
+            ("    operation_args = {} if _operation is None else {'_operation': _operation}\n",
+             "    stream_args = {} if _operation is None else {'_operation': _operation, '_root': "
+             'root}\n',
+             '    if _operation is not None:\n',
+             '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+             '        cleanup._operation_include_context(_operation, root, include_roots)\n')),
+           (813,
+            815,
+            ('        if file_sha256(relative_source(root, DENSITY_SOURCE)) != '
+             'DENSITY_AFTER_SHA256:\n',),
+            ('        if file_sha256(relative_source(root, DENSITY_SOURCE, **operation_args),\n',
+             '                       **stream_args) != DENSITY_AFTER_SHA256:\n')),
+           (818,
+            820,
+            ('    if not all(_density_stdlib_unshadowed(path) for path in (root, '
+             '*include_roots)):\n',),
+            ('    if not all(_density_stdlib_unshadowed(path, **operation_args)\n',
+             '               for path in (root, *include_roots)):\n')),
+           (828,
+            1281,
+            (),
+            ('\n',
+             '\n',
+             '# Fixed physical density/groom import closure on the reviewed PR760 image.\n',
+             '# These bytes bind local domination proofs only, never whole CARLA admission.\n',
+             "DENSITY760_INPUTS = {'core/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'core/assets.mojo': "
+             "'5d5394df10b330767970b8585f9707673fb1ee6ef0f269ec430b8e2ffa54f89b',\n",
+             " 'core/background.mojo': "
+             "'0d43517034157e341071cd96448901e0483480053e26df93dca3521680446039',\n",
+             " 'core/binary.mojo': "
+             "'2d3a5a121ebcd919fc987b5972eb1071100bdd9dc397695c789561cc275e59d7',\n",
+             " 'core/buffer_attribute.mojo': "
+             "'8b0dfe3d758bf4e323805f5a3c513a3102f7fde86f7ebad418db3264295ceaed',\n",
+             " 'core/buffer_geometry.mojo': "
+             "'9e09d806746e717207b5d20bff79369b5cc6357bcde1d9a609792c0095668176',\n",
+             " 'core/extent.mojo': "
+             "'50f3c4fcc55b672ab1d42505cf70baeb3aae85ebf915927369246ab7e214a023',\n",
+             " 'core/fog.mojo': "
+             "'8026f0db83e2eef31d0e63793f65a449cb9eebae917e081e950a851ab98ca66c',\n",
+             " 'core/gaussian_splat_utils.mojo': "
+             "'63e4123f61a1e8ae6845b0eae449b5c173368bdf0ca691d7327255d33c8533b3',\n",
+             " 'core/geometry_store.mojo': "
+             "'c42cde4b1e8c5668b138d462a997ac23d36cfe9789cddd22eaee142a2cec6f06',\n",
+             " 'core/interleaved_buffer.mojo': "
+             "'2d9b3760a4e0d9d227d38a91ef4917501ffecdedfdf60bf0e8ccacd0e60de597',\n",
+             " 'core/layers.mojo': "
+             "'ebc7a81fcc9f8b7d36ab3cecc46208f078797b7ac108317baaac9a9d44cacb7b',\n",
+             " 'core/morph.mojo': "
+             "'8c84adfbad9405ae1f582ba6e3f6a9b39db14bbf8ac20e96bee1d03e9d6be47d',\n",
+             " 'core/object3d.mojo': "
+             "'749062c89390981215d7f4d9fb60a4557291b734b19f93571d4e46e1996cb203',\n",
+             " 'core/order.mojo': "
+             "'4c7a1e85fbb2ceffa9c6d59a4294517057b1580dfd7b0e2f07b1ec99b59096b7',\n",
+             " 'core/ordinal.mojo': "
+             "'020ae821e6e4d6f596174a672f70876d43a13d5a397bd42ef1b2152ac736bb90',\n",
+             " 'core/scene.mojo': "
+             "'4eb55a160cd53e4db34a51bc6fc48e7427cb10ffa4ffa72e191519dee76e8b20',\n",
+             " 'core/search.mojo': "
+             "'1bc8bedd8b4d91ff3a455fa8232dc36fdfdeae0b7f61adf8d41ee16467b8df72',\n",
+             " 'core/user_data.mojo': "
+             "'bec1a6fb8cf0cc43536c0e347a5e302fa225988a47dcd5001b30fb9dd443d5a5',\n",
+             " 'extensions/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/anatomy/__init__.mojo': "
+             "'e07a6d503cb1d532b4dac54ceca76d6ff2b7bbddea0af02d17f55b64143ee1cf',\n",
+             " 'extensions/anatomy/soft_tissue.mojo': "
+             "'7a72a46ef52f2d4a506b30eb405381a2e24760bfdb7e80a3b49bde1a29d1b91b',\n",
+             " 'extensions/humanoid/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/assets.mojo': "
+             "'5bb7d4e755b00fb7f9170449fac3fb294b8a32be7397772cfec73fd1af0a0fd4',\n",
+             " 'extensions/humanoid/athleticism.mojo': "
+             "'0cddb9a18fbd1de06a3af23fdba6bd6d76a0227c537277bf87ebc6b6aedc9541',\n",
+             " 'extensions/humanoid/genome.mojo': "
+             "'6e76453b4bd8f3b1fc7a1575ceff46684aa3d4c333b4fed506dfc21ed68a5eca',\n",
+             " 'extensions/humanoid/sex.mojo': "
+             "'d31e08b1eb5e8301ae86d895b1f0e35e9242ea0e2e265227243c4231b406c342',\n",
+             " 'extensions/humanoid/side.mojo': "
+             "'8e0d56aaa0b8a06cde796f440809daab81ff2ba5042c56f5474beaf5115cd2a9',\n",
+             " 'extensions/humanoid/skeleton/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/assembly.mojo': "
+             "'f62f2445d176dcb7135826a79fe03cf1ef1958717e9241fe6d083eadd034911f',\n",
+             " 'extensions/humanoid/skeleton/arm/bones/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/bones/dimensions.mojo': "
+             "'fec01e7fcf2e22f572025a9aa25ee73787afe40a81af3d15895ed870eb220388',\n",
+             " 'extensions/humanoid/skeleton/arm/bones/geometry.mojo': "
+             "'b97e08430c780a0ee916aaa1137af5c64f2282de7330d34bd23e68f591c5903e',\n",
+             " 'extensions/humanoid/skeleton/arm/contents.mojo': "
+             "'4abe4929a889fbb130217874c52a470fad109c0d29d85a3e6004a77eeb28f508',\n",
+             " 'extensions/humanoid/skeleton/arm/frame.mojo': "
+             "'a6a2fd6455f20e4e261fb43d4b6754d382da71dd060a79a19612cafc4f927546',\n",
+             " 'extensions/humanoid/skeleton/arm/hair/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/hair/dimensions.mojo': "
+             "'2117dae1a6b922403571c72f661ed270acef62589299c02daab143edd3d9188d',\n",
+             " 'extensions/humanoid/skeleton/arm/hair/geometry.mojo': "
+             "'20d3ff217a0c2fca7da2e62c94d5a5369261f1eb613e210c4a9e4d9bb9ea54db',\n",
+             " 'extensions/humanoid/skeleton/arm/ligaments/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/ligaments/dimensions.mojo': "
+             "'d6439c7dc5bff3066ca69d8e610162f9038cb65dcc3056da3d430ab11a401162',\n",
+             " 'extensions/humanoid/skeleton/arm/ligaments/geometry.mojo': "
+             "'efdc55cb634b732654bc268971c0fafde6baa2d502ba0d4f827ec63acb1018e3',\n",
+             " 'extensions/humanoid/skeleton/arm/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/lymph/dimensions.mojo': "
+             "'9c69c757e141106011074cc20ba0e0e90543ee7e2c767bf741f046ebf7b11a63',\n",
+             " 'extensions/humanoid/skeleton/arm/lymph/geometry.mojo': "
+             "'77d88fb31f2fdb2b3e7f0492c5f8b3f833afa3ac82d9f2094294081460b538ab',\n",
+             " 'extensions/humanoid/skeleton/arm/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/muscles/dimensions.mojo': "
+             "'daea51edd98ea1882e5f5b840ef43e93f3f4421b6e142ad2fd6d5c1ca5174a0b',\n",
+             " 'extensions/humanoid/skeleton/arm/muscles/geometry.mojo': "
+             "'87c62ef12263a84408013142de1306ad3d682401d223121ee49a16a878bb1e26',\n",
+             " 'extensions/humanoid/skeleton/arm/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/nerves/dimensions.mojo': "
+             "'5f99788bd09e4eba09c04c10547b443af4640e58161dd2414340f2fa63b8fee5',\n",
+             " 'extensions/humanoid/skeleton/arm/nerves/geometry.mojo': "
+             "'f4c02994854f0cdabe88453f3a7c691bb44dab599157da776380ba0289340cb4',\n",
+             " 'extensions/humanoid/skeleton/arm/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/skin/dimensions.mojo': "
+             "'65341dc934994f1401535fc732255739dae36ff4790389ca7808729064e92aa0',\n",
+             " 'extensions/humanoid/skeleton/arm/skin/geometry.mojo': "
+             "'8b687cd8a8982e32f2fac500c2db809a3ada568c4fbc3903dfd081f9089a05a3',\n",
+             " 'extensions/humanoid/skeleton/arm/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/arm/vessels/dimensions.mojo': "
+             "'720932e514410d8ed79f7bab028cda672a68b0380b11376b34356038faa4b6c9',\n",
+             " 'extensions/humanoid/skeleton/arm/vessels/geometry.mojo': "
+             "'a5f4cb9a6493d4ea73a5a50b4a146aa054452ca11a762922c2851771af35bc31',\n",
+             " 'extensions/humanoid/skeleton/complexion.mojo': "
+             "'4000aa47c43c805097a54b96d226ae89d6341a6ca6c79436e80b7e8dbd56ad06',\n",
+             " 'extensions/humanoid/skeleton/dermis.mojo': "
+             "'bdfbe857828add673109c382a8478ad6ea7a47c495b8bbfd3b38a6844d0ff5f9',\n",
+             " 'extensions/humanoid/skeleton/field.mojo': "
+             "'c5c57466cc6bd576d56bddd948f5dcbc3330523b2375742c8a8f1ab687d40fa9',\n",
+             " 'extensions/humanoid/skeleton/foot/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/assembly.mojo': "
+             "'3cf5b178fa42b49feebf9336703caa990b43ed83dc2f0075d02292be77939df3',\n",
+             " 'extensions/humanoid/skeleton/foot/bones/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/bones/dimensions.mojo': "
+             "'b6f21c7d225c013eab349961aee5c416322e6abb053b5e9cad69d006435a569a',\n",
+             " 'extensions/humanoid/skeleton/foot/bones/geometry.mojo': "
+             "'3e04cf81d212e620db76470513e20180c45c97264b56a06343eb8d821137da6b',\n",
+             " 'extensions/humanoid/skeleton/foot/chain.mojo': "
+             "'d82355f0a6f6c4f3340f24689b9b1aa18f916fd57c8f030647c200dc52eb00bc',\n",
+             " 'extensions/humanoid/skeleton/foot/contents.mojo': "
+             "'4ac91cacee468c5b8bad79ad8cdd8012995b51b31bbff3244dc1f09820e5af35',\n",
+             " 'extensions/humanoid/skeleton/foot/hair/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/hair/dimensions.mojo': "
+             "'15781d9f1f7961037b22d418823cf2d007002563a78edc4b84f4400311d3a018',\n",
+             " 'extensions/humanoid/skeleton/foot/hair/geometry.mojo': "
+             "'2822843b766edb7f260a6a410635bcb39b57db0e5cea728177b0a1d431af6a38',\n",
+             " 'extensions/humanoid/skeleton/foot/ligaments/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/ligaments/dimensions.mojo': "
+             "'e534d46121d26c543a7b506164c64ef54d2cc29caac636cef929d1eeff54f6d6',\n",
+             " 'extensions/humanoid/skeleton/foot/ligaments/geometry.mojo': "
+             "'3082eb038e5acef71d037476c7ccf9aef9e23fe0a8be88640e4ac3468965d317',\n",
+             " 'extensions/humanoid/skeleton/foot/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/lymph/dimensions.mojo': "
+             "'822889f9bd9ca1e68714945c255d272747986037f8bf6d551d6e4c6c4e2f5b3a',\n",
+             " 'extensions/humanoid/skeleton/foot/lymph/geometry.mojo': "
+             "'822b1a94865951aa34427c927e5d3185e8c777a2a53616999de6354830a32ef3',\n",
+             " 'extensions/humanoid/skeleton/foot/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/muscles/dimensions.mojo': "
+             "'06b1c0b7e304eed94682ffa8ba1b799bdce944f06f0804be9f25785d6c898d7b',\n",
+             " 'extensions/humanoid/skeleton/foot/muscles/geometry.mojo': "
+             "'1e40ff03dd6516b9e391c428a9884ca8cff56d3df9cc08cdd3443d5d2aa28a0f',\n",
+             " 'extensions/humanoid/skeleton/foot/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/nerves/dimensions.mojo': "
+             "'6ae2a4a74534bf8d3ad32a1b4a2e4bbda71821af57793b17293169121e021908',\n",
+             " 'extensions/humanoid/skeleton/foot/nerves/geometry.mojo': "
+             "'20cc857c207e46a1e423533839219e418eb0334a8db8f09fa036649456cce4aa',\n",
+             " 'extensions/humanoid/skeleton/foot/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/skin/dimensions.mojo': "
+             "'cac9654d6385da4c8fa44ec185fa7829de620f823ebe178a7485b69926f49cec',\n",
+             " 'extensions/humanoid/skeleton/foot/skin/geometry.mojo': "
+             "'ac8fc0d736a79aa68108f52dff5b68d06a5a71cf1c74902cf30ec8fa5ae46154',\n",
+             " 'extensions/humanoid/skeleton/foot/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/foot/vessels/dimensions.mojo': "
+             "'22b582af30c0003ca1535d6573d44c54132cac6b47a8884df24adfde2f5058b8',\n",
+             " 'extensions/humanoid/skeleton/foot/vessels/geometry.mojo': "
+             "'52acebbddd8e2ced61c9c141a8e23668162ebca4d581ec96f3cf5b70f63bcdb0',\n",
+             " 'extensions/humanoid/skeleton/hair_shafts.mojo': "
+             "'1c8c1a21f439d4694bde79aff5d576a98d9d002ff2ac02b94010eaac6ac3311c',\n",
+             " 'extensions/humanoid/skeleton/hand/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/assembly.mojo': "
+             "'77f807c1ee34a766f7f79b6b4d04c5caf4310cc569b26e6441621db35146c408',\n",
+             " 'extensions/humanoid/skeleton/hand/bones/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/bones/dimensions.mojo': "
+             "'ee3533bb1657418b005a7bd13451a510789beb726fa38e0add676d4d1d618461',\n",
+             " 'extensions/humanoid/skeleton/hand/bones/geometry.mojo': "
+             "'93a3fa4a707f8fe950db466c0af19185fc9c13149021cd77a5512433c02ca2c4',\n",
+             " 'extensions/humanoid/skeleton/hand/contents.mojo': "
+             "'ce55447d577356c91dfa648ec4b2c28a6de4c00332859b9c8044df350e42aa56',\n",
+             " 'extensions/humanoid/skeleton/hand/hair/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/hair/dimensions.mojo': "
+             "'85a3ad55508026b86b8ace135c0209b415595a8955df9445cb0370cd51f66832',\n",
+             " 'extensions/humanoid/skeleton/hand/hair/geometry.mojo': "
+             "'ace0c7dd09bf1e0cb64c4d16b0a4421f53e6dc4139ba0b482b7cad483277aa83',\n",
+             " 'extensions/humanoid/skeleton/hand/ligaments/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/ligaments/dimensions.mojo': "
+             "'dedee73703e5a13bd8de7c37989a1480e129a3c79e596cd405e400c3113daafa',\n",
+             " 'extensions/humanoid/skeleton/hand/ligaments/geometry.mojo': "
+             "'e12c1e40562e5a6a533668b0827ecdd34ed5dfd78b56e27b79cb12845b949fe3',\n",
+             " 'extensions/humanoid/skeleton/hand/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/lymph/dimensions.mojo': "
+             "'7f1b2197ba968af085e6cd42088447100eb33ec24fcd672efdf9ed33bb8dc7ab',\n",
+             " 'extensions/humanoid/skeleton/hand/lymph/geometry.mojo': "
+             "'f568f74defca05261750eabf717ad715689273911e07693f00819e48791f51aa',\n",
+             " 'extensions/humanoid/skeleton/hand/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/muscles/dimensions.mojo': "
+             "'774775c26d5852f240f1140415103765d60a2165fd459189833d578f6d5657bf',\n",
+             " 'extensions/humanoid/skeleton/hand/muscles/geometry.mojo': "
+             "'c69e380e22d6a6470a828569174692d778c943c44dc55fa076fde77405f2e0e7',\n",
+             " 'extensions/humanoid/skeleton/hand/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/nerves/dimensions.mojo': "
+             "'f0082636513ae8306f9bde3cce54d8f3090d3170d5f81c420d66ea2819a7a978',\n",
+             " 'extensions/humanoid/skeleton/hand/nerves/geometry.mojo': "
+             "'a59e5b920dffc808c9f8b469c1a00db77829e77ac533599049e5c514948c9088',\n",
+             " 'extensions/humanoid/skeleton/hand/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/skin/dimensions.mojo': "
+             "'329328b7896e02928f9d8afd319a2cbe380d65e6bc4ed06ea1b9d398d1276aa2',\n",
+             " 'extensions/humanoid/skeleton/hand/skin/geometry.mojo': "
+             "'82531a82da3600f8887a8e1e3af7e3758d3d975bb036c8c976ef4d7a8d44af6a',\n",
+             " 'extensions/humanoid/skeleton/hand/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/hand/vessels/dimensions.mojo': "
+             "'f6182b369605e4dc0a3fb389c90cdff1a907f1eb5cc7d4d62fbd42ca978b7052',\n",
+             " 'extensions/humanoid/skeleton/hand/vessels/geometry.mojo': "
+             "'ae7b3fe2dd1f1b6eae62317876b135ec07f8d0588c6835b46fbe4885fc4c51bb',\n",
+             " 'extensions/humanoid/skeleton/head/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/assembly.mojo': "
+             "'89c62abc454debdb2777e3698c2992185507a4c2b1c7674ecd22bf70a883f406',\n",
+             " 'extensions/humanoid/skeleton/head/bones/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/bones/dimensions.mojo': "
+             "'8de999263d7cb6b807b6e1105e5bf9e774efdbcd0501546bac58af77415e0eba',\n",
+             " 'extensions/humanoid/skeleton/head/bones/geometry.mojo': "
+             "'131afc719a4262c90defbd9c1c9c70dffe4382ee2f365fc57fe0bef96bbd12c5',\n",
+             " 'extensions/humanoid/skeleton/head/contents.mojo': "
+             "'8963187c2c449394e9deeb5efeca8e9f781d6fe39525b74c878a2af2c7eb4e69',\n",
+             " 'extensions/humanoid/skeleton/head/eyes.mojo': "
+             "'ed845af70644d0408e6a295c1af5abcf4ef6ab16073a8ab29a2c9d5b258e542b',\n",
+             " 'extensions/humanoid/skeleton/head/face_model.mojo': "
+             "'89f346b425a3f096e8ad46352f97cbf44299f3a0bd4713815af3b7e6a3322e6e',\n",
+             " 'extensions/humanoid/skeleton/head/frame.mojo': "
+             "'cc2ebb1a9d590ddd6072f509d8f9d59f41473f02128193bbf9f8b3de6f54795d',\n",
+             " 'extensions/humanoid/skeleton/head/hair/collider.mojo': "
+             "'da7bf07ec7f71bbb742e8af16de38d3b93bd3497446cf5f73ed1a1b8fe438a88',\n",
+             " 'extensions/humanoid/skeleton/head/hair/density.mojo': "
+             "'88283971d77ae8f245e606887373bc57222c403f4e64af982bf2acdf4a97ef63',\n",
+             " 'extensions/humanoid/skeleton/head/hair/dimensions.mojo': "
+             "'4dbcc1e61c5b8a748633d255b99f9167f55c7b822c7a7718e5b6b11ed860152b',\n",
+             " 'extensions/humanoid/skeleton/head/hair/geometry.mojo': "
+             "'786d218c79da1097b930bc83d42ac9d3ae2cb4b4705d2c1318f824db251396ee',\n",
+             " 'extensions/humanoid/skeleton/head/hair/groom.mojo': "
+             "'67f8ea34485c0f1a8b561dece38a933cdc5d0e6aea47d038196d68ee0b617fbd',\n",
+             " 'extensions/humanoid/skeleton/head/hair/styles.mojo': "
+             "'2693b22bbca30f659de4c954479249680871c001959c03644d897f17ba5c5ea4',\n",
+             " 'extensions/humanoid/skeleton/head/ligaments/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/ligaments/dimensions.mojo': "
+             "'4ff301c65e3c38639504f67f2ab32267a34c0e9f89768d5f30cafe97cf5a5779',\n",
+             " 'extensions/humanoid/skeleton/head/ligaments/geometry.mojo': "
+             "'a4da0a0a88d271c2198dca163b553b420987b76e0d61251f8b0482fc4d002586',\n",
+             " 'extensions/humanoid/skeleton/head/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/lymph/dimensions.mojo': "
+             "'1606f3ac37769995f888646920da7ff2973c4f0fdf29f8d118348a8173101831',\n",
+             " 'extensions/humanoid/skeleton/head/lymph/geometry.mojo': "
+             "'e6735eeddeff098772e131af3f3c05c2e19e67f7d4d5802c9eb493bd7435df3c',\n",
+             " 'extensions/humanoid/skeleton/head/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/muscles/dimensions.mojo': "
+             "'0fd568d8d36e0c7390f18b1d212853a6a643d9d86e2a358990f00fa369793c67',\n",
+             " 'extensions/humanoid/skeleton/head/muscles/geometry.mojo': "
+             "'9805573beadd5dc11b5689902f29bcd403eb18dd62d6317a4292948f8724f74c',\n",
+             " 'extensions/humanoid/skeleton/head/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/nerves/dimensions.mojo': "
+             "'b8648d896b8d5d0700f81ee12232c5933b3f30909f65b25da42240946d5a44f7',\n",
+             " 'extensions/humanoid/skeleton/head/nerves/geometry.mojo': "
+             "'0c794156f22d40b3224fb0e6b0f80943b1e777628e6a4a42fb07682898288fdf',\n",
+             " 'extensions/humanoid/skeleton/head/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/skin/dimensions.mojo': "
+             "'fb1f420a98b05ce2a64224699b4dd5b1032654a096ffe9ce6e060d0fcee713be',\n",
+             " 'extensions/humanoid/skeleton/head/skin/geometry.mojo': "
+             "'22d55d868986379a82bab45d351325d223c0f228cd60b2ea9eacdc58286cc385',\n",
+             " 'extensions/humanoid/skeleton/head/skin/mouth.mojo': "
+             "'9c3bdb9b664e92a3a3e7fb93689be2ff7ca2b996de740bd750d7d31819eb406c',\n",
+             " 'extensions/humanoid/skeleton/head/skin/scan.mojo': "
+             "'616033de36df47bc74ec0c0f91d38dff73ae1b8606ca42731dc97af9b8891eb7',\n",
+             " 'extensions/humanoid/skeleton/head/skin/tint.mojo': "
+             "'aefb817f97ca01316b9a9a22e30f855bd9bd20fdfc9573d6fcdd7eed5c30d170',\n",
+             " 'extensions/humanoid/skeleton/head/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/head/vessels/dimensions.mojo': "
+             "'0f3bc9c28524be575a022bb1700eba4811c27410d270c7c80b5077425f1bf515',\n",
+             " 'extensions/humanoid/skeleton/head/vessels/geometry.mojo': "
+             "'775662396994f5ccffac5b4b5f2102488118a5d7cf1373f1f36c01fae1bf7709',\n",
+             " 'extensions/humanoid/skeleton/isosurface.mojo': "
+             "'cf40c00847dbdb157273acc2163ba3c2f90875ac0b41ec67ea9d4828fb17ac75',\n",
+             " 'extensions/humanoid/skeleton/layer_set.mojo': "
+             "'833ceb236d967cc0594cad8e7ccc97b13a874f73605ef103b32bf6c8776ced09',\n",
+             " 'extensions/humanoid/skeleton/leg/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/assembly.mojo': "
+             "'50593a0fbe48d64ccd33386d1ab1d5b2ad54482d758f78ccfc4b362b49a1cafd',\n",
+             " 'extensions/humanoid/skeleton/leg/contents.mojo': "
+             "'c2aef8fe7969cab99926bce30af9de3777294c96d8c526582739fa63e73be28b',\n",
+             " 'extensions/humanoid/skeleton/leg/femur/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/femur/dimensions.mojo': "
+             "'1bfcc887ee1f531108b2719c31d90d8b88f8650db75b32e3a628f991488dc4ba',\n",
+             " 'extensions/humanoid/skeleton/leg/femur/geometry.mojo': "
+             "'e6e99b707dff7ab24886a5ecbf4bf1ce15f7cd3ab617bf2117b392a671675691',\n",
+             " 'extensions/humanoid/skeleton/leg/fibula/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/fibula/dimensions.mojo': "
+             "'b4c7848f100e1ebd5ba1010de6fc34bc77aa59b227010fd33c0d40b664e0fbaa',\n",
+             " 'extensions/humanoid/skeleton/leg/fibula/geometry.mojo': "
+             "'50205b8c7e927732edac3e227f23d1e8d520f0eb4ceb04d0b91e8a2ca7fe93cc',\n",
+             " 'extensions/humanoid/skeleton/leg/hair/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/hair/dimensions.mojo': "
+             "'e904d80577cd1727684064b1ed4b487ff29b795f50eab770ded4665831c9cacb',\n",
+             " 'extensions/humanoid/skeleton/leg/hair/geometry.mojo': "
+             "'4653aab9209929c433617c94029f68d438cce5d0745fbd5dbfdb7a877bb9cef6',\n",
+             " 'extensions/humanoid/skeleton/leg/knee/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/knee/dimensions.mojo': "
+             "'6661d7cb0622e8f3e66044f0fe598ad9ae0a493654ccf0293313579fa2ec8297',\n",
+             " 'extensions/humanoid/skeleton/leg/knee/geometry.mojo': "
+             "'c7477b3213098d1c42ea4fb9fbb550f0c003f75512eb07ccd39721aca00ea38d',\n",
+             " 'extensions/humanoid/skeleton/leg/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/lymph/dimensions.mojo': "
+             "'34bb02ffa56e23a7f2651979fc4e52c0cf1c9bc329cf6f5c926f66a74076aa66',\n",
+             " 'extensions/humanoid/skeleton/leg/lymph/geometry.mojo': "
+             "'98572a4ddfb99d136838dcbfa1e97b58dc2fee8ef6e2e66c4a0f4403aa8989b4',\n",
+             " 'extensions/humanoid/skeleton/leg/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/muscles/dimensions.mojo': "
+             "'f947872e5d0f24ba923b445ff13970a56adc1299534a6cf5b48885173981117f',\n",
+             " 'extensions/humanoid/skeleton/leg/muscles/geometry.mojo': "
+             "'7ba642cfe580bd55e882020e0e7449b1b02b105a4c968d4eb86c51f76fd81957',\n",
+             " 'extensions/humanoid/skeleton/leg/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/nerves/dimensions.mojo': "
+             "'da35dd1c640e32ab76fe8af3ae59ea0d0f0fe1543a86f28b21f94d79e36cc833',\n",
+             " 'extensions/humanoid/skeleton/leg/nerves/geometry.mojo': "
+             "'b3ca7e7d49746d2fc1ea8fafa6aa8f971c0ce9f331bf2f2862cbb9a63f09b6a0',\n",
+             " 'extensions/humanoid/skeleton/leg/patella/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/patella/dimensions.mojo': "
+             "'0ff13ee04349990b58ee3b37f9b928ad36a9ffcf6237d6032f8d7de2aedd17ff',\n",
+             " 'extensions/humanoid/skeleton/leg/patella/geometry.mojo': "
+             "'6aa9d6af356e5a506e45035b3a160548bfed17455560b8a4190af74cef8350e9',\n",
+             " 'extensions/humanoid/skeleton/leg/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/skin/dimensions.mojo': "
+             "'e85e7864d7a6e8d5c041ba8386c790938345502688f519717a1523f4076b9393',\n",
+             " 'extensions/humanoid/skeleton/leg/skin/geometry.mojo': "
+             "'612bead9071cff56cb692fed1a2014211acfbd1264911f8e0ff34eb41c48f8f4',\n",
+             " 'extensions/humanoid/skeleton/leg/tibia/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/tibia/dimensions.mojo': "
+             "'0b35d66eff93164c478da515d5966a736a37f0aac8853837a5c5f31cd61e05dc',\n",
+             " 'extensions/humanoid/skeleton/leg/tibia/geometry.mojo': "
+             "'e366515e962e34e2c3ded867861693eb7b5152bc3bd93d4f4e70027b9a1b7eaf',\n",
+             " 'extensions/humanoid/skeleton/leg/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/leg/vessels/dimensions.mojo': "
+             "'3a9b54cfa4eeeacbb1a04c8ce8952a46f5ca2d8405f69215832aecf37ea476a7',\n",
+             " 'extensions/humanoid/skeleton/leg/vessels/geometry.mojo': "
+             "'53b51984fd16179981a4f964f7fd6435009d946c8b1103c1b66504cf75b3bb85',\n",
+             " 'extensions/humanoid/skeleton/limb/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/limb/skin.mojo': "
+             "'3b93c4902fa4dfbb2bb984aa21dfd555036631b40e8d964e8b776a07414ac430',\n",
+             " 'extensions/humanoid/skeleton/loft.mojo': "
+             "'e752c764322629e463d4bda2ec1016fcf798dc783b8964e1d3c67380724083ab',\n",
+             " 'extensions/humanoid/skeleton/look.mojo': "
+             "'3650c0efb4bbfd6ab72793cbb2485b633bb70e6e8413006ea8022a3c1a93dc89',\n",
+             " 'extensions/humanoid/skeleton/mesh_field.mojo': "
+             "'2fae9883759be00f2d95eed70595bd4f3020773a96e821d88af86c45b5cd136d',\n",
+             " 'extensions/humanoid/skeleton/morph.mojo': "
+             "'ad45a84aecebd2ede894aaf3706ae14a79635e1df93156adb540662620c5d8ec',\n",
+             " 'extensions/humanoid/skeleton/pelvis/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/assembly.mojo': "
+             "'a1db00e7da91785d4700751d2e23ab1a1359ff0176201c0a58390373dfd7785d',\n",
+             " 'extensions/humanoid/skeleton/pelvis/bones/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/bones/dimensions.mojo': "
+             "'13fd1ec5e495f42650355847245f508d41b37da75766e0bae9b398c31403b5f1',\n",
+             " 'extensions/humanoid/skeleton/pelvis/bones/geometry.mojo': "
+             "'da74a97a5bc3c9bca9d3cbdad9addeef1ec8f349c3b0858b89f88dde35e1ec12',\n",
+             " 'extensions/humanoid/skeleton/pelvis/contents.mojo': "
+             "'43d95b7d5cfa1d784eeb36fdbf4916893b4283d6436417291deb6ffc1b89f10a',\n",
+             " 'extensions/humanoid/skeleton/pelvis/ligaments/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/ligaments/dimensions.mojo': "
+             "'07f981c8d999391e065f3bae371a6f89b4d29c6e1d061e75a7978e1b05908440',\n",
+             " 'extensions/humanoid/skeleton/pelvis/ligaments/geometry.mojo': "
+             "'a3de67d9e17fdf08f1dac600a86e10e2784679066b2b663bb402111cb2efe945',\n",
+             " 'extensions/humanoid/skeleton/pelvis/lower_body.mojo': "
+             "'2fdd9e479823e2c35988e7321b6e723cbb367e854e410ba0423f80ce46d605eb',\n",
+             " 'extensions/humanoid/skeleton/pelvis/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/lymph/dimensions.mojo': "
+             "'70f1362e55c33f8ee148d7243c3678a18d798b8a2de9b4933aa4a90eb71678d0',\n",
+             " 'extensions/humanoid/skeleton/pelvis/lymph/geometry.mojo': "
+             "'0adcc126f28e9ed4dc3043adeed75dc96e07fa1229d5a75010327c558a304c05',\n",
+             " 'extensions/humanoid/skeleton/pelvis/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/muscles/dimensions.mojo': "
+             "'e0b25da2866e2ff54a9644e18b5c87c7cbe81d670bff0b2618d04e5ada054d50',\n",
+             " 'extensions/humanoid/skeleton/pelvis/muscles/geometry.mojo': "
+             "'76422f29dea2b0ee59fa3de095a9a8bc488cf00b18107227d4ab5be064cb1535',\n",
+             " 'extensions/humanoid/skeleton/pelvis/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/nerves/dimensions.mojo': "
+             "'48e4f823a890ec63e6582774e803554389105476c58e03969abd64d8cd8b4211',\n",
+             " 'extensions/humanoid/skeleton/pelvis/nerves/geometry.mojo': "
+             "'c06bb0bd8c5f7042b584b96c230d9653dc0a1eec288e3ca1a09ae6de020b8f64',\n",
+             " 'extensions/humanoid/skeleton/pelvis/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/skin/dimensions.mojo': "
+             "'0a41deec5cec4c2d5c8e938534df901a63aacf1cae2d0119523a019f3244751b',\n",
+             " 'extensions/humanoid/skeleton/pelvis/skin/geometry.mojo': "
+             "'032066a91f40ecf521162aa1f98ca198baadcfc6fc59eb854f7a776cba63cdc0',\n",
+             " 'extensions/humanoid/skeleton/pelvis/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/pelvis/vessels/dimensions.mojo': "
+             "'e7fa736eccca74db021cbcd2a4dd816c4d72cd7b09661c38da6115eb0e1d347e',\n",
+             " 'extensions/humanoid/skeleton/pelvis/vessels/geometry.mojo': "
+             "'c6bc09e684ea9b75bf428e4df7e8159f096b422044f188f9e5a159f12662bdd7',\n",
+             " 'extensions/humanoid/skeleton/place.mojo': "
+             "'5821df5eefffc821ee3a219620ebe44ba41f1cbd48ed6003ae4040a5fd180b6b',\n",
+             " 'extensions/humanoid/skeleton/sculpt.mojo': "
+             "'a345363e76110c3a7e962156ca2ef3395724667f0f41644586cb360e264dd365',\n",
+             " 'extensions/humanoid/skeleton/surface_nets.mojo': "
+             "'c41e146dca44bb7c2e9f05113a0e0d254b4257547e8c7930dc25d5ba8567c86e',\n",
+             " 'extensions/humanoid/skeleton/torso/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/assembly.mojo': "
+             "'1c82e6907e7c82478b0af19a45882340f34c5a1522814e2bfc5c4f8c38b5c4bd',\n",
+             " 'extensions/humanoid/skeleton/torso/body.mojo': "
+             "'0658ea8977066bff64e7cfcb96711f1b88bb2debb7339abaaf22bed477a2d44d',\n",
+             " 'extensions/humanoid/skeleton/torso/bones/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/bones/dimensions.mojo': "
+             "'091efbf3f856a0d95ce1821316c448a240d8fd35fe811cf5f147d5e3a8333896',\n",
+             " 'extensions/humanoid/skeleton/torso/bones/geometry.mojo': "
+             "'d56c60e8875c95881311a1701f4b23e3e4036c1f0c60a566f7cc9175850f53db',\n",
+             " 'extensions/humanoid/skeleton/torso/contents.mojo': "
+             "'6b7e25da899e5ef3c092216d4f7e40d57623fb38d2a51443ca4b7560ab9707d1',\n",
+             " 'extensions/humanoid/skeleton/torso/ligaments/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/ligaments/dimensions.mojo': "
+             "'1d3de688dd915e85bfdbd353799d950b4d4cb585e316ba118fed9fa209feb0e3',\n",
+             " 'extensions/humanoid/skeleton/torso/ligaments/geometry.mojo': "
+             "'802c3a65993a5e85d2f374b0ea988d0f3dc406ffe8427b09a28fa0d35c034b45',\n",
+             " 'extensions/humanoid/skeleton/torso/lymph/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/lymph/dimensions.mojo': "
+             "'25495230d859a0df914d109ba132f9e8f2a919038525bc0a41808920e7c33b07',\n",
+             " 'extensions/humanoid/skeleton/torso/lymph/geometry.mojo': "
+             "'1a4003f46bdc343725b982d49d4f3232593a2d9b3551be73c7ea7cd7316338a7',\n",
+             " 'extensions/humanoid/skeleton/torso/muscles/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/muscles/dimensions.mojo': "
+             "'b37174a431e5afb705e0d820c8721d608e167ee2914cef8bdd5d4b1a8e725ec9',\n",
+             " 'extensions/humanoid/skeleton/torso/muscles/geometry.mojo': "
+             "'5429ce4a2f1649d32781ad809371088f256f76dfc96c0b56f6c646ef6e9e9c9f',\n",
+             " 'extensions/humanoid/skeleton/torso/nerves/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/nerves/dimensions.mojo': "
+             "'5d54ea4d00a723cf51cf1e5e29cb259567c39715f503711c1e1e725df273dc33',\n",
+             " 'extensions/humanoid/skeleton/torso/nerves/geometry.mojo': "
+             "'bda5de30375bf8f3c74a18c7f48d611aefdebf627ae7f1d5477dc179a3b8f442',\n",
+             " 'extensions/humanoid/skeleton/torso/skin/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/skin/dimensions.mojo': "
+             "'33e3f30cdecfdc9ea615a984886ae01f8cd1aa0f4f86a4f0f5685581a088fd86',\n",
+             " 'extensions/humanoid/skeleton/torso/skin/geometry.mojo': "
+             "'09148d5decdd93e67de2785afcb696f5333f817327f7d40765a3024205530654',\n",
+             " 'extensions/humanoid/skeleton/torso/sweep.mojo': "
+             "'8ee430e8785effa1078ce22509580f60eb64c5c23e79c55145ba7cec2189891a',\n",
+             " 'extensions/humanoid/skeleton/torso/vessels/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'extensions/humanoid/skeleton/torso/vessels/dimensions.mojo': "
+             "'444ffc36a5040f1edc66bc31bc8c79d94f6329f22bc0c7c21bae5b51b2991d70',\n",
+             " 'extensions/humanoid/skeleton/torso/vessels/geometry.mojo': "
+             "'ab01ddda0002f59e5bc7faa2a8800331720cd908fdf418b27be569765b7616cf',\n",
+             " 'extensions/humanoid/spec.mojo': "
+             "'994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224',\n",
+             " 'geometries/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'geometries/attribute_utils.mojo': "
+             "'0a87276b9264a028a3220a667e39f8e96ff6fde7e41ed2c180e0aed7484ccda6',\n",
+             " 'geometries/surface.mojo': "
+             "'8ff3246d240c90168470bde485496accca02d7096a53270c0d6ce442a4429e04',\n",
+             " 'geometries/utils.mojo': "
+             "'459f32ecdd779c03d347b6c99f743a48a56028ab02b3f813181781eea3dcf548',\n",
+             " 'lights/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'lights/fresnel.mojo': "
+             "'4c1a852d788c636603f75a3c459b6f43b0ec3a032d62b525c9fe9fc7cdfcada7',\n",
+             " 'lights/light.mojo': "
+             "'bc5654ee21e462cf9c86bc5eeffdd2ae7eaed91c3607a03312322e342d9108da',\n",
+             " 'lights/light_slot.mojo': "
+             "'05dd9713ca0a410e23b8ffdae48a9f530cec9239efaa127f4fb43861ab129652',\n",
+             " 'lights/physical_layers.mojo': "
+             "'b97a85136309d66b1042de440bf4bc4571c64851b87fb2c4c4aa4fff1b17f649',\n",
+             " 'lights/shadow.mojo': "
+             "'e57aabcefe61cebaa8e57ae129f0cae3873215b7b1c0d2171c972d78d4015b81',\n",
+             " 'loaders/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'loaders/bytes.mojo': "
+             "'5600d6d9ca117fc7c7c97a2e5d6a687adc8090627c34cf3181935245dae87c07',\n",
+             " 'loaders/js_text.mojo': "
+             "'847797a811cd7ee54bdf833e1f6d3f8c2965e90e2491c71d04bf2488c6d2b971',\n",
+             " 'loaders/json.mojo': "
+             "'b6d44e6930f415f9b47eb7c48b26673a961746cff3a3125b8ac3f7ef9a1de417',\n",
+             " 'loaders/utf8.mojo': "
+             "'e0d5891d9d2954bd5c4329cda8a3492f4f6464b402b84489eae000cf8e0ce10a',\n",
+             " 'materials/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'materials/compute_ids.mojo': "
+             "'215ccb1704fb7b30d8a0ad7ec14e839dc399f29f7c7ca29f0403f5c32e25a39e',\n",
+             " 'materials/material.mojo': "
+             "'0722ad172e97c70cc530348a627eb52cde41c643cabef385423ee8ea6d8b77b9',\n",
+             " 'materials/nodes.mojo': "
+             "'525920b0e48d73cd4329a51ed127e38c59972ebc48c8562c20ce2200b072c3ef',\n",
+             " 'math/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'math/arc_tangent.mojo': "
+             "'fde08cd180cb0e2bd94fca6196f86c4b318ef6f1a4ed8e588aaad848076ea8e5',\n",
+             " 'math/bezier.mojo': "
+             "'4a4087e15d2472bcbeedd492c5a866039988cc1988029a5c28c828eedfb77034',\n",
+             " 'math/bounds.mojo': "
+             "'712403832a9fc9bdcd835e68e1934dd4de37e8b218e418f797a717da3684ee25',\n",
+             " 'math/box_extent.mojo': "
+             "'d978c71d45c074acb0a6e36938b1f52f7b2bb6e822c95cf6b3ec4802223782c1',\n",
+             " 'math/catmull.mojo': "
+             "'d2584909e792fd6f503ea35b6e33fc0fcd801571b1260135ee6fb38df8c74ed2',\n",
+             " 'math/cross.mojo': "
+             "'352f81c1fc781becc0cf88056ac39978b24926303e3784ff783bcabdf5bf67e5',\n",
+             " 'math/curve.mojo': "
+             "'579839a0981c00cc9e188a0a57ff9f0c5822b09f3cd8ae6fa5b667d97d8ff5d9',\n",
+             " 'math/curve_checks.mojo': "
+             "'9ad53ff5ed5a540a85ed4ed00860e8d9c1b537c67edda2a8d6f58b458ae5a8ef',\n",
+             " 'math/euler.mojo': "
+             "'9645a80e2b0a7dcfeeb2fbf51a0030aab6b44f8603192b86aee533068dab7356',\n",
+             " 'math/finite.mojo': "
+             "'fc0bcbef9d5439f4ce6da4e10ac2c0a3a2a8022fb31f3426992408e25ac73f7b',\n",
+             " 'math/matrix3.mojo': "
+             "'b134fabd9dbf12f41c46724ccaa89582be5efbb929677a47c64af45c4d0a1e97',\n",
+             " 'math/matrix4.mojo': "
+             "'206877d7335ed69e9055ec69b2ac09bd83b493456bfc43c1083ea235a1a44549',\n",
+             " 'math/matrix_determinant.mojo': "
+             "'c5b25179893fd2903dbda5de68914a50e662e3428107ef2c3424ef42cafcde19',\n",
+             " 'math/matrix_inverse.mojo': "
+             "'d833edd9d3705ba77e5000b75e6cd4852955e4d978bf0afdbc8efbafa61d42de',\n",
+             " 'math/norm.mojo': "
+             "'941dbe97b3b6bc6d48af64a682f88970e12d387e8e896054cfc860d59eea9c3d',\n",
+             " 'math/path.mojo': "
+             "'e182834e6ecb1019ca882beeb2272053dfbbee263f4bfd45bcd35c5c53197f11',\n",
+             " 'math/polyline.mojo': "
+             "'c4ff928fc5278100da0df381e6ee79423ddd6ef7c3fc38dcfb11521ac73774c1',\n",
+             " 'math/quaternion.mojo': "
+             "'2cf5b20029448204c1b984349e2e9e5f804ff7831d0506ab156ea7f88173c65d',\n",
+             " 'math/random.mojo': "
+             "'f8a00ee7d03897a7c35f2f23d157fb65ce2c2b3fde5e4c91f21e7a764fab1655',\n",
+             " 'math/ray.mojo': "
+             "'5298756c8056364661902adb9a253b3c0e7d771641cc01e4781b85d3dc9a84a4',\n",
+             " 'math/ray_query.mojo': "
+             "'48136d70da9f19e28fc30e1660416ba1c25bf8a545bafbbe16a904f8e26ff3eb',\n",
+             " 'math/remainder.mojo': "
+             "'b7575b2fde7a212433498422a121c66b12a85e7109614093bb783ad1cc043e58',\n",
+             " 'math/scaled_products.mojo': "
+             "'8d16ee11a738e90a951943b786c1abcc7473286788392c447827240900ed16c5',\n",
+             " 'math/sine.mojo': "
+             "'81580a510da8722ef96df0074937d139019234afc3f089584f534d6b556edcf9',\n",
+             " 'math/smoothstep.mojo': "
+             "'1753a3342932f3c89eb5ebfb7f9ef5ee0a28530f447432b1bb179e3213ff8edb',\n",
+             " 'math/spherical_harmonics3.mojo': "
+             "'2ca87fb3e0c23a5755e6c7d147a866d041d3bcef40ad3d35329a4dd559c5b8f4',\n",
+             " 'math/square_matrix.mojo': "
+             "'04a9f011e814455c9d24a94c66df30b8137f7e9802a2a9b552b0d9bb05538c27',\n",
+             " 'math/triangle.mojo': "
+             "'f1facc4a319f3ee6614bc3c57896b82300826e0536640e73adc7d55573347f01',\n",
+             " 'math/triangle_normal.mojo': "
+             "'cdcf00131967b714f2518acd96fb28e874fa3006bfb52a242f3596c281e147bf',\n",
+             " 'math/utils.mojo': "
+             "'d32e99704324833af194084f0b1d646a894c63bdd0b8ce1baa0da8a287c1d690',\n",
+             " 'math/vector2.mojo': "
+             "'2aa5cee2c09cfad3c3b2fa883db31efe47f82f30bac6565415ce6a9f18c8d125',\n",
+             " 'math/vector3.mojo': "
+             "'39bd8f3d5102eb8d32f95fb0982b5886050c43031de416903d692e1c2c664b4a',\n",
+             " 'math/vector4.mojo': "
+             "'44797637aae80c1e92c08592bc2a510e90e14e93d1c74bb4a01ca71034b10ee6',\n",
+             " 'objects/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'objects/clipping_group.mojo': "
+             "'abb69d042f7add2154e9efeb83df36a10788844803b57fc405c7092bdc8dc19e',\n",
+             " 'objects/gaussian_splat.mojo': "
+             "'01fe94cc3159b21a70c104ea92a3631e57c217f19ad26f17bd2bd3ad3ff0f80f',\n",
+             " 'objects/instanced_mesh.mojo': "
+             "'9992a151f9340c0211f5202594b6bec3d63e10940ae236e9ec0e4feafd888261',\n",
+             " 'objects/line.mojo': "
+             "'3846559aebd946c4a5e73937fa488a14d2bdbfedf30102cb746456c86397ae27',\n",
+             " 'objects/line_segments2.mojo': "
+             "'fdff9f90123e0d3d8d3ca9b0aaf22e3b2c110c255d01a14927ce1fca8fa7d021',\n",
+             " 'objects/lod.mojo': "
+             "'4829fbffecab2c13215a9918f30df7ea7c1471fb94d75b0a0815ccbbb1156899',\n",
+             " 'objects/mesh.mojo': "
+             "'5e365168f48476146dc90c8bc9f3fec240be9c260b719925e7965e42d2de53b8',\n",
+             " 'objects/points.mojo': "
+             "'42cdd945dc927e8bcf490824e9163188f50d8dcdd407970b7ccb234e9b91f737',\n",
+             " 'objects/skeleton.mojo': "
+             "'baff1a5346ae64d843d58802437e797c83686a5f11447684dd028febd0a98a5d',\n",
+             " 'objects/skinned_mesh.mojo': "
+             "'bf9a1d2aebf7c510a322d85e209f13e472f11bd4898c1c4ea5d507e5fde5a3fb',\n",
+             " 'objects/sprite.mojo': "
+             "'c257fd417a1394f9c4600e58e5994d3251b8f221efab993ab54b4458e869b225',\n",
+             " 'render/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'render/blend.mojo': "
+             "'899f45b625a5c50af3960bf65042686ab4b6fb910e03cb142c9556847aedb271',\n",
+             " 'render/checksum.mojo': "
+             "'796c60b76d945f7672c1595a06d86443224747cbddc07cdaf3fae90bdd3b4eff',\n",
+             " 'render/color_math.mojo': "
+             "'37e57703f18f3ccd6c7f85ec4700ee2b2967e96b5451db2f7b3edf4be4d4d02b',\n",
+             " 'render/css_color.mojo': "
+             "'bcfa54778b83bf4056cbf15b7602f6a66e0a01c6778e87b75440fa667275e567',\n",
+             " 'render/cube_texture.mojo': "
+             "'28c83baf52788ffb412328360ceef2397de1ec33489ee1516d447e3fc8d1f79c',\n",
+             " 'render/cube_texture_store.mojo': "
+             "'f052c06f7608058225486575e8584da3dda50ced69cf4834501360a73aebefde',\n",
+             " 'render/cube_uv.mojo': "
+             "'8bd7e1dd5fb4eb131747759c7dfdb86f71ec2f77d4d99dd6735d924ae7756bbe',\n",
+             " 'render/float_image.mojo': "
+             "'5554273bf9382d919b8cc8450ba406de99b220c4951f86e61721bc92c7aba357',\n",
+             " 'render/framebuffer.mojo': "
+             "'cc907b6c905ad936f68fca609a7ddcffcd2090977088170670c4b43bfa6ad6ef',\n",
+             " 'render/inflate.mojo': "
+             "'7db92edc5ed721f4fb66a02195703fa4c7260607be732cb72070d33ac4d0c0a5',\n",
+             " 'render/linerule.mojo': "
+             "'0d809e132f3019d04cef9734e9841dfbd0244aac738ed4d09bb40b9c45faf07e',\n",
+             " 'render/packing.mojo': "
+             "'e7b3b4158fb6992edad74bd0870b4509b79d6547785ec9285448b2467b98f083',\n",
+             " 'render/png.mojo': "
+             "'75d9105e434ed286b207d55d27e90328a24a2ad9f4b8e6580f8de156256558c4',\n",
+             " 'render/raster_state.mojo': "
+             "'a8fc16d55ca53f4e36c333d99f3ce9eb110ea523aac33b90194c17a8f4fb1211',\n",
+             " 'render/srgb.mojo': "
+             "'630ac4819cf3eb7bd546e8400ab8984452570110ee15db2898ae65cebae20b61',\n",
+             " 'render/tasks.mojo': "
+             "'efa65ccd751c3430f1fa875382748f6040733f802be4719b92ff239b510804d4',\n",
+             " 'render/texture.mojo': "
+             "'3552ba623c9c6c8dd2ea0d7b6f4eb0aac924854086a0ddd9b90865e3f1978c15',\n",
+             " 'render/texture_buffer.mojo': "
+             "'a1977c2d14e15917b149280e4ae75a1c20e37a0b5939514d8daac50c3da7c7db',\n",
+             " 'render/texture_store.mojo': "
+             "'78dfcc5c37879dd286272674096b13bad72efdefac769f85525790800f1fbd4b',\n",
+             " 'render/volume_texture.mojo': "
+             "'e599b4924490cdd8d828749ae4e25cea751f59bfa59198cd3350b5823bda52bf',\n",
+             " 'render/volume_texture_store.mojo': "
+             "'105a32971b5e88c613ec3a350d9b2c99c27d19080c6c66fb9d42bd4be546c8b0',\n",
+             " 'tests/test_hair_density_bounds_controls.mojo': "
+             "'2cfb0de9ac61d170beaa7e47fbcaf5c51c7db139ed373f4ab4f07af2fae9e11c',\n",
+             " 'tests/test_reconciled_hair_density.mojo': "
+             "'2e0c703b365bc98d3d6fc4c8796d4133edf004eafb753262ca89cd6d639be3c4',\n",
+             " 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': "
+             "'03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',\n",
+             " 'units/__init__.mojo': "
+             "'5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',\n",
+             " 'units/measure.mojo': "
+             "'b7531458ae7a74d6b9213f55672073137dbac41c2634787f7d6a78a16b526b85',\n",
+             " 'units/quantity.mojo': "
+             "'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',\n",
+             " 'units/si.mojo': "
+             "'d149a23f2ee4a9bde17875615e7251285cb56af535716b66c7d8959c80f48c02'}\n",
+             'DENSITY760_RULES = (\n',
+             "    (131, 64, 262144, 'range(count)', 'density-validated-positive-cube-count'),\n",
+             "    (167, 1, None, 'range(len(groom))', 'density-partitioned-nonempty-groom'),\n",
+             "    (178, 1, None, 'range(samples)', "
+             "'density-checked-representable-positive-samples'),\n",
+             "    (245, 16, 256, 'range(self.resolution * 4)', "
+             "'density-query-validated-positive-step-count'),\n",
+             ')\n',
+             '\n',
+             '\n',
+             'def _density760_stage_identity(raw):\n',
+             '    """Reuse existing executing-code checks for the one pure inverse leaf."""\n',
+             '    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+             '    from carla_lane_oracle import pr760_arithmetic_stage as stage\n',
+             '    filename = '
+             "Path(__file__).resolve().parent/'carla_lane_oracle/pr760_arithmetic_stage.py'\n",
+             '    cleanup.require(Path(stage.__file__).resolve() == filename,\n',
+             "                    'density inverse executing origin changed')\n",
+             "    compiled = compile(raw, str(filename), 'exec', dont_inherit=True, "
+             'optimize=sys.flags.optimize)\n',
+             '    cleanup.require(cleanup._code_identity(stage._EXECUTED_MODULE_CODE)\n',
+             "                    == cleanup._code_identity(compiled), 'density inverse module "
+             "code changed')\n",
+             '    defaults = cleanup._compiled_defaults(raw)\n',
+             '    for name, expected in cleanup._compiled_functions(raw, str(filename)).items():\n',
+             "        if name.startswith('<'):\n",
+             '            continue\n',
+             '        live = getattr(stage, name, None)\n',
+             '        actual = cleanup._live_function_code(live)\n',
+             '        cleanup.require(actual is not None and cleanup._code_identity(actual)\n',
+             "                        == cleanup._code_identity(expected), 'density inverse "
+             "function changed: ' + name)\n",
+             '        cleanup._check_defaults(live, defaults.get(name), name)\n',
+             '    stage.verify_stage_data()\n',
+             '\n',
+             '\n',
+             'def density760_loops(root, *, include_roots=(), _operation=None):\n',
+             '    """Admit only four local validated density rows on one physical image."""\n',
+             '    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+             '    from carla_lane_oracle import pr760_arithmetic_stage as stage\n',
+             "    operation_args = {} if _operation is None else {'_operation': _operation}\n",
+             '    if _operation is not None:\n',
+             '        cleanup._operation_include_context(_operation, root, include_roots)\n',
+             '    try:\n',
+             '        # Historical and unknown endpoints keep their existing independent paths.\n',
+             '        raw = _coverage_observe_bytes(root, DENSITY_SOURCE,\n',
+             '            relative_source(root, DENSITY_SOURCE, **operation_args).read_bytes(),\n',
+             '            _operation=_operation)\n',
+             '        if sha256(raw) != DENSITY760_INPUTS[DENSITY_SOURCE]:\n',
+             '            return {}\n',
+             '        executing = cleanup.executing_checker_bindings()\n',
+             '        snapshots = {}\n',
+             '        for name, expected in DENSITY760_INPUTS.items():\n',
+             '            value = _coverage_observe_bytes(root, name,\n',
+             '                relative_source(root, name, **operation_args).read_bytes(), '
+             '_operation=_operation)\n',
+             '            if sha256(value) != expected:\n',
+             '                return {}\n',
+             '            snapshots[name] = value\n',
+             "        leaf = 'tools/carla_lane_oracle/pr760_arithmetic_stage.py'\n",
+             '        _density760_stage_identity(snapshots[leaf])\n',
+             "        groom = 'extensions/humanoid/skeleton/head/hair/groom.mojo'\n",
+             '        if sha256(stage.predecessor_source(DENSITY_SOURCE, '
+             'snapshots[DENSITY_SOURCE].decode()).encode()) != DENSITY_AFTER_SHA256:\n',
+             '            return {}\n',
+             '        if sha256(stage.predecessor_source(groom, '
+             'snapshots[groom].decode()).encode()) != GUARDED_LOOP_SOURCE_SHA256[groom]:\n',
+             '            return {}\n',
+             "        paths = {name for name in snapshots if name.endswith('.mojo')}\n",
+             '        entries, source_image = cleanup._helper_entry_census(root, '
+             '**operation_args)\n',
+             '        contexts = [(root, entries, source_image)]\n',
+             '        for location in include_roots:\n',
+             '            extra_entries, extra_image = cleanup._include_entry_context(\n',
+             '                location, source_image, **operation_args)\n',
+             '            contexts.append((location, extra_entries, extra_image))\n',
+             "        native_tests = {'tests/test_reconciled_hair_density.mojo',\n",
+             "                        'tests/test_hair_density_bounds_controls.mojo'}\n",
+             '        closure = cleanup.dependency_inventory(root, roots=(DENSITY_SOURCE, '
+             'groom),\n',
+             '            entries=entries, _known=set(source_image), '
+             '_snapshots=dict(source_image))\n',
+             '        if closure != paths - native_tests:\n',
+             '            return {}\n',
+             '        def resolver_ok():\n',
+             '            # Source coordinates never allow origin sidecars, even when the\n',
+             '            # same root is also listed as an include. Include-only sidecars\n',
+             '            # correspond to observed staged Mojo coordinates; the generation\n',
+             '            # owner authenticates their exact set and bytes before dispatch.\n',
+             '            return all(cleanup.resolver_unshadowed(location,\n',
+             '                paths if index == 0 else paths | {\n',
+             "                    name + '.cov-origin' for name in paths if name in image},\n",
+             '                **cleanup._render_lookup_args(paths, local_entries),\n',
+             "                math_entries=frozenset(('.', *local_entries)))\n",
+             '                for index, (location, local_entries, image) in '
+             'enumerate(contexts))\n',
+             '        if not resolver_ok():\n',
+             '            return {}\n',
+             '        for name, value in snapshots.items():\n',
+             '            if _coverage_observe_bytes(root, name,\n',
+             '                    relative_source(root, name, **operation_args).read_bytes(), '
+             '_operation=_operation) != value:\n',
+             '                return {}\n',
+             '        _density760_stage_identity(snapshots[leaf])\n',
+             '        for location, _, image in contexts:\n',
+             '            cleanup._helper_entry_census_finish(location, image, **operation_args)\n',
+             '        if cleanup.executing_checker_bindings() != executing or not resolver_ok():\n',
+             '            return {}\n',
+             '        return {line: {\n',
+             "            'line': line, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,\n",
+             "            'minimum_cardinality': minimum, 'maximum_cardinality': maximum,\n",
+             "            'required': 'T', 'impossible': 'F', 'expression': expression,\n",
+             "            'proof_id': proof_id, 'dependency_sha256': dict(DENSITY760_INPUTS),\n",
+             '        } for line, minimum, maximum, expression, proof_id in DENSITY760_RULES}\n',
+             '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError) '
+             'as error:\n',
+             '        if _operation is not None:\n',
+             '            cleanup._operation_fail(_operation, error)\n',
+             '        return {}\n')),
+           (1314,
+            1341,
+            (),
+            ('\n',
+             '\n',
+             '# Review the producer and consumer as one pair; old/new mixtures are unknown.\n',
+             'STRAND_CAP_PAIRED_SUCCESSOR = ({\n',
+             '    **STRAND_CAP_SOURCES,\n',
+             "    'renderers/renderer.mojo':\n",
+             "        '2491b99a982cd4bc49b3573d3c6db8313bfdd47372e693e932c03c27d0ff127d',\n",
+             "    'objects/line_segments2.mojo':\n",
+             "        'fdff9f90123e0d3d8d3ca9b0aaf22e3b2c110c255d01a14927ce1fca8fa7d021',\n",
+             '}, 4047)\n',
+             '\n',
+             '\n',
+             '# The Camera-order repair leaves the complete cap function and producer intact.\n',
+             '# Preserve the first PR760 pair as a separately accepted historical endpoint.\n',
+             'STRAND_CAP_CAMERA_ORDER_SUCCESSOR = ({\n',
+             '    **STRAND_CAP_PAIRED_SUCCESSOR[0],\n',
+             "    'renderers/renderer.mojo':\n",
+             "        'df552b5bc14d6cc5a0ef4cf919afaf66da620f431b0d4f5bb9c3a61538cb2b84',\n",
+             '}, 4047)\n',
+             '\n',
+             '\n',
+             '# Formatting only: generic Camera signature gains two physical lines.\n',
+             'STRAND_CAP_FORMATTED_SUCCESSOR = ({\n',
+             '    **STRAND_CAP_CAMERA_ORDER_SUCCESSOR[0],\n',
+             "    'renderers/renderer.mojo':\n",
+             "        '5cc066092d9b0302c60a6676459efc855e220dc319d1f88b5eb84df768f489f9',\n",
+             '}, 4049)\n')),
+           (1377,
+            1378,
+            ('def strand_cap_loops(root, *, include_roots=()):\n',),
+            ('def strand_cap_loops(root, *, include_roots=(), _operation=None):\n',)),
+           (1379,
+            1384,
+            (),
+            ("    operation_args = {} if _operation is None else {'_operation': _operation}\n",
+             "    stream_args = {} if _operation is None else {'_operation': _operation, '_root': "
+             'root}\n',
+             '    if _operation is not None:\n',
+             '        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup\n',
+             '        cleanup._operation_include_context(_operation, root, include_roots)\n')),
+           (1385,
+            1387,
+            ('        actual = {name: file_sha256(relative_source(root, name))\n',),
+            ('        actual = {name: file_sha256(relative_source(root, name, **operation_args),\n',
+             '                                   **stream_args)\n')),
+           (1391,
+            1398,
+            ('        if line is None or actual != expected:\n',),
+            ('        if actual == STRAND_CAP_FORMATTED_SUCCESSOR[0]:\n',
+             '            line = STRAND_CAP_FORMATTED_SUCCESSOR[1]\n',
+             '        elif actual == STRAND_CAP_CAMERA_ORDER_SUCCESSOR[0]:\n',
+             '            line = STRAND_CAP_CAMERA_ORDER_SUCCESSOR[1]\n',
+             '        elif actual == STRAND_CAP_PAIRED_SUCCESSOR[0]:\n',
+             '            line = STRAND_CAP_PAIRED_SUCCESSOR[1]\n',
+             '        elif line is None or actual != expected:\n')),
+           (1579,
+            1589,
+            ('                if not all(cleanup.resolver_unshadowed(location, resolver_paths)\n',
+             '                           for location in (root, *include_roots)):\n'),
+            ('                def resolver_ok():\n',
+             '                    # Source coordinates remain strict. Only include roots can\n',
+             '                    # contain these exact provider origin sidecars; the receipt\n',
+             '                    # owner authenticates their set and bytes before dispatch\n',
+             '                    # and again before the generated proof can escape.\n',
+             '                    return cleanup.resolver_unshadowed(root, resolver_paths) and '
+             'all(\n',
+             '                        cleanup.resolver_unshadowed(location, resolver_paths | {\n',
+             "                            path + '.cov-origin' for path in resolver_paths})\n",
+             '                        for location in include_roots)\n',
+             '                if not resolver_ok():\n')),
+           (1602,
+            1603,
+            ('                        or not all(cleanup.resolver_unshadowed(location, '
+             'resolver_paths)\n',
+             '                                   for location in (root, *include_roots))):\n'),
+            ('                        or not resolver_ok()):\n',)),
+           (1604,
+            1619,
+            (),
+            ('                if _operation is not None:\n',
+             "                    # Keep this local theorem's consumed resolver premises in\n",
+             "                    # the generated owner's final physical sweep as well.\n",
+             '                    observed = (_operation._raw.keys() if _operation._state == '
+             "'active' else\n",
+             '                        {path for location, path, value, mode in '
+             '_operation._receipt_observations\n',
+             '                         if location == _operation._root})\n',
+             '                    cleanup.require(resolver_paths <= observed,\n',
+             "                                    'local helper resolver inputs were not "
+             "observed')\n",
+             '                    _operation._resolver_paths = frozenset(\n',
+             '                        _operation._resolver_paths | resolver_paths)\n',
+             "                    if _operation._state == 'pending':\n",
+             '                        cleanup.require(not _operation._executing\n',
+             '                                        or dict(_operation._executing) == '
+             'executing,\n',
+             "                                        'local helper checker image changed')\n",
+             '                        _operation._executing = '
+             'types.MappingProxyType(dict(executing))\n')),
+           (1684,
+            1694,
+            (),
+            ("        if module == 'extensions/humanoid/skeleton/head/hair/strands':\n",
+             "            name = module + '.mojo'\n",
+             '            raw = _coverage_observe_bytes(root, name,\n',
+             '                relative_source(root, name, **operation_args).read_bytes(),\n',
+             '                _operation=_operation)\n',
+             '            if sha256(raw) == HAIR_LITERAL_SUCCESSOR[0][name]:\n',
+             '                bindings, sites = HAIR_LITERAL_SUCCESSOR\n',
+             '                if not all(_density_stdlib_unshadowed(path, **operation_args)\n',
+             '                           for path in (root, *include_roots)):\n',
+             '                    return {}\n')),
+           (2189,
+            2190,
+            ('            result.update(strand_cap_loops(root, include_roots=include_roots))\n',),
+            ('            result.update(strand_cap_loops(root, include_roots=include_roots, '
+             '**operation_args))\n',)),
+           (2193,
+            2195,
+            ('            result.update(repaired_density_loops(root, '
+             'include_roots=include_roots))\n',),
+            ('            result.update(repaired_density_loops(root, include_roots=include_roots, '
+             '**operation_args))\n',
+             '            result.update(density760_loops(root, include_roots=include_roots, '
+             '**operation_args))\n')))},
+ 'full_audit_cleanup_contracts.py': {'after_sha256': '65fc5809c888bf07e2a8798cc3803de1757988e5cad5cd8766beb2e5fb2673cb',
+ 'before_sha256': '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',
+ 'edits': ((10, 11, (), ('from contextlib import nullcontext\n',)),
+           (45, 46, (), ('        from . import lane_order_contracts as lane_order\n',)),
+           (55, 56, (), ('        from . import pr760_arithmetic_stage as pr760_stage\n',)),
+           (59, 60, (), ('        import lane_order_contracts as lane_order\n',)),
+           (69, 70, (), ('        import pr760_arithmetic_stage as pr760_stage\n',)),
+           (150,
+            159,
+            ("DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/scaled_float32_contracts.py': "
+             "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n",),
+            ('PR760_STAGE_SHA256 = '
+             "'03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359'\n",
+             "PR760_IMAGE = 'tools/carla_lane_oracle/pr760-source-image.json'\n",
+             'PR760_IMAGE_SHA256 = '
+             "'ef91b7edab2c8a597aeedc90f86e834d5227aad5770ebe39e0438944f246f7cf'\n",
+             "PR760_OWNER_PREDECESSOR = 'tools/carla_lane_oracle/pr760-owner-predecessor.txt'\n",
+             'PR760_OWNER_PREDECESSOR_SHA256 = '
+             "'6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69'\n",
+             "DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/winner_sign_contracts.py': "
+             "'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f',\n",
+             " 'tools/carla_lane_oracle/border_parser_contracts.py': "
+             "'734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',\n",
+             " 'tools/carla_lane_oracle/pr760_arithmetic_stage.py': PR760_STAGE_SHA256,\n",
+             " 'tools/carla_lane_oracle/scaled_float32_contracts.py': "
+             "'e3a59a9f8d5a9394007c03fab6ac696e04998812dad5843a22e721bfbe57c2a1',\n")),
+           (167,
+            171,
+            (" 'tools/carla_lane_oracle/source_contracts.py': "
+             "'83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',\n",
+             " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
+             "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
+             " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
+             "'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',\n"),
+            (" 'tools/carla_lane_oracle/source_contracts.py': "
+             "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",
+             " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
+             "'8c1d646c1dd70e1e7c9453077b63060ca506f76d2493137af0dd0a9a68012570',\n",
+             " 'tools/carla_lane_oracle/lane_order_contracts.py': "
+             "'314b1fae1f274c7223ab5dec50ad4cb97760c31926844ca92e1e6aa8560b4889',\n",
+             " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
+             "'59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',\n")),
+           (174,
+            175,
+            (" 'tools/carla_lane_oracle/seed_count_contracts.py': "
+             "'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345'}\n",),
+            (" 'tools/carla_lane_oracle/seed_count_contracts.py': "
+             "'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90'}\n",)),
+           (246,
+            248,
+            ("                 'tools/carla_lane_oracle/scaled_float32_contracts.py')\n",),
+            ("                 'tools/carla_lane_oracle/scaled_float32_contracts.py',\n",
+             "                 'tools/carla_lane_oracle/pr760_arithmetic_stage.py')\n")),
+           (718,
+            719,
+            ("for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), "
+             'consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, '
+             'typed_boundary, conditioned_cubic, scaled_float32):\n',),
+            ("for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), "
+             'consumer_ledger, station, shared_helpers, runtime_view, deviation, witness_format, '
+             'typed_boundary, conditioned_cubic, scaled_float32, pr760_stage):\n',)),
+           (771,
+            772,
+            ('               vars(scaled_float32))\n',),
+            ('               vars(scaled_float32), vars(pr760_stage))\n',)),
+           (808,
+            810,
+            (),
+            ('    pr760_stage.verify_stage_data()\n', '    _pr760_authority_data()\n')),
+           (921,
+            922,
+            ('                        math_entries=None):\n',),
+            ('                        math_entries=None, example_entries=None):\n',)),
+           (936,
+            938,
+            ('    inert. Include roots receive structural checks only: maintained generation\n',),
+            ('    inert; entry scoping preserves this wiki guard. Include roots receive\n',
+             '    structural checks only: maintained generation\n')),
+           (951,
+            958,
+            (),
+            ('    # PR760 examples add tools/generators providers and example roots. These\n',
+             '    # namespaces compete only at freshly censused compiled lookup directories;\n',
+             '    # exact consumed module/package coordinates remain unconditional below.\n',
+             '    if example_entries is not None and (type(example_entries) is not frozenset\n',
+             "            or '.' not in example_entries or any(type(path) is not str or not path\n",
+             "            or Path(path).is_absolute() or '..' in Path(path).parts for path in "
+             'example_entries)):\n',
+             '        return False\n')),
+           (967, 968, (), ('    coordinates = {path.casefold() for path in allowed}\n',)),
+           (1008,
+            1018,
+            ('                relevant = (folded in stems or folded in prefixes or stem in '
+             'stems\n',),
+            ('                # Appended suffixes of exact consumed coordinates remain\n',
+             '                # guarded even when their bare namespace is entry-scoped.\n',
+             '                # This includes origin sidecars, allowed only when explicitly\n',
+             '                # enumerated for an include root.\n',
+             '                coordinate_suffix = any(\n',
+             '                    (relative[:-len(name)] + name[:index]).casefold() in '
+             'coordinates\n',
+             "                    for index, character in enumerate(name) if character == '.')\n",
+             '                # Entry-scoped math still owes the historical wiki guard:\n',
+             '                # only the exact regular Math.md file is an inert exception.\n',
+             '                relevant = (coordinate_suffix or folded in stems or folded in '
+             'prefixes or stem in stems\n')),
+           (1022,
+            1026,
+            ('                                     or relative_dir.casefold() in math_entries)\n',),
+            ('                                     or relative_dir.casefold() in math_entries\n',
+             "                                     or relative_dir.casefold() == 'docs/wiki')\n",
+             "                                and (scoped_name not in ('tools', 'examples', "
+             "'generators') or example_entries is None\n",
+             '                                     or relative_dir.casefold() in '
+             'example_entries)\n')),
+           (1070,
+            1170,
+            (),
+            ('\n',
+             '\n',
+             'def _pr760_image_selected(image):\n',
+             '    """Identify one complete cohort inside an already observed byte image."""\n',
+             '    current = tuple(image.get(path) is not None and\n',
+             "        sha(image[path]) == pr760_stage.EDGES[path]['after_sha256']\n",
+             '        for path in pr760_stage.EXAMPLE_PATHS)\n',
+             "    require(not any(current) or all(current), 'mixed PR760 example source image')\n",
+             '    return all(current)\n',
+             '\n',
+             '\n',
+             'def _pr760_select(root, *, _snapshots=None, _operation=None, _inputs=None, '
+             '_input_owner=None):\n',
+             '    image = {}\n',
+             '    for path in pr760_stage.EXAMPLE_PATHS:\n',
+             '        raw = (_observe_bytes(root, path, _regular(root, path).read_bytes(), '
+             '_operation=_operation)\n',
+             '               if _inputs is None else _inputs.raw(_input_owner, root, path))\n',
+             "        require(type(raw) is bytes, 'PR760 cohort is not physical bytes: ' + path)\n",
+             '        if _snapshots is not None:\n',
+             "            require(_snapshots.setdefault(path, raw) == raw, 'PR760 cohort changed: "
+             "' + path)\n",
+             '        image[path] = raw\n',
+             '    return _pr760_image_selected(image)\n',
+             '\n',
+             '\n',
+             'def _image_lookup_args(paths, entries, image):\n',
+             '    args = _render_lookup_args(paths, entries)\n',
+             '    if _pr760_image_selected(image):\n',
+             "        roots = frozenset(('.', *entries,\n",
+             '            *(str(Path(path).parent) for path in pr760_stage.REGISTRY_INPUT_SHA256\n',
+             "              if path.endswith('.mojo') and path.startswith(('tests/', 'examples/', "
+             "'bench/')))))\n",
+             '        args.update(math_entries=roots, example_entries=roots)\n',
+             '    return args\n',
+             '\n',
+             '\n',
+             'def _pr760_admit(root, *, _inputs=None, _input_owner=None, _operation=None, '
+             '_selection=None):\n',
+             '    """Reuse only the current concrete owner\'s admitted immutable image."""\n',
+             '    if _selection is not None:\n',
+             '        caller = sys._getframe(1)\n',
+             '        require(caller.f_globals is globals() and caller.f_code in\n',
+             '                (_live_function_code(_shared_helper_bindings),\n',
+             '                 _live_function_code(_scaled_float32_bindings)),\n',
+             "                'unowned PR760 selection')\n",
+             '        parent = caller.f_back\n',
+             '        require(parent is not None and parent.f_globals is globals()\n',
+             '                and parent.f_code is _live_function_code(verify)\n',
+             "                and parent.f_locals.get('pr760') is _selection,\n",
+             "                'PR760 selection must come from the complete physical gate')\n",
+             '        return\n',
+             '    if _inputs is not None:\n',
+             '        _inputs._check(_input_owner, root)\n',
+             "        require(_pr760_image_selected(_inputs._raw), 'owned image is not PR760')\n",
+             '    elif _operation is not None:\n',
+             '        _operation_record(_operation, root, exact=True)\n',
+             "        require(_pr760_image_selected(_operation._raw), 'operation image is not "
+             "PR760')\n",
+             '    else:\n',
+             '        verify(root, exact=True)\n',
+             '    pr760_stage.verify_stage_data()\n',
+             '\n',
+             '\n',
+             'def _pr760_composed_edges(leaf, bindings):\n',
+             '    selected = tuple(path for path in leaf.SOURCE_PATHS\n',
+             '        if bindings.get(path) == leaf.AFTER_SHA256[path]\n',
+             '        or (path in pr760_stage.CARLA_REGISTRY_PATHS and\n',
+             "            bindings.get(path) == pr760_stage.EDGES[path]['after_sha256']))\n",
+             '    edges = leaf.edges(selected)\n',
+             '    for path in selected:\n',
+             '        if bindings[path] != leaf.AFTER_SHA256[path]:\n',
+             '            edge = pr760_stage.EDGES[path]\n',
+             "            require(edge['before_sha256'] == leaf.AFTER_SHA256[path],\n",
+             "                    'PR760 historical helper join changed: ' + path)\n",
+             "            edges[path] = {**edges[path], 'after_sha256': edge['after_sha256'],\n",
+             "                          'after_token_sha256': edge['after_token_sha256'],\n",
+             "                          'provenance_after_sha256': edge['before_sha256']}\n",
+             '    return edges\n',
+             '\n',
+             '\n',
+             'def provenance_after_sha256(edge):\n',
+             '    """Authenticate the historical comparison target separately from physical '
+             'bytes."""\n',
+             "    require(type(edge) is dict, 'invalid provenance edge')\n",
+             "    if 'provenance_after_sha256' not in edge:\n",
+             "        return edge['after_sha256']\n",
+             "    require(type(edge.get('path')) is str, 'invalid provenance edge')\n",
+             '    pr760_stage.verify_stage_data()\n',
+             "    path = edge['path']\n",
+             '    require(path in pr760_stage.CARLA_REGISTRY_PATHS,\n',
+             "            'unregistered provenance edge')\n",
+             '    leaf = (shared_helpers if path in shared_helpers.SOURCE_PATHS else\n',
+             '            scaled_float32 if path in scaled_float32.SOURCE_PATHS else None)\n',
+             "    require(leaf is not None, 'provenance field is not a historical helper edge')\n",
+             '    prior = leaf.edges((path,))[path]\n',
+             '    current = pr760_stage.EDGES[path]\n',
+             "    require(current['before_sha256'] == prior['after_sha256']\n",
+             "            and edge['provenance_after_sha256'] == current['before_sha256']\n",
+             '            and all(edge[field] == current[field] for field in\n',
+             "                    ('after_sha256', 'after_token_sha256'))\n",
+             "            and edge['before_sha256'] == prior['before_sha256']\n",
+             "            and ('before_token_sha256' in edge) == ('before_token_sha256' in "
+             'prior)\n',
+             "            and ('before_token_sha256' not in prior or\n",
+             "                 edge['before_token_sha256'] == prior['before_token_sha256']),\n",
+             "            'provenance edge does not compose exact physical and historical "
+             "endpoints')\n",
+             "    return current['before_sha256']\n")),
+           (1487,
+            1488,
+            ('                        **_render_lookup_args(self._resolver_paths, '
+             'self._entries))\n',),
+            ('                        **_image_lookup_args(self._resolver_paths, self._entries, '
+             'self._raw))\n',)),
+           (1536,
+            1539,
+            ("            'seed_count_contracts.py': ('verify_score',)}\n",),
+            ("            'seed_count_contracts.py': ('verify_score',),\n",
+             "            'sum2_guard_contracts.py': ('verify',),\n",
+             "            'lane_order_contracts.py': ('verify',)}\n")),
+           (1540,
+            1557,
+            (),
+            ('\n',
+             'def _canonical_inventory_admission_frame(frame):\n',
+             '    """Only the two new canonical inventory entries may own a public scope."""\n',
+             "    filename = frame.f_globals.get('__file__')\n",
+             '    name = Path(filename).name if type(filename) is str else None\n',
+             "    if (name not in ('sum2_guard_contracts.py', 'lane_order_contracts.py')\n",
+             "            or frame.f_code.co_name != 'verify'):\n",
+             '        return True\n',
+             "    module = guard if name == 'sum2_guard_contracts.py' else lane_order\n",
+             "    registered = sys.modules.get((__package__ + '.' if __package__ else '') + "
+             'name[:-3])\n',
+             "    candidate = frame.f_globals.get('verify')\n",
+             '    return (type(module) is types.ModuleType and registered is module\n',
+             '            and frame.f_globals is vars(module)\n',
+             '            and type(candidate) is types.FunctionType\n',
+             '            and candidate.__globals__ is frame.f_globals\n',
+             '            and candidate.__code__ is frame.f_code\n',
+             "            and '__wrapped__' not in candidate.__dict__)\n")),
+           (1565,
+            1567,
+            (),
+            ('    if not _canonical_inventory_admission_frame(frame):\n',
+             '        return nullcontext()\n')),
+           (1584,
+            1586,
+            (),
+            ('        require(_canonical_inventory_admission_frame(frame),\n',
+             "                'public inventory admission requires its canonical owner')\n")),
+           (1608,
+            1614,
+            (),
+            ("        owner_filename = self._owner_frame.f_globals.get('__file__')\n",
+             '        inventory_owner = (type(owner_filename) is str\n',
+             "            and Path(owner_filename).name in ('sum2_guard_contracts.py', "
+             "'lane_order_contracts.py')\n",
+             "            and self._owner_frame.f_code.co_name == 'verify')\n",
+             '        if inventory_owner and not _canonical_inventory_admission_frame(frame):\n',
+             '            return False\n')),
+           (2553,
+            2554,
+            ('            require(stage_args == _render_lookup_args(resolver_paths, '
+             'self._include_entries),\n',),
+            ('            require(stage_args == _image_lookup_args(resolver_paths, '
+             'self._include_entries, self._raw),\n',)),
+           (2717,
+            2718,
+            ('                    **_render_lookup_args(self._resolver_paths, self._entries))\n',),
+            ('                    **_image_lookup_args(self._resolver_paths, self._entries, '
+             'self._raw))\n',)),
+           (2720,
+            2721,
+            ('                    **_render_lookup_args(self._resolver_paths, '
+             'self._include_entries)),\n',),
+            ('                    **_image_lookup_args(self._resolver_paths, '
+             'self._include_entries, self._raw)),\n',)),
+           (2808,
+            2809,
+            ('                                **_render_lookup_args(self._resolver_paths, '
+             'self._entries)),\n',),
+            ('                                **_image_lookup_args(self._resolver_paths, '
+             'self._entries, self._raw)),\n',)),
+           (2983,
+            2984,
+            ('                            _input_owner=None, _operation=None):\n',),
+            ('                            _input_owner=None, _operation=None, _pr760=None):\n',)),
+           (3003,
+            3019,
+            (),
+            ('    current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS\n',
+             "        and sha(raw) == pr760_stage.EDGES[name]['after_sha256']\n",
+             '        for name, raw in sources.items())\n',
+             '    if not current:\n',
+             '        # Exact pre-extraction sources do not import their helper provider.\n',
+             '        # Probe only live edges; a current source still selects full PR760\n',
+             '        # admission above, including every physical provider it requires.\n',
+             '        for name in {name for path in selected\n',
+             '                     if sha(sources[path]) != shared_helpers.BEFORE_SHA256[path]\n',
+             '                     for name in shared_helpers.PROVIDER_PATHS[path]}:\n',
+             '            raw = observe(name)\n',
+             '            if name in pr760_stage.CARLA_REGISTRY_PATHS and sha(raw) == '
+             "pr760_stage.EDGES[name]['after_sha256']:\n",
+             '                current = True\n',
+             '    if current:\n',
+             '        _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,\n',
+             '                    _operation=_operation, _selection=_pr760)\n')),
+           (3021,
+            3025,
+            (),
+            ("        prior = (_pr760['predecessors'][path] if _pr760 and path in "
+             "_pr760['predecessors']\n",
+             "                 else pr760_stage.predecessor_source(path, raw.decode('utf-8'))\n",
+             '                 if current and path in pr760_stage.CARLA_REGISTRY_PATHS else '
+             "raw.decode('utf-8'))\n",
+             "        raw = prior.encode('utf-8')\n")),
+           (3042,
+            3045,
+            (),
+            ('        if current and path in pr760_stage.CARLA_REGISTRY_PATHS:\n',
+             "            historical = (_pr760['predecessors'][path] if _pr760 else\n",
+             '                pr760_stage.predecessor_source(path, '
+             "raw.decode('utf-8'))).encode('utf-8')\n")),
+           (3056,
+            3067,
+            (),
+            ('    if current:\n',
+             "        texts = {path: (_pr760['predecessors'][path] if _pr760 and path in "
+             "_pr760['predecessors']\n",
+             '            else pr760_stage.predecessor_source(path, text)\n',
+             '            if path in pr760_stage.CARLA_REGISTRY_PATHS else text) for path, text in '
+             'texts.items()}\n',
+             "        for path in ('tools/carla_lane_oracle/pr760_arithmetic_stage.py', "
+             'PR760_IMAGE,\n',
+             '                     PR760_OWNER_PREDECESSOR):\n',
+             '            bound[path] = observe(path)\n',
+             '        require(sha(bound[PR760_IMAGE]) == PR760_IMAGE_SHA256\n',
+             '                and sha(bound[PR760_OWNER_PREDECESSOR]) == '
+             'PR760_OWNER_PREDECESSOR_SHA256\n',
+             "                and sha(bound['tools/carla_lane_oracle/pr760_arithmetic_stage.py']) "
+             '== PR760_STAGE_SHA256,\n',
+             "                'PR760 shared-helper authority changed')\n")),
+           (3167,
+            3168,
+            ('    return shared_helpers.edges(tuple(path for path in shared_helpers.SOURCE_PATHS\n',
+             '        if bindings.get(path) == shared_helpers.AFTER_SHA256[path]))\n'),
+            ('    return _pr760_composed_edges(shared_helpers, bindings)\n',)),
+           (3191,
+            3192,
+            ('                             _input_owner=None, _operation=None, _context=None):\n',),
+            ('                             _input_owner=None, _operation=None, _context=None, '
+             '_pr760=None):\n',)),
+           (3215,
+            3228,
+            ("    active = scaled_float32.verify_sources({name: raw.decode('utf-8') for name, raw "
+             'in sources.items()})\n',),
+            ('    current = bool(_pr760) or any(name in pr760_stage.CARLA_REGISTRY_PATHS\n',
+             "        and sha(raw) == pr760_stage.EDGES[name]['after_sha256']\n",
+             '        for name, raw in sources.items())\n',
+             '    if current:\n',
+             '        _pr760_admit(root, _inputs=_inputs, _input_owner=_input_owner,\n',
+             '                    _operation=_operation, _selection=_pr760)\n',
+             '    def historical(name, raw):\n',
+             '        if current and name == '
+             "'tools/carla_lane_oracle/test_scaled_float32_contracts.py':\n",
+             "            return qualification_predecessor_bytes(name, raw).decode('utf-8')\n",
+             "        return (_pr760['predecessors'][name] if _pr760 and name in "
+             "_pr760['predecessors']\n",
+             "                else pr760_stage.predecessor_source(name, raw.decode('utf-8'))\n",
+             '                if current and name in pr760_stage.CARLA_REGISTRY_PATHS else '
+             "raw.decode('utf-8'))\n",
+             '    active = scaled_float32.verify_sources({name: historical(name, raw) for name, '
+             'raw in sources.items()})\n')),
+           (3234,
+            3235,
+            ("        require(sha(observe(name)) == digest, 'scaled correctness input changed: ' + "
+             'name)\n',),
+            ("        require(sha(historical(name, observe(name))) == digest, 'scaled correctness "
+             "input changed: ' + name)\n",)),
+           (3260,
+            3265,
+            (),
+            ('    if current:\n',
+             "        for name, digest in (('tools/carla_lane_oracle/pr760_arithmetic_stage.py', "
+             'PR760_STAGE_SHA256),\n',
+             '                             (PR760_IMAGE, PR760_IMAGE_SHA256),\n',
+             '                             (PR760_OWNER_PREDECESSOR, '
+             'PR760_OWNER_PREDECESSOR_SHA256)):\n',
+             "            require(sha(observe(name)) == digest, 'PR760 scaled authority changed: ' "
+             '+ name)\n')),
+           (3348,
+            3349,
+            ('    return scaled_float32.edges(tuple(name for name in scaled_float32.SOURCE_PATHS\n',
+             '        if bindings.get(name) == scaled_float32.AFTER_SHA256[name]))\n'),
+            ('    return _pr760_composed_edges(scaled_float32, bindings)\n',)),
+           (3446,
+            3454,
+            ('                require(type(raw) is bytes and sha(_historical_typed_text(path, '
+             "raw.decode('utf-8'))) == expected,\n",),
+            ("                require(type(raw) is bytes, 'witness-format input is not physical "
+             "bytes: ' + path)\n",
+             '                historical = raw\n',
+             '                if (path == '
+             "'tools/carla_lane_oracle/test_witness_format_contracts.py'\n",
+             '                        and sha(raw) != expected):\n',
+             '                    # This one qualification edge joins the unchanged typed\n',
+             '                    # endpoint. Observations, rereads and receipts stay physical.\n',
+             '                    historical = qualification_predecessor_bytes(path, raw)\n',
+             '                require(sha(_historical_typed_text(path, '
+             "historical.decode('utf-8'))) == expected,\n")),
+           (3470,
+            3471,
+            ('def _historical_typed_text(path, text):\n',),
+            ('def _historical_typed_text(path, text, *, pr760=False):\n',)),
+           (3472,
+            3474,
+            (),
+            ('    if pr760 and path in pr760_stage.CARLA_REGISTRY_PATHS:\n',
+             '        text = pr760_stage.predecessor_source(path, text)\n')),
+           (3477,
+            3478,
+            ('def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None):\n',),
+            ('def _typed_boundary_bindings(root, *, _snapshots=None, _operation=None, '
+             '_selection=None):\n',)),
+           (3481,
+            3494,
+            (),
+            ('        if _pr760_select(root, _snapshots=_snapshots, _operation=_operation):\n',
+             '            if (type(_operation) is _InvariantInputs and _operation._state == '
+             "'active'\n",
+             '                    and not _operation._capturing):\n',
+             '                pr760_stage.verify_stage_data()\n',
+             '                typed_boundary.verify_authority()\n',
+             '                conditioned_cubic.verify_authority()\n',
+             "                require(_pr760_image_selected(_operation._raw), 'operation cohort "
+             "changed')\n",
+             '                return {path: sha(raw) for path, raw in _operation._raw.items()}\n',
+             '            candidate = _pr760_candidate_bindings(root, _snapshots=_snapshots, '
+             '_operation=_operation)\n',
+             '            if _selection is not None:\n',
+             "                require(type(_selection) is dict and not _selection, 'invalid PR760 "
+             "selection output')\n",
+             '                _selection.update(candidate)\n',
+             "            return candidate['bindings']\n")),
+           (3558,
+            3560,
+            ('    edge = typed_boundary.EDGES.get(path)\n',),
+            ('    edge = (pr760_stage.EDGES.get(path) if path in '
+             'pr760_stage.CARLA_REGISTRY_PATHS\n',
+             '            else typed_boundary.EDGES.get(path))\n')),
+           (3578,
+            3580,
+            ('        if not (typed_boundary.is_current(path, text) or\n',),
+            ('        new_endpoint = path in pr760_stage.CARLA_REGISTRY_PATHS and '
+             "source.token_sha256(text) == edge['after_token_sha256']\n",
+             '        if not (new_endpoint or typed_boundary.is_current(path, text) or\n')),
+           (3584,
+            3585,
+            ('        require(typed_boundary.is_current(path, raw),\n',),
+            ("        require((sha(raw) == edge['after_sha256']) if new_endpoint else "
+             'typed_boundary.is_current(path, raw),\n',)),
+           (3603,
+            3607,
+            ('        return _historical_typed_text(path, physical_text)\n',),
+            ('        if new_endpoint:\n',
+             '            require(_pr760_select(root, _operation=_operation,\n',
+             "                _inputs=_inputs, _input_owner=_input_owner), 'new endpoint lacks "
+             "complete PR760 image')\n",
+             '        return _historical_typed_text(path, physical_text, pr760=new_endpoint)\n')),
+           (3646,
+            3648,
+            ('        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots,\n',),
+            ('        pr760 = {}\n',
+             '        typed_bindings = _typed_boundary_bindings(root, _snapshots=snapshots, '
+             '_selection=pr760,\n')),
+           (3670,
+            3674,
+            ('        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots)\n',
+             '        scaled_edges = scaled_float32.edges(tuple(name for name in '
+             'scaled_float32.SOURCE_PATHS\n',
+             '            if scaled_bindings.get(name) == scaled_float32.AFTER_SHA256[name]))\n',
+             '        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots)\n',
+             '        helper_edges = shared_helpers.edges(tuple(\n',
+             '            path for path in shared_helpers.SOURCE_PATHS\n',
+             '            if helper_bindings.get(path) == shared_helpers.AFTER_SHA256[path]))\n'),
+            ('        scaled_bindings = _scaled_float32_bindings(root, _snapshots=snapshots, '
+             '_pr760=pr760 or None)\n',
+             '        scaled_edges = _pr760_composed_edges(scaled_float32, scaled_bindings)\n',
+             '        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots, '
+             '_pr760=pr760 or None)\n',
+             '        helper_edges = _pr760_composed_edges(shared_helpers, helper_bindings)\n')),
+           (3681,
+            3683,
+            (),
+            ('        if pr760:\n',
+             "            resolver_paths |= set().union(*pr760['closures'].values())\n")),
+           (3689,
+            3690,
+            ('                    **_render_lookup_args(resolver_paths, '
+             "record['entry_directories'])),\n",),
+            ('                    **_image_lookup_args(resolver_paths, '
+             "record['entry_directories'], snapshots)),\n",)),
+           (3691,
+            3709,
+            ("        known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if "
+             "p.suffix == '.mojo'}\n",
+             '        # #720 resolves from actual compiled entrypoint directories. Bind all\n',
+             "        # maintained production entry contexts and each witness's own root.\n",
+             '        live_sources = {}\n',
+             '        for path in sorted(known):\n',
+             '            raw = _regular(root, path).read_bytes()\n',
+             '            previous = snapshots.setdefault(path, raw)\n',
+             "            require(previous == raw, 'source changed before entrypoint census: ' + "
+             'path)\n',
+             '            live_sources[path] = _physical_text(raw)\n',
+             "        entries = _sibling('affected').entry_directories(live_sources)\n",
+             "        require(entries == record['entry_directories'], 'maintained entrypoint "
+             "directories changed')\n"),
+            ('        if pr760:\n',
+             '            # The private whole-image check already consumed these exact bytes.\n',
+             "            # Reuse only this call's pure census/closure results; final physical\n",
+             '            # sweeps and include-root checks below remain mandatory.\n',
+             "            known = set(pr760['known'])\n",
+             "            entries = pr760['entries']\n",
+             '        else:\n',
+             "            known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) "
+             "if p.suffix == '.mojo'}\n",
+             '            # #720 resolves from actual compiled entrypoint directories. Bind all\n',
+             "            # maintained production entry contexts and each witness's own root.\n",
+             '            live_sources = {}\n',
+             '            for path in sorted(known):\n',
+             '                raw = _regular(root, path).read_bytes()\n',
+             '                previous = snapshots.setdefault(path, raw)\n',
+             "                require(previous == raw, 'source changed before entrypoint census: ' "
+             '+ path)\n',
+             '                live_sources[path] = _physical_text(raw)\n',
+             "            entries = _sibling('affected').entry_directories(live_sources)\n",
+             "            require(entries == record['entry_directories'], 'maintained entrypoint "
+             "directories changed')\n")),
+           (3713,
+            3714,
+            ('            stage_args = _render_lookup_args(resolver_paths, stage_entries)\n',),
+            ('            stage_args = _image_lookup_args(resolver_paths, stage_entries, '
+             'snapshots)\n',)),
+           (3717,
+            3746,
+            ('        require(dependency_inventory(root, roots=(*SOURCE_PATHS, '
+             "*record['inventory']), entries=entries,\n",
+             '                                     _known=known, _snapshots=snapshots)\n',
+             '                == (set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings else\n',
+             "                    set(record['dependency_inventory']) | helper_closure), "
+             "'production import inventory changed')\n",
+             '        native_found = _native_dependency_inventory(root, '
+             'witnesses=NATIVE_WITNESSES,\n',
+             '            _known=known, _snapshots=snapshots)\n',
+             '        require(native_found == (set(typed_boundary.NATIVE_CLOSURE) if '
+             'typed_bindings else\n',
+             "                set(record['native_dependency_inventory']) | helper_closure),\n",
+             "                'native witness import inventory changed')\n",
+             '        if typed_bindings:\n',
+             '            current_native = set()\n',
+             '            test_paths = tuple(path for path in typed_boundary.TESTS if '
+             "path.endswith('.mojo'))\n",
+             '            for parent in sorted({str(Path(path).parent) for path in test_paths}):\n',
+             '                current_native.update(dependency_inventory(root,\n',
+             '                    roots=tuple(path for path in test_paths if '
+             'str(Path(path).parent) == parent),\n',
+             '                    entries=(parent,), _known=known, _snapshots=snapshots))\n',
+             '            require(current_native == set(typed_boundary.TYPED_NATIVE_CLOSURE),\n',
+             "                    'typed native test import inventory changed')\n",
+             '            current_production = dependency_inventory(root,\n',
+             '                roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, '
+             '*typed_boundary.NEW_INPUTS)\n',
+             "                    if path.endswith('.mojo') and not path.startswith(('tests/', "
+             "'tools/', 'examples/', 'bench/'))),\n",
+             '                entries=entries, _known=known, _snapshots=snapshots)\n',
+             '            require(current_production == '
+             'set(typed_boundary.TYPED_PRODUCTION_CLOSURE),\n',
+             "                    'typed production import inventory changed')\n"),
+            ('        if not pr760:\n',
+             '            require(dependency_inventory(root, roots=(*SOURCE_PATHS, '
+             "*record['inventory']), entries=entries,\n",
+             '                                         _known=known, _snapshots=snapshots)\n',
+             "                    == (pr760['closures']['PRODUCTION_CLOSURE'] if pr760 else\n",
+             '                        set(typed_boundary.PRODUCTION_CLOSURE) if typed_bindings '
+             'else\n',
+             "                        set(record['dependency_inventory']) | helper_closure), "
+             "'production import inventory changed')\n",
+             '            native_found = _native_dependency_inventory(root, '
+             'witnesses=NATIVE_WITNESSES,\n',
+             '                _known=known, _snapshots=snapshots)\n',
+             "            require(native_found == (pr760['closures']['NATIVE_CLOSURE'] if pr760 "
+             'else\n',
+             '                    set(typed_boundary.NATIVE_CLOSURE) if typed_bindings else\n',
+             "                    set(record['native_dependency_inventory']) | helper_closure),\n",
+             "                    'native witness import inventory changed')\n",
+             '            if typed_bindings:\n',
+             '                current_native = set()\n',
+             '                test_paths = tuple(path for path in typed_boundary.TESTS if '
+             "path.endswith('.mojo'))\n",
+             '                for parent in sorted({str(Path(path).parent) for path in '
+             'test_paths}):\n',
+             '                    current_native.update(dependency_inventory(root,\n',
+             '                        roots=tuple(path for path in test_paths if '
+             'str(Path(path).parent) == parent),\n',
+             '                        entries=(parent,), _known=known, _snapshots=snapshots))\n',
+             "                require(current_native == (pr760['closures']['TYPED_NATIVE_CLOSURE'] "
+             'if pr760 else\n',
+             '                                          '
+             'set(typed_boundary.TYPED_NATIVE_CLOSURE)),\n',
+             "                        'typed native test import inventory changed')\n",
+             '                current_production = dependency_inventory(root,\n',
+             '                    roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, '
+             '*typed_boundary.NEW_INPUTS)\n',
+             "                        if path.endswith('.mojo') and not path.startswith(('tests/', "
+             "'tools/', 'examples/', 'bench/'))),\n",
+             '                    entries=entries, _known=known, _snapshots=snapshots)\n',
+             '                require(current_production == '
+             "(pr760['closures']['TYPED_PRODUCTION_CLOSURE'] if pr760 else\n",
+             '                                              '
+             'set(typed_boundary.TYPED_PRODUCTION_CLOSURE)),\n',
+             "                        'typed production import inventory changed')\n")),
+           (3780,
+            3785,
+            ('                historical = _historical_typed_text(path, '
+             "raw.decode('utf-8')).encode('utf-8') if path in typed_boundary.EDGES and "
+             'typed_bindings else raw\n',),
+            ('                historical = raw\n',
+             "                if pr760 and path in pr760['predecessors'] and path not in "
+             'helper_edges and path not in scaled_edges:\n',
+             "                    historical = pr760['predecessors'][path].encode('utf-8')\n",
+             '                if path in typed_boundary.EDGES and typed_bindings:\n',
+             '                    historical = _historical_typed_text(path, '
+             "historical.decode('utf-8')).encode('utf-8')\n")),
+           (3790,
+            3797,
+            ('        production = set() if _capture is not None or _public_admission is not None '
+             'else None\n',
+             '        observed_inventory = (inventory(root, _snapshots=snapshots) if production is '
+             'None else\n',
+             '                              inventory(root, _snapshots=snapshots, '
+             '_production=production))\n'),
+            ('        if pr760:\n',
+             "            production = set(pr760['production'])\n",
+             "            observed_inventory = pr760['inventory']\n",
+             '        else:\n',
+             '            production = set() if _capture is not None or _public_admission is not '
+             'None else None\n',
+             '            observed_inventory = (inventory(root, _snapshots=snapshots) if '
+             'production is None else\n',
+             '                                  inventory(root, _snapshots=snapshots, '
+             '_production=production))\n')),
+           (3812,
+            3815,
+            (),
+            ('        if pr760:\n',
+             '            require({path.relative_to(root).as_posix() for path in '
+             'guard.production_mojo_paths(root)}\n',
+             "                    == production, 'PR760 production path inventory changed during "
+             "verification')\n")),
+           (3818,
+            3819,
+            ('                    **_render_lookup_args(resolver_paths, '
+             "record['entry_directories']))\n",),
+            ('                    **_image_lookup_args(resolver_paths, '
+             "record['entry_directories'], snapshots))\n",)),
+           (3950,
+            3954,
+            ('    changed = {p for p, text in texts.items() if p in SOURCE_PATHS\n',
+             '               and source.token_sha256(text) != BEFORE_TOKEN_SHA256[p]}\n'),
+            ('    changed = {p for p, text in texts.items() if\n',
+             '               (p in SOURCE_PATHS and source.token_sha256(text) != '
+             'BEFORE_TOKEN_SHA256[p])\n',
+             '               or (p in pr760_stage.CARLA_REGISTRY_PATHS and\n',
+             '                   source.token_sha256(text) == '
+             "pr760_stage.EDGES[p]['after_token_sha256'])}\n")),
+           (3963, 3964, (), ('    pr760 = bool(_pr760_select(root))\n',)),
+           (3975,
+            3976,
+            ('        text = _historical_typed_text(path, _physical_text(physical))\n',),
+            ('        text = _historical_typed_text(path, _physical_text(physical), '
+             'pr760=pr760)\n',)),
+           (3983,
+            3984,
+            ('            require(raw == physical and source.token_sha256(text) == '
+             'source.token_sha256(_historical_typed_text(path, _physical_text(raw))),\n',),
+            ('            require(raw == physical and source.token_sha256(text) == '
+             'source.token_sha256(_historical_typed_text(path, _physical_text(raw), '
+             'pr760=pr760)),\n',)),
+           (4070,
+            4071,
+            (),
+            ('        current_image = _pr760_select(root, _operation=_operation)\n',)),
+           (4075,
+            4082,
+            ('            require(typed_boundary.is_current(path, current),\n',),
+            ('            qualification = (current_image and path ==\n',
+             "                'tools/carla_lane_oracle/test_witness_format_contracts.py')\n",
+             '            projected = (pr760_stage.predecessor_source(path, '
+             "current.decode('utf-8'))\n",
+             '                if current_image and path in pr760_stage.EXAMPLE_PATHS else\n',
+             "                qualification_predecessor_bytes(path, current).decode('utf-8')\n",
+             "                if qualification else current.decode('utf-8'))\n",
+             '            require(typed_boundary.is_current(path, projected),\n')),
+           (4084,
+            4087,
+            (),
+            ('            if current_image and (path in pr760_stage.EXAMPLE_PATHS or '
+             'qualification):\n',
+             '                edge.update(after_sha256=sha(current),\n',
+             '                            '
+             "after_token_sha256=source.token_sha256(current.decode('utf-8')))\n")),
+           (4178,
+            5001,
+            (),
+            ('PR760_IMPLEMENTATION_PREDECESSORS = '
+             "{'tools/carla_lane_oracle/pr760-border_parser-predecessor.txt': "
+             "'d7a638dcf4d5cadabd183be03cbea08945e9bb5351f4b96dd24803d42fa5626e',\n",
+             " 'tools/carla_lane_oracle/pr760-seed_count-predecessor.txt': "
+             "'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345',\n",
+             " 'tools/carla_lane_oracle/pr760-source-adapter-predecessor.txt': "
+             "'83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',\n",
+             " 'tools/carla_lane_oracle/pr760-winner_sign-predecessor.txt': "
+             "'2ed96052d6568fee1bb7700515b7ad03bd38edafc7ca413fc1c03bb9ad5f6aad'}\n",
+             'PR760_IMPLEMENTATION_SUCCESSORS = '
+             "{'tools/carla_lane_oracle/border_parser_contracts.py': "
+             "'734d7b24aaf4e9f537cd7f0d7c7b8094d9c29106770b66c4a7a24cab74604dd4',\n",
+             " 'tools/carla_lane_oracle/seed_count_contracts.py': "
+             "'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90',\n",
+             " 'tools/carla_lane_oracle/source_contracts.py': "
+             "'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',\n",
+             " 'tools/carla_lane_oracle/winner_sign_contracts.py': "
+             "'f850902634073364fe2407b00d12e9fdfb2ecfc6cf2a03414269fbb7984a8a7f'}\n",
+             '\n',
+             '\n',
+             'def _pr760_authority_data():\n',
+             '    """Bind successor data selectors to literal executing-code constants."""\n',
+             '    require((PR760_STAGE_SHA256, PR760_IMAGE, PR760_IMAGE_SHA256, '
+             'PR760_OWNER_PREDECESSOR, PR760_OWNER_PREDECESSOR_SHA256) == (\n',
+             "        '03757bafb02fbb3908919839c18d5c2c443f46469aeb01393dee57ae22054359',\n",
+             "        'tools/carla_lane_oracle/pr760-source-image.json',\n",
+             "        'ef91b7edab2c8a597aeedc90f86e834d5227aad5770ebe39e0438944f246f7cf',\n",
+             "        'tools/carla_lane_oracle/pr760-owner-predecessor.txt',\n",
+             "        '6138ba2dcac394c716ea9ed32e74e0c6d15857d5c605fc82304d21d0c80fdc69',\n",
+             "    ), 'PR760 authority selectors changed')\n",
+             '\n',
+             '\n',
+             'def qualification_predecessor_bytes(path, raw):\n',
+             '    """Pure exact comparison for eight reviewed Python witness successors only.\n',
+             '\n',
+             '    Physical owners still consume and return actual bytes. This function grants\n',
+             '    neither source-image admission nor a receipt, and never reads projected files.\n',
+             '    """\n',
+             '    executing_checker_bindings()\n',
+             '    require(type(path) is str and type(raw) is bytes,\n',
+             "            'qualification predecessor requires builtin source bytes')\n",
+             "    rows = {'tools/carla_lane_oracle/test_common758_current_successor.py': "
+             "('010cd7008a96b80e0aea26734dafb7be0068f677c5dd73af8fb15db585e70b9f',\n",
+             '                                                                     '
+             "'bae8693bfbc3557a53e54f3dea90c5bf44583d5fde349a6c24c16045acec10e4',\n",
+             '                                                                     ((13,\n',
+             '                                                                       14,\n',
+             '                                                                       (),\n',
+             "                                                                       ('import "
+             "_full_audit_test_fixtures as '\n",
+             '                                                                        '
+             "'fixtures\\n',)),\n",
+             '                                                                      (84,\n',
+             '                                                                       90,\n',
+             '                                                                       (),\n',
+             "                                                                       ('    "
+             "@classmethod\\n',\n",
+             "                                                                        '    def "
+             "setUpClass(cls):\\n',\n",
+             "                                                                        '        "
+             "baseline = '\n",
+             '                                                                        '
+             "'fixtures.common758_leaf_texts(ROOT)\\n',\n",
+             "                                                                        '        "
+             "cls.current = {name: '\n",
+             '                                                                        '
+             "'baseline[name] for name in '\n",
+             '                                                                        '
+             "'typed.SOURCE_PATHS}\\n',\n",
+             "                                                                        '        '\n",
+             '                                                                        '
+             "'typed.verify_sources(dict(cls.current))\\n',\n",
+             "                                                                        '\\n')),\n",
+             '                                                                      (110,\n',
+             '                                                                       111,\n',
+             "                                                                       ('        '\n",
+             '                                                                        '
+             "'self.assertEqual(typed.BINDING_INPUTS[SELF], '\n",
+             '                                                                        '
+             "'_sha((ROOT/SELF).read_bytes()))\\n',),\n",
+             "                                                                       ('        '\n",
+             '                                                                        '
+             "'self.assertEqual(typed.BINDING_INPUTS[SELF], '\n",
+             '                                                                        '
+             "'_sha(audit.qualification_predecessor_bytes(SELF, '\n",
+             '                                                                        '
+             "'(ROOT/SELF).read_bytes())))\\n',)),\n",
+             '                                                                      (112,\n',
+             '                                                                       113,\n',
+             "                                                                       ('        '\n",
+             '                                                                        '
+             "'self.assertEqual(typed.BINDING_INPUTS[conditioned], '\n",
+             '                                                                        '
+             "'_sha((ROOT/conditioned).read_bytes()))\\n',),\n",
+             "                                                                       ('        '\n",
+             '                                                                        '
+             "'self.assertEqual(typed.BINDING_INPUTS[conditioned], '\n",
+             '                                                                        '
+             "'_sha(audit.qualification_predecessor_bytes(conditioned, '\n",
+             '                                                                        '
+             "'(ROOT/conditioned).read_bytes())))\\n',)),\n",
+             '                                                                      (121,\n',
+             '                                                                       123,\n',
+             "                                                                       ('        "
+             "current = {p: '\n",
+             '                                                                        '
+             "'(ROOT/p).read_text() for p in '\n",
+             '                                                                        '
+             "'typed.SOURCE_PATHS}\\n',),\n",
+             "                                                                       ('        "
+             "current = dict(self.current)\\n',\n",
+             "                                                                        '        '\n",
+             '                                                                        '
+             "'typed.verify_sources(current)\\n')),\n",
+             '                                                                      (135,\n',
+             '                                                                       137,\n',
+             "                                                                       ('        "
+             "current = {p: '\n",
+             '                                                                        '
+             "'(ROOT/p).read_text() for p in '\n",
+             '                                                                        '
+             "'typed.SOURCE_PATHS}\\n',),\n",
+             "                                                                       ('        "
+             "current = dict(self.current)\\n',\n",
+             "                                                                        '        '\n",
+             '                                                                        '
+             "'typed.verify_sources(current)\\n')),\n",
+             '                                                                      (184,\n',
+             '                                                                       206,\n',
+             "                                                                       ('        # "
+             "Map is observed during source '\n",
+             "                                                                        'admission, "
+             "exact dependency binding,\\n',\n",
+             "                                                                        '        # "
+             "and the final image reread. '\n",
+             "                                                                        'Exercise "
+             "the first and final '\n",
+             '                                                                        '
+             "'observations.\\n',\n",
+             "                                                                        '        for "
+             "at_read in (1, 3):\\n'),\n",
+             '                                                                       ("        # '
+             'PR760\'s exact candidate has "\n',
+             "                                                                        'one first "
+             "and one terminal map read.\\n',\n",
+             "                                                                        '        # "
+             "Authenticate the actual '\n",
+             "                                                                        'nested "
+             "observer and establish a passing '\n",
+             '                                                                        '
+             "'image\\n',\n",
+             "                                                                        '        # "
+             "with exactly those two reads '\n",
+             "                                                                        'before "
+             "injecting either returned '\n",
+             '                                                                        '
+             "'value.\\n',\n",
+             "                                                                        '        "
+             "candidate = '\n",
+             '                                                                        '
+             "'audit._pr760_candidate_bindings\\n',\n",
+             "                                                                        '        "
+             "observers = [code for code in '\n",
+             '                                                                        '
+             "'candidate.__code__.co_consts\\n',\n",
+             '                                                                        '
+             "'                     if '\n",
+             '                                                                        '
+             "'isinstance(code, '\n",
+             '                                                                        '
+             "'type(candidate.__code__)) and '\n",
+             '                                                                        '
+             '"code.co_name == \'observe\']\\n",\n',
+             "                                                                        '        '\n",
+             '                                                                        '
+             "'self.assertEqual(len(observers), 1)\\n',\n",
+             "                                                                        '        "
+             "observed_code = observers[0]\\n',\n",
+             "                                                                        '        "
+             "baseline_reads = []\\n',\n",
+             "                                                                        '        def "
+             "observe(path, *args, '\n",
+             '                                                                        '
+             "'**kwargs):\\n',\n",
+             "                                                                        '            "
+             "frame = sys._getframe(1)\\n',\n",
+             "                                                                        '            "
+             "if path == target and '\n",
+             '                                                                        '
+             "'frame.f_code is observed_code:\\n',\n",
+             '                                                                        '
+             "'                '\n",
+             '                                                                        '
+             "'self.assertIs(frame.f_globals, '\n",
+             '                                                                        '
+             "'vars(audit))\\n',\n",
+             '                                                                        '
+             "'                '\n",
+             '                                                                        '
+             "'self.assertIs(frame.f_back.f_code, '\n",
+             '                                                                        '
+             "'candidate.__code__)\\n',\n",
+             '                                                                        '
+             "'                '\n",
+             '                                                                        '
+             '"self.assertEqual(frame.f_back.f_locals[\'root\'], "\n',
+             '                                                                        '
+             "'ROOT)\\n',\n",
+             '                                                                        '
+             "'                '\n",
+             '                                                                        '
+             '"self.assertEqual(frame.f_locals[\'path\'], "\n',
+             '                                                                        '
+             '"\'extensions/carla/map.mojo\')\\n",\n',
+             '                                                                        '
+             "'                '\n",
+             '                                                                        '
+             "'baseline_reads.append(path)\\n',\n",
+             "                                                                        '            "
+             "return original(path, '\n",
+             "                                                                        '*args, "
+             "**kwargs)\\n',\n",
+             "                                                                        '        "
+             "with patch.object(Path, '\n",
+             '                                                                        '
+             '"\'read_bytes\', observe):\\n",\n',
+             "                                                                        '            "
+             "'\n",
+             '                                                                        '
+             "'audit._typed_boundary_bindings(ROOT)\\n',\n",
+             "                                                                        '        '\n",
+             '                                                                        '
+             "'self.assertEqual(len(baseline_reads), '\n",
+             "                                                                        '2)\\n',\n",
+             "                                                                        '        for "
+             "at_read in (1, 2):\\n')),\n",
+             '                                                                      (209,\n',
+             '                                                                       214,\n',
+             '                                                                       '
+             "('                        '\n",
+             '                                                                        '
+             "'audit._typed_boundary_bindings.__code__):\\n',),\n",
+             '                                                                       '
+             "('                        '\n",
+             '                                                                        '
+             "'observed_code):\\n',\n",
+             '                                                                        '
+             "'                    frame = '\n",
+             '                                                                        '
+             "'sys._getframe(1)\\n',\n",
+             '                                                                        '
+             "'                    '\n",
+             '                                                                        '
+             "'self.assertIs(frame.f_globals, '\n",
+             '                                                                        '
+             "'vars(audit))\\n',\n",
+             '                                                                        '
+             "'                    '\n",
+             '                                                                        '
+             "'self.assertIs(frame.f_back.f_code, '\n",
+             '                                                                        '
+             "'candidate.__code__)\\n',\n",
+             '                                                                        '
+             "'                    '\n",
+             '                                                                        '
+             '"self.assertEqual(frame.f_back.f_locals[\'root\'], "\n',
+             '                                                                        '
+             "'ROOT)\\n')))),\n",
+             "     'tools/carla_lane_oracle/test_scaled_float32_contracts.py': "
+             "('86cb083e302ec2f3b76beaa015bf5ec6b79bc9e2ea5058f76e80bec022649931',\n",
+             '                                                                  '
+             "'dfed575b3625ee6dab4257055023be20d60da8a20529f729e890df22679396a6',\n",
+             '                                                                  ((22,\n',
+             '                                                                    24,\n',
+             "                                                                    ('        "
+             "cls.after = {name: '\n",
+             '                                                                     '
+             "'(ROOT/name).read_text() for name in '\n",
+             '                                                                     '
+             "'scaled.SOURCE_PATHS}\\n',),\n",
+             "                                                                    ('        "
+             "baseline = '\n",
+             '                                                                     '
+             "'fixtures.common758_leaf_texts(ROOT)\\n',\n",
+             "                                                                     '        "
+             "cls.after = {name: baseline[name] '\n",
+             "                                                                     'for name in "
+             "scaled.SOURCE_PATHS}\\n')),\n",
+             '                                                                   (185,\n',
+             '                                                                    186,\n',
+             '                                                                    '
+             "('                with patch.object(Path, '\n",
+             '                                                                     '
+             '"\'read_bytes\', denied), "\n',
+             '                                                                     '
+             "'self.assertRaises(OSError) as caught:\\n',),\n",
+             '                                                                    '
+             "('                with patch.object(Path, '\n",
+             '                                                                     '
+             '"\'read_bytes\', denied), "\n',
+             '                                                                     '
+             "'self.assertRaises((OSError, ValueError)) '\n",
+             "                                                                     'as "
+             "caught:\\n',)),\n",
+             '                                                                   (187,\n',
+             '                                                                    191,\n',
+             '                                                                    '
+             "('                '\n",
+             '                                                                     '
+             "'self.assertIs(caught.exception, '\n",
+             '                                                                     '
+             "'failure)\\n',),\n",
+             '                                                                    '
+             "('                cause = caught.exception\\n',\n",
+             '                                                                     '
+             "'                while cause.__cause__ is '\n",
+             "                                                                     'not "
+             "None:\\n',\n",
+             '                                                                     '
+             "'                    cause = '\n",
+             '                                                                     '
+             "'cause.__cause__\\n',\n",
+             '                                                                     '
+             "'                self.assertIs(cause, '\n",
+             '                                                                     '
+             "'failure)\\n')),\n",
+             '                                                                   (477,\n',
+             '                                                                    483,\n',
+             "                                                                    ('        "
+             "self.original = {name: (ROOT / '\n",
+             '                                                                     '
+             "'name).read_bytes() for name in '\n",
+             '                                                                     '
+             "'self.paths}\\n',),\n",
+             "                                                                    ('        "
+             "baseline = '\n",
+             '                                                                     '
+             "'fixtures.common758_leaf_texts(ROOT)\\n',\n",
+             "                                                                     '        "
+             "self.original = {name: '\n",
+             '                                                                     '
+             '"(baseline[name].encode(\'utf-8\') if name in "\n',
+             '                                                                     '
+             "'baseline\\n',\n",
+             '                                                                     '
+             "'                         else '\n",
+             '                                                                     '
+             "'(ROOT/name).read_bytes()) for name in '\n",
+             '                                                                     '
+             "'self.paths}\\n',\n",
+             "                                                                     '        "
+             "witness = '\n",
+             '                                                                     '
+             '"\'tools/carla_lane_oracle/test_scaled_float32_contracts.py\'\\n",\n',
+             "                                                                     '        "
+             "self.original[witness] = '\n",
+             '                                                                     '
+             "'cleanup.qualification_predecessor_bytes(\\n',\n",
+             "                                                                     '            "
+             "witness, '\n",
+             '                                                                     '
+             "'self.original[witness])\\n')))),\n",
+             "     'tools/carla_lane_oracle/test_shared_helper_contracts.py': "
+             "('c5f02d4424d7c497557991d1b08e4864dd0249158506beac08f601413a9648f2',\n",
+             " '63645797e8134e48b9a9bcfe01b33fcba83ac9c140e696af23937c43296ca494',\n",
+             ' ((25,\n',
+             '   27,\n',
+             "   ('        cls.texts = {path: (ROOT/path).read_text()\\n',),\n",
+             "   ('        baseline = fixtures.common758_leaf_texts(ROOT)\\n',\n",
+             "    '        cls.texts = {path: baseline[path]\\n')),\n",
+             '  (126,\n',
+             '   130,\n',
+             '   ("        self.assertEqual(bindings[\'render/color_math.mojo\'],\\n",\n',
+             "    '                         '\n",
+             '    '
+             '"cleanup.typed_boundary.CURRENT_DEPENDENCIES[\'render/color_math.mojo\'])\\n"),\n',
+             '   ("        color = \'render/color_math.mojo\'\\n",\n',
+             "    '        self.assertEqual(bindings[color], "
+             "cleanup.sha((self.root/color).read_bytes()))\\n',\n",
+             "    '        "
+             "self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\\n',\n",
+             "    '            color, (self.root/color).read_text())), '\n",
+             "    'cleanup.typed_boundary.CURRENT_DEPENDENCIES[color])\\n')),\n",
+             '  (177,\n',
+             '   179,\n',
+             "   ('        for root, typed in ((self.root, True), (historical, False)):\\n',),\n",
+             "   ('        common = fixtures.copy_common758_boundary_root(self, ROOT)\\n',\n",
+             "    '        for root, typed in ((common, True), (historical, False)):\\n')),\n",
+             '  (196,\n',
+             '   214,\n',
+             '   (),\n',
+             "   ('\\n',\n",
+             "    '    def "
+             "test_pr760_old_xml_cannot_borrow_the_current_provider_image(self):\\n',\n",
+             "    '        baseline = fixtures.common758_leaf_texts(self.root)\\n',\n",
+             '    "        old = helpers.predecessor_source(XML, '
+             'baseline[XML]).encode(\'utf-8\')\\n",\n',
+             "    '        with self.changed(XML, old):\\n',\n",
+             "    '            with self.assertRaises(ValueError):\\n',\n",
+             "    '                cleanup.shared_helper_proof_bindings(self.root, "
+             "paths=helpers.SOURCE_PATHS)\\n',\n",
+             "    '            utf8 = self.root/UTF8\\n',\n",
+             "    '            raw = utf8.read_bytes()\\n',\n",
+             "    '            utf8.unlink()\\n',\n",
+             "    '            try:\\n',\n",
+             "    '                with self.assertRaises(cleanup.ContractError) as caught:\\n',\n",
+             "    '                    cleanup.shared_helper_proof_bindings(self.root, '\n",
+             "    'paths=helpers.SOURCE_PATHS)\\n',\n",
+             "    '                self.assertIsInstance(caught.exception.__cause__, "
+             "FileNotFoundError)\\n',\n",
+             "    '                self.assertEqual(caught.exception.__cause__.filename, "
+             "str(utf8))\\n',\n",
+             "    '            finally:\\n',\n",
+             "    '                utf8.write_bytes(raw)\\n',\n",
+             "    '        cleanup.shared_helper_proof_bindings(self.root, "
+             "paths=helpers.SOURCE_PATHS)\\n')),\n",
+             '  (235,\n',
+             '   236,\n',
+             '   ("                with patch.object(Path, \'read_bytes\', unreadable), '
+             'self.assertRaises(OSError) "\n',
+             "    'as caught:\\n',),\n",
+             '   ("                with patch.object(Path, \'read_bytes\', unreadable), "\n',
+             "    'self.assertRaises((OSError, ValueError)) as caught:\\n',)),\n",
+             '  (237,\n',
+             '   241,\n',
+             "   ('                self.assertIs(caught.exception, failure)\\n',),\n",
+             "   ('                cause = caught.exception\\n',\n",
+             "    '                while cause.__cause__ is not None:\\n',\n",
+             "    '                    cause = cause.__cause__\\n',\n",
+             "    '                self.assertIs(cause, failure)\\n')),\n",
+             '  (315,\n',
+             '   319,\n',
+             '   ("        self.assertEqual(bindings[\'render/color_math.mojo\'], "\n',
+             '    "helpers.PROVIDERS[\'render/color_math.mojo\'])\\n",),\n',
+             '   ("        color = \'render/color_math.mojo\'\\n",\n',
+             "    '        self.assertEqual(bindings[color], "
+             "cleanup.sha((self.root/color).read_bytes()))\\n',\n",
+             "    '        "
+             "self.assertEqual(cleanup.sha(cleanup.pr760_stage.predecessor_source(\\n',\n",
+             "    '            color, (self.root/color).read_text())), "
+             "helpers.PROVIDERS[color])\\n')),\n",
+             '  (326,\n',
+             '   342,\n',
+             '   ("        entry = '
+             'self.root/\'extensions/animals/anatomy/helper_scope_entry.mojo\'\\n",\n',
+             '    "        entry.write_text(\'def main():\\\\n    pass\\\\n\')\\n",\n',
+             "    '        try:\\n',\n",
+             '    "            with self.assertRaisesRegex(ValueError, \'entrypoint directories '
+             'changed\'):\\n",\n',
+             "    '                cleanup.shared_helper_proof_bindings(self.root, "
+             "paths=helpers.SOURCE_PATHS)\\n',\n",
+             "    '        finally: entry.unlink()\\n'),\n",
+             "   ('        common = fixtures.copy_common758_boundary_root(self, ROOT)\\n',\n",
+             "    '        for cohort, root, message in (\\n',\n",
+             '    "                (\'pr760\', self.root, \'PR760 maintained entry directories '
+             'changed\'),\\n",\n',
+             '    "                (\'common758\', common, \'maintained entrypoint directories '
+             'changed\')):\\n",\n',
+             "    '            with self.subTest(cohort=cohort):\\n',\n",
+             "    '                cleanup.shared_helper_proof_bindings(root, "
+             "paths=helpers.SOURCE_PATHS)\\n',\n",
+             '    "                entry = '
+             'root/\'extensions/animals/anatomy/helper_scope_entry.mojo\'\\n",\n',
+             "    '                self.assertFalse(entry.exists())\\n',\n",
+             '    "                entry.write_text(\'def main():\\\\n    pass\\\\n\')\\n",\n',
+             "    '                try:\\n',\n",
+             "    '                    with self.assertRaises(cleanup.ContractError) as "
+             "caught:\\n',\n",
+             "    '                        cleanup.shared_helper_proof_bindings(root, '\n",
+             "    'paths=helpers.SOURCE_PATHS)\\n',\n",
+             "    '                    self.assertEqual(str(caught.exception),\\n',\n",
+             '    "                                     \'full-audit cleanup successor: \' + '
+             'message)\\n",\n',
+             "    '                finally: entry.unlink()\\n',\n",
+             "    '                cleanup.shared_helper_proof_bindings(root, "
+             "paths=helpers.SOURCE_PATHS)\\n')))),\n",
+             "     'tools/carla_lane_oracle/test_typed_boundary_contracts.py': "
+             "('7181041aa06c10cade1c7c0512c6a130cb28d5baaad293ba24874c3e3e142dd5',\n",
+             " '7114f17cce33b84fe226d3559b4d08d1227a6c1cda1f83825441d22e48b51705',\n",
+             ' ((18,\n',
+             '   20,\n',
+             '   (),\n',
+             "   ('import full_audit_cleanup_contracts as audit\\n',\n",
+             "    'import _full_audit_test_fixtures as fixtures\\n')),\n",
+             '  (27,\n',
+             '   30,\n',
+             "   ('        cls.current = {path: (ROOT/path).read_text() for path in "
+             "typed.SOURCE_PATHS}\\n',),\n",
+             "   ('        baseline = fixtures.common758_leaf_texts(ROOT)\\n',\n",
+             "    '        cls.current = {path: baseline[path] for path in "
+             "typed.SOURCE_PATHS}\\n',\n",
+             "    '        typed.verify_sources(dict(cls.current))\\n')),\n",
+             "  (190, 191, (), ('        baseline = fixtures.common758_leaf_texts(ROOT)\\n',)),\n",
+             '  (196,\n',
+             '   201,\n',
+             "   ('                path.write_bytes((ROOT/name).read_bytes())\\n',),\n",
+             '   ("                raw = (baseline[name].encode(\'utf-8\') if name in '
+             'baseline\\n",\n',
+             "    '                       else (ROOT/name).read_bytes())\\n',\n",
+             '    "                if name in (\'tools/test_conditioned_coverage_loops.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_shared_helper_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_scaled_float32_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_common758_current_successor.py\'):\\n",\n',
+             "    '                    raw = audit.qualification_predecessor_bytes(name, "
+             "raw)\\n',\n",
+             "    '                path.write_bytes(raw)\\n')),\n",
+             '  (443,\n',
+             '   447,\n',
+             "   ('                "
+             "self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), '\n",
+             "    'expected)\\n',),\n",
+             "   ('                raw = target.read_bytes()\\n',\n",
+             '    "                if path in (\'tools/test_conditioned_coverage_loops.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_typed_boundary_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_shared_helper_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_scaled_float32_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_common758_current_successor.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_coverage_invariant_contracts.py\', "\n',
+             '    "\'tools/carla_lane_oracle/test_expectation_binding_successor.py\'):\\n",\n',
+             "    '                    raw = audit.qualification_predecessor_bytes(path, "
+             "raw)\\n',\n",
+             "    '                self.assertEqual(hashlib.sha256(raw).hexdigest(), "
+             "expected)\\n')))),\n",
+             "     'tools/test_conditioned_coverage_loops.py': "
+             "('633c30c126a0ccf535bea13c66e528ee78b95dd47cf55f01eccad4f9f67d22c9',\n",
+             '                                                  '
+             "'1c7a6f9f0f32ec579b0609c0cac7fec04dedd342c7e22ec9a9956d6c6042c2dc',\n",
+             '                                                  ((167,\n',
+             '                                                    169,\n',
+             "                                                    ('        original = "
+             "audit._InvariantInputs.finish\\n',),\n",
+             "                                                    ('        original = "
+             "audit._CacheInputs.checkpoint\\n',\n",
+             "                                                     '        finish = "
+             "audit._InvariantInputs.finish\\n')),\n",
+             '                                                   (171,\n',
+             '                                                    181,\n',
+             "                                                    ('        def finish(operation, "
+             "root):\\n',),\n",
+             "                                                    ('        def "
+             "checkpoint(operation, owner, root):\\n',\n",
+             "                                                     '            result = "
+             "original(operation, owner, root)\\n',\n",
+             "                                                     '            frame = "
+             "audit.sys._getframe(1)\\n',\n",
+             "                                                     '            if frame.f_code is "
+             "not finish.__code__:\\n',\n",
+             "                                                     '                return "
+             "result\\n',\n",
+             "                                                     '            "
+             "self.assertIs(frame.f_globals, vars(audit))\\n',\n",
+             '                                                     "            '
+             'self.assertIs(frame.f_locals[\'self\'], "\n',
+             "                                                     'operation)\\n',\n",
+             "                                                     '            "
+             "self.assertIs(owner, operation._owner)\\n',\n",
+             "                                                     '            "
+             "self.assertEqual(root, self.root)\\n',\n",
+             "                                                     '            "
+             "self.assertEqual(operation._state, '\n",
+             '                                                     "\'active\')\\n")),\n',
+             '                                                   (184,\n',
+             '                                                    185,\n',
+             "                                                    ('            "
+             "self.assertNotIn(name, operation._raw)\\n',),\n",
+             "                                                    ('            "
+             "self.assertEqual(operation._raw[name], '\n",
+             "                                                     'physical)\\n',)),\n",
+             '                                                   (187,\n',
+             '                                                    190,\n',
+             '                                                    (),\n',
+             "                                                    ('            # PR760 also "
+             "observes checker copies as data. '\n",
+             "                                                     'Mutate after the real\\n',\n",
+             "                                                     '            # data checkpoint "
+             "so the unchanged later '\n",
+             "                                                     'checker-receipt "
+             "comparison\\n',\n",
+             "                                                     '            # retains its "
+             "distinct finalization '\n",
+             "                                                     'obligation.\\n')),\n",
+             '                                                   (191,\n',
+             '                                                    192,\n',
+             "                                                    ('            return "
+             "original(operation, root)\\n',),\n",
+             "                                                    ('            return "
+             "result\\n',)),\n",
+             '                                                   (193,\n',
+             '                                                    194,\n',
+             "                                                    ('            with "
+             "patch.object(audit._InvariantInputs, '\n",
+             '                                                     "\'finish\', finish):\\n",),\n',
+             "                                                    ('            with "
+             "patch.object(audit._CacheInputs, '\n",
+             '                                                     "\'checkpoint\', '
+             'checkpoint):\\n",)))),\n',
+             "        'tools/carla_lane_oracle/test_witness_format_contracts.py': "
+             "('ad002f1255ae4f545a5cbfb3b8abf3f8e883a2637656248a232b297032b178de',\n",
+             " '82f7e13e72b4f99ccad63d5dfe55fc0a73c898120b43ed8416b0731489ea6f84',\n",
+             ' ((154,\n',
+             '   170,\n',
+             '   ("        with patch.object(cleanup.guard, \'production_mojo_paths\', "\n',
+             '    "side_effect=AssertionError(\'extra census\')):\\n",),\n',
+             "   ('        # Observe the real current checker without invalidating its code "
+             "seal.\\n',\n",
+             "    '        census = cleanup.guard.production_mojo_paths\\n',\n",
+             "    '        calls = []\\n',\n",
+             "    '        def reject_census(frame, event, value):\\n',\n",
+             '    "            if event == \'call\' and frame.f_code is census.__code__:\\n",\n',
+             "    '                calls.append(True)\\n',\n",
+             '    "                raise AssertionError(\'extra census\')\\n",\n',
+             "    '        previous = sys.getprofile()\\n',\n",
+             "    '        try:\\n',\n",
+             "    '            sys.setprofile(reject_census)\\n',\n",
+             '    "            with self.assertRaisesRegex(AssertionError, \'extra '
+             'census\'):\\n",\n',
+             "    '                list(census(self.root))\\n',\n",
+             "    '            self.assertEqual(calls, [True])\\n',\n",
+             "    '            # Python disables a profile callback after it raises. Rearm it "
+             "for\\n',\n",
+             "    '            # the actual positive; any real census call must still fail.\\n',\n",
+             "    '            sys.setprofile(reject_census)\\n')),\n",
+             '  (171,\n',
+             '   174,\n',
+             '   (),\n',
+             "   ('            self.assertEqual(calls, [True])\\n',\n",
+             "    '        finally:\\n',\n",
+             "    '            sys.setprofile(previous)\\n')),\n",
+             '  (176,\n',
+             '   189,\n',
+             '   (),\n',
+             '   ("        with patch.object(cleanup.guard, \'production_mojo_paths\', "\n',
+             '    "side_effect=AssertionError(\'extra census\')):\\n",\n',
+             '    "            with self.assertRaisesRegex(cleanup.ContractError, \'executing '
+             'function "\n',
+             '    "changed\'):\\n",\n',
+             "    '                cleanup._witness_format_bindings(self.root)\\n',\n",
+             "    '        # The original pre-typed leaf still accepts the original "
+             "monkeypatch\\n',\n",
+             "    '        # control, proving its no-census behavior independently of this "
+             "edge.\\n',\n",
+             "    '        historical = fixtures.copy_historical_boundary_root(self, ROOT)\\n',\n",
+             '    "        with patch.object(cleanup.guard, \'production_mojo_paths\', "\n',
+             '    "side_effect=AssertionError(\'extra census\')):\\n",\n',
+             "    '            old_bindings = cleanup._witness_format_bindings(historical)\\n',\n",
+             "    '        self.assertEqual(set(old_bindings), set(self.paths))\\n',\n",
+             '    "        self.assertNotIn(\'math/scaled_products.mojo\', old_bindings)\\n",\n',
+             "    '        for root, actual in ((self.root, bindings), (historical, "
+             "old_bindings)):\\n',\n",
+             "    '            self.assertEqual(actual, {name: "
+             "cleanup.sha((root/name).read_bytes())\\n',\n",
+             "    '                                      for name in self.paths})\\n')),\n",
+             '  (191,\n',
+             '   202,\n',
+             '   (),\n',
+             "   ('        current = self.root\\n',\n",
+             "    '        try:\\n',\n",
+             '    "            for cohort in (\'pr760\', \'common758\'):\\n",\n',
+             '    "                self.root = (current if cohort == \'pr760\' else\\n",\n',
+             "    '                             fixtures.copy_common758_boundary_root(self, "
+             "ROOT))\\n',\n",
+             "    '                with self.subTest(cohort=cohort):\\n',\n",
+             "    '                    "
+             "self._check_alias_paths_and_native_module_shadows_refuse(cohort)\\n',\n",
+             "    '        finally:\\n',\n",
+             "    '            self.root = current\\n',\n",
+             "    '\\n',\n",
+             "    '    def _check_alias_paths_and_native_module_shadows_refuse(self, "
+             "cohort):\\n')),\n",
+             '  (219,\n',
+             '   224,\n',
+             '   (),\n',
+             "   ('        created = []\\n',\n",
+             "    '        parent = shadow.parent\\n',\n",
+             "    '        while not parent.exists():\\n',\n",
+             "    '            created.append(parent)\\n',\n",
+             "    '            parent = parent.parent\\n')),\n",
+             '  (226,\n',
+             '   236,\n',
+             '   ("        with self.assertRaisesRegex(ValueError, \'resolver\'):\\n",\n',
+             "    '            cleanup.verify(self.root)\\n'),\n",
+             "   ('        try:\\n',\n",
+             '    "            reason = (\'PR760 exact dependency closure changed\' if cohort == '
+             '\'pr760\'\\n",\n',
+             '    "                      else \'resolver\')\\n",\n',
+             "    '            with self.assertRaisesRegex(ValueError, reason):\\n',\n",
+             "    '                cleanup.verify(self.root)\\n',\n",
+             "    '        finally:\\n',\n",
+             "    '            shadow.unlink()\\n',\n",
+             "    '            for parent in created:\\n',\n",
+             "    '                parent.rmdir()\\n',\n",
+             "    '        cleanup.verify(self.root, exact=True)\\n')),\n",
+             '  (255,\n',
+             '   266,\n',
+             '   (),\n',
+             "   ('        current = self.root\\n',\n",
+             "    '        try:\\n',\n",
+             '    "            for cohort in (\'pr760\', \'common758\'):\\n",\n',
+             '    "                self.root = (current if cohort == \'pr760\' else\\n",\n',
+             "    '                             fixtures.copy_common758_boundary_root(self, "
+             "ROOT))\\n',\n",
+             "    '                with self.subTest(cohort=cohort):\\n',\n",
+             "    '                    "
+             "self._check_full_gate_late_proof_input_mutation(cohort)\\n',\n",
+             "    '        finally:\\n',\n",
+             "    '            self.root = current\\n',\n",
+             "    '\\n',\n",
+             "    '    def _check_full_gate_late_proof_input_mutation(self, cohort):\\n')),\n",
+             '  (275,\n',
+             '   280,\n',
+             '   ("            with patch.object(cleanup, \'inventory\', late), '
+             'self.assertRaisesRegex(ValueError, "\n',
+             '    "\'input changed during verification\'):\\n",),\n',
+             "   ('            # PR760 consumes inventory within its image admission; the same "
+             "late\\n',\n",
+             "    '            # mutation meets its physical reread before the outer final "
+             "sweep.\\n',\n",
+             '    "            reason = (\'PR760 source changed after consumption: \' + "\n',
+             "    'target.relative_to(self.root).as_posix()\\n',\n",
+             '    "                      if cohort == \'pr760\' else \'input changed during '
+             'verification\')\\n",\n',
+             '    "            with patch.object(cleanup, \'inventory\', late), '
+             'self.assertRaisesRegex(ValueError, "\n',
+             "    'reason):\\n')))),\n",
+             "     'tools/carla_lane_oracle/test_coverage_invariant_contracts.py': "
+             "('8ec5dfed0b21c02a2104c4df8778fe1e11215cd67a9fa7d4808c30e4cc4e2841',\n",
+             " 'f1f5fba22e90180c5c68af113c15941e96b2b2d1cfdc3a7a9b2a01936a4735f2',\n",
+             ' ((82,\n',
+             '   88,\n',
+             "   ('            # Exact current direct/package commands completed in "
+             "40.007/40.211\\n',\n",
+             "    '            # seconds on pinned Python 3.12.14. Keep a measured "
+             "60-second\\n',\n",
+             "    '            # validation allowance; native cases retain their 5-second "
+             "bound.\\n'),\n",
+             "   ('            # On pinned Python 3.12.14, current 64ed89bf and pre-scope\\n',\n",
+             "    '            # 3dcb9f06 direct verification took 155.268/154.829 seconds\\n',\n",
+             "    '            # (155.172/154.799 CPU seconds), each with one complete gate "
+             "and\\n',\n",
+             "    '            # one terminal checkpoint. Both import modes exceeded 300 "
+             "seconds\\n',\n",
+             "    '            # in hosted parallel tooling CI. Allow 600 seconds for this "
+             "current\\n',\n",
+             "    '            # integration only; historical and native bounds stay "
+             "unchanged.\\n')),\n",
+             '  (90,\n',
+             '   91,\n',
+             "   ('                               check=True, capture_output=True, text=True, "
+             "timeout=60)\\n',),\n",
+             "   ('                               check=True, capture_output=True, text=True, "
+             "timeout=600)\\n',)))),\n",
+             "     'tools/carla_lane_oracle/test_expectation_binding_successor.py': "
+             "('6f866d62d04370dad8eed28e7e6bd26c5b6ab804b00c407932624ba183cd9a08',\n",
+             " '112d9a22a78f4379fbdb932d57aea179a246251df63fb2778486903607e55050',\n",
+             " ((13, 14, (), ('import _full_audit_test_fixtures as fixtures\\n',)),\n",
+             '  (116,\n',
+             '   123,\n',
+             "   ('        target = ROOT/PATH\\n', '        raw = target.read_bytes()\\n'),\n",
+             "   ('        historical = fixtures.copy_common758_boundary_root(self, ROOT)\\n',\n",
+             "    '        candidate = audit._pr760_candidate_bindings\\n',\n",
+             "    '        # The current candidate owns these reads in its exact nested "
+             "observer;\\n',\n",
+             "    '        # the common758 cohort retains the original direct binding "
+             "observer.\\n',\n",
+             "    '        observers = [code for code in candidate.__code__.co_consts\\n',\n",
+             "    '                     if isinstance(code, type(candidate.__code__)) and "
+             "code.co_name == '\n",
+             '    "\'observe\']\\n",\n',
+             "    '        self.assertEqual(len(observers), 1)\\n')),\n",
+             '  (124,\n',
+             '   172,\n',
+             "   ('        for at_read in (1, 2):\\n',\n",
+             "    '            reads = []\\n',\n",
+             "    '            def changed(path, *args, **kwargs):\\n',\n",
+             "    '                if (path == target and sys._getframe(1).f_code is\\n',\n",
+             "    '                        audit._typed_boundary_bindings.__code__):\\n',\n",
+             "    '                    reads.append(path)\\n',\n",
+             '    "                    return raw+b\'\\\\n\' if len(reads) == at_read else '
+             'raw\\n",\n',
+             "    '                return original(path, *args, **kwargs)\\n',\n",
+             '    "            with self.subTest(at_read=at_read), patch.object(Path, '
+             '\'read_bytes\', changed):\\n",\n',
+             "    '                with self.assertRaises(ValueError):\\n',\n",
+             "    '                    audit._typed_boundary_bindings(ROOT)\\n',\n",
+             "    '            self.assertEqual(len(reads), at_read)\\n',\n",
+             "    '            self.assertEqual(target.read_bytes(), raw)\\n'),\n",
+             "   ('        for cohort, root, observed_code in (\\n',\n",
+             '    "                (\'common758\', historical, '
+             'audit._typed_boundary_bindings.__code__),\\n",\n',
+             '    "                (\'pr760\', ROOT, observers[0])):\\n",\n',
+             "    '            target = root/PATH\\n',\n",
+             "    '            raw = target.read_bytes()\\n',\n",
+             "    '            def is_input_read(path, frame):\\n',\n",
+             "    '                if path != target or frame.f_code is not observed_code:\\n',\n",
+             "    '                    return False\\n',\n",
+             "    '                self.assertIs(frame.f_globals, vars(audit))\\n',\n",
+             '    "                self.assertEqual(frame.f_locals[\'path\'], PATH)\\n",\n',
+             '    "                if cohort == \'pr760\':\\n",\n',
+             "    '                    self.assertIs(frame.f_back.f_code, "
+             "candidate.__code__)\\n',\n",
+             '    "                    self.assertEqual(frame.f_back.f_locals[\'root\'], '
+             'root)\\n",\n',
+             "    '                else:\\n',\n",
+             '    "                    self.assertEqual(frame.f_locals[\'root\'], root)\\n",\n',
+             "    '                return True\\n',\n",
+             "    '\\n',\n",
+             "    '            baseline_reads = []\\n',\n",
+             "    '            def observe(path, *args, **kwargs):\\n',\n",
+             "    '                value = original(path, *args, **kwargs)\\n',\n",
+             "    '                if is_input_read(path, sys._getframe(1)):\\n',\n",
+             "    '                    self.assertEqual(value, raw)\\n',\n",
+             "    '                    baseline_reads.append(path)\\n',\n",
+             "    '                return value\\n',\n",
+             '    "            with self.subTest(cohort=cohort, baseline=True), patch.object(Path, '
+             '\'read_bytes\', "\n',
+             "    'observe):\\n',\n",
+             "    '                result = audit._typed_boundary_bindings(root)\\n',\n",
+             "    '                self.assertEqual(result[PATH], "
+             "hashlib.sha256(raw).hexdigest())\\n',\n",
+             "    '            self.assertEqual(len(baseline_reads), 2)\\n',\n",
+             "    '            for at_read in (1, 2):\\n',\n",
+             "    '                reads = []\\n',\n",
+             "    '                def changed(path, *args, **kwargs):\\n',\n",
+             "    '                    value = original(path, *args, **kwargs)\\n',\n",
+             "    '                    if is_input_read(path, sys._getframe(1)):\\n',\n",
+             "    '                        self.assertEqual(value, raw)\\n',\n",
+             "    '                        reads.append(path)\\n',\n",
+             '    "                        return raw+b\'\\\\n\' if len(reads) == at_read else '
+             'value\\n",\n',
+             "    '                    return value\\n',\n",
+             "    '                with self.subTest(cohort=cohort, at_read=at_read), "
+             "patch.object(Path, '\n",
+             '    "\'read_bytes\', changed):\\n",\n',
+             "    '                    with self.assertRaises(ValueError) as caught:\\n',\n",
+             "    '                        audit._typed_boundary_bindings(root)\\n',\n",
+             '    "                    reason = ({1: \'PR760 physical input changed: \',\\n",\n',
+             '    "                               2: \'PR760 source changed after consumption: '
+             '\'}\\n",\n',
+             '    "                              if cohort == \'pr760\' else\\n",\n',
+             '    "                              {1: \'typed boundary bound input changed: '
+             '\',\\n",\n',
+             '    "                               2: \'typed input changed during admission: '
+             '\'})[at_read]\\n",\n',
+             "    '                    self.assertIn(reason+PATH, str(caught.exception))\\n',\n",
+             "    '                self.assertEqual(len(reads), at_read)\\n',\n",
+             "    '                self.assertEqual(target.read_bytes(), raw)\\n'))))}\n",
+             "    require(path in rows, 'unregistered qualification witness: ' + path)\n",
+             '    before_sha, after_sha, edits = rows[path]\n',
+             "    expected = (typed_boundary.EDGES[path]['after_sha256'] if path ==\n",
+             "        'tools/carla_lane_oracle/test_witness_format_contracts.py' else\n",
+             '        scaled_float32.TESTS[path] if path ==\n',
+             "        'tools/carla_lane_oracle/test_scaled_float32_contracts.py'\n",
+             '        else typed_boundary.BINDING_INPUTS[path])\n',
+             "    require(before_sha == expected, 'qualification historical authority changed: ' + "
+             'path)\n',
+             '    if sha(raw) == before_sha:\n',
+             '        result = raw\n',
+             '    else:\n',
+             "        require(sha(raw) == after_sha, 'unreviewed qualification endpoint: ' + "
+             'path)\n',
+             "        lines = raw.decode('utf-8').splitlines(keepends=True)\n",
+             '        previous = len(lines) + 1\n',
+             '        for start, stop, before, after in reversed(edits):\n',
+             '            require(0 <= start <= stop < previous and tuple(lines[start:stop]) == '
+             'after,\n',
+             "                    'qualification inverse span changed: ' + path)\n",
+             '            lines[start:stop] = before\n',
+             '            previous = start\n',
+             "        result = ''.join(lines).encode('utf-8')\n",
+             "        require(sha(result) == before_sha, 'qualification inverse misses "
+             "predecessor: ' + path)\n",
+             '    executing_checker_bindings()\n',
+             '    return result\n',
+             '\n',
+             '\n',
+             'def stage_witness_predecessor_bytes(raw):\n',
+             '    """Recover one fixed stage witness for pure historical registry comparison.\n',
+             '\n',
+             '    The physical owner still observes, pins, rereads and returns current bytes.\n',
+             '    This exact inverse supplies no admission, filesystem or receipt authority.\n',
+             '    """\n',
+             '    executing_checker_bindings()\n',
+             '    before_sha, after_sha, edits = '
+             "('b6d5ecc453ebe4c1f8d5f07e1f029b09f414dea887480fa6cf07ccd85bfacdb3',\n",
+             " '35efae78b6a95568760b4544428c511a5ee90beec4d86338fd2f717c0f1c7516',\n",
+             ' ((74,\n',
+             '   75,\n',
+             '   (),\n',
+             '   ("            \'typed_boundary_contracts.py\': '
+             '\'pr760-typed_boundary-predecessor.txt\',\\n",)),\n',
+             '  (155,\n',
+             '   158,\n',
+             '   (),\n',
+             "   ('        import full_audit_cleanup_contracts as owner\\n',\n",
+             '    "        witness = '
+             '\'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py\'\\n",\n',
+             "    '        inputs[witness] = "
+             "owner.stage_witness_predecessor_bytes(inputs[witness])\\n'))))\n",
+             "    path = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
+             '    require(before_sha == pr760_stage.REGISTRY_INPUT_SHA256[path],\n',
+             "            'stage witness historical authority changed')\n",
+             '    require(type(raw) is bytes and sha(raw) in (before_sha, after_sha),\n',
+             "            'unreviewed stage witness endpoint')\n",
+             '    if sha(raw) == before_sha:\n',
+             '        return raw\n',
+             "    lines = raw.decode('utf-8').splitlines(keepends=True)\n",
+             '    previous = len(lines) + 1\n',
+             '    for start, stop, before, after in reversed(edits):\n',
+             '        require(0 <= start <= stop < previous and tuple(lines[start:stop]) == '
+             'after,\n',
+             "                'stage witness inverse span changed')\n",
+             '        lines[start:stop] = before\n',
+             '        previous = start\n',
+             "    result = ''.join(lines).encode('utf-8')\n",
+             "    require(sha(result) == before_sha, 'stage witness inverse misses predecessor')\n",
+             '    executing_checker_bindings()\n',
+             '    return result\n',
+             '\n',
+             '\n',
+             'def _pr760_candidate_bindings(root, *, _snapshots=None, _operation=None):\n',
+             '    """Complete physical image comparison; the enclosing owner grants admission.\n',
+             '\n',
+             '    The fixed PR760 inverse runs once on immutable observed bytes. Historical\n',
+             "    texts exist only in memory for the preserved authorities' pure comparisons.\n",
+             '    All observations, terminal checks and returned digests remain physical.\n',
+             '    Its return value alone is never an owner, publication token or receipt.\n',
+             '    """\n',
+             '    root = Path(root)\n',
+             '    try:\n',
+             '        _operation_check(_operation, root)\n',
+             '        require(_snapshots is None or type(_snapshots) is dict,\n',
+             "                'invalid PR760 snapshot owner')\n",
+             '        executing = executing_checker_bindings(root)\n',
+             '        image = {} if _snapshots is None else _snapshots\n',
+             '\n',
+             '        def observe(path):\n',
+             '            raw = _observe_bytes(root, path, _regular(root, path).read_bytes(),\n',
+             '                                 _operation=_operation)\n',
+             "            require(type(raw) is bytes, 'PR760 source is not physical bytes: ' + "
+             'path)\n',
+             '            require(image.setdefault(path, raw) == raw,\n',
+             "                    'PR760 source changed after consumption: ' + path)\n",
+             '            return raw\n',
+             '\n',
+             '        for path, digest in executing.items():\n',
+             "            require(sha(observe(path)) == digest, 'PR760 executing source differs "
+             "from owner: ' + path)\n",
+             '        data_raw = observe(PR760_IMAGE)\n',
+             '        require(sha(data_raw) == PR760_IMAGE_SHA256,\n',
+             "                'PR760 physical-image authority changed')\n",
+             '        data = json.loads(data_raw)\n',
+             "        require(type(data) is dict and data.get('status') == 'closed-candidate'\n",
+             "                and data.get('public_admission') is False\n",
+             "                and data.get('stage_sha256') == PR760_STAGE_SHA256,\n",
+             "                'PR760 image is not the fixed closed candidate')\n",
+             '        before_owner = observe(PR760_OWNER_PREDECESSOR)\n',
+             '        require(sha(before_owner) == PR760_OWNER_PREDECESSOR_SHA256\n',
+             '                == pr760_stage.PROTECTED_AUTHORITY_SHA256[CHECKER_PATHS[0]],\n',
+             "                'PR760 predecessor owner evidence changed')\n",
+             '        for path, digest in {**PR760_IMPLEMENTATION_PREDECESSORS, '
+             '**PR760_IMPLEMENTATION_SUCCESSORS}.items():\n',
+             "            require(sha(observe(path)) == digest, 'PR760 implementation source "
+             "changed: ' + path)\n",
+             '        observe(MIGRATION)\n',
+             '        record = read_record(root)\n',
+             '        entries, source_image = _helper_entry_census(root, _operation=_operation)\n',
+             "        require(list(entries) == record['entry_directories'],\n",
+             "                'PR760 maintained entry directories changed')\n",
+             '        for path, raw in source_image.items():\n',
+             '            require(image.setdefault(path, raw) == raw,\n',
+             "                    'PR760 source changed before entry census: ' + path)\n",
+             "        expected = data['inputs']\n",
+             '        require(type(expected) is dict and all(type(path) is str and type(digest) is '
+             'str\n',
+             "                for path, digest in expected.items()), 'malformed PR760 source-image "
+             "pins')\n",
+             '        for path, digest in expected.items():\n',
+             "            require(sha(observe(path)) == digest, 'PR760 physical input changed: ' + "
+             'path)\n',
+             "        stage_witness = 'tools/carla_lane_oracle/test_pr760_arithmetic_stage.py'\n",
+             '        stage_prior = stage_witness_predecessor_bytes(image[stage_witness])\n',
+             '        require(stage_prior == '
+             "image['tools/carla_lane_oracle/pr760-test_pr760_arithmetic_stage-predecessor.txt'],\n",
+             "                'stage witness archive differs from exact predecessor')\n",
+             '        require(all((sha(stage_prior) if path == stage_witness else '
+             'expected.get(path)) == digest\n',
+             '                    for path, digest in '
+             'pr760_stage.REGISTRY_INPUT_SHA256.items()),\n',
+             "                'PR760 physical image misses reviewed registry input')\n",
+             "        for path, archive in (('tools/test_conditioned_coverage_loops.py', "
+             "'tools/carla_lane_oracle/pr760-test_conditioned_coverage_loops-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_typed_boundary_contracts.py', "
+             "'tools/carla_lane_oracle/pr760-test_typed_boundary_contracts-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_shared_helper_contracts.py', "
+             "'tools/carla_lane_oracle/pr760-test_shared_helper_contracts-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_scaled_float32_contracts.py', "
+             "'tools/carla_lane_oracle/pr760-test_scaled_float32_contracts-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_common758_current_successor.py', "
+             "'tools/carla_lane_oracle/pr760-test_common758_current_successor-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_witness_format_contracts.py', "
+             "'tools/carla_lane_oracle/pr760-test_witness_format_contracts-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_coverage_invariant_contracts.py', "
+             "'tools/carla_lane_oracle/pr760-test_coverage_invariant_contracts-predecessor.txt'), "
+             "('tools/carla_lane_oracle/test_expectation_binding_successor.py', "
+             "'tools/carla_lane_oracle/pr760-test_expectation_binding_successor-predecessor.txt')):\n",
+             '            require(qualification_predecessor_bytes(path, image[path]) == '
+             'image[archive],\n',
+             "                    'PR760 qualification archive differs from exact predecessor: ' + "
+             'path)\n',
+             '        # One complete fixed image, with no per-file old/new fallback.\n',
+             '        previous = pr760_stage.verify_registry_sources(\n',
+             '            {path: stage_prior if path == stage_witness else image[path]\n',
+             '             for path in pr760_stage.REGISTRY_INPUT_SHA256})\n',
+             '        typed_texts = {path: (previous[path] if path in pr760_stage.EXAMPLE_PATHS\n',
+             '                              else qualification_predecessor_bytes(path, '
+             "image[path]).decode('utf-8')\n",
+             '                              if path == '
+             "'tools/carla_lane_oracle/test_witness_format_contracts.py' else "
+             "image[path].decode('utf-8'))\n",
+             '                       for path in typed_boundary.SOURCE_PATHS}\n',
+             '        typed_previous = typed_boundary.verify_sources(typed_texts)\n',
+             '        for path in pr760_stage.CARLA_REGISTRY_PATHS:\n',
+             '            if path in pr760_stage.EXAMPLE_PATHS:\n',
+             '                require(sha(previous[path]) == '
+             "typed_boundary.EDGES[path]['after_sha256'],\n",
+             "                        'PR760 example misses existing typed endpoint: ' + path)\n",
+             '            elif path in typed_boundary.CURRENT_DEPENDENCIES:\n',
+             '                require(sha(previous[path]) == '
+             'typed_boundary.CURRENT_DEPENDENCIES[path],\n',
+             "                        'PR760 dependency misses existing typed endpoint: ' + "
+             'path)\n',
+             '            else:\n',
+             '                require(sha(previous[path]) == '
+             "data['supplemental_predecessors'][path],\n",
+             "                        'PR760 supplemental example predecessor changed: ' + path)\n",
+             '        # #738 sees its original exact source/provider bytes solely as pure\n',
+             '        # comparison inputs. Nothing is published as a synthetic filesystem.\n',
+             '        helper_paths = set(shared_helpers.SOURCE_PATHS) | '
+             'set(shared_helpers.PROVIDERS)\n',
+             "        helper_texts = {path: previous.get(path, image[path].decode('utf-8'))\n",
+             '                        for path in helper_paths}\n',
+             '        active = shared_helpers.verify_correspondence(helper_texts)\n',
+             '        require(set(active) == set(shared_helpers.SOURCE_PATHS),\n',
+             "                'PR760 shared-helper composition changed')\n",
+             '        shared_edges = shared_helpers.edges(active)\n',
+             '        for path in active:\n',
+             '            if path in previous:\n',
+             "                require(sha(previous[path]) == shared_edges[path]['after_sha256'],\n",
+             "                        'PR760 shared-helper predecessor join changed: ' + path)\n",
+             '                shared_edges[path] = {**shared_edges[path],\n',
+             "                    'after_sha256': sha(image[path]),\n",
+             "                    'after_token_sha256': "
+             "source.token_sha256(image[path].decode('utf-8'))}\n",
+             '        known = set(source_image)\n',
+             '        found = {}\n',
+             "        found['PRODUCTION_CLOSURE'] = dependency_inventory(root,\n",
+             "            roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,\n",
+             '            _known=known, _snapshots=image)\n',
+             "        found['NATIVE_CLOSURE'] = _native_dependency_inventory(root,\n",
+             '            witnesses=NATIVE_WITNESSES, _known=known, _snapshots=image)\n',
+             '        test_paths = tuple(path for path in typed_boundary.TESTS if '
+             "path.endswith('.mojo'))\n",
+             "        found['TYPED_NATIVE_CLOSURE'] = set()\n",
+             '        for parent in sorted({str(Path(path).parent) for path in test_paths}):\n',
+             "            found['TYPED_NATIVE_CLOSURE'].update(dependency_inventory(root,\n",
+             '                roots=tuple(path for path in test_paths if str(Path(path).parent) == '
+             'parent),\n',
+             '                entries=(parent,), _known=known, _snapshots=image))\n',
+             "        found['TYPED_PRODUCTION_CLOSURE'] = dependency_inventory(root,\n",
+             '            roots=tuple(path for path in (*typed_boundary.SOURCE_PATHS, '
+             '*typed_boundary.NEW_INPUTS)\n',
+             "                if path.endswith('.mojo') and not path.startswith(('tests/', "
+             "'tools/', 'examples/', 'bench/'))),\n",
+             '            entries=entries, _known=known, _snapshots=image)\n',
+             "        found['EXAMPLE_CLOSURE'] = dependency_inventory(root,\n",
+             '            roots=pr760_stage.EXAMPLE_PATHS, entries=pr760_stage.EXAMPLE_ENTRIES,\n',
+             '            _known=known, _snapshots=image)\n',
+             "        require(set(data['closures']) == set(found)\n",
+             "                and all(set(data['closures'][name]) == paths for name, paths in "
+             'found.items()),\n',
+             "                'PR760 exact dependency closure changed')\n",
+             "        pr760_stage.verify_example_closure(found['EXAMPLE_CLOSURE'], "
+             'pr760_stage.EXAMPLE_ENTRIES)\n',
+             '        resolver_paths = set().union(*found.values())\n',
+             '        # Registry-wide diagnostic pins also contain the separately owned hair\n',
+             '        # scope and qualification-only tests. They are observed bytes, not new\n',
+             '        # CARLA import roots or a grant of their own caller/theorem contracts.\n',
+             '        carla_providers = set(pr760_stage.REGISTRY_PROVIDER_SHA256) - {\n',
+             "            'extensions/humanoid/skeleton/head/hair/styles.mojo'}\n",
+             '        require(set(pr760_stage.CARLA_REGISTRY_PATHS) <= resolver_paths\n',
+             '                and carla_providers <= resolver_paths\n',
+             "                and resolver_paths <= set(expected), 'PR760 transitive provider is "
+             "unbound')\n",
+             '        lookup = _render_lookup_args(resolver_paths, entries)\n',
+             "        lookup['math_entries'] = frozenset(('.', *entries,\n",
+             '            *(str(Path(path).parent) for path in expected\n',
+             "              if path.endswith('.mojo') and path.startswith(('tests/', 'examples/', "
+             "'bench/')))))\n",
+             "        lookup['example_entries'] = lookup['math_entries']\n",
+             '        require(resolver_unshadowed(root, resolver_paths, **lookup),\n',
+             "                'PR760 alternate, compiled, package, symlink or std resolver "
+             "surface')\n",
+             '        production = set()\n',
+             '        observed = inventory(root, _snapshots=image, _production=production)\n',
+             '        require(observed == typed_boundary.INVENTORY,\n',
+             "                'PR760 production caller/use inventory changed')\n",
+             '        # Fresh physical reads close both all source-classifying reads and every\n',
+             '        # non-Mojo input. No authorization/result cache survives this call.\n',
+             '        _helper_entry_census_finish(root, source_image, _operation=_operation)\n',
+             '        for path, raw in tuple(image.items()):\n',
+             "            require(observe(path) == raw, 'PR760 input changed during verification: "
+             "' + path)\n",
+             '        require(resolver_unshadowed(root, resolver_paths, **lookup),\n',
+             "                'PR760 resolver surface changed during verification')\n",
+             '        require(executing_checker_bindings(root) == executing,\n',
+             "                'PR760 executing checker changed during verification')\n",
+             "        return {'image': 'pr760-closed-candidate', 'public_admission': False,\n",
+             "                'bindings': {path: sha(image[path]) for path in sorted(image)},\n",
+             "                'predecessors': previous, 'typed_predecessors': typed_previous,\n",
+             "                'shared_edges': shared_edges,\n",
+             "                'closures': {name: frozenset(paths) for name, paths in "
+             'found.items()},\n',
+             "                'known': frozenset(known), 'entries': tuple(entries),\n",
+             "                'production': frozenset(production),\n",
+             "                'inventory': types.MappingProxyType({path: "
+             'types.MappingProxyType(row)\n',
+             '                    for path, row in observed.items()})}\n',
+             '    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, '
+             'AttributeError) as error:\n',
+             '        if isinstance(error, ContractError):\n',
+             '            _operation_fail(_operation, error)\n',
+             '        try:\n',
+             '            _operation_fail(_operation, ContractError(\n',
+             "                'full-audit cleanup successor: malformed or unreadable PR760 "
+             "candidate: ' + str(error)))\n",
+             '        except ContractError as failure:\n',
+             '            raise failure from error\n',
+             '\n',
+             '\n')))},
+ 'seed_count_contracts.py': {'after_sha256': 'daa8f391a18e54a3fae958150673c134897db52ce5de87291f613f84df7c6d90',
+                             'before_sha256': 'ff4a330326fd69bc649e6f235d1f05db4ed40e6b76b1d75e66a4474741c16345',
+                             'edits': ((777,
+                                        778,
+                                        ("                expected = edge['after_sha256']\n",),
+                                        ('                expected = '
+                                         'full_audit.provenance_after_sha256(edge)\n',)),)},
+ 'source_contracts.py': {'after_sha256': 'ebb6e75b90528b5456485433d470de36e6b33e4df98139dd0acadda75a57adf5',
+                         'before_sha256': '83fdd35b61f0dc7739160c113ae6b4558ad07d45ffded22b7062bc9a209032d0',
+                         'edits': ((346,
+                                    352,
+                                    ('        return text\n',),
+                                    ('        if __package__:\n',
+                                     '            from . import pr760_arithmetic_stage as pr760\n',
+                                     '        else:\n',
+                                     '            import pr760_arithmetic_stage as pr760\n',
+                                     '        if relative not in pr760.CARLA_REGISTRY_PATHS:\n',
+                                     '            return text\n')),
+                                   (370,
+                                    376,
+                                    ('        return raw\n',),
+                                    ('        if __package__:\n',
+                                     '            from . import pr760_arithmetic_stage as pr760\n',
+                                     '        else:\n',
+                                     '            import pr760_arithmetic_stage as pr760\n',
+                                     '        if relative not in pr760.CARLA_REGISTRY_PATHS:\n',
+                                     '            return raw\n')))}}
+
+
+def _pr760_checker_source_predecessor(name, raw):
+    """Return reviewed implementation predecessor and its physical line map."""
+    row = _PR760_CHECKER_SOURCE_EDGES.get(name)
+    if row is None or hashlib.sha256(raw).hexdigest() == row['before_sha256']:
+        return raw, {line: (line, line) for line in range(1, len(raw.splitlines()) + 1)}
+    if hashlib.sha256(raw).hexdigest() != row['after_sha256']:
+        raise AssertionError(('unreviewed PR760 checker bytes', name))
+    lines = raw.decode('utf-8').splitlines(keepends=True)
+    result, mapping, cursor = [], {}, 0
+    for start, stop, before, after in row['edits']:
+        if not cursor <= start <= stop <= len(lines) or tuple(lines[start:stop]) != after:
+            raise AssertionError(('unreviewed PR760 checker span', name, start, stop))
+        for current in range(cursor, start):
+            mapping[len(result) + 1] = (current + 1, current + 1)
+            result.append(lines[current])
+        for line in before:
+            mapping[len(result) + 1] = (start + 1, stop)
+            result.append(line)
+        cursor = stop
+    for current in range(cursor, len(lines)):
+        mapping[len(result) + 1] = (current + 1, current + 1)
+        result.append(lines[current])
+    previous = ''.join(result).encode('utf-8')
+    if hashlib.sha256(previous).hexdigest() != row['before_sha256']:
+        raise AssertionError(('PR760 checker predecessor changed', name))
+    return previous, mapping
+
+
 def _checker_source_predecessor(name, raw):
     """Invert enumerated complete checker edits; retain every untouched byte.
 
@@ -3389,6 +6383,7 @@ def _checker_source_predecessor(name, raw):
     """
     if type(raw) is not bytes:
         raise AssertionError('checker source must be physical builtin bytes')
+    raw, current_mapping = _pr760_checker_source_predecessor(name, raw)
     lines = raw.decode('utf-8').splitlines(keepends=True)
     result, mapping, cursor = [], {}, 0
     for start, stop, before, after in _TYPED_CHECKER_SOURCE_EDITS[name]:
@@ -3407,7 +6402,16 @@ def _checker_source_predecessor(name, raw):
     predecessor = ''.join(result).encode('utf-8')
     if hashlib.sha256(predecessor).hexdigest() != BoundedOwnerDistinctMechanismControls._SOURCE_SHA256[name]:
         raise AssertionError(('whole predecessor checker bytes changed', name))
-    return predecessor, mapping
+    composed = {}
+    for line, (first, last) in mapping.items():
+        if first > last:
+            # An old observer removed by an earlier reviewed edge has no active
+            # call site; existing exact AST/call controls must still refuse it.
+            composed[line] = (first, last)
+            continue
+        ranges = [current_mapping[index] for index in range(first, last + 1)]
+        composed[line] = (min(start for start, stop in ranges), max(stop for start, stop in ranges))
+    return predecessor, composed
 
 
 _CURRENT_LOCAL_S_PREDICATE = (
@@ -4382,7 +7386,7 @@ _TYPED_CHECKER_SOURCE_EDITS = {
    " 'tools/carla_lane_oracle/sum2_guard_contracts.py': "
    "'acbf385486e2b0dfe15a409d039cd31c8e9fed295704bc6adcb4289818b65f63',\n",
    " 'tools/carla_lane_oracle/typed_boundary_contracts.py': "
-   "'59cc73b325af897981a2d7299cf2d4ed3c61d3ea64d5f958f2b85aef51666362',\n",
+   "'baf231cb640435f5b81e350f32e6a0d6203e4ae5d0d6fb9bccb0c6d4bdbfae8a',\n",
    " 'tools/carla_lane_oracle/witness_format_contracts.py': "
    "'a76ba6d5bf18be80c151fd03ea7a7ebeb75af1c1ed8af1600037d5f75ac13cb3',\n",
    " 'tools/carla_lane_oracle/cache_key_contracts.py': "
@@ -8345,6 +11349,13 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
                 ('_check_context', ('body', 0, 'value', 'args', 0, 'values', 0, 'left'))):
             method = self._one_definition(public.body, name)
             expected = self._one_definition(reviewed.body, name)
+            if name == '__init__':
+                self.assertEqual(len(method.body), len(expected.body) + 1)
+                guard = ast.parse("require(_canonical_inventory_admission_frame(frame), "
+                    "'public inventory admission requires its canonical owner')").body[0]
+                self.assertEqual(ast_key(method.body[4]), ast_key(guard),
+                                 'reviewed canonical inventory owner guard drift')
+                method.body.pop(4)
             self.assertEqual(ast_key(method), ast_key(expected),
                              (name, 'reviewed public root method drift'))
             calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)
@@ -8368,6 +11379,21 @@ class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
             else:
                 setattr(parent, field, value)
         return projected
+
+    def test_inventory_constructor_transition_preserves_exact_historical_root_method(self):
+        original = ast.parse(inspect.getsource(cleanup._PublicAdmission))
+        self._project_public_admission_root_calls(original)
+        for fault in ('missing', 'moved', 'condition', 'message', 'duplicate'):
+            tree = copy.deepcopy(original)
+            public = self._one_definition(tree.body, '_PublicAdmission')
+            method = self._one_definition(public.body, '__init__')
+            if fault == 'missing': method.body.pop(4)
+            elif fault == 'moved': method.body[4], method.body[5] = method.body[5], method.body[4]
+            elif fault == 'condition': method.body[4].value.args[0] = ast.Constant(True)
+            elif fault == 'message': method.body[4].value.args[1] = ast.Constant('other')
+            else: method.body.insert(4, copy.deepcopy(method.body[4]))
+            with self.subTest(fault=fault), self.assertRaises(AssertionError):
+                self._project_public_admission_root_calls(tree)
 
     def _assert_root_projection(self, tree, source_tree):
         definitions = {name: self._one_definition(tree.body, name) for name in
@@ -9294,7 +12320,8 @@ class TypedBorrowedProvenancePureControls(unittest.TestCase):
                     'changed owned gate')
             admissions.append('owned')
 
-        def historical(actual_path, text):
+        def historical(actual_path, text, *, pr760=False):
+            require(pr760 is False, 'isolated legacy typed probe received PR760 provenance')
             require((actual_path, text) == (path, physical.decode()), 'nonphysical provenance')
             projections.append(text)
             return 'historical provenance'
@@ -9470,10 +12497,10 @@ class TypedBorrowedProvenanceCurrentControls(unittest.TestCase):
                     return original_observe(operation, root, name, value, mode)
 
                 @wraps(original_projection)
-                def project(name, text):
+                def project(name, text, **kwargs):
                     if selected and sys._getframe(1) is selected[0][0]:
                         projections.append((name, text))
-                    return original_projection(name, text)
+                    return original_projection(name, text, **kwargs)
 
                 @wraps(helper)
                 def checked(root, name, text, **kwargs):

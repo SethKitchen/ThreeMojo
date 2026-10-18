@@ -41,14 +41,18 @@ number, and a file that ends early. An empty line is zero, as
 `Number("")` is in JavaScript.
 """
 
-from math.rounded_product import rounded_product
+from std.math import isfinite
+
+from math.rounded_product import rounded_lerp, rounded_product
+from loaders.bytes import ascii_space_at
 from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
 from render.texture import BILINEAR, IGNORED, Texture, float_texture
-from std.math import floor, isfinite, isnan, nan
+from std.math import floor, isnan, nan
 from std.memory import bitcast
 from std.pathlib import Path
+from core.ordinal import require_valid, require_positive
 
 comptime IES_WIDTH = 360
 comptime IES_HEIGHT = 180
@@ -133,14 +137,9 @@ def _js_number(text: String) raises -> Float64:
         Error: If it is not a finite number, where JavaScript gives NaN.
     """
     var value = js_string_to_number(text)
-    if not isfinite(value):
+    if not isfinite(Float64(value)):
         raise Error("IES: `" + text + "` is not a number")
     return value
-
-
-def _is_space(byte: UInt8) -> Bool:
-    """Return True for an ASCII white space byte."""
-    return byte == 32 or (byte >= 9 and byte <= 13)
 
 
 def _tokens(line: String) -> List[String]:
@@ -153,7 +152,7 @@ def _tokens(line: String) -> List[String]:
     var i = 0
     while i < len(bytes):
         var end = i
-        while _space_at(bytes, end):
+        while ascii_space_at(bytes, end):
             end += 1
         if end - i >= 2:
             text += " "
@@ -165,11 +164,6 @@ def _tokens(line: String) -> List[String]:
     for token in text.split(" "):  # pragma: no branch
         out.append(String(token))
     return out^
-
-
-def _space_at(bytes: Span[UInt8, _], i: Int) -> Bool:
-    """Return True if there is a white space byte at `i`."""
-    return i < len(bytes) and _is_space(bytes[i])
 
 
 struct _Lines:
@@ -290,12 +284,6 @@ def parse_ies(text: String) raises -> IesLamp:
     return lamp^
 
 
-def _lerp(x: Float64, y: Float64, t: Float64) -> Float64:
-    """Return three.js's `MathUtils.lerp`, each product rounded before the
-    sum as JavaScript rounds it."""
-    return rounded_product(1 - t, x) + rounded_product(t, y)
-
-
 def _interpolate(lamp: IesLamp, phi: Float64, theta: Float64) -> Float64:
     """Return the value at a vertical and a horizontal angle, three.js's
     `interpolateCandelaValues`."""
@@ -329,11 +317,13 @@ def _interpolate(lamp: IesLamp, phi: Float64, theta: Float64) -> Float64:
     var t2 = (phi - start_phi) / delta_phi
     var next_theta = theta_index if delta_theta == 0 else theta_index + 1
     ref c = lamp.candela
-    var v1 = _lerp(c[theta_index][phi_index], c[next_theta][phi_index], t1)
-    var v2 = _lerp(
+    var v1 = rounded_lerp(
+        c[theta_index][phi_index], c[next_theta][phi_index], t1
+    )
+    var v2 = rounded_lerp(
         c[theta_index][phi_index + 1], c[next_theta][phi_index + 1], t1
     )
-    return _lerp(v1, v2, t2)
+    return rounded_lerp(v1, v2, t2)
 
 
 def _js_rem(a: Float64, b: Float64) -> Float64:
@@ -360,8 +350,9 @@ def ies_values(lamp: IesLamp) raises -> List[Float64]:
         Error: If the lamp has no horizontal angle, where three.js reads
             `undefined`.
     """
-    if lamp.num_hor_angles < 1:
-        raise Error("IES: a lamp with no horizontal angle")
+    require_positive(
+        lamp.num_hor_angles, "IES: a lamp with no horizontal angle"
+    )
     var size = IES_WIDTH * IES_HEIGHT
     var data = List[Float64](length=size, fill=nan[DType.float64]())
     var start_theta = lamp.hor_angles[0]
@@ -459,8 +450,7 @@ def ies_texture(
     Raises:
         Error: If the type is not valid, or `ies_values` refuses the lamp.
     """
-    if not type.is_valid():
-        raise Error("IES: a type that is not valid")
+    require_valid(type.is_valid(), "IES: a type that is not valid")
     var values = ies_values(lamp)
     if type == IES_UNSIGNED_BYTE:
         var pixels = List[UInt8]()

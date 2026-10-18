@@ -64,11 +64,9 @@ void main() {
 }
 """
 
-# three.js's fragment shader, with `sh[ 9 ]` as nine uniforms and
-# `inverseTransformDirection` written out where it is called.
-comptime PROBE_FRAGMENT_SHADER = """
-#define RECIPROCAL_PI 0.318309886
-
+# The nine coefficient uniforms, `sh0` through `sh8`. This GLSL subset
+# has no arrays, so three.js's `sh[9]` is spelled this way.
+comptime SH_COEFFICIENT_UNIFORMS = """
 uniform vec3 sh0;
 uniform vec3 sh1;
 uniform vec3 sh2;
@@ -78,11 +76,11 @@ uniform vec3 sh5;
 uniform vec3 sh6;
 uniform vec3 sh7;
 uniform vec3 sh8;
+"""
 
-uniform float intensity;
-
-varying vec3 vNormal;
-
+# `shGetIrradianceAt`: the irradiance at a normal. The probe helper and
+# the grid helper both call it.
+comptime SH_GET_IRRADIANCE = """
 vec3 shGetIrradianceAt( in vec3 normal ) {
 
     float x = normal.x, y = normal.y, z = normal.z;
@@ -101,7 +99,22 @@ vec3 shGetIrradianceAt( in vec3 normal ) {
     return result;
 
 }
+"""
 
+# three.js's fragment shader, with `sh[ 9 ]` as nine uniforms and
+# `inverseTransformDirection` written out where it is called.
+comptime PROBE_FRAGMENT_SHADER = (
+    """
+#define RECIPROCAL_PI 0.318309886
+"""
+    + SH_COEFFICIENT_UNIFORMS
+    + """
+uniform float intensity;
+
+varying vec3 vNormal;
+"""
+    + SH_GET_IRRADIANCE
+    + """
 void main() {
 
     vec3 normal = normalize( vNormal );
@@ -116,6 +129,7 @@ void main() {
 
 }
 """
+)
 
 
 def _check_probe(light: Light) raises:

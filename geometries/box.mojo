@@ -31,8 +31,13 @@ from core.buffer_geometry import (
     POSITION,
     UV,
 )
-from core.user_data import UserData
-from units.si import Length, METER
+from geometries.surface import (
+    record_grid_segments,
+    record_kind,
+    record_width_height,
+    require_positive_extents,
+)
+from units.si import Length
 
 
 struct _Planes:
@@ -154,8 +159,7 @@ def box(
         Error: If any extent is not positive, or any segment count is
             below one. three.js floors a count and takes what it gets.
     """
-    if width.value <= 0 or height.value <= 0 or depth.value <= 0:
-        raise Error("A box needs positive extents")
+    require_positive_extents(width.value, height.value, depth.value, "box")
     if width_segments < 1 or height_segments < 1 or depth_segments < 1:
         raise Error("A box needs at least one segment a side")
     var x = width.value
@@ -187,13 +191,10 @@ def box(
             groups[face * 3 + 1],
             MaterialIndex(groups[face * 3 + 2]),
         )
-    geometry.kind = BOX_GEOMETRY
-    geometry.parameters = UserData()
-    geometry.parameters.set_number("width", Float64(width.to(METER)))
-    geometry.parameters.set_number("height", Float64(height.to(METER)))
-    geometry.parameters.set_number("depth", Float64(depth.to(METER)))
-    geometry.parameters.set_number("widthSegments", Float64(width_segments))
-    geometry.parameters.set_number("heightSegments", Float64(height_segments))
+    record_kind(geometry, BOX_GEOMETRY)
+    record_width_height(geometry, width, height)
+    geometry.parameters.set_meters("depth", depth)
+    record_grid_segments(geometry, width_segments, height_segments)
     geometry.parameters.set_number("depthSegments", Float64(depth_segments))
     return geometry^
 

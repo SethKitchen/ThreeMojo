@@ -28,8 +28,11 @@ An `update` by a time that is not a number is refused, and so is a mesh
 that is not in the scene.
 """
 
+from loaders.bytes import ascii_digit, ascii_letter
 from core.scene import Scene
 from animation.keyframe_track import MeshIndex
+from core.ordinal import require_index_in_count
+from math.finite import require_finite
 from std.math import floor, isfinite, nan
 
 # The name three.js gives the animation every blend mesh starts with.
@@ -112,24 +115,19 @@ def _animation_word(name: String) -> Optional[String]:
     var bytes = name.as_bytes()
     var at = 0
     while at < len(bytes):
-        if not _letter(bytes[at]):
+        if not ascii_letter(Int(bytes[at])):
             at += 1
             continue
         var end = at
-        while end < len(bytes) and _letter(bytes[end]):
+        while end < len(bytes) and ascii_letter(Int(bytes[end])):
             end += 1
         var next = end
         if next < len(bytes) and bytes[next] == 95:
             next += 1
-        if next < len(bytes) and bytes[next] >= 48 and bytes[next] <= 57:
+        if next < len(bytes) and ascii_digit(Int(bytes[next])):
             return String(name[byte=at:end])
         at = end
     return None
-
-
-def _letter(byte: UInt8) -> Bool:
-    """Return True for an ASCII letter, either case."""
-    return (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
 
 
 struct MorphBlendMesh(Movable):
@@ -385,10 +383,10 @@ struct MorphBlendMesh(Movable):
             Error: If the time is not a number, or the scene has no such
                 mesh.
         """
-        if not isfinite(delta):
-            raise Error(
-                "A blend mesh cannot move on by a time that is not a number"
-            )
+        require_finite(
+            Float64(delta),
+            "A blend mesh cannot move on by a time that is not a number",
+        )
         _check(self.mesh, scene)
         ref mesh = scene.meshes[self.mesh.value]
         # `__default` at least, so this loop always runs.
@@ -445,5 +443,8 @@ struct MorphBlendMesh(Movable):
 
 def _check(mesh: MeshIndex, scene: Scene) raises:
     """Refuse a mesh the scene does not have."""
-    if mesh.value < 0 or mesh.value >= len(scene.meshes):
-        raise Error("A blend mesh must name one of the scene's meshes")
+    require_index_in_count(
+        mesh.value,
+        len(scene.meshes),
+        "A blend mesh must name one of the scene's meshes",
+    )

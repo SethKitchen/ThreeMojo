@@ -33,6 +33,8 @@ The results live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 """
 
+from core.ordinal import ordinal_valid, require_valid
+
 from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
@@ -98,6 +100,7 @@ from extensions.humanoid.skeleton.limb.regions import (
     MUSCLE_REGION,
     TENDON_REGION,
     FAT_PROXY_REGION,
+    require_limb_region,
 )
 from math.vector3 import Vector3
 from std.math import isfinite, sqrt
@@ -130,7 +133,7 @@ struct LimbSegment(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is a named segment."""
-        return self == THIGH or self == SHANK or self == FOOT_SEGMENT
+        return ordinal_valid(self.value, FOOT_SEGMENT.value)
 
 
 # From the hip joint's center to the knee's.
@@ -176,8 +179,7 @@ struct SegmentEstimate(ImplicitlyCopyable):
         Raises:
             Error: If the region is not named.
         """
-        if not region.is_valid():
-            raise Error("A limb region must be named")
+        require_limb_region(region)
         return Volume(Float32(self.region_volumes[region.value]))
 
     def region_mass(self, region: LimbRegion) raises -> Mass:
@@ -192,8 +194,7 @@ struct SegmentEstimate(ImplicitlyCopyable):
         Raises:
             Error: If the region is not named.
         """
-        if not region.is_valid():
-            raise Error("A limb region must be named")
+        require_limb_region(region)
         return Mass(Float32(self.region_masses[region.value]))
 
 
@@ -250,8 +251,10 @@ def segment_estimate(
         Error: If the spec, side, segment or step is invalid, or the
             sampling box exceeds the bounded grid work limit.
     """
-    if not segment.is_valid():
-        raise Error("A limb segment must be the thigh, the shank or the foot")
+    require_valid(
+        segment.is_valid(),
+        "A limb segment must be the thigh, the shank or the foot",
+    )
     check_mass_step(step, "limb segment")
     var pose = assemble_leg(spec, side)
     var skin = LimbSkinField(spec, side)

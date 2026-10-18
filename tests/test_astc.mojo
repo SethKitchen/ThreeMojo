@@ -166,7 +166,7 @@ def test_edge_images_match_the_cropped_independent_texels() raises:
         )
         var payload = List[UInt8]()
         for _ in range(4):
-            payload.extend(block.copy())
+            payload.extend(Span(block))
         var width = size * 2 - 1
         var height = size * 2 - 2
         var vk = (157 if size == 4 else 165) + profile

@@ -37,6 +37,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.buffer_geometry import UV, UV1
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_index_in_count, require_positive
 from core.scene import Scene
 from geometries.plane import plane
 from materials.material import (
@@ -60,7 +61,8 @@ from render.target import FLOAT_TARGET, RenderTarget
 from render.texture import IGNORED, UV_CHANNEL_1, Texture, float_texture
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
-from std.math import isfinite, max, min
+from math.finite import require_positive_finite
+from math.utils import edge_index
 from units.si import Length, METER
 
 
@@ -134,8 +136,9 @@ struct ProgressiveLightMap(Movable):
         Raises:
             Error: If the resolution is not positive.
         """
-        if resolution <= 0:
-            raise Error("A light map's resolution must be positive")
+        require_positive(
+            resolution, "A light map's resolution must be positive"
+        )
         self.resolution = resolution
         self.maps = List[TextureId]()
         for index in range(2):  # pragma: no branch
@@ -186,8 +189,11 @@ struct ProgressiveLightMap(Movable):
         var boxes = List[PackedBox]()
         for index in range(len(meshes)):
             var at = meshes[index]
-            if at < 0 or at >= len(scene.meshes):
-                raise Error("A light map's mesh is not in the scene")
+            require_index_in_count(
+                at,
+                len(scene.meshes),
+                "A light map's mesh is not in the scene",
+            )
             ref mesh = scene.meshes[at]
             if not assets.geometries.get(mesh.geometry).has_attribute(UV):
                 raise Error("A mesh drawn into a light map needs a uv")
@@ -265,8 +271,10 @@ struct ProgressiveLightMap(Movable):
             Error: If the blend window is not a positive finite number, or
                 the draw raises.
         """
-        if not isfinite(blend_window) or blend_window <= 0:
-            raise Error("A light map's blend window must be positive")
+        require_positive_finite(
+            Float64(blend_window),
+            "A light map's blend window must be positive",
+        )
         if len(self.meshes) == 0:
             return
         var active = 0 if self.buffer1_active else 1
@@ -323,8 +331,9 @@ struct ProgressiveLightMap(Movable):
             Error: If no mesh has been added yet: three.js warns and does
                 nothing.
         """
-        if len(self.meshes) == 0:
-            raise Error("Show the light map after adding the meshes")
+        require_positive(
+            len(self.meshes), "Show the light map after adding the meshes"
+        )
         # Spelled as a Bool, as the coverage probes take one.
         if not Bool(self.label):
             var shows = Material(
@@ -375,8 +384,8 @@ def _blur(mut target: RenderTarget, old: Texture):
                     if dx == 0 and dy == 0:
                         continue
                     var at = (
-                        min(max(y + dy, 0), size - 1) * size
-                        + min(max(x + dx, 0), size - 1)
+                        edge_index(y + dy, size) * size
+                        + edge_index(x + dx, size)
                     ) * 4
                     r += old.data[at]
                     g += old.data[at + 1]

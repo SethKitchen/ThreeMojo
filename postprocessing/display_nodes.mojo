@@ -36,14 +36,17 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_non_negative, require_positive
+from math.finite import require_finite_group
 from math.norm import length2
+from math.sine import fraction
 
 from math.smoothstep import smoothstep
-from math.vector2 import Vector2
+from math.vector2 import Vector2, vector2_from_float64
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import DepthView, glsl_rand
 from units.si import Length, METER
-from render.framebuffer import FloatColor
+from render.framebuffer import TRANSPARENT_BLACK, FloatColor
 from render.target import RenderTarget
 from std.math import cos, floor, isfinite, pi, pow, sin, sqrt
 
@@ -173,22 +176,26 @@ def check_display(settings: DisplaySettings) raises:
         and isfinite(settings.focal_length.value)
         and isfinite(settings.bokeh_scale)
     )
-    if not finite:
-        raise Error("A display pass setting must be finite")
-    if settings.sigma < 0:
-        raise Error("A Gaussian blur's sigma must not be negative")
+    require_finite_group(finite, "A display pass setting must be finite")
+    require_non_negative(
+        settings.sigma, "A Gaussian blur's sigma must not be negative"
+    )
     if not (settings.resolution_scale > 0 and settings.down_sample_ratio > 0):
         raise Error("A display pass's scale and ratio must be positive")
     if settings.size < 0 or settings.separation < 0:
         raise Error("A box blur's size and separation must not be negative")
     if settings.repeats < 1 or settings.samples < 2:
         raise Error("A hash blur needs a repeat, an anamorphic two samples")
-    if settings.ghost_samples < 0:
-        raise Error("A lens flare's ghost count must not be negative")
+    require_non_negative(
+        settings.ghost_samples,
+        "A lens flare's ghost count must not be negative",
+    )
     if settings.motion_samples < 2:
         raise Error("A motion blur takes at least two samples")
-    if settings.focal_length.value <= 0:
-        raise Error("A depth of field's focal length must be positive")
+    require_positive(
+        settings.focal_length.value,
+        "A depth of field's focal length must be positive",
+    )
 
 
 # --- reading a frame ---------------------------------------------------------
@@ -380,7 +387,7 @@ def box_blur_pixel(
     var sep = Float32(max(settings.separation, 1))
     var step_u = 1 / Float32(source.width) * sep
     var step_v = 1 / Float32(source.height) * sep
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     var count = 0
     for i in range(-settings.size, settings.size + 1):  # pragma: no branch
         for j in range(-settings.size, settings.size + 1):  # pragma: no branch
@@ -419,7 +426,7 @@ def hash_blur_pixel(
     var v = v_of(y, source.height)
     var repeats = Float32(settings.repeats)
     var amount = settings.blur_amount
-    var sum = FloatColor(0, 0, 0, 0)
+    var sum = TRANSPARENT_BLACK
     for step in range(settings.repeats):  # pragma: no branch
         var i = Float32(step)
         # three.js's `degrees( i / repeats * 360 )`: the loop's angle, in
@@ -442,6 +449,29 @@ def hash_blur_pixel(
     )
 
 
+def replace_light[
+    pixel: def(LightView, Int, Int) capturing[_] -> FloatColor
+](mut frame: RenderTarget):
+    """Replace every pixel from a copy of the frame.
+
+    The width and the height are positive, so both loops run.
+
+    Parameters:
+        pixel: The color of one pixel, read from the copy.
+
+    Args:
+        frame: The frame, replaced. Each pixel's data flag is cleared.
+    """
+    var before = frame.colors.copy()
+    var view = LightView(before, frame.width, frame.height)
+    for y in range(frame.height):  # pragma: no branch
+        for x in range(frame.width):  # pragma: no branch
+            var slot = y * frame.width + x
+            frame.colors[slot] = pixel(view, x, y)
+            frame.data[slot] = False
+    _ = before^
+
+
 def box_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
     """Run `boxBlur` over the frame, every pixel reading the frame as it
     was before the pass.
@@ -450,14 +480,11 @@ def box_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, replaced.
         settings: The box blur's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = box_blur_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return box_blur_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 def hash_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
@@ -468,14 +495,11 @@ def hash_blur_light(mut frame: RenderTarget, settings: DisplaySettings):
         frame: The frame, replaced.
         settings: The hash blur's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = hash_blur_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return hash_blur_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- motionBlur --------------------------------------------------------------
@@ -578,7 +602,7 @@ def dof_kernel(small: Bool) -> List[Vector2]:
             continue
         var theta = Float64(i) * DOF_GOLDEN_ANGLE
         var r = sqrt(Float64(i)) / sqrt(Float64(DOF_SAMPLES))
-        points.append(Vector2(Float32(r * cos(theta)), Float32(r * sin(theta))))
+        points.append(vector2_from_float64(r * cos(theta), r * sin(theta)))
     return points^
 
 
@@ -774,14 +798,10 @@ def dof_light(
             var here = beauty_view.sample(u, v)
             var blend_near = min(near.a, 0.5) * 2
             var blend_far = min(far.a, 0.5) * 2
-            var r = here.r + (far.r - here.r) * blend_far
-            var g = here.g + (far.g - here.g) * blend_far
-            var b = here.b + (far.b - here.b) * blend_far
-            r = r + (near.r - r) * blend_near
-            g = g + (near.g - g) * blend_near
-            b = b + (near.b - b) * blend_near
+            var mid = here.mix(far, blend_far)
+            var rgb = mid.mix(near, blend_near)
             var slot = y * w + x
-            frame.colors[slot] = FloatColor(r, g, b, 1)
+            frame.colors[slot] = FloatColor(rgb.r, rgb.g, rgb.b, 1)
             frame.data[slot] = False
     _ = beauty^
     _ = near_field^
@@ -853,16 +873,11 @@ def chromatic_aberration_light(
         frame: The frame, replaced.
         settings: The strength, the center and the scale.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = chromatic_aberration_pixel(
-                view, x, y, settings
-            )
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return chromatic_aberration_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- AnamorphicNode ----------------------------------------------------------
@@ -938,11 +953,6 @@ def anamorphic_light(mut frame: RenderTarget, settings: DisplaySettings):
 # --- LensflareNode -----------------------------------------------------------
 
 
-def _fract(x: Float32) -> Float32:
-    """Return GLSL's `fract`."""
-    return x - floor(x)
-
-
 def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
     """Add three.js's `LensflareNode` to the frame: ghosts of the light
     above a threshold, mirrored through the center, at a smaller size.
@@ -976,8 +986,8 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
             var g = Float32(0)
             var b = Float32(0)
             for i in range(settings.ghost_samples):
-                var su = _fract(tu + gu * Float32(i))
-                var sv = _fract(tv + gv * Float32(i))
+                var su = fraction(tu + gu * Float32(i))
+                var sv = fraction(tv + gv * Float32(i))
                 var du = su - 0.5
                 var dv = sv - 0.5
                 var d = length2(du, dv)

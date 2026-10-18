@@ -26,9 +26,12 @@ The pass runs on the host. It reads the depth and the normals that
 `postprocessing.screen_space.DepthView` reads for SSAO.
 """
 
+from math.finite import require_unit_range
+from math.norm import squared_length2
 from math.noise import SimplexNoise
 from math.utils import SeededRandom
-from math.vector3 import Vector3
+from math.cross import cross_vectors
+from math.vector3 import Vector3, vector3_from_float64
 from postprocessing.sampling import LightView, u_of, v_of
 from postprocessing.screen_space import (
     BEAUTY_OUTPUT,
@@ -39,6 +42,7 @@ from postprocessing.screen_space import (
     DepthView,
     ScreenSpaceOutput,
     multiply_light,
+    require_screen_output,
     show_depth,
     show_normals,
     show_values,
@@ -132,8 +136,7 @@ def check_gtao(settings: GtaoSettings) raises:
             negative; a sample count is below two, or the denoise's radius
             below one.
     """
-    if not settings.output.is_valid():
-        raise Error("A screen-space output must be one of the six named")
+    require_screen_output(settings.output)
     if not (
         isfinite(settings.radius.value)
         and isfinite(settings.distance_exponent)
@@ -158,8 +161,9 @@ def check_gtao(settings: GtaoSettings) raises:
         or settings.normal_phi <= 0
     ):
         raise Error("A GTAO radius, thickness, scale and phi must be positive")
-    if settings.distance_fall_off < 0 or settings.distance_fall_off > 1:
-        raise Error("A GTAO fall-off runs from zero to one")
+    require_unit_range(
+        settings.distance_fall_off, "A GTAO fall-off runs from zero to one"
+    )
     if (
         settings.blend_intensity < 0
         or settings.distance_exponent < 0
@@ -236,7 +240,7 @@ def gtao_noise(size: Int = GTAO_NOISE_SIZE) -> List[FloatColor]:
         var angle = 2 * pi * Float64(square[index]) / Float64(count)
         var x = cos(angle)
         var y = sin(angle)
-        var length = sqrt(x * x + y * y)
+        var length = sqrt(squared_length2[DType.float64](x, y))
         texels.append(
             FloatColor(
                 _byte((x / length * 0.5 + 0.5) * 255),
@@ -295,25 +299,8 @@ def denoise_disk(
         var radius = pow(
             Float64(i) / Float64(samples - 1), Float64(radius_exponent)
         )
-        disk.append(
-            Vector3(Float32(cos(angle)), Float32(sin(angle)), Float32(radius))
-        )
+        disk.append(vector3_from_float64(cos(angle), sin(angle), radius))
     return disk^
-
-
-def _unit(v: Vector3) -> Vector3:
-    """Return `v` at a length of one, or zero for zero."""
-    var size = v.length()
-    if size == 0:
-        return v
-    return v * (1 / size)
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
 
 
 def _row_up(y: Int, height: Int) -> Int:
@@ -328,6 +315,14 @@ def _scene_sample(view: DepthView, point: Vector3) -> Vector3:
     var u = clip.x * 0.5 + 0.5
     var v = clip.y * 0.5 + 0.5
     return view.position(u, v, view.depth_at(u, v))
+
+
+def _unit(v: Vector3) -> Vector3:
+    """Return `v` at a length of one, or zero for zero."""
+    var size = v.length()
+    if size == 0:
+        return v
+    return v * (1 / size)
 
 
 def _horizon(
@@ -401,12 +396,12 @@ def gtao_occlusion(
     for i in range(directions):  # pragma: no branch
         var angle = Float32(i) / Float32(directions) * Float32(pi)
         var direction = _unit(tangent * cos(angle) + bitangent * sin(angle))
-        var slice_bitangent = _unit(_cross(direction, view_dir))
-        var slice_tangent = _cross(slice_bitangent, view_dir)
+        var slice_bitangent = _unit(cross_vectors(direction, view_dir))
+        var slice_tangent = cross_vectors(slice_bitangent, view_dir)
         var in_slice = _unit(
             normal - slice_bitangent * normal.dot(slice_bitangent)
         )
-        var toward = _cross(in_slice, slice_bitangent)
+        var toward = cross_vectors(in_slice, slice_bitangent)
         var cos_x = view_dir.dot(toward)
         var cos_y = view_dir.dot(-toward)
         for j in range(steps):  # pragma: no branch

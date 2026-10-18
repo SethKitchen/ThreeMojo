@@ -13,6 +13,8 @@ The construction is covariant under a uniform scale. It avoids treating
 an under-resolved occupancy grid as dimensional validation.
 """
 
+from math.finite import stored_float32, require_positive_finite
+from math.norm import squared_length3
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
     SHOULDER_HEIGHT,
@@ -31,7 +33,8 @@ from extensions.sdf.field import Primitive
 from extensions.sdf.ids import CONE, ELLIPSOID, FIN
 from extensions.sdf.vector import V3, dot
 from std.math import isfinite, sqrt
-from units.si import Length, METER
+from units.measure import length_meters
+from units.si import Length
 
 
 def _extent(
@@ -42,7 +45,7 @@ def _extent(
         var x = dot(p.ax, direction) * p.r.x
         var y = dot(p.ay, direction) * p.r.y
         var z = dot(p.az, direction) * p.r.z
-        var radius = sqrt(x * x + y * y + z * z)
+        var radius = sqrt(squared_length3[DType.float64](x, y, z))
         return (center - radius, center + radius)
     if p.kind == CONE:
         var end = dot(p.b, direction)
@@ -129,6 +132,8 @@ def reference_length(animal: Animal) raises -> Length:
     var value = (
         withers - ground if body.reference == SHOULDER_HEIGHT else high - low
     )
-    if not (isfinite(Float32(value)) and Float32(value) > 0.0):
-        raise Error("A reference landmark must fit a positive finite SI length")
-    return Length(Float32(value), METER)
+    require_positive_finite(
+        stored_float32(value),
+        "A reference landmark must fit a positive finite SI length",
+    )
+    return length_meters(value)

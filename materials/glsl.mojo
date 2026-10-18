@@ -53,6 +53,18 @@ This replaces the old silent truncation and can refuse previously accepted
 runtime-dependent exits. See the Node-materials wiki page for the proof
 subset and compatibility limits.
 """
+from math.finite import stored_float32
+from core.ordinal import ordinal_valid, require_non_negative
+from core.search import first_match
+from loaders.bytes import (
+    ascii_digit,
+    is_exponent_mark,
+    is_sign_mark,
+    is_hex_digit,
+    letter_or_underscore,
+    space_tab_return,
+)
+from loaders.js_text import is_js_word
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
 from render.volume_texture_store import (
@@ -191,7 +203,7 @@ struct _TokenKind(Equatable, ImplicitlyCopyable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the six token kinds."""
-        return self.value >= 0 and self.value <= 5
+        return ordinal_valid(self.value, 5)
 
 
 comptime _NAME = _TokenKind(0)
@@ -212,55 +224,10 @@ struct _Token(Copyable, Movable):
     var line: Int
 
 
-def _is_letter(c: UInt8) -> Bool:
-    """Return True for a letter or an underscore."""
-    return (
-        (c >= UInt8(ord("a")) and c <= UInt8(ord("z")))
-        or (c >= UInt8(ord("A")) and c <= UInt8(ord("Z")))
-        or c == UInt8(ord("_"))
-    )
-
-
-def _is_digit(c: UInt8) -> Bool:
-    """Return True for a decimal digit."""
-    return c >= UInt8(ord("0")) and c <= UInt8(ord("9"))
-
-
-def _is_hex(c: UInt8) -> Bool:
-    """Return True for a hexadecimal digit."""
-    return (
-        _is_digit(c)
-        or (c >= UInt8(ord("a")) and c <= UInt8(ord("f")))
-        or (c >= UInt8(ord("A")) and c <= UInt8(ord("F")))
-    )
-
-
-def _is_word_byte(c: UInt8) -> Bool:
-    """Return True for a byte a name can hold after its first."""
-    return _is_letter(c) or _is_digit(c)
-
-
-def _is_space(c: UInt8) -> Bool:
-    """Return True for a space, a tab or a carriage return."""
-    return (
-        c == UInt8(ord(" ")) or c == UInt8(ord("\t")) or c == UInt8(ord("\r"))
-    )
-
-
-def _is_exponent(c: UInt8) -> Bool:
-    """Return True for `e` or `E`."""
-    return c == UInt8(ord("e")) or c == UInt8(ord("E"))
-
-
-def _is_sign(c: UInt8) -> Bool:
-    """Return True for `+` or `-`."""
-    return c == UInt8(ord("+")) or c == UInt8(ord("-"))
-
-
 def _starts_number(c: UInt8, next: UInt8) -> Bool:
     """Return True if a number begins at `c`: a digit, or a point and a
     digit."""
-    return _is_digit(c) or (c == UInt8(ord(".")) and _is_digit(next))
+    return ascii_digit(c) or (c == UInt8(ord(".")) and ascii_digit(next))
 
 
 def _is_hex_start(text: String) -> Bool:
@@ -337,7 +304,7 @@ struct _Lexer(Movable):
                 line += 1
                 at += 1
                 starts_line = True
-            elif _is_space(c):
+            elif space_tab_return(c):
                 at += 1
             elif c == UInt8(ord("/")) and next == UInt8(ord("/")):
                 at = text.find("\n", at)
@@ -383,9 +350,9 @@ struct _Lexer(Movable):
         var bytes = text.as_bytes()
         var c = bytes[at]
         var next = bytes[at + 1] if at + 1 < len(bytes) else UInt8(0)
-        if _is_letter(c):
+        if letter_or_underscore(c):
             var end = at
-            while end < len(bytes) and _is_word_byte(bytes[end]):
+            while end < len(bytes) and is_js_word(bytes[end]):
                 end += 1
             var word = String(text[byte=at:end])
             for index in range(len(self.names)):
@@ -431,26 +398,26 @@ struct _Lexer(Movable):
             base = 16
             digits_at += 2
             end = digits_at
-            while end < len(bytes) and _is_hex(bytes[end]):
+            while end < len(bytes) and is_hex_digit(Int(bytes[end])):
                 end += 1
             if end == digits_at:
                 raise self.error(line, "a hexadecimal number needs digits")
         else:
-            while end < len(bytes) and _is_digit(bytes[end]):
+            while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
         var real = False
         if base == 10 and end < len(bytes) and bytes[end] == UInt8(ord(".")):
             real = True
             end += 1
-            while end < len(bytes) and _is_digit(bytes[end]):
+            while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
-        if base == 10 and end < len(bytes) and _is_exponent(bytes[end]):
+        if base == 10 and end < len(bytes) and is_exponent_mark(bytes[end]):
             real = True
             end += 1
-            if end < len(bytes) and _is_sign(bytes[end]):
+            if end < len(bytes) and is_sign_mark(bytes[end]):
                 end += 1
             var first = end
-            while end < len(bytes) and _is_digit(bytes[end]):
+            while end < len(bytes) and ascii_digit(bytes[end]):
                 end += 1
             if end == first:
                 raise self.error(line, "an exponent needs digits")
@@ -477,11 +444,9 @@ struct _Lexer(Movable):
                 if number > 4294967295.0:
                     raise self.error(line, "an integer literal exceeds 32 bits")
         var suffix_end = end
-        if end < len(bytes) and _is_word_byte(bytes[end]):
+        if end < len(bytes) and is_js_word(bytes[end]):
             var c = _letter(text, end)
-            var alone = end + 1 >= len(bytes) or not _is_word_byte(
-                bytes[end + 1]
-            )
+            var alone = end + 1 >= len(bytes) or not is_js_word(bytes[end + 1])
             if not real and alone and (c == "u" or c == "U"):
                 kind = _UINT_TOKEN
                 suffix_end += 1
@@ -593,10 +558,7 @@ struct _Lexer(Movable):
 
     def defined(self, name: String) -> Bool:
         """Return True if a macro is defined."""
-        for index in range(len(self.names)):
-            if self.names[index] == name:
-                return True
-        return False
+        return first_match(self.names, name) >= 0
 
     def condition(self, text: String, line: Int) raises -> Bool:
         """Return whether an `#if`'s condition holds: whole numbers, macros
@@ -630,14 +592,14 @@ struct _Lexer(Movable):
         var at = 0
         while at < len(bytes):
             var c = bytes[at]
-            if _is_space(c):
+            if space_tab_return(c):
                 at += 1
                 continue
             if c == UInt8(ord("/")) and _clipped(text, at, at + 2) == "//":
                 break
             var end = at + 1
-            if _is_word_byte(c):
-                while end < len(bytes) and _is_word_byte(bytes[end]):
+            if is_js_word(c):
+                while end < len(bytes) and is_js_word(bytes[end]):
                     end += 1
             elif _listed(_clipped(text, at, at + 2), " && || == != <= >= "):
                 end = at + 2
@@ -714,7 +676,9 @@ struct _Lexer(Movable):
             var wrapped = at < len(parts) and parts[at] == "("
             if wrapped:
                 at += 1
-            if at >= len(parts) or not _is_letter(parts[at].as_bytes()[0]):
+            if at >= len(parts) or not letter_or_underscore(
+                parts[at].as_bytes()[0]
+            ):
                 raise self.error(line, "defined names a macro")
             var holds = self.defined(parts[at])
             at += 1
@@ -723,15 +687,15 @@ struct _Lexer(Movable):
                     raise self.error(line, "an #if condition leaves a ( open")
                 at += 1
             return 1 if holds else 0
-        if _is_digit(part.as_bytes()[0]):
+        if ascii_digit(part.as_bytes()[0]):
             # A part has at least one byte.
             for index in range(part.byte_length()):  # pragma: no branch
-                if not _is_digit(part.as_bytes()[index]):
+                if not ascii_digit(part.as_bytes()[index]):
                     raise self.error(
                         line, "an #if condition counts in whole numbers"
                     )
             return atol(part)
-        if not _is_letter(part.as_bytes()[0]):
+        if not letter_or_underscore(part.as_bytes()[0]):
             raise self.error(line, "an #if condition cannot hold " + part)
         for index in range(len(self.names)):
             if self.names[index] == part:
@@ -782,10 +746,10 @@ struct _Lexer(Movable):
                 twice.
         """
         var at = text.find("define") + 6
-        while at < text.byte_length() and _is_space(text.as_bytes()[at]):
+        while at < text.byte_length() and space_tab_return(text.as_bytes()[at]):
             at += 1
         var end = at
-        while end < text.byte_length() and _is_word_byte(text.as_bytes()[end]):
+        while end < text.byte_length() and is_js_word(text.as_bytes()[end]):
             end += 1
         var macro = String(text[byte=at:end])
         if macro == "":
@@ -807,7 +771,7 @@ struct _Lexer(Movable):
         var body = List[_Token]()
         var place = 0
         while place < rest.byte_length():
-            if _is_space(rest.as_bytes()[place]):
+            if space_tab_return(rest.as_bytes()[place]):
                 place += 1
                 continue
             place = self.token(rest, place, line, body)
@@ -2138,11 +2102,10 @@ struct _Compiler(Movable):
                     raise self.error(
                         "an array in a struct is outside the subset"
                     )
-                for index in range(len(names)):
-                    if names[index] == field:
-                        raise self.error(
-                            "the field " + field + " is declared twice"
-                        )
+                if first_match(names, field) >= 0:
+                    raise self.error(
+                        "the field " + field + " is declared twice"
+                    )
                 names.append(field)
                 types.append(type)
                 if not self.is_mark(","):
@@ -2464,11 +2427,7 @@ struct _Compiler(Movable):
         elif type == _SAMPLER_ARRAY:
             node = self.graph.array_uniform(name, NO_DATA_ARRAY_TEXTURE)
         elif type == _MAT3:
-            var zero = Matrix3()
-            zero.elements[0] = 0
-            zero.elements[4] = 0
-            zero.elements[8] = 0
-            node = self.graph.uniform(name, zero)
+            node = self.graph.uniform(name, Matrix3.diagonal(0, 0, 0))
         elif type == _MAT4:
             var zero = Matrix4()
             for index in range(0, 16, 5):  # pragma: no branch
@@ -3080,13 +3039,12 @@ struct _Compiler(Movable):
                 var label = self.bit_or()
                 if label.type != selector.type or not label.known:
                     raise self.error("a case label is a constant int")
-                for index in range(len(labels)):
-                    if labels[index] == label.number:
-                        raise self.error(
-                            "the case "
-                            + String(Int(label.number))
-                            + " is listed twice"
-                        )
+                if first_match(labels, label.number) >= 0:
+                    raise self.error(
+                        "the case "
+                        + String(Int(label.number))
+                        + " is listed twice"
+                    )
                 labels.append(label.number)
                 continue
             elif nesting == 0 and self.is_word("default"):
@@ -3444,7 +3402,7 @@ struct _Compiler(Movable):
                     bitcast[DType.int32](UInt32(Int64(index + step)))
                 )
             else:
-                index = Float64(Float32(index + step))
+                index = stored_float32(index + step)
         var node: NodeRef
         if type.is_uint():
             var iteration = self.graph.to_uint(self.graph.Loop(count))
@@ -3709,6 +3667,10 @@ struct _Compiler(Movable):
             target, self.arithmetic("+" if sign > 0 else "-", target, one)
         )
 
+    def _refuse_types(mut self, given: String, held: String) raises:
+        """Refuse an assignment of one type onto another."""
+        raise self.error("cannot assign a " + given + " to a " + held)
+
     def assign(mut self, target: _Value, value: _Value) raises:
         """Make a variable, or some of its components, hold a value.
 
@@ -3735,12 +3697,7 @@ struct _Compiler(Movable):
                 + _kind_name(kind)
             )
         if value.type != target.type:
-            raise self.error(
-                "cannot assign a "
-                + value.type.name()
-                + " to a "
-                + target.type.name()
-            )
+            self._refuse_types(value.type.name(), target.type.name())
         # A point in clip space has no node: a whole assignment outside
         # every branch keeps it for `gl_Position`, and nothing else can.
         var whole = target.components == "" and self.depth == 0
@@ -3799,11 +3756,8 @@ struct _Compiler(Movable):
             Error: If the types differ, or a field cannot be assigned.
         """
         if value.type != target.type:
-            raise self.error(
-                "cannot assign a "
-                + self.type_name(value.type)
-                + " to a "
-                + self.type_name(target.type)
+            self._refuse_types(
+                self.type_name(value.type), self.type_name(target.type)
             )
         var count = len(self.structs[target.type.value - _STRUCT_BASE].names)
         for index in range(count):  # pragma: no branch
@@ -3833,12 +3787,7 @@ struct _Compiler(Movable):
                 + _kind_name(kind)
             )
         if value.type != target.type:
-            raise self.error(
-                "cannot assign a "
-                + value.type.name()
-                + " to a "
-                + target.type.name()
-            )
+            self._refuse_types(value.type.name(), target.type.name())
         var node = self.node(value)
         for index in range(size):  # pragma: no branch
             var variable = NodeVar(self.symbols[first + index].variable)
@@ -4655,7 +4604,7 @@ struct _Compiler(Movable):
             return self.literal(_TINT, token.number)
         if token.kind == _REAL:
             self.at += 1
-            return self.literal(_FLOAT, Float64(Float32(token.number)))
+            return self.literal(_FLOAT, stored_float32(token.number))
         if self.is_mark("("):
             self.at += 1
             var value = self.expression()
@@ -5157,7 +5106,7 @@ struct _Compiler(Movable):
             return Float64(Int32(Int64(number)))
         if to.is_bool():
             return 1 if number != 0 else 0
-        return Float64(Float32(number))
+        return stored_float32(number)
 
     def convert(
         mut self, type: _Type, args: List[_Value], var value: _Value
@@ -5634,8 +5583,9 @@ def _compile(
     """
     var compiler = _Compiler(raw, toy, defines)
     compiler.shader(vertex_shader, _VERTEX)
-    if compiler.drawn < 0:
-        raise Error("GLSL vertex shader: main never writes gl_Position")
+    require_non_negative(
+        compiler.drawn, "GLSL vertex shader: main never writes gl_Position"
+    )
     for index in range(len(compiler.seen)):
         if compiler.seen[index] != compiler.drawn:
             raise Error(
@@ -5685,8 +5635,9 @@ def _compile(
             depth = node
         else:
             color = node
-    if color < 0:
-        raise Error("GLSL fragment shader: main never writes its color")
+    require_non_negative(
+        color, "GLSL fragment shader: main never writes its color"
+    )
     var rgb = compiler.graph.swizzle(NodeRef(color), "xyz")
     compiler.graph.set_output(COLOR_NODE, rgb)
     var alpha = compiler.graph.swizzle(NodeRef(color), "w")

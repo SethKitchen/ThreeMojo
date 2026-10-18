@@ -37,8 +37,9 @@ from animation.keyframe_track import POSITION, QUATERNION, KeyframeTrack
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.js_number import js_parse_float, js_parse_int
+from loaders.js_text import split_fields, text_lines
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, vector3_from_float64
 from objects.skeleton import Bone, Skeleton
 from std.math import cos, isnan, pi, sin
 from std.pathlib import Path
@@ -181,9 +182,7 @@ struct _Lines:
 
     def __init__(out self, text: String):
         """Split a text on line breaks."""
-        self.lines = List[String]()
-        for line in text.replace("\r", "\n").split("\n"):  # pragma: no branch
-            self.lines.append(String(line))
+        self.lines = text_lines(text)
         self.at = 0
 
     def next(mut self) raises -> String:
@@ -205,10 +204,7 @@ struct _Lines:
         Raises:
             Error: If the file ends first.
         """
-        var out = List[String]()
-        for token in self.next().split():  # pragma: no branch
-            out.append(String(token))
-        return out^
+        return split_fields(self.next())
 
 
 def _number(text: String, what: String) raises -> Float64:
@@ -397,9 +393,8 @@ def parse_bvh(
         var node = Object3D()
         node.name = joints[j].name
         ref offset = joints[j].offset
-        node.set_position(
-            Float32(offset[0]), Float32(offset[1]), Float32(offset[2])
-        )
+        var place = vector3_from_float64(offset[0], offset[1], offset[2])
+        node.set_position(place.x, place.y, place.z)
         var above = parent if joints[j].parent < 0 else nodes[joints[j].parent]
         var id = scene.attach(node^, above)
         nodes.append(id)

@@ -24,14 +24,20 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     palette_of,
     srgb,
 )
 from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
-from extensions.animals.kit import EyeSpec, pick_cumulative, hashed_stream
-from extensions.animals.noise import cells3, fbm3
+from extensions.animals.kit import (
+    EyeSpec,
+    pick_cumulative,
+    hashed_stream,
+    side_sign,
+)
+from extensions.animals.noise import cells3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
@@ -45,16 +51,24 @@ from extensions.animals.species.swimmer_rig import (
     spine_name,
     swimmer_bones,
 )
-from extensions.animals.traits import Traits, pick_age, pick_sex
+from extensions.animals.traits import (
+    Traits,
+    pick_age,
+    pick_sex,
+    require_color_variant,
+)
 from extensions.sdf.vector import (
     V3,
     clamp,
     dot,
     length,
+    mix,
     normalize,
     smoothstep,
 )
 from extensions.animals.warp import girth_warp, scale_about_warp
+from math.norm import squared_length2
+from math.utils import edge_index, min3, nearest_distance
 from std.math import cos, exp, floor, pi, pow, sin, sqrt
 
 # The fish's head origin moves with the variant, so the eye is placed
@@ -454,7 +468,7 @@ struct _Geo(Movable):
         var n = self.v.spine_segs
         var occ = self.v.occ
         var i = Int(floor((u - occ) / (1.0 - occ) * Float64(n)))
-        return spine_name(max(0, min(n - 1, i)))
+        return spine_name(edge_index(i, n))
 
     def bone_at(self, u: Float64) -> String:
         return String("head") if u < self.v.occ else self.pick_parent(u)
@@ -540,8 +554,7 @@ def fish_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     if options.variant.value < 0:
         variant = Int(r.next() * 4.0) % 4
     else:
-        if options.variant.value >= 4:
-            raise Error("The species has no such color variant")
+        require_color_variant(options.variant.value, 4)
         variant = options.variant.value
     var sex = pick_sex(options.sex, r)
     var age = pick_age(options.age)
@@ -762,9 +775,9 @@ def _median_rays(g: _Geo, d: _Median, dorsal: Bool) -> List[Float64]:
     # The morph tables give every fish its fin rays.
     for i in range(d.n):
         var f = 0.0 if d.n == 1 else Float64(i) / Float64(d.n - 1)
-        var u = d.u0 + (d.u1 - d.u0) * f
-        var a = (d.a0 + (d.a1 - d.a0) * f) * pi / 180.0
-        var l = d.l0 + (d.l1 - d.l0) * f
+        var u = mix(d.u0, d.u1, f)
+        var a = mix(d.a0, d.a1, f) * pi / 180.0
+        var l = mix(d.l0, d.l1, f)
         var bz = g.z(u)
         var by: Float64
         if dorsal:
@@ -792,7 +805,7 @@ def _adipose_rays(g: _Geo) -> List[Float64]:
     var rays = List[Float64]()
     for i in range(6):  # pragma: no branch
         var f = Float64(i) / 5.0
-        var u = g.v.ad_u0 + (g.v.ad_u1 - g.v.ad_u0) * f
+        var u = mix(g.v.ad_u0, g.v.ad_u1, f)
         var bz = g.z(u)
         var by = g.yc(u) + g.hd(u) - 0.006 * sl
         var l = (
@@ -937,7 +950,7 @@ def fish_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # HEAD: the gill covers, the bluegill's ear flap and the upper lip.
     var op = g.v.op
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var uc = op - 0.055
         var c = g.flank(uc, 0.02, s)
         var nrm = normalize(V3(s, 0.0, 0.12))
@@ -1290,7 +1303,7 @@ def _clown_bands(g: _Geo, u: Float64, e0: Float64) -> Float64:
         abs(u - (0.53 + 0.07 * bulge - 0.03)) - (0.05 + 0.012 * bulge)
     ) * sl
     var b3 = (abs(u - 0.905) - 0.035) * sl
-    return min(b1, min(b2, b3))
+    return min3(b1, b2, b3)
 
 
 def _spot(p: V3, cell: Float64, radius: Float64, seed: Int) -> Float64:
@@ -1299,14 +1312,6 @@ def _spot(p: V3, cell: Float64, radius: Float64, seed: Int) -> Float64:
     var c = cells3(p * (1.0 / cell), seed)
     var r = radius * (0.7 + 0.6 * c.id)
     return c.nearest * cell - r
-
-
-def _tweak(c: V3, shade: Float64, k: Float64) -> V3:
-    return V3(
-        c.x * (1.0 + shade * 0.12 * k),
-        c.y * (1.0 + shade * 0.08 * k),
-        c.z * (1.0 + shade * 0.04 * k),
-    )
 
 
 def fish_paint(
@@ -1343,7 +1348,7 @@ def fish_paint(
     var morph = Int(t.get("morph", 0.0))
     var shade = t.get("coatShade", 0.0)
     var seed = Int(t.get("coatSeed", 0.0)) % 9973
-    var noise = fbm3(p * (9.0 / sl), 3) - 0.5
+    var noise = centered_fbm(p, (9.0 / sl), 3)
     var u = clamp(g.u(p.z), 0.0, 1.3)
     var uc = min(u, 1.0)
     var e = (p.y - g.yc(uc)) / max(1e-6, g.hd(uc))
@@ -1474,7 +1479,7 @@ def fish_paint(
             # gill cover.
             var fz = (u - (g.v.op + 0.03)) / 0.058
             var fy = (p.y - (g.yc(g.v.op) + 0.2 * g.hd(g.v.op))) / (0.034 * sl)
-            var rr = fz * fz + fy * fy
+            var rr = squared_length2[DType.float64](fz, fy)
             c = mix3(c, pal.get("ear"), smoothstep(1.25, 0.9, rr))
     # The lips' cut faces, a little darker, toward the mouth's pink.
     c = mix3(c, mix3(c * 0.85, srgb(0xB88A80), 0.3), lip_cut)
@@ -1490,7 +1495,7 @@ def fish_paint(
         )
     c = c * (1.0 - 0.15 * edge_line)
     c = mix3(c, c * 0.8, 0.25 * (noise + 0.5))
-    c = _tweak(c, shade, 1.0)
+    c = channel_gain(c, 1.0, shade * 0.12, shade * 0.08, shade * 0.04)
     # Spots and patches.
     if key == TROUT:
         var spotted = k == 0 or k == 1 or k == 5
@@ -1505,7 +1510,7 @@ def fish_paint(
         var patched = k == 0 or k == 1 or k == 6
         if patched:
             var q = p + V3(1.0, 1.0, 1.0) * (
-                0.04 * sl * (fbm3(p * (14.0 / sl), 2) - 0.5)
+                0.04 * sl * (centered_fbm(p, (14.0 / sl), 2))
             )
             var d = _spot(q, 0.12 * sl, 0.07 * sl, seed)
             c = mix3(c, pal.get("spot"), smoothstep(0.004 * sl, -0.004 * sl, d))
@@ -1567,7 +1572,7 @@ def _paint_fin(
         c, mix3(c, pal.get("back"), 0.4), smoothstep(0.5, 0.0, along) * 0.5
     )
     # The fin rays: faint darker lines between the clear membrane.
-    var ray_line = abs(rc.phase - floor(rc.phase + 0.5))
+    var ray_line = nearest_distance(rc.phase)
     c = c * (0.9 + 0.12 * smoothstep(0.0, 0.35, ray_line))
     if key == TROUT:
         var low_fin = tag == "pelvic" or tag == "anal"
@@ -1612,6 +1617,9 @@ def _paint_fin(
             c = mix3(c, srgb(0x1E1E18), 0.9 * smoothstep(0.01, -0.01, d))
         if tag == "pelvic" or tag == "anal":
             c = mix3(c, srgb(0x3C3A2C), 0.5)
-    c = _tweak(c, t.get("coatShade", 0.0), 0.5)
+    var coat_shade = t.get("coatShade", 0.0)
+    c = channel_gain(
+        c, 0.5, coat_shade * 0.12, coat_shade * 0.08, coat_shade * 0.04
+    )
     c = c * (0.94 + 0.12 * noise)
     return Paint(c, SCALES)

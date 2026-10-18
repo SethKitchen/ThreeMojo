@@ -42,6 +42,7 @@ its vertices, its texture coordinates or the normal table.
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import KeyframeTrack, MeshIndex, morph_target
+from core.binary import little_endian_uint
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     NORMAL,
@@ -49,6 +50,9 @@ from core.buffer_geometry import (
     UV,
     BufferGeometry,
 )
+from core.ordinal import require_positive
+from loaders.bytes import ascii_digit
+from loaders.js_text import is_js_word
 from loaders.three_mf import js_key_order
 from std.memory import bitcast
 from std.pathlib import Path
@@ -626,14 +630,17 @@ struct Md2Model(Movable):
         self.animations = animations^
 
 
-struct _Reader:
-    """Reads little-endian values, refusing a read past the end."""
+struct _Reader[origin: Origin[mut=False]]:
+    """Reads little-endian values, refusing a read past the end.
 
-    var bytes: List[UInt8]
+    The caller keeps the bytes for the read.
+    """
 
-    def __init__(out self, var bytes: List[UInt8]):
-        """Hold the file."""
-        self.bytes = bytes^
+    var bytes: Span[UInt8, Self.origin]
+
+    def __init__(out self, bytes: Span[UInt8, Self.origin]):
+        """Hold the file. The caller keeps it."""
+        self.bytes = bytes
 
     def unsigned(self, at: Int, size: Int) raises -> Int:
         """Return an unsigned value of `size` bytes.
@@ -646,10 +653,7 @@ struct _Reader:
             raise Error(
                 "MD2: the file ends inside a value, at byte " + String(at)
             )
-        var value = 0
-        for k in range(size):  # pragma: no branch
-            value |= Int(self.bytes[at + k]) << (8 * k)
-        return value
+        return little_endian_uint(self.bytes, at, size)
 
     def signed(self, at: Int, size: Int) raises -> Int:
         """Return a two's complement value of `size` bytes."""
@@ -664,7 +668,7 @@ struct _Reader:
 
 def _digit_before(bytes: Span[UInt8, _], end: Int) -> Bool:
     """Return True if the byte before `end` is a digit."""
-    return end > 0 and bytes[end - 1] >= 48 and bytes[end - 1] <= 57
+    return end > 0 and ascii_digit(Int(bytes[end - 1]))
 
 
 def md2_animation_name(frame: String) -> Optional[String]:
@@ -686,13 +690,7 @@ def md2_animation_name(frame: String) -> Optional[String]:
         return None
     for k in range(end):
         var b = bytes[k]
-        var word = (
-            (b >= 48 and b <= 57)
-            or (b >= 65 and b <= 90)
-            or (b >= 97 and b <= 122)
-            or b == 95
-            or b == 45
-        )
+        var word = is_js_word(b) or b == 45
         if not word:
             return None
     return String(frame[byte=:end])
@@ -710,7 +708,7 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
     Raises:
         Error: For anything the module docstring lists.
     """
-    var r = _Reader(bytes.copy())
+    var r = _Reader(Span(bytes))
     var header = List[Int]()
     for i in range(_HEADER_FIELD_COUNT):  # pragma: no branch
         header.append(r.signed(i * 4, 4))
@@ -727,8 +725,7 @@ def parse_md2(bytes: List[UInt8]) raises -> Md2Model:
     var num_st = header[_NUM_TEXCOORDS]
     var num_tris = header[_NUM_TRIANGLES]
     var num_frames = header[_NUM_FRAMES]
-    if num_frames < 1:
-        raise Error("MD2: a model with no frames")
+    require_positive(num_frames, "MD2: a model with no frames")
     # Header fields 5 through 9: the five count fields before frames.
     for field in range(_NUM_SKINS, _NUM_FRAMES):  # pragma: no branch
         if header[field] < 0:

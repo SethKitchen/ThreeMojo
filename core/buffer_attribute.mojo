@@ -67,6 +67,7 @@ limits, and explicit zero and nonfinite rules.
 """
 
 from core.interleaved_buffer import InterleavedBuffer
+from core.ordinal import require_index_in_count, require_valid, require_positive
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.utils import (
@@ -98,8 +99,9 @@ def array_type_name(component: ComponentType) raises -> String:
     Raises:
         Error: If the component type is not valid.
     """
-    if not component.is_valid():
-        raise Error("A typed array needs a valid component type")
+    require_valid(
+        component.is_valid(), "A typed array needs a valid component type"
+    )
     var names: List[String] = [
         "Float32Array",
         "Uint32Array",
@@ -169,6 +171,20 @@ def typed_value(value: Float64, component: ComponentType) raises -> Int:
     return wrapped
 
 
+def require_item_size(item_size: Int) raises:
+    """Refuse an attribute item size that is not positive.
+
+    Nothing. The call returns when the size is positive.
+
+    Args:
+        item_size: How many numbers one item holds.
+
+    Raises:
+        Error: If the size is not positive.
+    """
+    require_positive(item_size, "An attribute's item size must be positive")
+
+
 struct BufferAttribute(Copyable, Movable):
     """A flat array of floats, grouped into per-vertex items, or a view of
     a shared interleaved array."""
@@ -204,8 +220,7 @@ struct BufferAttribute(Copyable, Movable):
             Error: If `item_size` is not positive, or the data does not divide
                 evenly into items, which would leave a partial vertex.
         """
-        if item_size <= 0:
-            raise Error("An attribute's item size must be positive")
+        require_item_size(item_size)
         if len(data) % item_size != 0:
             raise Error("Attribute data does not divide evenly into items")
         self.data = data^
@@ -242,8 +257,9 @@ struct BufferAttribute(Copyable, Movable):
             Error: If the component type is not valid, `item_size` is not
                 positive, or the numbers do not divide evenly into items.
         """
-        if not component.is_valid():
-            raise Error("An attribute needs a valid component type")
+        require_valid(
+            component.is_valid(), "An attribute needs a valid component type"
+        )
         var floats = List[Float32](capacity=len(stored))
         for value in stored:
             floats.append(Float32(value))
@@ -278,8 +294,10 @@ struct BufferAttribute(Copyable, Movable):
             Error: If `item_size` or `mesh_per_attribute` is not positive,
                 or the data does not divide evenly into items.
         """
-        if mesh_per_attribute <= 0:
-            raise Error("An instanced attribute serves one instance or more")
+        require_positive(
+            mesh_per_attribute,
+            "An instanced attribute serves one instance or more",
+        )
         self = BufferAttribute(data^, item_size)
         self._mesh_per_attribute = mesh_per_attribute
 
@@ -303,8 +321,7 @@ struct BufferAttribute(Copyable, Movable):
             Error: If `item_size` is not positive, `offset` is negative, or
                 the item reaches past the end of its run.
         """
-        if item_size <= 0:
-            raise Error("An attribute's item size must be positive")
+        require_item_size(item_size)
         if offset < 0 or offset + item_size > buffer.stride():
             raise Error("An interleaved item must lie inside the stride")
         self.data = List[Float32]()
@@ -512,10 +529,14 @@ struct BufferAttribute(Copyable, Movable):
             Error: If either index falls outside the attribute, or an
                 interleaved item has been made to reach past its run.
         """
+        # Count divides by the public item size; refuse negatives first.
         if index < 0 or index >= self.count():
             raise Error("Attribute vertex index out of range")
-        if offset < 0 or offset >= self.item_size:
-            raise Error("Attribute component offset out of range")
+        require_index_in_count(
+            offset,
+            self.item_size,
+            "Attribute component offset out of range",
+        )
         var lane = self._offset + offset
         var stride = self.stride()
         if lane >= stride:

@@ -21,23 +21,12 @@ limits, and explicit zero and nonfinite rules.
 from math.norm import _ordinary_squared, normalized3
 
 from math.matrix_determinant import _sum_products
-from math.vector3 import Vector3
-from std.math import isfinite
+from math.vector3 import Vector3, vector3_from_float64
 
 
 def _finite_triangle(a: Vector3, b: Vector3, c: Vector3) -> Bool:
     """Check the finite-factor precondition of the coordinate expansion."""
-    return (
-        isfinite(a.x)
-        and isfinite(a.y)
-        and isfinite(a.z)
-        and isfinite(b.x)
-        and isfinite(b.y)
-        and isfinite(b.z)
-        and isfinite(c.x)
-        and isfinite(c.y)
-        and isfinite(c.z)
-    )
+    return a.is_finite() and b.is_finite() and c.is_finite()
 
 
 def _coordinate_plane_through_origin(
@@ -126,7 +115,7 @@ def normal_or_zero(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     ):
         var wide = _triangle_cross_wide(a, b, c)
         var unit = normalized3(wide[0], wide[1], wide[2])
-        return Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+        return vector3_from_float64(unit[0], unit[1], unit[2])
     normal.normalize()
     return normal
 
@@ -196,7 +185,7 @@ def polygon_normal(points: List[Vector3]) -> Vector3:
         normal.x += (a.y - b.y) * (a.z + b.z)
         normal.y += (a.z - b.z) * (a.x + b.x)
         normal.z += (a.x - b.x) * (a.y + b.y)
-        finite = finite and isfinite(a.x) and isfinite(a.y) and isfinite(a.z)
+        finite = finite and a.is_finite()
     if not finite:
         normal.normalize()
         return normal
@@ -211,4 +200,4 @@ def polygon_normal(points: List[Vector3]) -> Vector3:
         normal.normalize()
         return normal
     var unit = normalized3(wide[0], wide[1], wide[2])
-    return Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+    return vector3_from_float64(unit[0], unit[1], unit[2])

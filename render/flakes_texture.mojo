@@ -21,7 +21,10 @@ pixel moves toward the disc's color by that share. A canvas keeps bytes,
 so each channel is rounded after each disc.
 """
 
-from math.utils import SeededRandom
+from core.extent import require_positive_extent
+from math.norm import squared_length2, squared_length3
+from math.utils import SeededRandom, mix_delta
+from render.framebuffer import rounded_byte
 from render.srgb import LINEAR
 from render.texture import BILINEAR, REPEAT, Texture
 from std.math import ceil, floor, sqrt
@@ -34,12 +37,6 @@ comptime _SAMPLES = 4
 comptime _REACH = 0.5304
 
 
-def _byte(value: Float64) -> UInt8:
-    """Return a CSS `rgb()` channel as a canvas keeps it: rounded to the
-    nearest whole number, and held from 0 to 255."""
-    return UInt8(Int(max(0.0, min(255.0, value)) + 0.5))
-
-
 def _coverage(
     x: Int, y: Int, center_x: Float64, center_y: Float64, radius: Float64
 ) -> Float64:
@@ -49,7 +46,7 @@ def _coverage(
     of a pixel, is measured whole."""
     var dx = Float64(x) + 0.5 - center_x
     var dy = Float64(y) + 0.5 - center_y
-    var apart = sqrt(dx * dx + dy * dy)
+    var apart = sqrt(squared_length2[DType.float64](dx, dy))
     if apart + _REACH <= radius:
         return 1
     if apart - _REACH > radius:
@@ -60,7 +57,7 @@ def _coverage(
         for j in range(_SAMPLES):  # pragma: no branch
             var dx = Float64(x) + (Float64(i) + 0.5) / _SAMPLES - center_x
             var dy = Float64(y) + (Float64(j) + 0.5) / _SAMPLES - center_y
-            if dx * dx + dy * dy <= squared:
+            if squared_length2[DType.float64](dx, dy) <= squared:
                 inside += 1
     return Float64(inside) / Float64(_SAMPLES * _SAMPLES)
 
@@ -83,8 +80,9 @@ def flakes_texture(
     Raises:
         Error: If a side is not at least one pixel.
     """
-    if width < 1 or height < 1:
-        raise Error("A flakes texture is at least one pixel on each side")
+    require_positive_extent(
+        width, height, "A flakes texture is at least one pixel on each side"
+    )
     var pixels = List[UInt8](capacity=width * height * 4)
     for _ in range(width * height):  # pragma: no branch
         pixels.append(127)
@@ -99,14 +97,14 @@ def flakes_texture(
         var nx = random.next() * 2 - 1
         var ny = random.next() * 2 - 1
         var nz = 1.5
-        var length = sqrt(nx * nx + ny * ny + nz * nz)
+        var length = sqrt(squared_length3[DType.float64](nx, ny, nz))
         nx /= length
         ny /= length
         nz /= length
         var color: List[Float64] = [
-            Float64(_byte(nx * 127 + 127)),
-            Float64(_byte(ny * 127 + 127)),
-            Float64(_byte(nz * 255)),
+            Float64(rounded_byte(nx * 127 + 127)),
+            Float64(rounded_byte(ny * 127 + 127)),
+            Float64(rounded_byte(nz * 255)),
         ]
         var left = max(0, Int(floor(center_x - radius)))
         var right = min(width - 1, Int(ceil(center_x + radius)))
@@ -122,7 +120,7 @@ def flakes_texture(
                 var at = (y * width + x) * 4
                 for channel in range(3):  # pragma: no branch
                     var old = Float64(pixels[at + channel])
-                    pixels[at + channel] = _byte(
-                        old + (color[channel] - old) * share
+                    pixels[at + channel] = rounded_byte(
+                        mix_delta(old, color[channel], share)
                     )
     return Texture(width, height, pixels^, REPEAT, BILINEAR, LINEAR)

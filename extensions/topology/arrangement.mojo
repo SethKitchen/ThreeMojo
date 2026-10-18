@@ -30,6 +30,10 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
+from core.ordinal import require_index_in_count, require_valid, require_positive
+from math.polygon_hit import ray_crosses
+from math.utils import clamp
+from math.finite import require_finite_group
 from std.math import atan2, isfinite, sqrt
 from extensions.topology.ids import NO_REGION, RegionId
 from extensions.topology.weld import Welder
@@ -44,6 +48,17 @@ struct Point2(ImplicitlyCopyable, Writable):
     var x: Float64
     var y: Float64
 
+    def __add__(self, other: Self) -> Self:
+        """Return the sum.
+
+        Args:
+            other: The point to add.
+
+        Returns:
+            The component-wise sum.
+        """
+        return Point2(self.x + other.x, self.y + other.y)
+
     def __sub__(self, other: Self) -> Self:
         """Return the difference.
 
@@ -54,6 +69,33 @@ struct Point2(ImplicitlyCopyable, Writable):
             The vector from `other` to this point.
         """
         return Point2(self.x - other.x, self.y - other.y)
+
+    def __mul__(self, factor: Float64) -> Self:
+        """Return this point scaled by a factor.
+
+        Args:
+            factor: The scale.
+
+        Returns:
+            Each component multiplied by `factor`.
+        """
+        return Point2(factor * self.x, factor * self.y)
+
+    def __neg__(self) -> Self:
+        """Return this point with each component negated.
+
+        Returns:
+            The point `(-x, -y)`.
+        """
+        return Point2(-self.x, -self.y)
+
+    def perpendicular(self) -> Self:
+        """Return this vector a quarter turn counterclockwise.
+
+        Returns:
+            The vector `(-y, x)`. It has the same length.
+        """
+        return Point2(-self.y, self.x)
 
     def cross(self, other: Self) -> Float64:
         """Return the z component of the cross product.
@@ -76,6 +118,14 @@ struct Point2(ImplicitlyCopyable, Writable):
             The dot product.
         """
         return self.x * other.x + self.y * other.y
+
+    def is_finite(self) -> Bool:
+        """Return True if every component is finite.
+
+        Returns:
+            True when `x` and `y` are both finite.
+        """
+        return isfinite(self.x) and isfinite(self.y)
 
 
 struct Region(Copyable, Movable):
@@ -184,7 +234,7 @@ def signed_area(points: List[Point2], loop: List[Int]) -> Float64:
     for i in range(n):  # pragma: no branch
         var p = points[loop[i]]
         var q = points[loop[(i + 1) % n]]
-        total += p.x * q.y - q.x * p.y
+        total += p.cross(q)
     return total / 2
 
 
@@ -202,7 +252,7 @@ def polygon_area(points: List[Point2]) -> Float64:
     for i in range(n):
         var p = points[i]
         var q = points[(i + 1) % n]
-        total += p.x * q.y - q.x * p.y
+        total += p.cross(q)
     return total / 2
 
 
@@ -225,10 +275,8 @@ def contains(points: List[Point2], p: Point2) -> Bool:
     for i in range(n):
         var a = points[i]
         var b = points[j]
-        if (a.y > p.y) != (b.y > p.y):
-            var x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
-            if p.x < x:
-                inside = not inside
+        if ray_crosses(a.x, a.y, b.x, b.y, p.x, p.y):
+            inside = not inside
         j = i
     return inside
 
@@ -243,7 +291,7 @@ def _on_segment(p: Point2, a: Point2, b: Point2, tolerance: Float64) -> Float64:
     var d = b - a
     var length_squared = d.dot(d)
     var t = (p - a).dot(d) / length_squared
-    var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+    var foot = a + d * t
     var offset = p - foot
     if offset.dot(offset) > tolerance * tolerance:
         return -1
@@ -281,17 +329,21 @@ def _collinear(
 
 def _check_region(region: Region, layers: Int, tolerance: Float64) raises:
     """Refuse a region that is not a simple polygon on a known layer."""
-    if region.layer < 0 or region.layer >= layers:
-        raise Error("A region's layer must be from zero to the count less one")
-    if not region.id.is_valid():
-        raise Error("A region id must be zero or more")
+    require_index_in_count(
+        region.layer,
+        layers,
+        "A region's layer must be from zero to the count less one",
+    )
+    require_valid(region.id.is_valid(), "A region id must be zero or more")
     var n = len(region.points)
     if n < 3:
         raise Error("A region needs three corners or more")
     for i in range(n):  # pragma: no branch
         var p = region.points[i]
-        if not (isfinite(p.x) and isfinite(p.y)):
-            raise Error("A region corner must have finite coordinates")
+        require_finite_group(
+            p.is_finite(),
+            "A region corner must have finite coordinates",
+        )
     for i in range(n):  # pragma: no branch
         var a = region.points[i]
         var b = region.points[(i + 1) % n]
@@ -376,8 +428,7 @@ def arrange(
             positive and finite, a region is not a simple polygon, or two
             regions of one layer overlap.
     """
-    if layers < 1:
-        raise Error("An arrangement needs one layer or more")
+    require_positive(layers, "An arrangement needs one layer or more")
     var tol = tolerance.to(METER)
     var welder = Welder(tol)
     for r in range(len(regions)):
@@ -423,10 +474,10 @@ def arrange(
                 var r = b - a
                 var s = d - c
                 var t = (c - a).cross(s) / r.cross(s)
-                var p = Point2(a.x + t * r.x, a.y + t * r.y)
+                var p = a + r * t
                 # Rounding can put the projection a hair outside the
                 # segment; the crossing is inside it.
-                var u = min(1.0, max(0.0, (p - c).dot(s) / s.dot(s)))
+                var u = clamp((p - c).dot(s) / s.dot(s), 0.0, 1.0)
                 split_t[i].append(t)
                 split_p[i].append(p)
                 split_t[j].append(u)

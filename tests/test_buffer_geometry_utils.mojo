@@ -94,7 +94,7 @@ def rep(item: List[Float32], times: Int) raises -> BufferAttribute:
     """Return an attribute of `times` copies of one item."""
     var data = List[Float32]()
     for _ in range(times):
-        data.extend(item.copy())
+        data.extend(Span(item))
     return BufferAttribute(data^, len(item))
 
 

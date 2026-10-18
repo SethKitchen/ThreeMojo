@@ -88,10 +88,18 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_positive,
+)
+
 from math.arc_tangent import atan2_float32
+from math.utils import clamp_unit
 from math.euler import Euler
 from math.vector2 import Vector2
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.cube_uv import (
     CUBE_UV_EXTRA_COPIES,
     CUBE_UV_MIN_MIP,
@@ -99,9 +107,14 @@ from render.cube_uv import (
     cube_uv_lod_max,
     sample_cube_uv,
 )
-from render.framebuffer import FloatColor, Framebuffer
+from render.framebuffer import (
+    FloatColor,
+    Framebuffer,
+    append_color,
+    append_float_color,
+)
 from render.png import DecodedImage
-from render.srgb import SRGB, UNKNOWN_SPACE, ColorSpace
+from render.srgb import SRGB, ColorSpace, require_known_color_space
 from render.texture import (
     BILINEAR,
     CLAMP,
@@ -128,6 +141,20 @@ comptime POSITIVE_Z = 4
 comptime NEGATIVE_Z = 5
 
 
+def require_cube_face(index: Int) raises:
+    """Refuse a cube face that is none of the six.
+
+    Nothing. The call returns when the index names a face.
+
+    Args:
+        index: The face, from zero.
+
+    Raises:
+        Error: If the index is negative or past the sixth face.
+    """
+    require_index_in_count(index, FACE_COUNT, "A cube has six faces")
+
+
 @fieldwise_init
 struct CubeLayout(Equatable, ImplicitlyCopyable, Writable):
     """Which way round six images are, as a type rather than a bare int.
@@ -140,7 +167,7 @@ struct CubeLayout(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `SEEN_FROM_INSIDE` or `SEEN_FROM_OUTSIDE`."""
-        return self == SEEN_FROM_INSIDE or self == SEEN_FROM_OUTSIDE
+        return ordinal_valid(self.value, SEEN_FROM_OUTSIDE.value)
 
 
 # Each face is what a camera at the center sees looking out: what a
@@ -151,6 +178,43 @@ comptime SEEN_FROM_INSIDE = CubeLayout(0)
 # view along -x and the nx image the view along +x. The two trade places
 # on the way in, and nothing is mirrored.
 comptime SEEN_FROM_OUTSIDE = CubeLayout(1)
+
+
+def require_cube_layout(layout: CubeLayout) raises:
+    """Refuse a layout that is not one of the two named layouts.
+
+    Nothing. The call returns when the layout is named.
+
+    Args:
+        layout: The layout of six images.
+
+    Raises:
+        Error: If the layout is not `SEEN_FROM_INSIDE` or
+            `SEEN_FROM_OUTSIDE`.
+    """
+    require_valid(
+        layout.is_valid(),
+        "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE",
+    )
+
+
+def cube_image_index(index: Int, outside: Bool) -> Int:
+    """Return which stored face an image slot reads.
+
+    Six image files keep the positive-x image in the negative-x slot
+    and the negative-x image in the positive-x slot. A cube seen from
+    inside keeps each image in the slot of the same name.
+
+    Args:
+        index: The slot, from `POSITIVE_X` through `NEGATIVE_Z`.
+        outside: True for three.js's six-file layout.
+
+    Returns:
+        The face that image belongs to.
+    """
+    if outside and index < NEGATIVE_X + 1:
+        return NEGATIVE_X - index
+    return index
 
 
 def face_forward(face: Int) -> Vector3:
@@ -427,9 +491,11 @@ def check_rotation(euler: Euler, what: String) raises:
     Raises:
         Error: If an angle is not finite, or the order is none of the six.
     """
-    if not isfinite(euler.x.value) or not isfinite(euler.y.value):
-        raise Error(what + "'s angles must be finite")
-    if not isfinite(euler.z.value):
+    if (
+        not isfinite(euler.x.value)
+        or not isfinite(euler.y.value)
+        or not isfinite(euler.z.value)
+    ):
         raise Error(what + "'s angles must be finite")
     if not euler.order.is_valid():
         raise Error(what + "'s order must be one of the six")
@@ -591,8 +657,7 @@ struct CubeTexture(Movable):
         Raises:
             Error: If the index names no face.
         """
-        if index < 0 or index >= FACE_COUNT:
-            raise Error("A cube has six faces")
+        require_cube_face(index)
         return self.faces[index]
 
     def sample(self, direction: Vector3) -> FloatColor:
@@ -697,11 +762,7 @@ def rough_reflection(
     """
     var bounce = reflected(toward_eye, normal)
     var bend = roughness * roughness
-    var bent = Vector3(
-        bounce.x + (normal.x - bounce.x) * bend,
-        bounce.y + (normal.y - bounce.y) * bend,
-        bounce.z + (normal.z - bounce.z) * bend,
-    )
+    var bent = mix_delta3(bounce, normal, bend)
     if bent.length() != 0:
         bent.normalize()
     return bent
@@ -753,11 +814,7 @@ def equirect_uv(direction: Vector3) -> Vector2:
         The coordinate, inside the unit square.
     """
     var unit = direction
-    if (
-        isfinite(direction.x)
-        and isfinite(direction.y)
-        and isfinite(direction.z)
-    ):
+    if direction.is_finite():
         unit.normalize()
     else:
         var magnitude = direction.length()
@@ -766,11 +823,11 @@ def equirect_uv(direction: Vector3) -> Vector2:
             direction.y / magnitude,
             direction.z / magnitude,
         )
-    if unit.x == 0 and unit.y == 0 and unit.z == 0:
+    if unit == Vector3(0, 0, 0):
         return Vector2(0.5, 0.5)
-    # Clamped as three.js clamps, with `min` and `max`: a unit vector's y
-    # is within one bar a rounding, and `asin` of a hair past one is NaN.
-    var up = max(Float32(-1), min(Float32(1), unit.y))
+    # Clamped as three.js clamps: a unit vector's y is within one bar a
+    # rounding, and `asin` of a hair past one is NaN.
+    var up = clamp_unit(unit.y)
     return Vector2(
         atan2_float32(unit.z, unit.x) / (2 * Float32(pi)) + 0.5,
         asin(up) / Float32(pi) + 0.5,
@@ -800,11 +857,22 @@ def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
     right.cross(up)
     var across = (Float32(x) + 0.5) / Float32(size) * 2 - 1
     var upward = 1 - (Float32(y) + 0.5) / Float32(size) * 2
-    return Vector3(
-        forward.x + right.x * across + up.x * upward,
-        forward.y + right.y * across + up.y * upward,
-        forward.z + right.z * across + up.z * upward,
-    )
+    return forward + right * across + up * upward
+
+
+def require_equirect_texels(image: Texture) raises:
+    """Refuse an equirectangular image that holds no texels.
+
+    Nothing. The call returns when the image holds texels.
+
+    Args:
+        image: The panorama.
+
+    Raises:
+        Error: If the image is blank.
+    """
+    if image.is_blank():
+        raise Error("An equirectangular image must hold texels")
 
 
 def cube_from_equirectangular(
@@ -846,11 +914,9 @@ def cube_from_equirectangular(
             or the size is not positive.
     """
     image.validate()
-    if image.is_blank():
-        raise Error("An equirectangular image must hold texels")
+    require_equirect_texels(image)
     var edge = size.or_else(image.height)
-    if edge <= 0:
-        raise Error("A cube's faces must be at least one texel across")
+    require_positive(edge, "A cube's faces must be at least one texel across")
     var chained = mipmapped.or_else(image.levels > 1)
     var faces = List[Texture]()
     for face in range(FACE_COUNT):  # pragma: no branch
@@ -861,18 +927,12 @@ def cube_from_equirectangular(
                 var place = equirect_uv(face_direction(face, x, y, edge))
                 var color = image.sample(place.x, place.y)
                 if image.texel_type == FLOAT_TYPE:
-                    floats.append(color.r)
-                    floats.append(color.g)
-                    floats.append(color.b)
-                    floats.append(color.a)
+                    append_float_color(floats, color)
                     continue
                 var stored = color.quantize()
                 if image.color_space == SRGB:
                     stored = color.encode()
-                bytes.append(stored.r)
-                bytes.append(stored.g)
-                bytes.append(stored.b)
-                bytes.append(stored.a)
+                append_color(bytes, stored)
         if image.texel_type == FLOAT_TYPE:
             faces.append(
                 float_texture(
@@ -951,6 +1011,21 @@ def validate_cube_uv(image: Texture) raises:
         raise Error("A PMREM's cube UV image is three tiles wide")
 
 
+def require_cube_images(count: Int) raises:
+    """Refuse a cube that is not built from six images.
+
+    Nothing. The call returns when there are six images.
+
+    Args:
+        count: How many images were given.
+
+    Raises:
+        Error: If the count is not six.
+    """
+    if count != FACE_COUNT:
+        raise Error("A cube texture is built from exactly six images")
+
+
 def cube_texture_from(
     images: List[DecodedImage],
     layout: CubeLayout = SEEN_FROM_INSIDE,
@@ -994,25 +1069,14 @@ def cube_texture_from(
             and none was given, or the faces are refused by
             `CubeTexture.validate`.
     """
-    if len(images) != FACE_COUNT:
-        raise Error("A cube texture is built from exactly six images")
-    if not layout.is_valid():
-        raise Error(
-            "A cube layout must be SEEN_FROM_INSIDE or SEEN_FROM_OUTSIDE"
-        )
+    require_cube_images(len(images))
+    require_cube_layout(layout)
     var faces = List[Texture]()
     for index in range(FACE_COUNT):  # pragma: no branch
-        var source = index
-        if layout == SEEN_FROM_OUTSIDE and index < NEGATIVE_X + 1:
-            # POSITIVE_X reads the nx image and NEGATIVE_X the px one.
-            source = NEGATIVE_X - index
+        var source = cube_image_index(index, layout == SEEN_FROM_OUTSIDE)
         ref image = images[source]
         var space = color_space.or_else(image.color_space)
-        if space == UNKNOWN_SPACE:
-            raise Error(
-                "This image declares a color space that cannot be interpreted;"
-                " pass SRGB or LINEAR to say how to read it"
-            )
+        require_known_color_space(space)
         faces.append(
             Texture(
                 image.width,
@@ -1057,8 +1121,7 @@ def cube_texture_of(
         Error: If there are not six images, or the faces are refused by
             `CubeTexture.validate`.
     """
-    if len(images) != FACE_COUNT:
-        raise Error("A cube texture is built from exactly six images")
+    require_cube_images(len(images))
     var faces = List[Texture]()
     for index in range(FACE_COUNT):  # pragma: no branch
         ref image = images[index]

@@ -26,28 +26,31 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    body_region,
+    channel_gain,
     grizzle,
     mix3,
     palette_of,
+    shade_swatch,
     srgb,
 )
-from extensions.sdf.ids import (
-    BoneId,
-    SurfacePart,
-)
+from extensions.sdf.ids import BoneId
 from extensions.animals.parts import (
     JAW,
     TEETH,
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     sculpt_eye_socket,
     is_limb,
     mirrored_blob,
     hashed_stream,
 )
-from extensions.animals.noise import fbm3
+from extensions.animals.noise import centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
 from extensions.sdf.field import SdfModel
@@ -69,6 +72,8 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
+from math.norm import squared_length2
+from math.utils import clamp_unit
 from std.math import atan2, cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 12
@@ -705,7 +710,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: thin, rounded and nearly bare, the cup facing forward and out.
     var ew = t.get("earWidth")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var f = _ear_frame(t, s)
@@ -761,21 +766,14 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         [40, 0.0086, 0.00086],
     ]
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0, 0)
-        var sc = rig.j("scapTop" + side)
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var meta = rig.bone("metacarpus" + side)
+        var s = side_sign(side)
+        var lat, sc, sh, e, w, mc, toe, scap, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "scapmuscle",
-            rig.bone("scapula" + side),
+            scap,
             lerp(sc, sh, 0.5) + on_side(V3(0.002, 0, 0), s),
             sh - sc,
             V3(0.0065, 0.016, 0.012),
@@ -816,7 +814,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.0015,
         )
-        _toes(m, rig.bone("fpaw" + side), mc, toe, s, fspec, 0.0017)
+        _toes(m, fpaw, mc, toe, s, fspec, 0.0017)
         _ = m.sphere(
             "toe",
             meta,
@@ -825,14 +823,9 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.0006,
         )
 
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var tt = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var mtar = rig.bone("metatarsus" + side)
+        var hp, kn, hk, mt, tt, fem, tib, mtar, hpaw = digitigrade_hind(
+            rig, side
+        )
         _ = ell_y(
             m,
             "haunch",
@@ -891,7 +884,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             lateral=lat,
             k=0.0015,
         )
-        _toes(m, rig.bone("hpaw" + side), mt, tt, s, hspec, 0.0018)
+        _toes(m, hpaw, mt, tt, s, hspec, 0.0018)
 
     # TAIL: long, thick at the root, tapering and scaly.
     var thick = t.get("tailThick")
@@ -1093,11 +1086,7 @@ def rat_palette(t: Traits) raises -> Palette:
             or name == "tailUnder"
         )
         if not fixed:
-            c = V3(
-                c.x * (1.0 + 0.12 * k + l),
-                c.y * (1.0 + 0.03 * k + l),
-                c.z * (1.0 - 0.12 * k + l),
-            )
+            c = shade_swatch(c, k, l, 0.12, 0.03, -0.12)
         var furry = (
             name == "back"
             or name == "flank"
@@ -1118,19 +1107,6 @@ def rat_palette(t: Traits) raises -> Palette:
 def _agouti(color: Int) -> Float64:
     var table: List[Float64] = [0.95, 0.95, 0.45, 0.0, 0.0]
     return table[color]
-
-
-def _region(part: SurfacePart, bone: String) -> Int:
-    # 0 torso, 1 neck, 2 head, 4 tail, 5 ear.
-    var head = part == JAW or bone == "head" or bone == "snout"
-    var neck = bone == "neck1" or bone == "neck2"
-    if head:
-        return 2
-    if bone.startswith("ear"):
-        return 5
-    if bone.startswith("tail"):
-        return 4
-    return 1 if neck else 0
 
 
 def _foot(bone: String) -> Bool:
@@ -1271,7 +1247,7 @@ def rat_paint(
         return Paint(tc, KERATIN)
     if tag == "claw":
         return Paint(pal.get("claw"), KERATIN)
-    var region = _region(s.part, bone)
+    var region = body_region(s.part, bone)
     var ag = _agouti(color)
     var c: V3
     if region == 4:
@@ -1289,7 +1265,7 @@ def rat_paint(
         var x_axis = normalize(cross(f[1], face))
         var along = dot(q, f[1]) / (0.52 * f[4])
         var across = dot(q, x_axis) / (0.0086 * t.get("earWidth"))
-        var rim = 1.0 - (along * along + across * across) ** 0.5
+        var rim = 1.0 - squared_length2[DType.float64](along, across) ** 0.5
         var inner = smoothstep(0.0, 0.4, dot(n, face)) * smoothstep(
             0.02, 0.12, rim
         )
@@ -1319,7 +1295,7 @@ def rat_paint(
         c = mix3(c, pal.get("belly"), clamp(chin, 0.0, 1.0) * 0.8)
         ag *= 0.75
     else:
-        var up = clamp(n.y, -1.0, 1.0)
+        var up = clamp_unit(n.y)
         c = mix3(pal.get("low"), pal.get("flank"), smoothstep(-0.35, 0.2, up))
         c = mix3(c, pal.get("back"), smoothstep(0.25, 0.85, up))
         var ventral = smoothstep(-0.2, -0.55, n.y) * smoothstep(
@@ -1375,11 +1351,9 @@ def rat_paint(
             ag *= 1.0 - 0.8 * leg * (1.0 if distal else 0.0)
     if hooded:
         var d = _hood(t, p, n, bone, region)
-        d += (fbm3(p * 1200.0, 2) - 0.5) * 0.0006
+        d += (centered_fbm(p, 1200.0, 2)) * 0.0006
         c = mix3(c, pal.get("hood"), smoothstep(0.0004, -0.0004, d))
-    var cv = fbm3(p * 90.0, 3) - 0.5
-    c = V3(
-        c.x * (1.0 + 0.16 * cv), c.y * (1.0 + 0.13 * cv), c.z * (1.0 + 0.1 * cv)
-    )
+    var cv = centered_fbm(p, 90.0, 3)
+    c = channel_gain(c, cv, 0.16, 0.13, 0.1)
     c = grizzle(c, p, 1400.0, 0.06 + 0.3 * clamp(ag, 0.0, 1.0))
     return Paint(c, FUR)

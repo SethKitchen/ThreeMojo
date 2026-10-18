@@ -13,7 +13,7 @@ contacts during shallow overlap, as in the discrete solver. See the
 continuous-collision wiki for the tessellated-floor limitation.
 """
 
-from extensions.physics.shape import _wide, _wide_cross, _wide_dot
+from math.cross import wide_cross, wide_dot, widen_vector
 from math.triangle import Triangle
 from std.math import sqrt
 
@@ -51,7 +51,7 @@ def _approaches(
     var bound = Float64(0)
     for axis in range(3):  # pragma: no branch
         bound += abs(travel[axis] * normal[axis])
-    return _wide_dot(travel, normal) < -bound * 7.105427357601002e-15
+    return wide_dot(travel, normal) < -bound * 7.105427357601002e-15
 
 
 def _root(
@@ -70,11 +70,11 @@ def _contact_root[
     radius: Float64,
 ) -> Float64:
     # Enter a sphere or the perpendicular section of an edge cylinder.
-    var a = _wide_dot(travel, travel)
-    var b = _wide_dot(offset, travel)
+    var a = wide_dot(travel, travel)
+    var b = wide_dot(offset, travel)
     if a == 0 or b >= 0:
         return 2
-    var c = _wide_dot(offset, offset) - radius * radius
+    var c = wide_dot(offset, offset) - radius * radius
     if c <= 0:
         return 0
 
@@ -84,7 +84,7 @@ def _contact_root[
         # Resolve the closest point before squaring its distance. Expanding
         # b*b-a*c loses the complete radius term on long, nearly axial paths.
         var closest = offset - travel * (b / a)
-        var height = radius * radius - _wide_dot(closest, closest)
+        var height = radius * radius - wide_dot(closest, closest)
         if height <= 0:
             # A tangent has no inward velocity and needs no impulse.
             return 2
@@ -104,10 +104,10 @@ def _choose(
     if fraction < 0 or fraction > 1 or fraction >= best.fraction:
         return best
     var at = start + travel * fraction
-    if _wide_dot(at - origin, face) < 0:
+    if wide_dot(at - origin, face) < 0:
         return best
     var normal = at - point
-    var length = sqrt(_wide_dot(normal, normal))
+    var length = sqrt(wide_dot(normal, normal))
     if length == 0:
         return best
     normal /= length
@@ -123,9 +123,9 @@ def _sweep_domain(
     reach: Float64,
     triangle: Triangle,
 ) raises -> Bool:
-    var a = _wide(triangle.a)
-    var b = _wide(triangle.b)
-    var c = _wide(triangle.c)
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
     for axis in range(3):  # pragma: no branch
         var end = start[axis] + travel[axis]
         if max(start[axis], end) + reach < min(
@@ -170,19 +170,19 @@ def _triangle_geometry[
     # The initial-only lookup is internal to a previously validated hit.
     # It uses incoming travel only as a direction, with no future search.
     var best = _SweepHit(2, SIMD[DType.float64, 4](0))
-    var a = _wide(triangle.a)
-    var b = _wide(triangle.b)
-    var c = _wide(triangle.c)
-    var normal = _wide_cross(b - a, c - a)
-    var length = sqrt(_wide_dot(normal, normal))
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
+    var normal = wide_cross(b - a, c - a)
+    var length = sqrt(wide_dot(normal, normal))
     if length == 0:
         return best
     normal /= length
-    var height = _wide_dot(start - a, normal)
+    var height = wide_dot(start - a, normal)
     if height < 0:
         # The mesh remains one-sided. Never catch a body from its back.
         return best
-    var speed = _wide_dot(travel, normal)
+    var speed = wide_dot(travel, normal)
     if _approaches(travel, normal):
         var fraction = Float64(2)
 
@@ -193,11 +193,11 @@ def _triangle_geometry[
             fraction = max((radius - height) / speed, Float64(0))
         if fraction <= 1:
             var at = start + travel * fraction
-            var point = at - normal * _wide_dot(at - a, normal)
+            var point = at - normal * wide_dot(at - a, normal)
             if (
-                _wide_dot(_wide_cross(b - a, point - a), normal) >= 0
-                and _wide_dot(_wide_cross(c - b, point - b), normal) >= 0
-                and _wide_dot(_wide_cross(a - c, point - c), normal) >= 0
+                wide_dot(wide_cross(b - a, point - a), normal) >= 0
+                and wide_dot(wide_cross(c - b, point - b), normal) >= 0
+                and wide_dot(wide_cross(a - c, point - c), normal) >= 0
             ):
                 best = _SweepHit(fraction, normal)
     var vertices = [a, b, c]
@@ -206,11 +206,11 @@ def _triangle_geometry[
     for i in range(3):  # pragma: no branch
         var p = vertices[i]
         var edge = vertices[(i + 1) % 3] - p
-        var square = _wide_dot(edge, edge)
+        var square = wide_dot(edge, edge)
         # The nonzero triangle normal proves that this edge is nonzero.
         var offset = start - p
-        var along = _wide_dot(offset, edge) / square
-        var delta = _wide_dot(travel, edge) / square
+        var along = wide_dot(offset, edge) / square
+        var delta = wide_dot(travel, edge) / square
         var fraction = _contact_root[initial_only](
             offset - edge * along, travel - edge * delta, radius
         )
@@ -247,11 +247,11 @@ def _segment_parameters(
     # Closest points of two nonparallel lines, start + u axis and
     # point + w edge. The denominator is |axis x edge|^2, which is not zero.
     var offset = start - point
-    var aa = _wide_dot(axis, axis)
-    var ae = _wide_dot(axis, edge)
-    var ee = _wide_dot(edge, edge)
-    var ao = _wide_dot(axis, offset)
-    var eo = _wide_dot(edge, offset)
+    var aa = wide_dot(axis, axis)
+    var ae = wide_dot(axis, edge)
+    var ee = wide_dot(edge, edge)
+    var ao = wide_dot(axis, offset)
+    var eo = wide_dot(edge, offset)
     return (
         (ae * eo - ee * ao) / denominator,
         (aa * eo - ae * ao) / denominator,
@@ -314,7 +314,7 @@ def _capsule_geometry[
     if cap.fraction < best.fraction:
         best = cap
     var axis = end - start
-    var length_sq = _wide_dot(axis, axis)
+    var length_sq = wide_dot(axis, axis)
     if length_sq == 0:
         return best
 
@@ -324,15 +324,15 @@ def _capsule_geometry[
             middle, travel, radius, radius + 0.5 * sqrt(length_sq), triangle
         ):
             return best
-    var a = _wide(triangle.a)
-    var b = _wide(triangle.b)
-    var c = _wide(triangle.c)
-    var normal = _wide_cross(b - a, c - a)
-    var length = sqrt(_wide_dot(normal, normal))
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
+    var normal = wide_cross(b - a, c - a)
+    var length = sqrt(wide_dot(normal, normal))
     if length == 0:
         return best
     normal /= length
-    if _wide_dot(start - a, normal) < 0 and _wide_dot(end - a, normal) < 0:
+    if wide_dot(start - a, normal) < 0 and wide_dot(end - a, normal) < 0:
         # The mesh remains one-sided. A capsule wholly behind the face
         # never reaches its front, as each cap sweep already reports.
         return best
@@ -342,12 +342,12 @@ def _capsule_geometry[
         var edge = vertices[(i + 1) % 3] - p
         # The segment's interior on this edge. Parallel lines meet first
         # at a cap or a vertex, which the other features cover.
-        var cross = _wide_cross(axis, edge)
-        var cross_sq = _wide_dot(cross, cross)
+        var cross = wide_cross(axis, edge)
+        var cross_sq = wide_dot(cross, cross)
         if cross_sq > 0:
             var unit = cross / sqrt(cross_sq)
-            var gap = _wide_dot(start - p, unit)
-            var rate = _wide_dot(travel, unit)
+            var gap = wide_dot(start - p, unit)
+            var rate = wide_dot(travel, unit)
             var fraction = Float64(2)
             if abs(gap) <= radius:
                 fraction = 0
@@ -375,8 +375,8 @@ def _capsule_geometry[
         # This vertex on the segment's cylinder. In the capsule's frame the
         # vertex moves by -travel.
         var offset = p - start
-        var along = _wide_dot(offset, axis) / length_sq
-        var delta = -_wide_dot(travel, axis) / length_sq
+        var along = wide_dot(offset, axis) / length_sq
+        var delta = -wide_dot(travel, axis) / length_sq
         var fraction = _contact_root[initial_only](
             offset - axis * along, -travel - axis * delta, radius
         )
@@ -409,7 +409,7 @@ def _point_hit(
         return best
     var normal = point + travel * fraction - other
     # A contact point lies the summed radius from the other one.
-    normal /= sqrt(_wide_dot(normal, normal))
+    normal /= sqrt(wide_dot(normal, normal))
     if not _approaches(travel, normal):
         return best
     return _SweepHit(fraction, -normal if flip else normal)
@@ -430,7 +430,7 @@ def _point_segment(
     var found = _point_hit(
         best, point, travel, start, _root(point - start, travel, radius), flip
     )
-    var square = _wide_dot(axis, axis)
+    var square = wide_dot(axis, axis)
     if square == 0:
         return found
     var end = start + axis
@@ -438,8 +438,8 @@ def _point_segment(
         found, point, travel, end, _root(point - end, travel, radius), flip
     )
     var offset = point - start
-    var along = _wide_dot(offset, axis) / square
-    var delta = _wide_dot(travel, axis) / square
+    var along = wide_dot(offset, axis) / square
+    var delta = wide_dot(travel, axis) / square
     var fraction = _root(offset - axis * along, travel - axis * delta, radius)
     var coordinate = along + fraction * delta
     if coordinate >= 0 and coordinate <= 1:
@@ -485,13 +485,13 @@ def _sweep_segments(
     best = _point_segment(best, b + b_axis, -travel, a, a_axis, radius, True)
     # The interiors meet across the plane that both axes span. Parallel
     # axes meet first at an end, which the cases above cover.
-    var cross = _wide_cross(a_axis, b_axis)
-    var cross_sq = _wide_dot(cross, cross)
+    var cross = wide_cross(a_axis, b_axis)
+    var cross_sq = wide_dot(cross, cross)
     if cross_sq == 0:
         return best
     var unit = cross / sqrt(cross_sq)
-    var gap = _wide_dot(a - b, unit)
-    var rate = _wide_dot(travel, unit)
+    var gap = wide_dot(a - b, unit)
+    var rate = wide_dot(travel, unit)
     var fraction = Float64(2)
     if abs(gap) <= radius:
         fraction = 0
@@ -537,19 +537,19 @@ def _segment_gap(
         closest point. The normal is zero when they meet.
     """
     var r = a - b
-    var aa = _wide_dot(a_axis, a_axis)
-    var bb = _wide_dot(b_axis, b_axis)
-    var f = _wide_dot(b_axis, r)
+    var aa = wide_dot(a_axis, a_axis)
+    var bb = wide_dot(b_axis, b_axis)
+    var f = wide_dot(b_axis, r)
     var s = Float64(0)
     var t = Float64(0)
     if aa == 0 and bb > 0:
         t = min(max(f / bb, Float64(0)), Float64(1))
     elif aa > 0:
-        var c = _wide_dot(a_axis, r)
+        var c = wide_dot(a_axis, r)
         if bb == 0:
             s = min(max(-c / aa, Float64(0)), Float64(1))
         else:
-            var ab = _wide_dot(a_axis, b_axis)
+            var ab = wide_dot(a_axis, b_axis)
             var denominator = aa * bb - ab * ab
             if denominator > 0:
                 s = min(
@@ -563,7 +563,7 @@ def _segment_gap(
                 t = 1
                 s = min(max((ab - c) / aa, Float64(0)), Float64(1))
     var gap = a + a_axis * s - (b + b_axis * t)
-    var distance = sqrt(_wide_dot(gap, gap))
+    var distance = sqrt(wide_dot(gap, gap))
     if distance == 0:
         return (distance, SIMD[DType.float64, 4](0), s)
     return (distance, gap / distance, s)
@@ -575,7 +575,7 @@ def _on_segment(
     edge: SIMD[DType.float64, 4],
 ) -> SIMD[DType.float64, 4]:
     # The point of segment x + u edge, u in [0, 1], closest to p.
-    var u = _wide_dot(p - x, edge) / _wide_dot(edge, edge)
+    var u = wide_dot(p - x, edge) / wide_dot(edge, edge)
     return x + edge * min(max(u, Float64(0)), Float64(1))
 
 
@@ -599,20 +599,18 @@ def _triangle_closest(
     Returns:
         The closest point.
     """
-    var normal = _wide_cross(b - a, c - a)
-    var flat = p - normal * (
-        _wide_dot(p - a, normal) / _wide_dot(normal, normal)
-    )
+    var normal = wide_cross(b - a, c - a)
+    var flat = p - normal * (wide_dot(p - a, normal) / wide_dot(normal, normal))
     if (
-        _wide_dot(_wide_cross(b - a, flat - a), normal) >= 0
-        and _wide_dot(_wide_cross(c - b, flat - b), normal) >= 0
-        and _wide_dot(_wide_cross(a - c, flat - c), normal) >= 0
+        wide_dot(wide_cross(b - a, flat - a), normal) >= 0
+        and wide_dot(wide_cross(c - b, flat - b), normal) >= 0
+        and wide_dot(wide_cross(a - c, flat - c), normal) >= 0
     ):
         return flat
     var best = _on_segment(p, a, b - a)
     for edge in [(b, c - b), (c, a - c)]:  # pragma: no branch
         var other = _on_segment(p, edge[0], edge[1])
-        if _wide_dot(p - other, p - other) < _wide_dot(p - best, p - best):
+        if wide_dot(p - other, p - other) < wide_dot(p - best, p - best):
             best = other
     return best
 
@@ -637,18 +635,18 @@ def _segment_triangle_gap(
     Returns:
         The distance, the normal and the point on the segment.
     """
-    var a = _wide(triangle.a)
-    var b = _wide(triangle.b)
-    var c = _wide(triangle.c)
-    var face = _wide_cross(b - a, c - a)
-    face /= sqrt(_wide_dot(face, face))
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
+    var face = wide_cross(b - a, c - a)
+    face /= sqrt(wide_dot(face, face))
     var best = Float64(1e300)
     var normal = face
     var point = start
     for end in range(2):  # pragma: no branch
         var p = start + axis * Float64(end)
         var gap = p - _triangle_closest(p, a, b, c)
-        var distance = sqrt(_wide_dot(gap, gap))
+        var distance = sqrt(wide_dot(gap, gap))
         if distance < best:
             best = distance
             normal = gap / distance if distance > 0 else face
@@ -663,14 +661,14 @@ def _segment_triangle_gap(
             # A segment that touches the edge line has no gap direction.
             normal = edge[1] if edge[0] > 0 else face
             point = start + axis * edge[2]
-    var low = _wide_dot(start - a, face)
-    var high = _wide_dot(start + axis - a, face)
+    var low = wide_dot(start - a, face)
+    var high = wide_dot(start + axis - a, face)
     if low * high < 0:
         var crossing = start + axis * (low / (low - high))
         if (
-            _wide_dot(_wide_cross(b - a, crossing - a), face) >= 0
-            and _wide_dot(_wide_cross(c - b, crossing - b), face) >= 0
-            and _wide_dot(_wide_cross(a - c, crossing - c), face) >= 0
+            wide_dot(wide_cross(b - a, crossing - a), face) >= 0
+            and wide_dot(wide_cross(c - b, crossing - b), face) >= 0
+            and wide_dot(wide_cross(a - c, crossing - c), face) >= 0
         ):
             return (Float64(0), face, crossing)
     return (best, normal, point)
@@ -706,12 +704,12 @@ def _turning_step(
         behind the face. A segment that already overlaps may deepen by the
         tolerance at most.
     """
-    var a = _wide(triangle.a)
-    var b = _wide(triangle.b)
-    var c = _wide(triangle.c)
-    var face = _wide_cross(b - a, c - a)
-    face /= sqrt(_wide_dot(face, face))
-    if _wide_dot(ends[0] - a, face) < 0 and _wide_dot(ends[1] - a, face) < 0:
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
+    var face = wide_cross(b - a, c - a)
+    face /= sqrt(wide_dot(face, face))
+    if wide_dot(ends[0] - a, face) < 0 and wide_dot(ends[1] - a, face) < 0:
         # The mesh stays one-sided.
         return -1
     # Each plane is a unit normal and a point on it.
@@ -721,16 +719,16 @@ def _turning_step(
     origins.append(a)
     var corners = [a, b, c]
     for i in range(3):  # pragma: no branch
-        var side = _wide_cross(corners[(i + 1) % 3] - corners[i], face)
-        normals.append(side / sqrt(_wide_dot(side, side)))
+        var side = wide_cross(corners[(i + 1) % 3] - corners[i], face)
+        normals.append(side / sqrt(wide_dot(side, side)))
         origins.append(corners[i])
     # The plane that separates the segment most now.
     var chosen = 0
     var most = Float64(-1e300)
     for k in range(4):  # pragma: no branch
         var low = min(
-            _wide_dot(ends[0] - origins[k], normals[k]),
-            _wide_dot(ends[1] - origins[k], normals[k]),
+            wide_dot(ends[0] - origins[k], normals[k]),
+            wide_dot(ends[1] - origins[k], normals[k]),
         )
         if low > most:
             most = low
@@ -743,11 +741,11 @@ def _turning_step(
     var moving = [speeds[0], speeds[1]]
     for end in range(2):  # pragma: no branch
         var room = (
-            _wide_dot(tips[end] - origins[chosen], normals[chosen])
+            wide_dot(tips[end] - origins[chosen], normals[chosen])
             - radius
             + allowance
         )
-        var rate = _wide_dot(moving[end], normals[chosen])
+        var rate = wide_dot(moving[end], normals[chosen])
         # The first positive root of room + rate t - curvature t^2 / 2.
         if curvature > 0:
             var root = sqrt(rate * rate + 2 * curvature * room)
@@ -767,11 +765,11 @@ def _project(
     points: List[SIMD[DType.float64, 4]], axis: SIMD[DType.float64, 4]
 ) -> Tuple[Float64, Float64]:
     # The interval that points cover along an axis.
-    var low = _wide_dot(points[0], axis)
+    var low = wide_dot(points[0], axis)
     var high = low
     # A triangle or a solid has three points at least.
     for k in range(1, len(points)):  # pragma: no branch
-        var value = _wide_dot(points[k], axis)
+        var value = wide_dot(points[k], axis)
         low = min(low, value)
         high = max(high, value)
     return (low, high)
@@ -808,12 +806,12 @@ def _sweep_convex_triangle(
         The earliest approaching contact, or the fraction 2 for none.
     """
     var miss = _SweepHit(2, SIMD[DType.float64, 4](0))
-    var a = _wide(triangle.a)
-    var b = _wide(triangle.b)
-    var c = _wide(triangle.c)
-    var face = _wide_cross(b - a, c - a)
-    face /= sqrt(_wide_dot(face, face))
-    if _project(vertices, face)[1] < _wide_dot(a, face):
+    var a = widen_vector(triangle.a)
+    var b = widen_vector(triangle.b)
+    var c = widen_vector(triangle.c)
+    var face = wide_cross(b - a, c - a)
+    face /= sqrt(wide_dot(face, face))
+    if _project(vertices, face)[1] < wide_dot(a, face):
         # The mesh stays one-sided: a solid wholly behind is not caught.
         return miss
     var corners = List[SIMD[DType.float64, 4]]()
@@ -824,7 +822,7 @@ def _sweep_convex_triangle(
     axes.append(face)
     for edge in edges:  # pragma: no branch
         for k in range(3):  # pragma: no branch
-            axes.append(_wide_cross(edge, corners[(k + 1) % 3] - corners[k]))
+            axes.append(wide_cross(edge, corners[(k + 1) % 3] - corners[k]))
     var entry = Float64(-1e300)
     var leave = Float64(1e300)
     var normal = SIMD[DType.float64, 4](0)
@@ -832,7 +830,7 @@ def _sweep_convex_triangle(
     var depth = Float64(1e300)
     var shallow = SIMD[DType.float64, 4](0)
     for axis in axes:  # pragma: no branch
-        var square = _wide_dot(axis, axis)
+        var square = wide_dot(axis, axis)
         if square == 0:
             # Parallel edges give no axis.
             continue
@@ -844,7 +842,7 @@ def _sweep_convex_triangle(
         if min(up, down) < depth:
             depth = min(up, down)
             shallow = unit if up < down else -unit
-        var rate = _wide_dot(travel, unit)
+        var rate = wide_dot(travel, unit)
         if rate == 0:
             # An axis the solid does not move along separates it for the
             # whole interval, even when the two only touch: a face or edge

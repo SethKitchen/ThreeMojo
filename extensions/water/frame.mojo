@@ -16,7 +16,11 @@ from extensions.water.caustics import (
     render_caustics,
 )
 from extensions.water.field import ComplexField, fft2
-from extensions.water.filter import anisotropic_step
+from extensions.water.filter import (
+    anisotropic_step,
+    lod_blend,
+    major_axis_offset,
+)
 from extensions.water.glare import GlareKernels, apply_glare, glare_kernels
 from extensions.water.pebbles import PebbleBed, PebbleTexels
 from extensions.water.optics import (
@@ -24,7 +28,6 @@ from extensions.water.optics import (
     aces_channel,
     bed_color,
     beckmann,
-    clamp01,
     floor_depth,
     fresnel,
     hash12,
@@ -64,12 +67,20 @@ from extensions.water.view import (
     require_view,
 )
 from cameras.camera import Camera
+from core.extent import require_positive_extent
 from core.scene import Scene
+from math.finite import (
+    require_finite,
+    require_positive_finite,
+    require_non_negative_finite,
+)
+from math.utils import max3, rec709_luminance, saturate
+from math.norm import squared_length3
 from math.matrix4 import Matrix4
-from math.vector3 import Vector3
+from math.vector3 import Vector3, mix_delta3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.tasks import TaskGroup
-from std.math import cos, exp, isfinite, pow, sin, sqrt
+from std.math import cos, exp, pow, sin, sqrt
 from std.memory import bitcast
 from std.sys import num_logical_cores
 from units.si import SECOND, Angle, Duration, Length
@@ -103,6 +114,23 @@ struct CameraLook(ImplicitlyCopyable):
     var px: Float32
     var py: Float32
     var pz: Float32
+
+
+def require_water_size(width: Int, height: Int) raises:
+    """Refuse a water image whose size is not positive.
+
+    Nothing. The call returns when both sizes are positive.
+
+    Args:
+        width: The width, in pixels.
+        height: The height, in pixels.
+
+    Raises:
+        Error: If the width or the height is not positive.
+    """
+    require_positive_extent(
+        width, height, "Water image dimensions must be positive"
+    )
 
 
 def camera_look(clock: Duration, sway: Bool, pitch: Angle) -> CameraLook:
@@ -220,7 +248,7 @@ def _write_rows(
                 LINEAR,
             )
             var color = FloatColor(
-                clamp01(graded.x), clamp01(graded.y), clamp01(graded.z), 1.0
+                saturate(graded.x), saturate(graded.y), saturate(graded.z), 1.0
             ).quantize()
             var at = (y * width + x) * Framebuffer.CHANNELS
             pixels[unsafe_offset=at] = color.r
@@ -699,11 +727,8 @@ def lit_radiance[
         foot[3],
         t,
     )
-    var color = Vector3(
-        f * refl.x + (1.0 - f) * under.x + sun_rgb.x,
-        f * refl.y + (1.0 - f) * under.y + sun_rgb.y,
-        f * refl.z + (1.0 - f) * under.z + sun_rgb.z,
-    )
+    var open = 1.0 - f
+    var color = refl * f + under * open + sun_rgb
     var haze = 1.0 - exp(-t * 0.004)
     var flat = _unit(wd.x, 0.0, wd.z)
     var muh = flat.x * sun.x + flat.z * sun.z
@@ -713,21 +738,13 @@ def lit_radiance[
         0.22 * pow(muh, Float32(6)) + 0.3 * pow(muh, Float32(64))
     )
     var haze_w = haze * 0.8
-    color = Vector3(
-        color.x + (haze_c.x * 0.95 - color.x) * haze_w,
-        color.y + (haze_c.y * 0.95 - color.y) * haze_w,
-        color.z + (haze_c.z * 0.95 - color.z) * haze_w,
-    )
+    color = mix_delta3(color, haze_c * 0.95, haze_w)
     var above = sky_radiance(rd.x, rd.y, rd.z, sun)
     var mu = rd.x * sun.x + rd.y * sun.y + rd.z * sun.z
     var disc = smoothstep(0.99996, 0.999985, mu) * 18.0
     above = above + Vector3(1.0, 0.90, 0.74) * (6.0 * disc)
     var horizon = smoothstep(-0.0005, 0.0015, rd.y)
-    return Vector3(
-        color.x + (above.x - color.x) * horizon,
-        color.y + (above.y - color.y) * horizon,
-        color.z + (above.z - color.z) * horizon,
-    )
+    return mix_delta3(color, above, horizon)
 
 
 def _wave_height[
@@ -886,7 +903,7 @@ def _underwater[
         focus = 0.45
     if focus > 3.0:
         focus = 3.0
-    caus = Vector3(caus.x * focus, caus.y * focus, caus.z * focus)
+    caus = caus * focus
     var sig_a = Vector3(0.40, 0.074, 0.088)
     var sig_s = Vector3(0.028, 0.052, 0.068)
     var sig_t = sig_a + sig_s
@@ -896,19 +913,11 @@ def _underwater[
     var ao = 0.55 + 0.45 * smoothstep(0.08, 0.42, bed.height)
     var sun_rgb = Vector3(1.0, 0.90, 0.74) * 6.0
     var sun_light = sun_rgb * ts
-    var esun = Vector3(
-        sun_light.x * absorb.x * caus.x * (-sun_t_y) * (0.75 + 0.25 * ao),
-        sun_light.y * absorb.y * caus.y * (-sun_t_y) * (0.75 + 0.25 * ao),
-        sun_light.z * absorb.z * caus.z * (-sun_t_y) * (0.75 + 0.25 * ao),
-    )
+    var esun = (((sun_light * absorb) * caus) * (-sun_t_y)) * (0.75 + 0.25 * ao)
     var pi = Float32(3.141592653589793)
     var sky_irr = Vector3(0.62, 0.70, 0.78) * (pi * 0.22)
     var sky_abs = _exp3((sig_a + sig_s * 0.4) * (column * 1.25))
-    var esky = Vector3(
-        sky_irr.x * sky_abs.x * ao,
-        sky_irr.y * sky_abs.y * ao,
-        sky_irr.z * sky_abs.z * ao,
-    )
+    var esky = (sky_irr * sky_abs) * ao
     var floor_l = Vector3(
         bed.r / pi * (esun.x + esky.x),
         bed.g / pi * (esun.y + esky.y),
@@ -932,16 +941,9 @@ def _underwater[
         sun_light.z * mid_abs.z * (phase + 0.02)
         + sky_irr.z * sky_mid.z / (4.0 * pi),
     )
-    var scatter = Vector3(
-        sig_s.x / sig_t.x * mid.x * (1.0 - view_abs.x) * 3.2,
-        sig_s.y / sig_t.y * mid.y * (1.0 - view_abs.y) * 3.2,
-        sig_s.z / sig_t.z * mid.z * (1.0 - view_abs.z) * 3.2,
-    )
-    var color = Vector3(
-        floor_l.x * view_abs.x + scatter.x,
-        floor_l.y * view_abs.y + scatter.y,
-        floor_l.z * view_abs.z + scatter.z,
-    )
+    var open = Vector3(1.0 - view_abs.x, 1.0 - view_abs.y, 1.0 - view_abs.z)
+    var scatter = (((sig_s / sig_t) * mid) * open) * 3.2
+    var color = floor_l * view_abs + scatter
     return _specks(color, x, z, ray, travel, clock, sun_light)
 
 
@@ -1027,24 +1029,20 @@ def _caustic_grad[
     var acc = Vector3(0.0, 0.0, 0.0)
     var count = step.taps
     for i in range(count):  # pragma: no branch
-        var o = (Float32(i) + 0.5) / Float32(count) - 0.5
+        var o = major_axis_offset(i, count)
         var sample = _caustic_lod(
             field, u + step.du * o, v + step.dv * o, step.lod
         )
-        acc = Vector3(acc.x + sample.x, acc.y + sample.y, acc.z + sample.z)
+        acc = acc + sample
     var inv = 1.0 / Float32(count)
-    return Vector3(acc.x * inv, acc.y * inv, acc.z * inv)
+    return acc * inv
 
 
 def _caustic_lod[
     C: CausticTexels
 ](field: C, u: Float32, v: Float32, lod: Float32) -> Vector3:
     var levels = field.caustic_levels()
-    var i0 = Int(floor_f(lod))
-    var i1 = i0 + 1
-    if i1 > levels:
-        i1 = levels
-    var frac = lod - Float32(i0)
+    var i0, i1, frac = lod_blend(lod, levels)
     var a = _caustic_level(field, i0, u, v)
     var b = _caustic_level(field, i1, u, v)
     return _mix3(a, b, frac)
@@ -1054,8 +1052,8 @@ def _caustic_level[
     C: CausticTexels
 ](field: C, level: Int, u: Float32, v: Float32) -> Vector3:
     var n = field.caustic_side(level)
-    var fu = u - _floor_wrap(u)
-    var fv = v - _floor_wrap(v)
+    var fu = u - floor_f(u)
+    var fv = v - floor_f(v)
     var px = fu * Float32(n) - 0.5
     var py = fv * Float32(n) - 0.5
     var x0 = Int(floor_f(px)) % n
@@ -1084,8 +1082,8 @@ def _caustic_level_texel[
 
 
 def _caustic_at(field: CausticField, u: Float32, v: Float32) -> Vector3:
-    var fu = u - _floor_wrap(u)
-    var fv = v - _floor_wrap(v)
+    var fu = u - floor_f(u)
+    var fv = v - floor_f(v)
     var n = field.n
     var px = fu * Float32(n) - 0.5
     var py = fv * Float32(n) - 0.5
@@ -1112,13 +1110,7 @@ def _caustic_texel(field: CausticField, x: Int, y: Int) -> Vector3:
 
 def _mix3(a: Vector3, b: Vector3, t: Float32) -> Vector3:
     var s = 1.0 - t
-    return Vector3(a.x * s + b.x * t, a.y * s + b.y * t, a.z * s + b.z * t)
-
-
-def _floor_wrap(value: Float32) -> Float32:
-    from std.math import floor
-
-    return floor(value)
+    return a * s + b * t
 
 
 def _exp3(v: Vector3) -> Vector3:
@@ -1258,7 +1250,7 @@ def grade_pixel(
     cr = aces_channel(cr)
     cg = aces_channel(cg)
     cb = aces_channel(cb)
-    var lum = cr * 0.2126 + cg * 0.7152 + cb * 0.0722
+    var lum = rec709_luminance(cr, cg, cb)
     cr = lum + (cr - lum) * 0.90
     cg = lum + (cg - lum) * 0.90
     cb = lum + (cb - lum) * 0.90
@@ -1338,8 +1330,9 @@ struct WaterScene(Movable):
         Raises:
             Error: If a resolution is not valid, or `start` is not finite.
         """
-        if not isfinite(start.value):
-            raise Error("A water start clock must be finite")
+        require_finite(
+            Float64(start.value), "A water start clock must be finite"
+        )
         self.ocean = ocean
         self.caustic_grid = caustic_grid
         self.caustic_resolution = caustic_resolution
@@ -1380,10 +1373,11 @@ struct WaterScene(Movable):
                 not point above the horizon.
         """
         var length = sqrt(
-            toward.x * toward.x + toward.y * toward.y + toward.z * toward.z
+            squared_length3[DType.float32](toward.x, toward.y, toward.z)
         )
-        if not (isfinite(length) and length > 0.0):
-            raise Error("A water sun direction must be finite and nonzero")
+        require_positive_finite(
+            Float64(length), "A water sun direction must be finite and nonzero"
+        )
         if not (toward.y > 0.0):
             raise Error("A water sun must be above the horizon")
         self.sun = Vector3(
@@ -1402,11 +1396,14 @@ struct WaterScene(Movable):
             Error: If `dt` is not finite or is negative, or the next clock
                 is not finite. The simulation does not change on refusal.
         """
-        if not (isfinite(dt.value) and dt.value >= 0):
-            raise Error("A water time step must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(dt.value),
+            "A water time step must be finite and nonnegative",
+        )
         var next_clock = self.clock.value + dt.value
-        if not isfinite(next_clock):
-            raise Error("The next water clock must be finite")
+        require_finite(
+            Float64(next_clock), "The next water clock must be finite"
+        )
         var strength = Float32(0.07) if drop else Float32(0.0)
         step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
         self.clock = Duration(next_clock, SECOND)
@@ -1636,8 +1633,7 @@ struct WaterScene(Movable):
         Raises:
             Error: If a size or the view is not valid.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Water image dimensions must be positive")
+        require_water_size(width, height)
         require_view(view)
         var clock = self.clock
         var surface = self._surface()
@@ -1694,9 +1690,9 @@ struct WaterScene(Movable):
                     x,
                     y,
                     FloatColor(
-                        clamp01(graded[p]),
-                        clamp01(graded[p + 1]),
-                        clamp01(graded[p + 2]),
+                        saturate(graded[p]),
+                        saturate(graded[p + 1]),
+                        saturate(graded[p + 2]),
                         1.0,
                     ).quantize(),
                 )
@@ -1790,8 +1786,7 @@ def render_water(
     Raises:
         Error: If a size or the view is not valid, or `clock` is not finite.
     """
-    if width <= 0 or height <= 0:
-        raise Error("Water image dimensions must be positive")
+    require_water_size(width, height)
     require_view(view)
     var scene = WaterScene(
         ocean, caustic_grid, caustic_resolution, glare_resolution, clock
@@ -1813,9 +1808,9 @@ def _caustic_picture(
                 x,
                 y,
                 FloatColor(
-                    clamp01(sample.x * 0.25),
-                    clamp01(sample.y * 0.25),
-                    clamp01(sample.z * 0.25),
+                    saturate(sample.x * 0.25),
+                    saturate(sample.y * 0.25),
+                    saturate(sample.z * 0.25),
                     1.0,
                 ).quantize(),
             )
@@ -1890,7 +1885,7 @@ def _highlight_rows(
             r /= count
             g /= count
             b /= count
-            var l = max(r, max(g, b))
+            var l = max3(r, g, b)
             var k = l - threshold
             if k < 0.0:
                 k = 0.0

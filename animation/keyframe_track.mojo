@@ -165,9 +165,18 @@ two lists still agree before it reads them -- the same argument
 it was built can be edited afterward.
 """
 
+from core.morph import require_morph_target
+from core.ordinal import (
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+    require_positive,
+)
 from core.object3d import NodeId
 from materials.material import MaterialId
+from math.finite import require_finite, require_positive_finite
 from math.quaternion import Quaternion
+from math.utils import mix_delta
 from math.vector3 import Vector3
 from std.math import isfinite, isnan
 from units.si import Duration, SECOND
@@ -618,8 +627,7 @@ def morph_target(mesh: MeshIndex, target: Int) raises -> TrackTarget:
         Error: If the target is negative. There is no upper limit: a mesh
             wears as many targets as its geometry carries.
     """
-    if target < 0:
-        raise Error("A morph target index cannot be negative")
+    require_morph_target(target)
     return TrackTarget(MORPH_INFLUENCE, mesh.value, target)
 
 
@@ -639,8 +647,7 @@ def skinned_morph_target(
     Raises:
         Error: If the target is negative. There is no upper limit.
     """
-    if target < 0:
-        raise Error("A morph target index cannot be negative")
+    require_morph_target(target)
     return TrackTarget(SKINNED_MORPH_INFLUENCE, mesh.value, target)
 
 
@@ -703,6 +710,38 @@ def material_target(
     if not kind.is_material():
         raise Error("A material target needs a kind that drives a material")
     return TrackTarget(kind, material.value, 0)
+
+
+def require_track_target(target: TrackTarget) raises:
+    """Refuse a track target whose kind or slot is not valid.
+
+    Nothing. The call returns when the kind exists and the slot fits it.
+
+    Args:
+        target: The track target.
+
+    Raises:
+        Error: If the kind does not exist or the slot does not fit it.
+    """
+    require_valid(
+        target.is_valid(), "A track needs a kind that exists and fits its slot"
+    )
+
+
+def require_key_values(held: Int, expected: Int) raises:
+    """Refuse a track that does not hold one value for every key.
+
+    Nothing. The call returns when the two counts are equal.
+
+    Args:
+        held: How many values the track holds.
+        expected: How many values the keys require.
+
+    Raises:
+        Error: If the counts differ.
+    """
+    if held != expected:
+        raise Error("A track needs one value for every key")
 
 
 def light_target(light: LightIndex, kind: TrackKind) raises -> TrackTarget:
@@ -795,11 +834,13 @@ def check_interpolation(kind: TrackKind, how: Interpolation) raises:
             or a string track is anything but `STEP`, or if a
             `QUATERNION` track is `SMOOTH`.
     """
-    if not how.is_valid():
-        raise Error(
-            "A track's interpolation must be STEP, LINEAR, SMOOTH,"
-            " CUBIC_SPLINE or BEZIER"
-        )
+    require_valid(
+        how.is_valid(),
+        (
+            "A track's interpolation must be STEP, LINEAR, SMOOTH, CUBIC_SPLINE"
+            " or BEZIER"
+        ),
+    )
     if kind.is_discrete() and how != STEP:
         # three.js's `BooleanKeyframeTrack` and `StringKeyframeTrack` have
         # no other mode: a flag half way between shown and hidden is
@@ -957,8 +998,7 @@ struct KeyframeTrack(Copyable, Movable):
                 a rotation key is not of unit length, or if a flag key is
                 neither zero nor one.
         """
-        if not target.is_valid():
-            raise Error("A track needs a kind that exists and fits its slot")
+        require_track_target(target)
         var kind = target.kind
         if kind.is_string():
             raise Error("A string track takes strings, not numbers")
@@ -1000,13 +1040,12 @@ struct KeyframeTrack(Copyable, Movable):
         """
         var target = checked_target
         var kind = target.kind
-        if len(times) == 0:
-            raise Error("A track needs at least one key")
-        if len(values) != len(times) * kind.component_count():
-            raise Error("A track needs one value for every key")
+        require_positive(len(times), "A track needs at least one key")
+        require_key_values(len(values), len(times) * kind.component_count())
         for index in range(len(values)):  # pragma: no branch
-            if not isfinite(values[index]):
-                raise Error("A track's values must be numbers")
+            require_finite(
+                Float64(values[index]), "A track's values must be numbers"
+            )
             if not kind.is_boolean():
                 continue
             if values[index] != 0 and values[index] != 1:
@@ -1014,10 +1053,8 @@ struct KeyframeTrack(Copyable, Movable):
         var seconds = List[Float32]()
         for index in range(len(times)):  # pragma: no branch
             var at = times[index].to(SECOND)
-            if not isfinite(at):
-                raise Error("A track's times must be numbers")
-            if at < 0:
-                raise Error("A track's times cannot be negative")
+            require_finite(Float64(at), "A track's times must be numbers")
+            require_non_negative(at, "A track's times cannot be negative")
             if index > 0:
                 if at <= seconds[index - 1]:
                     raise Error("A track's times must rise")
@@ -1095,8 +1132,7 @@ struct KeyframeTrack(Copyable, Movable):
                 number; and as the constructor that takes an interpolation
                 does, for the target, the times and the values.
         """
-        if not target.is_valid():
-            raise Error("A track needs a kind that exists and fits its slot")
+        require_track_target(target)
         if interpolation != CUBIC_SPLINE and interpolation != BEZIER:
             raise Error("A track with tangents is CUBIC_SPLINE or BEZIER")
         check_interpolation(target.kind, interpolation)
@@ -1143,12 +1179,10 @@ struct KeyframeTrack(Copyable, Movable):
                 string a key, and as the constructor that takes numbers
                 does, for the target and the times.
         """
-        if not target.is_valid():
-            raise Error("A track needs a kind that exists and fits its slot")
+        require_track_target(target)
         if not target.kind.is_string():
             raise Error("Only a string track takes strings")
-        if len(strings) != len(times):
-            raise Error("A track needs one value for every key")
+        require_key_values(len(strings), len(times))
         var kept = List[String]()
         var places = List[Float32]()
         for index in range(len(strings)):
@@ -1281,10 +1315,10 @@ struct KeyframeTrack(Copyable, Movable):
                 track cannot have.
         """
         var by = offset.to(SECOND)
-        if not isfinite(by):
-            raise Error("A track cannot shift by a time that is not a number")
-        if len(self.times) == 0:
-            raise Error("A track's keys were removed after it was built")
+        require_finite(
+            Float64(by), "A track cannot shift by a time that is not a number"
+        )
+        self._require_keys()
         if self.times[0] + by < 0:
             raise Error("A track's times cannot be negative")
         for key in range(len(self.times)):  # pragma: no branch
@@ -1313,10 +1347,10 @@ struct KeyframeTrack(Copyable, Movable):
                 put every key at one time, and a negative factor would
                 make the times fall.
         """
-        if not isfinite(factor) or factor <= 0:
-            raise Error(
-                "A track's times can only be scaled by a number above zero"
-            )
+        require_positive_finite(
+            Float64(factor),
+            "A track's times can only be scaled by a number above zero",
+        )
         for key in range(len(self.times)):
             self.times[key] *= factor
         if self.interpolation == BEZIER:
@@ -1640,6 +1674,18 @@ struct KeyframeTrack(Copyable, Movable):
             return [turned.x, turned.y, turned.z, turned.w]
         return out^
 
+    def _require_keys(self) raises:
+        """Refuse a track whose keys were removed after it was built.
+
+        Nothing. The call returns when the track still holds a key.
+
+        Raises:
+            Error: If the track holds no keys.
+        """
+        require_positive(
+            len(self.times), "A track's keys were removed after it was built"
+        )
+
     def _check_lists(self) raises:
         """Refuse a track whose lists no longer agree with each other.
 
@@ -1647,8 +1693,7 @@ struct KeyframeTrack(Copyable, Movable):
             Error: If the track has no keys, if the values do not divide
                 into one a key, or if the tangents do not match the values.
         """
-        if len(self.times) == 0:
-            raise Error("A track's keys were removed after it was built")
+        self._require_keys()
         if (
             len(self.values)
             != len(self.times) * self.target.kind.component_count()
@@ -1704,8 +1749,10 @@ struct KeyframeTrack(Copyable, Movable):
                 cheap buys.
         """
         var seconds = at.to(SECOND)
-        if not isfinite(seconds):
-            raise Error("A track cannot be read at a time that is not a number")
+        require_finite(
+            Float64(seconds),
+            "A track cannot be read at a time that is not a number",
+        )
         if not start.is_valid() or not end.is_valid():
             raise Error("A track needs an ending mode that exists")
         check_interpolation(self.target.kind, self.interpolation)
@@ -1735,7 +1782,7 @@ struct KeyframeTrack(Copyable, Movable):
             return [mixed.x, mixed.y, mixed.z, mixed.w]
         var out = List[Float32]()
         for offset in range(len(near)):  # pragma: no branch
-            out.append(near[offset] + (far[offset] - near[offset]) * part)
+            out.append(mix_delta(near[offset], far[offset], part))
         return out^
 
     def sample_string(self, at: Duration) raises -> String:
@@ -1755,8 +1802,11 @@ struct KeyframeTrack(Copyable, Movable):
         if not self.target.kind.is_string():
             raise Error("Only a string track's value is a string")
         var place = Int(self.sample(at)[0])
-        if place < 0 or place >= len(self.strings):
-            raise Error("A string track's key names no string it holds")
+        require_index_in_count(
+            place,
+            len(self.strings),
+            "A string track's key names no string it holds",
+        )
         return self.strings[place]
 
     def sample_vector3(

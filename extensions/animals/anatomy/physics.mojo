@@ -19,16 +19,17 @@ has them.
 """
 
 from extensions.anatomy.inertia import SegmentInertia
-from extensions.animals.anatomy.mass import BodyMass
+from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.build import Animal
 from extensions.physics.body import DYNAMIC, RigidBody, rotation_matrix
 from extensions.physics.shape import Shape
 from extensions.sdf.vector import V3, length
+from math.finite import require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
-from math.vector3 import Vector3
-from std.math import isfinite, pi, sqrt
-from units.si import KILOGRAM, METER, Length, Mass
+from math.vector3 import Vector3, vector3_from_float64
+from std.math import pi, sqrt
+from units.measure import length_meters
 
 
 def to_physics(p: Vector3) -> Vector3:
@@ -42,10 +43,6 @@ def to_physics(p: Vector3) -> Vector3:
         In the physics frame: `+z` up, `+x` forward.
     """
     return Vector3(p.z, p.x, p.y)
-
-
-def _wide(v: V3) -> Vector3:
-    return Vector3(Float32(v.x), Float32(v.y), Float32(v.z))
 
 
 def _tensor(s: SegmentInertia) -> Matrix3:
@@ -103,20 +100,22 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         Error: If the mass is for another rig, or a body refuses its
             mass properties.
     """
-    if len(mass.bones) != len(animal.rig.bones):
-        raise Error("The mass was sampled from another rig")
+    require_sampled_rig(len(mass.bones), len(animal.rig.bones))
     var out = List[RigidBody]()
     for i in range(len(animal.rig.bones)):  # pragma: no branch
-        if not (isfinite(mass.bones[i].mass) and mass.bones[i].mass >= 0.0):
-            raise Error("A segment mass must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(mass.bones[i].mass),
+            "A segment mass must be finite and nonnegative",
+        )
         if mass.bones[i].mass == 0.0:
             continue
         ref b = animal.rig.bones[i]
         var head = animal.rig.j(b.head)
         var tail = animal.rig.j(b.tail)
-        var span = length(tail - head)
+        var delta = tail - head
+        var span = length(delta)
         var s = mass.bone(i, Float32(span))
-        var along = to_physics(_wide(tail - head))
+        var along = to_physics(vector3_from_float64(delta.x, delta.y, delta.z))
         var turn = Quaternion.identity()
         if span > 0.0:
             along.normalize()
@@ -125,10 +124,10 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         var m = Float64(s.mass.value)
         var radius = sqrt(m / (1000.0 * pi * max(span, 1e-6)))
         var shape = Shape.capsule(
-            Length(Float32(radius), METER),
-            Length(Float32(0.5 * span), METER),
+            length_meters(radius),
+            length_meters(0.5 * span),
         )
-        var origin = to_physics(_wide(head))
+        var origin = to_physics(vector3_from_float64(head.x, head.y, head.z))
         var body = RigidBody(DYNAMIC, shape^, s.mass, origin, turn)
         body.set_shape_pose(
             Vector3(0, 0, Float32(0.5 * span)), Quaternion.identity()

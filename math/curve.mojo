@@ -84,13 +84,28 @@ or a `u` outside zero through one, which three.js clamps silently and
 which here says the caller has computed something wrong.
 """
 
+from core.ordinal import ordinal_valid
+
+from math.bezier import (
+    cubic_bezier_slope,
+    cubic_bezier_weights,
+    quadratic_bezier_slope,
+    quadratic_bezier_weights,
+)
 from math.curve_checks import (
     check_curve_parameter,
     curve_sample_count,
     curve_count_product,
+    parameter_samples,
+    require_control_count,
+    require_curve_kind,
+    require_distinct_points,
+    require_length_table,
 )
+from math.polyline import PolylineVertex, prefix_lengths, unit_direction
 from math.vector2 import Vector2
-from std.math import cos, floor, isfinite, pi, sin
+from math.finite import require_finite
+from std.math import cos, floor, pi, sin
 from units.si import Angle, Length, METER, RADIAN
 
 # The fewest straight runs that stand in for a curve when its length is
@@ -126,13 +141,7 @@ struct CurveKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the four kinds there are."""
-        return (
-            self == LINE
-            or self == QUADRATIC
-            or self == CUBIC
-            or self == SPLINE
-            or self == ELLIPSE
-        )
+        return ordinal_valid(self.value, ELLIPSE.value)
 
     def control_count(self) -> Int:
         """Return how many points a curve of this kind takes, or zero for
@@ -191,8 +200,7 @@ def ellipse_sweep(start: Angle, end: Angle, clockwise: Bool) raises -> Float32:
             which three.js draws as a single point.
     """
     var difference = Float64(end.to(RADIAN)) - Float64(start.to(RADIAN))
-    if not isfinite(difference):
-        raise Error("An ellipse needs finite angles")
+    require_finite(Float64(difference), "An ellipse needs finite angles")
     if abs(difference) < Float64(SAME_ANGLE):
         raise Error("An ellipse needs two different angles")
     # Range reduction must terminate even when a turn is less than one ULP.
@@ -298,8 +306,7 @@ def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
             fewer than two entries.
     """
     check_curve_parameter(Float64(u))
-    if len(table) < 2:
-        raise Error("A curve length table needs at least two entries")
+    require_length_table(len(table))
     var last = len(table) - 1
     var target = u * table[last]
     var index = 1
@@ -312,6 +319,41 @@ def u_to_t(table: List[Float32], u: Float32) raises -> Float32:
     if span > 0:
         within = (target - table[index - 1]) / span
     return (Float32(index - 1) + within) / Float32(last)
+
+
+def arc_samples[
+    C: AnyType,
+    T: PolylineVertex,
+    //,
+    take: def(C, Float32) raises thin -> T,
+](curve: C, divisions: Int, table: List[Float32]) raises -> List[T]:
+    """Return `divisions + 1` values at equal distances along `table`.
+
+    Parameters:
+        C: The curve type.
+        T: The value type.
+        take: Reads `curve` at one parameter.
+
+    Args:
+        curve: The curve.
+        divisions: How many equal runs to cut the length into. At least one.
+        table: How far along each sample is, from `Curve.lengths`.
+
+    Returns:
+        The values, first to last.
+
+    Raises:
+        Error: If `divisions` is less than one, the sample count cannot
+            fit in Int, the table has fewer than two entries, or `take`
+            raises.
+    """
+    var sample_count = curve_sample_count(divisions)
+    var out = List[T]()
+    # At least one division, so this loop runs.
+    for index in range(sample_count):  # pragma: no branch
+        var u = Float32(index) / Float32(divisions)
+        out.append(take(curve, u_to_t(table, u)))
+    return out^
 
 
 struct Curve(Copyable, Movable):
@@ -351,23 +393,16 @@ struct Curve(Copyable, Movable):
                 number of points does not match the kind, or if every point
                 is the same point, which has no direction anywhere.
         """
-        if not kind.is_valid():
-            raise Error("A curve needs a kind that exists")
+        require_curve_kind(kind.is_valid())
         if kind == ELLIPSE:
             raise Error("An ellipse is made with its radii and angles")
-        var wanted = kind.control_count()
-        if wanted == 0:
-            if len(points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(points) != wanted:
-            raise Error("A curve's points must match its kind")
+        require_control_count(kind.control_count(), len(points))
         var moved = False
         for index in range(1, len(points)):  # pragma: no branch
             var step = points[index] - points[0]
             if step.x != 0 or step.y != 0:
                 moved = True
-        if not moved:
-            raise Error("A curve needs two points that differ")
+        require_distinct_points(moved)
         self.kind = kind
         self.points = points^
         self.radii = Vector2(0, 0)
@@ -467,14 +502,8 @@ struct Curve(Copyable, Movable):
 
     def _validate(self) raises:
         """Check mutable dispatch and storage in constant time."""
-        if not self.kind.is_valid():
-            raise Error("A curve needs a kind that exists")
-        var wanted = self.kind.control_count()
-        if wanted == 0:
-            if len(self.points) < 2:
-                raise Error("A spline needs at least two points")
-        elif len(self.points) != wanted:
-            raise Error("A curve's points must match its kind")
+        require_curve_kind(self.kind.is_valid())
+        require_control_count(self.kind.control_count(), len(self.points))
 
     def point(self, t: Float32) raises -> Vector2:
         """Return the point at `t` along this curve's own parameter.
@@ -498,19 +527,18 @@ struct Curve(Copyable, Movable):
             if t == 1:
                 return self.points[1]
             return (self.points[1] - self.points[0]) * t + self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC:
+            var w0, w1, w2 = quadratic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest)
-                + self.points[1] * (2 * rest * t)
-                + self.points[2] * (t * t)
+                self.points[0] * w0 + self.points[1] * w1 + self.points[2] * w2
             )
         if self.kind == CUBIC:
+            var w0, w1, w2, w3 = cubic_bezier_weights(t)
             return (
-                self.points[0] * (rest * rest * rest)
-                + self.points[1] * (3 * rest * rest * t)
-                + self.points[2] * (3 * rest * t * t)
-                + self.points[3] * (t * t * t)
+                self.points[0] * w0
+                + self.points[1] * w1
+                + self.points[2] * w2
+                + self.points[3] * w3
             )
         if self.kind == ELLIPSE:
             return self._ellipse_point(t)
@@ -529,6 +557,23 @@ struct Curve(Copyable, Movable):
             segment = last - 1
         return segment
 
+    def _spline_frame(
+        self, t: Float32
+    ) -> Tuple[Float32, Vector2, Vector2, Vector2, Vector2]:
+        """Return the Catmull-Rom weight and the four points around `t`.
+
+        The point and the slope both read this frame. The first and last
+        stored points stand in where the spline has nothing beyond them.
+        """
+        var last = len(self.points) - 1
+        var segment = self._spline_segment(t)
+        var weight = Float32(last) * t - Float32(segment)
+        var before = self.points[max(segment - 1, 0)]
+        var start = self.points[segment]
+        var end = self.points[segment + 1]
+        var after = self.points[min(segment + 2, last)]
+        return (weight, before, start, end, after)
+
     def _spline_point(self, t: Float32) -> Vector2:
         """Return the point at `t` on a Catmull-Rom spline through every
         point, three.js's `SplineCurve.getPoint`.
@@ -538,13 +583,7 @@ struct Curve(Copyable, Movable):
         give it its directions, with the first and last point repeated
         where there is nothing beyond.
         """
-        var last = len(self.points) - 1
-        var segment = self._spline_segment(t)
-        var weight = Float32(last) * t - Float32(segment)
-        var before = self.points[max(segment - 1, 0)]
-        var start = self.points[segment]
-        var end = self.points[segment + 1]
-        var after = self.points[min(segment + 2, last)]
+        var weight, before, start, end, after = self._spline_frame(t)
         return Vector2(
             _catmull_rom(weight, before.x, start.x, end.x, after.x),
             _catmull_rom(weight, before.y, start.y, end.y, after.y),
@@ -553,13 +592,7 @@ struct Curve(Copyable, Movable):
     def _spline_slope(self, t: Float32) -> Vector2:
         """Return the direction a Catmull-Rom spline runs in at `t`, of
         whatever length the derivative gives it."""
-        var last = len(self.points) - 1
-        var segment = self._spline_segment(t)
-        var weight = Float32(last) * t - Float32(segment)
-        var before = self.points[max(segment - 1, 0)]
-        var start = self.points[segment]
-        var end = self.points[segment + 1]
-        var after = self.points[min(segment + 2, last)]
+        var weight, before, start, end, after = self._spline_frame(t)
         return Vector2(
             _catmull_rom_slope(weight, before.x, start.x, end.x, after.x),
             _catmull_rom_slope(weight, before.y, start.y, end.y, after.y),
@@ -570,16 +603,17 @@ struct Curve(Copyable, Movable):
         is made unit length. The caller has checked `t` is on the curve."""
         if self.kind == LINE:
             return self.points[1] - self.points[0]
-        var rest = 1 - t
         if self.kind == QUADRATIC:
-            return (self.points[1] - self.points[0]) * (2 * rest) + (
+            var s0, s1 = quadratic_bezier_slope(t)
+            return (self.points[1] - self.points[0]) * s0 + (
                 self.points[2] - self.points[1]
-            ) * (2 * t)
+            ) * s1
         if self.kind == CUBIC:
+            var s0, s1, s2 = cubic_bezier_slope(t)
             return (
-                (self.points[1] - self.points[0]) * (3 * rest * rest)
-                + (self.points[2] - self.points[1]) * (6 * rest * t)
-                + (self.points[3] - self.points[2]) * (3 * t * t)
+                (self.points[1] - self.points[0]) * s0
+                + (self.points[2] - self.points[1]) * s1
+                + (self.points[3] - self.points[2]) * s2
             )
         if self.kind == ELLIPSE:
             return self._ellipse_slope(t)
@@ -614,11 +648,7 @@ struct Curve(Copyable, Movable):
         """
         check_curve_parameter(Float64(t))
         self._validate()
-        var slope = self._slope(t)
-        if slope.length() == 0:
-            raise Error("A curve has no direction where it turns back")
-        slope.normalize()
-        return slope
+        return unit_direction(self._slope(t))
 
     def sample(self, divisions: Int) raises -> List[Vector2]:
         """Return `divisions + 1` points at equal steps in `t`.
@@ -633,11 +663,7 @@ struct Curve(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
-        var out = List[Vector2]()
-        for index in range(sample_count):  # pragma: no branch
-            out.append(self.point(Float32(index) / Float32(divisions)))
-        return out^
+        return parameter_samples[Self.point](self, divisions)
 
     def lengths(self, divisions: Int) raises -> List[Float32]:
         """Return how far along the curve each sample is, from zero.
@@ -653,13 +679,7 @@ struct Curve(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var samples = self.sample(divisions)
-        var out = List[Float32]()
-        out.append(0)
-        for index in range(1, len(samples)):  # pragma: no branch
-            var step = (samples[index] - samples[index - 1]).length()
-            out.append(out[index - 1] + step)
-        return out^
+        return prefix_lengths(self.sample(divisions))
 
     def arc_divisions(self) raises -> Int:
         """Return how many straight runs stand in for this curve when its
@@ -750,16 +770,12 @@ struct Curve(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var sample_count = curve_sample_count(divisions)
         # One table for the whole call. `point_at` builds its own, and
         # asking it once per point rebuilt the same hundreds of samples for
         # every point returned.
+        _ = curve_sample_count(divisions)
         var table = self.lengths(self.arc_divisions())
-        var out = List[Vector2]()
-        for index in range(sample_count):  # pragma: no branch
-            var u = Float32(index) / Float32(divisions)
-            out.append(self.point(u_to_t(table, u)))
-        return out^
+        return arc_samples[Self.point](self, divisions, table)
 
 
 def line(start: Vector2, end: Vector2) raises -> Curve:

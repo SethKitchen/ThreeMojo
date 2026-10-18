@@ -29,6 +29,9 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION as POSITION_ATTRIBUTE
 from core.object3d import NodeId, Object3D
+from core.ordinal import require_non_negative
+from math.curve_checks import require_at_least_one
+from math.vector3 import append_vector3
 from core.scene import Scene
 from materials.material import BASIC, Material, PointSize, points_material
 from objects.line import Line
@@ -82,23 +85,35 @@ def animation_path(
         Error: If `divisions` is below one, the clip has no position track
             for the node, or the track cannot be read.
     """
-    if divisions < 1:
-        raise Error("An animation path needs one division at least")
+    require_at_least_one(
+        divisions, "An animation path needs one division at least"
+    )
     var track = position_track(clip, object)
-    if track < 0:
-        raise Error("The clip has no position track for the node")
+    require_position_track(track)
     var numbers = List[Float32]()
     for step in range(divisions + 1):  # pragma: no branch
         var at = Float32(step) / Float32(divisions) * clip.length
         var point = clip.tracks[track].sample_vector3(Duration(at, SECOND))
-        numbers.append(point.x)
-        numbers.append(point.y)
-        numbers.append(point.z)
+        append_vector3(numbers, point)
     var geometry = BufferGeometry()
     geometry.set_attribute(
         String(POSITION_ATTRIBUTE), BufferAttribute(numbers^, 3)
     )
     return geometry^
+
+
+def require_position_track(track: Int) raises:
+    """Refuse a clip that has no position track for the node.
+
+    Nothing. The call returns when the clip has that track.
+
+    Args:
+        track: The track index, or below zero when there is none.
+
+    Raises:
+        Error: If the track index is below zero.
+    """
+    require_non_negative(track, "The clip has no position track for the node")
 
 
 def animation_path_markers(
@@ -118,8 +133,7 @@ def animation_path_markers(
         Error: If the clip has no position track for the node.
     """
     var track = position_track(clip, object)
-    if track < 0:
-        raise Error("The clip has no position track for the node")
+    require_position_track(track)
     var geometry = BufferGeometry()
     geometry.set_attribute(
         String(POSITION_ATTRIBUTE),

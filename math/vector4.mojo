@@ -24,9 +24,18 @@ thresholds and its fallback axes are three.js's.
 """
 
 from math.matrix4 import Matrix4
+from math.polyline import (
+    PolylineVertex,
+    add_scaled,
+    clamp_to_length,
+    lerp_between,
+    lerp_in_place,
+    scale_to_length,
+)
 from math.quaternion import Quaternion
-from math.vector3 import Vector3, _js_round
-from math.norm import length4, normalized4, _ordinary_squared
+from math.utils import clamp, js_round
+from math.vector3 import Vector3
+from math.norm import dot4, length4, normalized4
 from std.math import acos, ceil, floor, pi, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -72,7 +81,7 @@ def _is_largest(a: Float32, b: Float32, c: Float32) -> Bool:
 
 
 @fieldwise_init
-struct Vector4(Equatable, ImplicitlyCopyable):
+struct Vector4(Equatable, ImplicitlyCopyable, PolylineVertex):
     """A point or direction in homogeneous coordinates."""
 
     var x: Float32
@@ -105,11 +114,15 @@ struct Vector4(Equatable, ImplicitlyCopyable):
         Returns:
             The dot product, all four components in.
         """
-        return (
-            self.x * other.x
-            + self.y * other.y
-            + self.z * other.z
-            + self.w * other.w
+        return dot4[DType.float32](
+            self.x,
+            self.y,
+            self.z,
+            self.w,
+            other.x,
+            other.y,
+            other.z,
+            other.w,
         )
 
     def length(self) -> Float32:
@@ -315,7 +328,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
             other: The vector to add.
             factor: What to scale it by first.
         """
-        self = self + other * factor
+        add_scaled(self, other, factor)
 
     def length_sq(self) -> Float32:
         """Return the squared length, three.js's `lengthSq`.
@@ -341,8 +354,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
         Args:
             length: The new length.
         """
-        self.normalize()
-        self = self * length
+        scale_to_length(self, length)
 
     def lerp(mut self, other: Self, alpha: Float32):
         """Move this vector toward `other` by `alpha`, three.js's `lerp`.
@@ -351,10 +363,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
             other: The vector to move toward.
             alpha: Zero stays, one arrives. Values outside run on.
         """
-        self.x += (other.x - self.x) * alpha
-        self.y += (other.y - self.y) * alpha
-        self.z += (other.z - self.z) * alpha
-        self.w += (other.w - self.w) * alpha
+        lerp_in_place(self, other, alpha)
 
     def lerp_vectors(mut self, start: Self, end: Self, alpha: Float32):
         """Set this vector a fraction of the way from `start` to `end`,
@@ -365,12 +374,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
             end: The vector at an `alpha` of one.
             alpha: How far along.
         """
-        self = Vector4(
-            start.x + (end.x - start.x) * alpha,
-            start.y + (end.y - start.y) * alpha,
-            start.z + (end.z - start.z) * alpha,
-            start.w + (end.w - start.w) * alpha,
-        )
+        lerp_between(self, start, end, alpha)
 
     def multiply(mut self, other: Self):
         """Multiply each component by `other`'s, three.js's `multiply`.
@@ -435,10 +439,10 @@ struct Vector4(Equatable, ImplicitlyCopyable):
                 three.js.
         """
         self = Vector4(
-            max(low.x, min(high.x, self.x)),
-            max(low.y, min(high.y, self.y)),
-            max(low.z, min(high.z, self.z)),
-            max(low.w, min(high.w, self.w)),
+            clamp(self.x, low.x, high.x),
+            clamp(self.y, low.y, high.y),
+            clamp(self.z, low.z, high.z),
+            clamp(self.w, low.w, high.w),
         )
 
     def clamp_scalar(mut self, low: Float32, high: Float32):
@@ -462,12 +466,7 @@ struct Vector4(Equatable, ImplicitlyCopyable):
             low: The shortest length.
             high: The longest.
         """
-        var length = self.length()
-        if _ordinary_squared(self.length_sq()):
-            self = self / length * max(low, min(high, length))
-        else:
-            self.normalize()
-            self = self * max(low, min(high, length))
+        clamp_to_length(self, low, high)
 
     def floor(mut self):
         """Round each component down, three.js's `floor`."""
@@ -483,10 +482,10 @@ struct Vector4(Equatable, ImplicitlyCopyable):
         """Round each component to the nearest whole number, a half up,
         three.js's `round`."""
         self = Vector4(
-            _js_round(self.x),
-            _js_round(self.y),
-            _js_round(self.z),
-            _js_round(self.w),
+            js_round(self.x),
+            js_round(self.y),
+            js_round(self.z),
+            js_round(self.w),
         )
 
     def round_to_zero(mut self):

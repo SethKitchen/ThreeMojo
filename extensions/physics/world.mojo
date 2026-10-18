@@ -82,21 +82,38 @@ from extensions.physics.shape import (
     any_perpendicular,
     cross,
     unit_or,
-    _wide,
-    _wide_cross,
-    _wide_dot,
     _finite_vector,
     _narrow_finite,
 )
 from math.bounds import Box3, Sphere
+from math.cross import wide_cross, wide_dot, widen_vector
+from math.finite import require_positive_finite, require_non_negative_finite
 from math.matrix3 import Matrix3
 from math.octree import Octree
-from math.quaternion import Quaternion
+from math.quaternion import Quaternion, quaternion_from_float64
 from math.ray import Ray
 from math.triangle import Line3, Triangle
+from math.norm import squared_length2
 from math.vector3 import Vector3
 from std.math import cos, fma, inf, isfinite, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
+from core.ordinal import require_valid
+
+
+def _impact_exhausted(count: Int, limit: Int) raises:
+    """Refuse a step that has used every CCD impact.
+
+    Nothing. The call returns when another impact is allowed.
+
+    Args:
+        count: How many impacts this step has taken.
+        limit: How many impacts the step may take.
+
+    Raises:
+        Error: If the count has reached the limit.
+    """
+    if count == limit:
+        raise Error("CCD impact limit exhausted; step rolled back")
 
 
 @fieldwise_init
@@ -334,13 +351,16 @@ struct PhysicsWorld(Movable):
                 body's mode or mass state is inconsistent.
         """
         var h = dt.value
-        if not (isfinite(h) and h > 0):
-            raise Error("A physics step must be more than zero")
+        require_positive_finite(
+            Float64(h), "A physics step must be more than zero"
+        )
         # Validate the complete batch before any body or pending force changes.
         for body in self.bodies:
             body.validate()
-        if not self.collision_detection.is_valid():
-            raise Error("Collision detection mode is not valid")
+        require_valid(
+            self.collision_detection.is_valid(),
+            "Collision detection mode is not valid",
+        )
         if self.collision_detection == DISCRETE:
             self._step(h)
             return
@@ -425,19 +445,27 @@ struct PhysicsWorld(Movable):
             )
 
     def _validate_ccd(mut self) raises:
-        if not (isfinite(self.margin) and self.margin >= 0):
-            raise Error("CCD contact margin must be finite and nonnegative")
-        if not (isfinite(self.slop) and self.slop >= 0):
-            raise Error("CCD contact slop must be finite and nonnegative")
-        if not (isfinite(self.push_factor) and self.push_factor >= 0):
-            raise Error("CCD push factor must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.margin),
+            "CCD contact margin must be finite and nonnegative",
+        )
+        require_non_negative_finite(
+            Float64(self.slop),
+            "CCD contact slop must be finite and nonnegative",
+        )
+        require_non_negative_finite(
+            Float64(self.push_factor),
+            "CCD push factor must be finite and nonnegative",
+        )
         if self.ccd_max_impacts < 1 or self.ccd_max_impacts > 1024:
             raise Error("CCD impact limit must be between 1 and 1024")
         if self.ccd_max_substeps < 1 or self.ccd_max_substeps > 65536:
             raise Error("CCD sub-step limit must be between 1 and 65536")
         _finite_vector(self.gravity)
-        if not (isfinite(self.bounce_threshold) and self.bounce_threshold >= 0):
-            raise Error("CCD bounce threshold must be finite and nonnegative")
+        require_non_negative_finite(
+            Float64(self.bounce_threshold),
+            "CCD bounce threshold must be finite and nonnegative",
+        )
         for body in self.bodies:
             _ccd_coordinate(body.position)
             _ccd_rotation(body.rotation)
@@ -549,20 +577,20 @@ struct PhysicsWorld(Movable):
             _ccd_coordinate(triangle.a)
             _ccd_coordinate(triangle.b)
             _ccd_coordinate(triangle.c)
-            var normal = _wide_cross(
-                _wide(triangle.b) - _wide(triangle.a),
-                _wide(triangle.c) - _wide(triangle.a),
+            var normal = wide_cross(
+                widen_vector(triangle.b) - widen_vector(triangle.a),
+                widen_vector(triangle.c) - widen_vector(triangle.a),
             )
-            var ab = _wide(triangle.b) - _wide(triangle.a)
-            var ac = _wide(triangle.c) - _wide(triangle.a)
-            var bc = _wide(triangle.c) - _wide(triangle.b)
+            var ab = widen_vector(triangle.b) - widen_vector(triangle.a)
+            var ac = widen_vector(triangle.c) - widen_vector(triangle.a)
+            var bc = widen_vector(triangle.c) - widen_vector(triangle.b)
             var edge = max(
-                _wide_dot(ab, ab), max(_wide_dot(ac, ac), _wide_dot(bc, bc))
+                wide_dot(ab, ab), max(wide_dot(ac, ac), wide_dot(bc, bc))
             )
             if (
-                _wide_dot(normal, normal) == 0
+                wide_dot(normal, normal) == 0
                 or triangle.raw_normal() == Vector3(0, 0, 0)
-                or _wide_dot(normal, normal) * 1099511627776 < edge * edge
+                or wide_dot(normal, normal) * 1099511627776 < edge * edge
             ):
                 raise Error(
                     "CCD requires resolved, well-conditioned static triangles"
@@ -596,8 +624,8 @@ struct PhysicsWorld(Movable):
             if not body.collides or body.kind() == STATIC:
                 continue
             kinematic[i] = body.kind() == KINEMATIC
-            var v = _wide(body.linear_velocity)
-            var w = _wide(body.angular_velocity)
+            var v = widen_vector(body.linear_velocity)
+            var w = widen_vector(body.angular_velocity)
             # A rotation-locked capsule has no spin energy to transfer.
             var spin = Float64(0)
             var inverse = body.inverse_inertia()
@@ -605,20 +633,20 @@ struct PhysicsWorld(Movable):
                 var inertia = Float64(inverse.elements[0])
                 if inertia > 0:
                     spin = (
-                        _wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
+                        wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
                     )
             else:
                 # w^T I w = u^T M^-1 u with u = R^T w in the body frame.
                 var turn = rotation_matrix(body.rotation)
                 var u = _turn_in(turn, w)
-                spin = _wide_dot(u, _solve(inverse, u)) * Float64(
+                spin = wide_dot(u, _solve(inverse, u)) * Float64(
                     body.inverse_mass()
                 )
-            speed[i] = sqrt(_wide_dot(v, v) + spin)
-            var p = _wide(body.push_velocity)
-            push[i] = sqrt(_wide_dot(p, p))
+            speed[i] = sqrt(wide_dot(v, v) + spin)
+            var p = widen_vector(body.push_velocity)
+            push[i] = sqrt(wide_dot(p, p))
             bound[i] = _ccd_bound(body)
-            center[i] = _wide(body.position)
+            center[i] = widen_vector(body.position)
             if self._ccd_turns(i):
                 # A turning shape's points move at |v| + |w| L, and
                 # |w|^2 <= w^T I w lambda_max(I^-1), at most the energy
@@ -633,7 +661,7 @@ struct PhysicsWorld(Movable):
                     trace / Float64(body.inverse_mass())
                 )
                 bound[i] = lever + Float64(body.shape.radius)
-                center[i] = _wide(body.world_center_of_mass())
+                center[i] = widen_vector(body.world_center_of_mass())
             group[i] = i
         var reach = List[Float64](length=count, fill=-1)
         var merged = True
@@ -681,7 +709,7 @@ struct PhysicsWorld(Movable):
                         continue
                     var offset = center[i] - center[j]
                     var limit = reach[i] + reach[j] + Float64(self.margin)
-                    if _wide_dot(offset, offset) <= limit * limit:
+                    if wide_dot(offset, offset) <= limit * limit:
                         var keep = min(group[i], group[j])
                         var drop = max(group[i], group[j])
                         for k in range(count):  # pragma: no branch
@@ -833,12 +861,12 @@ struct PhysicsWorld(Movable):
         mut self, i: Int, h: Float32, mut impacts: List[_CCDImpact]
     ) raises -> Tuple[Vector3, Quaternion]:
         var rotation = self.bodies[i].rotation
-        var push_angular = _wide(self.bodies[i].push_angular)
-        var at = _wide(self.bodies[i].position) + _wide(
+        var push_angular = widen_vector(self.bodies[i].push_angular)
+        var at = widen_vector(self.bodies[i].position) + widen_vector(
             self.bodies[i].push_velocity
         ) * Float64(h)
-        var velocity = _wide(self.bodies[i].linear_velocity)
-        var angular = _wide(self.bodies[i].angular_velocity)
+        var velocity = widen_vector(self.bodies[i].linear_velocity)
+        var angular = widen_vector(self.bodies[i].angular_velocity)
         var half_axis = self._ccd_half_axis(i)
         var remaining = Float64(h)
         var count = 0
@@ -856,8 +884,7 @@ struct PhysicsWorld(Movable):
                     rotation, angular + push_angular, remaining
                 )
                 break
-            if count == self.ccd_max_impacts:
-                raise Error("CCD impact limit exhausted; step rolled back")
+            _impact_exhausted(count, self.ccd_max_impacts)
             at += travel * fraction
             rotation = _ccd_rotate(
                 rotation, angular + push_angular, remaining * fraction
@@ -894,22 +921,26 @@ struct PhysicsWorld(Movable):
         # separating-axis test over time; see _sweep_convex_triangle. Each
         # impact is a linear impulse with restitution and friction.
         var shape = self._shape(i)
-        var shift = _wide(self.bodies[i].push_velocity) * Float64(h)
+        var shift = widen_vector(self.bodies[i].push_velocity) * Float64(h)
         var corners = List[SIMD[DType.float64, 4]]()
         for corner in shape.polyhedron.vertices:  # pragma: no branch
-            corners.append(_wide(corner) + shift)
+            corners.append(widen_vector(corner) + shift)
         var faces = List[SIMD[DType.float64, 4]]()
         for normal in shape.polyhedron.normals:  # pragma: no branch
-            faces.append(_wide(normal))
+            faces.append(widen_vector(normal))
         var edges = List[SIMD[DType.float64, 4]]()
         for k in range(len(shape.polyhedron.edge_a)):  # pragma: no branch
             edges.append(
-                _wide(shape.polyhedron.vertices[shape.polyhedron.edge_b[k]])
-                - _wide(shape.polyhedron.vertices[shape.polyhedron.edge_a[k]])
+                widen_vector(
+                    shape.polyhedron.vertices[shape.polyhedron.edge_b[k]]
+                )
+                - widen_vector(
+                    shape.polyhedron.vertices[shape.polyhedron.edge_a[k]]
+                )
             )
-        var start = _wide(self.bodies[i].position) + shift
+        var start = widen_vector(self.bodies[i].position) + shift
         var moved = SIMD[DType.float64, 4](0)
-        var velocity = _wide(self.bodies[i].linear_velocity)
+        var velocity = widen_vector(self.bodies[i].linear_velocity)
         var angular = SIMD[DType.float64, 4](0)
         var bound = _ccd_bound(self.bodies[i])
         var indexed = (
@@ -948,8 +979,7 @@ struct PhysicsWorld(Movable):
             if triangle < 0:
                 moved += travel
                 break
-            if count == self.ccd_max_impacts:
-                raise Error("CCD impact limit exhausted; step rolled back")
+            _impact_exhausted(count, self.ccd_max_impacts)
             count += 1
             moved += travel * fraction
             remaining *= 1 - fraction
@@ -1001,8 +1031,8 @@ struct PhysicsWorld(Movable):
             )
         var middle = body.shape_position - body.center_of_mass
         return (
-            _wide(rotation.rotate(middle - half)),
-            _wide(rotation.rotate(middle + half)),
+            widen_vector(rotation.rotate(middle - half)),
+            widen_vector(rotation.rotate(middle + half)),
         )
 
     def _ccd_lever(self, i: Int) -> Float64:
@@ -1010,8 +1040,8 @@ struct PhysicsWorld(Movable):
         var ends = self._ccd_ends(i, self.bodies[i].rotation)
         return (
             max(
-                sqrt(_wide_dot(ends[0], ends[0])),
-                sqrt(_wide_dot(ends[1], ends[1])),
+                sqrt(wide_dot(ends[0], ends[0])),
+                sqrt(wide_dot(ends[1], ends[1])),
             )
             * 1.000000000000001
         )
@@ -1026,12 +1056,12 @@ struct PhysicsWorld(Movable):
         # takes a rigid impulse at the contact point. The mass center moves
         # at a constant velocity and the body turns at a constant spin.
         var rotation = self.bodies[i].rotation
-        var center = _wide(self.bodies[i].world_center_of_mass()) + _wide(
-            self.bodies[i].push_velocity
-        ) * Float64(h)
-        var velocity = _wide(self.bodies[i].linear_velocity)
-        var angular = _wide(self.bodies[i].angular_velocity)
-        var turning = _wide(self.bodies[i].push_angular)
+        var center = widen_vector(
+            self.bodies[i].world_center_of_mass()
+        ) + widen_vector(self.bodies[i].push_velocity) * Float64(h)
+        var velocity = widen_vector(self.bodies[i].linear_velocity)
+        var angular = widen_vector(self.bodies[i].angular_velocity)
+        var turning = widen_vector(self.bodies[i].push_angular)
         var radius = Float64(self.bodies[i].shape.radius)
         var tolerance = radius / 1024
         var indexed = (
@@ -1054,8 +1084,8 @@ struct PhysicsWorld(Movable):
             var spin = angular + turning
             if refresh:
                 var speed = (
-                    sqrt(_wide_dot(velocity, velocity))
-                    + sqrt(_wide_dot(spin, spin)) * lever
+                    sqrt(wide_dot(velocity, velocity))
+                    + sqrt(wide_dot(spin, spin)) * lever
                 )
                 _ = self._ccd_index.query(
                     center,
@@ -1070,21 +1100,19 @@ struct PhysicsWorld(Movable):
             var ends = self._ccd_ends(i, rotation)
             var at = (center + ends[0], center + ends[1])
             var speeds = (
-                velocity + _wide_cross(spin, ends[0]),
-                velocity + _wide_cross(spin, ends[1]),
+                velocity + wide_cross(spin, ends[0]),
+                velocity + wide_cross(spin, ends[1]),
             )
             # A point's path bends at |w|^2 times its distance from the
             # spin axis through the mass center: the ends bound it.
             var curvature = Float64(0)
-            var square = _wide_dot(spin, spin)
+            var square = wide_dot(spin, spin)
             if square > 0:
-                var low = ends[0] - spin * (_wide_dot(ends[0], spin) / square)
-                var high = ends[1] - spin * (_wide_dot(ends[1], spin) / square)
+                var low = ends[0] - spin * (wide_dot(ends[0], spin) / square)
+                var high = ends[1] - spin * (wide_dot(ends[1], spin) / square)
                 curvature = (
                     square
-                    * max(
-                        sqrt(_wide_dot(low, low)), sqrt(_wide_dot(high, high))
-                    )
+                    * max(sqrt(wide_dot(low, low)), sqrt(wide_dot(high, high)))
                     * 1.000000000000001
                 )
             var step = remaining
@@ -1112,7 +1140,7 @@ struct PhysicsWorld(Movable):
                     # The contact point's velocity closes on the triangle.
                     var contact = gap[2] - gap[1] * radius
                     if _approaches(
-                        velocity + _wide_cross(angular, contact - center),
+                        velocity + wide_cross(angular, contact - center),
                         gap[1],
                     ):
                         triangle = index
@@ -1120,8 +1148,7 @@ struct PhysicsWorld(Movable):
                         point = contact
                 step = min(step, clear)
             if triangle >= 0:
-                if count == self.ccd_max_impacts:
-                    raise Error("CCD impact limit exhausted; step rolled back")
+                _impact_exhausted(count, self.ccd_max_impacts)
                 count += 1
                 var impulse = self._ccd_rigid(
                     i,
@@ -1170,26 +1197,26 @@ struct PhysicsWorld(Movable):
         var material = self.bodies[i].material.combine(
             self.bodies[other].material
         )
-        var approach = _wide_dot(velocity + _wide_cross(angular, arm), normal)
+        var approach = wide_dot(velocity + wide_cross(angular, arm), normal)
         var restitution = Float64(0)
         if approach <= -Float64(self.bounce_threshold):
             restitution = Float64(material.restitution)
-        var lever = _wide_cross(arm, normal)
+        var lever = wide_cross(arm, normal)
         var impulse = (
             -(1 + restitution)
             * approach
-            / (mass + _wide_dot(lever, self._ccd_spin(i, lever)))
+            / (mass + wide_dot(lever, self._ccd_spin(i, lever)))
         )
         velocity += normal * (impulse * mass)
         angular += self._ccd_spin(i, lever * impulse)
-        var slip = velocity + _wide_cross(angular, arm)
-        var tangent = slip - normal * _wide_dot(slip, normal)
-        var speed = sqrt(_wide_dot(tangent, tangent))
+        var slip = velocity + wide_cross(angular, arm)
+        var tangent = slip - normal * wide_dot(slip, normal)
+        var speed = sqrt(wide_dot(tangent, tangent))
         if speed > 0:
             var along = tangent / speed
-            var side = _wide_cross(arm, along)
+            var side = wide_cross(arm, along)
             var friction = min(
-                speed / (mass + _wide_dot(side, self._ccd_spin(i, side))),
+                speed / (mass + wide_dot(side, self._ccd_spin(i, side))),
                 Float64(material.friction) * impulse,
             )
             velocity -= along * (friction * mass)
@@ -1197,12 +1224,10 @@ struct PhysicsWorld(Movable):
             # A tangential impulse at an arm turns the body, which can close
             # the contact again. Open it to zero closing speed: that impulse
             # changes the energy by -v^2 / (2 K), so it cannot add any.
-            var closing = _wide_dot(
-                velocity + _wide_cross(angular, arm), normal
-            )
+            var closing = wide_dot(velocity + wide_cross(angular, arm), normal)
             if closing < 0:
                 var extra = -closing / (
-                    mass + _wide_dot(lever, self._ccd_spin(i, lever))
+                    mass + wide_dot(lever, self._ccd_spin(i, lever))
                 )
                 velocity += normal * (extra * mass)
                 angular += self._ccd_spin(i, lever * extra)
@@ -1214,7 +1239,7 @@ struct PhysicsWorld(Movable):
         # rotation-locked capsule's axis does not change during a step.
         if self.bodies[i].shape.kind != CAPSULE:
             return SIMD[DType.float64, 4](0)
-        return _wide(
+        return widen_vector(
             self.bodies[i]
             .shape_world_rotation()
             .rotate(Vector3(0, 0, self.bodies[i].shape.half_height))
@@ -1303,7 +1328,7 @@ struct PhysicsWorld(Movable):
         var material = self.bodies[i].material.combine(
             self.bodies[self._triangle_body[triangle]].material
         )
-        var approach = _wide_dot(velocity, normal)
+        var approach = wide_dot(velocity, normal)
         var restitution = Float64(0)
         if approach <= -Float64(self.bounce_threshold):
             restitution = Float64(material.restitution)
@@ -1314,9 +1339,9 @@ struct PhysicsWorld(Movable):
         var normal_impulse = -(1 + restitution) * approach / inverse_mass
         velocity += normal * (normal_impulse * inverse_mass)
         var arm = -normal * radius
-        var slip = velocity + _wide_cross(angular, arm)
-        var tangent = slip - normal * _wide_dot(slip, normal)
-        var speed = sqrt(_wide_dot(tangent, tangent))
+        var slip = velocity + wide_cross(angular, arm)
+        var tangent = slip - normal * wide_dot(slip, normal)
+        var speed = sqrt(wide_dot(tangent, tangent))
         var tensor = self.bodies[i].inverse_inertia()
         if speed > 0 and _isotropic(tensor):
             var impulse = min(
@@ -1325,7 +1350,7 @@ struct PhysicsWorld(Movable):
             )
             var friction = -tangent * (impulse / speed)
             velocity += friction * inverse_mass
-            angular += _wide_cross(arm, friction) * inverse_inertia
+            angular += wide_cross(arm, friction) * inverse_inertia
         elif speed > 0:
             # W = R M R^T at the step's start orientation, the one
             # the separation bound measured, so no impact in this step
@@ -1333,8 +1358,8 @@ struct PhysicsWorld(Movable):
             # K = 1/m + (r x t)^T W (r x t), which is positive.
             var turn = rotation_matrix(self.bodies[i].rotation)
             var along = tangent / speed
-            var lever = _wide_cross(arm, along)
-            var resist = inverse_mass + _wide_dot(
+            var lever = wide_cross(arm, along)
+            var resist = inverse_mass + wide_dot(
                 lever,
                 _turn_out(turn, _apply(tensor, _turn_in(turn, lever))),
             )
@@ -1346,7 +1371,7 @@ struct PhysicsWorld(Movable):
             velocity += friction * inverse_mass
             angular += _turn_out(
                 turn,
-                _apply(tensor, _turn_in(turn, _wide_cross(arm, friction))),
+                _apply(tensor, _turn_in(turn, wide_cross(arm, friction))),
             )
         velocity = _ccd_close_normal_velocity(
             velocity, normal, -restitution * approach
@@ -1376,11 +1401,12 @@ struct PhysicsWorld(Movable):
             moves.append(body.kind() == DYNAMIC)
             half.append(self._ccd_half_axis(i))
             at.append(
-                _wide(body.position) + _wide(body.push_velocity) * Float64(h)
+                widen_vector(body.position)
+                + widen_vector(body.push_velocity) * Float64(h)
             )
-            velocity.append(_wide(body.linear_velocity))
-            angular.append(_wide(body.angular_velocity))
-            turning.append(_wide(body.push_angular))
+            velocity.append(widen_vector(body.linear_velocity))
+            angular.append(widen_vector(body.angular_velocity))
+            turning.append(widen_vector(body.push_angular))
             rotation.append(body.rotation)
         var none = SIMD[DType.float64, 4](0)
         var candidates = List[Int]()
@@ -1454,9 +1480,9 @@ struct PhysicsWorld(Movable):
                 members[second] if second
                 >= 0 else self._triangle_body[triangle]
             )
-            var approach = _wide_dot(velocity[first], normal)
+            var approach = wide_dot(velocity[first], normal)
             if second >= 0:
-                approach -= _wide_dot(velocity[second], normal)
+                approach -= wide_dot(velocity[second], normal)
             # A cascade of plastic impacts at one instant only halves the
             # speeds each round, and a bouncing one can go on too. Settle
             # every touching contact together, plastically, instead.
@@ -1620,9 +1646,9 @@ struct PhysicsWorld(Movable):
         var matrix = List[Float64](length=m * m, fill=0)
         var closing = List[Float64](length=m, fill=0)
         for c in range(m):  # pragma: no branch
-            closing[c] = _wide_dot(velocity[body[c]], normal[c])
+            closing[c] = wide_dot(velocity[body[c]], normal[c])
             if partner[c] >= 0:
-                closing[c] -= _wide_dot(velocity[partner[c]], normal[c])
+                closing[c] -= wide_dot(velocity[partner[c]], normal[c])
             for d in range(m):  # pragma: no branch
                 # The change in contact c's closing speed per unit impulse
                 # at contact d.
@@ -1635,7 +1661,7 @@ struct PhysicsWorld(Movable):
                     share -= inverse[partner[c]]
                 if partner[c] >= 0 and partner[c] == partner[d]:
                     share += inverse[partner[c]]
-                matrix[c * m + d] = share * _wide_dot(normal[c], normal[d])
+                matrix[c * m + d] = share * wide_dot(normal[c], normal[d])
         var impulse = _ccd_lcp(matrix, closing)
         for c in range(m):  # pragma: no branch
             if impulse[c] <= 0:
@@ -1677,33 +1703,33 @@ struct PhysicsWorld(Movable):
         var ra = -normal * Float64(self.bodies[i].shape.radius)
         var rb = normal * Float64(self.bodies[j].shape.radius)
         var material = self.bodies[i].material.combine(self.bodies[j].material)
-        var approach = _wide_dot(va - vb, normal)
+        var approach = wide_dot(va - vb, normal)
         var restitution = Float64(0)
         if approach <= -Float64(self.bounce_threshold):
             restitution = Float64(material.restitution)
         var impulse = -(1 + restitution) * approach / (ma + mb)
         va += normal * (impulse * ma)
         vb -= normal * (impulse * mb)
-        var slip = va + _wide_cross(wa, ra) - vb - _wide_cross(wb, rb)
-        var tangent = slip - normal * _wide_dot(slip, normal)
-        var speed = sqrt(_wide_dot(tangent, tangent))
+        var slip = va + wide_cross(wa, ra) - vb - wide_cross(wb, rb)
+        var tangent = slip - normal * wide_dot(slip, normal)
+        var speed = sqrt(wide_dot(tangent, tangent))
         if speed > 0:
             var along = tangent / speed
-            var la = _wide_cross(ra, along)
-            var lb = _wide_cross(rb, along)
+            var la = wide_cross(ra, along)
+            var lb = wide_cross(rb, along)
             var resist = (
                 ma
                 + mb
-                + _wide_dot(la, self._ccd_spin(i, la))
-                + _wide_dot(lb, self._ccd_spin(j, lb))
+                + wide_dot(la, self._ccd_spin(i, la))
+                + wide_dot(lb, self._ccd_spin(j, lb))
             )
             var friction = -along * min(
                 speed / resist, Float64(material.friction) * impulse
             )
             va += friction * ma
-            wa += self._ccd_spin(i, _wide_cross(ra, friction))
+            wa += self._ccd_spin(i, wide_cross(ra, friction))
             vb -= friction * mb
-            wb += self._ccd_spin(j, _wide_cross(rb, -friction))
+            wb += self._ccd_spin(j, wide_cross(rb, -friction))
         return impulse
 
     def _ccd_spin(
@@ -1826,9 +1852,9 @@ struct PhysicsWorld(Movable):
                 continue
             if self.collision_detection == SPHERE_MESH_CCD:
                 var triangle = self._triangles[t]
-                var normal = _wide_cross(
-                    _wide(triangle.b) - _wide(triangle.a),
-                    _wide(triangle.c) - _wide(triangle.a),
+                var normal = wide_cross(
+                    widen_vector(triangle.b) - widen_vector(triangle.a),
+                    widen_vector(triangle.c) - widen_vector(triangle.a),
                 )
                 # A sphere's two endpoints are equal. A capsule is behind
                 # only when both of its endpoints are, as in mesh_contacts.
@@ -1836,12 +1862,15 @@ struct PhysicsWorld(Movable):
                 var ahead = False
                 if shape.is_round():
                     ahead = (
-                        _wide_dot(
-                            _wide(shape.start) - _wide(triangle.a), normal
+                        wide_dot(
+                            widen_vector(shape.start)
+                            - widen_vector(triangle.a),
+                            normal,
                         )
                         >= 0
-                        or _wide_dot(
-                            _wide(shape.end) - _wide(triangle.a), normal
+                        or wide_dot(
+                            widen_vector(shape.end) - widen_vector(triangle.a),
+                            normal,
                         )
                         >= 0
                     )
@@ -1850,7 +1879,10 @@ struct PhysicsWorld(Movable):
                         corner
                     ) in shape.polyhedron.vertices:  # pragma: no branch
                         if (
-                            _wide_dot(_wide(corner) - _wide(triangle.a), normal)
+                            wide_dot(
+                                widen_vector(corner) - widen_vector(triangle.a),
+                                normal,
+                            )
                             >= 0
                         ):
                             ahead = True
@@ -1989,7 +2021,7 @@ struct PhysicsWorld(Movable):
             var t1 = p.tangent_impulse1 - p.tangent_mass1 * v.dot(p.tangent1)
             var t2 = p.tangent_impulse2 - p.tangent_mass2 * v.dot(p.tangent2)
             var limit = friction * p.normal_impulse
-            var size = sqrt(t1 * t1 + t2 * t2)
+            var size = sqrt(squared_length2[DType.float32](t1, t2))
             if size > limit:
                 t1 *= limit / size
                 t2 *= limit / size
@@ -2158,49 +2190,19 @@ struct PhysicsWorld(Movable):
         if owner == ignore.value or not self.bodies[owner].collides:
             return best
         ref tri = self._triangles[t]
-        var met = ray.intersect_triangle(tri.a, tri.b, tri.c, True)
-        if not Bool(met):
-            return best
-        var distance = (met.value() - ray.origin).length()
-        if distance > reach:
-            return best
-        if Bool(best) and best.value().distance <= distance:
-            return best
-        return RaycastHit(
-            BodyId(owner),
-            met.value(),
-            unit_or(cross(tri.b - tri.a, tri.c - tri.a), Vector3(0, 0, 1)),
-            distance,
+        return _triangle_ray_hit(
+            ray,
+            tri.a,
+            tri.b,
+            tri.c,
+            reach,
+            best,
+            owner,
             self.bodies[owner].material,
         )
 
     def _shape_hit(self, ray: Ray, i: Int) -> Optional[RaycastHit]:
-        var shape = self._shape(i)
-        var material = self.bodies[i].material
-        if not shape.is_round():
-            return _polyhedron_hit(ray, shape.polyhedron, i, material)
-        var best = _sphere_hit(ray, shape.start, shape.radius)
-        var other = _sphere_hit(ray, shape.end, shape.radius)
-        if other < best:
-            best = other
-        other = _cylinder_hit(ray, shape.start, shape.end, shape.radius)
-        if other < best:
-            best = other
-        if best == inf[DType.float32]():
-            return None
-        var point = ray.at(best)
-        var on = Vector3(0, 0, 0)
-        var on_ray = Vector3(0, 0, 0)
-        _ = Line3(shape.start, shape.end).closest_points_to_line(
-            Line3(point, point), on, on_ray
-        )
-        return RaycastHit(
-            BodyId(i),
-            point,
-            unit_or(point - on, -ray.direction),
-            best,
-            material,
-        )
+        return _shape_ray_hit(ray, self._shape(i), i, self.bodies[i].material)
 
 
 def _box_of(shape: WorldShape) -> Box3:
@@ -2216,6 +2218,77 @@ def _box_of(shape: WorldShape) -> Box3:
     for v in shape.polyhedron.vertices:  # pragma: no branch
         box.expand_by_point(v)
     return box
+
+
+def _triangle_ray_hit(
+    ray: Ray,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    reach: Float32,
+    best: Optional[RaycastHit],
+    owner: Int,
+    material: PhysicsMaterial,
+) -> Optional[RaycastHit]:
+    """Return the nearer hit of a ray on one triangle, or `best`."""
+    var met = ray.intersect_triangle(a, b, c, True)
+    if not Bool(met):
+        return best
+    var distance = (met.value() - ray.origin).length()
+    if distance > reach:
+        return best
+    if Bool(best) and best.value().distance <= distance:
+        return best
+    return RaycastHit(
+        BodyId(owner),
+        met.value(),
+        unit_or(cross(b - a, c - a), Vector3(0, 0, 1)),
+        distance,
+        material,
+    )
+
+
+def _shape_ray_hit(
+    ray: Ray, shape: WorldShape, body: Int, material: PhysicsMaterial
+) -> Optional[RaycastHit]:
+    """Return where a ray enters one placed shape.
+
+    A round shape is the nearest of its two end spheres and its side.
+    A box or a hull is the convex clip.
+
+    Args:
+        ray: The ray, in world space.
+        shape: The shape, already placed.
+        body: The body that owns the shape.
+        material: The body's material.
+
+    Returns:
+        The hit, or none when the ray misses.
+    """
+    if not shape.is_round():
+        return _polyhedron_hit(ray, shape.polyhedron, body, material)
+    var best = _sphere_hit(ray, shape.start, shape.radius)
+    var other = _sphere_hit(ray, shape.end, shape.radius)
+    if other < best:
+        best = other
+    other = _cylinder_hit(ray, shape.start, shape.end, shape.radius)
+    if other < best:
+        best = other
+    if best == inf[DType.float32]():
+        return None
+    var point = ray.at(best)
+    var on = Vector3(0, 0, 0)
+    var on_ray = Vector3(0, 0, 0)
+    _ = Line3(shape.start, shape.end).closest_points_to_line(
+        Line3(point, point), on, on_ray
+    )
+    return RaycastHit(
+        BodyId(body),
+        point,
+        unit_or(point - on, -ray.direction),
+        best,
+        material,
+    )
 
 
 def _sphere_hit(ray: Ray, center: Vector3, radius: Float32) -> Float32:
@@ -2376,14 +2449,12 @@ def _ccd_turn(
 ) -> Quaternion:
     # The exact turn at a constant spin for a time h, about the spin axis
     # by |spin| h, so the pose lies on the path that the sweep certified.
-    var size = sqrt(_wide_dot(spin, spin))
+    var size = sqrt(wide_dot(spin, spin))
     if size == 0:
         return rotation
     var half = size * h / 2
     var axis = spin * (sin(half) / size)
-    var turn = Quaternion(
-        Float32(axis[0]), Float32(axis[1]), Float32(axis[2]), Float32(cos(half))
-    )
+    var turn = quaternion_from_float64(axis[0], axis[1], axis[2], cos(half))
     var out = turn * rotation
     out.normalize()
     return out
@@ -2396,8 +2467,7 @@ def _ccd_spend(
     # A kinematic member's impacts count against the dynamic member hit.
     if not moves[k]:
         return
-    if count[k] == limit:
-        raise Error("CCD impact limit exhausted; step rolled back")
+    _impact_exhausted(count[k], limit)
     count[k] += 1
 
 
@@ -2577,22 +2647,22 @@ def _ccd_bound(body: RigidBody) -> Float64:
     # box or hull uses its farthest world corner.
     if _solid(body):
         var turn = body.shape_world_rotation()
-        var offset = _wide(body.shape_world_position() - body.position)
+        var offset = widen_vector(body.shape_world_position() - body.position)
         var most = Float64(0)
         for corner in body.shape.polyhedron.vertices:  # pragma: no branch
-            var at = offset + _wide(turn.rotate(corner))
-            most = max(most, sqrt(_wide_dot(at, at)))
+            var at = offset + widen_vector(turn.rotate(corner))
+            most = max(most, sqrt(wide_dot(at, at)))
         return most * 1.000000000000001
     var bound = Float64(body.shape.radius)
     if body.shape.kind != CAPSULE:
         return bound
-    var half = _wide(
+    var half = widen_vector(
         body.shape_world_rotation().rotate(
             Vector3(0, 0, body.shape.half_height)
         )
     )
     # Round outward: the sum, the root and the addition each round.
-    return (bound + sqrt(_wide_dot(half, half))) * 1.000000000000001
+    return (bound + sqrt(wide_dot(half, half))) * 1.000000000000001
 
 
 def _ccd_rotation(value: Quaternion) raises:

@@ -15,7 +15,7 @@ marching tetrahedra. Connectivity comes from the field.
 from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
+from extensions.humanoid.skeleton.isosurface import mesh_checked
 from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaDimensions,
     TibiaField,
@@ -66,6 +66,5 @@ def tibia_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    check_detail(detail, "tibia")
     var field = TibiaField(dimensions)
-    return mesh_field(field, field.low, field.high, detail, "tibia")
+    return mesh_checked(field, field.low, field.high, detail, "tibia")

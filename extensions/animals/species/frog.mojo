@@ -21,6 +21,7 @@ from extensions.animals.coat import (
     EyeLook,
     Paint,
     Palette,
+    channel_gain,
     mix3,
     palette_of,
     srgb,
@@ -33,15 +34,23 @@ from extensions.animals.parts import (
 )
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
+    side_sign,
+    digitigrade_fore,
+    digitigrade_hind,
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
 )
-from extensions.animals.noise import cells3, fbm3
+from extensions.animals.noise import cells3, fbm3, centered_fbm
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones
 from extensions.sdf.field import SdfModel
-from extensions.animals.traits import Traits, pick_age, pick_sex
+from extensions.animals.traits import (
+    Traits,
+    pick_age,
+    pick_sex,
+    require_color_variant,
+)
 from extensions.sdf.vector import (
     V3,
     clamp,
@@ -54,6 +63,7 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import legs_warp, length_warp, scale_about_warp
+from math.norm import squared_length2
 from std.math import atan2, cos, floor, pi, sin, sqrt
 
 # The head's origin: on the midline, level with the eye centers.
@@ -109,8 +119,7 @@ def frog_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var age = pick_age(options.age)
     var variant = BULLFROG
     if options.variant.value >= 0:
-        if options.variant.value >= 3:
-            raise Error("The species has no such color variant")
+        require_color_variant(options.variant.value, 3)
         variant = options.variant.value
     var t = Traits(sex, age, variant)
     var juv = t.juvenile() > 0.0
@@ -247,7 +256,9 @@ def _solve2(a: V3, c: V3, l1: Float64, l2: Float64, pole: V3) -> V3:
     var e1 = normalize(d)
     var e2 = normalize(pole - e1 * dot(pole, e1))
     var cos_a = clamp(
-        (l1 * l1 + dd * dd - l2 * l2) / (2.0 * l1 * dd), -1.0, 1.0
+        (squared_length2[DType.float64](l1, dd) - l2 * l2) / (2.0 * l1 * dd),
+        -1.0,
+        1.0,
     )
     return a + e1 * (cos_a * l1) + e2 * (sqrt(1.0 - cos_a * cos_a) * l1)
 
@@ -482,7 +493,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     var tym = _tympanum(t)
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
+        var s = side_sign(side)
         # The canthus: a soft ridge from the eye to the nostril.
         _ = m.cone(
             "canthus",
@@ -679,17 +690,11 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS.
     var arm = (1.18 if male else 1.0) * t.get("armK")
     for side in [String("L"), String("R")]:  # pragma: no branch
-        var s = 1.0 if side == "L" else -1.0
-        var lat = V3(s, 0.0, 0.0)
+        var s = side_sign(side)
         # FRONT: short and upright, with four slender fingers.
-        var sh = rig.j("shoulder" + side)
-        var e = rig.j("elbow" + side)
-        var w = rig.j("wrist" + side)
-        var mc = rig.j("mcp" + side)
-        var toe = rig.j("ftoe" + side)
-        var hum = rig.bone("humerus" + side)
-        var rad = rig.bone("radius" + side)
-        var fpaw = rig.bone("fpaw" + side)
+        var lat, _, sh, e, w, mc, toe, _, hum, rad, meta, fpaw = (
+            digitigrade_fore(rig, side, s)
+        )
         _ = ell_y(
             m,
             "armpit",
@@ -716,7 +721,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = ell_y(
             m,
             "palm",
-            rig.bone("metacarpus" + side),
+            meta,
             lerp(w, mc, 0.55),
             dp,
             V3(0.0045, 0.0068, 0.0022),
@@ -747,15 +752,9 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
         # HIND: a heavy thigh, the tibiofibula, the long tarsus and the
         # long webbed foot.
-        var hp = rig.j("hip" + side)
-        var kn = rig.j("knee" + side)
-        var hk = rig.j("hock" + side)
-        var mt = rig.j("mtp" + side)
-        var ht = rig.j("htoe" + side)
-        var fem = rig.bone("femur" + side)
-        var tib = rig.bone("tibia" + side)
-        var tar = rig.bone("metatarsus" + side)
-        var hpaw = rig.bone("hpaw" + side)
+        var hp, kn, hk, mt, ht, fem, tib, tar, hpaw = digitigrade_hind(
+            rig, side
+        )
         # The web between the thigh and the body.
         _ = ell_y(
             m,
@@ -1096,11 +1095,11 @@ def frog_paint(
                 var period = 0.0105 if temporaria else 0.0125
                 var phase = Float64(ends[0].byte_length() * 7 % 10) * 0.1
                 var ph = (
-                    along / period + phase + 0.25 * (fbm3(p * 300.0, 2) - 0.5)
+                    along / period + phase + 0.25 * (centered_fbm(p, 300.0, 2))
                 )
                 var f = abs(ph - floor(ph) - 0.5)
                 var wb = (0.2 if temporaria else 0.17) + 0.05 * (
-                    fbm3(p * 120.0, 2) - 0.5
+                    centered_fbm(p, 120.0, 2)
                 )
                 pat = min(pat, (f - wb) * period + (1.0 - outer) * 0.002)
                 pat_col = pal.get("band")
@@ -1210,11 +1209,11 @@ def frog_paint(
             rad *= 0.6
         rad *= t.get("mottleSize")
         var cs = rad * 2.0 * (1.35 if temporaria else 1.5)
-        var q = p + V3(0.7, 0.3, 1.1) * (0.002 * (fbm3(p * 260.0, 2) - 0.5))
+        var q = p + V3(0.7, 0.3, 1.1) * (0.002 * (centered_fbm(p, 260.0, 2)))
         var cl = cells3(q * (1.0 / cs), Int(t.get("coatSeed", 0.0)) % 7919)
         if cl.id < t.get("mottle", 0.7):
             var sd = cl.nearest * cs - rad * (0.75 + 0.5 * cl.id)
-            sd += 0.0022 * (fbm3(p * 420.0, 3) - 0.5)
+            sd += 0.0022 * (centered_fbm(p, 420.0, 3))
             if sd < pat:
                 pat = sd
                 pat_col = pal.get("mottle") if region == 0 else mix3(
@@ -1239,10 +1238,6 @@ def frog_paint(
         )
     if t.juvenile() > 0.0:
         col = mix3(col, mix3(col, pal.get("head"), 0.6), 0.3)
-    var cv = fbm3(p * 60.0, 3) - 0.5
-    col = V3(
-        col.x * (1.0 + 0.16 * cv),
-        col.y * (1.0 + 0.13 * cv),
-        col.z * (1.0 + 0.1 * cv),
-    )
+    var cv = centered_fbm(p, 60.0, 3)
+    col = channel_gain(col, cv, 0.16, 0.13, 0.1)
     return Paint(col, SKIN if mouth else WET)

@@ -25,10 +25,18 @@ writes that array, so the port rounds each height to `Float32` where
 three.js stores one.
 """
 
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
-from generators.utils import check_finite, generator_random, meters
+from core.buffer_geometry import BufferGeometry
+from core.ordinal import require_non_negative, require_positive
+from geometries.surface import position_normal_surface
+from generators.utils import (
+    check_finite,
+    generator_random,
+    length_meters,
+    meters,
+)
 from math.noise import ImprovedNoise
+from math.utils import clamp
+from math.norm import squared_length2, squared_length3
 from std.math import floor, inf, pow, sqrt
 from units.si import (
     InverseLength,
@@ -98,12 +106,16 @@ struct TerrainParameters(Copyable, Movable):
         """
         if not meters(self.size) > 0:
             raise Error("A terrain's size must be positive")
-        if self.segments < 1:
-            raise Error("A terrain needs one segment a side at least")
-        if self.octaves < 0:
-            raise Error("A terrain's octave count must be zero or more")
-        if self.talus_passes < 0:
-            raise Error("A terrain's erosion pass count must be zero or more")
+        require_positive(
+            self.segments, "A terrain needs one segment a side at least"
+        )
+        require_non_negative(
+            self.octaves, "A terrain's octave count must be zero or more"
+        )
+        require_non_negative(
+            self.talus_passes,
+            "A terrain's erosion pass count must be zero or more",
+        )
         check_finite(meters(self.height_scale), "A height scale")
         check_finite(Float64(self.frequency.to(PER_METER)), "A frequency")
         check_finite(
@@ -168,7 +180,11 @@ struct _HeightField:
             var nz = self.perlin.noise(bx, bz + e, zr)
             dx += (nx - n) / e * freq
             dz += (nz - n) / e * freq
-            sum += amp * n / (1 + self.p.erosion * (dx * dx + dz * dz))
+            sum += (
+                amp
+                * n
+                / (1 + self.p.erosion * squared_length2[DType.float64](dx, dz))
+            )
             var rx = 0.8 * px - 0.6 * pz
             pz = 0.6 * px + 0.8 * pz
             px = rx
@@ -350,8 +366,7 @@ struct TerrainGenerator(Movable):
             for ix in range(segments):  # pragma: no branch
                 _append_quad(index, n, ix, iz)
         var geometry = BufferGeometry()
-        geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-        geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+        position_normal_surface(geometry, positions^, normals^)
         geometry.set_index(index^)
         self.heights = heights^
         self.grid_size = n
@@ -366,8 +381,8 @@ struct TerrainGenerator(Movable):
         var size = meters(self.parameters.size)
         var n = self.grid_size
         var half = size / 2
-        var fx = max(0.0, min(segments, (x + half) / size * segments))
-        var fz = max(0.0, min(segments, (z + half) / size * segments))
+        var fx = clamp((x + half) / size * segments, 0.0, segments)
+        var fz = clamp((z + half) / size * segments, 0.0, segments)
         var ix = min(n - 2, Int(floor(fx)))
         var iz = min(n - 2, Int(floor(fz)))
         var tx = fx - Float64(ix)
@@ -401,7 +416,7 @@ struct TerrainGenerator(Movable):
             Error: If the terrain is not built.
         """
         self._check_built()
-        return Length(Float32(self._height_at(meters(x), meters(z))), METER)
+        return length_meters(self._height_at(meters(x), meters(z)))
 
     def sample_slope(self, x: Length, z: Length) raises -> Float64:
         """Return how flat the baked surface is at a point, three.js's
@@ -455,7 +470,7 @@ struct TerrainGenerator(Movable):
         var e = meters(self.parameters.size) / Float64(self.parameters.segments)
         var hx = self._height_at(x + e, z) - self._height_at(x - e, z)
         var hz = self._height_at(x, z + e) - self._height_at(x, z - e)
-        return 2 * e / sqrt(hx * hx + 4 * e * e + hz * hz)
+        return 2 * e / sqrt(squared_length3[DType.float64](hx, 2 * e, hz))
 
 
 def _append_normal(

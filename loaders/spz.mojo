@@ -42,6 +42,8 @@ whose table or streams are past its end, or whose streams do not hold
 what the header says, is refused too.
 """
 
+from math.finite import stored_float32
+from core.binary import copy_bytes
 from core.gaussian_splat_utils import (
     GaussianSplatGeometry,
     SH_C0,
@@ -56,6 +58,7 @@ from loaders.nrrd import gunzip
 from loaders.splat import le_u16, le_u32
 from render.data_utils import from_half_float
 from render.zstd import zstd_decompress
+from math.norm import squared_length3
 from std.math import exp, max, min, sqrt
 from std.pathlib import Path
 
@@ -114,7 +117,7 @@ def spz_scale(byte: UInt8) -> Float64:
     Returns:
         `exp(byte / 16 - 10)`.
     """
-    return Float64(Float32(exp(Float64(byte) / 16 - 10)))
+    return stored_float32(exp(Float64(byte) / 16 - 10))
 
 
 def spz_quaternion_component(code: Int) -> Float64:
@@ -147,7 +150,9 @@ def smallest_three(packed: Int) -> Tuple[Float64, Float64, Float64, Float64]:
     var a = spz_quaternion_component(packed & 1023)
     var b = spz_quaternion_component((packed >> 10) & 1023)
     var c = spz_quaternion_component((packed >> 20) & 1023)
-    var rest = sqrt(max(Float64(0), 1 - (a * a + b * b + c * c)))
+    var rest = sqrt(
+        max(Float64(0), 1 - squared_length3[DType.float64](a, b, c))
+    )
     if largest == 0:
         return (rest, c, b, a)
     if largest == 1:
@@ -232,17 +237,14 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             is not 1 to 3, the degree is above 4, or the length is not what
             the header says.
     """
-    if len(bytes) < SPZ_HEADER_BYTES:
-        raise Error("SPZ: invalid SPZ header")
+    require_spz_header(len(bytes), SPZ_HEADER_BYTES)
     var version = le_u32(bytes, 4)
     var count = le_u32(bytes, 8)
     var stored = Int(bytes[12])
-    if le_u32(bytes, 0) != SPZ_MAGIC:
-        raise Error("SPZ: invalid SPZ magic")
+    require_spz_magic(le_u32(bytes, 0))
     if version < 1 or version > 3:
         raise Error("SPZ: SPZ version " + String(version) + " is not supported")
-    if count > MAX_SPZ_SPLATS:
-        raise Error("SPZ: the file holds too many splats")
+    require_spz_count(count)
     var vectors = spz_vectors(stored)
     var positions = count * 3 * (2 if version == 1 else 3)
     var rotations = count * (4 if version == 3 else 3)
@@ -255,12 +257,12 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         raise Error("SPZ: invalid SPZ byte length")
     var at = SPZ_HEADER_BYTES
     var fields = _Fields(
-        _cut(bytes, at, positions),
-        _cut(bytes, at + positions, count),
-        _cut(bytes, at + positions + count, count * 3),
-        _cut(bytes, at + positions + count * 4, count * 3),
-        _cut(bytes, at + positions + count * 7, rotations),
-        _cut(bytes, at + positions + count * 7 + rotations, harmonics),
+        copy_bytes(bytes, at, positions),
+        copy_bytes(bytes, at + positions, count),
+        copy_bytes(bytes, at + positions + count, count * 3),
+        copy_bytes(bytes, at + positions + count * 4, count * 3),
+        copy_bytes(bytes, at + positions + count * 7, rotations),
+        copy_bytes(bytes, at + positions + count * 7 + rotations, harmonics),
         count,
         version,
         Int(bytes[13]),
@@ -270,21 +272,51 @@ def parse_raw_spz(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
     return _attributes(fields)
 
 
-def _cut(bytes: List[UInt8], start: Int, length: Int) -> List[UInt8]:
-    """Return a run of bytes.
+def require_spz_header(length: Int, least: Int) raises:
+    """Refuse an SPZ file whose header is shorter than the bytes it reads.
+
+    Nothing. The call returns when the file holds at least `least`
+    bytes.
 
     Args:
-        bytes: The data.
-        start: Where the run starts.
-        length: How long it is. The caller checks it is inside.
+        length: How many bytes the file has.
+        least: How many bytes the header read needs.
 
-    Returns:
-        A copy of the run.
+    Raises:
+        Error: If the file is shorter than `least`.
     """
-    var out = List[UInt8](capacity=length)
-    for at in range(start, start + length):
-        out.append(bytes[at])
-    return out^
+    if length < least:
+        raise Error("SPZ: invalid SPZ header")
+
+
+def require_spz_magic(magic: Int) raises:
+    """Refuse an SPZ file whose magic is not `NGSP`.
+
+    Nothing. The call returns when the magic is `NGSP`.
+
+    Args:
+        magic: The first four bytes, as a little-endian integer.
+
+    Raises:
+        Error: If the magic is not `NGSP`.
+    """
+    if magic != SPZ_MAGIC:
+        raise Error("SPZ: invalid SPZ magic")
+
+
+def require_spz_count(count: Int) raises:
+    """Refuse an SPZ file that holds too many splats.
+
+    Nothing. The call returns when the count is within the limit.
+
+    Args:
+        count: How many splats the file names.
+
+    Raises:
+        Error: If the count passes the limit.
+    """
+    if count > MAX_SPZ_SPLATS:
+        raise Error("SPZ: the file holds too many splats")
 
 
 def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
@@ -303,18 +335,15 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
             does not decompress to its field's length, or anything
             `render.zstd.zstd_decompress` raises.
     """
-    if len(bytes) < 20:
-        raise Error("SPZ: invalid SPZ header")
-    if le_u32(bytes, 0) != SPZ_MAGIC:
-        raise Error("SPZ: invalid SPZ magic")
+    require_spz_header(len(bytes), 20)
+    require_spz_magic(le_u32(bytes, 0))
     if le_u32(bytes, 4) != 4:
         raise Error("SPZ: the raw SPZ parser requires version 4")
     var count = le_u32(bytes, 8)
     var stored = Int(bytes[12])
     var streams = Int(bytes[15])
     var table = le_u32(bytes, 16)
-    if count > MAX_SPZ_SPLATS:
-        raise Error("SPZ: the file holds too many splats")
+    require_spz_count(count)
     var sizes: List[Int] = [
         count * 9,
         count,
@@ -340,7 +369,7 @@ def parse_raw_spz_v4(bytes: List[UInt8]) raises -> GaussianSplatGeometry:
         if length > UInt64(len(bytes) - start):
             raise Error("SPZ: an SPZ stream is past the end")
         var stream = zstd_decompress(
-            _cut(bytes, start, Int(length)), sizes[field]
+            copy_bytes(bytes, start, Int(length)), sizes[field]
         )
         if len(stream) != sizes[field]:
             raise Error("SPZ: an SPZ stream does not hold its field")

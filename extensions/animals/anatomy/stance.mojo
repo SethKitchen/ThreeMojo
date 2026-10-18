@@ -31,7 +31,7 @@ or prove that they can support the missing moment.
 """
 
 from extensions.animals.anatomy.body import MAMMAL, species_body
-from extensions.animals.anatomy.mass import BodyMass
+from extensions.animals.anatomy.mass import BodyMass, require_sampled_rig
 from extensions.animals.anatomy.muscles import (
     AnimalMuscle,
     descends,
@@ -40,9 +40,10 @@ from extensions.animals.anatomy.muscles import (
 from extensions.animals.build import Animal
 from extensions.physics.quantities import NEWTON_METER, Torque
 from extensions.sdf.vector import V3
+from math.finite import stored_float32, require_finite
 from std.math import cos, isfinite
+from units.measure import length_meters
 from units.si import (
-    METER,
     NEWTON,
     PASCAL,
     STANDARD_GRAVITY,
@@ -137,20 +138,21 @@ def _load(
     var activation = sigma / tension if able else 0.0
     var advantage = lever / ground if ground > 0.0 else 0.0
     for value in [push, need, ground, lever, sigma]:  # pragma: no branch
-        if not isfinite(Float32(value)):
-            raise Error("Standing loads must fit finite SI quantities")
+        require_finite(
+            stored_float32(value),
+            "Standing loads must fit finite SI quantities",
+        )
     # `sigma` fits a Float32 and the tension is a positive Float32, so the
     # activation is finite. A foot all but level with its joint can still
     # overflow the advantage.
     debug_assert(isfinite(activation), "The activation is finite")
-    if not isfinite(advantage):
-        raise Error("Standing load ratios must be finite")
+    require_finite(Float64(advantage), "Standing load ratios must be finite")
     return JointLoad(
         joint,
         Force(Float32(push), NEWTON),
         Torque(Float32(need), NEWTON_METER),
-        Length(Float32(ground), METER),
-        Length(Float32(lever), METER),
+        length_meters(ground),
+        length_meters(lever),
         advantage,
         Pressure(Float32(sigma), PASCAL),
         activation,
@@ -195,8 +197,7 @@ def standing_loads(
     """
     if species_body(animal.species).plan != MAMMAL:
         raise Error("Standing loads are for quadruped mammals")
-    if len(mass.bones) != len(animal.rig.bones):
-        raise Error("The mass was sampled from another rig")
+    require_sampled_rig(len(mass.bones), len(animal.rig.bones))
     var total = mass.total()
     var weight = Float64(total.mass.value) * Float64(STANDARD_GRAVITY.value)
     var rig = animal.rig.copy()

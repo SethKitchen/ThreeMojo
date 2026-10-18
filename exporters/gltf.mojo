@@ -134,6 +134,15 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
+from core.ordinal import index_in_count
+
+from core.ordinal import (
+    ordinal_valid,
+    require_index_in_count,
+    require_valid,
+    require_non_negative,
+)
+
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
     CUBIC_SPLINE,
@@ -171,6 +180,7 @@ from exporters.common import (
     resized_image,
 )
 from exporters.json_writer import JsonWriter
+from loaders.file_path import path_directory, path_name
 from loaders.gltf import (
     COMPONENT_BYTE,
     COMPONENT_FLOAT,
@@ -221,8 +231,11 @@ from materials.material import (
     MaterialId,
 )
 from math.matrix4 import Matrix4
+from math.square_matrix import copy_elements
 from math.utils import (
     ComponentType,
+    max3,
+    mix_delta,
     INT16_COMPONENT,
     INT32_COMPONENT,
     INT8_COMPONENT,
@@ -236,7 +249,7 @@ from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from objects.line import LOOP, SEGMENTS, LineMode
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, rgb_is_white
 from render.png import encode as encode_png
 from render.texture import CLAMP, FLOAT_TYPE, MIRROR, Texture, Wrap
 from render.texture_store import TextureId
@@ -266,7 +279,7 @@ struct GltfContainer(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is one of the three containers there are."""
-        return self == GLTF_EMBEDDED or self == GLTF_SEPARATE or self == GLB
+        return ordinal_valid(self.value, GLB.value)
 
 
 # One `.gltf`, its buffer and images as `data:` URIs.
@@ -352,7 +365,7 @@ def binary_name_for(path: String) -> String:
         The `.bin`'s name, without the directory: `scene.gltf` gives
         `scene.bin`, and a name with no extension gains one.
     """
-    var name = String(path[byte = path.rfind("/") + 1 :])
+    var name = path_name(path)
     var dot = name.rfind(".")
     var stem = String(name[byte=0:dot]) if dot > 0 else name
     return stem + ".bin"
@@ -362,40 +375,6 @@ def _is_relative_name(name: String) -> Bool:
     """Return True if a buffer URI is a name `read_gltf` reads beside the
     file: not empty, and with no scheme."""
     return name != "" and name.find(":") < 0
-
-
-def _is_zero(vector: Vector3) -> Bool:
-    """Return True if all three components are zero."""
-    return vector.x == 0 and vector.y == 0 and vector.z == 0
-
-
-def _is_one(vector: Vector3) -> Bool:
-    """Return True if all three components are one."""
-    return vector.x == 1 and vector.y == 1 and vector.z == 1
-
-
-def _is_identity_rotation(rotation: Quaternion) -> Bool:
-    """Return True if a quaternion turns nothing."""
-    return (
-        rotation.x == 0
-        and rotation.y == 0
-        and rotation.z == 0
-        and rotation.w == 1
-    )
-
-
-def _is_identity_matrix(matrix: Matrix4) -> Bool:
-    """Return True if a matrix moves nothing."""
-    var identity = Matrix4()
-    var same = True
-    for index in range(16):  # pragma: no branch
-        same = same and matrix.elements[index] == identity.elements[index]
-    return same
-
-
-def _is_at(point: Vector2, u: Float32, v: Float32) -> Bool:
-    """Return True if a point is exactly at `(u, v)`."""
-    return point.x == u and point.y == v
 
 
 def _is_written_upside_down(texture: Texture) -> Bool:
@@ -466,8 +445,8 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
             False for glTF's identity, which is written as no transform.
         """
         return not (
-            _is_at(self.offset, 0, 0)
-            and _is_at(self.scale, 1, 1)
+            self.offset == Vector2(0, 0)
+            and self.scale == Vector2(1, 1)
             and self.rotation == 0
         )
 
@@ -481,8 +460,8 @@ struct GltfPlacement(Equatable, ImplicitlyCopyable):
             True if every part is equal.
         """
         return (
-            _is_at(self.offset, other.offset.x, other.offset.y)
-            and _is_at(self.scale, other.scale.x, other.scale.y)
+            self.offset == other.offset
+            and self.scale == other.scale
             and self.rotation == other.rotation
             and self.set == other.set
         )
@@ -862,9 +841,9 @@ struct _Exporter(Movable):
                     low[lane] = min(low[lane], value)
                     high[lane] = max(high[lane], value)
             writer.key("min")
-            _write_numbers(writer, low)
+            writer.numbers(low)
             writer.key("max")
-            _write_numbers(writer, high)
+            writer.numbers(high)
         writer.end_object()
         self.accessors.append(writer.finish())
         return len(self.accessors) - 1
@@ -933,9 +912,9 @@ struct _Exporter(Movable):
                     low[lane] = min(low[lane], value)
                     high[lane] = max(high[lane], value)
             writer.key("min")
-            _write_integers(writer, low)
+            writer.integers(low)
             writer.key("max")
-            _write_integers(writer, high)
+            writer.integers(high)
         writer.end_object()
         self.accessors.append(writer.finish())
         if _is_quantized(semantic, type, attribute.is_normalized()):
@@ -1240,15 +1219,15 @@ struct _Exporter(Movable):
             writer.begin_object()
             writer.key(TEXTURE_TRANSFORM)
             writer.begin_object()
-            if not _is_at(placed.offset, 0, 0):
+            if placed.offset != Vector2(0, 0):
                 writer.key("offset")
-                _write_numbers(writer, [placed.offset.x, placed.offset.y])
+                writer.numbers([placed.offset.x, placed.offset.y])
             if placed.rotation != 0:
                 writer.key("rotation")
                 writer.number(placed.rotation)
-            if not _is_at(placed.scale, 1, 1):
+            if placed.scale != Vector2(1, 1):
                 writer.key("scale")
-                _write_numbers(writer, [placed.scale.x, placed.scale.y])
+                writer.numbers([placed.scale.x, placed.scale.y])
             writer.end_object()
             writer.end_object()
         writer.end_object()
@@ -1318,7 +1297,7 @@ struct _Exporter(Movable):
                 material.ao_map_intensity,
             )
         var glow = FloatColor(srgb=material.emissive)
-        if max(glow.r, max(glow.g, glow.b)) > 0:
+        if max3(glow.r, glow.g, glow.b) > 0:
             writer.key("emissiveFactor")
             writer.begin_array()
             writer.number(glow.r)
@@ -1543,8 +1522,7 @@ struct _Exporter(Movable):
             self.open_extension(writer, MATERIALS_SHEEN)
             var tint = FloatColor(srgb=material.sheen_color)
             writer.key("sheenColorFactor")
-            _write_numbers(
-                writer,
+            writer.numbers(
                 [
                     tint.r * material.sheen,
                     tint.g * material.sheen,
@@ -1721,7 +1699,7 @@ struct _Exporter(Movable):
         writer.end_array()
         if morphs > 0:
             writer.key("weights")
-            _write_numbers(writer, weights)
+            writer.numbers(weights)
             ref first = assets.geometries.get(shapes[0])
             writer.key("extras")
             writer.begin_object()
@@ -1903,11 +1881,13 @@ struct _Exporter(Movable):
         # A skeleton has at least one bone.
         for bone in first.skeleton.bones:  # pragma: no branch
             var joint = _written_slot(bone.node, written, "a bone")
-            if joint < 0:
-                raise Error(
+            require_non_negative(
+                joint,
+                (
                     "glTF: a bone rides a node that is not written: show it,"
                     " or write every node"
-                )
+                ),
+            )
             joints.append(joint)
             var inverse = bone.inverse_bind * first.bind_matrix
             for element in range(16):  # pragma: no branch
@@ -1917,7 +1897,7 @@ struct _Exporter(Movable):
         writer.key("inverseBindMatrices")
         writer.integer(self.float_accessor(inverses, 16, "MAT4", False, False))
         writer.key("joints")
-        _write_integers(writer, joints)
+        writer.integers(joints)
         writer.key("skeleton")
         writer.integer(joints[0])
         writer.end_object()
@@ -2117,8 +2097,8 @@ struct _Exporter(Movable):
             writer.string(clip.name)
         else:
             writer.string("clip_" + String(len(self.animations)))
-        _write_array(writer, "samplers", samplers)
-        _write_array(writer, "channels", channels)
+        writer.raw_array("samplers", samplers)
+        writer.raw_array("channels", channels)
         writer.end_object()
         self.animations.append(writer.finish())
 
@@ -2182,22 +2162,16 @@ struct _Exporter(Movable):
         writer.end_object()
         if len(self.used) > 0:
             writer.key("extensionsUsed")
-            writer.begin_array()
-            for name in self.used:  # pragma: no branch
-                writer.string(name)
-            writer.end_array()
+            writer.strings(self.used)
         if len(self.required) > 0:
             writer.key("extensionsRequired")
-            writer.begin_array()
-            for name in self.required:  # pragma: no branch
-                writer.string(name)
-            writer.end_array()
+            writer.strings(self.required)
         if len(self.lights) > 0:
             writer.key("extensions")
             writer.begin_object()
             writer.key(LIGHTS_PUNCTUAL)
             writer.begin_object()
-            _write_array(writer, "lights", self.lights)
+            writer.raw_array("lights", self.lights)
             writer.end_object()
             writer.end_object()
         writer.key("scene")
@@ -2207,7 +2181,7 @@ struct _Exporter(Movable):
         writer.begin_object()
         if len(roots) > 0:
             writer.key("nodes")
-            _write_integers(writer, roots)
+            writer.integers(roots)
         if scene.extras != "":
             writer.key("extras")
             writer.raw(scene.extras)
@@ -2216,17 +2190,17 @@ struct _Exporter(Movable):
             writer.raw(_with_custom(scene, ""))
         writer.end_object()
         writer.end_array()
-        _write_array(writer, "nodes", nodes)
-        _write_array(writer, "meshes", self.meshes)
-        _write_array(writer, "cameras", self.cameras)
-        _write_array(writer, "skins", self.skins)
-        _write_array(writer, "animations", self.animations)
-        _write_array(writer, "materials", self.materials)
-        _write_array(writer, "textures", self.textures)
-        _write_array(writer, "images", self.images)
-        _write_array(writer, "samplers", self.samplers)
-        _write_array(writer, "accessors", self.accessors)
-        _write_array(writer, "bufferViews", self.views)
+        writer.raw_array("nodes", nodes)
+        writer.raw_array("meshes", self.meshes)
+        writer.raw_array("cameras", self.cameras)
+        writer.raw_array("skins", self.skins)
+        writer.raw_array("animations", self.animations)
+        writer.raw_array("materials", self.materials)
+        writer.raw_array("textures", self.textures)
+        writer.raw_array("images", self.images)
+        writer.raw_array("samplers", self.samplers)
+        writer.raw_array("accessors", self.accessors)
+        writer.raw_array("bufferViews", self.views)
         if len(self.bin) > 0:
             writer.key("buffers")
             writer.begin_array()
@@ -2426,7 +2400,7 @@ def _sample(
     # Every caller reads at least one lane.
     for lane in range(width):  # pragma: no branch
         var here = values[key * width + lane]
-        out.append(here + (values[next * width + lane] - here) * blend)
+        out.append(mix_delta(here, values[next * width + lane], blend))
     return out^
 
 
@@ -2468,22 +2442,39 @@ def _interpolation_name(how: Interpolation) -> String:
     return "LINEAR"
 
 
+def require_morph_mesh(index: Int, count: Int) raises:
+    """Refuse a morph track whose mesh is not in the scene.
+
+    Nothing. The call returns when the index names a mesh.
+
+    Args:
+        index: The mesh index the track names.
+        count: How many meshes of that kind the scene holds.
+
+    Raises:
+        Error: If the index is negative or past the last mesh.
+    """
+    require_index_in_count(
+        index,
+        count,
+        "glTF: a morph track names a mesh that is not there",
+    )
+
+
 def _morph_node(track: KeyframeTrack, scene: Scene) raises -> NodeId:
     """Return the node of the mesh or the skinned mesh a morph track
     drives."""
     var index = track.target.index
     if track.target.kind == MORPH_INFLUENCE:
-        if index < 0 or index >= len(scene.meshes):
-            raise Error("glTF: a morph track names a mesh that is not there")
+        require_morph_mesh(index, len(scene.meshes))
         return scene.meshes[index].node
-    if index < 0 or index >= len(scene.skinned_meshes):
-        raise Error("glTF: a morph track names a mesh that is not there")
+    require_morph_mesh(index, len(scene.skinned_meshes))
     return scene.skinned_meshes[index].node
 
 
 def _written_slot(node: NodeId, written: List[Int], what: String) raises -> Int:
     """Return a scene node's index in the file, or -1 when it is left out."""
-    if node.value < 0 or node.value >= len(written):
+    if not index_in_count(node.value, len(written)):
         raise Error("glTF: " + what + " names a node that is not in the scene")
     return written[node.value]
 
@@ -2686,16 +2677,11 @@ def _is_opaque_white(color: FloatColor, opacity: Float32) -> Bool:
     return color.r == 1 and color.g == 1 and color.b == 1 and opacity == 1
 
 
-def _is_white(color: Color) -> Bool:
-    """Return True for white, the default specular and attenuation color."""
-    return color.r == 255 and color.g == 255 and color.b == 255
-
-
 def _has_specular(material: Material) -> Bool:
     """Return True if `KHR_materials_specular` has something to say."""
     return (
         material.specular_intensity != 1
-        or not _is_white(material.specular_color)
+        or not rgb_is_white(material.specular_color)
         or material.specular_intensity_map != NO_TEXTURE
         or material.specular_color_map != NO_TEXTURE
     )
@@ -2717,14 +2703,14 @@ def _has_volume(material: Material) -> Bool:
         material.thickness.to(METER) != 0
         or material.thickness_map != NO_TEXTURE
         or isfinite(material.attenuation_distance.to(METER))
-        or not _is_white(material.attenuation_color)
+        or not rgb_is_white(material.attenuation_color)
     )
 
 
 def _write_color(mut writer: JsonWriter, color: Color) raises:
     """Write a color as glTF holds a factor: three linear numbers."""
     var linear = FloatColor(srgb=color)
-    _write_numbers(writer, [linear.r, linear.g, linear.b])
+    writer.numbers([linear.r, linear.g, linear.b])
 
 
 def _copy_channel(
@@ -2754,15 +2740,6 @@ def _copy_channel(
     # A texture `gltf_pixels` accepts has at least one texel.
     for texel in range(texture.width * texture.height):  # pragma: no branch
         pixels[texel * 4 + channel] = source[texel * 4 + channel]
-
-
-def _write_numbers(mut writer: JsonWriter, numbers: List[Float32]) raises:
-    """Write an array of numbers."""
-    writer.begin_array()
-    # Every caller writes at least one number.
-    for value in numbers:  # pragma: no branch
-        writer.number(value)
-    writer.end_array()
 
 
 def _gl_component(type: ComponentType) -> Int:
@@ -2803,29 +2780,6 @@ def _is_quantized(
     return False
 
 
-def _write_integers(mut writer: JsonWriter, numbers: List[Int]) raises:
-    """Write an array of whole numbers."""
-    writer.begin_array()
-    # Every caller writes at least one number.
-    for value in numbers:  # pragma: no branch
-        writer.integer(value)
-    writer.end_array()
-
-
-def _write_array(
-    mut writer: JsonWriter, key: String, entries: List[String]
-) raises:
-    """Write a top-level array of JSON texts under `key`, or nothing when
-    it is empty: the specification asks for at least one entry."""
-    if len(entries) == 0:
-        return
-    writer.key(key)
-    writer.begin_array()
-    for entry in entries:  # pragma: no branch
-        writer.raw(entry)
-    writer.end_array()
-
-
 def _node_json(
     node: Object3D,
     mesh: Int,
@@ -2843,15 +2797,12 @@ def _node_json(
         writer.key("name")
         writer.string(node.name)
     if node.matrix_auto_update:
-        if not _is_zero(node.position):
+        if node.position != Vector3(0, 0, 0):
             writer.key("translation")
-            _write_numbers(
-                writer, [node.position.x, node.position.y, node.position.z]
-            )
-        if not _is_identity_rotation(node.quaternion):
+            writer.numbers([node.position.x, node.position.y, node.position.z])
+        if node.quaternion != Quaternion.identity():
             writer.key("rotation")
-            _write_numbers(
-                writer,
+            writer.numbers(
                 [
                     node.quaternion.x,
                     node.quaternion.y,
@@ -2859,15 +2810,13 @@ def _node_json(
                     node.quaternion.w,
                 ],
             )
-        if not _is_one(node.scale):
+        if node.scale != Vector3(1, 1, 1):
             writer.key("scale")
-            _write_numbers(writer, [node.scale.x, node.scale.y, node.scale.z])
-    elif not _is_identity_matrix(node.matrix):
-        var elements = List[Float32]()
-        for index in range(16):  # pragma: no branch
-            elements.append(node.matrix.elements[index])
+            writer.numbers([node.scale.x, node.scale.y, node.scale.z])
+    elif node.matrix != Matrix4():
         writer.key("matrix")
-        _write_numbers(writer, elements)
+        var elements = copy_elements(node.matrix.elements)
+        writer.numbers(elements)
     if extras != "":
         writer.key("extras")
         writer.raw(extras)
@@ -2882,7 +2831,7 @@ def _node_json(
         writer.integer(skin)
     if len(children) > 0:
         writer.key("children")
-        _write_integers(writer, children)
+        writer.integers(children)
     if extensions != "":
         writer.key("extensions")
         writer.raw(extensions)
@@ -2971,8 +2920,9 @@ def export_gltf(
     """
     if len(scene.gaussian_splats) > 0:
         raise Error("glTF export cannot serialize Gaussian splats yet")
-    if not container.is_valid():
-        raise Error("glTF: a container that is none of the three")
+    require_valid(
+        container.is_valid(), "glTF: a container that is none of the three"
+    )
     if Bool(options.max_texture_size) and options.max_texture_size.value() < 1:
         raise Error("glTF: maxTextureSize must be one pixel or more")
     if container == GLTF_SEPARATE and not _is_relative_name(binary_name):
@@ -3073,6 +3023,21 @@ def export_gltf(
     return files^
 
 
+def require_one_camera(has_camera: Bool) raises:
+    """Refuse a second camera on one node.
+
+    Nothing. The call returns when the node carries no camera.
+
+    Args:
+        has_camera: Whether the node already carries a camera.
+
+    Raises:
+        Error: If the node already carries a camera.
+    """
+    if has_camera:
+        raise Error("glTF: a node carries one camera, and two ride one")
+
+
 def _carry(
     scene: Scene,
     cameras: CameraList,
@@ -3108,8 +3073,10 @@ def _carry(
             carried[slot].points.append(which)
     for which in range(len(scene.lights)):
         ref light = scene.lights[which]
-        if not light.kind.is_valid():
-            raise Error("glTF: a light of a kind that is none of the named")
+        require_valid(
+            light.kind.is_valid(),
+            "glTF: a light of a kind that is none of the named",
+        )
         light.validate()
         if not _is_punctual(light.kind):
             continue
@@ -3125,8 +3092,7 @@ def _carry(
         )
         if slot < 0:
             continue
-        if carried[slot].has_camera():
-            raise Error("glTF: a node carries one camera, and two ride one")
+        require_one_camera(carried[slot].has_camera())
         carried[slot].perspective = which
     for which in range(len(cameras.orthographic)):
         var slot = _written_slot(
@@ -3134,8 +3100,7 @@ def _carry(
         )
         if slot < 0:
             continue
-        if carried[slot].has_camera():
-            raise Error("glTF: a node carries one camera, and two ride one")
+        require_one_camera(carried[slot].has_camera())
         carried[slot].orthographic = which
 
 
@@ -3183,5 +3148,5 @@ def write_gltf(
     )
     Path(path).write_bytes(files.document)
     if len(files.binary) > 0:
-        var directory = String(path[byte = 0 : path.rfind("/") + 1])
+        var directory = path_directory(path)
         Path(directory + name).write_bytes(files.binary)

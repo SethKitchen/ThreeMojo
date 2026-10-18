@@ -14,6 +14,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.leg.hair.dimensions import (
     HairField,
     HairPart,
+    require_hair_part,
     hair_distance,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -29,9 +30,10 @@ from extensions.anatomy.soft_tissue import (
 from extensions.humanoid.skeleton.soft_tissue import (
     SoftOccupancy,
     classify_soft,
+    six_capsule_volume,
+    six_segment_length,
 )
 from math.vector3 import Vector3
-from std.math import pi
 
 
 def hair_occupancy(
@@ -97,19 +99,21 @@ def hair_mass_from_dimensions(
             not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    if not part.is_valid():
-        raise Error("A hair part must be a named hair group")
+    require_hair_part(part)
     tissue.validate()
     var field = HairField(dimensions, part)
-    var length = (field.b0 - field.a0).length()
-    length += (field.b1 - field.a1).length()
-    length += (field.b2 - field.a2).length()
-    length += (field.b3 - field.a3).length()
-    length += (field.b4 - field.a4).length()
-    length += (field.b5 - field.a5).length()
-    var radius = field.radius
-    var volume = (
-        pi * radius * radius * length
-        + Float32(6) * Float32(4.0 / 3.0) * pi * radius * radius * radius
+    var length = six_segment_length(
+        field.a0,
+        field.b0,
+        field.a1,
+        field.b1,
+        field.a2,
+        field.b2,
+        field.a3,
+        field.b3,
+        field.a4,
+        field.b4,
+        field.a5,
+        field.b5,
     )
-    return analytic_soft_mass(tissue, volume)
+    return analytic_soft_mass(tissue, six_capsule_volume(field.radius, length))

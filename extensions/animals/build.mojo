@@ -94,12 +94,13 @@ from extensions.sdf.vector import (
     smoothstep,
 )
 from extensions.animals.warp import scale_warp
+from math.utils import clamp, max3
 from materials.material import LAMBERT, PHONG, Material
 from render.framebuffer import Color
 from render.tasks import TaskGroup
 from std.math import sqrt
 from std.sys import num_logical_cores
-from units.si import METER, Length
+from units.measure import length_meters
 
 # How many fine cells an eyeball's radius spans, at least.
 comptime EYE_CELLS = 6.0
@@ -265,7 +266,7 @@ def primitive_box(p: Primitive, outline: List[Float64]) -> Tuple[V3, V3]:
     var c = p.c
     var d = p.c
     if p.kind == ELLIPSOID:
-        reach = max(p.r.x, max(p.r.y, p.r.z))
+        reach = max3(p.r.x, p.r.y, p.r.z)
     elif p.kind == CONE:
         reach = max(p.r.x, p.r.y)
         d = p.b
@@ -278,12 +279,9 @@ def primitive_box(p: Primitive, outline: List[Float64]) -> Tuple[V3, V3]:
         reach = far * 1.5 + p.r.x * 2.0
     else:
         reach = p.r.x * 2.0 + max(abs(p.lo), abs(p.hi))
-    var low = V3(
-        min(c.x, d.x) - reach, min(c.y, d.y) - reach, min(c.z, d.z) - reach
-    )
-    var high = V3(
-        max(c.x, d.x) + reach, max(c.y, d.y) + reach, max(c.z, d.z) + reach
-    )
+    var span = V3(reach, reach, reach)
+    var low = c.min(d) - span
+    var high = c.max(d) + span
     return (low, high)
 
 
@@ -307,12 +305,8 @@ def part_box(model: SdfModel, part: List[Int]) -> Tuple[V3, V3]:
         if p.carve:
             continue
         var box = primitive_box(p, model.outline)
-        low = V3(
-            min(low.x, box[0].x), min(low.y, box[0].y), min(low.z, box[0].z)
-        )
-        high = V3(
-            max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
-        )
+        low = low.min(box[0])
+        high = high.max(box[1])
     var pad = V3(k, k, k)
     return (low - pad, high + pad)
 
@@ -359,7 +353,7 @@ def mesh_animal(
             ids,
             box[0],
             box[1],
-            Length(Float32(cell), METER),
+            length_meters(cell),
             workers=threads,
         )
         for _ in range(piece.vertex_count()):
@@ -530,7 +524,7 @@ def bake_occlusion(
             solids.append(i)
     var reach = 16.0 * unit
     var out = List[Float64](length=count, fill=1.0)
-    var tasks = max(1, min(workers, count))
+    var tasks = clamp(workers, 1, count)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -612,7 +606,7 @@ def _geometry(
     var starts = List[Int]()
     for k in range(SURFACE_CLASS_COUNT):  # pragma: no branch
         starts.append(len(index))
-        index.extend(buckets[k].copy())
+        index.extend(Span(buckets[k]))
     g.set_index(index^)
     for k in range(SURFACE_CLASS_COUNT):  # pragma: no branch
         var end = starts[k + 1] if k + 1 < SURFACE_CLASS_COUNT else len(g.index)

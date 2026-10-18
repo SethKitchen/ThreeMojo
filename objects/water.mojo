@@ -55,8 +55,10 @@ from render.framebuffer import Color
 from render.target import UNSIGNED_BYTE_TARGET
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
+from math.finite import require_finite
 from std.math import isfinite
 from units.si import Duration, Length, METER, SECOND
+from core.ordinal import require_valid
 
 # three.js's `sunDirection` default.
 comptime DEFAULT_SUN_DIRECTION = Vector3(0.70707, 0.70707, 0.0)
@@ -220,8 +222,9 @@ struct Water(Movable):
         """
         check_texture_size(texture_width, texture_height)
         check_clip_bias(clip_bias)
-        if not side.is_valid():
-            raise Error("A water's side must be one of the three")
+        require_valid(
+            side.is_valid(), "A water's side must be one of the three"
+        )
         if not (
             isfinite(alpha)
             and isfinite(time.to(SECOND))
@@ -264,8 +267,7 @@ struct Water(Movable):
             Error: If the time is not finite, or the program is gone.
         """
         var seconds = time.to(SECOND)
-        if not isfinite(seconds):
-            raise Error("A water's time must be finite")
+        require_finite(Float64(seconds), "A water's time must be finite")
         assets.programs.get(self.program).set_uniform("time", seconds)
 
     def update[

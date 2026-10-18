@@ -32,18 +32,26 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
-from math.norm import length2
+from core.ordinal import require_non_negative, require_positive
+from math.finite import require_finite_group
+from math.norm import length2, squared_length2
+from math.utils import (
+    interleaved_gradient_noise as _gradient_noise,
+    mix_bilinear,
+    mix_delta,
+)
 
 from postprocessing.display_nodes import (
     exp_f,
     gaussian_coefficients,
     luminance_of,
+    replace_light,
 )
 from postprocessing.sampling import LightView, u_of
 from postprocessing.screen_space import DepthView
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
-from std.math import floor, isfinite, max, min, sin, sqrt
+from std.math import isfinite, max, min, sin, sqrt
 from units.si import Length, METER
 
 
@@ -157,18 +165,18 @@ def check_filters(settings: FilterSettings) raises:
         and isfinite(settings.blend_b)
         and isfinite(settings.edge_strength)
     )
-    if not finite:
-        raise Error("A filter pass setting must be finite")
+    require_finite_group(finite, "A filter pass setting must be finite")
     if settings.curvature >= 0.5:
         raise Error("A CRT's curvature must be below a half")
-    if settings.count < 1:
-        raise Error("A radial blur takes at least one tap")
+    require_positive(settings.count, "A radial blur takes at least one tap")
     if not (settings.sigma > 0 and settings.sigma_color > 0):
         raise Error("A bilateral blur's sigmas must be positive")
     if not (settings.radius.value > 0):
         raise Error("A depth-aware blur's radius must be positive")
-    if settings.edge_radius < 0:
-        raise Error("A depth-aware blend's edge radius must not be negative")
+    require_non_negative(
+        settings.edge_radius,
+        "A depth-aware blend's edge radius must not be negative",
+    )
 
 
 # --- reading the frame -------------------------------------------------------
@@ -201,10 +209,7 @@ def interleaved_gradient_noise(x: Float32, y: Float32) -> Float32:
     Returns:
         A number from zero up to one.
     """
-    var inner = x * Float32(0.06711056) + y * Float32(0.00583715)
-    inner = inner - floor(inner)
-    var outer = Float32(52.9829189) * inner
-    return outer - floor(outer)
+    return _gradient_noise(x, y)
 
 
 # --- CRT ---------------------------------------------------------------------
@@ -226,7 +231,7 @@ def barrel_uv(
     """
     var cx = (u - 0.5) * 2
     var cy = (v - 0.5) * 2
-    var r2 = cx * cx + cy * cy
+    var r2 = squared_length2[DType.float32](cx, cy)
     var distortion = 1 - r2 * curvature
     var corner = 1 - curvature * 2
     return (
@@ -306,6 +311,12 @@ def scanlines(
     return 1 - (line * 0.5 + 0.5) * intensity
 
 
+def _smoothstep_any(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
+    """Return GLSL's `smoothstep` for edges in either order."""
+    var t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
+    return t * t * (3 - 2 * t)
+
+
 def circle(
     scale: Float32, softness: Float32, u: Float32, v: Float32
 ) -> Float32:
@@ -325,12 +336,6 @@ def circle(
     var dv = v - 0.5
     var dist = length2(du, dv) * 2
     return _smoothstep_any(scale, scale - softness * scale, dist)
-
-
-def _smoothstep_any(edge0: Float32, edge1: Float32, x: Float32) -> Float32:
-    """Return GLSL's `smoothstep` for edges in either order."""
-    var t = min(max((x - edge0) / (edge1 - edge0), 0), 1)
-    return t * t * (3 - 2 * t)
 
 
 def crt_vignette(
@@ -399,14 +404,11 @@ def crt_light(mut frame: RenderTarget, settings: FilterSettings):
         frame: The frame, replaced.
         settings: The CRT's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = crt_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return crt_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- radialBlur --------------------------------------------------------------
@@ -488,14 +490,11 @@ def radial_blur_light(mut frame: RenderTarget, settings: FilterSettings):
         frame: The frame, replaced.
         settings: The radial blur's settings.
     """
-    var before = frame.colors.copy()
-    var view = LightView(before, frame.width, frame.height)
-    for y in range(frame.height):  # pragma: no branch
-        for x in range(frame.width):  # pragma: no branch
-            var slot = y * frame.width + x
-            frame.colors[slot] = radial_blur_pixel(view, x, y, settings)
-            frame.data[slot] = False
-    _ = before^
+
+    def pixel(view: LightView, x: Int, y: Int) capturing -> FloatColor:
+        return radial_blur_pixel(view, x, y, settings)
+
+    replace_light[pixel](frame)
 
 
 # --- BilateralBlurNode -------------------------------------------------------
@@ -708,15 +707,14 @@ def _value_at(
     var fy = py - Float32(y0)
     var x1 = min(x0 + 1, width - 1)
     var y1 = min(y0 + 1, height - 1)
-    var top = (
-        values[y0 * width + x0]
-        + (values[y0 * width + x1] - values[y0 * width + x0]) * fx
+    return mix_bilinear(
+        values[y0 * width + x0],
+        values[y0 * width + x1],
+        values[y1 * width + x0],
+        values[y1 * width + x1],
+        fx,
+        fy,
     )
-    var bottom = (
-        values[y1 * width + x0]
-        + (values[y1 * width + x1] - values[y1 * width + x0]) * fx
-    )
-    return top + (bottom - top) * fy
 
 
 def depth_aware_blur_channel(
@@ -863,16 +861,16 @@ def depth_aware_blend_pixel(
     push_y /= count
     var su = u
     var sv = v
-    if sqrt(push_x * push_x + push_y * push_y) > 0:
+    if sqrt(squared_length2[DType.float32](push_x, push_y)) > 0:
         su = u + settings.edge_strength * push_x / Float32(w)
         sv = v + settings.edge_strength * push_y / Float32(h)
     var choice = sample_down(blend, su, sv).r
     var color = sample_down(base, u, v)
     return FloatColor(
-        color.r + (settings.blend_r - color.r) * choice,
-        color.g + (settings.blend_g - color.g) * choice,
-        color.b + (settings.blend_b - color.b) * choice,
-        color.a + (1 - color.a) * choice,
+        mix_delta(color.r, settings.blend_r, choice),
+        mix_delta(color.g, settings.blend_g, choice),
+        mix_delta(color.b, settings.blend_b, choice),
+        mix_delta(color.a, Float32(1), choice),
     )
 
 

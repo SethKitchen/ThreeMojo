@@ -52,12 +52,13 @@ from extensions.building.kinds import (
 )
 from extensions.building.material import Look, aluminum, glass, timber
 from extensions.building.model import Building, WallFrame
-from generators.utils import Vec3d
+from generators.utils import Vec3d, append_z_up_as_y_up
 from geometries.earcut import earcut
 from materials.material import standard_material
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, unit_byte
 from std.math import cos, pi, sin
+from core.ordinal import require_valid
 
 # The name of the per-vertex element attribute.
 comptime ELEMENT_ID = "elementId"
@@ -154,12 +155,7 @@ struct _Bucket(Movable):
 
     def vertex(mut self, p: Vec3d, n: Vec3d, u: Float64, v: Float64, id: Int):
         """Add one vertex, converting z up to y up."""
-        self.positions.append(Float32(p.x))
-        self.positions.append(Float32(p.z))
-        self.positions.append(Float32(-p.y))
-        self.normals.append(Float32(n.x))
-        self.normals.append(Float32(n.z))
-        self.normals.append(Float32(-n.y))
+        append_z_up_as_y_up(self.positions, self.normals, p, n)
         self.uvs.append(Float32(u))
         self.uvs.append(Float32(v))
         self.ids.append(Float32(id))
@@ -253,11 +249,6 @@ struct _Mesher(Movable):
                 var y = flat[2 * corner[k] + 1]
                 bucket.vertex(origin + e1 * x + e2 * y, n, x, y, id)
             t += 3
-
-
-def _color(value: Float32) -> UInt8:
-    """Return a look channel from zero to one as a byte."""
-    return UInt8(Int(value * 255 + 0.5))
 
 
 def _look(building: Building, look: Int) -> Look:
@@ -916,8 +907,9 @@ def add_building(
         Error: If the detail is not valid, the top storey is out of range,
             or the model's ids do not agree.
     """
-    if not options.detail.is_valid():
-        raise Error("A render detail must be massing or full")
+    require_valid(
+        options.detail.is_valid(), "A render detail must be massing or full"
+    )
     var top = options.top_storey
     if top < -1 or top >= len(building.storeys):
         raise Error("The top storey must be -1 or a storey of the model")
@@ -993,7 +985,9 @@ def add_building(
         var look = _look(building, bucket.look)
         var transparent = look.transmission > 0
         var material = standard_material(
-            Color(_color(look.red), _color(look.green), _color(look.blue)),
+            Color(
+                unit_byte(look.red), unit_byte(look.green), unit_byte(look.blue)
+            ),
             roughness=look.roughness,
             metalness=look.metalness,
             opacity=1 - look.transmission * 0.7,

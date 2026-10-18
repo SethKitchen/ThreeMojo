@@ -12,6 +12,7 @@ It preserves small endpoint gaps, including an interior foot near an end.
 The returned distance is a Float64 estimate, not an exact rational number.
 """
 
+from math.finite import stored_float32
 from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
 
@@ -120,7 +121,7 @@ def _difference_is_exact_f32(
         return True
     if max(abs(a), abs(b)) > 268435456.0 * min(abs(a), abs(b)):
         return False
-    return Float64(Float32(difference)) == difference
+    return stored_float32(difference) == difference
 
 
 @no_inline

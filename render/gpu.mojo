@@ -70,6 +70,7 @@ from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
     RasterState,
+    require_depth_mode,
     cleared_depth,
     fragment_depth,
     shades,
@@ -86,11 +87,17 @@ from render.linerule import (
 from render.pointrule import (
     coord as point_coord,
     covers as point_covers,
-    gl_point_coord,
     mip_level_of,
 )
 from render.rect import Rect
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import (
+    TRANSPARENT_BLACK,
+    Color,
+    FloatColor,
+    Framebuffer,
+    OPAQUE_WHITE,
+    require_framebuffer_size,
+)
 from render.target import (
     UNSIGNED_BYTE_TARGET,
     RenderTarget,
@@ -101,11 +108,13 @@ from render.target import (
     block_velocity,
     check_samples,
     color_only,
+    require_rect,
     resolve_block,
     sample_grid,
 )
 from render.layered_target import LayeredRenderTarget
 from render.texture_copy import TexelPoint, copy_framebuffer_to_texture
+from core.extent import positive_extent
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
     ShadowShape,
@@ -180,6 +189,7 @@ from lights.lighting import (
     floored_roughness,
     geometry_roughness,
     gouraud_light,
+    light_cosines,
     occluded_light,
     physical_light,
     scattering_through,
@@ -195,6 +205,7 @@ from lights.lighting import (
 )
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
+from math.utils import clamp, mix_delta
 from math.vector3 import Vector3
 from render.rasterizer import (
     joined,
@@ -214,6 +225,9 @@ from render.rasterizer import (
     Draw,
     RasterVertex,
     ShadeMode,
+    require_shade_mode,
+    require_whole_segments,
+    require_whole_triangles,
     Triangle,
     TangentFrame,
     check_alpha_map,
@@ -221,6 +235,15 @@ from render.rasterizer import (
     check_output_kinds,
     check_transmission,
     check_triangle_state,
+    require_triangle_lighting,
+    require_coverage_alpha,
+    require_data_descriptors,
+    require_gradient_bytes,
+    require_gradient_row,
+    require_gradient_texels,
+    require_ignored_alpha,
+    require_linear_data,
+    require_program_uniform,
     bumped_normal,
     interpolate_alpha,
     mapped_normal,
@@ -229,13 +252,13 @@ from render.rasterizer import (
     TextureFrames,
     matcap_fallback,
     matcap_uv,
-    packed_normal,
     tangent_frame,
 )
 from render.packing import (
     DepthPacking,
     packed_depth_fragment,
     packed_distance_fragment,
+    packed_normal,
 )
 from materials.material import (
     OPAQUE,
@@ -291,6 +314,13 @@ from render.tonemap import (
     tone_map,
     tone_map_with,
 )
+from render.screen_coord import (
+    pixel_frag_coord,
+    sample_pixel,
+    sample_step,
+    sampled_point_coord,
+    screen_size_coord,
+)
 from materials.nodes import (
     AO_NODE,
     BACKDROP_ALPHA_NODE,
@@ -326,6 +356,7 @@ from materials.nodes import (
     offset_normal,
     has_output,
     perspective_shares,
+    perspective_shares_over,
     run_nodes,
 )
 from render.transmission import (
@@ -458,6 +489,7 @@ from postprocessing.sampling import LightView, Untracked, u_of, v_of
 from postprocessing.shader_pass import (
     ScreenNodes,
     reads_assets,
+    require_saved_frame,
     screen_code,
     screen_pixel,
 )
@@ -490,6 +522,7 @@ from render.computation import (
     ComputeNodes,
     GPUComputationRenderer,
     compute_texel,
+    require_computation_ready,
 )
 from materials.compute_ids import ATOMIC_LOAD
 from materials.compute_nodes import (
@@ -507,7 +540,7 @@ from materials.compute_nodes import (
 from std.atomic import Atomic
 from renderers.renderer import Frame, Renderer
 from objects.gaussian_splat import GaussianSplat
-from render.splat_raster import prepare_gaussian_splat
+from render.splat_raster import prepare_gaussian_splat, require_splat_depth
 from render.splatrule import (
     SPLAT_A,
     SPLAT_AXIS_X,
@@ -1148,6 +1181,54 @@ def pack(color: Color) -> UInt32:
 def available() -> Bool:
     """Return True if this machine has a GPU Mojo can target."""
     return has_accelerator()
+
+
+def require_gpu() raises:
+    """Refuse a launch when this machine has no GPU.
+
+    Nothing. The call returns when a GPU is present.
+
+    Raises:
+        Error: If no GPU is present.
+    """
+    if not available():
+        raise Error("No GPU available")
+
+
+def require_volume_address(used: Int, size: Int) raises:
+    """Refuse a volume block that cannot be addressed as an Int32.
+
+    Nothing. The call returns when the block fits.
+
+    Args:
+        used: How many floats are already stored.
+        size: How many floats the next block adds.
+
+    Raises:
+        Error: If the block exceeds Int32 addressing.
+    """
+    if used > 2147483647 - size:
+        raise Error("GPU volume blocks must fit Int32 addressing")
+
+
+def require_composer_frame(
+    width: Int, height: Int, frame_width: Int, frame_height: Int
+) raises:
+    """Refuse a composer frame that is not the composer's size.
+
+    Nothing. The call returns when the sizes match.
+
+    Args:
+        width: The composer's width in pixels.
+        height: The composer's height in pixels.
+        frame_width: The frame's width in pixels.
+        frame_height: The frame's height in pixels.
+
+    Raises:
+        Error: If the frame is another size.
+    """
+    if frame_width != width or frame_height != height:
+        raise Error("A GPU composer's frame must be its own size")
 
 
 def flatten(corners: List[RasterVertex]) -> List[Float32]:
@@ -2358,17 +2439,17 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
 
     def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def sample_level(
         self, slot: Int, u: Float32, v: Float32, level: Float32
     ) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return opaque white: a curve reads no texture."""
-        return FloatColor(1, 1, 1, 1)
+        return OPAQUE_WHITE
 
     def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
         """Return zeros: a curve reads no texture."""
@@ -2443,7 +2524,7 @@ def _packed_offset(base: Int, offset: Int) raises -> Float32:
 
 def _volume_block_size(width: Int, height: Int, depth: Int) raises -> Int:
     """Check the header and block size before decoding a volume."""
-    if width < 1 or height < 1 or depth < 1:
+    if not positive_extent(width, height, depth):
         raise Error("A GPU volume needs positive dimensions")
     _ = _packed_index(width)
     _ = _packed_index(height)
@@ -2481,8 +2562,7 @@ def volume_blocks(
         var size = _volume_block_size(
             volume.image.width, volume.image.height, volume.image.depth
         )
-        if len(floats) > 2147483647 - size:
-            raise Error("GPU volume blocks must fit Int32 addressing")
+        require_volume_address(len(floats), size)
         volume.validate()
         volume_starts.append(len(floats))
         _append_block(
@@ -2501,8 +2581,7 @@ def volume_blocks(
         var size = _volume_block_size(
             array.image.width, array.image.height, array.image.depth
         )
-        if len(floats) > 2147483647 - size:
-            raise Error("GPU volume blocks must fit Int32 addressing")
+        require_volume_address(len(floats), size)
         array.validate()
         array_starts.append(len(floats))
         _append_block(
@@ -3632,15 +3711,10 @@ def _world_at(
     var aw = corners[unsafe_offset=base + LANE_INV_W]
     var bw = corners[unsafe_offset=b_base + LANE_INV_W]
     var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-    var inv_w = wa * aw + wb * bw + wc * cw
-    var share_a = wa
-    var share_b = wb
-    var share_c = wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = wa * aw * rcp
-        share_b = wb * bw * rcp
-        share_c = wc * cw * rcp
+    var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     return Vector3(
         corners[unsafe_offset=base + LANE_WX] * share_a
         + corners[unsafe_offset=b_base + LANE_WX] * share_b
@@ -3688,15 +3762,10 @@ def _normal_at(
     var aw = corners[unsafe_offset=base + LANE_INV_W]
     var bw = corners[unsafe_offset=b_base + LANE_INV_W]
     var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-    var inv_w = wa * aw + wb * bw + wc * cw
-    var share_a = wa
-    var share_b = wb
-    var share_c = wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = wa * aw * rcp
-        share_b = wb * bw * rcp
-        share_c = wc * cw * rcp
+    var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     var facing = Vector3(
         corners[unsafe_offset=base + LANE_NX] * share_a
         + corners[unsafe_offset=b_base + LANE_NX] * share_b
@@ -3892,17 +3961,12 @@ def _physical[
         var distance = Float32(0)
         var direction_length = Float32(1)
         var rim = Float32(1)
-        var lambert: Float32
-        var coat_lambert = Float32(0)
         if kind == _DIRECTIONAL:
             toward = Vector3(
                 lights[unsafe_offset=at],
                 lights[unsafe_offset=at + 1],
                 lights[unsafe_offset=at + 2],
             )
-            lambert = max(Float32(0), normal.dot(toward))
-            if clearcoat > 0:
-                coat_lambert = max(Float32(0), coat_normal.dot(toward))
         else:
             var ray = light_vector(
                 Vector3(
@@ -3928,11 +3992,9 @@ def _physical[
                 )
                 if rim <= 0:
                     continue
-            lambert = max(Float32(0), normal.dot(toward) / direction_length)
-            if clearcoat > 0:
-                coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / direction_length
-                )
+        var lambert, coat_lambert = light_cosines(
+            normal, toward, coat_normal, clearcoat, direction_length
+        )
         if lambert == 0 and coat_lambert == 0:
             continue
         var bare = Float32(1)
@@ -4002,7 +4064,7 @@ def _physical[
     if rects > 0:
         var first_rect = first_spot + spots * SPOT_FLOATS
         var first_table = first_rect + rects * RECT_FLOATS
-        var dot_nv = max(Float32(0), min(Float32(1), normal.dot(toward_eye)))
+        var dot_nv = clamp(normal.dot(toward_eye), 0, 1)
         var uv = ltc_uv(dot_nv, roughness)
         var minv = _ltc_lookup(lights, first_table, uv)
         var fresnel = _ltc_lookup(lights, first_table + LTC_FLOATS, uv)
@@ -4662,15 +4724,10 @@ def _uv_at(
     var aw = corners[unsafe_offset=base + LANE_INV_W]
     var bw = corners[unsafe_offset=b_base + LANE_INV_W]
     var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-    var inv_w = wa * aw + wb * bw + wc * cw
-    var share_a = wa
-    var share_b = wb
-    var share_c = wc
-    if inv_w != 0:
-        var rcp = Float32(1) / inv_w
-        share_a = wa * aw * rcp
-        share_b = wb * bw * rcp
-        share_c = wc * cw * rcp
+    var shares = perspective_shares(wa, wb, wc, aw, bw, cw)
+    var share_a = shares[0]
+    var share_b = shares[1]
+    var share_c = shares[2]
     return Vector2(
         corners[unsafe_offset=base + lane] * share_a
         + corners[unsafe_offset=b_base + lane] * share_b
@@ -5029,7 +5086,7 @@ def _sample_grad(
 ) -> FloatColor:
     """Read explicit gradients with the host's footprint arithmetic."""
     if not texture_grad_finite(u, v, dx, dy):
-        return FloatColor(0, 0, 0, 0)
+        return TRANSPARENT_BLACK
     var footprint = anisotropic_footprint(
         dx, dy, image.width, image.height, image.anisotropy
     )
@@ -5049,12 +5106,8 @@ def _sample_footprint(
 ) -> FloatColor:
     """Read bounded taps as `Texture._sample_footprint` reads them."""
     if explicit:
-        if (
-            not isfinite(footprint.level)
-            or not isfinite(footprint.step.x)
-            or not isfinite(footprint.step.y)
-        ):
-            return FloatColor(0, 0, 0, 0)
+        if not isfinite(footprint.level) or not footprint.step.is_finite():
+            return TRANSPARENT_BLACK
     if footprint.taps == 1:
         if explicit:
             return _sample_level(
@@ -5068,29 +5121,22 @@ def _sample_footprint(
         return _sample_level(texels, ramp, image, u, v, footprint.level)
     # The taps along the long axis, averaged premultiplied, exactly as
     # `Texture.sample_footprint` averages them.
-    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+    var total = TRANSPARENT_BLACK
     for tap in range(footprint.taps):
         var along = Float32(tap) - Float32(footprint.taps - 1) / 2
         var tap_u = u + footprint.step.x * along
         var tap_v = v + footprint.step.y * along
         if explicit:
             if not isfinite(tap_u) or not isfinite(tap_v):
-                return FloatColor(0, 0, 0, 0)
+                return TRANSPARENT_BLACK
             tap_u = gradient_sample_coordinate(tap_u, image.wrap_s)
             tap_v = gradient_sample_coordinate(tap_v, image.wrap_t)
         var sampled = _sample_level(
             texels, ramp, image, tap_u, tap_v, footprint.level
         ).premultiplied()
-        total = FloatColor(
-            total.r + sampled.r,
-            total.g + sampled.g,
-            total.b + sampled.b,
-            total.a + sampled.a,
-        )
+        total = total + sampled
     var share = 1 / Float32(footprint.taps)
-    return FloatColor(
-        total.r * share, total.g * share, total.b * share, total.a * share
-    ).unpremultiplied()
+    return (total * share).unpremultiplied()
 
 
 def _placed_steps(
@@ -5469,8 +5515,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
         """Return each corner's perspective-correct weight at this pixel,
         or at the pixel to its right or above it, from the triangle's own
         edge functions, as `_uv_at` reads the pixels either side."""
-        var px = self.px + (SUBPIXEL if context == AT_RIGHT else 0)
-        var py = self.py - (SUBPIXEL if context == AT_UP else 0)
+        var px, py = sample_step(self.px, self.py, context, SUBPIXEL)
         var e_ab = edge_at(self.ax, self.ay, self.bx, self.by, px, py)
         var e_bc = edge_at(self.bx, self.by, self.cx, self.cy, px, py)
         var e_ca = edge_at(self.cx, self.cy, self.ax, self.ay, px, py)
@@ -5504,8 +5549,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
         Returns:
             The four numbers.
         """
-        var px = self.px + (SUBPIXEL if context == AT_RIGHT else 0)
-        var py = self.py - (SUBPIXEL if context == AT_UP else 0)
+        var px, py = sample_step(self.px, self.py, context, SUBPIXEL)
         return SIMD[DType.float32, 4](
             Float32(px) / Float32(SUBPIXEL),
             Float32(self.height) - Float32(py) / Float32(SUBPIXEL),
@@ -5515,9 +5559,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def behind(self, u: Float32, v: Float32) -> FloatColor:
         """Return the opaque scene behind at a place on the target, as
@@ -5842,6 +5884,7 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         """Return each end's perspective-correct weight at this pixel, or
         at the pixel to its right or above it, from `toward_at`."""
         var far = self.base + FLOATS_PER_VERTEX
+        var x, y = sample_pixel(self.x, self.y, context)
         var toward = toward_at(
             Vector2(
                 self.segments[unsafe_offset=self.base + LANE_X],
@@ -5853,8 +5896,8 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
             ),
             self.segments[unsafe_offset=self.base + LANE_INV_W],
             self.segments[unsafe_offset=far + LANE_INV_W],
-            self.x + (1 if context == AT_RIGHT else 0),
-            self.y - (1 if context == AT_UP else 0),
+            x,
+            y,
         )
         return SIMD[DType.float32, 4](1 - toward, toward, 0, 0)
 
@@ -5868,20 +5911,13 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return one end's coordinates, world position, normal, color and
@@ -6071,20 +6107,13 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         Returns:
             The four numbers.
         """
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        return SIMD[DType.float32, 4](
-            Float32(x) + 0.5,
-            Float32(self.height - y) - 0.5,
-            self.depth * 0.5 + 0.5,
-            1,
+        return pixel_frag_coord(
+            self.x, self.y, self.height, self.depth, context
         )
 
     def screen_size(self) -> SIMD[DType.float32, 4]:
         """Return the target's width and height in pixels."""
-        return SIMD[DType.float32, 4](
-            Float32(self.width), Float32(self.height), 0, 0
-        )
+        return screen_size_coord(self.width, self.height)
 
     def point_coord(self, context: NodeContext) -> SIMD[DType.float32, 4]:
         """Return where the pixel is in the point, GLSL's `gl_PointCoord`,
@@ -6096,20 +6125,16 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         Returns:
             The two numbers, then zeros.
         """
-        if context.is_corner():
-            return SIMD[DType.float32, 4](0.5, 0.5, 0, 0)
-        var x = self.x + (1 if context == AT_RIGHT else 0)
-        var y = self.y - (1 if context == AT_UP else 0)
-        var place = gl_point_coord(
+        return sampled_point_coord(
+            context,
+            self.x,
+            self.y,
             Vector2(
                 self.points[unsafe_offset=self.base + LANE_X],
                 self.points[unsafe_offset=self.base + LANE_Y],
             ),
             self.points[unsafe_offset=self.base + LANE_POINT_SIZE],
-            x,
-            y,
         )
-        return SIMD[DType.float32, 4](place.x, place.y, 0, 0)
 
     def corner(self, context: NodeContext) -> NodeInputs:
         """Return the point's coordinates, world position, normal, color
@@ -6710,7 +6735,7 @@ def rasterize_kernel(
                     unsafe_offset=far_base + LANE_LINE_DISTANCE
                 ]
                 if not dash_covers(
-                    from_a + (from_b - from_a) * toward,
+                    mix_delta(from_a, from_b, toward),
                     segments[unsafe_offset=base + LANE_DASH],
                     segments[unsafe_offset=base + LANE_GAP],
                 ):
@@ -6737,7 +6762,7 @@ def rasterize_kernel(
                     unsafe_offset=base + LANE_LOG_DEPTH
                 ]
                 var stored_z = fragment_depth(
-                    state, az + (bz - az) * share, total
+                    state, mix_delta(az, bz, share), total
                 )
                 # Straight, through the function the host calls, so the one
                 # convention for a line's color lives in one place.
@@ -6777,7 +6802,7 @@ def rasterize_kernel(
                     x,
                     y,
                     Int(height),
-                    az + (bz - az) * share,
+                    mix_delta(az, bz, share),
                     Int(width),
                 )
                 var line_given = here_inputs(
@@ -6822,7 +6847,7 @@ def rasterize_kernel(
                 ):
                     var ad = segments[unsafe_offset=base + LANE_DEPTH]
                     var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
-                    var seen = ad + (bd - ad) * toward
+                    var seen = mix_delta(ad, bd, toward)
                     # By name, as the triangle pass reads it. Written out as
                     # literal slots once, which took the color out of the near,
                     # far and density lanes and the distances out of the color: a
@@ -7116,14 +7141,10 @@ def rasterize_kernel(
             if not shades(test, tested or hashed or covered or masked):
                 stencil = test.stencil
                 continue
-            var share_a = wa
-            var share_b = wb
-            var share_c = wc
-            if inv_w != 0:
-                var rcp = Float32(1) / inv_w
-                share_a = wa * aw * rcp
-                share_b = wb * bw * rcp
-                share_c = wc * cw * rcp
+            var shares = perspective_shares_over(inv_w, wa, wb, wc, aw, bw, cw)
+            var share_a = shares[0]
+            var share_b = shares[1]
+            var share_c = shares[2]
             # The metalness and roughness a physical surface settles on,
             # as `rasterize_shaded` keeps them; zero for every other.
             var frag_metal = Float32(0)
@@ -8159,11 +8180,7 @@ def rasterize_kernel(
                             uv,
                             uv1,
                         ).r
-                        highlight = Vector3(
-                            highlight.x * specular_strength,
-                            highlight.y * specular_strength,
-                            highlight.z * specular_strength,
-                        )
+                        highlight = highlight * specular_strength
                     # The layers' maps, exactly as `rasterize_shaded`
                     # reads them: a color, an alpha, a red, a green, and a
                     # whole texel.
@@ -8562,9 +8579,9 @@ def rasterize_kernel(
                         var share = Float32(1)
                         if set[6]:
                             share = ran[6][0]
-                        red = red + (ran[5][0] - red) * share
-                        green = green + (ran[5][1] - green) * share
-                        blue = blue + (ran[5][2] - blue) * share
+                        red = mix_delta(red, ran[5][0], share)
+                        green = mix_delta(green, ran[5][1], share)
+                        blue = mix_delta(blue, ran[5][2], share)
                     if set[7] and ran[7][0] == 0:
                         continue
                 # Thrown away for being too transparent, three.js's
@@ -9065,13 +9082,8 @@ def rasterize_kernel(
                         around.y + baked.y,
                         around.z + baked.z,
                     )
-                    var dot_nv = max(
-                        Float32(0), min(Float32(1), facing.dot(toward_eye))
-                    )
-                    var dot_nv_coat = max(
-                        Float32(0),
-                        min(Float32(1), coat_normal.dot(toward_eye)),
-                    )
+                    var dot_nv = clamp(facing.dot(toward_eye), 0, 1)
+                    var dot_nv_coat = clamp(coat_normal.dot(toward_eye), 0, 1)
                     var radiance = Vector3(0, 0, 0)
                     var irradiance = Vector3(0, 0, 0)
                     var coat_radiance = Vector3(0, 0, 0)
@@ -9780,10 +9792,8 @@ struct GpuRenderer(Movable):
         Raises:
             Error: If the dimensions are not positive, or no GPU is present.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Framebuffer dimensions must be positive")
-        if not available():
-            raise Error("No GPU available")
+        require_framebuffer_size(width, height)
+        require_gpu()
         self.width = width
         self.height = height
         self.drawn = False
@@ -10103,14 +10113,10 @@ struct GpuRenderer(Movable):
                 `custom_tone_mapping` names a program that is not in
                 `programs`.
         """
-        if not depth_mode.is_valid():
-            raise Error("A depth mode that is none of the three")
-        if len(corners) % 3 != 0:
-            raise Error("Rasterizing needs whole triangles")
-        if len(lines) % 2 != 0:
-            raise Error("Rasterizing needs whole segments")
-        if not mode.is_valid():
-            raise Error("A shading mode that is none of the four")
+        require_depth_mode(depth_mode)
+        require_whole_triangles(len(corners))
+        require_whole_segments(len(lines))
+        require_shade_mode(mode)
         if mode == SHADE_SHADOW:
             raise Error(
                 "A shadow map's colors are drawn on the host: the kernel"
@@ -10137,8 +10143,7 @@ struct GpuRenderer(Movable):
         var narrowed = Bool(scissor)
         if narrowed:
             kept = scissor.value()
-            if not kept.fits(self.width, self.height):
-                raise Error("A scissor must lie inside the target")
+            require_rect(kept, self.width, self.height, "scissor")
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -10151,10 +10156,7 @@ struct GpuRenderer(Movable):
                 corners[triangle * 3 + 2],
             )
             var named = corners[triangle * 3].lights
-            if named < 0 or named > len(lightings):
-                raise Error(
-                    "A triangle names a lighting the frame does not have"
-                )
+            require_triangle_lighting(named, len(lightings))
         # The frame's lights and each light mask's, a block each.
         var lit = flatten_frame_lights(lighting, lightings)
 
@@ -10222,44 +10224,45 @@ struct GpuRenderer(Movable):
                 if mode != SHADE_TEXTURE:
                     continue
                 for slot in range(len(program.textures)):
-                    if program.textures[slot].value < 0:
-                        raise Error(
-                            "A node program reads a texture uniform that"
-                            " names no texture; call set_texture() first"
-                        )
+                    require_program_uniform(
+                        program.textures[slot].value,
+                        "a texture",
+                        "texture",
+                        "set_texture",
+                    )
                     if program.textures[slot].value >= self.uploaded:
                         raise Error(
                             "A node program reads a texture that has not"
                             " been uploaded; call set_textures() first"
                         )
                 for slot in range(len(program.volumes)):
-                    if program.volumes[slot].value < 0:
-                        raise Error(
-                            "A node program reads a 3D texture uniform that"
-                            " names no texture; call set_volume() first"
-                        )
+                    require_program_uniform(
+                        program.volumes[slot].value,
+                        "a 3D texture",
+                        "texture",
+                        "set_volume",
+                    )
                     if program.volumes[slot].value >= len(self.volume_starts):
                         raise Error(
                             "A node program reads a 3D texture that has not"
                             " been uploaded; call set_textures() first"
                         )
                 for slot in range(len(program.arrays)):
-                    if program.arrays[slot].value < 0:
-                        raise Error(
-                            "A node program reads an array texture uniform"
-                            " that names no texture; call set_array() first"
-                        )
+                    require_program_uniform(
+                        program.arrays[slot].value,
+                        "an array texture",
+                        "texture",
+                        "set_array",
+                    )
                     if program.arrays[slot].value >= len(self.array_starts):
                         raise Error(
                             "A node program reads an array texture that has"
                             " not been uploaded; call set_textures() first"
                         )
                 for slot in range(len(program.cubes)):
-                    if program.cubes[slot].value < 0:
-                        raise Error(
-                            "A node program reads a cube uniform that names"
-                            " no cube; call set_cube() first"
-                        )
+                    require_program_uniform(
+                        program.cubes[slot].value, "a cube", "cube", "set_cube"
+                    )
                     if program.cubes[slot].value >= self.uploaded_cubes:
                         raise Error(
                             "A node program reads a cube that has not been"
@@ -10348,16 +10351,11 @@ struct GpuRenderer(Movable):
                     )
             var mask = points[index].alpha_map
             if mask != NO_TEXTURE and mode == SHADE_TEXTURE:
-                if not self.is_linear[mask.value]:
-                    raise Error(
-                        "An alpha map holds data, not color; build the"
-                        " texture with color_space=LINEAR"
-                    )
-                if not self.ignores_alpha[mask.value]:
-                    raise Error(
-                        "An alpha map must ignore its own alpha; build"
-                        " the texture with alpha=IGNORED"
-                    )
+                require_data_descriptors(
+                    self.is_linear[mask.value],
+                    self.ignores_alpha[mask.value],
+                    "An alpha map",
+                )
         # An emissive map's alpha means nothing, and only a texture built to
         # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
         # here, before the launch, exactly where `rasterize_shaded` asks it
@@ -10365,26 +10363,20 @@ struct GpuRenderer(Movable):
         if mode == SHADE_TEXTURE:
             for triangle in range(triangles):
                 var glow = corners[triangle * 3].emissive_map
-                if glow != NO_TEXTURE and not self.ignores_alpha[glow.value]:
-                    raise Error(
-                        "An emissive map must ignore its alpha; build the"
-                        " texture with alpha=IGNORED"
+                if glow != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[glow.value], "An emissive map"
                     )
                 # An alpha map holds data and must say so twice; the same
                 # question `check_alpha_map` asks on the host, asked of the
                 # descriptors this renderer uploaded.
                 var mask = corners[triangle * 3].alpha_map
                 if mask != NO_TEXTURE:
-                    if not self.is_linear[mask.value]:
-                        raise Error(
-                            "An alpha map holds data, not color; build the"
-                            " texture with color_space=LINEAR"
-                        )
-                    if not self.ignores_alpha[mask.value]:
-                        raise Error(
-                            "An alpha map must ignore its own alpha; build"
-                            " the texture with alpha=IGNORED"
-                        )
+                    require_data_descriptors(
+                        self.is_linear[mask.value],
+                        self.ignores_alpha[mask.value],
+                        "An alpha map",
+                    )
                 # The maps that hold numbers, asked the same two
                 # questions with the same words `check_data_map` uses.
                 self._check_data_map(
@@ -10403,10 +10395,9 @@ struct GpuRenderer(Movable):
                 # alpha means nothing: `check_triangle_maps`'s two rules.
                 self._check_data_map(corners[triangle * 3].ao_map, "An ao map")
                 var baked = corners[triangle * 3].light_map
-                if baked != NO_TEXTURE and not self.ignores_alpha[baked.value]:
-                    raise Error(
-                        "A light map must ignore its alpha; build the"
-                        " texture with alpha=IGNORED"
+                if baked != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[baked.value], "A light map"
                     )
                 self._check_data_map(
                     corners[triangle * 3].specular_map, "A specular map"
@@ -10421,23 +10412,19 @@ struct GpuRenderer(Movable):
                 # The layers' maps, by `check_triangle_maps`'s three rules.
                 ref layered = corners[triangle * 3].layers
                 var tint = layered.sheen_color_map
-                if tint != NO_TEXTURE and not self.ignores_alpha[tint.value]:
-                    raise Error(
-                        "A sheen color map must ignore its alpha; build the"
-                        " texture with alpha=IGNORED"
+                if tint != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[tint.value], "A sheen color map"
                     )
                 var cloth = layered.sheen_roughness_map
                 if cloth != NO_TEXTURE:
-                    if not self.is_linear[cloth.value]:
-                        raise Error(
-                            "A sheen roughness map holds data, not color;"
-                            " build the texture with color_space=LINEAR"
-                        )
-                    if self.ignores_alpha[cloth.value]:
-                        raise Error(
-                            "A sheen roughness map is read from its alpha;"
-                            " build the texture with alpha=COVERAGE"
-                        )
+                    require_linear_data(
+                        self.is_linear[cloth.value], "A sheen roughness map"
+                    )
+                    require_coverage_alpha(
+                        not self.ignores_alpha[cloth.value],
+                        "A sheen roughness map",
+                    )
                 self._check_data_map(
                     layered.iridescence_map, "An iridescence map"
                 )
@@ -10452,23 +10439,18 @@ struct GpuRenderer(Movable):
                 # of data, as `check_triangle_maps` refuses them.
                 var intensity = layered.specular_intensity_map
                 if intensity != NO_TEXTURE:
-                    if not self.is_linear[intensity.value]:
-                        raise Error(
-                            "A specular intensity map holds data, not"
-                            " color; build the texture with"
-                            " color_space=LINEAR"
-                        )
-                    if self.ignores_alpha[intensity.value]:
-                        raise Error(
-                            "A specular intensity map is read from its"
-                            " alpha; build the texture with"
-                            " alpha=COVERAGE"
-                        )
+                    require_linear_data(
+                        self.is_linear[intensity.value],
+                        "A specular intensity map",
+                    )
+                    require_coverage_alpha(
+                        not self.ignores_alpha[intensity.value],
+                        "A specular intensity map",
+                    )
                 var shine = layered.specular_color_map
-                if shine != NO_TEXTURE and not self.ignores_alpha[shine.value]:
-                    raise Error(
-                        "A specular color map must ignore its alpha; build"
-                        " the texture with alpha=IGNORED"
+                if shine != NO_TEXTURE:
+                    require_ignored_alpha(
+                        self.ignores_alpha[shine.value], "A specular color map"
                     )
                 self._check_data_map(layered.clearcoat_map, "A clearcoat map")
                 self._check_data_map(
@@ -10499,32 +10481,14 @@ struct GpuRenderer(Movable):
                 var tones = corners[triangle * 3].gradient_map
                 if tones == NO_TEXTURE:
                     continue
-                if not self.has_texels[tones.value]:
-                    raise Error(
-                        "A gradient map must hold texels: name no map for"
-                        " the fallback"
-                    )
-                if self.heights[tones.value] != 1:
-                    raise Error(
-                        "A gradient map must be one row high: it is a lookup"
-                        " table, not a picture, and a taller image has no"
-                        " unambiguous row"
-                    )
-                if not self.is_linear[tones.value]:
-                    raise Error(
-                        "A gradient map holds data, not color; build the"
-                        " texture with color_space=LINEAR"
-                    )
-                if not self.ignores_alpha[tones.value]:
-                    raise Error(
-                        "A gradient map must ignore its own alpha; build"
-                        " the texture with alpha=IGNORED"
-                    )
-                if self.holds_floats[tones.value]:
-                    raise Error(
-                        "A gradient map must hold bytes: its tones are read"
-                        " one byte each"
-                    )
+                require_gradient_texels(self.has_texels[tones.value])
+                require_gradient_row(self.heights[tones.value])
+                require_data_descriptors(
+                    self.is_linear[tones.value],
+                    self.ignores_alpha[tones.value],
+                    "A gradient map",
+                )
+                require_gradient_bytes(self.holds_floats[tones.value])
             # A matcap's own alpha means nothing either, and only a
             # texture built to ignore it filters correctly. Its own loop,
             # because a triangle with a matcap rarely has a ramp as well.
@@ -10532,11 +10496,9 @@ struct GpuRenderer(Movable):
                 var ball = corners[triangle * 3].matcap
                 if ball == NO_TEXTURE:
                     continue
-                if not self.ignores_alpha[ball.value]:
-                    raise Error(
-                        "A matcap must ignore its alpha; build the texture"
-                        " with alpha=IGNORED"
-                    )
+                require_ignored_alpha(
+                    self.ignores_alpha[ball.value], "A matcap"
+                )
 
         # A pixel outside the scissor is left as it was, and on a
         # fresh target "as it was" is whatever the device buffer held.
@@ -10876,18 +10838,9 @@ struct GpuRenderer(Movable):
         """
         if map == NO_TEXTURE:
             return
-        if not self.is_linear[map.value]:
-            raise Error(
-                name
-                + " holds data, not color; build the texture with"
-                " color_space=LINEAR"
-            )
-        if not self.ignores_alpha[map.value]:
-            raise Error(
-                name
-                + " must ignore its own alpha; build the texture with"
-                " alpha=IGNORED"
-            )
+        require_data_descriptors(
+            self.is_linear[map.value], self.ignores_alpha[map.value], name
+        )
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.
@@ -11565,7 +11518,7 @@ def bloom_composite_kernel(
         return
     var u = u_of(x, w)
     var v = v_of(y, h)
-    var glow = FloatColor(0, 0, 0, 0)
+    var glow = TRANSPARENT_BLACK
     var level_width = halved_size(w)
     var level_height = halved_size(h)
     var start = 0
@@ -12276,10 +12229,8 @@ struct GpuComposer(Movable):
             Error: If the dimensions are not positive, or no GPU is
                 present.
         """
-        if width <= 0 or height <= 0:
-            raise Error("Framebuffer dimensions must be positive")
-        if not available():
-            raise Error("No GPU available")
+        require_framebuffer_size(width, height)
+        require_gpu()
         self.width = width
         self.height = height
         self.round_trips = 0
@@ -12326,8 +12277,9 @@ struct GpuComposer(Movable):
             Error: If the frame is another size, or a buffer cannot be
                 written.
         """
-        if frame.width != self.width or frame.height != self.height:
-            raise Error("A GPU composer's frame must be its own size")
+        require_composer_frame(
+            self.width, self.height, frame.width, frame.height
+        )
         var count = self.width * self.height
         var flags = List[UInt8](length=count, fill=0)
         for slot in range(count):
@@ -12368,8 +12320,9 @@ struct GpuComposer(Movable):
             Error: If the frame is another size, or a buffer cannot be
                 read.
         """
-        if frame.width != self.width or frame.height != self.height:
-            raise Error("A GPU composer's frame must be its own size")
+        require_composer_frame(
+            self.width, self.height, frame.width, frame.height
+        )
         var count = self.width * self.height
         var flags = List[UInt8](length=count, fill=0)
         with self.light.map_to_host() as host:
@@ -12637,13 +12590,12 @@ struct GpuComposer(Movable):
         var saved = List[FloatColor]()
         if step.shader.saved.byte_length() > 0:
             saved = composer.saved_image(step.shader.saved_pass)
+        require_saved_frame(len(saved), self.width * self.height)
         if len(saved) == self.width * self.height:
             saved_width = self.width
             saved_height = self.height
-        elif len(saved) != 0:
-            raise Error("A saved image must be the frame's size")
         else:
-            saved = [FloatColor(0, 0, 0, 0)]
+            saved = [TRANSPARENT_BLACK]
         for slot in range(len(saved)):
             floats.append(saved[slot].r)
             floats.append(saved[slot].g)
@@ -12830,9 +12782,7 @@ struct GpuComposer(Movable):
                     grid_dim=grid,
                     block_dim=(TILE, TILE),
                 )
-            var trail = List[FloatColor](
-                length=count, fill=FloatColor(0, 0, 0, 0)
-            )
+            var trail = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
             with self.light.map_to_host() as host:
                 unsafe_memcpy(
                     dest=trail.unsafe_ptr().unsafe_bitcast[Float32](),
@@ -13083,9 +13033,7 @@ struct GpuComposer(Movable):
         elif kind == SAVE:
             # The copy is kept on the host, in the composer, so both
             # backends share it, as the afterimage's trail is kept.
-            var kept = List[FloatColor](
-                length=count, fill=FloatColor(0, 0, 0, 0)
-            )
+            var kept = List[FloatColor](length=count, fill=TRANSPARENT_BLACK)
             with self.light.map_to_host() as host:
                 unsafe_memcpy(
                     dest=kept.unsafe_ptr().unsafe_bitcast[Float32](),
@@ -13314,8 +13262,7 @@ struct GpuComputation(Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
         self.image = self.context.enqueue_create_buffer[DType.float32](4)
         self.code = self.context.enqueue_create_buffer[DType.float32](4)
@@ -13333,8 +13280,9 @@ struct GpuComputation(Movable):
         Raises:
             Error: If `init` has not compiled the shaders.
         """
-        if len(computation.programs) != len(computation.variables):
-            raise Error("A computation must be initialized before it runs")
+        require_computation_ready(
+            len(computation.programs), len(computation.variables)
+        )
         var packed = computation.packed()
         var w = computation.size_x
         var h = computation.size_y
@@ -13527,8 +13475,7 @@ struct GpuSplats(Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
         self.colors = self.context.enqueue_create_buffer[DType.float32](4)
         self.depth = self.context.enqueue_create_buffer[DType.float32](4)
@@ -13548,8 +13495,7 @@ struct GpuSplats(Movable):
         Raises:
             Error: If the target's depth mode is not valid.
         """
-        if not target.depth_mode.is_valid():
-            raise Error("A Gaussian splat needs a valid depth mode")
+        require_splat_depth(target.depth_mode)
         var w = target.width
         var h = target.height
         var pixels = w * h
@@ -13786,8 +13732,7 @@ struct GpuCompute(ComputeRunner, Movable):
         Raises:
             Error: If no GPU is present.
         """
-        if not available():
-            raise Error("No GPU available")
+        require_gpu()
         self.context = DeviceContext()
         self.code = self.context.enqueue_create_buffer[DType.float32](4)
         self.before = self.context.enqueue_create_buffer[DType.float32](4)

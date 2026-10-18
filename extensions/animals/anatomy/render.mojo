@@ -35,6 +35,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
+from core.ordinal import require_positive
 from extensions.animals.anatomy.body import MAMMAL, BodyPlan, species_body
 from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import (
@@ -69,10 +70,11 @@ from extensions.sdf.ids import CONE, BoneId, SURFACE_PART_COUNT, SurfacePart
 from extensions.sdf.mesher import SurfaceMesh, merge, mesh_part
 from extensions.sdf.vector import V3, length
 from materials.material import LAMBERT, PHONG, Material
+from math.vector3 import append_float64_xyz
 from render.framebuffer import Color
 from std.math import pi, sqrt
 from std.sys import num_logical_cores
-from units.si import METER, Length
+from units.measure import length_meters
 
 # Linear tissue colors.
 comptime SKIN_COLOR = (0.62, 0.42, 0.33)
@@ -228,7 +230,7 @@ def _layer(
         ids,
         box[0],
         box[1],
-        Length(Float32(cell), METER),
+        length_meters(cell),
         workers=threads,
     )
     return _layer_geometry(model, surface, tissue, tendon)
@@ -252,9 +254,7 @@ def _layer_geometry(
             surface.vertex(v),
         )
         var c = tendon if model.prims[at].kind == CONE else tissue
-        colors.append(Float32(c[0]))
-        colors.append(Float32(c[1]))
-        colors.append(Float32(c[2]))
+        append_float64_xyz(colors, c[0], c[1], c[2])
     var g = BufferGeometry()
     g.set_attribute(
         String(POSITION), BufferAttribute(surface.positions.copy(), 3)
@@ -291,7 +291,7 @@ def _skin_layer(
             ids,
             box[0],
             box[1],
-            Length(Float32(animal.cell), METER),
+            length_meters(animal.cell),
             workers=threads,
         )
         merge(surface, piece)
@@ -319,8 +319,9 @@ def anatomy_layers(
         Error: If the pose is for another rig, or the animal has no
             muscles to draw.
     """
-    if len(muscles) == 0:
-        raise Error("Engineering mode needs the animal's muscles")
+    require_positive(
+        len(muscles), "Engineering mode needs the animal's muscles"
+    )
     var threads = workers if workers > 0 else num_logical_cores()
     var world = pose.world(animal.rig)
     var cell = animal.cell * FINE

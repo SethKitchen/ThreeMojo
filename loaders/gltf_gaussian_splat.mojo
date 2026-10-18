@@ -50,6 +50,8 @@ three numbers or not as many as the positions, or a band above a missing
 one is refused, with three.js's reasons.
 """
 
+from core.binary import copy_bytes
+from core.ordinal import require_index_in_count, require_non_negative
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 
 from core.gaussian_splat_utils import (
@@ -63,9 +65,21 @@ from core.gaussian_splat_utils import (
 )
 from core.user_data import UserData, user_data_of
 from loaders.fbx import sanitize_node_name
-from loaders.gltf import decode_base64, split_glb, _apply_matrix
+from loaders.file_path import path_directory
+from loaders.gltf import (
+    _FLAT_NODE_MATRIX,
+    decode_base64,
+    require_rising_sparse_index,
+    require_sparse_indices,
+    split_glb,
+)
 from core.scene import Scene
-from core.object3d import NodeId, Object3D, NO_PARENT
+from core.object3d import (
+    NO_PARENT,
+    NodeId,
+    Object3D,
+    _place_from_column_major,
+)
 from math.quaternion import Quaternion
 from objects.gaussian_splat import GaussianSplat
 from loaders.json import OBJECT, JsonDocument, parse_json
@@ -326,8 +340,11 @@ def _read_accessor(
         document.integer(document.get(accessor, "bufferView")),
     )
     var buffer_index = document.integer(document.get(view, "buffer"))
-    if buffer_index < 0 or buffer_index >= len(buffers):
-        raise Error("glTF: a splat buffer view names a missing buffer")
+    require_index_in_count(
+        buffer_index,
+        len(buffers),
+        "glTF: a splat buffer view names a missing buffer",
+    )
     ref buffer = buffers[buffer_index]
     var view_offset = _offset(document, view)
     var length = document.integer(document.get(view, "byteLength"))
@@ -372,8 +389,11 @@ def _sparse_span(
         document.integer(document.get(part, "bufferView")),
     )
     var buffer = document.integer(document.get(view, "buffer"))
-    if buffer < 0 or buffer >= len(buffers):
-        raise Error("glTF: a sparse splat accessor names a missing buffer")
+    require_index_in_count(
+        buffer,
+        len(buffers),
+        "glTF: a sparse splat accessor names a missing buffer",
+    )
     var base = _offset(document, view)
     var length = document.integer(document.get(view, "byteLength"))
     check_buffer_range(len(buffers[buffer]), base, length)
@@ -413,8 +433,7 @@ def _apply_sparse_splat(
     var indices = document.get(sparse, "indices")
     var data = document.get(sparse, "values")
     var index_type = document.integer(document.get(indices, "componentType"))
-    if index_type != 5121 and index_type != 5123 and index_type != 5125:
-        raise Error("glTF: sparse indices must be unsigned integers")
+    require_sparse_indices(index_type)
     var index_size = _component_bytes(index_type)
     var component_size = _component_bytes(component)
     var found = _sparse_span(
@@ -437,10 +456,7 @@ def _apply_sparse_splat(
                 False,
             )
         )
-        if element <= last or element >= count:
-            raise Error(
-                "glTF: sparse indices must rise and stay inside the accessor"
-            )
+        require_rising_sparse_index(element, last, count)
         last = element
         for lane in range(width):  # pragma: no branch
             values[element * width + lane] = _component(
@@ -495,8 +511,9 @@ def _buffers(
     for index in range(document.length(list)):
         var buffer = document.at(list, index)
         var length = document.integer(document.get(buffer, "byteLength"))
-        if length < 0:
-            raise Error("glTF: a splat buffer needs a nonnegative byteLength")
+        require_non_negative(
+            length, "glTF: a splat buffer needs a nonnegative byteLength"
+        )
         var data: List[UInt8]
         if not document.has(buffer, "uri"):
             if index != 0:
@@ -516,8 +533,7 @@ def _buffers(
         # GLB padding is not part of the declared buffer. Views must not
         # read it, even though the container supplies those extra bytes.
         if length < len(data):
-            var trimmed = List[UInt8](data[:length])
-            data = trimmed^
+            data = copy_bytes(data, 0, length)
         out.append(data^)
     return out^
 
@@ -915,7 +931,7 @@ def read_gltf_gaussian_splats(
             anything `load_gltf_gaussian_splats` raises.
     """
     var bytes = Path(path).read_bytes()
-    var directory = String(path[byte = : path.rfind("/") + 1])
+    var directory = path_directory(path)
     if len(bytes) >= 4 and le_u32(bytes, 0) == _GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf_gaussian_splats(parts[0], parts[1], directory)
@@ -981,8 +997,9 @@ def load_gltf_gaussian_splat_scene(
     while len(pending) > 0:
         var entry = pending.pop()
         var index = entry[0]
-        if index < 0 or index >= count:
-            raise Error("glTF: a splat node index is not there")
+        require_index_in_count(
+            index, count, "glTF: a splat node index is not there"
+        )
         if reached[index]:
             raise Error("glTF: a splat node is reached twice")
         reached[index] = True
@@ -1020,7 +1037,7 @@ def load_gltf_gaussian_splat_scene(
                 placed.user_data = user_data_of(document, extras)
         var matrix = _node_numbers(document, node, "matrix", 16)
         if len(matrix) > 0:
-            _apply_matrix(placed, matrix)
+            _place_from_column_major(placed, matrix, _FLAT_NODE_MATRIX)
         else:
             var position = _node_numbers(document, node, "translation", 3)
             var rotation = _node_numbers(document, node, "rotation", 4)
@@ -1044,8 +1061,11 @@ def load_gltf_gaussian_splat_scene(
         if not document.has(node, "mesh"):
             continue
         var mesh = document.integer(document.get(node, "mesh"))
-        if mesh < 0 or mesh >= len(mesh_map):
-            raise Error("glTF: a splat node names a missing mesh")
+        require_index_in_count(
+            mesh,
+            len(mesh_map),
+            "glTF: a splat node names a missing mesh",
+        )
         if mesh_map[mesh] < 0:
             continue
         ref primitives = meshes[mesh_map[mesh]].primitives
@@ -1079,7 +1099,7 @@ def read_gltf_gaussian_splat_scene(
     """
     var file = Path(path)
     var bytes = file.read_bytes()
-    var directory = String(path[byte = : path.rfind("/") + 1])
+    var directory = path_directory(path)
     if len(bytes) >= 4 and le_u32(bytes, 0) == _GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf_gaussian_splat_scene(

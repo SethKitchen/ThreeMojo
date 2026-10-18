@@ -32,19 +32,22 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.ordinal import require_positive
+from math.finite import require_non_negative_finite
 from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
+    require_vertex_index,
     NORMAL,
     POSITION,
 )
 from geometries.attribute_utils import merge_attributes
 from math.vector3 import Vector3
 from std.collections import Dict
-from std.math import cos, isfinite, isnan, log10
+from std.math import cos, isnan, log10
 from units.si import Angle, DEGREE
 
 # The tolerance three.js's `mergeVertices` defaults to. A plain number and
@@ -111,8 +114,7 @@ def merge_geometries(
             parts do not match as above, if a part has no positions, or if
             an index entry points past its part's last vertex.
     """
-    if len(geometries) == 0:
-        raise Error("Merging needs at least one geometry")
+    require_positive(len(geometries), "Merging needs at least one geometry")
     # The empty list was refused above, so this runs once at least.
     for part in range(len(geometries)):  # pragma: no branch
         if geometries[part].instanced:
@@ -158,8 +160,7 @@ def merge_geometries(
         var count = geometry.vertex_count()
         # Runs no times for a part without an index.
         for entry in range(len(geometry.index)):
-            if geometry.index[entry] >= count:
-                raise Error("An index entry points past the last vertex")
+            require_vertex_index(geometry.index[entry], count)
             index.append(geometry.index[entry] + vertices)
         if use_groups:
             var span = geometry.stream_length()
@@ -227,8 +228,10 @@ def merge_vertices(
             is instanced or has no positions, or if an index entry points past an
             attribute's last item.
     """
-    if not isfinite(tolerance) or tolerance < 0:
-        raise Error("A weld tolerance must be a finite number, zero or more")
+    require_non_negative_finite(
+        Float64(tolerance),
+        "A weld tolerance must be a finite number, zero or more",
+    )
     if geometry.instanced:
         raise Error("An instanced geometry is not welded")
     var step = max(tolerance, EPSILON)
@@ -326,8 +329,10 @@ def to_creased_normals(
             no positions or they hold fewer than three numbers a vertex, or
             if an index entry points past an attribute's last item.
     """
-    if not isfinite(crease_angle.value) or crease_angle.value < 0:
-        raise Error("A crease angle must be a finite angle, zero or more")
+    require_non_negative_finite(
+        Float64(crease_angle.value),
+        "A crease angle must be a finite angle, zero or more",
+    )
     var crease = cos(crease_angle.value)
     var result = geometry.to_non_indexed()
     var count = result.vertex_count()

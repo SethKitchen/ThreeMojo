@@ -21,7 +21,22 @@ can be given for any target from zero upward.
 stays implicitly copyable: a scene adds one by value.
 """
 
-from std.math import isfinite
+from core.ordinal import require_non_negative
+from math.finite import require_finite
+
+
+def require_morph_target(target: Int) raises:
+    """Refuse a morph target index below zero.
+
+    Nothing. The call returns when the index is not negative.
+
+    Args:
+        target: Which target, from zero.
+
+    Raises:
+        Error: If the target is negative.
+    """
+    require_non_negative(target, "A morph target index cannot be negative")
 
 
 struct MorphInfluences(ImplicitlyCopyable, Sized):
@@ -43,8 +58,9 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
         Raises:
             Error: If the count is negative.
         """
-        if count < 0:
-            raise Error("A mesh cannot wear a negative number of targets")
+        require_non_negative(
+            count, "A mesh cannot wear a negative number of targets"
+        )
         self.weights = List[Float32](length=count, fill=0)
 
     def __init__(out self, *, copy: Self):
@@ -89,8 +105,7 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
         Raises:
             Error: If the target is negative.
         """
-        if target < 0:
-            raise Error("A morph target index cannot be negative")
+        require_morph_target(target)
         return self[target]
 
     def set(mut self, target: Int, weight: Float32) raises:
@@ -105,10 +120,8 @@ struct MorphInfluences(ImplicitlyCopyable, Sized):
         Raises:
             Error: If the target is negative or the weight is not a number.
         """
-        if target < 0:
-            raise Error("A morph target index cannot be negative")
-        if not isfinite(weight):
-            raise Error("A morph influence must be a number")
+        require_morph_target(target)
+        require_finite(Float64(weight), "A morph influence must be a number")
         while len(self.weights) <= target:
             self.weights.append(0)
         self.weights[target] = weight

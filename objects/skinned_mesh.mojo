@@ -111,18 +111,38 @@ first, and this port's glTF loader calls `normalize_skin_weights` the same
 way. Call it for a geometry built by hand whose weights do not sum to one.
 """
 
+from core.ordinal import ordinal_valid, require_draw_ids, require_valid
+
 from core.buffer_geometry import BufferGeometry
 from core.geometry_store import GeometryId
 from core.morph import MorphInfluences
 from core.object3d import NodeId
 from materials.material import MaterialId
-from math.matrix4 import Matrix4
+from math.matrix4 import Matrix4, require_affine
+from math.finite import require_finite_group
 from objects.mesh import fill_morph_targets, morph_target_index
 from objects.skeleton import Skeleton
 
 # Four numbers per vertex in each of the two skin attributes: three.js's
 # and glTF's. See the module docstring.
 comptime BONES_PER_VERTEX = 4
+
+
+def require_skin_width(item_size: Int) raises:
+    """Refuse a skin attribute that is not four numbers a vertex.
+
+    Nothing. The call returns when the attribute holds four numbers
+    a vertex.
+
+    Args:
+        item_size: How many numbers one vertex holds.
+
+    Raises:
+        Error: If the attribute holds another count.
+    """
+    if item_size != BONES_PER_VERTEX:
+        raise Error("A skin attribute holds four numbers a vertex")
+
 
 # The geometry attribute naming which bones carry each vertex, four per
 # vertex, each a whole number identifying a bone of the skeleton.
@@ -147,7 +167,7 @@ struct BindMode(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `ATTACHED` or `DETACHED`."""
-        return self == ATTACHED or self == DETACHED
+        return ordinal_valid(self.value, DETACHED.value)
 
 
 # Undo the mesh node's world matrix as it stands this frame, so the rig
@@ -234,18 +254,17 @@ struct SkinnedMesh(Copyable, Movable):
                 the two, or if the bind matrix is not a finite affine
                 transform that can be inverted.
         """
-        if node.value < 0:
-            raise Error("A skinned mesh must name a scene node")
-        if geometry.value < 0:
-            raise Error("A skinned mesh must name a geometry")
-        if material.value < 0:
-            raise Error("A skinned mesh must name a material")
-        if not bind_mode.is_valid():
-            raise Error("A skinned mesh needs a bind mode that exists")
-        if not bind_matrix.is_finite():
-            raise Error("A bind matrix must be a real transform")
-        if not bind_matrix.is_affine():
-            raise Error("A bind matrix must be affine")
+        require_draw_ids(
+            node.value, geometry.value, material.value, "A skinned mesh"
+        )
+        require_valid(
+            bind_mode.is_valid(), "A skinned mesh needs a bind mode that exists"
+        )
+        require_finite_group(
+            bind_matrix.is_finite(),
+            "A bind matrix must be a real transform",
+        )
+        require_affine(bind_matrix, "A bind matrix must be affine")
         if bind_matrix.determinant() == 0:
             raise Error("A bind matrix must be invertible")
         var undo = Matrix4(copy=bind_matrix)
@@ -362,8 +381,7 @@ def normalize_skin_weights(mut geometry: BufferGeometry) raises:
     if not geometry.has_attribute(String(SKIN_WEIGHT)):
         raise Error("Only a geometry with skinWeight has weights to normalize")
     var weights = geometry.attribute_view(String(SKIN_WEIGHT)).copy()
-    if weights.item_size != BONES_PER_VERTEX:
-        raise Error("A skin attribute holds four numbers a vertex")
+    require_skin_width(weights.item_size)
     for vertex in range(weights.count()):
         var four = SIMD[DType.float32, BONES_PER_VERTEX](0)
         for lane in range(BONES_PER_VERTEX):  # pragma: no branch

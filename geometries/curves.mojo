@@ -17,6 +17,7 @@ cell are visited, as three.js's `v0` to `v7` do. The defaults are
 three.js's.
 """
 
+from core.ordinal import require_non_negative
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
 from units.si import Length, METER
@@ -33,6 +34,22 @@ def _check_order(order: List[Int], count: Int) raises:
                 seen += 1
         if seen != 1:
             raise Error("A Hilbert curve visits each corner once")
+
+
+def require_hilbert_iterations(iterations: Int) raises:
+    """Refuse a Hilbert curve with a negative iteration count.
+
+    Nothing. The call returns when the count is zero or more.
+
+    Args:
+        iterations: How many times each cell is split.
+
+    Raises:
+        Error: If the count is negative.
+    """
+    require_non_negative(
+        iterations, "A Hilbert curve cannot have a negative iteration count"
+    )
 
 
 def hilbert2d(
@@ -59,8 +76,7 @@ def hilbert2d(
         Error: If `iterations` is negative, or `order` is not the four
             corners once each.
     """
-    if iterations < 0:
-        raise Error("A Hilbert curve cannot have a negative iteration count")
+    require_hilbert_iterations(iterations)
     _check_order(order, 4)
     var out = List[Vector3]()
     _hilbert2d(out, center, size.to(METER), iterations, order)
@@ -121,8 +137,7 @@ def hilbert3d(
         Error: If `iterations` is negative, or `order` is not the eight
             corners once each.
     """
-    if iterations < 0:
-        raise Error("A Hilbert curve cannot have a negative iteration count")
+    require_hilbert_iterations(iterations)
     _check_order(order, 8)
     var out = List[Vector3]()
     _hilbert3d(out, center, size.to(METER), iterations, order)
