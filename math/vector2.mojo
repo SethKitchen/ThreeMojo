@@ -6,6 +6,7 @@
 """A 2D vector, ported from three.js `src/math/Vector2.js`."""
 
 from math.matrix3 import Matrix3
+from math.polyline import PolylineVertex
 from math.utils import SeededRandom
 from math.vector3 import _js_round
 from math.norm import length2, normalized2, _ordinary_squared
@@ -25,7 +26,7 @@ from units.si import Angle, RADIAN
 
 
 @fieldwise_init
-struct Vector2(Equatable, ImplicitlyCopyable):
+struct Vector2(Equatable, ImplicitlyCopyable, PolylineVertex):
     """A point or direction in 2D space.
 
     The members are `Vector3`'s members, in two dimensions and for the same

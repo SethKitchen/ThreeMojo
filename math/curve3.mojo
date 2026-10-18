@@ -62,6 +62,7 @@ from math.curve_checks import (
     curve_count_product,
 )
 from math.curve import ARC_DIVISIONS, SEGMENT_SAMPLES, u_to_t
+from math.polyline import prefix_lengths, unit_direction
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import acos, floor
@@ -433,11 +434,7 @@ struct Curve3(Copyable, Movable):
         """
         check_curve_parameter(Float64(t))
         self._validate()
-        var slope = self._slope(t)
-        if slope.length() == 0:
-            raise Error("A curve has no direction where it turns back")
-        slope.normalize()
-        return slope
+        return unit_direction(self._slope(t))
 
     def sample(self, divisions: Int) raises -> List[Vector3]:
         """Return `divisions + 1` points at equal steps in `t`, three.js's
@@ -475,14 +472,7 @@ struct Curve3(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var samples = self.sample(divisions)
-        var out = List[Float32]()
-        out.append(0)
-        for index in range(1, len(samples)):  # pragma: no branch
-            # At least two samples, so this runs.
-            var step = (samples[index] - samples[index - 1]).length()
-            out.append(out[index - 1] + step)
-        return out^
+        return prefix_lengths(self.sample(divisions))
 
     def arc_divisions(self) raises -> Int:
         """Return how many straight runs stand in for this curve when its

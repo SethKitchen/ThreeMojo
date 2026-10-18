@@ -91,6 +91,7 @@ from math.curve_checks import (
     curve_sample_count,
     curve_count_product,
 )
+from math.polyline import prefix_lengths, unit_direction
 from math.vector2 import Vector2
 from std.math import cos, floor, isfinite, pi, sin
 from units.si import Angle, Length, METER, RADIAN
@@ -610,11 +611,7 @@ struct Curve(Copyable, Movable):
         """
         check_curve_parameter(Float64(t))
         self._validate()
-        var slope = self._slope(t)
-        if slope.length() == 0:
-            raise Error("A curve has no direction where it turns back")
-        slope.normalize()
-        return slope
+        return unit_direction(self._slope(t))
 
     def sample(self, divisions: Int) raises -> List[Vector2]:
         """Return `divisions + 1` points at equal steps in `t`.
@@ -649,13 +646,7 @@ struct Curve(Copyable, Movable):
             Error: If `divisions` is less than one, its sample count cannot
                 fit in Int, or the mutable curve is not valid.
         """
-        var samples = self.sample(divisions)
-        var out = List[Float32]()
-        out.append(0)
-        for index in range(1, len(samples)):  # pragma: no branch
-            var step = (samples[index] - samples[index - 1]).length()
-            out.append(out[index - 1] + step)
-        return out^
+        return prefix_lengths(self.sample(divisions))
 
     def arc_divisions(self) raises -> Int:
         """Return how many straight runs stand in for this curve when its
